@@ -1,0 +1,335 @@
+// Prisma Schema for AI4WEB 测试平台
+// RBAC (Role-Based Access Control) System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 用户模型
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  username      String    @unique
+  passwordHash   String
+  name          String?
+  avatar        String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+ 
+  // 关系
+  userRoles      UserRole[]
+  projects       Project[]
+  opencodeConfig OpencodeConfig[]
+  workflows      Workflow[]
+  workflowExecutions WorkflowExecution[]
+  workflowSharesAsSharer WorkflowShare[] @relation("SharedBy")
+  workflowSharesAsRecipient WorkflowShare[] @relation("SharedWith")
+ 
+  @@index([email])
+  @@index([username])
+}
+
+// 角色模型
+model Role {
+  id          String   @id @default(cuid())
+  name        String   @unique // admin, user, viewer, etc.
+  description String?
+  isSystem    Boolean  @default(false) // 系统角色不可删除
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关系
+  userRoles  UserRole[]
+  permissions Permission[]
+
+  @@index([name])
+}
+
+// 权限模型
+model Permission {
+  id          String   @id @default(cuid())
+  name        String   @unique // session:create, session:read, user:manage, etc.
+  description String?
+  module      String   // session, user, config, search, file
+  action      String   // create, read, update, delete, share
+  resource    String?  // specific resource identifier
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关系
+  roles       Role[]
+
+  @@unique([module, action, resource])
+  @@index([module])
+}
+
+// 用户-角色关联表（多对多）
+model UserRole {
+  id        String   @id @default(cuid())
+  userId    String
+  roleId    String
+  createdAt DateTime  @default(now())
+
+  // 关系
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+// AI4WEB 会话配置（每个用户可以配置多个 AI4WEB 服务器）
+model OpencodeConfig {
+  id                String   @id @default(cuid())
+  userId            String
+  name              String
+  baseURL           String   @default("http://localhost:54321")
+  description       String?
+  isActive          Boolean  @default(true)
+  mcpServers        String?  // JSON string for MCP servers configuration
+  keybinds          String?  // JSON string for keybinds configuration
+  modelPreferences  String?  // JSON string for model preferences
+  projectUploadDir  String?  // 项目上传目录路径
+  taskDescription   String?  // 任务描述（Markdown格式），用于项目评估时发送的第一个消息
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // 关系
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects          Project[]
+
+  @@index([userId])
+}
+
+// 项目（一个项目对应多个评估会话）
+model Project {
+  id              String   @id @default(cuid())
+  userId          String
+  configId        String?  // 可选：关联的 AI4WEB 配置
+  name            String   // 项目名称
+  description     String?  // 项目描述
+  projectPath     String?  // 项目目录路径
+  status          String   @default("idle") // 项目状态：idle, running, completed, failed
+  // 环境配置字段
+  environmentUrl  String?  // 环境 URL 地址
+  adminUsername   String?  // 管理员用户名
+  adminPassword   String?  // 管理员密码
+  normalUsername  String?  // 普通用户名
+  normalPassword  String?  // 普通用户密码
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // 关系
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  config          OpencodeConfig?     @relation(fields: [configId], references: [id], onDelete: SetNull)
+  files           ProjectFile[]
+  evaluations     EvaluationSession[]
+
+  @@index([userId])
+  @@index([configId])
+  @@index([status])
+}
+
+// 项目文件记录
+model ProjectFile {
+  id          String   @id @default(cuid())
+  projectId   String
+  fileName    String
+  filePath    String
+  fileSize    Float
+  fileType    String   // zip, jar, war, pdf, doc, etc.
+  uploadedAt  DateTime  @default(now())
+
+  // 关系
+  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// 评估会话（每次启动评估创建一条记录，一个项目可以有多个评估会话）
+model EvaluationSession {
+  id               String   @id @default(cuid())
+  projectId        String   // 关联项目
+  opencodeSessionId String? @unique // AI4WEB SDK 返回的会话 ID（唯一）
+  port             Int?     // OpenCode 服务器运行端口
+  status           String   @default("running") // running, completed, failed, cancelled
+  startedAt        DateTime  @default(now())
+  completedAt      DateTime?
+  errorMessage     String?
+  
+  // 关系
+  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  messages         SessionMessage[]
+
+  @@index([projectId])
+  @@index([opencodeSessionId])
+  @@index([status])
+}
+
+// 会话消息记录（用于本地缓存消息历史）
+model SessionMessage {
+  id               String   @id @default(cuid())
+  evaluationSessionId String  // 关联评估会话
+  role             String   // user | assistant
+  content          String
+  metadata         String?  // JSON string for additional data
+  createdAt        DateTime  @default(now())
+
+  // 关系
+  evaluationSession EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationSessionId])
+}
+
+// 审计日志
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String   // login, logout, create_session, delete_session, etc.
+  resource    String?  // affected resource
+  details     String?  // JSON string for additional context
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// 工作流模板（可视化工作流定义）
+model Workflow {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  thumbnail   String?  // Base64 编码的工作流预览图
+  version     Int      @default(1)
+  status      String   @default("draft") // draft, published, archived
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关系
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  nodes       WorkflowNode[]
+  edges       WorkflowEdge[]
+  executions  WorkflowExecution[]
+  shares      WorkflowShare[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+// 工作流节点（编辑器中的可视化节点）
+model WorkflowNode {
+  id          String   @id @default(cuid())
+  workflowId  String
+  type        String   // start, end, task, condition, parallel, merge, delay, variable, transform, notification
+  positionX   Float
+  positionY   Float
+  data        String   // JSON: { label, config, inputs, outputs, etc. }
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关系
+  workflow    Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sourceEdges WorkflowEdge[]    @relation("SourceEdges")
+  targetEdges WorkflowEdge[]    @relation("TargetEdges")
+
+  @@index([workflowId])
+  @@index([type])
+}
+
+// 工作流连线（节点之间的连接）
+model WorkflowEdge {
+  id          String   @id @default(cuid())
+  workflowId  String
+  sourceId    String
+  targetId    String
+  label       String?
+  data        String?  // JSON: { condition, delay, etc. }
+  createdAt   DateTime  @default(now())
+
+  // 关系
+  workflow    Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  source      WorkflowNode @relation("SourceEdges", fields: [sourceId], references: [id], onDelete: Cascade)
+  target      WorkflowNode @relation("TargetEdges", fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([sourceId])
+  @@index([targetId])
+  @@unique([sourceId, targetId])
+}
+
+// 工作流执行实例（运行时记录）
+model WorkflowExecution {
+  id          String   @id @default(cuid())
+  workflowId  String
+  userId      String
+  status      String   @default("pending") // pending, running, completed, failed, cancelled
+  startedAt   DateTime  @default(now())
+  completedAt DateTime?
+  error       String?
+  result      String?  // JSON: 执行结果数据
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关系
+  workflow    Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  steps       WorkflowExecutionStep[]
+
+  @@index([workflowId])
+  @@index([userId])
+  @@index([status])
+}
+
+// 工作流执行步骤（单个任务的执行记录）
+model WorkflowExecutionStep {
+  id          String   @id @default(cuid())
+  executionId String
+  nodeId      String
+  status      String   @default("pending") // pending, running, completed, failed, skipped
+  startedAt   DateTime?
+  completedAt DateTime?
+  input       String?  // JSON: 步骤输入数据
+  output      String?  // JSON: 步骤输出数据
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // 关系
+  execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([executionId])
+  @@index([nodeId])
+  @@index([status])
+}
+
+// 工作流共享（与其他用户共享工作流）
+model WorkflowShare {
+  id          String   @id @default(cuid())
+  workflowId  String
+  sharedBy    String   // 分享者用户ID
+  sharedWith  String   // 被分享者用户ID
+  permission  String   @default("read") // read, execute, edit
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  // 关系
+  workflow      Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  sharedByUser  User     @relation("SharedBy", fields: [sharedBy], references: [id], onDelete: Cascade)
+  sharedWithUser User    @relation("SharedWith", fields: [sharedWith], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+  @@index([sharedBy])
+  @@index([sharedWith])
+  @@unique([workflowId, sharedWith])
+}
