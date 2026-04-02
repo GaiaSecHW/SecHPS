@@ -59,7 +59,7 @@ export async function GET(
 
     // 初始化 SDK
     const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
-    
+
     // 调用 SDK 获取会话详情
     console.log('[SDK] Calling session.get() for session:', id);
     const result = await client.session.get({
@@ -69,21 +69,23 @@ export async function GET(
     });
 
     console.log('[SDK] session.get() result:', JSON.stringify(result, null, 2));
-    
+
     // 检查错误
     if (result.error) {
       console.error('[SDK] session.get() error:', result.error);
       return NextResponse.json({ error: '获取会话详情失败', details: result.error }, { status: 500 });
     }
-    
+
     const session = result.data;
-    
+
     // 检查 session 数据结构是否正确
     if (session && !session.id) {
       console.error('[SDK] Invalid session structure - missing id field');
       return NextResponse.json({ error: '无效的会话数据结构' }, { status: 500 });
     }
-    
+
+    console.log('[API] Returning session:', session.id);
+
     return NextResponse.json({ session });
   } catch (error) {
     console.error('Get session detail error:', error);
