@@ -16,7 +16,7 @@ import {
   useReactFlow,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Save, Play, Download, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X } from 'lucide-react';
+import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff } from 'lucide-react';
 import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
 import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP } from '@/types/workflow';
@@ -27,6 +27,8 @@ interface WorkflowEditorProps {
   onSave?: (data: WorkflowData) => Promise<void>;
   onExecute?: () => Promise<void>;
   readOnly?: boolean;
+  isEnabled?: boolean;
+  onToggleEnabled?: () => void;
 }
 
 function WorkflowEditorContent({
@@ -35,6 +37,8 @@ function WorkflowEditorContent({
   onSave,
   onExecute,
   readOnly = false,
+  isEnabled = true,
+  onToggleEnabled,
 }: WorkflowEditorProps) {
   const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initialData?.nodes || []);
@@ -42,7 +46,6 @@ function WorkflowEditorContent({
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null);
   const [selectedEdge, setSelectedEdge] = useState<FlowEdge | null>(null);
   const [saving, setSaving] = useState(false);
-  const [executing, setExecuting] = useState(false);
   const [history, setHistory] = useState<WorkflowData[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -304,38 +307,6 @@ function WorkflowEditorContent({
     }
   };
 
-  // 执行工作流
-  const handleExecute = async () => {
-    if (!onExecute) return;
-
-    try {
-      setExecuting(true);
-      await onExecute();
-    } catch (error) {
-      console.error('Failed to execute workflow:', error);
-      alert('执行失败');
-    } finally {
-      setExecuting(false);
-    }
-  };
-
-  // 导出工作流
-  const handleExport = () => {
-    const data = {
-      nodes,
-      edges,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `workflow-${workflowId || 'export'}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   // 生成预览内容（Markdown 格式）
   const generatePreviewContent = () => {
     let markdown = '# 工作流预览\n\n';
@@ -477,21 +448,6 @@ function WorkflowEditorContent({
                   <span>{saving ? '保存中...' : '保存'}</span>
                 </button>
                 <button
-                  onClick={handleExecute}
-                  disabled={executing}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  <Play size={16} />
-                  <span>{executing ? '执行中...' : '执行'}</span>
-                </button>
-                <button
-                  onClick={handleExport}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700"
-                >
-                  <Download size={16} />
-                  <span>导出</span>
-                </button>
-                <button
                   onClick={handlePreview}
                   className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
                 >
@@ -503,6 +459,22 @@ function WorkflowEditorContent({
           </div>
 
           <div className="flex items-center space-x-2">
+            {/* 启用/禁用状态切换 */}
+            {onToggleEnabled && (
+              <button
+                onClick={onToggleEnabled}
+                className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  isEnabled
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-400 text-white hover:bg-gray-500'
+                }`}
+                title={isEnabled ? '点击禁用工作流' : '点击启用工作流'}
+              >
+                {isEnabled ? <Power size={16} /> : <PowerOff size={16} />}
+                <span>{isEnabled ? '已启用' : '已禁用'}</span>
+              </button>
+            )}
+            
             {!readOnly && (
               <>
                 <button

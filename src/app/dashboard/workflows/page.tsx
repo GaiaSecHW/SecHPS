@@ -165,7 +165,7 @@ export default function WorkflowsPage() {
     }
   };
 
-  // 过滤工作流
+   // 过滤工作流
   const filteredWorkflows = workflows.filter((workflow) => {
     const matchesSearch =
       workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -175,6 +175,14 @@ export default function WorkflowsPage() {
 
     return matchesSearch && matchesStatus;
   });
+
+  // 统计信息
+  const stats = {
+    total: workflows.length,
+    draft: workflows.filter(w => w.status === 'draft').length,
+    published: workflows.filter(w => w.status === 'published').length,
+    archived: workflows.filter(w => w.status === 'archived').length,
+  };
 
   if (loading) {
     return (
@@ -210,6 +218,57 @@ export default function WorkflowsPage() {
           {error}
         </div>
       )}
+
+      {/* 统计信息 */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">总工作流</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <FileText className="h-6 w-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">草稿</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.draft}</p>
+            </div>
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <FileText className="h-6 w-6 text-gray-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">已发布</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.published}</p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">已归档</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.archived}</p>
+            </div>
+            <div className="p-3 bg-yellow-50 rounded-lg">
+              <AlertCircle className="h-6 w-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* 搜索和筛选 */}
       <div className="flex items-center space-x-4">

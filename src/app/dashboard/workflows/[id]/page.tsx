@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, Play, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Loader2, Power, PowerOff } from 'lucide-react';
 import WorkflowEditor from '@/components/workflow/WorkflowEditor';
 import { WorkflowData } from '@/types/workflow';
 import '@xyflow/react/dist/style.css';
@@ -49,8 +49,8 @@ export default function WorkflowEditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [executing, setExecuting] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isEnabled, setIsEnabled] = useState(true);
 
   useEffect(() => {
     fetchWorkflowData();
@@ -130,34 +130,11 @@ export default function WorkflowEditPage() {
     }
   };
 
-  const handleExecute = async () => {
-    try {
-      setExecuting(true);
-      const token = localStorage.getItem('token');
-
-      const response = await fetch(`/api/workflows/${workflowId}/execute`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || '执行失败');
-      }
-
-      const data = await response.json();
-      alert(`工作流执行已启动\n执行 ID: ${data.executionId}`);
-    } catch (err) {
-      console.error('Execute error:', err);
-      alert(err instanceof Error ? err.message : '执行失败');
-      throw err;
-    } finally {
-      setExecuting(false);
-    }
+  const handleToggleEnabled = () => {
+    setIsEnabled(!isEnabled);
+    // TODO: 调用 API 更新工作流启用状态
+    setSuccessMessage(isEnabled ? '工作流已禁用' : '工作流已启用');
+    setTimeout(() => setSuccessMessage(''), 3000);
   };
 
   if (loading) {
@@ -248,15 +225,6 @@ export default function WorkflowEditPage() {
           )}
 
           <button
-            onClick={handleExecute}
-            disabled={executing}
-            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            <Play size={18} />
-            <span>{executing ? '执行中...' : '执行工作流'}</span>
-          </button>
-
-          <button
             onClick={() => {
               // 触发编辑器的保存
               const saveEvent = new CustomEvent('workflow-save');
@@ -277,8 +245,9 @@ export default function WorkflowEditPage() {
           workflowId={workflowId}
           initialData={initialData}
           onSave={handleSave}
-          onExecute={handleExecute}
           readOnly={false}
+          isEnabled={isEnabled}
+          onToggleEnabled={handleToggleEnabled}
         />
       </div>
     </div>
