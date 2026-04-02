@@ -111,18 +111,25 @@ export default function SessionDetailPage({
   };
 
   const fetchMessages = async () => {
-    if (!evaluationId) return;
+    console.log('[fetchMessages] evaluationId:', evaluationId);
+    if (!evaluationId) {
+      console.log('[fetchMessages] No evaluationId, returning');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
+      console.log('[fetchMessages] Fetching from:', `/api/evaluations/${evaluationId}/messages`);
       const response = await fetch(`/api/evaluations/${evaluationId}/messages`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
+      console.log('[fetchMessages] Response status:', response.status, response.statusText);
       if (!response.ok) {
-        console.error('[Messages] Failed to fetch:', response.status);
+        const errorText = await response.text();
+        console.error('[Messages] Failed to fetch:', response.status, errorText);
         return;
       }
 

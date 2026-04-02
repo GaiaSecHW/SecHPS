@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { validateWorkflow } from '@/lib/workflow-validator';
 
 // 获取工作流数据（nodes 和 edges）
 export async function GET(

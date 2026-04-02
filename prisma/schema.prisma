@@ -213,6 +213,7 @@ model Workflow {
   thumbnail   String?  // Base64 编码的工作流预览图
   version     Int      @default(1)
   status      String   @default("draft") // draft, published, archived
+  isActive    Boolean  @default(false) // 是否启用（可用于执行）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -225,6 +226,7 @@ model Workflow {
 
   @@index([userId])
   @@index([status])
+  @@index([isActive])
 }
 
 // 工作流节点（编辑器中的可视化节点）

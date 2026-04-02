@@ -78,6 +78,9 @@ export default function WorkflowEditPage() {
       const workflowData = await workflowResponse.json();
       setWorkflow(workflowData.workflow);
 
+      // 根据工作流状态设置启用状态
+      setIsEnabled(workflowData.workflow.status === 'published');
+
       // 获取工作流节点和边数据
       const dataResponse = await fetch(`/api/workflows/${workflowId}/data`, {
         headers: {
@@ -130,11 +133,82 @@ export default function WorkflowEditPage() {
     }
   };
 
-  const handleToggleEnabled = () => {
-    setIsEnabled(!isEnabled);
-    // TODO: 调用 API 更新工作流启用状态
-    setSuccessMessage(isEnabled ? '工作流已禁用' : '工作流已启用');
-    setTimeout(() => setSuccessMessage(''), 3000);
+  const handleToggleEnabled = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const newStatus = !isEnabled ? 'published' : 'draft'; // 启用=published, 禁用=draft
+
+      // 如果要启用工作流，先验证工作流数据
+      if (!isEnabled && initialData) {
+        const response = await fetch(`/api/workflows/${workflowId}/data`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          alert(`无法获取工作流数据：${data.error || '未知错误'}`);
+          return;
+        }
+
+        const { nodes, edges } = await response.json();
+
+        // 验证工作流结构
+        const validationResponse = await fetch('/api/workflows/validate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ nodes, edges }),
+        });
+
+        if (!validationResponse.ok) {
+          const data = await validationResponse.json();
+          const errors = data.errors || [];
+          const warnings = data.warnings || [];
+
+          let message = '工作流验证失败：\n\n';
+          errors.forEach((err: string) => {
+            message += `❌ ${err}\n`;
+          });
+          if (warnings.length > 0) {
+            message += '\n警告：\n';
+            warnings.forEach((warn: string) => {
+              message += `⚠️ ${warn}\n`;
+            });
+          }
+
+          alert(message);
+          return;
+        }
+      }
+
+      const response = await fetch(`/api/workflows/${workflowId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || '更新状态失败');
+        return;
+      }
+
+      setIsEnabled(!isEnabled);
+      setSuccessMessage(isEnabled ? '工作流已禁用' : '工作流已启用');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (err) {
+      console.error('Toggle enabled error:', err);
+      alert('网络错误，请重试');
+    }
   };
 
   if (loading) {
