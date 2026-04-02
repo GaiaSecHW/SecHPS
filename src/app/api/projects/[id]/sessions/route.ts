@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
-import { getOrCreateProjectClient, getOrCreateServer } from '@/lib/opencode-manager';
+import { getOrCreateProjectClient } from '@/lib/opencode-manager';
 
 // 获取项目的评估历史（从 OpenCode session.list()）
 export async function GET(
@@ -48,13 +48,9 @@ export async function GET(
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    // 获取或创建项目级 OpenCode 服务器
-    console.log('[Sessions API] Getting or creating project server for project:', id);
-    const server = await getOrCreateServer(id);
-    console.log('[Sessions API] Server ready:', server.url);
-
-    // 初始化初始化 SDK
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
+    // 获取或创建项目级 OpenCode 客户端
+    console.log('[Sessions API] Getting or creating project client for project:', id);
+    const { client } = await getOrCreateProjectClient(id);
 
     // 调用 session.list() 获取会话列表
     console.log('[SDK] Calling session.list()');

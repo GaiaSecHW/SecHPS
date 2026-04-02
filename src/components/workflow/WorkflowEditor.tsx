@@ -52,6 +52,42 @@ function WorkflowEditorContent({
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'node' | 'edge', id: string } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
+  
+  // 工作流配置（从系统配置读取）
+  const [workflowConfig, setWorkflowConfig] = useState<{
+    startNodeLabel: string;
+    startNodeDescription: string;
+    endNodeLabel: string;
+    endNodeDescription: string;
+  }>({
+    startNodeLabel: '开始',
+    startNodeDescription: '工作流的起始点',
+    endNodeLabel: '结束',
+    endNodeDescription: '工作流的结束点',
+  });
+
+  // 加载工作流配置
+  useEffect(() => {
+    const fetchWorkflowConfig = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/workflows/config', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const config = await response.json();
+          setWorkflowConfig(config);
+        }
+      } catch (error) {
+        console.error('Failed to fetch workflow config:', error);
+      }
+    };
+
+    fetchWorkflowConfig();
+  }, []);
 
   // 保存当前状态到历史记录
   const saveToHistory = useCallback(() => {
@@ -218,13 +254,28 @@ function WorkflowEditorContent({
 
         const nodeType = NODE_TYPE_MAP[nodeData.type as WorkflowNodeType];
         
+        // 从系统配置读取默认值
+        let label = nodeType?.defaultLabel || nodeData.label;
+        let description = nodeType?.defaultDescription || nodeData.description;
+        
+        // 如果是开始节点，使用系统配置中的值
+        if (nodeData.type === 'start') {
+          label = workflowConfig.startNodeLabel;
+          description = workflowConfig.startNodeDescription;
+        }
+        // 如果是结束节点，使用系统配置中的值
+        else if (nodeData.type === 'end') {
+          label = workflowConfig.endNodeLabel;
+          description = workflowConfig.endNodeDescription;
+        }
+        
         const newNode: FlowNode = {
           id: `node-${Date.now()}`,
           type: nodeData.type,
           position,
           data: {
-            label: nodeType?.defaultLabel || nodeData.label,
-            description: nodeType?.defaultDescription || nodeData.description,
+            label,
+            description,
             config: {},
             inputs: nodeData.inputs,
             outputs: nodeData.outputs,
@@ -551,7 +602,7 @@ function WorkflowEditorContent({
             attributionPosition="bottom-left"
             minZoom={0.1}
             maxZoom={2}
-            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 0.5 }}
             style={{ width: '100%', height: '100%' }}
           >
             <Background color="#aaa" gap={16} />
