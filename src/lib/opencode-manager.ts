@@ -65,42 +65,40 @@ export async function getOrCreateProjectClient(projectId: string): Promise<{
     throw new Error('项目目录未配置');
   }
 
-  // 3. 切换到项目目录
-  console.log('[OpenCodeManager] Changing directory to:', project.projectPath);
-  const originalDir = process.cwd();
-  try {
-    chdir(project.projectPath);
-  } catch (error) {
-    throw new Error(`无法切换到项目目录: ${project.projectPath}`);
-  }
-
-  // 4. 使用 SDK 的 createOpencode 创建实例
+  // 3. 使用 SDK 的 createOpencode 创建实例
   console.log('[OpenCodeManager] Creating new instance for project:', projectId);
+  console.log('[OpenCodeManager]   directory:', project.projectPath);
   console.log('[OpenCodeManager]   model:', project.config?.modelPreferences || 'openai/gpt-4');
 
-  const createOpencodeFn = await getCreateOpencode();
-  const instance = await createOpencodeFn({
-    hostname: '127.0.0.1',
-    config: { model: project.config?.modelPreferences || 'openai/gpt-4' },
-  });
+  // 切换到项目目录（在子进程中执行）
+  const originalDir = process.cwd();
+  process.chdir(project.projectPath);
 
-  console.log('[OpenCodeManager] Instance created at:', instance.server.url);
-
-  // 5. 切换回原目录
   try {
-    chdir(originalDir);
+    const createOpencodeFn = await getCreateOpencode();
+    const instance = await createOpencodeFn({
+      hostname: '127.0.0.1',
+      config: { model: project.config?.modelPreferences || 'openai/gpt-4' },
+    });
+
+    console.log('[OpenCodeManager] Instance created at:', instance.server.url);
+
+    // 切换回原目录
+    process.chdir(originalDir);
+
+    // 4. 缓存实例
+    projectInstances.set(projectId, {
+      client: instance.client,
+      server: instance.server,
+      refCount: 1,
+    });
+
+    return instance;
   } catch (error) {
-    console.error('[OpenCodeManager] Failed to change back to original directory:', error);
+    // 确保切换回原目录
+    process.chdir(originalDir);
+    throw error;
   }
-
-  // 4. 缓存实例
-  projectInstances.set(projectId, {
-    client: instance.client,
-    server: instance.server,
-    refCount: 1,
-  });
-
-  return instance;
 }
 
 /**

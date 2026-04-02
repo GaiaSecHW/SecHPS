@@ -50,12 +50,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[SDK Projects List] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
-
-    // 初始化 SDK
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
+    // 获取 OpenCode 客户端
+    console.log('[SDK Projects List] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client } = await getOrCreateServer(evaluation.id);
 
     // 调用 SDK 获取项目列表
     console.log('[SDK] Calling project.list()...');

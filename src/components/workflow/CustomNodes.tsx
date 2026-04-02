@@ -26,6 +26,12 @@ interface NodeData {
   inputs?: any[];
   outputs?: any[];
   type?: WorkflowNodeType;
+  workflowConfig?: {
+    startNodeLabel: string;
+    startNodeDescription: string;
+    endNodeLabel: string;
+    endNodeDescription: string;
+  };
   [key: string]: any; // 添加索引签名
 }
 

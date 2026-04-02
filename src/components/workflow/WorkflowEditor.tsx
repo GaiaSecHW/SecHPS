@@ -254,28 +254,16 @@ function WorkflowEditorContent({
 
         const nodeType = NODE_TYPE_MAP[nodeData.type as WorkflowNodeType];
         
-        // 从系统配置读取默认值
-        let label = nodeType?.defaultLabel || nodeData.label;
-        let description = nodeType?.defaultDescription || nodeData.description;
-        
-        // 如果是开始节点，使用系统配置中的值
-        if (nodeData.type === 'start') {
-          label = workflowConfig.startNodeLabel;
-          description = workflowConfig.startNodeDescription;
-        }
-        // 如果是结束节点，使用系统配置中的值
-        else if (nodeData.type === 'end') {
-          label = workflowConfig.endNodeLabel;
-          description = workflowConfig.endNodeDescription;
-        }
+        // 开始和结束节点不保存label和description，实时从系统配置读取
+        const isSystemNode = nodeData.type === 'start' || nodeData.type === 'end';
         
         const newNode: FlowNode = {
           id: `node-${Date.now()}`,
           type: nodeData.type,
           position,
           data: {
-            label,
-            description,
+            label: isSystemNode ? '' : (nodeType?.defaultLabel || nodeData.label),
+            description: isSystemNode ? '' : (nodeType?.defaultDescription || nodeData.description),
             config: {},
             inputs: nodeData.inputs,
             outputs: nodeData.outputs,
@@ -698,11 +686,34 @@ function WorkflowEditorContent({
                     </div>
                   </>
                 ) : (
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                    <p className="text-sm text-blue-800">
-                      此节点为系统节点，不可编辑名称和描述
-                    </p>
-                  </div>
+                  <>
+                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                      <p className="text-sm text-blue-800 font-medium mb-2">
+                        系统节点配置
+                      </p>
+                      <p className="text-xs text-blue-600">
+                        此节点为系统节点，名称和描述由系统配置管理
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        节点名称
+                      </label>
+                      <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900">
+                        {selectedNode.data.label}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        描述
+                      </label>
+                      <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900 whitespace-pre-wrap">
+                        {selectedNode.data.description || '无描述'}
+                      </div>
+                    </div>
+                  </>
                 )}
 
                 <div>
