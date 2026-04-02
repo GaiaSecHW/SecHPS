@@ -60,9 +60,6 @@ export async function GET(
     console.log('[SDK] Calling session.todo() for session:', id);
     const result = await client.session.todo({
       path: { id },
-      query: {
-        directory: evaluation.project.projectPath || undefined,
-      },
     });
     
     // 检查错误

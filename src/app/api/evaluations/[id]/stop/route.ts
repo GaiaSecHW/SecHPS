@@ -3,7 +3,6 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOrCreateServer } from '@/lib/opencode-manager';
-import { closeServer } from '@/lib/server-manager';
 
 // 停止评估会话
 export async function POST(

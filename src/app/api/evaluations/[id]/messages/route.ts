@@ -85,14 +85,12 @@ export async function GET(
 
     // 从 OpenCode 服务器获取消息
     console.log('[SDK] Calling session.messages() for session:', evaluation.opencodeSessionId);
-    console.log('[SDK]   project path:', evaluation.project.projectPath);
 
     const result = await client.session.messages({
       path: {
         id: evaluation.opencodeSessionId,
       },
       query: {
-        directory: evaluation.project.projectPath || undefined,
         limit: 50,
       },
     });

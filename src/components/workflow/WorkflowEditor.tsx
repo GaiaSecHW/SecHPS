@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -107,6 +107,17 @@ function WorkflowEditorContent({
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
   }, [nodes, edges, history, historyIndex]);
+
+  // 为节点添加 workflowConfig
+  const nodesWithConfig = useMemo(() => {
+    return nodes.map(node => ({
+      ...node,
+      data: {
+        ...node.data,
+        workflowConfig,
+      },
+    }));
+  }, [nodes, workflowConfig]);
 
   // 初始化历史记录
   useEffect(() => {
@@ -572,7 +583,7 @@ function WorkflowEditorContent({
         {/* React Flow 画布 */}
         <div className="flex-1 bg-gray-50 relative overflow-hidden" onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
-            nodes={nodes}
+            nodes={nodesWithConfig}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -701,7 +712,11 @@ function WorkflowEditorContent({
                         节点名称
                       </label>
                       <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900">
-                        {selectedNode.data.label}
+                        {selectedNode.type === 'start' 
+                          ? workflowConfig.startNodeLabel 
+                          : selectedNode.type === 'end' 
+                            ? workflowConfig.endNodeLabel 
+                            : selectedNode.data.label}
                       </div>
                     </div>
 
@@ -710,7 +725,11 @@ function WorkflowEditorContent({
                         描述
                       </label>
                       <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900 whitespace-pre-wrap">
-                        {selectedNode.data.description || '无描述'}
+                        {selectedNode.type === 'start' 
+                          ? workflowConfig.startNodeDescription 
+                          : selectedNode.type === 'end' 
+                            ? workflowConfig.endNodeDescription 
+                            : selectedNode.data.description || '无描述'}
                       </div>
                     </div>
                   </>

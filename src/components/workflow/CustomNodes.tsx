@@ -43,6 +43,18 @@ const BaseNode = memo((props: NodeProps) => {
   const nodeType = NODE_TYPE_MAP[type as WorkflowNodeType] || null;
   const Icon = iconMap[nodeType?.icon || 'Cog'];
 
+  // 对于开始和结束节点，从 workflowConfig 读取 label 和 description
+  let displayLabel = nodeData.label;
+  let displayDescription = nodeData.description;
+  
+  if (type === 'start' && nodeData.workflowConfig) {
+    displayLabel = nodeData.workflowConfig.startNodeLabel;
+    displayDescription = nodeData.workflowConfig.startNodeDescription;
+  } else if (type === 'end' && nodeData.workflowConfig) {
+    displayLabel = nodeData.workflowConfig.endNodeLabel;
+    displayDescription = nodeData.workflowConfig.endNodeDescription;
+  }
+
   const handleStyle = {
     width: '12px',
     height: '12px',
