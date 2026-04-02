@@ -129,6 +129,21 @@ export async function PUT(
       );
     }
 
+    // 验证工作流结构
+    // 如果工作流已启用（status === 'published'），使用严格验证
+    const strictValidation = existingWorkflow.status === 'published';
+    const validation = validateWorkflow(nodes, edges, strictValidation);
+    if (!validation.valid) {
+      return NextResponse.json(
+        {
+          error: '工作流验证失败',
+          details: validation.errors,
+          warnings: validation.warnings,
+        },
+        { status: 400 }
+      );
+    }
+
     // 使用事务更新工作流数据
     const result = await prisma.$transaction(async (tx) => {
       // 删除旧的 nodes 和 edges

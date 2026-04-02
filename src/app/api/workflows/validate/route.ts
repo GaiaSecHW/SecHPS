@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
     // 解析请求体
     const body = await request.json();
-    const { nodes, edges } = body;
+    const { nodes, edges, strict } = body;
 
     // 验证数据格式
     if (!Array.isArray(nodes) || !Array.isArray(edges)) {
@@ -36,8 +36,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // 验证工作流结构
-    const validation = validateWorkflow(nodes, edges);
+    // 验证工作流结构（strict=true 表示启用时的严格验证）
+    const validation = validateWorkflow(nodes, edges, strict === true);
 
     return NextResponse.json({
       valid: validation.valid,

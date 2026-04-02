@@ -58,13 +58,7 @@ export async function GET(
 
     // 调用 session.list() 获取会话列表
     console.log('[SDK] Calling session.list()');
-    console.log('[SDK]   directory:', project.projectPath);
-    
-    const result = await client.session.list({
-      query: {
-        directory: project.projectPath || undefined,
-      },
-    });
+    const result = await client.session.list();
 
     // 检查错误
     if (result.error) {

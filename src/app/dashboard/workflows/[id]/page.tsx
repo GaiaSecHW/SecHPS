@@ -140,28 +140,18 @@ export default function WorkflowEditPage() {
 
       // 如果要启用工作流，先验证工作流数据
       if (!isEnabled && initialData) {
-        const response = await fetch(`/api/workflows/${workflowId}/data`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const data = await response.json();
-          alert(`无法获取工作流数据：${data.error || '未知错误'}`);
-          return;
-        }
-
-        const { nodes, edges } = await response.json();
-
-        // 验证工作流结构
+        // 使用严格模式验证（strict=true）
         const validationResponse = await fetch('/api/workflows/validate', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ nodes, edges }),
+          body: JSON.stringify({
+            nodes: initialData.nodes,
+            edges: initialData.edges,
+            strict: true, // 启用时使用严格验证
+          }),
         });
 
         if (!validationResponse.ok) {

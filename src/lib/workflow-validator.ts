@@ -12,9 +12,10 @@ export interface ValidationResult {
  * 验证工作流数据
  * @param nodes 节点数组
  * @param edges 边数组
+ * @param strict 是否严格模式（启用工作流时使用）
  * @returns 验证结果
  */
-export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[]): ValidationResult {
+export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: boolean = false): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
@@ -56,7 +57,13 @@ export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[]): Validati
   // 检查未连接的节点
   nodes.forEach(node => {
     if (!connectedNodeIds.has(node.id)) {
-      warnings.push(`节点 "${node.data.label}" 没有任何连接`);
+      if (strict) {
+        // 严格模式：未连接的节点是错误
+        errors.push(`节点 "${node.data.label}" 没有任何连接，所有节点必须连接`);
+      } else {
+        // 普通模式：未连接的节点是警告
+        warnings.push(`节点 "${node.data.label}" 没有任何连接`);
+      }
     }
   });
 
