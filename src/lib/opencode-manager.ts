@@ -1,10 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import type { OpencodeClient } from '@opencode-ai/sdk';
-import { chdir } from 'node:process';
 
 // 动态导入 createOpencode，避免编译错误
 let createOpencode: ((options: {
-  directory?: string;
   hostname?: string;
   port?: number;
   config?: any;
