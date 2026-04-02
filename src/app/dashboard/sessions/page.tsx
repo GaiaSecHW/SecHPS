@@ -462,7 +462,9 @@ export default function SessionsPage() {
   const openHistoryModal = async (project: Project) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/projects/${project.id}`, {
+      
+      // 从 session.list() 获取评估历史
+      const response = await fetch(`/api/projects/${project.id}/sessions`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -470,14 +472,29 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '获取项目详情失败');
+        alert(data.error || '获取评估历史失败');
         return;
       }
 
       const data = await response.json();
-      setSelectedProject(data.project);
+      
+      // 转换数据格式以匹配前端期望
+      const evaluations = (data.sessions || []).map((session: any, index: number) => ({
+        id: session.id,
+        opencodeSessionId: session.id,
+        status: session.status || 'completed',
+        startedAt: session.createdAt || new Date().toISOString(),
+        completedAt: session.updatedAt || new Date().toISOString(),
+        title: session.title || `评估 #${index + 1}`,
+      }));
+      
+      setSelectedProject({
+        ...project,
+        evaluations,
+      });
       setShowHistoryModal(true);
     } catch (err) {
+      console.error('获取评估历史失败:', err);
       alert('网络错误，请重试');
     }
   };

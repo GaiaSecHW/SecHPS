@@ -53,12 +53,18 @@ export async function GET(
     const server = await getOrCreateProjectServer(id);
     console.log('[Sessions API] Server ready:', server.url);
 
-    // 初始化 SDK
+    // 初始化初始化 SDK
     const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
 
     // 调用 session.list() 获取会话列表
     console.log('[SDK] Calling session.list()');
-    const result = await client.session.list();
+    console.log('[SDK]   directory:', project.projectPath);
+    
+    const result = await client.session.list({
+      query: {
+        directory: project.projectPath || undefined,
+      },
+    });
 
     // 检查错误
     if (result.error) {
@@ -69,19 +75,8 @@ export async function GET(
     const sessions = result.data || [];
     console.log('[SDK] session.list() response length:', sessions?.length);
 
-    // 过滤出属于当前项目的 session
-    const projectSessions = sessions.filter((session: any) => {
-      // 检查 session.projectID 是否匹配当前项目 ID
-      // 注意：OpenCode SDK 返回的 projectID 是项目在 OpenCode 中的 ID
-      // 我们需要通过项目路径或其他方式匹配
-      // 这里我们使用项目路径作为匹配条件
-      return session.directory === project.projectPath;
-    });
-
-    console.log('[API] Filtered', projectSessions.length, 'sessions for project:', id);
-
     // 格式化会话列表
-    const formattedSessions = projectSessions.map((session: any) => ({
+    const formattedSessions = sessions.map((session: any) => ({
       id: session.id,
       title: session.title || '无标题',
       status: session.status || 'unknown',
