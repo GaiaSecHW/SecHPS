@@ -110,24 +110,48 @@ function WorkflowEditorContent({
       
       const sourceType = sourceNode.type;
       const targetType = targetNode.type;
+      const sourceHandle = connection.sourceHandle;
+      const targetHandle = connection.targetHandle;
       
       // 连接规则验证
-      // 1. 开始节点只能连接到任务节点
+      // 1. 开始节点只能连接到任务节点（左侧输入）
       if (sourceType === 'start' && targetType !== 'task') {
         alert('开始节点只能连接到任务节点');
         return;
       }
       
-      // 2. 结束节点只能被任务节点连接
+      // 2. 结束节点只能被任务节点连接（右侧输出）
       if (targetType === 'end' && sourceType !== 'task') {
         alert('只有任务节点可以连接到结束节点');
         return;
       }
       
-      // 3. 任务节点可以连接到：任务节点、结束节点、子任务节点（上下连接）
-      if (sourceType === 'task' && targetType !== 'task' && targetType !== 'end' && targetType !== 'subtask') {
-        alert('任务节点只能连接到任务节点、结束节点或子任务节点');
-        return;
+      // 3. 任务节点连接规则
+      if (sourceType === 'task') {
+        // 从右侧输出连接到任务节点（左侧输入）或结束节点
+        if (sourceHandle === 'out' || !sourceHandle) {
+          if (targetType !== 'task' && targetType !== 'end') {
+            alert('任务节点的右侧输出只能连接到任务节点或结束节点');
+            return;
+          }
+          // 目标节点应该通过左侧输入句柄连接
+          if (targetHandle && targetHandle !== 'in') {
+            alert('请连接到任务节点的左侧输入');
+            return;
+          }
+        }
+        // 从底部子任务输出连接到子任务节点（顶部输入）
+        else if (sourceHandle === 'subtask') {
+          if (targetType !== 'subtask') {
+            alert('任务节点的底部输出只能连接到子任务节点');
+            return;
+          }
+          // 目标节点应该通过顶部输入句柄连接
+          if (targetHandle && targetHandle !== 'in') {
+            alert('请连接到子任务节点的顶部输入');
+            return;
+          }
+        }
       }
       
       // 4. 子任务节点可以连接到子任务节点（上下连接）
@@ -138,7 +162,10 @@ function WorkflowEditorContent({
       
       // 检查是否已存在相同的连接
       const existingEdge = edges.find(
-        e => e.source === connection.source && e.target === connection.target
+        e => e.source === connection.source && 
+             e.target === connection.target &&
+             e.sourceHandle === connection.sourceHandle &&
+             e.targetHandle === connection.targetHandle
       );
       if (existingEdge) {
         alert('该连接已存在');

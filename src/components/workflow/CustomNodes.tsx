@@ -200,9 +200,101 @@ export const EndNode = memo((props: NodeProps) => {
 
 EndNode.displayName = 'EndNode';
 
-// 任务节点
+// 任务节点（三个连接点：左输入、右输出、底子任务输出）
 export const TaskNode = memo((props: NodeProps) => {
-  return <BaseNode {...props} />;
+  const { data, type, selected } = props;
+  const nodeData = data as NodeData;
+  const nodeType = NODE_TYPE_MAP[type as WorkflowNodeType] || null;
+  const Icon = iconMap[nodeType?.icon || 'Cog'];
+
+  const handleStyle = {
+    width: '12px',
+    height: '12px',
+    border: '2px solid white',
+    borderRadius: '50%',
+    backgroundColor: nodeType?.color || '#3B82F6',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+    transition: 'all 0.2s',
+  };
+
+  const subtaskHandleStyle = {
+    width: '12px',
+    height: '12px',
+    border: '2px solid white',
+    borderRadius: '50%',
+    backgroundColor: '#8B5CF6', // 子任务节点颜色
+    boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+    transition: 'all 0.2s',
+  };
+
+  return (
+    <div
+      className="relative min-w-[100px] w-[100px] rounded-md border bg-white shadow-sm transition-all"
+      style={{ 
+        borderColor: nodeType?.color || '#3B82F6', 
+        borderWidth: '1.5px',
+        overflow: 'visible',
+      }}
+    >
+      {/* 输入句柄 - 左侧 */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        style={{
+          ...handleStyle,
+          backgroundColor: nodeType?.color || '#3B82F6',
+          left: '-8px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+        }}
+      />
+
+      {/* 节点内容 */}
+      <div className="p-1.5">
+        <div className="flex items-center space-x-1.5">
+          <div
+            className="p-1 rounded flex-shrink-0"
+            style={{ backgroundColor: `${nodeType?.color}15` || '#3B82F615' }}
+          >
+            <Icon size={12} style={{ color: nodeType?.color || '#3B82F6' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-[10px] font-medium text-gray-900 truncate leading-tight">
+              {nodeData.label}
+            </h3>
+          </div>
+        </div>
+      </div>
+
+      {/* 输出句柄 - 右侧 */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="out"
+        style={{
+          ...handleStyle,
+          backgroundColor: nodeType?.color || '#3B82F6',
+          right: '-8px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+        }}
+      />
+
+      {/* 子任务输出句柄 - 底部 */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="subtask"
+        style={{
+          ...subtaskHandleStyle,
+          bottom: '-8px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+        }}
+      />
+    </div>
+  );
 });
 
 TaskNode.displayName = 'TaskNode';

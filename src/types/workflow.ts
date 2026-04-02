@@ -20,6 +20,8 @@ export interface FlowEdge {
   id: string;
   source: string;
   target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
   label?: string;
   data?: EdgeData;
   type?: 'default' | 'straight' | 'step' | 'smoothstep' | 'bezier';
@@ -200,7 +202,10 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     description: '执行一个任务（串行执行）',
     color: '#3B82F6',
     inputs: [{ id: 'in', label: '输入', type: 'object', required: true }],
-    outputs: [{ id: 'out', label: '输出', type: 'object', required: true }],
+    outputs: [
+      { id: 'out', label: '输出', type: 'object', required: true },
+      { id: 'subtask', label: '子任务', type: 'object', required: false },
+    ],
     config: [
       { id: 'name', label: '任务名称', type: 'text', required: true },
       { id: 'description', label: '任务描述', type: 'textarea', required: false },
