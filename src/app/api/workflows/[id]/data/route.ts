@@ -140,6 +140,9 @@ export async function PUT(
         where: { workflowId: id },
       });
 
+      // 创建节点 ID 映射（前端 ID -> 数据库 ID）
+      const nodeIdMap = new Map<string, string>();
+
       // 创建新的 nodes
       const createdNodes = await Promise.all(
         nodes.map((node: any) =>
@@ -151,23 +154,34 @@ export async function PUT(
               positionY: node.position.y,
               data: JSON.stringify(node.data),
             },
+          }).then((createdNode) => {
+            // 保存 ID 映射
+            nodeIdMap.set(node.id, createdNode.id);
+            return createdNode;
           })
         )
       );
 
-      // 创建新的 edges
+      // 创建新的 edges（使用映射后的节点 ID）
       const createdEdges = await Promise.all(
-        edges.map((edge: any) =>
-          tx.workflowEdge.create({
+        edges.map((edge: any) => {
+          const sourceId = nodeIdMap.get(edge.source);
+          const targetId = nodeIdMap.get(edge.target);
+
+          if (!sourceId || !targetId) {
+            throw new Error(`Invalid edge: source or target node not found (${edge.source} -> ${edge.target})`);
+          }
+
+          return tx.workflowEdge.create({
             data: {
               workflowId: id,
-              sourceId: edge.source,
-              targetId: edge.target,
+              sourceId,
+              targetId,
               label: edge.label || null,
               data: edge.data ? JSON.stringify(edge.data) : null,
             },
-          })
-        )
+          });
+        })
       );
 
       // 更新工作流版本
