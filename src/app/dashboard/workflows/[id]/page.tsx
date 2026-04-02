@@ -119,6 +119,23 @@ export default function WorkflowEditPage() {
 
       if (!response.ok) {
         const data = await response.json();
+        
+        // 如果有详细的验证错误信息，显示它们
+        if (data.details && Array.isArray(data.details)) {
+          let message = data.error || '工作流验证失败';
+          message += '\n\n';
+          data.details.forEach((err: string) => {
+            message += `❌ ${err}\n`;
+          });
+          if (data.warnings && Array.isArray(data.warnings) && data.warnings.length > 0) {
+            message += '\n警告：\n';
+            data.warnings.forEach((warn: string) => {
+              message += `⚠️ ${warn}\n`;
+            });
+          }
+          throw new Error(message);
+        }
+        
         throw new Error(data.error || '保存失败');
       }
 
