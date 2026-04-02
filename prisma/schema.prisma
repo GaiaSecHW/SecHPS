@@ -98,6 +98,7 @@ model OpencodeConfig {
   modelPreferences  String?  // JSON string for model preferences
   projectUploadDir  String?  // 项目上传目录路径
   taskDescription   String?  // 任务描述（Markdown格式），用于项目评估时发送的第一个消息
+  workflowConfig    String?  // JSON string for workflow configuration (startNodeLabel, startNodeDescription, endNodeLabel, endNodeDescription)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

@@ -76,6 +76,9 @@ export interface NodeTypeDefinition {
   inputs: NodePort[];
   outputs: NodePort[];
   config: NodeConfigField[];
+  defaultLabel?: string;        // 默认节点名称
+  defaultDescription?: string;  // 默认节点描述
+  editable?: boolean;            // 是否可编辑（名称和描述）
 }
 
 // ============ 边数据 ============
@@ -182,6 +185,9 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     inputs: [],
     outputs: [{ id: 'out', label: '输出', type: 'object', required: true }],
     config: [],
+    defaultLabel: '开始',
+    defaultDescription: '工作流的起始点',
+    editable: false, // 开始节点不可编辑
   },
   {
     type: 'end',
@@ -193,6 +199,9 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     inputs: [{ id: 'in', label: '输入', type: 'object', required: true }],
     outputs: [],
     config: [],
+    defaultLabel: '结束',
+    defaultDescription: '工作流的结束点',
+    editable: false, // 结束节点不可编辑
   },
   {
     type: 'task',
@@ -210,6 +219,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       { id: 'name', label: '任务名称', type: 'text', required: true },
       { id: 'description', label: '任务描述', type: 'textarea', required: false },
     ],
+    editable: true, // 任务节点可编辑
   },
   {
     type: 'subtask',
@@ -224,6 +234,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
       { id: 'name', label: '子任务名称', type: 'text', required: true },
       { id: 'description', label: '子任务描述', type: 'textarea', required: false },
     ],
+    editable: true, // 子任务节点可编辑
   },
 ];
 

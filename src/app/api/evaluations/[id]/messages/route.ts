@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
-import { getOrCreateServer } from '@/lib/server-manager';
+import { getOrCreateServer } from '@/lib/opencode-manager';
 
 // 获取评估会话消息列表
 export async function GET(
@@ -79,13 +79,9 @@ export async function GET(
       return NextResponse.json({ messages });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[Messages API] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
-    console.log('[Messages API] Server ready:', server.url);
-
-    // 初始化 OpenCode SDK
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
+    // 获取 OpenCode 客户端
+    console.log('[Messages API] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client } = await getOrCreateServer(evaluation.id);
 
     // 从 OpenCode 服务器获取消息
     console.log('[SDK] Calling session.messages() for session:', evaluation.opencodeSessionId);

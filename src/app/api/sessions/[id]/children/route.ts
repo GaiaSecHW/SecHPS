@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
-import { getOrCreateServer } from '@/lib/server-manager';
+import { getOrCreateServer } from '@/lib/opencode-manager';
 
 // 获取会话的子会话列表
 export async function GET(

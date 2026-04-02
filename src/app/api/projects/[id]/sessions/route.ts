@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
-import { getOrCreateProjectServer } from '@/lib/server-manager';
+import { getOrCreateProjectClient } from '@/lib/opencode-manager';
 
 // 获取项目的评估历史（从 OpenCode session.list()）
 export async function GET(

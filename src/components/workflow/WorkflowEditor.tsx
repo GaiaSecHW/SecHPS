@@ -19,7 +19,7 @@ import '@xyflow/react/dist/style.css';
 import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff } from 'lucide-react';
 import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
-import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP } from '@/types/workflow';
+import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP, WorkflowNodeType } from '@/types/workflow';
 
 interface WorkflowEditorProps {
   workflowId?: string;
@@ -216,13 +216,15 @@ function WorkflowEditorContent({
           flowY: position.y 
         });
 
+        const nodeType = NODE_TYPE_MAP[nodeData.type as WorkflowNodeType];
+        
         const newNode: FlowNode = {
           id: `node-${Date.now()}`,
           type: nodeData.type,
           position,
           data: {
-            label: nodeData.label,
-            description: nodeData.description,
+            label: nodeType?.defaultLabel || nodeData.label,
+            description: nodeType?.defaultDescription || nodeData.description,
             config: {},
             inputs: nodeData.inputs,
             outputs: nodeData.outputs,
@@ -603,43 +605,54 @@ function WorkflowEditorContent({
           <div className="p-4">
             {selectedNode && (
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    节点名称
-                  </label>
-                  <input
-                    type="text"
-                    value={selectedNode.data.label}
-                    onChange={(e) => {
-                      const updatedNodes = nodes.map((n) =>
-                        n.id === selectedNode.id
-                          ? { ...n, data: { ...n.data, label: e.target.value } }
-                          : n
-                      );
-                      setNodes(updatedNodes);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                {/* 检查节点是否可编辑 */}
+                {NODE_TYPE_MAP[selectedNode.type as WorkflowNodeType]?.editable !== false ? (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        节点名称
+                      </label>
+                      <input
+                        type="text"
+                        value={selectedNode.data.label}
+                        onChange={(e) => {
+                          const updatedNodes = nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, data: { ...n.data, label: e.target.value } }
+                              : n
+                          );
+                          setNodes(updatedNodes);
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    描述
-                  </label>
-                  <textarea
-                    value={selectedNode.data.description || ''}
-                    onChange={(e) => {
-                      const updatedNodes = nodes.map((n) =>
-                        n.id === selectedNode.id
-                          ? { ...n, data: { ...n.data, description: e.target.value } }
-                          : n
-                      );
-                      setNodes(updatedNodes);
-                    }}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        描述
+                      </label>
+                      <textarea
+                        value={selectedNode.data.description || ''}
+                        onChange={(e) => {
+                          const updatedNodes = nodes.map((n) =>
+                            n.id === selectedNode.id
+                              ? { ...n, data: { ...n.data, description: e.target.value } }
+                              : n
+                          );
+                          setNodes(updatedNodes);
+                        }}
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                    <p className="text-sm text-blue-800">
+                      此节点为系统节点，不可编辑名称和描述
+                    </p>
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
