@@ -318,7 +318,7 @@ export async function getOrCreateProjectServer(projectId: string): Promise<{ url
       const server = await createOpencodeServer({
         port: newPort,
         directory: project.projectPath,
-        config: { { model: modelStr } },
+        config: { model: modelStr },
       });
 
       // 缓存项目级服务器实例
