@@ -63,13 +63,9 @@ export async function GET(
       return NextResponse.json({ children: [] });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[Children API] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
-    console.log('[Children API] Server ready:', server.url);
-
-    // 初始化 OpenCode SDK
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
+    // 获取 OpenCode 客户端
+    console.log('[Children API] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client } = await getOrCreateServer(evaluation.id);
 
     // 从 OpenCode 服务器获取子会话
     console.log('[SDK] Calling session.children() for session:', evaluation.opencodeSessionId);

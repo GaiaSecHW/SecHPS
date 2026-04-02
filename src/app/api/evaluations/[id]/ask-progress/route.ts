@@ -54,12 +54,9 @@ export async function POST(
       return NextResponse.json({ error: '该评估会话没有关联的 AI 会话' }, { status: 400 });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[Ask Progress] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
-
-    // 初始化 SDK
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
+    // 获取 OpenCode 客户端
+    console.log('[Ask Progress] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client } = await getOrCreateServer(evaluation.id);
 
     // 获取模型配置
     const modelStr = evaluation.project.config?.modelPreferences || 'openai/gpt-4';

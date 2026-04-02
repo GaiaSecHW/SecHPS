@@ -46,19 +46,13 @@ export async function GET(
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[Session History] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
-    console.log('[Session History] Server ready:', server.url);
-
-    // 初始化 SDK
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
+    // 获取 OpenCode 客户端
+    console.log('[Session History] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client } = await getOrCreateServer(evaluation.id);
 
     // 调用 session.list() 获取会话列表
     console.log('[SDK] Calling session.list() for project');
-    const result = await client.session.list({
-      directory: evaluation.project.projectPath || undefined,
-    } as any);
+    const result = await client.session.list();
 
     // 检查错误
     if (result.error) {
