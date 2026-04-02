@@ -83,7 +83,9 @@ export async function DELETE(
 
     // 获取评估会话
     const { id } = await params;
-    const evaluation = await prisma.evaluationSession.findUnique({
+    
+    // 尝试通过 opencodeSessionId 查找（因为前端可能传递 OpenCode session ID）
+    let evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
         project: {
@@ -91,8 +93,32 @@ export async function DELETE(
             config: true,
           },
         },
+        messages: {
+          orderBy: {
+            createdAt: 'asc',
+          },
+        },
       },
     });
+    
+    // 如果没找到，尝试通过 opencodeSessionId 查找
+    if (!evaluation) {
+      evaluation = await prisma.evaluationSession.findFirst({
+        where: { opencodeSessionId: id },
+        include: {
+          project: {
+            include: {
+              config: true,
+            },
+          },
+          messages: {
+            orderBy: {
+              createdAt: 'asc',
+            },
+          },
+        },
+      });
+    }
 
     if (!evaluation) {
       return NextResponse.json({ error: '未找到评估会话' }, { status: 404 });
