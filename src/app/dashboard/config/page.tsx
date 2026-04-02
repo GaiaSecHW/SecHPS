@@ -54,6 +54,7 @@ interface Config {
   projectUploadDir: string | null;
   taskDescription: string | null;
   modelPreferences: string | null;
+  workflowConfig: string | null;
   isActive: boolean;
 }
 
@@ -69,6 +70,12 @@ export default function ConfigPage() {
   const [projectUploadDir, setProjectUploadDir] = useState('');
   const [taskDescription, setTaskDescription] = useState('');
   const [selectedModel, setSelectedModel] = useState('');
+  
+  // 工作流配置
+  const [startNodeLabel, setStartNodeLabel] = useState('开始');
+  const [startNodeDescription, setStartNodeDescription] = useState('工作流的起始点');
+  const [endNodeLabel, setEndNodeLabel] = useState('结束');
+  const [endNodeDescription, setEndNodeDescription] = useState('工作流的结束点');
 
   // OpenCode 数据
   const [providers, setProviders] = useState<OpenCodeProvider[]>([]);
@@ -104,6 +111,19 @@ export default function ConfigPage() {
         setProjectUploadDir(activeConfig.projectUploadDir || '');
         setTaskDescription(activeConfig.taskDescription || '');
         setSelectedModel(activeConfig.modelPreferences || '');
+        
+        // 解析工作流配置
+        if (activeConfig.workflowConfig) {
+          try {
+            const workflowConfig = JSON.parse(activeConfig.workflowConfig);
+            setStartNodeLabel(workflowConfig.startNodeLabel || '开始');
+            setStartNodeDescription(workflowConfig.startNodeDescription || '工作流的起始点');
+            setEndNodeLabel(workflowConfig.endNodeLabel || '结束');
+            setEndNodeDescription(workflowConfig.endNodeDescription || '工作流的结束点');
+          } catch (e) {
+            console.error('Failed to parse workflow config:', e);
+          }
+        }
       }
     } catch (err) {
       setError('加载配置失败');
@@ -170,6 +190,15 @@ export default function ConfigPage() {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
+      
+      // 构建工作流配置
+      const workflowConfig = JSON.stringify({
+        startNodeLabel,
+        startNodeDescription,
+        endNodeLabel,
+        endNodeDescription,
+      });
+      
       const response = await fetch(`/api/config/${config.id}`, {
         method: 'PATCH',
         headers: {
@@ -180,6 +209,7 @@ export default function ConfigPage() {
           projectUploadDir,
           taskDescription,
           modelPreferences: selectedModel,
+          workflowConfig,
         }),
       });
 

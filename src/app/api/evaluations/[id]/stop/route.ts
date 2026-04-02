@@ -52,15 +52,13 @@ export async function POST(
       return NextResponse.json({ error: '只有运行中的会话才能停止' }, { status: 400 });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[Stop API] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
+    // 获取 OpenCode 客户端
+    console.log('[Stop API] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client, close } = await getOrCreateServer(evaluation.id);
 
     // 调用 SDK 中止会话
     if (evaluation.opencodeSessionId) {
       try {
-        const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
-        
         // 调用 SDK 中止会话
         const result = await client.session.abort({ path: { id: evaluation.opencodeSessionId } });
         if (result.error) {
@@ -75,7 +73,7 @@ export async function POST(
     }
 
     // 关闭服务器实例
-    closeServer(evaluation.id);
+    close();
 
     // 更新评估会话状态
     const updatedEvaluation = await prisma.evaluationSession.update({

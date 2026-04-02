@@ -108,10 +108,10 @@ export function releaseProjectClient(projectId: string) {
  * 基于项目级实例，但使用评估会话 ID 作为缓存键
  */
 export async function getOrCreateServer(evaluationId: string): Promise<{
+  client: OpencodeClient;
   url: string;
   port: number;
   close: () => void;
-  client: OpencodeClient;
 }> {
   // 1. 检查评估会话级缓存
   const cached = evaluationInstances.get(evaluationId);

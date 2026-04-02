@@ -59,13 +59,11 @@ export async function POST(
       return NextResponse.json({ error: '缺少 modelID 或 providerID' }, { status: 400 });
     }
 
-    // 获取或创建 OpenCode 服务器
-    console.log('[Summarize API] Getting or creating server for evaluation:', evaluation.id);
-    const server = await getOrCreateServer(evaluation.id);
+    // 获取 OpenCode 客户端
+    console.log('[Summarize API] Getting OpenCode client for evaluation:', evaluation.id);
+    const { client } = await getOrCreateServer(evaluation.id);
 
     // 调用 SDK 总结会话
-    const client = (await import('@opencode-ai/sdk')).createOpencodeClient({ baseUrl: server.url });
-
     const result = await client.session.summarize({
       path: { id: evaluation.opencodeSessionId },
       body: {
