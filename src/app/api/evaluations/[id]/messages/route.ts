@@ -30,7 +30,9 @@ export async function GET(
 
     // 获取评估会话
     const { id } = await params;
-    const evaluation = await prisma.evaluationSession.findUnique({
+    
+    // 尝试通过 id 查找（可能是数据库 ID 或 OpenCode session ID）
+    let evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
         project: {
@@ -40,6 +42,20 @@ export async function GET(
         },
       },
     });
+    
+    // 如果没找到，尝试通过 opencodeSessionId 查找
+    if (!evaluation) {
+      evaluation = await prisma.evaluationSession.findFirst({
+        where: { opencodeSessionId: id },
+        include: {
+          project: {
+            include: {
+              config: true,
+            },
+          },
+        },
+      });
+    }
 
     if (!evaluation) {
       return NextResponse.json({ error: '未找到评估会话' }, { status: 404 });
