@@ -450,6 +450,78 @@ export default function ConfigPage() {
           </div>
         </div>
 
+        {/* Workflow Config */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Settings size={20} />
+            工作流配置
+          </h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Start Node Config */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-800">开始节点</h4>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  节点名称
+                </label>
+                <input
+                  type="text"
+                  value={startNodeLabel}
+                  onChange={(e) => setStartNodeLabel(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="开始"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  节点描述
+                </label>
+                <input
+                  type="text"
+                  value={startNodeDescription}
+                  onChange={(e) => setStartNodeDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="工作流的起始点"
+                />
+              </div>
+            </div>
+            
+            {/* End Node Config */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold text-gray-800">结束节点</h4>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  节点名称
+                </label>
+                <input
+                  type="text"
+                  value={endNodeLabel}
+                  onChange={(e) => setEndNodeLabel(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="结束"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  节点描述
+                </label>
+                <input
+                  type="text"
+                  value={endNodeDescription}
+                  onChange={(e) => setEndNodeDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="工作流的结束点"
+                />
+              </div>
+            </div>
+          </div>
+          
+          <p className="text-xs text-gray-500">
+            这些配置将作为工作流中开始和结束节点的默认名称和描述
+          </p>
+        </div>
+
         {/* MCP Servers */}
         {openCodeConfig && openCodeConfig.mcpServers.length > 0 && (
           <div className="space-y-4 border-t border-gray-200 pt-6">
