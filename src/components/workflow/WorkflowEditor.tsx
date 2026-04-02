@@ -202,9 +202,18 @@ function WorkflowEditorContent({
         const nodeData = JSON.parse(event.dataTransfer.getData('application/reactflow'));
 
         // 使用 screenToFlowPosition 准确计算位置
+        // 注意：需要考虑 React Flow 容器的边界框
+        const bounds = (event.target as HTMLElement).getBoundingClientRect();
         const position = screenToFlowPosition({
           x: event.clientX,
           y: event.clientY,
+        });
+
+        console.log('Drop position:', { 
+          clientX: event.clientX, 
+          clientY: event.clientY,
+          flowX: position.x, 
+          flowY: position.y 
         });
 
         const newNode: FlowNode = {
@@ -540,7 +549,7 @@ function WorkflowEditorContent({
             attributionPosition="bottom-left"
             minZoom={0.1}
             maxZoom={2}
-            defaultViewport={{ x: 0, y: 0, zoom: 0.33 }}
+            defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             style={{ width: '100%', height: '100%' }}
           >
             <Background color="#aaa" gap={16} />
