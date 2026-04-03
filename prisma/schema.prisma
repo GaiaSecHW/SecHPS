@@ -133,6 +133,14 @@ model Project {
   files           ProjectFile[]
   evaluations     EvaluationSession[]
 
+  // 新增关系
+  structures      ProjectStructure[]
+  codeKnowledge   CodeKnowledge[]
+  dataFlows       DataFlow[]
+  scanTasks       ScanTask[]
+  skillExecutions SkillExecution[]
+  vulnerabilities Vulnerability[]
+
   @@index([userId])
   @@index([configId])
   @@index([status])
@@ -335,4 +343,432 @@ model WorkflowShare {
   @@index([sharedBy])
   @@index([sharedWith])
   @@unique([workflowId, sharedWith])
+}
+
+// Claude Code Router - 模型配置
+model ModelConfig {
+  id          String   @id @default(uuid())
+  name        String   // 提供商名称（如 "internal-model" 或 "claude"）
+  providerType String  @default("openai") // 代理类型：claude 或 openai
+  apiBaseUrl  String   // API 地址（Claude API 或内部大模型）
+  apiKey      String   // API Key
+  models      String   // 模型列表（JSON 数组，如 ["qwen-72b", "qwen-14b"]）
+  transformer String?  // 转换器配置（JSON，如 {"use": ["deepseek"]}）
+  isActive    Boolean  @default(true)
+  isDefault   Boolean  @default(false)  // 是否为默认模型
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([isDefault])
+  @@index([providerType])
+}
+
+// Claude Code Router - 路由配置
+model RouterConfig {
+  id          String   @id @default(uuid())
+  routeType   String   // 路由类型：default, background, think, longContext, webSearch
+  modelId     String   // 关联 ModelConfig.id
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([routeType])  // 每种路由类型只有一个配置
+  @@index([modelId])
+}
+
+// ============================================
+// AI 漏洞挖掘平台 - Skills 系统
+// ============================================
+
+// Skill 定义
+model Skill {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  displayName String
+  description String
+  category    String   // code-audit, auth, sensitive, api, config, crypto, web, business, client, cloud
+  cwe         String?  // CWE 编号，如 CWE-89
+  severity    String   // critical, high, medium, low, info
+
+  // Prompt 定义
+  systemPrompt String  // 系统提示词
+  userPrompt   String  // 用户提示词模板（支持变量）
+
+  // 工具和参数
+  tools       String   // JSON: ["read_file", "search_pattern"]
+  parameters  String   // JSON: 参数定义
+
+  // 状态
+  isActive    Boolean  @default(true)
+  isBuiltin   Boolean  @default(true)  // 是否内置（不可删除）
+  version     Int      @default(1)
+
+  // 进化相关
+  successRate Float?   // 成功率
+  avgDuration Int?     // 平均执行时间（毫秒）
+  execCount   Int      @default(0)     // 执行次数
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  executions  SkillExecution[]
+  evolutions  SkillEvolution[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+// Skill 执行记录
+model SkillExecution {
+  id          String   @id @default(cuid())
+  skillId     String
+  projectId   String
+  scanTaskId  String?
+
+  // 输入输出
+  input       String   // JSON: 输入参数
+  output      String?  // JSON: 输出结果
+
+  // 执行状态
+  status      String   @default("pending") // pending, running, completed, failed, cancelled
+  startedAt   DateTime?
+  completedAt DateTime?
+  duration    Int?     // 执行时长（毫秒）
+  error       String?
+
+  // 结果
+  findingsCount   Int @default(0)  // 发现数量
+  confirmedCount  Int @default(0)  // 确认数量
+  falsePositiveCount Int @default(0) // 误报数量
+
+  // Token 使用
+  inputTokens  Int?
+  outputTokens Int?
+
+  createdAt   DateTime @default(now())
+
+  // 关系
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  scanTask    ScanTask? @relation(fields: [scanTaskId], references: [id], onDelete: SetNull)
+  vulnerabilities Vulnerability[]
+
+  @@index([skillId])
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Skill 进化记录
+model SkillEvolution {
+  id          String   @id @default(cuid())
+  skillId     String
+
+  // 版本信息
+  fromVersion Int
+  toVersion   Int
+
+  // 变更内容
+  changeType  String   // prompt-update, parameter-tune, tool-add, tool-remove
+  changeDesc  String   // 变更描述
+  beforeData  String   // JSON: 变更前数据
+  afterData   String   // JSON: 变更后数据
+
+  // 变更原因
+  reason      String   // 手动调整 | 自动优化 | 误报反馈 | 漏报反馈
+
+  // 效果评估
+  beforeRate  Float?   // 变更前成功率
+  afterRate   Float?   // 变更后成功率
+
+  createdAt   DateTime @default(now())
+
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@index([createdAt])
+}
+
+// ============================================
+// 漏洞管理
+// ============================================
+
+// 漏洞记录
+model Vulnerability {
+  id          String   @id @default(cuid())
+  projectId   String
+  skillExecutionId String?
+
+  // 基本信息
+  title       String
+  description String
+  type        String   // SQL注入, XSS, 等等
+  cwe         String?  // CWE 编号
+  severity    String   // critical, high, medium, low, info
+
+  // 位置信息
+  filePath    String?
+  lineStart   Int?
+  lineEnd     Int?
+  codeSnippet String?  // 漏洞代码片段
+
+  // 详情
+  details     String?  // JSON: 详细信息
+  aiAnalysis  String?  // AI 分析结果
+  fixSuggestion String? // 修复建议
+
+  // 状态管理
+  status      String   @default("new") // new, confirmed, false-positive, fixed, verified, closed
+  confirmedBy String?  // 确认人
+  confirmedAt DateTime?
+  fixedBy     String?  // 修复人
+  fixedAt     DateTime?
+  verifiedBy  String?  // 验证人
+  verifiedAt  DateTime?
+
+  // 备注
+  notes       String?  // 处理备注
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  execution   SkillExecution? @relation(fields: [skillExecutionId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([status])
+  @@index([severity])
+  @@index([type])
+  @@index([createdAt])
+}
+
+// 漏洞模式库
+model VulnerabilityPattern {
+  id          String   @id @default(cuid())
+
+  // 基本信息
+  name        String   @unique
+  displayName String
+  description String
+  category    String
+
+  // CWE/CVE 映射
+  cwe         String?
+  cve         String?
+
+  // 检测规则
+  patterns    String   // JSON: 检测模式列表
+  languages   String   // JSON: 适用语言
+
+  // 示例
+  exampleVulnerable String? // 漏洞示例代码
+  exampleFixed      String? // 修复示例代码
+
+  // 修复建议
+  fixGuidance String?  // 修复指导
+
+  // 状态
+  isActive    Boolean  @default(true)
+  isBuiltin   Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
+}
+
+// ============================================
+// 自动化扫描
+// ============================================
+
+// 扫描任务
+model ScanTask {
+  id          String   @id @default(cuid())
+  projectId   String
+  userId      String
+
+  // 任务配置
+  name        String
+  description String?
+  skillIds    String   // JSON: 选中的 Skill ID 列表
+
+  // 调度配置
+  schedule    String?  // cron 表达式，null 表示手动触发
+  nextRunAt   DateTime?
+
+  // 执行状态
+  status      String   @default("pending") // pending, running, completed, failed, cancelled
+  startedAt   DateTime?
+  completedAt DateTime?
+  progress    Int      @default(0) // 0-100
+  currentSkill String? // 当前执行的 Skill
+
+  // 统计
+  totalSkills    Int   @default(0)
+  completedSkills Int  @default(0)
+  findingsCount   Int  @default(0)
+
+  // 错误信息
+  error       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  executions  SkillExecution[]
+  reports     ScanReport[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 扫描报告
+model ScanReport {
+  id          String   @id @default(cuid())
+  scanTaskId  String
+  projectId   String
+
+  // 报告内容
+  summary     String   // JSON: 摘要统计
+  details     String   // JSON: 详细结果
+
+  // 导出格式
+  format      String   @default("json") // json, pdf, html, sarif
+
+  createdAt   DateTime @default(now())
+
+  scanTask    ScanTask @relation(fields: [scanTaskId], references: [id], onDelete: Cascade)
+
+  @@index([scanTaskId])
+  @@index([projectId])
+}
+
+// ============================================
+// 代码理解
+// ============================================
+
+// 项目结构
+model ProjectStructure {
+  id          String   @id @default(cuid())
+  projectId   String   @unique
+
+  // 结构数据
+  structure   String   // JSON: 目录树结构
+  fileCount   Int      @default(0)
+  codeCount   Int      @default(0) // 代码文件数
+  languageStats String // JSON: 语言统计
+
+  // 分析状态
+  status      String   @default("pending") // pending, analyzing, completed, failed
+  analyzedAt  DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// 代码知识
+model CodeKnowledge {
+  id          String   @id @default(cuid())
+  projectId   String
+
+  // 实体信息
+  entityType  String   // function, class, interface, variable, import, call
+  name        String
+  filePath    String
+  lineStart   Int
+  lineEnd     Int?
+
+  // 关系
+  parentId    String?  // 父实体ID（如类包含方法）
+  calls       String?  // JSON: 调用的函数列表
+  calledBy    String?  // JSON: 被调用的函数列表
+
+  // 详情
+  signature   String?  // 函数签名
+  docstring   String?  // 文档字符串
+  code        String?  // 代码片段
+
+  // AI 分析
+  summary     String?  // AI 生成的摘要
+  riskScore   Float?   // 风险评分
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([entityType])
+  @@index([name])
+}
+
+// 数据流记录
+model DataFlow {
+  id          String   @id @default(cuid())
+  projectId   String
+
+  // 数据流信息
+  sourceId    String   // 数据源实体ID
+  sinkId      String   // 数据汇实体ID
+  sourceName  String
+  sinkName    String
+
+  // 路径
+  path        String   // JSON: 数据流路径
+
+  // 安全相关
+  isUserInput Boolean  @default(false)
+  isSensitive Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([sourceId])
+  @@index([sinkId])
+}
+
+// ============================================
+// 工具定义
+// ============================================
+
+// 工具定义
+model Tool {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  displayName String
+  description String
+  category    String   // file, code, security, network, system
+
+  // 工具参数定义
+  parameters  String   // JSON: 参数 schema
+
+  // 执行配置
+  executor    String   // builtin, mcp, http, script
+  executorConfig String? // JSON: 执行器配置
+
+  // 安全配置
+  requiresPermission Boolean @default(false)
+  allowedInSandbox   Boolean @default(true)
+  timeout            Int     @default(30000) // 超时时间（毫秒）
+
+  // 状态
+  isActive    Boolean  @default(true)
+  isBuiltin   Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([isActive])
 }
