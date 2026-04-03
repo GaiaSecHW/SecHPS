@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/prisma';
 import type { User, Role, Permission } from '@prisma/client';
+import { permissionCache, cacheKeys, getOrSet, invalidateUserCaches } from '@/lib/cache';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 const JWT_EXPIRES_IN = '7d';
@@ -46,40 +47,49 @@ export function verifyToken(token: string): JWTPayload | null {
   }
 }
 
-// 获取用户完整信息（包含角色和权限）
+// 获取用户完整信息（包含角色和权限）- 使用缓存
 export async function getUserWithPermissions(userId: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: {
-      userRoles: {
+  const cacheKey = cacheKeys.userPermissions(userId);
+
+  return getOrSet(
+    permissionCache,
+    cacheKey,
+    async () => {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
         include: {
-          role: {
+          userRoles: {
             include: {
-              permissions: true,
+              role: {
+                include: {
+                  permissions: true,
+                },
+              },
             },
           },
         },
-      },
+      });
+
+      if (!user) {
+        return null;
+      }
+
+      // 提取所有权限（去重）
+      const permissions = new Set<string>();
+      user.userRoles.forEach(userRole => {
+        userRole.role.permissions.forEach(permission => {
+          permissions.add(permission.name);
+        });
+      });
+
+      return {
+        user,
+        roles: user.userRoles.map(ur => ur.role),
+        permissions: Array.from(permissions),
+      };
     },
-  });
-
-  if (!user) {
-    return null;
-  }
-
-  // 提取所有权限（去重）
-  const permissions = new Set<string>();
-  user.userRoles.forEach(userRole => {
-    userRole.role.permissions.forEach(permission => {
-      permissions.add(permission.name);
-    });
-  });
-
-  return {
-    user,
-    roles: user.userRoles.map(ur => ur.role),
-    permissions: Array.from(permissions),
-  };
+    5 * 60 * 1000 // 5 minutes TTL
+  );
 }
 
 // 检查用户是否拥有指定权限
