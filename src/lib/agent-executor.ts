@@ -1,0 +1,328 @@
+import { prisma } from '@/lib/prisma';
+import { createAIProvider, AIProvider, AIMessage, AIStreamCallbacks } from '@/services/ai';
+import { ToolExecutor } from '@/lib/tool-executor';
+import { parseAIResponse, ParsedVulnerability, ParsedToolCall } from '@/lib/result-parser';
+
+export interface AgentExecutionContext {
+  skillId: string;
+  projectId: string;
+  scanTaskId?: string;
+  modelConfig: {
+    providerType: string;
+    apiKey: string;
+    apiBaseUrl: string;
+    model: string;
+  };
+  maxToolCalls?: number;
+  maxIterations?: number;
+}
+
+export interface AgentExecutionCallbacks {
+  onChunk: (text: string) => void;
+  onToolCall: (tool: string, parameters: Record<string, unknown>) => void;
+  onVulnerability: (vulnerability: ParsedVulnerability) => void;
+  onComplete: (result: AgentExecutionResult) => void;
+  onError: (error: Error) => void;
+}
+
+export interface AgentExecutionResult {
+  executionId: string;
+  skillId: string;
+  projectId: string;
+  status: 'completed' | 'failed' | 'cancelled';
+  summary: string;
+  vulnerabilities: ParsedVulnerability[];
+  toolCalls: Array<{ tool: string; parameters: Record<string, unknown>; result: unknown }>;
+  duration: number;
+  error?: string;
+}
+
+/**
+ * Agent 执行引擎
+ * 负责执行 Skill 并处理 AI 调用、工具执行、结果解析
+ */
+export class AgentExecutor {
+  private context: AgentExecutionContext;
+  private callbacks: AgentExecutionCallbacks;
+  private provider: AIProvider;
+  private toolExecutor: ToolExecutor;
+  private cancelled: boolean = false;
+  private toolCallCount: number = 0;
+  private iterationCount: number = 0;
+  private executionId: string = '';
+
+  constructor(context: AgentExecutionContext, callbacks: AgentExecutionCallbacks) {
+    this.context = context;
+    this.callbacks = callbacks;
+
+    // 创建 AI 提供商
+    this.provider = createAIProvider(
+      (context.modelConfig.providerType === 'claude' ? 'claude' : 'ccr-proxy') as 'claude' | 'ccr-proxy',
+      {
+        apiKey: context.modelConfig.apiKey,
+        baseUrl: context.modelConfig.apiBaseUrl,
+        model: context.modelConfig.model,
+        maxTokens: 4096,
+      }
+    );
+
+    // 创建工具执行器
+    this.toolExecutor = new ToolExecutor({
+      projectId: context.projectId,
+      timeout: 30000,
+    });
+  }
+
+  /**
+   * 执行 Skill
+   */
+  async execute(): Promise<AgentExecutionResult> {
+    const startTime = Date.now();
+
+    try {
+      // 创建执行记录
+      this.executionId = await this.createExecutionRecord();
+
+      // 获取 Skill 信息
+      const skill = await prisma.skill.findUnique({
+        where: { id: this.context.skillId },
+      });
+
+      if (!skill) {
+        throw new Error('Skill 不存在');
+      }
+
+      // 获取项目信息
+      const project = await prisma.project.findUnique({
+        where: { id: this.context.projectId },
+        include: { files: true },
+      });
+
+      if (!project) {
+        throw new Error('项目不存在');
+      }
+
+      // 构建初始消息
+      const messages = this.buildMessages(skill, project);
+      let lastResponse = '';
+
+      // 执行循环
+      while (!this.cancelled && this.iterationCount < (this.context.maxIterations || 10)) {
+        this.iterationCount++;
+
+        // 调用 AI
+        lastResponse = await this.callAI(messages);
+
+        // 解析响应
+        const parsed = parseAIResponse(lastResponse);
+
+        // 保存漏洞
+        if (parsed.vulnerabilities.length > 0) {
+          await this.saveVulnerabilities(parsed.vulnerabilities);
+          parsed.vulnerabilities.forEach(v => this.callbacks.onVulnerability(v));
+        }
+
+        // 检查是否需要工具调用
+        if (parsed.needsToolCall && this.toolCallCount < (this.context.maxToolCalls || 20)) {
+          const toolResults = await this.executeToolCalls(parsed.toolCalls);
+
+          // 将工具结果添加到消息
+          messages.push({
+            role: 'assistant',
+            content: lastResponse,
+          });
+          messages.push({
+            role: 'user',
+            content: `工具执行结果:\n${toolResults}`,
+          });
+
+          continue;
+        }
+
+        // 没有更多工具调用，完成执行
+        break;
+      }
+
+      const duration = Date.now() - startTime;
+
+      // 更新执行记录
+      await this.updateExecutionRecord('completed', lastResponse.slice(0, 500), duration);
+
+      const result: AgentExecutionResult = {
+        executionId: this.executionId,
+        skillId: this.context.skillId,
+        projectId: this.context.projectId,
+        status: this.cancelled ? 'cancelled' : 'completed',
+        summary: parseAIResponse(lastResponse).summary,
+        vulnerabilities: [],
+        toolCalls: [],
+        duration,
+      };
+
+      this.callbacks.onComplete(result);
+      return result;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      const errorMessage = error instanceof Error ? error.message : '未知错误';
+
+      // 更新执行记录
+      if (this.executionId) {
+        await this.updateExecutionRecord('failed', errorMessage, duration);
+      }
+
+      const result: AgentExecutionResult = {
+        executionId: this.executionId,
+        skillId: this.context.skillId,
+        projectId: this.context.projectId,
+        status: 'failed',
+        summary: errorMessage,
+        vulnerabilities: [],
+        toolCalls: [],
+        duration,
+        error: errorMessage,
+      };
+
+      this.callbacks.onError(error instanceof Error ? error : new Error(errorMessage));
+      return result;
+    }
+  }
+
+  /**
+   * 取消执行
+   */
+  cancel(): void {
+    this.cancelled = true;
+    this.provider.abort();
+  }
+
+  /**
+   * 创建执行记录
+   */
+  private async createExecutionRecord(): Promise<string> {
+    const execution = await prisma.skillExecution.create({
+      data: {
+        skillId: this.context.skillId,
+        projectId: this.context.projectId,
+        scanTaskId: this.context.scanTaskId,
+        input: JSON.stringify({}),
+        status: 'running',
+        startedAt: new Date(),
+      },
+    });
+    return execution.id;
+  }
+
+  /**
+   * 更新执行记录
+   */
+  private async updateExecutionRecord(
+    status: string,
+    output: string,
+    duration: number
+  ): Promise<void> {
+    await prisma.skillExecution.update({
+      where: { id: this.executionId },
+      data: {
+        status,
+        output: JSON.stringify({ summary: output }),
+        duration,
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * 构建消息
+   */
+  private buildMessages(
+    skill: { systemPrompt: string; userPrompt: string; category: string },
+    project: { name: string; description: string | null; files: Array<{ fileName: string; fileType: string }> }
+  ): AIMessage[] {
+    const systemMessage = skill.systemPrompt;
+
+    const userMessage = skill.userPrompt
+      .replace('{{projectName}}', project.name)
+      .replace('{{projectDescription}}', project.description || '')
+      .replace('{{fileCount}}', String(project.files.length));
+
+    return [
+      { role: 'system', content: systemMessage },
+      { role: 'user', content: userMessage },
+    ];
+  }
+
+  /**
+   * 调用 AI
+   */
+  private async callAI(messages: AIMessage[]): Promise<string> {
+    return new Promise((resolve, reject) => {
+      let fullResponse = '';
+
+      const callbacks: AIStreamCallbacks = {
+        onChunk: (text) => {
+          fullResponse += text;
+          this.callbacks.onChunk(text);
+        },
+        onComplete: () => {
+          resolve(fullResponse);
+        },
+        onError: (error) => {
+          reject(error);
+        },
+      };
+
+      this.provider.stream(messages, callbacks).catch(reject);
+    });
+  }
+
+  /**
+   * 执行工具调用
+   */
+  private async executeToolCalls(
+    toolCalls: ParsedToolCall[]
+  ): Promise<string> {
+    const results: string[] = [];
+
+    for (const toolCall of toolCalls) {
+      if (this.cancelled) break;
+
+      this.toolCallCount++;
+      this.callbacks.onToolCall(toolCall.tool, toolCall.parameters);
+
+      try {
+        const result = await this.toolExecutor.execute(toolCall.tool, toolCall.parameters);
+        results.push(`[${toolCall.tool}] 执行成功:\n${JSON.stringify(result, null, 2)}`);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : '执行失败';
+        results.push(`[${toolCall.tool}] 执行失败: ${errorMsg}`);
+      }
+    }
+
+    return results.join('\n\n');
+  }
+
+  /**
+   * 保存漏洞到数据库
+   */
+  private async saveVulnerabilities(vulnerabilities: ParsedVulnerability[]): Promise<void> {
+    for (const vuln of vulnerabilities) {
+      await prisma.vulnerability.create({
+        data: {
+          projectId: this.context.projectId,
+          title: vuln.title,
+          description: vuln.description,
+          type: vuln.type || 'unknown',
+          severity: vuln.severity,
+          status: 'new',
+          filePath: vuln.filePath,
+          lineStart: vuln.lineStart,
+          lineEnd: vuln.lineEnd,
+          codeSnippet: vuln.codeSnippet,
+          recommendation: vuln.recommendation,
+          cwe: vuln.cwe,
+        },
+      });
+    }
+  }
+}
