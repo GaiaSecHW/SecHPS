@@ -176,8 +176,8 @@
   "hotPaths": [
     {
       "path": "prisma\\schema.prisma",
-      "accessCount": 11,
-      "lastAccessed": 1775236016057,
+      "accessCount": 15,
+      "lastAccessed": 1775237505413,
       "type": "file"
     },
     {
@@ -301,6 +301,12 @@
       "type": "file"
     },
     {
+      "path": "src\\app\\dashboard\\code\\page.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775237554546,
+      "type": "file"
+    },
+    {
       "path": "src\\services\\ai\\ccr-proxy.ts",
       "accessCount": 2,
       "lastAccessed": 1775222653924,
@@ -352,12 +358,6 @@
       "path": "src\\app\\dashboard\\scans\\page.tsx",
       "accessCount": 2,
       "lastAccessed": 1775225990259,
-      "type": "file"
-    },
-    {
-      "path": "src\\app\\dashboard\\code\\page.tsx",
-      "accessCount": 2,
-      "lastAccessed": 1775225990263,
       "type": "file"
     },
     {
