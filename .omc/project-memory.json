@@ -199,15 +199,15 @@
       "type": "file"
     },
     {
-      "path": "src\\app\\dashboard\\admin\\patterns\\page.tsx",
-      "accessCount": 5,
-      "lastAccessed": 1775234866788,
+      "path": "src\\services\\ai\\index.ts",
+      "accessCount": 6,
+      "lastAccessed": 1775238605978,
       "type": "file"
     },
     {
-      "path": "src\\services\\ai\\index.ts",
+      "path": "src\\app\\dashboard\\admin\\patterns\\page.tsx",
       "accessCount": 5,
-      "lastAccessed": 1775236016070,
+      "lastAccessed": 1775234866788,
       "type": "file"
     },
     {
