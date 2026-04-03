@@ -29,7 +29,10 @@ export async function GET(
     });
 
     if (!structure) {
-      return NextResponse.json({ error: '项目结构不存在，请先分析项目' }, { status: 404 });
+      return NextResponse.json({
+        error: '项目结构不存在，请先分析项目',
+        structure: null
+      }, { status: 404 });
     }
 
     return NextResponse.json({

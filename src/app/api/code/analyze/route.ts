@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { CodeAnalyzer } from '@/lib/code-analyzer';
 
 // POST /api/code/analyze - 分析项目代码
 export async function POST(request: Request) {
@@ -20,7 +21,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { projectId, options } = body;
+    const { projectId } = body;
 
     if (!projectId) {
       return NextResponse.json({ error: '缺少项目ID' }, { status: 400 });
@@ -35,61 +36,55 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
-    // 检查是否已有结构分析
-    let structure = await prisma.projectStructure.findUnique({
-      where: { projectId },
-    });
-
-    if (!structure) {
-      // 创建初始结构记录
-      structure = await prisma.projectStructure.create({
-        data: {
-          projectId,
-          structure: '{}',
-          fileCount: project.files.length,
-          codeCount: project.files.filter(f =>
-            ['js', 'ts', 'jsx', 'tsx', 'py', 'java', 'go', 'rs', 'c', 'cpp'].includes(f.fileType)
-          ).length,
-          languageStats: '{}',
-          status: 'pending',
-        },
-      });
-
-      // TODO: 实际分析逻辑（后台任务）
-      // 这里只更新状态为分析中
-      await prisma.projectStructure.update({
-        where: { id: structure.id },
-        data: { status: 'analyzing' },
-      });
+    // 检查项目路径
+    if (!project.projectPath) {
+      return NextResponse.json({ error: '项目路径未配置' }, { status: 400 });
     }
 
-    // 统计知识库
-    const knowledgeCount = await prisma.codeKnowledge.count({
-      where: { projectId },
+    // 创建 SSE 流用于进度更新
+    const stream = new ReadableStream({
+      async start(controller) {
+        const sendProgress = (status: string, progress: number) => {
+          const data = JSON.stringify({ status, progress });
+          controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+        };
+
+        try {
+          const analyzer = new CodeAnalyzer(projectId, project.projectPath!);
+          const result = await analyzer.analyze(sendProgress);
+
+          const data = JSON.stringify({
+            type: 'complete',
+            result: {
+              projectId: result.projectId,
+              fileCount: result.structure.fileCount,
+              codeCount: result.structure.codeCount,
+              entityCount: result.entities.length,
+              callRelationCount: result.callRelations.length,
+              dataFlowCount: result.dataFlows.length,
+              duration: result.duration,
+              errors: result.errors,
+            },
+          });
+          controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+          controller.close();
+        } catch (error) {
+          const data = JSON.stringify({
+            type: 'error',
+            error: error instanceof Error ? error.message : '分析失败',
+          });
+          controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+          controller.close();
+        }
+      },
     });
 
-    // 统计数据流
-    const dataFlowCount = await prisma.dataFlow.count({
-      where: { projectId },
-    });
-
-    return NextResponse.json({
-      projectId,
-      structure: structure ? {
-        id: structure.id,
-        projectId: structure.projectId,
-        structure: JSON.parse(structure.structure),
-        fileCount: structure.fileCount,
-        codeCount: structure.codeCount,
-        languageStats: JSON.parse(structure.languageStats),
-        status: structure.status,
-        analyzedAt: structure.analyzedAt,
-        createdAt: structure.createdAt,
-        updatedAt: structure.updatedAt,
-      } : null,
-      knowledgeCount,
-      dataFlowCount,
-      status: structure?.status || 'pending',
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
     });
   } catch (error) {
     console.error('分析项目错误:', error);
