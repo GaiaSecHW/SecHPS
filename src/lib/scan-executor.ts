@@ -1,6 +1,7 @@
 // src/lib/scan-executor.ts
 
 import { prisma } from '@/lib/prisma';
+import { AgentExecutor, AgentExecutionContext, AgentExecutionCallbacks, AgentExecutionResult } from '@/lib/agent-executor';
 
 export interface ScanProgress {
   taskId: string;
@@ -32,6 +33,7 @@ export class ScanExecutor {
   private taskId: string;
   private progressCallback: ProgressCallback | null;
   private cancelled: boolean = false;
+  private activeExecutors: Map<string, AgentExecutor> = new Map();
 
   constructor(taskId: string, progressCallback?: ProgressCallback) {
     this.taskId = taskId;
@@ -150,38 +152,72 @@ export class ScanExecutor {
     const startTime = Date.now();
 
     try {
-      // 模拟执行 - 实际实现需要连接 AI 服务
-      // 这里返回模拟结果
-      await this.simulateExecution(2000);
+      // 获取模型配置
+      const modelConfig = await this.getModelConfig();
 
-      // 模拟发现漏洞
-      const findingsCount = Math.floor(Math.random() * 3);
-
-      if (findingsCount > 0) {
-        // 创建漏洞记录
-        for (let i = 0; i < findingsCount; i++) {
-          await prisma.vulnerability.create({
-            data: {
-              projectId: project.id,
-              title: `[${skill.displayName}] 发现潜在漏洞 #${i + 1}`,
-              description: `由 Skill "${skill.displayName}" 发现的潜在安全问题`,
-              type: skill.category,
-              severity: skill.severity,
-              status: 'new',
-            },
-          });
-        }
+      if (!modelConfig) {
+        // 如果没有模型配置，使用模拟执行
+        return this.simulateSkillExecution(skill, project, startTime);
       }
+
+      // 创建 Agent 执行上下文
+      const context: AgentExecutionContext = {
+        skillId: skill.id,
+        projectId: project.id,
+        modelConfig: {
+          providerType: modelConfig.providerType,
+          apiKey: modelConfig.apiKey,
+          apiBaseUrl: modelConfig.apiBaseUrl || 'https://api.anthropic.com/v1/messages',
+          model: JSON.parse(modelConfig.models)[0] || 'claude-sonnet-4-20250514',
+        },
+        maxToolCalls: 20,
+        maxIterations: 10,
+      };
+
+      // 执行
+      let result: AgentExecutionResult;
+      const callbacks: AgentExecutionCallbacks = {
+        onChunk: () => {},
+        onToolCall: (tool, params) => {
+          console.log(`[ScanExecutor] Tool call: ${tool}`, params);
+        },
+        onVulnerability: (vuln) => {
+          console.log(`[ScanExecutor] Found vulnerability: ${vuln.title}`);
+        },
+        onComplete: (r) => {
+          result = r;
+        },
+        onError: (error) => {
+          throw error;
+        },
+      };
+
+      // 使用 Promise 包装
+      result = await new Promise<AgentExecutionResult>((resolve, reject) => {
+        const executor = new AgentExecutor(context, {
+          ...callbacks,
+          onComplete: resolve,
+          onError: reject,
+        });
+        this.activeExecutors.set(skill.id, executor);
+
+        executor.execute().then(resolve).catch(reject);
+      });
 
       return {
         skillId: skill.id,
         skillName: skill.displayName,
-        status: 'completed',
-        findings: findingsCount,
-        output: { simulated: true, duration: Date.now() - startTime },
-        error: null,
-        duration: Date.now() - startTime,
+        status: result.status === 'completed' ? 'completed' : 'failed',
+        findings: result.vulnerabilities.length,
+        output: {
+          summary: result.summary,
+          vulnerabilities: result.vulnerabilities,
+          toolCalls: result.toolCalls,
+        },
+        error: result.error,
+        duration: result.duration,
       };
+
     } catch (error) {
       return {
         skillId: skill.id,
@@ -193,6 +229,71 @@ export class ScanExecutor {
         duration: Date.now() - startTime,
       };
     }
+  }
+
+  /**
+   * 模拟 Skill 执行（无模型配置时使用）
+   */
+  private async simulateSkillExecution(
+    skill: { id: string; name: string; displayName: string; category: string; severity: string },
+    project: { id: string },
+    startTime: number
+  ): Promise<ScanResult> {
+    await this.simulateExecution(2000);
+
+    const findingsCount = Math.floor(Math.random() * 3);
+
+    if (findingsCount > 0) {
+      for (let i = 0; i < findingsCount; i++) {
+        await prisma.vulnerability.create({
+          data: {
+            projectId: project.id,
+            title: `[${skill.displayName}] 发现潜在漏洞 #${i + 1}`,
+            description: `由 Skill "${skill.displayName}" 发现的潜在安全问题`,
+            type: skill.category,
+            severity: skill.severity,
+            status: 'new',
+          },
+        });
+      }
+    }
+
+    return {
+      skillId: skill.id,
+      skillName: skill.displayName,
+      status: 'completed',
+      findings: findingsCount,
+      output: { simulated: true, duration: Date.now() - startTime },
+      error: null,
+      duration: Date.now() - startTime,
+    };
+  }
+
+  /**
+   * 获取模型配置
+   */
+  private async getModelConfig(): Promise<{
+    providerType: string;
+    apiKey: string;
+    apiBaseUrl: string;
+    models: string;
+  } | null> {
+    const envApiKey = process.env.ANTHROPIC_API_KEY;
+    const envBaseUrl = process.env.ANTHROPIC_BASE_URL;
+    const envModel = process.env.ANTHROPIC_MODEL;
+
+    if (envApiKey) {
+      return {
+        providerType: 'claude',
+        apiKey: envApiKey,
+        apiBaseUrl: envBaseUrl || 'https://api.anthropic.com/v1/messages',
+        models: JSON.stringify([envModel || 'claude-sonnet-4-20250514']),
+      };
+    }
+
+    return prisma.modelConfig.findFirst({
+      where: { isActive: true, isDefault: true },
+    });
   }
 
   /**
