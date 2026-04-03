@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyPassword, generateToken, getUserWithPermissions } from '@/lib/auth';
 import { ROLES } from '@/types/permissions';
+import { auditLogAuth } from '@/lib/audit/logger';
 
 export async function POST(request: Request) {
   try {
@@ -53,12 +54,8 @@ export async function POST(request: Request) {
     const token = generateToken(user, roles, permissions);
 
     // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        action: 'login',
-        details: JSON.stringify({ method: 'username_password' }),
-      },
+    await auditLogAuth('login', user.id, request, {
+      metadata: { method: 'username_password' },
     });
 
     return NextResponse.json(
