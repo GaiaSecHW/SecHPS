@@ -782,3 +782,109 @@ model Tool {
   @@index([category])
   @@index([isActive])
 }
+
+// ============================================
+// 监控告警系统
+// ============================================
+
+// 告警规则
+model AlertRule {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+
+  // 指标配置
+  metricType  String   // api_response_time, error_rate, etc.
+  condition   String   // JSON: { type: 'threshold', operator: 'gt', value: 100 }
+
+  // 告警配置
+  severity    String   @default("medium") // critical, high, medium, low, info
+  enabled     Boolean  @default(true)
+  cooldownPeriod Int   @default(300) // 冷却期（秒）
+
+  // 通知配置
+  notificationChannels String // JSON: ["email", "webhook"]
+
+  // 标签过滤
+  tags        String?  // JSON: { path: "/api/workflows" }
+
+  // 状态
+  lastTriggeredAt DateTime?
+  triggerCount Int     @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  alerts      AlertInstance[]
+
+  @@index([metricType])
+  @@index([enabled])
+  @@index([severity])
+}
+
+// 告警实例
+model AlertInstance {
+  id          String   @id @default(cuid())
+  ruleId      String
+
+  // 告警信息
+  ruleName    String
+  severity    String   // critical, high, medium, low, info
+  status      String   @default("active") // active, resolved, acknowledged, silenced
+  message     String
+
+  // 触发详情
+  value       Float
+  threshold   Float
+  triggeredAt DateTime @default(now())
+
+  // 处理信息
+  resolvedAt  DateTime?
+  acknowledgedAt DateTime?
+  acknowledgedBy String?
+  details     String?  // JSON: 额外详情
+
+  // 通知状态
+  notifiedChannels String? // JSON: 已通知的渠道
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  rule        AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([ruleId])
+  @@index([status])
+  @@index([severity])
+  @@index([triggeredAt])
+}
+
+// 通知渠道配置
+model NotificationChannel {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  type        String   // email, webhook, slack, dingtalk, wechat
+  config      String   // JSON: 渠道特定配置
+  enabled     Boolean  @default(true)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+  @@index([enabled])
+}
+
+// 系统指标存储（用于历史查询）
+model SystemMetric {
+  id          String   @id @default(cuid())
+  name        String
+  type        String   // api_response_time, db_query_time, etc.
+  value       Float
+  tags        String?  // JSON: { path: "/api/workflows", method: "GET" }
+  recordedAt  DateTime @default(now())
+
+  @@index([type])
+  @@index([name])
+  @@index([recordedAt])
+}
