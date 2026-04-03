@@ -1,34 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS } from '@/types/permissions';
-import { existsSync, rmSync, readdirSync, statSync } from 'fs';
-import { join } from 'path';
+import { verifyToken } from '@/lib/auth';
+import { rm, stat } from 'fs/promises';
 
-// 递归删除目录
-function deleteDirectory(dirPath: string) {
-  if (existsSync(dirPath)) {
-    const files = readdirSync(dirPath);
-    for (const file of files) {
-      const filePath = join(dirPath, file);
-      const stats = statSync(filePath);
-      if (stats.isDirectory()) {
-        deleteDirectory(filePath);
-      } else {
-        rmSync(filePath);
-      }
-    }
-    rmSync(dirPath);
-  }
-}
-
-// 获取项目详情
+// 获取单个项目详情
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
@@ -41,38 +21,102 @@ export async function GET(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // 获取项目
     const { id } = await params;
+
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        config: true,
-        files: true,
+        files: {
+          orderBy: { uploadedAt: 'desc' },
+        },
         evaluations: {
-          orderBy: {
-            startedAt: 'desc',
-          },
+          orderBy: { startedAt: 'desc' },
         },
       },
     });
 
     if (!project) {
-      return NextResponse.json({ error: '未找到项目' }, { status: 404 });
-    }
-
-    // 检查项目是否属于当前用户
-    if (project.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
     return NextResponse.json({ project });
   } catch (error) {
-    console.error('Get project error:', error);
+    console.error('获取项目详情错误:', error);
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+  }
+}
+
+// 更新项目
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const payload = verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+
+    const project = await prisma.project.update({
+      where: { id },
+      data: {
+        name: body.name,
+        description: body.description,
+      },
+    });
+
+    return NextResponse.json({ project });
+  } catch (error) {
+    console.error('更新项目错误:', error);
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+  }
+}
+
+// 部分更新项目（PATCH）
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const payload = verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const body = await request.json();
+
+    const project = await prisma.project.update({
+      where: { id },
+      data: {
+        environmentUrl: body.environmentUrl,
+        adminUsername: body.adminUsername,
+        adminPassword: body.adminPassword,
+        normalUsername: body.normalUsername,
+        normalPassword: body.normalPassword,
+      },
+    });
+
+    return NextResponse.json({ project });
+  } catch (error) {
+    console.error('更新项目错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -83,7 +127,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
@@ -96,135 +139,59 @@ export async function DELETE(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_DELETE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // 获取项目
     const { id } = await params;
+
+    // 获取项目信息（包括文件和评估会话）
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
         files: true,
+        evaluations: true,
       },
     });
 
     if (!project) {
-      return NextResponse.json({ error: '未找到项目' }, { status: 404 });
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
-    // 检查项目是否属于当前用户
-    if (project.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+    // 删除项目目录（如果存在）
+    if (project.projectPath) {
+      try {
+        const dirStats = await stat(project.projectPath);
+        if (dirStats.isDirectory()) {
+          await rm(project.projectPath, { recursive: true, force: true });
+        }
+      } catch (err) {
+        // 目录不存在或无法访问，忽略错误
+        console.warn(`项目目录不存在或无法删除: ${project.projectPath}`, err);
+      }
     }
 
-    // 删除项目目录和文件
-    if (project.projectPath && existsSync(project.projectPath)) {
-      deleteDirectory(project.projectPath);
-    }
+    // 删除数据库记录（使用事务确保一致性）
+    await prisma.$transaction(async (tx) => {
+      // 删除文件记录
+      if (project.files.length > 0) {
+        await tx.projectFile.deleteMany({
+          where: { projectId: id },
+        });
+      }
 
-    // 删除数据库记录
-    await prisma.project.delete({
-      where: { id },
+      // 删除评估会话（会级联删除 SessionMessage）
+      if (project.evaluations.length > 0) {
+        await tx.evaluationSession.deleteMany({
+          where: { projectId: id },
+        });
+      }
+
+      // 删除项目
+      await tx.project.delete({
+        where: { id },
+      });
     });
 
-    // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'project_delete',
-        resource: id,
-        details: JSON.stringify({
-          projectPath: project.projectPath,
-          fileCount: project.files.length,
-        }),
-      },
-    });
-
-    return NextResponse.json({ message: '项目删除成功' });
+    return NextResponse.json({ message: '项目已删除' });
   } catch (error) {
-    console.error('Delete project error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
-  }
-}
-
-// 更新项目信息
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // 获取项目
-    const { id } = await params;
-    const project = await prisma.project.findUnique({
-      where: { id },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: '未找到项目' }, { status: 404 });
-    }
-
-    // 检查项目是否属于当前用户
-    if (project.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // 解析请求体
-    const body = await request.json();
-    const { name, description, environmentUrl, adminUsername, adminPassword, normalUsername, normalPassword } = body;
-
-    // 更新项目
-    const updatedProject = await prisma.project.update({
-      where: { id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(environmentUrl !== undefined && { environmentUrl }),
-        ...(adminUsername !== undefined && { adminUsername }),
-        ...(adminPassword !== undefined && { adminPassword }),
-        ...(normalUsername !== undefined && { normalUsername }),
-        ...(normalPassword !== undefined && { normalPassword }),
-      },
-    });
-
-    // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'project_update',
-        resource: id,
-        details: JSON.stringify({
-          name,
-          description,
-        }),
-      },
-    });
-
-    return NextResponse.json({
-      message: '项目更新成功',
-      project: updatedProject,
-    });
-  } catch (error) {
-    console.error('Update project error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    console.error('删除项目错误:', error);
+    return NextResponse.json({ error: '服务器内部错误', details: String(error) }, { status: 500 });
   }
 }

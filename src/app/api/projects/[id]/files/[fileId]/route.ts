@@ -1,16 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS } from '@/types/permissions';
-import { existsSync, unlinkSync } from 'fs';
+import { verifyToken } from '@/lib/auth';
 
-// 删除文件
-export async function DELETE(
+// 下载项目文件
+export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string; fileId: string }> }
 ) {
   try {
-    // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
@@ -23,68 +20,50 @@ export async function DELETE(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // 获取项目和文件 ID
     const { id, fileId } = await params;
 
-    // 获取项目
-    const project = await prisma.project.findUnique({
-      where: { id },
-    });
-
-    if (!project) {
-      return NextResponse.json({ error: '未找到项目' }, { status: 404 });
-    }
-
-    // 检查项目是否属于当前用户
-    if (project.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // 获取文件
     const file = await prisma.projectFile.findUnique({
       where: { id: fileId },
     });
 
     if (!file) {
-      return NextResponse.json({ error: '未找到文件' }, { status: 404 });
+      return NextResponse.json({ error: '文件不存在' }, { status: 404 });
     }
 
-    // 检查文件是否属于当前项目
-    if (file.projectId !== project.id) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+    return NextResponse.json({ file });
+  } catch (error) {
+    console.error('获取文件信息错误:', error);
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+  }
+}
+
+// 删除项目文件
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string; fileId: string }> }
+) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
     }
 
-    // 删除物理文件
-    if (existsSync(file.filePath)) {
-      unlinkSync(file.filePath);
+    const token = authHeader.replace('Bearer ', '');
+    const payload = verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 删除数据库记录
+    const { id, fileId } = await params;
+
     await prisma.projectFile.delete({
       where: { id: fileId },
     });
 
-    // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'project_file_delete',
-        resource: project.id,
-        details: JSON.stringify({
-          fileId,
-          fileName: file.fileName,
-        }),
-      },
-    });
-
-    return NextResponse.json({ message: '文件删除成功' });
+    return NextResponse.json({ message: '文件已删除' });
   } catch (error) {
-    console.error('Delete file error:', error);
+    console.error('删除文件错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

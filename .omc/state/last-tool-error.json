@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"npx prisma migrate status\",\"description\":\"Check Prisma migration status\"}",
+  "error": "Exit code 1\nEnvironment variables loaded from .env\nPrisma schema loaded from prisma\\schema.prisma\nDatasource \"db\": SQLite database \"dev.db\" at \"file:./dev.db\"\n\nNo migration found in prisma/migrations\nThe current database is not managed by Prisma Migrate.\n        \nRead more about how to baseline an existing production database:\nhttps://pris.ly/d/migrate-baseline",
+  "timestamp": "2026-04-03T15:44:46.368Z",
+  "retry_count": 1
+}

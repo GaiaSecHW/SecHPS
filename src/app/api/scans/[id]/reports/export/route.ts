@@ -75,7 +75,7 @@ export async function POST(
         })),
         reports: scan.reports.map(r => ({
           id: r.id,
-          title: r.title,
+          name: scan.name + ' Report',
           summary: JSON.parse(r.summary),
           details: JSON.parse(r.details),
           createdAt: r.createdAt,

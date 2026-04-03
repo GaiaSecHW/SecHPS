@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug } from 'lucide-react';
 
 interface UploadedFile {
   id: string;
@@ -409,13 +409,59 @@ export default function SessionsPage() {
       if (!response.ok) {
         const data = await response.json();
         alert(data.error || '启动项目失败');
+        setStartingProject(null);
         return;
       }
 
-      await fetchProjects();
+      // 处理 SSE 流式响应
+      const reader = response.body?.getReader();
+      if (!reader) {
+        alert('响应体不可读');
+        setStartingProject(null);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const event = JSON.parse(data);
+
+              if (event.type === 'message') {
+                // 实时显示评估内容
+                console.log('[评估]', event.content);
+              } else if (event.type === 'done') {
+                alert('评估完成');
+                await fetchProjects();
+                setStartingProject(null);
+                return;
+              } else if (event.type === 'error') {
+                alert(`评估失败: ${event.error}`);
+                await fetchProjects();
+                setStartingProject(null);
+                return;
+              }
+            } catch {
+              // 忽略解析错误
+            }
+          }
+        }
+      }
     } catch (err) {
       alert('网络错误，请重试');
-    } finally {
       setStartingProject(null);
     }
   };
@@ -566,6 +612,11 @@ export default function SessionsPage() {
     alert(`环境 AI 渗透功能开发中\n\n目标环境: ${project.environmentUrl}`);
   };
 
+  const handleVulnerabilityManagement = (project: Project) => {
+    // TODO: 调用漏洞管理功能
+    alert(`漏洞管理功能开发中\n\n项目: ${project.name}`);
+  };
+
   const downloadFile = async (projectId: string, fileId: string, fileName: string) => {
     try {
       const token = localStorage.getItem('token');
@@ -640,49 +691,35 @@ export default function SessionsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('name', projectName);
-      formData.append('description', projectDescription);
-
-      // 添加新文件
-      for (const uploadedFile of uploadedFiles) {
-        if (uploadedFile.file) {
-          formData.append('files', uploadedFile.file);
-        }
-      }
-
-      setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'uploading' as const })));
 
       const response = await fetch(`/api/projects/${selectedProject.id}`, {
         method: 'PATCH',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: formData,
+        body: JSON.stringify({
+          name: projectName,
+          description: projectDescription,
+        }),
       });
 
       if (!response.ok) {
         const data = await response.json();
         alert(data.error || '更新项目失败');
-        setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: data.error })));
         setUploading(false);
         return;
       }
 
-      setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'success' as const })));
-
-      setTimeout(() => {
-        setShowEditModal(false);
-        setSelectedProject(null);
-        setProjectName('');
-        setProjectDescription('');
-        setUploadedFiles([]);
-      }, 1000);
+      setShowEditModal(false);
+      setSelectedProject(null);
+      setProjectName('');
+      setProjectDescription('');
+      setUploadedFiles([]);
 
       await fetchProjects();
     } catch (err) {
       alert('网络错误，请重试');
-      setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: '网络错误' })));
     } finally {
       setUploading(false);
     }
@@ -893,6 +930,14 @@ export default function SessionsPage() {
                       <Settings size={16} />
                       <span>环境配置</span>
                     </button>
+                    <button
+                      onClick={() => handleVulnerabilityManagement(project)}
+                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-red-600 hover:text-red-800"
+                      title="漏洞管理"
+                    >
+                      <Bug size={16} />
+                      <span>漏洞管理</span>
+                    </button>
                   </div>
                 </div>
                 {/* 第二行：启动评估、编辑、文件管理、删除 或 当前会话操作 */}
@@ -968,6 +1013,13 @@ export default function SessionsPage() {
                       title="评估历史"
                     >
                       <History size={16} />
+                    </button>
+                    <button
+                      onClick={() => deleteProject(project.id)}
+                      className="p-1 text-gray-400 hover:text-red-600"
+                      title="删除"
+                    >
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -1189,76 +1241,6 @@ export default function SessionsPage() {
                   onChange={(e) => setProjectDescription(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  添加更多文件
-                </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-md p-6">
-                  <div className="text-center">
-                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                    <div className="mt-4">
-                      <label
-                        htmlFor="edit-file-upload"
-                        className="cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500"
-                      >
-                        <span>点击上传更多文件</span>
-                        <input
-                          id="edit-file-upload"
-                          type="file"
-                          multiple
-                          ref={editFileInputRef}
-                          onChange={handleAdditionalFileSelect}
-                          accept=".zip,.jar,.war,.ear,.tar,.gz,.rar,.7z,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
-                          className="sr-only"
-                        />
-                      </label>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      可添加更多文件到现有项目
-                    </p>
-                  </div>
-                </div>
-
-                {uploadedFiles.length > 0 && (
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-700">
-                        新增 {uploadedFiles.length} 个文件
-                      </p>
-                      <button
-                        onClick={clearAllFiles}
-                        disabled={uploading}
-                        className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
-                      >
-                        清空
-                      </button>
-                    </div>
-                    {uploadedFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <File size={20} className="text-gray-400" />
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                            <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
-                          </div>
-                        </div>
-                        {file.status === 'pending' && (
-                          <button
-                            onClick={() => removeFile(file.id)}
-                            className="p-1 text-gray-400 hover:text-red-600"
-                          >
-                            <X size={16} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
 

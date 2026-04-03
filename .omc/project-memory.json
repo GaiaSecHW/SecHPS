@@ -1,0 +1,479 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1775215766429,
+  "projectRoot": "D:\\claude-web-platform",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "fastify",
+        "version": "5.4.0",
+        "category": "backend"
+      },
+      {
+        "name": "next",
+        "version": "16.2.1",
+        "category": "fullstack"
+      },
+      {
+        "name": "react",
+        "version": "19.2.4",
+        "category": "frontend"
+      },
+      {
+        "name": "react-dom",
+        "version": "19.2.4",
+        "category": "frontend"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": null,
+    "lintCommand": "npm run lint",
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "next dev",
+      "build": "next build",
+      "start": "next start",
+      "lint": "next lint",
+      "postinstall": "prisma generate",
+      "db:generate": "prisma generate",
+      "db:push": "prisma db push",
+      "db:seed": "tsx prisma/seed.ts"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": "type-based"
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "src"
+    ],
+    "gitBranches": null
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "-p": {
+      "path": "-p",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775215766400,
+      "keyFiles": []
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 1,
+      "lastAccessed": 1775215766400,
+      "keyFiles": [
+        "SDK-FEATURES.md"
+      ]
+    },
+    "prisma": {
+      "path": "prisma",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1775215766400,
+      "keyFiles": [
+        "dev.db",
+        "schema.prisma",
+        "seed.ts"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1775215766415,
+      "keyFiles": [
+        "check-admin-permissions.ts"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 0,
+      "lastAccessed": 1775215766415,
+      "keyFiles": []
+    },
+    "uploads": {
+      "path": "uploads",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775215766416,
+      "keyFiles": []
+    },
+    "src\\app": {
+      "path": "src\\app",
+      "purpose": "Application code",
+      "fileCount": 3,
+      "lastAccessed": 1775215766417,
+      "keyFiles": [
+        "globals.css",
+        "layout.tsx",
+        "page.tsx"
+      ]
+    },
+    "src\\components": {
+      "path": "src\\components",
+      "purpose": "UI components",
+      "fileCount": 1,
+      "lastAccessed": 1775215766417,
+      "keyFiles": [
+        "MarkdownRenderer.tsx"
+      ]
+    },
+    "src\\lib": {
+      "path": "src\\lib",
+      "purpose": "Library code",
+      "fileCount": 4,
+      "lastAccessed": 1775215766417,
+      "keyFiles": [
+        "auth.ts",
+        "prisma.ts",
+        "workflow-executor.ts"
+      ]
+    },
+    "src\\types": {
+      "path": "src\\types",
+      "purpose": "Type definitions",
+      "fileCount": 4,
+      "lastAccessed": 1775215766418,
+      "keyFiles": [
+        "config.ts",
+        "permissions.ts",
+        "prisma-client.d.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "prisma\\schema.prisma",
+      "accessCount": 10,
+      "lastAccessed": 1775234004267,
+      "type": "file"
+    },
+    {
+      "path": "docs\\superpowers\\plans\\2025-04-03-evaluation-service-refactor.md",
+      "accessCount": 8,
+      "lastAccessed": 1775232384951,
+      "type": "file"
+    },
+    {
+      "path": "docs\\superpowers\\plans\\2025-04-03-phase1-data-layer.md",
+      "accessCount": 7,
+      "lastAccessed": 1775230957836,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\layout.tsx",
+      "accessCount": 6,
+      "lastAccessed": 1775231336712,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\admin\\patterns\\page.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1775234866788,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\ai\\index.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775222653882,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\projects\\[id]\\start\\route.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775222712292,
+      "type": "file"
+    },
+    {
+      "path": "docs\\superpowers\\specs\\2025-04-03-ai-vulnerability-platform-design.md",
+      "accessCount": 4,
+      "lastAccessed": 1775225700302,
+      "type": "file"
+    },
+    {
+      "path": "prisma\\seed-skills.ts",
+      "accessCount": 4,
+      "lastAccessed": 1775231316997,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\ai\\base.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775222653832,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\admin\\vulnerabilities\\page.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775225990176,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\skills\\page.tsx",
+      "accessCount": 3,
+      "lastAccessed": 1775225990344,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\skills\\route.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775226215803,
+      "type": "file"
+    },
+    {
+      "path": "src\\types\\code.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775231237385,
+      "type": "file"
+    },
+    {
+      "path": "src\\types\\scan.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775231237444,
+      "type": "file"
+    },
+    {
+      "path": "src\\types\\vulnerability.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775231237467,
+      "type": "file"
+    },
+    {
+      "path": "src\\types\\skills.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775231237524,
+      "type": "file"
+    },
+    {
+      "path": "src\\types\\evaluation.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775232388269,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\ai\\ccr-proxy.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222653924,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\ai\\claude.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222653930,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\evaluation\\prompt.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222674030,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\evaluation\\index.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222674063,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\evaluation\\history.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222674082,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\evaluation\\caller.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222674127,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\evaluation\\StreamingMessage.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775222708014,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\evaluation\\ChatInput.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775222708117,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\evaluations\\[id]\\chat\\route.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775222708169,
+      "type": "file"
+    },
+    {
+      "path": "src\\components\\evaluation\\EvaluationProgress.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775222708233,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\route.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775225344468,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\scans\\page.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775225990259,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\code\\page.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775225990263,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\admin\\tools\\page.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1775225990322,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\skills\\[id]\\route.ts",
+      "accessCount": 2,
+      "lastAccessed": 1775226215866,
+      "type": "file"
+    },
+    {
+      "path": "docs\\SDK-FEATURES.md",
+      "accessCount": 1,
+      "lastAccessed": 1775215833557,
+      "type": "file"
+    },
+    {
+      "path": "DATABASE_UPDATE_REQUIRED.md",
+      "accessCount": 1,
+      "lastAccessed": 1775215833622,
+      "type": "file"
+    },
+    {
+      "path": "DATABASE_UPDATE.md",
+      "accessCount": 1,
+      "lastAccessed": 1775215833680,
+      "type": "file"
+    },
+    {
+      "path": "MULTI_FILE_UPLOAD.md",
+      "accessCount": 1,
+      "lastAccessed": 1775215833742,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\sessions\\[id]\\page.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775216272983,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\sessions\\page.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775216273037,
+      "type": "file"
+    },
+    {
+      "path": "src\\lib\\prisma.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775218485438,
+      "type": "file"
+    },
+    {
+      "path": "src\\types\\permissions.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775218485495,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\skills\\categories\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219156306,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\stats\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219185918,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\[id]\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219186273,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\[id]\\confirm\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219289827,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\[id]\\false-positive\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219290179,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\[id]\\fix\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219290532,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\vulnerabilities\\[id]\\verify\\route.ts",
+      "accessCount": 1,
+      "lastAccessed": 1775219290883,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\skills\\[id]\\page.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1775222061409,
+      "type": "file"
+    },
+    {
+      "path": "C:\\Users\\icsl\\.claude\\plugins\\cache\\claude-plugins-official\\superpowers\\5.0.7\\skills\\systematic-debugging\\SKILL.md",
+      "accessCount": 1,
+      "lastAccessed": 1775222130208,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:snyk.io)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.sonarqube.org)",
+      "WebFetch(domain:docs.github.com)",
+      "mcp__plugin_oh-my-claudecode_t__notepad_read",
+      "mcp__plugin_oh-my-claudecode_t__project_memory_read",
+      "mcp__plugin_oh-my-claudecode_t__state_list_active",
+      "mcp__plugin_oh-my-claudecode_t__session_search",
+      "Bash(npm run:*)",
+      "Bash(npx prisma:*)",
+      "Read(//c/Users/icsl/.claude/.omc/**)",
+      "Read(//c/Users/icsl/.claude/plugins/**)"
+    ]
+  }
+}
