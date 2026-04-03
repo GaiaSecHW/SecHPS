@@ -176,8 +176,8 @@
   "hotPaths": [
     {
       "path": "prisma\\schema.prisma",
-      "accessCount": 10,
-      "lastAccessed": 1775234004267,
+      "accessCount": 11,
+      "lastAccessed": 1775236016057,
       "type": "file"
     },
     {
@@ -206,8 +206,8 @@
     },
     {
       "path": "src\\services\\ai\\index.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775222653882,
+      "accessCount": 5,
+      "lastAccessed": 1775236016070,
       "type": "file"
     },
     {
@@ -283,15 +283,27 @@
       "type": "file"
     },
     {
-      "path": "src\\services\\ai\\ccr-proxy.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775222653924,
+      "path": "src\\services\\evaluation\\index.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775236007791,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\evaluation\\caller.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775236007838,
       "type": "file"
     },
     {
       "path": "src\\services\\ai\\claude.ts",
+      "accessCount": 3,
+      "lastAccessed": 1775236016006,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\ai\\ccr-proxy.ts",
       "accessCount": 2,
-      "lastAccessed": 1775222653930,
+      "lastAccessed": 1775222653924,
       "type": "file"
     },
     {
@@ -301,21 +313,9 @@
       "type": "file"
     },
     {
-      "path": "src\\services\\evaluation\\index.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775222674063,
-      "type": "file"
-    },
-    {
       "path": "src\\services\\evaluation\\history.ts",
       "accessCount": 2,
       "lastAccessed": 1775222674082,
-      "type": "file"
-    },
-    {
-      "path": "src\\services\\evaluation\\caller.ts",
-      "accessCount": 2,
-      "lastAccessed": 1775222674127,
       "type": "file"
     },
     {
