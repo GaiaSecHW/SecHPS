@@ -4,6 +4,19 @@
  */
 
 import type { FlowNode, FlowEdge, NodeData, ExecutionContext, StepResult, NodeExecutor, WorkflowNodeType } from '@/types/workflow';
+import {
+  executeApiCall,
+  executeAiProcess,
+  executeFileOperation,
+  executeScript,
+  evaluateCondition,
+  executeTransform,
+  ApiCallConfig,
+  AiProcessConfig,
+  FileOperationConfig,
+  ScriptExecuteConfig,
+  TransformConfig,
+} from './workflow-actions';
 
 // 重新定义节点类型以匹配简化后的类型
 type SimplifiedNodeType = 'start' | 'end' | 'task' | 'subtask';
@@ -59,25 +72,112 @@ const taskExecutor: NodeExecutor = {
   type: 'task' as SimplifiedNodeType,
   validate: (node: FlowNode) => {
     const config = node.data.config || {};
-    return !!(config.name);
+    return !!(config.name || config.action);
   },
   execute: async (context: ExecutionContext, node: FlowNode): Promise<StepResult> => {
     const config = node.data.config || {};
     const startedAt = new Date();
-    
+
     try {
       const previousStep = getPreviousStepOutput(context, node.id);
-      
-      // 任务执行逻辑（串行）
-      let output: any;
-      if (config.action === 'api_call') {
-        output = { apiCall: true, url: config.url, response: previousStep };
-      } else if (config.action === 'script') {
-        output = { scriptExecuted: true, result: previousStep };
-      } else {
-        output = { taskExecuted: true, input: previousStep, config };
+      const action = config.action;
+
+      let output: unknown;
+
+      // 根据动作类型执行不同的逻辑
+      switch (action) {
+        case 'api_call': {
+          const apiConfig: ApiCallConfig = {
+            url: config.url,
+            method: config.method || 'GET',
+            headers: config.headers,
+            body: config.body || previousStep,
+            timeout: config.timeout,
+            auth: config.auth,
+          };
+          const result = await executeApiCall(apiConfig, context);
+          if (!result.success) {
+            throw new Error(result.error || 'API 调用失败');
+          }
+          output = result.output;
+          break;
+        }
+
+        case 'ai_process': {
+          const aiConfig: AiProcessConfig = {
+            provider: config.provider,
+            model: config.model,
+            prompt: config.prompt,
+            systemPrompt: config.systemPrompt,
+            temperature: config.temperature,
+            maxTokens: config.maxTokens,
+            inputMapping: config.inputMapping,
+            outputParsing: config.outputParsing,
+          };
+          const result = await executeAiProcess(aiConfig, context);
+          if (!result.success) {
+            throw new Error(result.error || 'AI 处理失败');
+          }
+          output = result.output;
+          break;
+        }
+
+        case 'file_operation': {
+          const fileConfig: FileOperationConfig = {
+            operation: config.fileOperation,
+            path: config.filePath,
+            content: config.content || previousStep,
+            encoding: config.encoding,
+            recursive: config.recursive,
+          };
+          const result = await executeFileOperation(fileConfig, context);
+          if (!result.success) {
+            throw new Error(result.error || '文件操作失败');
+          }
+          output = result.output;
+          break;
+        }
+
+        case 'script': {
+          const scriptConfig: ScriptExecuteConfig = {
+            language: config.language || 'javascript',
+            code: config.code,
+            timeout: config.timeout,
+            input: previousStep,
+          };
+          const result = await executeScript(scriptConfig, context);
+          if (!result.success) {
+            throw new Error(result.error || '脚本执行失败');
+          }
+          output = result.output;
+          break;
+        }
+
+        case 'transform': {
+          const transformConfig: TransformConfig = {
+            type: config.transformType || 'jsonpath',
+            expression: config.expression,
+            input: previousStep,
+          };
+          const result = await executeTransform(transformConfig, context);
+          if (!result.success) {
+            throw new Error(result.error || '数据转换失败');
+          }
+          output = result.output;
+          break;
+        }
+
+        case 'condition': {
+          const conditionResult = evaluateCondition(config.condition, context.variables);
+          output = { result: conditionResult, expression: config.condition };
+          break;
+        }
+
+        default:
+          // 默认任务执行
+          output = { taskExecuted: true, input: previousStep, config };
       }
-      
+
       return {
         nodeId: node.id,
         status: 'completed',
@@ -365,88 +465,4 @@ function collectAllPreviousOutputs(context: ExecutionContext, nodeId: string): a
   return Array.from(context.steps.values())
     .filter(step => step.status === 'completed')
     .map(step => step.output);
-}
-
-/**
- * 执行 API 调用
- */
-async function executeApiCall(config: any, input: any): Promise<any> {
-  // TODO: 实现实际的 API 调用逻辑
-  return {
-    apiCall: true,
-    url: config.url,
-    method: config.method || 'GET',
-    response: { success: true, data: input },
-  };
-}
-
-/**
- * 执行脚本
- */
-async function executeScript(config: any, input: any, variables: Record<string, any>): Promise<any> {
-  // TODO: 实现安全的脚本执行环境
-  // 注意：实际生产环境需要使用沙箱环境执行脚本
-  return {
-    scriptExecuted: true,
-    result: input,
-  };
-}
-
-/**
- * 执行 AI 处理
- */
-async function executeAiProcess(config: any, input: any): Promise<any> {
-  // TODO: 实现 AI 处理逻辑
-  return {
-    aiProcessed: true,
-    input,
-    output: { processed: true },
-  };
-}
-
-/**
- * 执行文件操作
- */
-async function executeFileOperation(config: any, input: any): Promise<any> {
-  // TODO: 实现文件操作逻辑
-  return {
-    fileOperation: true,
-    operation: config.operation,
-    path: config.path,
-    result: input,
-  };
-}
-
-/**
- * 评估条件表达式
- */
-function evaluateCondition(condition: string, input: any, variables: Record<string, any>): boolean {
-  // TODO: 实现安全的条件表达式评估
-  // 注意：实际生产环境需要使用安全的表达式解析器
-  try {
-    // 简单模拟：检查条件是否包含 'true' 或 'false'
-    if (condition.toLowerCase().includes('true')) {
-      return true;
-    }
-    if (condition.toLowerCase().includes('false')) {
-      return false;
-    }
-    // 默认返回 true
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 执行数据转换
- */
-async function executeTransform(transform: string, input: any, variables: Record<string, any>): Promise<any> {
-  // TODO: 实现安全的数据转换逻辑
-  // 注意：实际生产环境需要使用沙箱环境执行转换脚本
-  try {
-    return input;
-  } catch {
-    return input;
-  }
 }
