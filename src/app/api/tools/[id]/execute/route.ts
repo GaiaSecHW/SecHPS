@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { ToolExecutor } from '@/lib/tool-executor';
 
 // POST /api/tools/:id/execute - 执行工具
 export async function POST(
@@ -24,6 +25,7 @@ export async function POST(
 
     const { id } = await params;
     const body = await request.json();
+    const { projectId, parameters } = body;
 
     const tool = await prisma.tool.findUnique({ where: { id } });
 
@@ -35,18 +37,23 @@ export async function POST(
       return NextResponse.json({ error: '工具未启用' }, { status: 400 });
     }
 
-    // TODO: 实际执行工具的逻辑
-    // 这里返回模拟结果
-    const result = {
-      toolId: tool.id,
-      toolName: tool.name,
-      parameters: body,
-      executedAt: new Date().toISOString(),
-      status: 'success',
-      output: { message: '工具执行成功（模拟）' },
-    };
+    // 创建执行器并执行
+    const executor = new ToolExecutor({
+      projectId: projectId || 'default',
+      timeout: tool.timeout || 30000,
+    });
 
-    return NextResponse.json({ result });
+    const result = await executor.execute(id, parameters || {});
+
+    return NextResponse.json({
+      result: {
+        toolId: tool.id,
+        toolName: tool.name,
+        parameters,
+        ...result,
+        executedAt: new Date().toISOString(),
+      },
+    });
   } catch (error) {
     console.error('执行工具错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

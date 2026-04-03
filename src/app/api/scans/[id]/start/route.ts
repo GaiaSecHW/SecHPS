@@ -3,6 +3,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { ScanExecutor } from '@/lib/scan-executor';
+
+// 存储活跃的扫描执行器（用于取消）
+const activeScans = new Map<string, ScanExecutor>();
 
 // POST /api/scans/:id/start - 启动扫描
 export async function POST(
@@ -38,7 +42,7 @@ export async function POST(
     }
 
     // 更新任务状态
-    const updated = await prisma.scanTask.update({
+    await prisma.scanTask.update({
       where: { id },
       data: {
         status: 'running',
@@ -51,13 +55,33 @@ export async function POST(
       },
     });
 
-    // TODO: 实际执行扫描的逻辑（后台任务）
-    // 这里只更新状态，实际执行需要集成 Agent 执行引擎
+    // 在后台执行扫描
+    const executor = new ScanExecutor(id);
+    activeScans.set(id, executor);
+
+    // 异步执行，不阻塞响应
+    executor.execute()
+      .then(async (results) => {
+        console.log(`[ScanExecutor] 扫描完成: ${id}`, results);
+        activeScans.delete(id);
+      })
+      .catch(async (error) => {
+        console.error(`[ScanExecutor] 扫描失败: ${id}`, error);
+        await prisma.scanTask.update({
+          where: { id },
+          data: {
+            status: 'failed',
+            error: error.message,
+            completedAt: new Date(),
+          },
+        });
+        activeScans.delete(id);
+      });
 
     return NextResponse.json({
       scan: {
-        ...updated,
-        skillIds: JSON.parse(updated.skillIds),
+        ...scan,
+        skillIds: JSON.parse(scan.skillIds),
       },
       message: '扫描任务已启动',
     });
@@ -66,3 +90,6 @@ export async function POST(
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
+
+// 导出供取消 API 使用
+export { activeScans };

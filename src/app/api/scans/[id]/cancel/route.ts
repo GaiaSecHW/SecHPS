@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { activeScans } from '../start/route';
 
 // POST /api/scans/:id/cancel - 取消扫描
 export async function POST(
@@ -32,6 +33,13 @@ export async function POST(
 
     if (scan.status !== 'running') {
       return NextResponse.json({ error: '只有运行中的任务可以取消' }, { status: 400 });
+    }
+
+    // 取消执行器
+    const executor = activeScans.get(id);
+    if (executor) {
+      executor.cancel();
+      activeScans.delete(id);
     }
 
     // 更新任务状态
