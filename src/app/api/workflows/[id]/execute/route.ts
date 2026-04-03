@@ -1,7 +1,10 @@
+// src/app/api/workflows/[id]/execute/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { WorkflowExecutionService } from '@/lib/workflow-execution-service';
 
 // 执行工作流
 export async function POST(
@@ -44,7 +47,6 @@ export async function POST(
 
     // 检查工作流是否属于当前用户或有执行权限
     if (workflow.userId !== payload.userId) {
-      // 检查是否有共享权限
       const share = await prisma.workflowShare.findFirst({
         where: {
           workflowId,
@@ -58,7 +60,15 @@ export async function POST(
       }
     }
 
-    // 检查工作流是否有效（至少有开始和结束节点）
+    // 检查工作流状态
+    if (workflow.status !== 'published') {
+      return NextResponse.json(
+        { error: '只能执行已发布的工作流' },
+        { status: 400 }
+      );
+    }
+
+    // 检查工作流是否有效
     const startNode = workflow.nodes.find((node) => node.type === 'start');
     const endNode = workflow.nodes.find((node) => node.type === 'end');
 
@@ -68,6 +78,24 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    // 解析节点和边数据
+    const nodes = workflow.nodes.map((node) => ({
+      id: node.id,
+      type: node.type as 'start' | 'end' | 'task' | 'subtask',
+      position: node.position as { x: number; y: number },
+      data: node.data as { label: string; config?: Record<string, unknown> },
+    }));
+
+    const edges = workflow.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
+      label: edge.label,
+      data: edge.data as Record<string, unknown> | undefined,
+    }));
 
     // 创建执行记录
     const execution = await prisma.workflowExecution.create({
@@ -79,7 +107,7 @@ export async function POST(
     });
 
     // 为每个节点创建执行步骤记录
-    const steps = await Promise.all(
+    await Promise.all(
       workflow.nodes.map((node) =>
         prisma.workflowExecutionStep.create({
           data: {
@@ -105,15 +133,26 @@ export async function POST(
       },
     });
 
-    // TODO: Phase 4 实现完整的工作流执行引擎
-    // 当前仅创建执行记录，实际执行逻辑在后续阶段实现
+    // 异步执行工作流
+    const executionService = new WorkflowExecutionService({
+      executionId: execution.id,
+      workflowId,
+      userId: payload.userId,
+    });
+
+    // 在后台执行（不阻塞响应）
+    executionService.execute(nodes, edges).catch((error) => {
+      console.error('[Workflow Execution Error]:', error);
+    });
 
     return NextResponse.json(
       {
-        message: '工作流执行已创建',
+        message: '工作流执行已启动',
         execution: {
-          ...execution,
-          steps,
+          id: execution.id,
+          workflowId: execution.workflowId,
+          status: execution.status,
+          startedAt: execution.startedAt,
         },
       },
       { status: 201 }

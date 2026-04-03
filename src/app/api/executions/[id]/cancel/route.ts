@@ -1,7 +1,10 @@
+// src/app/api/executions/[id]/cancel/route.ts
+
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { cancelExecution } from '@/lib/workflow-execution-service';
 
 // 取消正在执行的流程
 export async function POST(
@@ -9,7 +12,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
       return NextResponse.json({ error: '未授权' }, { status: 401 });
@@ -22,14 +24,12 @@ export async function POST(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
     if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_EXECUTE)) {
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
     const { id: executionId } = await params;
 
-    // 查询执行记录
     const execution = await prisma.workflowExecution.findUnique({
       where: { id: executionId },
     });
@@ -38,37 +38,27 @@ export async function POST(
       return NextResponse.json({ error: '执行记录不存在' }, { status: 404 });
     }
 
-    // 检查执行记录是否属于当前用户
     if (execution.userId !== payload.userId) {
       return NextResponse.json({ error: '无权取消此执行' }, { status: 403 });
     }
 
     // 检查执行状态
     if (execution.status === 'completed') {
-      return NextResponse.json(
-        { error: '执行已完成，无法取消' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '执行已完成，无法取消' }, { status: 400 });
     }
 
     if (execution.status === 'failed') {
-      return NextResponse.json(
-        { error: '执行已失败，无法取消' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '执行已失败，无法取消' }, { status: 400 });
     }
 
     if (execution.status === 'cancelled') {
-      return NextResponse.json(
-        { error: '执行已取消' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '执行已取消' }, { status: 400 });
     }
 
-    // TODO: Phase 4 实现完整的工作流执行引擎
-    // 当前仅更新状态，实际取消逻辑在后续阶段实现
+    // 尝试取消活跃执行
+    const wasActive = cancelExecution(executionId);
 
-    // 更新执行状态为已取消
+    // 更新数据库状态
     const updatedExecution = await prisma.workflowExecution.update({
       where: { id: executionId },
       data: {
@@ -97,6 +87,7 @@ export async function POST(
         details: JSON.stringify({
           workflowId: execution.workflowId,
           previousStatus: execution.status,
+          wasActive,
         }),
       },
     });
@@ -104,6 +95,7 @@ export async function POST(
     return NextResponse.json({
       message: '执行已取消',
       execution: updatedExecution,
+      wasActive,
     });
   } catch (error) {
     console.error('Cancel execution error:', error);
