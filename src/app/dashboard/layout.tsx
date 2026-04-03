@@ -13,6 +13,14 @@ import {
   User,
   GitBranch,
   Clock,
+  Award,
+  Bug,
+  TrendingUp,
+  Brain,
+  Zap,
+  Code,
+  Shield,
+  Search,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -84,6 +92,22 @@ export default function DashboardLayout({
             执行历史
           </NavLink>
 
+          {/* 安全测试 */}
+          <div className="pt-4 pb-2">
+            <p className="text-xs text-gray-500 uppercase tracking-wider">
+              安全测试
+            </p>
+          </div>
+          <NavLink href="/dashboard/skills" icon={<Award size={20} />}>
+            Skills 库
+          </NavLink>
+          <NavLink href="/dashboard/scans" icon={<Zap size={20} />}>
+            自动化扫描
+          </NavLink>
+          <NavLink href="/dashboard/code" icon={<Code size={20} />}>
+            代码理解
+          </NavLink>
+
           {/* 个人中心 */}
           <div className="pt-4 pb-2">
             <p className="text-xs text-gray-500 uppercase tracking-wider">
@@ -110,6 +134,21 @@ export default function DashboardLayout({
               </NavLink>
               <NavLink href="/dashboard/config" icon={<Cog size={20} />}>
                 系统配置
+              </NavLink>
+              <NavLink href="/dashboard/admin/models" icon={<Brain size={20} />}>
+                模型管理
+              </NavLink>
+              <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={20} />}>
+                漏洞管理
+              </NavLink>
+              <NavLink href="/dashboard/admin/patterns" icon={<Shield size={20} />}>
+                漏洞模式库
+              </NavLink>
+              <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={20} />}>
+                Skills 进化
+              </NavLink>
+              <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />}>
+                工具管理
               </NavLink>
             </>
           )}

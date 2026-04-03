@@ -4,9 +4,9 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// 预定义 Skills 数据
+// 预定义 Skills 数据 - 完整的 65 个安全检测技能
 const skillsData = [
-  // ========== 代码安全审计类 ==========
+  // ========== 代码安全审计类 (15个) ==========
   {
     name: 'sql-injection',
     displayName: 'SQL 注入检测',
@@ -14,21 +14,10 @@ const skillsData = [
     category: 'code-audit',
     cwe: 'CWE-89',
     severity: 'high',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测 SQL 注入漏洞。
-
-你的任务是分析代码中的 SQL 注入风险，包括但不限于：
-1. 字符串拼接构建 SQL 语句
-2. 用户输入直接拼接到 SQL 中
-3. 使用不安全的数据库操作方法
-4. 动态表名、列名构造
-
-请仔细分析每一段代码，找出潜在的 SQL 注入点，并提供修复建议。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的 SQL 注入漏洞，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 SQL 注入漏洞。\n\n你的任务是分析代码中的 SQL 注入风险，包括但不限于：\n1. 字符串拼接构建 SQL 语句\n2. 用户输入直接拼接到 SQL 中\n3. 使用不安全的数据库操作方法\n4. 动态表名、列名构造\n\n请仔细分析每一段代码，找出潜在的 SQL 注入点，并提供修复建议。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 SQL 注入漏洞，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-      language: { type: 'string', required: false, description: '编程语言' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' }, language: { type: 'string', required: false, description: '编程语言' } }),
   },
   {
     name: 'xss-detection',
@@ -37,20 +26,10 @@ const skillsData = [
     category: 'code-audit',
     cwe: 'CWE-79',
     severity: 'medium',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测 XSS 跨站脚本漏洞。
-
-你的任务是分析代码中的 XSS 风险，包括：
-1. 用户输入未经转义直接输出到 HTML
-2. 危险的 DOM 操作（innerHTML、document.write）
-3. 不安全的 URL 参数处理
-4. 缺少内容安全策略（CSP）
-
-请仔细分析每一段代码，找出潜在的 XSS 漏洞。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的 XSS 漏洞，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 XSS 跨站脚本漏洞。\n\n你的任务是分析代码中的 XSS 风险，包括：\n1. 用户输入未经转义直接输出到 HTML\n2. 危险的 DOM 操作（innerHTML、document.write）\n3. 不安全的 URL 参数处理\n4. 缺少内容安全策略（CSP）\n\n请仔细分析每一段代码，找出潜在的 XSS 漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 XSS 漏洞，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
     name: 'command-injection',
@@ -59,20 +38,10 @@ const skillsData = [
     category: 'code-audit',
     cwe: 'CWE-78',
     severity: 'critical',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测命令注入漏洞。
-
-你的任务是分析代码中可能存在的命令注入风险，包括：
-1. 用户输入拼接系统命令
-2. 不安全的 exec、system、shell 等调用
-3. 文件路径拼接导致的命令注入
-4. 环境变量注入
-
-请仔细分析代码，找出潜在的命令注入点。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的命令注入漏洞，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测命令注入漏洞。\n\n你的任务是分析代码中可能存在的命令注入风险，包括：\n1. 用户输入拼接系统命令\n2. 不安全的 exec、system、shell 等调用\n3. 文件路径拼接导致的命令注入\n4. 环境变量注入\n\n请仔细分析代码，找出潜在的命令注入点。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的命令注入漏洞，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
     name: 'path-traversal',
@@ -81,22 +50,145 @@ const skillsData = [
     category: 'code-audit',
     cwe: 'CWE-22',
     severity: 'high',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测路径遍历漏洞。
-
-你的任务是分析代码中可能存在的路径遍历风险，包括：
-1. 用户输入直接用于文件路径
-2. 未对 ../ 等路径序列进行过滤
-3. 符号链接攻击
-4. 文件扩展名验证不足
-
-请仔细分析代码，找出潜在的路径遍历漏洞。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的路径遍历漏洞，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测路径遍历漏洞。\n\n你的任务是分析代码中可能存在的路径遍历风险，包括：\n1. 用户输入直接用于文件路径\n2. 未对 ../ 等路径序列进行过滤\n3. 符号链接攻击\n4. 文件扩展名验证不足\n\n请仔细分析代码，找出潜在的路径遍历漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的路径遍历漏洞，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
-  // ========== 认证与授权类 ==========
+  {
+    name: 'xxe-detection',
+    displayName: 'XXE 漏洞检测',
+    description: '检测 XML 外部实体注入漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-611',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 XXE 漏洞。\n\n你的任务是分析代码中可能存在的 XXE 风险，包括：\n1. 不安全的 XML 解析配置\n2. 允许外部实体解析\n3. 允许 DTD 处理\n4. 未禁用实体扩展\n\n请仔细分析代码，找出潜在的 XXE 漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 XXE 漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'ssrf-detection',
+    displayName: 'SSRF 漏洞检测',
+    description: '检测服务端请求伪造漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-918',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 SSRF 漏洞。\n\n你的任务是分析代码中可能存在的 SSRF 风险，包括：\n1. 用户输入直接用于 URL 请求\n2. 未验证目标主机地址\n3. 内网地址访问风险\n4. 云元数据服务访问\n\n请仔细分析代码，找出潜在的 SSRF 漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 SSRF 漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'ldap-injection',
+    displayName: 'LDAP 注入检测',
+    description: '检测 LDAP 注入漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-90',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 LDAP 注入漏洞。\n\n你的任务是分析代码中可能存在的 LDAP 注入风险，包括：\n1. 用户输入直接拼接到 LDAP 查询\n2. 未转义特殊字符\n3. 认证绕过风险\n\n请仔细分析代码，找出潜在的 LDAP 注入漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 LDAP 注入漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'xpath-injection',
+    displayName: 'XPath 注入检测',
+    description: '检测 XPath 注入漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-643',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 XPath 注入漏洞。\n\n你的任务是分析代码中可能存在的 XPath 注入风险，包括：\n1. 用户输入直接拼接到 XPath 查询\n2. 未转义 XPath 特殊字符\n3. 认证绕过风险\n\n请仔细分析代码，找出潜在的 XPath 注入漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 XPath 注入漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'template-injection',
+    displayName: '模板注入检测',
+    description: '检测服务端模板注入漏洞 (SSTI)',
+    category: 'code-audit',
+    cwe: 'CWE-94',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测模板注入漏洞。\n\n你的任务是分析代码中可能存在的模板注入风险，包括：\n1. 用户输入直接嵌入模板\n2. 不安全的模板渲染方法\n3. 模板引擎沙箱逃逸\n\n请仔细分析代码，找出潜在的模板注入漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的模板注入漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'code-injection',
+    displayName: '代码注入检测',
+    description: '检测动态代码执行漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-94',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测代码注入漏洞。\n\n你的任务是分析代码中可能存在的代码注入风险，包括：\n1. eval、exec 等动态执行\n2. 反射调用风险\n3. 动态类实例化\n4. 序列化/反序列化漏洞\n\n请仔细分析代码，找出潜在的代码注入漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的代码注入漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'deserialization',
+    displayName: '反序列化漏洞检测',
+    description: '检测不安全的反序列化漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-502',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测反序列化漏洞。\n\n你的任务是分析代码中可能存在的反序列化风险，包括：\n1. 不安全的反序列化方法\n2. 未验证的反序列化数据\n3. Java 原生序列化\n4. Pickle、YAML 等危险反序列化\n\n请仔细分析代码，找出潜在的反序列化漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的反序列化漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'file-upload',
+    displayName: '文件上传漏洞检测',
+    description: '检测不安全的文件上传功能',
+    category: 'code-audit',
+    cwe: 'CWE-434',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测文件上传漏洞。\n\n你的任务是分析代码中可能存在的文件上传风险，包括：\n1. 文件类型验证不足\n2. 文件扩展名绕过\n3. 文件内容检测缺失\n4. 路径遍历上传\n\n请仔细分析代码，找出潜在的文件上传漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的文件上传漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'open-redirect',
+    displayName: '开放重定向检测',
+    description: '检测开放重定向漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-601',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测开放重定向漏洞。\n\n你的任务是分析代码中可能存在的开放重定向风险，包括：\n1. 用户输入直接用于重定向 URL\n2. URL 验证不足\n3. 相对路径重定向绕过\n\n请仔细分析代码，找出潜在的开放重定向漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的开放重定向漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'cors-misconfig',
+    displayName: 'CORS 配置检测',
+    description: '检测跨域资源共享配置问题',
+    category: 'code-audit',
+    cwe: 'CWE-942',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 CORS 配置问题。\n\n你的任务是分析代码中可能存在的 CORS 风险，包括：\n1. 过于宽松的 CORS 策略\n2. Access-Control-Allow-Origin 设置为 *\n3. 凭证暴露风险\n4. 预检请求处理不当\n\n请仔细分析代码，找出潜在的 CORS 配置问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 CORS 配置问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'null-byte-injection',
+    displayName: '空字节注入检测',
+    description: '检测空字节注入漏洞',
+    category: 'code-audit',
+    cwe: 'CWE-158',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测空字节注入漏洞。\n\n你的任务是分析代码中可能存在的空字节注入风险，包括：\n1. 文件扩展名绕过\n2. 字符串截断\n3. 路径处理问题\n\n请仔细分析代码，找出潜在的空字节注入漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的空字节注入漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 认证与授权类 (10个) ==========
   {
     name: 'auth-bypass',
     displayName: '认证绕过检测',
@@ -104,20 +196,10 @@ const skillsData = [
     category: 'auth',
     cwe: 'CWE-287',
     severity: 'critical',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测认证和授权漏洞。
-
-你的任务是分析代码中的认证和授权问题，包括：
-1. 认证逻辑缺陷
-2. 会话管理漏洞
-3. 权限检查缺失
-4. 越权访问风险
-
-请仔细分析代码，找出潜在的认证和授权问题。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的认证和授权漏洞，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测认证和授权漏洞。\n\n你的任务是分析代码中的认证和授权问题，包括：\n1. 认证逻辑缺陷\n2. 会话管理漏洞\n3. 权限检查缺失\n4. 越权访问风险\n\n请仔细分析代码，找出潜在的认证和授权问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的认证和授权漏洞，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
     name: 'session-management',
@@ -126,44 +208,120 @@ const skillsData = [
     category: 'auth',
     cwe: 'CWE-384',
     severity: 'high',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测会话管理漏洞。
-
-你的任务是分析代码中的会话管理问题，包括：
-1. 会话 ID 可预测
-2. 会话固定攻击
-3. 会话超时设置不当
-4. Cookie 安全属性缺失
-
-请仔细分析代码，找出潜在的会话管理问题。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的会话管理漏洞，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测会话管理漏洞。\n\n你的任务是分析代码中的会话管理问题，包括：\n1. 会话 ID 可预测\n2. 会话固定攻击\n3. 会话超时设置不当\n4. Cookie 安全属性缺失\n\n请仔细分析代码，找出潜在的会话管理问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的会话管理漏洞，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
-  // ========== 敏感信息泄露类 ==========
+  {
+    name: 'password-storage',
+    displayName: '密码存储检测',
+    description: '检测不安全的密码存储方式',
+    category: 'auth',
+    cwe: 'CWE-256',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测密码存储问题。\n\n你的任务是分析代码中的密码存储问题，包括：\n1. 明文存储密码\n2. 弱哈希算法（MD5、SHA1）\n3. 缺少盐值\n4. 可逆加密存储\n\n请仔细分析代码，找出潜在的密码存储问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的密码存储问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'brute-force',
+    displayName: '暴力破解检测',
+    description: '检测缺少暴力破解防护的功能',
+    category: 'auth',
+    cwe: 'CWE-307',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测暴力破解风险。\n\n你的任务是分析代码中的暴力破解问题，包括：\n1. 缺少登录失败限制\n2. 缺少验证码机制\n3. 缺少账户锁定策略\n4. 错误信息泄露用户存在性\n\n请仔细分析代码，找出潜在的暴力破解风险。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的暴力破解风险，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'jwt-security',
+    displayName: 'JWT 安全检测',
+    description: '检测 JWT 相关的安全问题',
+    category: 'auth',
+    cwe: 'CWE-287',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 JWT 安全问题。\n\n你的任务是分析代码中的 JWT 问题，包括：\n1. 算法混淆攻击（alg: none）\n2. 弱密钥签名\n3. 敏感信息泄露\n4. Token 过期验证缺失\n\n请仔细分析代码，找出潜在的 JWT 安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 JWT 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'oauth-security',
+    displayName: 'OAuth 安全检测',
+    description: '检测 OAuth 实现中的安全问题',
+    category: 'auth',
+    cwe: 'CWE-287',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测 OAuth 安全问题。\n\n你的任务是分析代码中的 OAuth 问题，包括：\n1. CSRF 攻击（state 参数）\n2. 开放重定向\n3. Token 泄露\n4. 授权码重放\n\n请仔细分析代码，找出潜在的 OAuth 安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 OAuth 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'privilege-escalation',
+    displayName: '权限提升检测',
+    description: '检测垂直和水平权限提升漏洞',
+    category: 'auth',
+    cwe: 'CWE-269',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测权限提升漏洞。\n\n你的任务是分析代码中的权限提升问题，包括：\n1. 水平越权\n2. 垂直越权\n3. 默认权限过高\n4. 权限检查缺失\n\n请仔细分析代码，找出潜在的权限提升漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的权限提升漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'multi-factor-auth',
+    displayName: '多因素认证检测',
+    description: '检测多因素认证实现问题',
+    category: 'auth',
+    cwe: 'CWE-308',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测多因素认证问题。\n\n你的任务是分析代码中的 MFA 问题，包括：\n1. MFA 绕过风险\n2. 备用代码不安全\n3. 重置流程漏洞\n4. OTP 实现问题\n\n请仔细分析代码，找出潜在的 MFA 问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的多因素认证问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'remember-me',
+    displayName: '记住我功能检测',
+    description: '检测记住我功能的安全问题',
+    category: 'auth',
+    cwe: 'CWE-384',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测记住我功能问题。\n\n你的任务是分析代码中的记住我问题，包括：\n1. Token 可预测\n2. Token 未过期\n3. Token 绑定不足\n4. 安全属性缺失\n\n请仔细分析代码，找出潜在的记住我安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的记住我安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'account-enumeration',
+    displayName: '账户枚举检测',
+    description: '检测账户枚举漏洞',
+    category: 'auth',
+    cwe: 'CWE-204',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测账户枚举漏洞。\n\n你的任务是分析代码中的账户枚举问题，包括：\n1. 登录错误信息差异\n2. 注册响应差异\n3. 密码重置响应差异\n4. 时间侧信道攻击\n\n请仔细分析代码，找出潜在的账户枚举漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的账户枚举漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 敏感信息泄露类 (8个) ==========
   {
     name: 'hardcoded-secrets',
     displayName: '硬编码密钥检测',
-    description: '检测代码中硬编码的敏感信息，如密码、API密钥等',
+    description: '检测代码中硬编码的敏感信息',
     category: 'sensitive',
     cwe: 'CWE-798',
     severity: 'high',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测硬编码的敏感信息。
-
-你的任务是分析代码中可能存在的硬编码敏感信息，包括：
-1. 硬编码的密码
-2. API 密钥和 Token
-3. 加密密钥
-4. 数据库连接字符串
-5. 私钥和证书
-
-请仔细分析代码，找出潜在的硬编码敏感信息。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的硬编码敏感信息，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测硬编码敏感信息。\n\n你的任务是分析代码中可能存在的硬编码敏感信息，包括：\n1. 硬编码的密码\n2. API 密钥和 Token\n3. 加密密钥\n4. 数据库连接字符串\n5. 私钥和证书\n\n请仔细分析代码，找出潜在的硬编码敏感信息。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的硬编码敏感信息，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
     name: 'info-disclosure',
@@ -172,22 +330,85 @@ const skillsData = [
     category: 'sensitive',
     cwe: 'CWE-200',
     severity: 'medium',
-    systemPrompt: `你是一个专业的安全代码审计专家，专注于检测信息泄露漏洞。
-
-你的任务是分析代码中可能导致信息泄露的问题，包括：
-1. 错误信息泄露敏感数据
-2. 调试信息未移除
-3. 日志记录敏感信息
-4. 注释中的敏感信息
-
-请仔细分析代码，找出潜在的信息泄露问题。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的信息泄露问题，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测信息泄露漏洞。\n\n你的任务是分析代码中可能导致信息泄露的问题，包括：\n1. 错误信息泄露敏感数据\n2. 调试信息未移除\n3. 日志记录敏感信息\n4. 注释中的敏感信息\n\n请仔细分析代码，找出潜在的信息泄露问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的信息泄露问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
-  // ========== API 安全类 ==========
+  {
+    name: 'logging-sensitive',
+    displayName: '敏感日志检测',
+    description: '检测日志中记录敏感信息的问题',
+    category: 'sensitive',
+    cwe: 'CWE-532',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测敏感日志问题。\n\n你的任务是分析代码中的日志问题，包括：\n1. 记录密码等敏感信息\n2. 记录完整的请求/响应\n3. 日志级别不当\n4. 日志文件权限不当\n\n请仔细分析代码，找出潜在的敏感日志问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的敏感日志问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'error-handling',
+    displayName: '错误处理检测',
+    description: '检测不安全的错误处理',
+    category: 'sensitive',
+    cwe: 'CWE-209',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测错误处理问题。\n\n你的任务是分析代码中的错误处理问题，包括：\n1. 详细错误信息泄露\n2. 堆栈跟踪暴露\n3. 数据库错误暴露\n4. 异常处理不当\n\n请仔细分析代码，找出潜在的错误处理问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的错误处理问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'cache-sensitive',
+    displayName: '缓存安全检测',
+    description: '检测敏感数据缓存问题',
+    category: 'sensitive',
+    cwe: 'CWE-524',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测缓存安全问题。\n\n你的任务是分析代码中的缓存问题，包括：\n1. 敏感数据被缓存\n2. 缓存控制头缺失\n3. 浏览器缓存敏感信息\n4. 代理缓存敏感信息\n\n请仔细分析代码，找出潜在的缓存安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的缓存安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'backup-files',
+    displayName: '备份文件检测',
+    description: '检测残留的备份文件和敏感文件',
+    category: 'sensitive',
+    cwe: 'CWE-538',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测备份文件问题。\n\n你的任务是分析代码中的备份文件问题，包括：\n1. 编辑器临时文件\n2. 版本控制文件\n3. 备份文件\n4. 配置文件泄露\n\n请仔细分析，找出潜在的备份文件问题。',
+    userPrompt: '请分析以下文件：\n\n文件路径：{{filePath}}\n\n内容：\n```\n{{code}}\n```\n\n请检测是否存在敏感备份文件，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'comment-disclosure',
+    displayName: '注释泄露检测',
+    description: '检测代码注释中的敏感信息',
+    category: 'sensitive',
+    cwe: 'CWE-200',
+    severity: 'low',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测注释泄露问题。\n\n你的任务是分析代码注释中的问题，包括：\n1. 注释中的密码\n2. 注释中的 API 密钥\n3. 注释中的内部信息\n4. TODO/FIXME 泄露架构信息\n\n请仔细分析代码，找出潜在的注释泄露问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的注释泄露问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'debug-endpoints',
+    displayName: '调试端点检测',
+    description: '检测暴露的调试端点和功能',
+    category: 'sensitive',
+    cwe: 'CWE-215',
+    severity: 'high',
+    systemPrompt: '你是一个专业的安全代码审计专家，专注于检测调试端点问题。\n\n你的任务是分析代码中的调试问题，包括：\n1. 调试 API 端点\n2. 开发环境配置\n3. 调试模式开关\n4. 测试接口未移除\n\n请仔细分析代码，找出潜在的调试端点问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的调试端点问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== API 安全类 (8个) ==========
   {
     name: 'api-broken-auth',
     displayName: 'API 认证检测',
@@ -195,20 +416,10 @@ const skillsData = [
     category: 'api',
     cwe: 'CWE-306',
     severity: 'critical',
-    systemPrompt: `你是一个专业的 API 安全专家，专注于检测 API 认证问题。
-
-你的任务是分析 API 代码中的认证问题，包括：
-1. 缺少认证检查
-2. 认证机制缺陷
-3. API 密钥管理不当
-4. JWT 安全问题
-
-请仔细分析代码，找出潜在的 API 认证问题。`,
-    userPrompt: `请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的 API 认证问题，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 API 认证问题。\n\n你的任务是分析 API 代码中的认证问题，包括：\n1. 缺少认证检查\n2. 认证机制缺陷\n3. API 密钥管理不当\n4. JWT 安全问题\n\n请仔细分析代码，找出潜在的 API 认证问题。',
+    userPrompt: '请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 API 认证问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
     name: 'api-rate-limit',
@@ -217,67 +428,85 @@ const skillsData = [
     category: 'api',
     cwe: 'CWE-770',
     severity: 'medium',
-    systemPrompt: `你是一个专业的 API 安全专家，专注于检测 API 限流问题。
-
-你的任务是分析 API 代码中的限流问题，包括：
-1. 缺少速率限制
-2. 限流机制可绕过
-3. 资源消耗无限制
-4. 批量请求攻击风险
-
-请仔细分析代码，找出潜在的 API 限流问题。`,
-    userPrompt: `请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的 API 限流问题，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 API 限流问题。\n\n你的任务是分析 API 代码中的限流问题，包括：\n1. 缺少速率限制\n2. 限流机制可绕过\n3. 资源消耗无限制\n4. 批量请求攻击风险\n\n请仔细分析代码，找出潜在的 API 限流问题。',
+    userPrompt: '请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 API 限流问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
-  // ========== 加密与数据类 ==========
   {
-    name: 'weak-crypto',
-    displayName: '弱加密检测',
-    description: '检测使用弱加密算法或不安全加密实践',
-    category: 'crypto',
-    cwe: 'CWE-327',
+    name: 'api-mass-assignment',
+    displayName: '批量赋值检测',
+    description: '检测 API 批量赋值漏洞',
+    category: 'api',
+    cwe: 'CWE-915',
     severity: 'high',
-    systemPrompt: `你是一个专业的密码学安全专家，专注于检测弱加密问题。
-
-你的任务是分析代码中的加密问题，包括：
-1. 使用弱加密算法（DES、RC4 等）
-2. 使用不安全的加密模式（ECB）
-3. 硬编码密钥
-4. 缺少完整性验证
-
-请仔细分析代码，找出潜在的加密安全问题。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的加密安全问题，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测批量赋值问题。\n\n你的任务是分析 API 代码中的批量赋值问题，包括：\n1. 未过滤的输入字段\n2. 敏感字段可被修改\n3. 权限字段可被注入\n4. 嵌套对象赋值\n\n请仔细分析代码，找出潜在的批量赋值问题。',
+    userPrompt: '请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的批量赋值问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
-    name: 'insecure-random',
-    displayName: '不安全随机数检测',
-    description: '检测使用不安全的随机数生成器',
-    category: 'crypto',
-    cwe: 'CWE-338',
-    severity: 'medium',
-    systemPrompt: `你是一个专业的密码学安全专家，专注于检测随机数安全问题。
-
-你的任务是分析代码中的随机数问题，包括：
-1. 使用伪随机数生成器生成安全敏感数据
-2. 随机数种子可预测
-3. 随机数范围不足
-4. UUID 生成不安全
-
-请仔细分析代码，找出潜在的随机数安全问题。`,
-    userPrompt: `请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的随机数安全问题，输出 JSON 格式的结果。`,
+    name: 'api-idor',
+    displayName: 'IDOR 检测',
+    description: '检测不安全的直接对象引用漏洞',
+    category: 'api',
+    cwe: 'CWE-639',
+    severity: 'high',
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 IDOR 问题。\n\n你的任务是分析 API 代码中的 IDOR 问题，包括：\n1. 资源 ID 未验证\n2. 用户可访问他人资源\n3. 缺少所有权检查\n4. 可预测的资源 ID\n\n请仔细分析代码，找出潜在的 IDOR 问题。',
+    userPrompt: '请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 IDOR 问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
-  // ========== 配置安全类 ==========
+  {
+    name: 'api-injection',
+    displayName: 'API 注入检测',
+    description: '检测 API 端点的注入漏洞',
+    category: 'api',
+    cwe: 'CWE-74',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 API 注入问题。\n\n你的任务是分析 API 代码中的注入问题，包括：\n1. 参数注入\n2. Header 注入\n3. JSON 注入\n4. GraphQL 注入\n\n请仔细分析代码，找出潜在的 API 注入问题。',
+    userPrompt: '请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 API 注入问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'api-versioning',
+    displayName: 'API 版本检测',
+    description: '检测 API 版本管理安全问题',
+    category: 'api',
+    cwe: 'CWE-918',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 API 版本问题。\n\n你的任务是分析 API 代码中的版本问题，包括：\n1. 旧版本未下线\n2. 版本绕过风险\n3. 版本信息泄露\n4. 不兼容变更\n\n请仔细分析代码，找出潜在的 API 版本问题。',
+    userPrompt: '请分析以下 API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 API 版本问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'graphql-security',
+    displayName: 'GraphQL 安全检测',
+    description: '检测 GraphQL 实现中的安全问题',
+    category: 'api',
+    cwe: 'CWE-284',
+    severity: 'high',
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 GraphQL 问题。\n\n你的任务是分析 GraphQL 代码中的问题，包括：\n1. 深度限制缺失\n2. 批量查询攻击\n3. 字段敏感信息泄露\n4. 内省未禁用\n\n请仔细分析代码，找出潜在的 GraphQL 问题。',
+    userPrompt: '请分析以下 GraphQL 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 GraphQL 问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'rest-security',
+    displayName: 'REST API 安全检测',
+    description: '检测 REST API 实现中的安全问题',
+    category: 'api',
+    cwe: 'CWE-284',
+    severity: 'high',
+    systemPrompt: '你是一个专业的 API 安全专家，专注于检测 REST API 问题。\n\n你的任务是分析 REST API 代码中的问题，包括：\n1. HTTP 方法不当使用\n2. 缺少输入验证\n3. 错误处理不当\n4. 缺少安全头\n\n请仔细分析代码，找出潜在的 REST API 问题。',
+    userPrompt: '请分析以下 REST API 代码：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 REST API 问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 配置安全类 (6个) ==========
   {
     name: 'insecure-config',
     displayName: '不安全配置检测',
@@ -285,21 +514,10 @@ const skillsData = [
     category: 'config',
     cwe: 'CWE-16',
     severity: 'medium',
-    systemPrompt: `你是一个专业的安全配置专家，专注于检测不安全配置问题。
-
-你的任务是分析配置代码中的安全问题，包括：
-1. 调试模式未关闭
-2. 详细错误信息暴露
-3. 默认密码未修改
-4. 不安全的 CORS 配置
-5. 安全头缺失
-
-请仔细分析配置，找出潜在的安全问题。`,
-    userPrompt: `请分析以下配置文件：\n\n文件路径：{{filePath}}\n\n配置内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的安全配置问题，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的安全配置专家，专注于检测不安全配置问题。\n\n你的任务是分析配置代码中的问题，包括：\n1. 调试模式未关闭\n2. 详细错误信息暴露\n3. 默认密码未修改\n4. 不安全的 CORS 配置\n5. 安全头缺失\n\n请仔细分析配置，找出潜在的安全问题。',
+    userPrompt: '请分析以下配置文件：\n\n文件路径：{{filePath}}\n\n配置内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的安全配置问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
   {
     name: 'dependency-vuln',
@@ -308,25 +526,364 @@ const skillsData = [
     category: 'config',
     cwe: 'CWE-1035',
     severity: 'high',
-    systemPrompt: `你是一个专业的供应链安全专家，专注于检测依赖漏洞问题。
-
-你的任务是分析项目依赖中的安全问题，包括：
-1. 已知漏洞的依赖版本
-2. 过时的依赖包
-3. 不安全的依赖配置
-4. 依赖冲突
-
-请仔细分析依赖文件，找出潜在的安全问题。`,
-    userPrompt: `请分析以下依赖配置：\n\n文件路径：{{filePath}}\n\n内容：\n\`\`\`{{language}}\n{{code}}\n\`\`\`\n\n请检测其中的依赖安全问题，输出 JSON 格式的结果。`,
+    systemPrompt: '你是一个专业的供应链安全专家，专注于检测依赖漏洞问题。\n\n你的任务是分析项目依赖中的安全问题，包括：\n1. 已知漏洞的依赖版本\n2. 过时的依赖包\n3. 不安全的依赖配置\n4. 依赖冲突\n\n请仔细分析依赖文件，找出潜在的安全问题。',
+    userPrompt: '请分析以下依赖配置：\n\n文件路径：{{filePath}}\n\n内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的依赖安全问题，输出 JSON 格式的结果。',
     tools: JSON.stringify(['read_file', 'search_pattern']),
-    parameters: JSON.stringify({
-      filePath: { type: 'string', required: true, description: '要分析的文件路径' },
-    }),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'security-headers',
+    displayName: '安全头检测',
+    description: '检测缺失的安全响应头',
+    category: 'config',
+    cwe: 'CWE-693',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测安全头问题。\n\n你的任务是分析代码中的安全头配置，包括：\n1. Content-Security-Policy\n2. X-Frame-Options\n3. X-Content-Type-Options\n4. Strict-Transport-Security\n\n请仔细分析代码，找出缺失的安全头。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的安全头配置问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'cors-config',
+    displayName: 'CORS 配置检测',
+    description: '检测跨域资源配置问题',
+    category: 'config',
+    cwe: 'CWE-942',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 CORS 配置问题。\n\n你的任务是分析代码中的 CORS 配置，包括：\n1. Access-Control-Allow-Origin 过于宽松\n2. Allow-Credentials 风险\n3. 预检请求处理\n4. 缓存问题\n\n请仔细分析代码，找出潜在的 CORS 问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 CORS 配置问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'cookie-security',
+    displayName: 'Cookie 安全检测',
+    description: '检测 Cookie 配置安全问题',
+    category: 'config',
+    cwe: 'CWE-614',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 Cookie 安全问题。\n\n你的任务是分析代码中的 Cookie 配置，包括：\n1. HttpOnly 属性缺失\n2. Secure 属性缺失\n3. SameSite 属性配置\n4. Cookie 过期设置\n\n请仔细分析代码，找出潜在的 Cookie 安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 Cookie 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'subdomain-takeover',
+    displayName: '子域名接管检测',
+    description: '检测子域名接管风险',
+    category: 'config',
+    cwe: 'CWE-350',
+    severity: 'high',
+    systemPrompt: '你是一个专业的云安全专家，专注于检测子域名接管问题。\n\n你的任务是分析配置中的子域名问题，包括：\n1. 未使用的 DNS 记录\n2. 云服务配置缺失\n3. CNAME 指向已释放资源\n4. 第三方服务配置\n\n请仔细分析配置，找出潜在的子域名接管风险。',
+    userPrompt: '请分析以下配置文件：\n\n文件路径：{{filePath}}\n\n内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的子域名接管风险，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 加密与数据类 (6个) ==========
+  {
+    name: 'weak-crypto',
+    displayName: '弱加密检测',
+    description: '检测使用弱加密算法或不安全加密实践',
+    category: 'crypto',
+    cwe: 'CWE-327',
+    severity: 'high',
+    systemPrompt: '你是一个专业的密码学安全专家，专注于检测弱加密问题。\n\n你的任务是分析代码中的加密问题，包括：\n1. 使用弱加密算法（DES、RC4 等）\n2. 使用不安全的加密模式（ECB）\n3. 硬编码密钥\n4. 缺少完整性验证\n\n请仔细分析代码，找出潜在的加密安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的加密安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'insecure-random',
+    displayName: '不安全随机数检测',
+    description: '检测使用不安全的随机数生成器',
+    category: 'crypto',
+    cwe: 'CWE-338',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的密码学安全专家，专注于检测随机数安全问题。\n\n你的任务是分析代码中的随机数问题，包括：\n1. 使用伪随机数生成器生成安全敏感数据\n2. 随机数种子可预测\n3. 随机数范围不足\n4. UUID 生成不安全\n\n请仔细分析代码，找出潜在的随机数安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的随机数安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'key-management',
+    displayName: '密钥管理检测',
+    description: '检测密钥管理问题',
+    category: 'crypto',
+    cwe: 'CWE-798',
+    severity: 'high',
+    systemPrompt: '你是一个专业的密码学安全专家，专注于检测密钥管理问题。\n\n你的任务是分析代码中的密钥管理问题，包括：\n1. 密钥硬编码\n2. 密钥存储不安全\n3. 密钥传输不安全\n4. 密钥轮换缺失\n\n请仔细分析代码，找出潜在的密钥管理问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的密钥管理问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'hash-weak',
+    displayName: '弱哈希检测',
+    description: '检测使用弱哈希算法',
+    category: 'crypto',
+    cwe: 'CWE-328',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的密码学安全专家，专注于检测弱哈希问题。\n\n你的任务是分析代码中的哈希问题，包括：\n1. 使用 MD5、SHA1 等弱哈希\n2. 密码存储使用弱哈希\n3. 缺少盐值\n4. 哈希碰撞风险\n\n请仔细分析代码，找出潜在的弱哈希问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的弱哈希问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'ssl-tls',
+    displayName: 'SSL/TLS 配置检测',
+    description: '检测 SSL/TLS 配置问题',
+    category: 'crypto',
+    cwe: 'CWE-327',
+    severity: 'high',
+    systemPrompt: '你是一个专业的密码学安全专家，专注于检测 SSL/TLS 问题。\n\n你的任务是分析代码中的 SSL/TLS 问题，包括：\n1. 使用过时的协议版本\n2. 弱密码套件\n3. 证书验证禁用\n4. 主机名验证禁用\n\n请仔细分析代码，找出潜在的 SSL/TLS 问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 SSL/TLS 问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'data-exposure',
+    displayName: '数据暴露检测',
+    description: '检测敏感数据暴露问题',
+    category: 'crypto',
+    cwe: 'CWE-200',
+    severity: 'high',
+    systemPrompt: '你是一个专业的数据安全专家，专注于检测数据暴露问题。\n\n你的任务是分析代码中的数据暴露问题，包括：\n1. 敏感数据明文传输\n2. 敏感数据明文存储\n3. 缺少数据加密\n4. 不安全的数据删除\n\n请仔细分析代码，找出潜在的数据暴露问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的数据暴露问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== Web 安全类 (6个) ==========
+  {
+    name: 'csrf',
+    displayName: 'CSRF 检测',
+    description: '检测跨站请求伪造漏洞',
+    category: 'web',
+    cwe: 'CWE-352',
+    severity: 'high',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 CSRF 漏洞。\n\n你的任务是分析代码中的 CSRF 问题，包括：\n1. 缺少 CSRF Token\n2. Token 验证缺失\n3. SameSite Cookie 缺失\n4. Referer 验证不足\n\n请仔细分析代码，找出潜在的 CSRF 漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 CSRF 漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'clickjacking',
+    displayName: '点击劫持检测',
+    description: '检测点击劫持漏洞',
+    category: 'web',
+    cwe: 'CWE-1021',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测点击劫持漏洞。\n\n你的任务是分析代码中的点击劫持问题，包括：\n1. X-Frame-Options 缺失\n2. Content-Security-Policy frame-ancestors 缺失\n3. Frame 嵌入风险\n\n请仔细分析代码，找出潜在的点击劫持漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的点击劫持漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'websocket-security',
+    displayName: 'WebSocket 安全检测',
+    description: '检测 WebSocket 实现中的安全问题',
+    category: 'web',
+    cwe: 'CWE-1039',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 WebSocket 安全问题。\n\n你的任务是分析代码中的 WebSocket 问题，包括：\n1. 认证缺失\n2. 授权缺失\n3. 输入验证不足\n4. 跨域配置问题\n\n请仔细分析代码，找出潜在的 WebSocket 安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 WebSocket 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'dom-xss',
+    displayName: 'DOM XSS 检测',
+    description: '检测 DOM 型 XSS 漏洞',
+    category: 'web',
+    cwe: 'CWE-79',
+    severity: 'high',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 DOM XSS 漏洞。\n\n你的任务是分析代码中的 DOM XSS 问题，包括：\n1. innerHTML 不安全使用\n2. document.write 风险\n3. location.hash 直接输出\n4. postMessage 未验证来源\n\n请仔细分析代码，找出潜在的 DOM XSS 漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 DOM XSS 漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'host-header-injection',
+    displayName: 'Host 头注入检测',
+    description: '检测 Host 头注入漏洞',
+    category: 'web',
+    cwe: 'CWE-74',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 Host 头注入漏洞。\n\n你的任务是分析代码中的 Host 头问题，包括：\n1. Host 头直接使用\n2. 密码重置链接注入\n3. 缓存投毒\n4. 重定向注入\n\n请仔细分析代码，找出潜在的 Host 头注入漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 Host 头注入漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'csp-misconfig',
+    displayName: 'CSP 配置检测',
+    description: '检测内容安全策略配置问题',
+    category: 'web',
+    cwe: 'CWE-1021',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的 Web 安全专家，专注于检测 CSP 配置问题。\n\n你的任务是分析代码中的 CSP 问题，包括：\n1. CSP 策略过于宽松\n2. unsafe-inline 使用\n3. unsafe-eval 使用\n4. 缺少 default-src\n\n请仔细分析代码，找出潜在的 CSP 配置问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 CSP 配置问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 业务逻辑类 (4个) ==========
+  {
+    name: 'business-logic',
+    displayName: '业务逻辑漏洞检测',
+    description: '检测业务逻辑相关漏洞',
+    category: 'business',
+    cwe: 'CWE-840',
+    severity: 'high',
+    systemPrompt: '你是一个专业的业务安全专家，专注于检测业务逻辑漏洞。\n\n你的任务是分析代码中的业务逻辑问题，包括：\n1. 价格篡改\n2. 数量篡改\n3. 条件竞争\n4. 状态机漏洞\n\n请仔细分析代码，找出潜在的业务逻辑漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的业务逻辑漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'race-condition',
+    displayName: '竞争条件检测',
+    description: '检测竞争条件漏洞',
+    category: 'business',
+    cwe: 'CWE-362',
+    severity: 'high',
+    systemPrompt: '你是一个专业的并发安全专家，专注于检测竞争条件漏洞。\n\n你的任务是分析代码中的竞争条件问题，包括：\n1. TOCTOU 问题\n2. 并发更新问题\n3. 余额竞态\n4. 库存竞态\n\n请仔细分析代码，找出潜在的竞争条件漏洞。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的竞争条件漏洞，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'payment-security',
+    displayName: '支付安全检测',
+    description: '检测支付相关安全问题',
+    category: 'business',
+    cwe: 'CWE-840',
+    severity: 'critical',
+    systemPrompt: '你是一个专业的支付安全专家，专注于检测支付安全问题。\n\n你的任务是分析代码中的支付问题，包括：\n1. 金额篡改\n2. 支付状态验证\n3. 重复支付\n4. 回调验证\n\n请仔细分析代码，找出潜在的支付安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的支付安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'coupon-fraud',
+    displayName: '优惠券欺诈检测',
+    description: '检测优惠券相关安全问题',
+    category: 'business',
+    cwe: 'CWE-840',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的业务安全专家，专注于检测优惠券欺诈问题。\n\n你的任务是分析代码中的优惠券问题，包括：\n1. 优惠券重复使用\n2. 优惠券枚举\n3. 优惠券金额篡改\n4. 优惠券条件绕过\n\n请仔细分析代码，找出潜在的优惠券欺诈问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的优惠券欺诈问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 客户端安全类 (4个) ==========
+  {
+    name: 'local-storage',
+    displayName: '本地存储安全检测',
+    description: '检测客户端本地存储安全问题',
+    category: 'client',
+    cwe: 'CWE-922',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的客户端安全专家，专注于检测本地存储安全问题。\n\n你的任务是分析代码中的本地存储问题，包括：\n1. 敏感数据存储在 localStorage\n2. 敏感数据存储在 sessionStorage\n3. 敏感数据存储在 IndexedDB\n4. 数据未加密存储\n\n请仔细分析代码，找出潜在的本地存储安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的本地存储安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'postmessage',
+    displayName: 'postMessage 安全检测',
+    description: '检测 postMessage 通信安全问题',
+    category: 'client',
+    cwe: 'CWE-940',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的客户端安全专家，专注于检测 postMessage 安全问题。\n\n你的任务是分析代码中的 postMessage 问题，包括：\n1. 未验证来源\n2. 敏感数据传输\n3. 消息处理不当\n4. targetOrigin 设置为 *\n\n请仔细分析代码，找出潜在的 postMessage 安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 postMessage 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'client-url-redirection',
+    displayName: '客户端重定向检测',
+    description: '检测客户端 URL 重定向问题',
+    category: 'client',
+    cwe: 'CWE-601',
+    severity: 'medium',
+    systemPrompt: '你是一个专业的客户端安全专家，专注于检测客户端重定向问题。\n\n你的任务是分析代码中的客户端重定向问题，包括：\n1. location.hash 注入\n2. location.href 注入\n3. JavaScript 重定向\n4. open() 重定向\n\n请仔细分析代码，找出潜在的客户端重定向问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的客户端重定向问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'third-party-library',
+    displayName: '第三方库安全检测',
+    description: '检测第三方库的安全问题',
+    category: 'client',
+    cwe: 'CWE-1035',
+    severity: 'high',
+    systemPrompt: '你是一个专业的供应链安全专家，专注于检测第三方库安全问题。\n\n你的任务是分析代码中的第三方库问题，包括：\n1. 有漏洞的库版本\n2. 不安全的库配置\n3. 过时的依赖\n4. 未使用的依赖\n\n请仔细分析代码，找出潜在的第三方库安全问题。',
+    userPrompt: '请分析以下代码文件：\n\n文件路径：{{filePath}}\n\n代码内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的第三方库安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+
+  // ========== 云与容器安全类 (4个) ==========
+  {
+    name: 'container-security',
+    displayName: '容器安全检测',
+    description: '检测 Docker 容器安全问题',
+    category: 'cloud',
+    cwe: 'CWE-269',
+    severity: 'high',
+    systemPrompt: '你是一个专业的容器安全专家，专注于检测容器安全问题。\n\n你的任务是分析容器配置中的安全问题，包括：\n1. 以 root 运行\n2. 特权模式\n3. 不安全的 volume 挂载\n4. 网络配置问题\n\n请仔细分析配置，找出潜在的容器安全问题。',
+    userPrompt: '请分析以下容器配置：\n\n文件路径：{{filePath}}\n\n内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的容器安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'kubernetes-security',
+    displayName: 'Kubernetes 安全检测',
+    description: '检测 Kubernetes 配置安全问题',
+    category: 'cloud',
+    cwe: 'CWE-269',
+    severity: 'high',
+    systemPrompt: '你是一个专业的 Kubernetes 安全专家，专注于检测 K8s 配置安全问题。\n\n你的任务是分析 K8s 配置中的安全问题，包括：\n1. Pod 安全策略\n2. RBAC 配置\n3. Secret 管理\n4. 网络策略\n\n请仔细分析配置，找出潜在的 K8s 安全问题。',
+    userPrompt: '请分析以下 Kubernetes 配置：\n\n文件路径：{{filePath}}\n\n内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 Kubernetes 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'cloud-storage',
+    displayName: '云存储安全检测',
+    description: '检测云存储配置安全问题',
+    category: 'cloud',
+    cwe: 'CWE-284',
+    severity: 'high',
+    systemPrompt: '你是一个专业的云安全专家，专注于检测云存储安全问题。\n\n你的任务是分析云存储配置中的安全问题，包括：\n1. 公开访问的存储桶\n2. 未加密的存储\n3. 不安全的访问控制\n4. 日志记录缺失\n\n请仔细分析配置，找出潜在的云存储安全问题。',
+    userPrompt: '请分析以下云存储配置：\n\n文件路径：{{filePath}}\n\n内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的云存储安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
+  },
+  {
+    name: 'iam-security',
+    displayName: 'IAM 安全检测',
+    description: '检测云身份和访问管理问题',
+    category: 'cloud',
+    cwe: 'CWE-269',
+    severity: 'high',
+    systemPrompt: '你是一个专业的云安全专家，专注于检测 IAM 安全问题。\n\n你的任务是分析 IAM 配置中的安全问题，包括：\n1. 过度权限\n2. 硬编码凭证\n3. 缺少 MFA\n4. 不安全的角色假设\n\n请仔细分析配置，找出潜在的 IAM 安全问题。',
+    userPrompt: '请分析以下 IAM 配置：\n\n文件路径：{{filePath}}\n\n内容：\n```{{language}}\n{{code}}\n```\n\n请检测其中的 IAM 安全问题，输出 JSON 格式的结果。',
+    tools: JSON.stringify(['read_file', 'search_pattern']),
+    parameters: JSON.stringify({ filePath: { type: 'string', required: true, description: '要分析的文件路径' } }),
   },
 ];
 
 async function main() {
   console.log('开始种子 Skills 数据...');
+
+  let created = 0;
+  let skipped = 0;
 
   for (const skill of skillsData) {
     const existing = await prisma.skill.findUnique({
@@ -335,6 +892,7 @@ async function main() {
 
     if (existing) {
       console.log(`Skill "${skill.name}" 已存在，跳过`);
+      skipped++;
       continue;
     }
 
@@ -345,9 +903,10 @@ async function main() {
       },
     });
     console.log(`创建 Skill "${skill.name}"`);
+    created++;
   }
 
-  console.log('Skills 种子数据完成！');
+  console.log(`\nSkills 种子数据完成！创建: ${created}, 跳过: ${skipped}, 总计: ${skillsData.length}`);
 }
 
 main()
