@@ -1,9 +1,7 @@
-// src/app/api/agent/execute/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { createEvaluationCaller } from '@/services/evaluation';
+import { AgentExecutor, AgentExecutionContext, AgentExecutionCallbacks } from '@/lib/agent-executor';
 
 // POST /api/agent/execute - 执行 Skill
 export async function POST(request: Request) {
@@ -40,120 +38,93 @@ export async function POST(request: Request) {
     // 获取项目
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      include: { files: true, config: true },
+      include: { files: true },
     });
 
     if (!project) {
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
-    // 创建执行记录
-    const execution = await prisma.skillExecution.create({
-      data: {
-        skillId,
-        projectId,
-        input: JSON.stringify(parameters || {}),
-        status: 'running',
-        startedAt: new Date(),
-      },
-    });
-
     // 获取模型配置
     const modelConfig = await getModelConfig();
     if (!modelConfig) {
-      await prisma.skillExecution.update({
-        where: { id: execution.id },
-        data: { status: 'failed', error: '模型配置不存在', completedAt: new Date() },
-      });
-      return NextResponse.json({ error: '模型配置不存在' }, { status: 500 });
+      return NextResponse.json({ error: '模型配置不存在，请先配置 AI 模型' }, { status: 500 });
     }
 
     // 创建 SSE 流
     const stream = new ReadableStream({
       async start(controller) {
-        const caller = createEvaluationCaller(modelConfig);
-        let fullResponse = '';
+        const context: AgentExecutionContext = {
+          skillId,
+          projectId,
+          modelConfig: {
+            providerType: modelConfig.providerType,
+            apiKey: modelConfig.apiKey,
+            apiBaseUrl: modelConfig.apiBaseUrl,
+            model: JSON.parse(modelConfig.models)[0] || 'claude-sonnet-4-20250514',
+          },
+        };
+
+        const callbacks: AgentExecutionCallbacks = {
+          onChunk: (text) => {
+            const data = JSON.stringify({
+              type: 'chunk',
+              content: text,
+              timestamp: Date.now(),
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+          },
+          onToolCall: (tool, parameters) => {
+            const data = JSON.stringify({
+              type: 'tool_call',
+              tool,
+              parameters,
+              timestamp: Date.now(),
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+          },
+          onVulnerability: (vuln) => {
+            const data = JSON.stringify({
+              type: 'vulnerability',
+              vulnerability: vuln,
+              timestamp: Date.now(),
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+          },
+          onComplete: (result) => {
+            const data = JSON.stringify({
+              type: 'done',
+              result: {
+                executionId: result.executionId,
+                status: result.status,
+                summary: result.summary,
+                vulnerabilitiesCount: result.vulnerabilities.length,
+                toolCalls: result.toolCalls,
+                duration: result.duration,
+              },
+              timestamp: Date.now(),
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+            controller.close();
+          },
+          onError: (error) => {
+            const data = JSON.stringify({
+              type: 'error',
+              error: error.message,
+              timestamp: Date.now(),
+            });
+            controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
+            controller.close();
+          },
+        };
 
         try {
-          // 构建 Prompt
-          const systemPrompt = skill.systemPrompt;
-          const userPrompt = skill.userPrompt
-            .replace('{{filePath}}', parameters?.filePath || '')
-            .replace('{{language}}', parameters?.language || 'unknown')
-            .replace('{{code}}', parameters?.code || '');
-
-          await caller.startEvaluation(execution.id, {
-            projectName: project.name,
-            projectDescription: project.description || undefined,
-            environmentUrl: project.environmentUrl || undefined,
-            files: project.files.map(f => ({
-              name: f.fileName,
-              type: f.fileType,
-              size: f.fileSize,
-            })),
-            taskDescription: `System: ${systemPrompt}\n\nUser: ${userPrompt}`,
-          }, {
-            onChunk: (text) => {
-              fullResponse += text;
-              const data = JSON.stringify({
-                type: 'message',
-                content: text,
-                timestamp: Date.now(),
-              });
-              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-            },
-            onComplete: async () => {
-              await prisma.skillExecution.update({
-                where: { id: execution.id },
-                data: {
-                  status: 'completed',
-                  output: JSON.stringify({ response: fullResponse }),
-                  completedAt: new Date(),
-                  duration: Date.now() - execution.startedAt.getTime(),
-                },
-              });
-
-              const data = JSON.stringify({
-                type: 'done',
-                executionId: execution.id,
-                timestamp: Date.now(),
-              });
-              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-              controller.close();
-            },
-            onError: async (error) => {
-              await prisma.skillExecution.update({
-                where: { id: execution.id },
-                data: {
-                  status: 'failed',
-                  error: error.message,
-                  completedAt: new Date(),
-                },
-              });
-
-              const data = JSON.stringify({
-                type: 'error',
-                error: error.message,
-                timestamp: Date.now(),
-              });
-              controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
-              controller.close();
-            },
-          });
+          const executor = new AgentExecutor(context, callbacks);
+          await executor.execute();
         } catch (error) {
-          const errorMessage = error instanceof Error ? error.message : '未知错误';
-          await prisma.skillExecution.update({
-            where: { id: execution.id },
-            data: {
-              status: 'failed',
-              error: errorMessage,
-              completedAt: new Date(),
-            },
-          });
-
           const data = JSON.stringify({
             type: 'error',
-            error: errorMessage,
+            error: error instanceof Error ? error.message : '未知错误',
             timestamp: Date.now(),
           });
           controller.enqueue(new TextEncoder().encode(`data: ${data}\n\n`));
