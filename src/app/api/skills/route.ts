@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
+import { skillSelectMinimal } from '@/lib/query-optimizer';
 
 // GET /api/skills - 获取 Skills 列表
 export async function GET(request: Request) {
@@ -21,35 +23,40 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category');
+    const category = searchParams.get('category') || undefined;
     const isActive = searchParams.get('isActive');
+    const search = searchParams.get('search') || undefined;
     const page = parseInt(searchParams.get('page') || '1');
-    const pageSize = parseInt(searchParams.get('pageSize') || '20');
+    const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
 
+    const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
+
+    // 构建查询条件
     const where: Record<string, unknown> = {};
     if (category) where.category = category;
     if (isActive !== null) where.isActive = isActive === 'true';
 
+    // 添加搜索条件
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { displayName: { contains: search } },
+        { description: { contains: search } },
+      ];
+    }
+
     const [skills, total] = await Promise.all([
       prisma.skill.findMany({
         where,
+        select: skillSelectMinimal,
         orderBy: [{ category: 'asc' }, { name: 'asc' }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip,
+        take,
       }),
       prisma.skill.count({ where }),
     ]);
 
-    return NextResponse.json({
-      skills: skills.map(s => ({
-        ...s,
-        tools: JSON.parse(s.tools),
-        parameters: JSON.parse(s.parameters),
-      })),
-      total,
-      page,
-      pageSize,
-    });
+    return NextResponse.json(createPaginatedResponse(skills, total, pageNum, pageLimit));
   } catch (error) {
     console.error('获取 Skills 列表错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
