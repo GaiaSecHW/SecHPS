@@ -211,6 +211,7 @@ model AuditLog {
   @@index([userId])
   @@index([action])
   @@index([createdAt])
+  @@index([action, createdAt])
 }
 
 // 工作流模板（可视化工作流定义）
@@ -236,6 +237,8 @@ model Workflow {
   @@index([userId])
   @@index([status])
   @@index([isActive])
+  @@index([userId, status])
+  @@index([status, isActive])
 }
 
 // 工作流节点（编辑器中的可视化节点）
@@ -300,6 +303,8 @@ model WorkflowExecution {
   @@index([workflowId])
   @@index([userId])
   @@index([status])
+  @@index([startedAt])
+  @@index([workflowId, status])
 }
 
 // 工作流执行步骤（单个任务的执行记录）
@@ -458,6 +463,8 @@ model SkillExecution {
   @@index([projectId])
   @@index([status])
   @@index([createdAt])
+  @@index([projectId, status])
+  @@index([skillId, status])
 }
 
 // Skill 进化记录
@@ -542,6 +549,8 @@ model Vulnerability {
   @@index([severity])
   @@index([type])
   @@index([createdAt])
+  @@index([projectId, status])
+  @@index([severity, status])
 }
 
 // 漏洞模式库
@@ -625,6 +634,7 @@ model ScanTask {
   @@index([projectId])
   @@index([status])
   @@index([createdAt])
+  @@index([userId, status])
 }
 
 // 扫描报告
