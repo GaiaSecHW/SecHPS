@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Search, Filter, MoreVertical, Edit2, Play, Trash2, Share2, FileText, Clock, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
 
 interface Workflow {
@@ -14,7 +14,6 @@ interface Workflow {
   thumbnail?: string;
   nodeCount: number;
   edgeCount: number;
-  lastExecutedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,13 +45,20 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || '获取工作流列表失败');
+        setError(data.error || '获取Agent编排列表失败');
         setLoading(false);
         return;
       }
 
       const data = await response.json();
-      setWorkflows(data.workflows || []);
+      // API returns { data: [...], pagination: {...} }
+      // 映射 _count.nodes 到 nodeCount
+      const mappedWorkflows = (data.data || []).map((w: any) => ({
+        ...w,
+        nodeCount: w._count?.nodes || 0,
+        edgeCount: 0, // 暂时设置为 0，因为 API 没有返回 edgeCount
+      }));
+      setWorkflows(mappedWorkflows);
       setLoading(false);
     } catch (err) {
       setError('网络错误，请重试');
@@ -61,8 +67,20 @@ export default function WorkflowsPage() {
   };
 
   const createWorkflow = async () => {
-    if (!workflowName.trim()) {
-      alert('请输入工作流名称');
+    const trimmedName = workflowName.trim();
+
+    if (!trimmedName) {
+      alert('请输入编排名称');
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      alert('编排名称至少需要2个字符');
+      return;
+    }
+
+    if (trimmedName.length > 100) {
+      alert('编排名称不能超过100个字符');
       return;
     }
 
@@ -77,14 +95,14 @@ export default function WorkflowsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          name: workflowName,
+          name: trimmedName,
           description: workflowDescription,
         }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '创建工作流失败');
+        alert(data.error || '创建编排失败');
         setCreating(false);
         return;
       }
@@ -101,7 +119,7 @@ export default function WorkflowsPage() {
   };
 
   const deleteWorkflow = async (workflowId: string) => {
-    if (!confirm('确定要删除这个工作流吗？删除后将无法恢复。')) {
+    if (!confirm('确定要删除这个编排吗？删除后将无法恢复。')) {
       return;
     }
 
@@ -116,7 +134,83 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '删除工作流失败');
+        alert(data.error || '删除编排失败');
+        return;
+      }
+
+      await fetchWorkflows();
+    } catch (err) {
+      alert('网络错误，请重试');
+    }
+  };
+
+  const publishWorkflow = async (workflowId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/workflows/${workflowId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'published' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || '发布编排失败');
+        return;
+      }
+
+      await fetchWorkflows();
+    } catch (err) {
+      alert('网络错误，请重试');
+    }
+  };
+
+  const archiveWorkflow = async (workflowId: string) => {
+    if (!confirm('确定要下线这个编排吗？下线后将不再在选择列表中显示。')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/workflows/${workflowId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'archived' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || '下线编排失败');
+        return;
+      }
+
+      await fetchWorkflows();
+    } catch (err) {
+      alert('网络错误，请重试');
+    }
+  };
+
+  const restoreWorkflow = async (workflowId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/workflows/${workflowId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: 'published' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || '恢复发布失败');
         return;
       }
 
@@ -133,7 +227,7 @@ export default function WorkflowsPage() {
       case 'published':
         return '已发布';
       case 'archived':
-        return '已归档';
+        return '已下线';
       default:
         return status;
     }
@@ -146,7 +240,7 @@ export default function WorkflowsPage() {
       case 'published':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'archived':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
     }
@@ -159,13 +253,13 @@ export default function WorkflowsPage() {
       case 'published':
         return <CheckCircle size={14} />;
       case 'archived':
-        return <AlertCircle size={14} />;
+        return <Archive size={14} />;
       default:
         return <FileText size={14} />;
     }
   };
 
-   // 过滤工作流
+   // 过滤
   const filteredWorkflows = workflows.filter((workflow) => {
     const matchesSearch =
       workflow.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -197,9 +291,9 @@ export default function WorkflowsPage() {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">工作流管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Agent编排管理</h1>
           <p className="mt-1 text-sm text-gray-600">
-            创建和管理自动化工作流
+            创建和管理Agent编排
           </p>
         </div>
 
@@ -208,7 +302,7 @@ export default function WorkflowsPage() {
           className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <Plus size={20} />
-          <span>新建工作流</span>
+          <span>新建编排</span>
         </button>
       </div>
 
@@ -224,7 +318,7 @@ export default function WorkflowsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">总工作流</p>
+              <p className="text-sm font-medium text-gray-600">总编排</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
             </div>
             <div className="p-3 bg-blue-50 rounded-lg">
@@ -260,11 +354,11 @@ export default function WorkflowsPage() {
         <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">已归档</p>
+              <p className="text-sm font-medium text-gray-600">已下线</p>
               <p className="text-2xl font-bold text-gray-900 mt-1">{stats.archived}</p>
             </div>
-            <div className="p-3 bg-yellow-50 rounded-lg">
-              <AlertCircle className="h-6 w-6 text-yellow-600" />
+            <div className="p-3 bg-red-50 rounded-lg">
+              <Archive className="h-6 w-6 text-red-600" />
             </div>
           </div>
         </div>
@@ -276,7 +370,7 @@ export default function WorkflowsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
           <input
             type="text"
-            placeholder="搜索工作流..."
+            placeholder="搜索编排..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -293,22 +387,22 @@ export default function WorkflowsPage() {
             <option value="all">全部状态</option>
             <option value="draft">草稿</option>
             <option value="published">已发布</option>
-            <option value="archived">已归档</option>
+            <option value="archived">已下线</option>
           </select>
         </div>
       </div>
 
-      {/* 工作流列表 */}
+      {/* Agent列表 */}
       {filteredWorkflows.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <FileText className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-4 text-lg font-medium text-gray-900">
-            {searchQuery || statusFilter !== 'all' ? '未找到匹配的工作流' : '暂无工作流'}
+            {searchQuery || statusFilter !== 'all' ? '未找到匹配的编排' : '暂无编排'}
           </h3>
           <p className="mt-2 text-sm text-gray-600">
             {searchQuery || statusFilter !== 'all'
               ? '尝试调整搜索条件或筛选器'
-              : '创建您的第一个工作流开始自动化'}
+              : '创建您的第一个Agent开始编排'}
           </p>
         </div>
       ) : (
@@ -322,7 +416,7 @@ export default function WorkflowsPage() {
               {workflow.thumbnail && (
                 <div className="h-32 bg-gray-100 relative">
                   <img
-                    src={workflow.thumbnail}
+                    src={workflow.thumbnail.startsWith('data:') ? workflow.thumbnail : `data:image/png;base64,${workflow.thumbnail}`}
                     alt={workflow.name}
                     className="w-full h-full object-cover"
                   />
@@ -354,14 +448,6 @@ export default function WorkflowsPage() {
                     <FileText size={14} />
                     <span>{workflow.nodeCount} 节点</span>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <Clock size={14} />
-                    <span>
-                      {workflow.lastExecutedAt
-                        ? new Date(workflow.lastExecutedAt).toLocaleDateString()
-                        : '未执行'}
-                    </span>
-                  </div>
                 </div>
 
                 <p className="mt-2 text-xs text-gray-400">
@@ -380,13 +466,36 @@ export default function WorkflowsPage() {
                       <Edit2 size={16} />
                       <span>编辑</span>
                     </Link>
-                    <button
-                      className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
-                      title="执行工作流"
-                    >
-                      <Play size={16} />
-                      <span>执行</span>
-                    </button>
+                    {workflow.status === 'draft' && (
+                      <button
+                        onClick={() => publishWorkflow(workflow.id)}
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
+                        title="发布"
+                      >
+                        <Send size={16} />
+                        <span>发布</span>
+                      </button>
+                    )}
+                    {workflow.status === 'published' && (
+                      <button
+                        onClick={() => archiveWorkflow(workflow.id)}
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+                        title="下线"
+                      >
+                        <Archive size={16} />
+                        <span>下线</span>
+                      </button>
+                    )}
+                    {workflow.status === 'archived' && (
+                      <button
+                        onClick={() => restoreWorkflow(workflow.id)}
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
+                        title="恢复发布"
+                      >
+                        <RotateCcw size={16} />
+                        <span>恢复</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex space-x-1">
@@ -411,12 +520,12 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* 新建工作流对话框 */}
+      {/* 新建Agent对话框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">新建工作流</h3>
+              <h3 className="text-lg font-semibold text-gray-900">新建编排</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -425,29 +534,31 @@ export default function WorkflowsPage() {
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <XCircle size={20} />
+                <AlertCircle size={20} />
               </button>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
                 <label htmlFor="workflowName" className="block text-sm font-medium text-gray-700">
-                  工作流名称 *
+                  编排名称 *
                 </label>
                 <input
                   id="workflowName"
                   type="text"
                   required
+                  maxLength={100}
+                  minLength={2}
                   value={workflowName}
                   onChange={(e) => setWorkflowName(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="请输入工作流名称"
+                  placeholder="请输入编排名称（2-100个字符）"
                 />
               </div>
 
               <div>
                 <label htmlFor="workflowDescription" className="block text-sm font-medium text-gray-700">
-                  工作流描述
+                  编排描述
                 </label>
                 <textarea
                   id="workflowDescription"
@@ -455,7 +566,7 @@ export default function WorkflowsPage() {
                   value={workflowDescription}
                   onChange={(e) => setWorkflowDescription(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="请输入工作流描述（可选）"
+                  placeholder="请输入编排描述（可选）"
                 />
               </div>
             </div>
@@ -477,7 +588,7 @@ export default function WorkflowsPage() {
                 disabled={creating || !workflowName.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {creating ? '创建中...' : '创建工作流'}
+                {creating ? '创建中...' : '创建编排'}
               </button>
             </div>
           </div>

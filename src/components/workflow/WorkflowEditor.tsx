@@ -15,6 +15,7 @@ import {
   Node,
   useReactFlow,
 } from '@xyflow/react';
+import { toPng } from 'html-to-image';
 import '@xyflow/react/dist/style.css';
 import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff } from 'lucide-react';
 import NodePalette from './NodePalette';
@@ -40,7 +41,7 @@ function WorkflowEditorContent({
   isEnabled = true,
   onToggleEnabled,
 }: WorkflowEditorProps) {
-  const { zoomIn, zoomOut, fitView, screenToFlowPosition } = useReactFlow();
+  const { zoomIn, zoomOut, fitView, screenToFlowPosition, setViewport, getViewport } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initialData?.nodes || []);
   const [edges, setEdges, onEdgesChange] = useEdgesState<FlowEdge>(initialData?.edges || []);
   const [selectedNode, setSelectedNode] = useState<FlowNode | null>(null);
@@ -79,7 +80,10 @@ function WorkflowEditorContent({
 
         if (response.ok) {
           const config = await response.json();
+          console.log('[WorkflowEditor] Loaded workflowConfig:', config);
           setWorkflowConfig(config);
+        } else {
+          console.error('[WorkflowEditor] Failed to load workflowConfig, status:', response.status);
         }
       } catch (error) {
         console.error('Failed to fetch workflow config:', error);
@@ -330,23 +334,46 @@ function WorkflowEditorContent({
     saveToHistory();
   }, [selectedEdge, setEdges, saveToHistory]);
 
-  // 处理删除键
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.key === 'Delete' || e.key === 'Backspace') && !e.shiftKey) {
-        if (selectedNode) {
-          e.preventDefault();
-          handleDeleteNode();
-        } else if (selectedEdge) {
-          e.preventDefault();
-          handleDeleteEdge();
-        }
-      }
-    };
+  // 注意：键盘删除功能已禁用
+  // 用户只能通过右侧属性面板中的删除按钮删除节点和边
+  // 这样可以防止误删，并提供更好的用户体验
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedNode, selectedEdge, handleDeleteNode, handleDeleteEdge]);
+  // 生成缩略图
+  const generateThumbnail = async (): Promise<string | undefined> => {
+    try {
+      // 获取 ReactFlow 容器
+      const reactFlowContainer = document.querySelector('.react-flow') as HTMLElement;
+      if (!reactFlowContainer) {
+        console.warn('ReactFlow container not found');
+        return undefined;
+      }
+
+      // 让所有节点自适应视图大小并居中
+      fitView({
+        padding: 0.1, // 留一点边距
+        duration: 0,
+      });
+
+      // 等待视图更新完成
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      // 生成缩略图
+      const dataUrl = await toPng(reactFlowContainer, {
+        quality: 0.9,
+        pixelRatio: 2,
+        backgroundColor: '#f9fafb',
+        skipAutoScale: false,
+        includeQueryParams: true,
+      });
+
+      // 提取 Base64 部分（去掉 data:image/png;base64, 前缀）
+      const base64Data = dataUrl.split(',')[1];
+      return base64Data;
+    } catch (error) {
+      console.error('Failed to generate thumbnail:', error);
+      return undefined;
+    }
+  };
 
   // 保存工作流
   const handleSave = async () => {
@@ -354,10 +381,15 @@ function WorkflowEditorContent({
 
     try {
       setSaving(true);
+      
+      // 生成缩略图
+      const thumbnail = await generateThumbnail();
+      
       const data: WorkflowData = {
         nodes,
         edges,
         viewport: undefined,
+        thumbnail, // 添加缩略图
       };
       await onSave(data);
     } catch (error) {
@@ -666,12 +698,16 @@ function WorkflowEditorContent({
                         type="text"
                         value={selectedNode.data.label}
                         onChange={(e) => {
-                          const updatedNodes = nodes.map((n) =>
-                            n.id === selectedNode.id
-                              ? { ...n, data: { ...n.data, label: e.target.value } }
-                              : n
+                          const updatedNode = { 
+                            ...selectedNode, 
+                            data: { ...selectedNode.data, label: e.target.value } 
+                          };
+                          setNodes((nds) =>
+                            nds.map((n) =>
+                              n.id === selectedNode.id ? updatedNode : n
+                            )
                           );
-                          setNodes(updatedNodes);
+                          setSelectedNode(updatedNode);
                         }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
@@ -684,12 +720,16 @@ function WorkflowEditorContent({
                       <textarea
                         value={selectedNode.data.description || ''}
                         onChange={(e) => {
-                          const updatedNodes = nodes.map((n) =>
-                            n.id === selectedNode.id
-                              ? { ...n, data: { ...n.data, description: e.target.value } }
-                              : n
+                          const updatedNode = { 
+                            ...selectedNode, 
+                            data: { ...selectedNode.data, description: e.target.value } 
+                          };
+                          setNodes((nds) =>
+                            nds.map((n) =>
+                              n.id === selectedNode.id ? updatedNode : n
+                            )
                           );
-                          setNodes(updatedNodes);
+                          setSelectedNode(updatedNode);
                         }}
                         rows={3}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"

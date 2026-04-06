@@ -30,6 +30,8 @@ model User {
   workflowExecutions WorkflowExecution[]
   workflowSharesAsSharer WorkflowShare[] @relation("SharedBy")
   workflowSharesAsRecipient WorkflowShare[] @relation("SharedWith")
+  mcpServers     McpServerConfig[]
+  skills         Skill[]  // 用户创建的 Skills
  
   @@index([email])
   @@index([username])
@@ -99,6 +101,17 @@ model OpencodeConfig {
   projectUploadDir  String?  // 项目上传目录路径
   taskDescription   String?  // 任务描述（Markdown格式），用于项目评估时发送的第一个消息
   workflowConfig    String?  // JSON string for workflow configuration (startNodeLabel, startNodeDescription, endNodeLabel, endNodeDescription)
+  
+  // 新增字段 - SDK 高级配置
+  customSystemPrompt String?  // 自定义系统提示词
+  claudemdPath       String?  // CLAUDE.md 文件路径
+  resumeSession      Boolean  @default(false)  // 是否启用会话恢复
+  permissionMode     String?  // 权限模式: default | bypassPermissions | plan
+  settingSources     String?  // JSON: 设置源 ['project', 'user', 'local']
+  
+  // 评估配置
+  progressQuestion  String?  // 询问进展消息模板，用于评估运行时发送进展询问
+  
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -115,24 +128,29 @@ model Project {
   userId          String
   configId        String?  // 可选：关联的 AI4WEB 配置
   name            String   // 项目名称
+  displayName     String?  // 显示名称
+  fullPath        String?  // 完整路径
   description     String?  // 项目描述
   projectPath     String?  // 项目目录路径
   status          String   @default("idle") // 项目状态：idle, running, completed, failed
+  
   // 环境配置字段
   environmentUrl  String?  // 环境 URL 地址
   adminUsername   String?  // 管理员用户名
   adminPassword   String?  // 管理员密码
   normalUsername  String?  // 普通用户名
   normalPassword  String?  // 普通用户密码
+  
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
-
+ 
   // 关系
   user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   config          OpencodeConfig?     @relation(fields: [configId], references: [id], onDelete: SetNull)
   files           ProjectFile[]
   evaluations     EvaluationSession[]
-
+  sessionMeta     SessionMeta?
+  
   // 新增关系
   structures      ProjectStructure[]
   codeKnowledge   CodeKnowledge[]
@@ -140,10 +158,13 @@ model Project {
   scanTasks       ScanTask[]
   skillExecutions SkillExecution[]
   vulnerabilities Vulnerability[]
+  mcpServers      McpServerConfig[]
+  toolPermissions ToolPermission[]
 
   @@index([userId])
   @@index([configId])
   @@index([status])
+  @@index([name])
 }
 
 // 项目文件记录
@@ -166,20 +187,83 @@ model ProjectFile {
 model EvaluationSession {
   id               String   @id @default(cuid())
   projectId        String   // 关联项目
+  workflowId       String?  // 关联的工作流（Agent编排）
   opencodeSessionId String? @unique // AI4WEB SDK 返回的会话 ID（唯一）
+  
+  // 多提供者支持
+  provider         String   @default("claude") // claude | cursor | codex | gemini
+  
+  // 会话信息
+  title            String?  // 会话标题
+  summary          String?  // 会话摘要
+  messageCount     Int      @default(0) // 消息数量
+  lastActivity     DateTime? @default(now()) // 最近活动时间
+  
   port             Int?     // OpenCode 服务器运行端口
   status           String   @default("running") // running, completed, failed, cancelled
   startedAt        DateTime  @default(now())
   completedAt      DateTime?
   errorMessage     String?
-  
+
   // 关系
   project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workflow         Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
   messages         SessionMessage[]
+  nodeExecutions   NodeExecution[]
+  vulnerabilities  Vulnerability[]
+  result           EvaluationResult?
 
   @@index([projectId])
+  @@index([workflowId])
   @@index([opencodeSessionId])
   @@index([status])
+  @@index([provider])
+  @@index([lastActivity])
+}
+
+// 评估结果摘要
+model EvaluationResult {
+  id                String   @id @default(cuid())
+  evaluationId      String   @unique
+  totalVulns        Int      @default(0)
+  criticalCount     Int      @default(0)
+  highCount         Int      @default(0)
+  mediumCount       Int      @default(0)
+  lowCount          Int      @default(0)
+  infoCount         Int      @default(0)
+  skillsUsed        String?  // JSON: ["nmap", "sqlmap", "burp"]
+  rawReport         String?  // 原始报告（完整 JSON）
+  createdAt         DateTime @default(now())
+
+  evaluation        EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+}
+
+// 会话元数据（统计信息）
+model SessionMeta {
+  id            String   @id @default(cuid())
+  projectId     String   @unique
+  
+  // 总体统计
+  total         Int      @default(0) // 会话总数
+  hasMore       Boolean  @default(false) // 是否还有更多
+  
+  // 按提供者统计
+  claudeCount   Int      @default(0)
+  cursorCount   Int      @default(0)
+  codexCount    Int      @default(0)
+  geminiCount   Int      @default(0)
+  
+  // 状态统计
+  runningCount  Int      @default(0)
+  completedCount Int     @default(0)
+  failedCount   Int      @default(0)
+  
+  updatedAt     DateTime @updatedAt
+  
+  // 关系
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
 }
 
 // 会话消息记录（用于本地缓存消息历史）
@@ -195,6 +279,29 @@ model SessionMessage {
   evaluationSession EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
   @@index([evaluationSessionId])
+}
+
+// 节点执行记录（追踪工作流节点执行状态）
+model NodeExecution {
+  id               String   @id @default(cuid())
+  evaluationSessionId String  // 关联评估会话
+  workflowNodeId   String   // 关联工作流节点ID
+  nodeLabel        String   // 节点名称（冗余存储，方便查询）
+  nodeType         String   // 节点类型：start, task, subtask, end
+  status           String   @default("pending") // pending, running, completed, failed, skipped
+  startedAt        DateTime?
+  completedAt      DateTime?
+  order            Int      @default(0) // 执行顺序
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // 关系
+  evaluationSession EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationSessionId])
+  @@index([workflowNodeId])
+  @@index([status])
+  @@unique([evaluationSessionId, workflowNodeId]) // 每个会话中每个节点只有一条执行记录
 }
 
 // 审计日志
@@ -233,6 +340,7 @@ model Workflow {
   edges       WorkflowEdge[]
   executions  WorkflowExecution[]
   shares      WorkflowShare[]
+  evaluations EvaluationSession[]
 
   @@index([userId])
   @@index([status])
@@ -263,13 +371,15 @@ model WorkflowNode {
 
 // 工作流连线（节点之间的连接）
 model WorkflowEdge {
-  id          String   @id @default(cuid())
-  workflowId  String
-  sourceId    String
-  targetId    String
-  label       String?
-  data        String?  // JSON: { condition, delay, etc. }
-  createdAt   DateTime  @default(now())
+  id           String   @id @default(cuid())
+  workflowId   String
+  sourceId     String
+  targetId     String
+  sourceHandle String?  // 源节点的连接点（如 'out', 'subtask'）
+  targetHandle String?  // 目标节点的连接点（如 'in'）
+  label        String?
+  data         String?  // JSON: { condition, delay, etc. }
+  createdAt    DateTime  @default(now())
 
   // 关系
   workflow    Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
@@ -279,7 +389,7 @@ model WorkflowEdge {
   @@index([workflowId])
   @@index([sourceId])
   @@index([targetId])
-  @@unique([sourceId, targetId])
+  @@unique([sourceId, targetId, sourceHandle])
 }
 
 // 工作流执行实例（运行时记录）
@@ -352,33 +462,22 @@ model WorkflowShare {
 
 // Claude Code Router - 模型配置
 model ModelConfig {
-  id          String   @id @default(uuid())
-  name        String   // 提供商名称（如 "internal-model" 或 "claude"）
-  providerType String  @default("openai") // 代理类型：claude 或 openai
-  apiBaseUrl  String   // API 地址（Claude API 或内部大模型）
-  apiKey      String   // API Key
-  models      String   // 模型列表（JSON 数组，如 ["qwen-72b", "qwen-14b"]）
-  transformer String?  // 转换器配置（JSON，如 {"use": ["deepseek"]}）
-  isActive    Boolean  @default(true)
-  isDefault   Boolean  @default(false)  // 是否为默认模型
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  name         String   // 提供商名称（如 "internal-model" 或 "claude"）
+  providerType String   @default("openai") // 代理类型：claude 或 openai
+  apiBaseUrl   String   // API 地址（Claude API 或内部大模型）
+  apiKey       String   // API Key
+  models       String   // 模型名称
+  routeType    String?  // 路由类型：default, think, background, longContext, webSearch（仅 OpenAI 类型需要）
+  isActive     Boolean  @default(true)
+  isDefault    Boolean  @default(false)  // 是否为默认模型
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([isActive])
   @@index([isDefault])
   @@index([providerType])
-}
-
-// Claude Code Router - 路由配置
-model RouterConfig {
-  id          String   @id @default(uuid())
-  routeType   String   // 路由类型：default, background, think, longContext, webSearch
-  modelId     String   // 关联 ModelConfig.id
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([routeType])  // 每种路由类型只有一个配置
-  @@index([modelId])
+  @@index([routeType])
 }
 
 // ============================================
@@ -388,7 +487,8 @@ model RouterConfig {
 // Skill 定义
 model Skill {
   id          String   @id @default(cuid())
-  name        String   @unique
+  userId      String?  // null = 公共，有值 = 私有
+  name        String   // 作用域 + 名称组合唯一（公共或用户私有的名称唯一）
   displayName String
   description String
   category    String   // code-audit, auth, sensitive, api, config, crypto, web, business, client, cloud
@@ -406,20 +506,44 @@ model Skill {
   // 状态
   isActive    Boolean  @default(true)
   isBuiltin   Boolean  @default(true)  // 是否内置（不可删除）
+
+  // 版本管理
   version     Int      @default(1)
+  parentId    String?  // 父版本 ID（用于版本链）
+  isLatest    Boolean  @default(true)  // 是否为最新版本
 
   // 进化相关
   successRate Float?   // 成功率
   avgDuration Int?     // 平均执行时间（毫秒）
   execCount   Int      @default(0)     // 执行次数
-
+  
+  // 官方标准字段
+  disableModelInvocation Boolean  @default(false)  // 阻止 Claude 自动调用
+  userInvocable        Boolean  @default(true)       // 是否显示在 `/` 菜单
+  context              String?                        // 'inline' | 'fork'
+  agent               String?                        // 子代理类型
+  argumentHint        String?                        // 参数提示
+  model               String?                        // 指定模型
+  effort              String?                        // 'low' | 'medium' | 'high' | 'max'
+  paths              String?                        // JSON: Glob 模式数组
+  shell              String?                        // 'bash' | 'powershell'
+  hooks              String?                        // JSON: Hooks 配置
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // 关系
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   executions  SkillExecution[]
   evolutions  SkillEvolution[]
+  versions    Skill[]  @relation("SkillVersions")  // 子版本
+  parent      Skill?   @relation("SkillVersions", fields: [parentId], references: [id], onDelete: SetNull)
 
+  @@unique([userId, name])  // 同一用户下名称唯一（公共 Skills 的 userId 为 null）
+  @@index([userId])
+  @@index([name])
+  @@index([isLatest])
+  @@index([version])
   @@index([category])
   @@index([isActive])
 }
@@ -505,6 +629,7 @@ model SkillEvolution {
 model Vulnerability {
   id          String   @id @default(cuid())
   projectId   String
+  evaluationId String?  // 关联评估会话（可选）
   skillExecutionId String?
 
   // 基本信息
@@ -513,6 +638,7 @@ model Vulnerability {
   type        String   // SQL注入, XSS, 等等
   cwe         String?  // CWE 编号
   severity    String   // critical, high, medium, low, info
+  skill       String?  // 发现此漏洞的工具/skill名称（纯文本，非外键）
 
   // 位置信息
   filePath    String?
@@ -542,9 +668,11 @@ model Vulnerability {
 
   // 关系
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  evaluation  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
   execution   SkillExecution? @relation(fields: [skillExecutionId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
+  @@index([evaluationId])
   @@index([status])
   @@index([severity])
   @@index([type])
@@ -875,6 +1003,72 @@ model NotificationChannel {
   @@index([enabled])
 }
 
+// 系统配置（键值对存储）
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String   // JSON: 配置值
+  description String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([key])
+}
+
+// ============================================
+// MCP 服务器配置
+// ============================================
+
+// MCP 服务器配置
+model McpServerConfig {
+  id          String   @id @default(cuid())
+  userId      String?
+  projectId   String?
+  
+  // MCP 服务器信息
+  name        String   // 服务器名称
+  type        String   // local | remote
+  command     String?  // 本地命令
+  args        String?  // JSON: 参数数组
+  url         String?  // 远程 URL
+  env         String?  // JSON: 环境变量
+  
+  // 配置
+  isEnabled   Boolean  @default(true)
+  autoStart   Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([projectId])
+  @@index([name])
+}
+
+// 工具权限规则
+model ToolPermission {
+  id          String   @id @default(cuid())
+  projectId   String
+  
+  // 权限规则
+  toolPattern String   // 工具名称或模式（如 Bash(npm:*)）
+  permission  String   // allow | deny | ask
+  
+  // 元数据
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@unique([projectId, toolPattern])
+  @@index([projectId])
+}
+
 // 系统指标存储（用于历史查询）
 model SystemMetric {
   id          String   @id @default(cuid())
@@ -887,4 +1081,43 @@ model SystemMetric {
   @@index([type])
   @@index([name])
   @@index([recordedAt])
+}
+
+// ============================================
+// 插件系统
+// ============================================
+
+// 插件模型
+model Plugin {
+  id          String   @id @default(cuid())
+  name        String   @unique // 插件唯一标识符
+  displayName String   // 显示名称
+  description String   // 插件描述
+  version     String   // 版本号
+  author      String   // 作者
+  type        String   // ui-tab, backend-service, integration, tool
+  status      String   @default("inactive") // active, inactive, error
+  
+  // 配置
+  config      String?  // JSON: 插件配置
+  
+  // 插件文件路径
+  pluginPath  String?  // 插件目录路径
+  
+  // 状态
+  isEnabled   Boolean  @default(false)
+  isBuiltin   Boolean  @default(false) // 是否内置插件
+  
+  // 元数据
+  icon        String?  // 图标
+  homepage    String?  // 主页
+  repository  String?  // 代码仓库
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+  @@index([type])
+  @@index([status])
+  @@index([isEnabled])
 }

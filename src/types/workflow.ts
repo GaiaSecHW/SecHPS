@@ -96,6 +96,7 @@ export interface WorkflowData {
   nodes: FlowNode[];
   edges: FlowEdge[];
   viewport?: { x: number; y: number; zoom: number };
+  thumbnail?: string; // Base64 编码的缩略图
 }
 
 // 从 Prisma 导入类型

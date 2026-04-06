@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Save, AlertCircle, Loader2, Power, PowerOff } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
 import WorkflowEditor from '@/components/workflow/WorkflowEditor';
 import { WorkflowData } from '@/types/workflow';
 import '@xyflow/react/dist/style.css';
@@ -50,7 +50,6 @@ export default function WorkflowEditPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
-  const [isEnabled, setIsEnabled] = useState(true);
 
   useEffect(() => {
     fetchWorkflowData();
@@ -61,7 +60,7 @@ export default function WorkflowEditPage() {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      // 获取工作流基本信息
+      // 获取Agent编排基本信息
       const workflowResponse = await fetch(`/api/workflows/${workflowId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -70,7 +69,7 @@ export default function WorkflowEditPage() {
 
       if (!workflowResponse.ok) {
         const data = await workflowResponse.json();
-        setError(data.error || '获取工作流失败');
+        setError(data.error || '获取Agent编排失败');
         setLoading(false);
         return;
       }
@@ -78,10 +77,7 @@ export default function WorkflowEditPage() {
       const workflowData = await workflowResponse.json();
       setWorkflow(workflowData.workflow);
 
-      // 根据工作流状态设置启用状态
-      setIsEnabled(workflowData.workflow.status === 'published');
-
-      // 获取工作流节点和边数据
+      // 获取Agent编排节点和边数据
       const dataResponse = await fetch(`/api/workflows/${workflowId}/data`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -119,10 +115,10 @@ export default function WorkflowEditPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        
+
         // 如果有详细的验证错误信息，显示它们
         if (data.details && Array.isArray(data.details)) {
-          let message = data.error || '工作流验证失败';
+          let message = data.error || 'Agent编排验证失败';
           message += '\n\n';
           data.details.forEach((err: string) => {
             message += `❌ ${err}\n`;
@@ -135,7 +131,7 @@ export default function WorkflowEditPage() {
           }
           throw new Error(message);
         }
-        
+
         throw new Error(data.error || '保存失败');
       }
 
@@ -150,80 +146,12 @@ export default function WorkflowEditPage() {
     }
   };
 
-  const handleToggleEnabled = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const newStatus = !isEnabled ? 'published' : 'draft'; // 启用=published, 禁用=draft
-
-      // 如果要启用工作流，先验证工作流数据
-      if (!isEnabled && initialData) {
-        // 使用严格模式验证（strict=true）
-        const validationResponse = await fetch('/api/workflows/validate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            nodes: initialData.nodes,
-            edges: initialData.edges,
-            strict: true, // 启用时使用严格验证
-          }),
-        });
-
-        if (!validationResponse.ok) {
-          const data = await validationResponse.json();
-          const errors = data.errors || [];
-          const warnings = data.warnings || [];
-
-          let message = '工作流验证失败：\n\n';
-          errors.forEach((err: string) => {
-            message += `❌ ${err}\n`;
-          });
-          if (warnings.length > 0) {
-            message += '\n警告：\n';
-            warnings.forEach((warn: string) => {
-              message += `⚠️ ${warn}\n`;
-            });
-          }
-
-          alert(message);
-          return;
-        }
-      }
-
-      const response = await fetch(`/api/workflows/${workflowId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          status: newStatus,
-        }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        alert(data.error || '更新状态失败');
-        return;
-      }
-
-      setIsEnabled(!isEnabled);
-      setSuccessMessage(isEnabled ? '工作流已禁用' : '工作流已启用');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      console.error('Toggle enabled error:', err);
-      alert('网络错误，请重试');
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-600 mx-auto mb" />
-          <p className="text-gray-600 mt-4">加载工作流中...</p>
+          <p className="text-gray-600 mt-4">加载Agent编排中...</p>
         </div>
       </div>
     );
@@ -255,13 +183,13 @@ export default function WorkflowEditPage() {
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            工作流不存在
+            Agent编排不存在
           </h2>
           <button
             onClick={() => router.push('/dashboard/workflows')}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            返回工作流列表
+            返回Agent编排列表
           </button>
         </div>
       </div>
@@ -272,7 +200,7 @@ export default function WorkflowEditPage() {
     <div className="h-full flex flex-col">
       {/* 自定义样式 */}
       <style jsx global>{handleStyles}</style>
-      
+
       {/* 顶部导航栏 */}
       <div className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 flex-shrink-0">
         <div className="flex items-center space-x-4">
@@ -304,31 +232,16 @@ export default function WorkflowEditPage() {
               {successMessage}
             </div>
           )}
-
-          <button
-            onClick={() => {
-              // 触发编辑器的保存
-              const saveEvent = new CustomEvent('workflow-save');
-              window.dispatchEvent(saveEvent);
-            }}
-            disabled={saving}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            <Save size={18} />
-            <span>{saving ? '保存中...' : '保存'}</span>
-          </button>
         </div>
       </div>
 
-      {/* 工作流编辑器 */}
+      {/* Agent编排编辑器 */}
       <div className="flex-1 overflow-hidden">
         <WorkflowEditor
           workflowId={workflowId}
           initialData={initialData}
           onSave={handleSave}
           readOnly={false}
-          isEnabled={isEnabled}
-          onToggleEnabled={handleToggleEnabled}
         />
       </div>
     </div>

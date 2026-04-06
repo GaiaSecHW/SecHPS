@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { createEvaluationCaller } from '@/services/evaluation';
+import { loadActiveSkills } from '@/services/skills';
 
 interface ChatRequest {
   message: string;
@@ -54,15 +55,6 @@ export async function POST(
       return NextResponse.json({ error: '评估会话未完成，无法继续对话' }, { status: 400 });
     }
 
-    // 获取模型配置
-    const modelConfig = await getModelConfig();
-    if (!modelConfig) {
-      return NextResponse.json({ error: '模型配置不存在' }, { status: 500 });
-    }
-
-    // 创建评估调用器
-    const caller = createEvaluationCaller(modelConfig);
-
     // 构建上下文
     const project = evaluation.project;
     const files = project.files.map(f => ({
@@ -70,6 +62,33 @@ export async function POST(
       type: f.fileType,
       size: f.fileSize,
     }));
+
+    // 获取模型配置
+    const modelConfig = await getModelConfig();
+    if (!modelConfig) {
+      return NextResponse.json({ error: '模型配置不存在' }, { status: 500 });
+    }
+
+    // 加载激活的 Skills
+    const skills = await loadActiveSkills();
+    console.log(`[Chat] 加载了 ${skills.length} 个激活的 Skills`);
+
+    // 从 Skills 中提取工具名称
+    const skillTools = new Set<string>();
+    for (const skill of skills) {
+      if (skill.tools && skill.tools.length > 0) {
+        skill.tools.forEach(tool => {
+          if (tool.name) {
+            skillTools.add(tool.name);
+          }
+        });
+      }
+    }
+    const allowedTools = Array.from(skillTools);
+    console.log(`[Chat] 从 Skills 中提取了 ${allowedTools.length} 个工具:`, allowedTools);
+
+    // 创建评估调用器，传递项目目录作为工作目录和允许的工具
+    const caller = createEvaluationCaller(modelConfig, project.projectPath || undefined, allowedTools);
 
     // 创建 SSE 流
     const stream = new ReadableStream({
@@ -81,6 +100,11 @@ export async function POST(
             environmentUrl: project.environmentUrl || undefined,
             files,
             taskDescription: project.config?.taskDescription || undefined,
+            // 添加 Skills
+            skills,
+            skillsContext: {
+              projectPath: project.projectPath || undefined,
+            },
           }, {
             onChunk: (text) => {
               const data = JSON.stringify({
@@ -138,19 +162,6 @@ export async function POST(
 }
 
 async function getModelConfig() {
-  const envApiKey = process.env.ANTHROPIC_API_KEY;
-  const envBaseUrl = process.env.ANTHROPIC_BASE_URL;
-  const envModel = process.env.ANTHROPIC_MODEL;
-
-  if (envApiKey) {
-    return {
-      providerType: 'claude',
-      apiKey: envApiKey,
-      apiBaseUrl: envBaseUrl || 'https://api.anthropic.com/v1/messages',
-      models: JSON.stringify([envModel || 'claude-sonnet-4-20250514']),
-    };
-  }
-
   return prisma.modelConfig.findFirst({
     where: { isActive: true, isDefault: true },
   });

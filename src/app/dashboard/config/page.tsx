@@ -4,56 +4,19 @@ import { useEffect, useState } from 'react';
 import {
   Settings,
   Save,
-  Cpu,
   Server,
   Check,
   AlertCircle,
   Loader2,
   RefreshCw,
   FolderOpen,
-  FileText,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
-
-// OpenCode 提供商和模型类型
-interface OpenCodeModel {
-  id: string;
-  name: string;
-  contextLimit: number;
-  outputLimit: number;
-  supportsAttachment: boolean;
-  supportsReasoning: boolean;
-  supportsTemperature: boolean;
-  supportsToolCall: boolean;
-  cost?: {
-    input: number;
-    output: number;
-    cache_read?: number;
-    cache_write?: number;
-  };
-}
-
-interface OpenCodeProvider {
-  id: string;
-  name: string;
-  models: OpenCodeModel[];
-}
-
-interface OpenCodeConfigInfo {
-  model?: string;
-  smallModel?: string;
-  mcpServers: { name: string; type: 'local' | 'remote'; enabled: boolean }[];
-  theme?: string;
-  username?: string;
-  autoupdate?: boolean;
-}
 
 interface Config {
   id: string;
   name: string;
   projectUploadDir: string | null;
-  taskDescription: string | null;
-  modelPreferences: string | null;
   workflowConfig: string | null;
   isActive: boolean;
 }
@@ -68,8 +31,6 @@ export default function ConfigPage() {
 
   // 表单数据
   const [projectUploadDir, setProjectUploadDir] = useState('');
-  const [taskDescription, setTaskDescription] = useState('');
-  const [selectedModel, setSelectedModel] = useState('');
   
   // 工作流配置
   const [startNodeLabel, setStartNodeLabel] = useState('开始');
@@ -77,10 +38,11 @@ export default function ConfigPage() {
   const [endNodeLabel, setEndNodeLabel] = useState('结束');
   const [endNodeDescription, setEndNodeDescription] = useState('工作流的结束点');
 
-  // OpenCode 数据
-  const [providers, setProviders] = useState<OpenCodeProvider[]>([]);
-  const [openCodeConfig, setOpenCodeConfig] = useState<OpenCodeConfigInfo | null>(null);
-  const [loadingProviders, setLoadingProviders] = useState(false);
+  // 系统提示词配置
+  const [customSystemPrompt, setCustomSystemPrompt] = useState('');
+
+  // 自定义进展询问消息
+  const [customProgressQuestion, setCustomProgressQuestion] = useState('');
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -109,8 +71,8 @@ export default function ConfigPage() {
       if (activeConfig) {
         setConfig(activeConfig);
         setProjectUploadDir(activeConfig.projectUploadDir || '');
-        setTaskDescription(activeConfig.taskDescription || '');
-        setSelectedModel(activeConfig.modelPreferences || '');
+        setCustomSystemPrompt(activeConfig.customSystemPrompt || '');
+        setCustomProgressQuestion(activeConfig.progressQuestion || '');
         
         // 解析工作流配置
         if (activeConfig.workflowConfig) {
@@ -136,50 +98,27 @@ export default function ConfigPage() {
     return user?.permissions?.includes(permission) || user?.roles?.includes('admin');
   };
 
-  // 从 OpenCode 获取可用模型和当前配置
-  const fetchOpenCodeData = async () => {
+  // 从 OpenCode 获取 MCP 服务器配置
+  const [mcpServers, setMcpServers] = useState<{ name: string; type: string; enabled: boolean }[]>([]);
+  
+  const fetchMcpServers = async () => {
     try {
-      setLoadingProviders(true);
       const token = localStorage.getItem('token');
-
-      // 获取可用模型
-      const providersResponse = await fetch('/api/opencode/providers', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const response = await fetch('/api/opencode/config', {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      if (providersResponse.ok) {
-        const data = await providersResponse.json();
-        setProviders(data.providers || []);
+      if (response.ok) {
+        const data = await response.json();
+        setMcpServers(data.mcpServers || []);
       }
-
-      // 获取当前配置（包括 MCP 服务器）
-      const configResponse = await fetch('/api/opencode/config', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (configResponse.ok) {
-        const data = await configResponse.json();
-        setOpenCodeConfig(data);
-        // 如果有默认模型，设置到 formData
-        if (data.model && !selectedModel) {
-          setSelectedModel(data.model);
-        }
-      }
-
-      setSuccess('成功获取模型列表和配置信息');
-      setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
-      console.error('Failed to fetch OpenCode data:', err);
-      setError('获取模型列表失败，请确保 OpenCode 服务正在运行');
-      setTimeout(() => setError(null), 5000);
-    } finally {
-      setLoadingProviders(false);
+      console.error('Failed to fetch MCP servers:', err);
     }
   };
+
+  useEffect(() => {
+    fetchMcpServers();
+  }, []);
 
   const handleSave = async () => {
     if (!config) {
@@ -207,9 +146,9 @@ export default function ConfigPage() {
         },
         body: JSON.stringify({
           projectUploadDir,
-          taskDescription,
-          modelPreferences: selectedModel,
           workflowConfig,
+          customSystemPrompt,
+          progressQuestion: customProgressQuestion,
         }),
       });
 
@@ -226,22 +165,6 @@ export default function ConfigPage() {
     } finally {
       setSaving(false);
     }
-  };
-
-  // 获取所有可用模型的扁平列表
-  const getAllModels = () => {
-    const models: { providerId: string; providerName: string; modelId: string; modelName: string }[] = [];
-    providers.forEach(provider => {
-      provider.models.forEach(model => {
-        models.push({
-          providerId: provider.id,
-          providerName: provider.name || provider.id,
-          modelId: model.id,
-          modelName: model.name || model.id,
-        });
-      });
-    });
-    return models;
   };
 
   if (!hasPermission(PERMISSIONS.CONFIG_READ)) {
@@ -283,8 +206,6 @@ export default function ConfigPage() {
       </div>
     );
   }
-
-  const allModels = getAllModels();
 
   return (
     <div className="space-y-6">
@@ -337,75 +258,8 @@ export default function ConfigPage() {
 
       {/* Configuration Form */}
       <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
-        {/* Model Selection */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-              <Cpu size={20} />
-              模型选择
-            </h3>
-            <button
-              onClick={fetchOpenCodeData}
-              disabled={loadingProviders}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-50 text-blue-700 rounded-md hover:bg-blue-100 transition-colors disabled:opacity-50"
-              title="从 OpenCode 服务获取模型列表"
-            >
-              <RefreshCw size={14} className={loadingProviders ? 'animate-spin' : ''} />
-              获取模型列表
-            </button>
-          </div>
-
-          {loadingProviders && (
-            <div className="flex items-center gap-2 text-sm text-gray-500 py-2">
-              <Loader2 size={16} className="animate-spin" />
-              正在从 OpenCode 服务获取可用模型...
-            </div>
-          )}
-
-          {!loadingProviders && providers.length === 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 text-sm text-yellow-700">
-              点击"获取模型列表"按钮从 OpenCode 服务获取可用模型
-            </div>
-          )}
-
-          {providers.length > 0 && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                选择模型
-              </label>
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="">-- 请选择模型 --</option>
-                {providers.map(provider => (
-                  <optgroup key={provider.id} label={provider.name || provider.id}>
-                    {provider.models.map(model => (
-                      <option key={`${provider.id}/${model.id}`} value={`${provider.id}/${model.id}`}>
-                        {model.name || model.id}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-              <p className="text-xs text-gray-500 mt-1">
-                选择启动项目评估时使用的模型
-              </p>
-            </div>
-          )}
-
-          {selectedModel && (
-            <div className="bg-gray-50 rounded-md p-3">
-              <p className="text-sm text-gray-600">
-                当前选择：<span className="font-mono font-medium text-gray-900">{selectedModel}</span>
-              </p>
-            </div>
-          )}
-        </div>
-
         {/* Project Upload Directory */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
+        <div className="space-y-4">
           <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
             <FolderOpen size={20} />
             项目上传目录
@@ -423,29 +277,6 @@ export default function ConfigPage() {
             />
             <p className="text-xs text-gray-500 mt-1">
               项目文件将上传到此目录，每个项目会创建一个独立的子目录
-            </p>
-          </div>
-        </div>
-
-        {/* Task Description */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-            <FileText size={20} />
-            任务描述
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              描述内容
-            </label>
-            <textarea
-              value={taskDescription}
-              onChange={(e) => setTaskDescription(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-              rows={10}
-              placeholder="在此输入任务描述，支持 Markdown 格式。&#10;&#10;例如：&#10;# 任务要求&#10;- 分析项目代码结构&#10;- 找出潜在的安全问题&#10;- 提供优化建议"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              此描述将作为项目评估时发送给 AI 的第一个消息
             </p>
           </div>
         </div>
@@ -477,11 +308,11 @@ export default function ConfigPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   节点描述
                 </label>
-                <input
-                  type="text"
+                <textarea
                   value={startNodeDescription}
                   onChange={(e) => setStartNodeDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   placeholder="工作流的起始点"
                 />
               </div>
@@ -506,11 +337,11 @@ export default function ConfigPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   节点描述
                 </label>
-                <input
-                  type="text"
+                <textarea
                   value={endNodeDescription}
                   onChange={(e) => setEndNodeDescription(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   placeholder="工作流的结束点"
                 />
               </div>
@@ -522,8 +353,54 @@ export default function ConfigPage() {
           </p>
         </div>
 
+        {/* System Prompt Config */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Settings size={20} />
+            系统提示词
+          </h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              自定义系统提示词
+            </label>
+            <textarea
+              value={customSystemPrompt}
+              onChange={(e) => setCustomSystemPrompt(e.target.value)}
+              rows={6}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              placeholder="在此输入自定义的系统提示词，用于项目评估时发送给 AI 的第一条系统消息..."
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              此提示词将在评估开始时作为系统消息发送，用于指导 AI 的评估行为
+            </p>
+          </div>
+        </div>
+
+        {/* Progress Question Config */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Settings size={20} />
+            进展询问消息
+          </h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              自定义进展询问消息
+            </label>
+            <textarea
+              value={customProgressQuestion}
+              onChange={(e) => setCustomProgressQuestion(e.target.value)}
+              rows={6}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              placeholder="请简要告诉我当前的评估进展如何：&#10;1. 已经完成了哪些检查？&#10;2. 目前发现了什么问题？&#10;3. 接下来计划做什么？&#10;&#10;请简洁回答，让我了解大致进度即可。"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              此消息将在点击"询问进展"按钮时发送给 AI，用于了解当前评估进度。留空则"询问进展"按钮将不可用。
+            </p>
+          </div>
+        </div>
+
         {/* MCP Servers */}
-        {openCodeConfig && openCodeConfig.mcpServers.length > 0 && (
+        {mcpServers.length > 0 && (
           <div className="space-y-4 border-t border-gray-200 pt-6">
             <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
               <Server size={20} />
@@ -533,7 +410,7 @@ export default function ConfigPage() {
               以下 MCP 服务器由 OpenCode 服务端配置，在此仅展示不可编辑
             </p>
             <div className="bg-gray-50 rounded-md p-3 space-y-2">
-              {openCodeConfig.mcpServers.map((server, index) => (
+              {mcpServers.map((server, index) => (
                 <div
                   key={index}
                   className="flex items-center justify-between text-sm py-1"

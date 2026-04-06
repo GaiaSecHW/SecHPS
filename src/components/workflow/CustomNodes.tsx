@@ -101,7 +101,7 @@ const BaseNode = memo((props: NodeProps) => {
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-[10px] font-medium text-gray-900 truncate leading-tight">
-              {nodeData.label}
+              {displayLabel}
             </h3>
           </div>
         </div>
@@ -178,7 +178,7 @@ const SubtaskNode = memo((props: NodeProps) => {
             <Icon size={10} style={{ color: nodeType?.color || '#8B5CF6' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-[9px] font-medium text-gray-900 truncate leading-tight">
+            <h3 className="text-[10px] font-medium text-gray-900 truncate leading-tight">
               {nodeData.label}
             </h3>
           </div>

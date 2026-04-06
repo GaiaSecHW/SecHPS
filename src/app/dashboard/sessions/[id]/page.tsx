@@ -23,6 +23,7 @@ import {
   FolderOpen,
   MessageSquare,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -50,14 +51,20 @@ export default function SessionDetailPage({
   const [loadingSdkProjects, setLoadingSdkProjects] = useState(false);
   const [childrenSessions, setChildrenSessions] = useState<any[]>([]);
   const [selectedChildSession, setSelectedChildSession] = useState<string | null>(null);
+  const [childSessionMessages, setChildSessionMessages] = useState<any[]>([]);
+  const [loadingChildMessages, setLoadingChildMessages] = useState(false);
   const [isTodosExpanded, setIsTodosExpanded] = useState(true);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(true);
+  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
+  const [progressQuestion, setProgressQuestion] = useState<string>('');
 
   useEffect(() => {
     if (evaluationId) {
       fetchEvaluation();
       fetchMessages();
+      fetchProgressQuestion();
     }
   }, [evaluationId]);
 
@@ -67,20 +74,144 @@ export default function SessionDetailPage({
       fetchTodos();
       fetchSdkProjects();
       fetchChildrenSessions();
+      
+      // 连接 SSE 实时事件流
+      connectToEvaluationStream();
     }
+    
+    return () => {
+      // 清理 SSE 连接
+      if (eventSource) {
+        eventSource.close();
+      }
+    };
   }, [evaluation?.opencodeSessionId]);
+
+  // 连接评估实时事件流
+  const connectToEvaluationStream = () => {
+    if (!evaluationId || !evaluation?.projectId) return;
+    
+    // 只有在评估运行中时才连接 SSE
+    if (evaluation.status !== 'running') {
+      console.log('[SSE] Evaluation not running, skip SSE connection');
+      return;
+    }
+    
+    const token = localStorage.getItem('token');
+    const url = `/api/projects/${evaluation.projectId}/start?evaluationId=${evaluationId}&token=${encodeURIComponent(token || '')}`;
+    
+    try {
+      const es = new EventSource(url);
+      
+      es.onopen = () => {
+        console.log('[SSE] Connected to evaluation stream');
+      };
+      
+      es.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleStreamEvent(data);
+        } catch (e) {
+          // 忽略解析错误
+        }
+      };
+      
+      es.onerror = (error) => {
+        console.warn('[SSE] Connection closed or failed');
+        es.close();
+        setEventSource(null);
+      };
+      
+      setEventSource(es);
+    } catch (error) {
+      console.warn('[SSE] Failed to connect:', error);
+    }
+  };
+
+  // 处理流式事件
+  const handleStreamEvent = (data: any) => {
+    switch (data.type) {
+      case 'todo_update':
+        // 实时更新 TODO 列表
+        if (data.todos && Array.isArray(data.todos)) {
+          setTodos(data.todos);
+          console.log('[TODO] Real-time update:', data.todos.length, 'items');
+        }
+        break;
+        
+      case 'vulnerability_summary':
+        // 接收漏洞总结
+        setVulnerabilitySummary({
+          summary: data.summary,
+          vulnerabilities: data.vulnerabilities,
+        });
+        console.log('[Vuln] Received vulnerability summary:', data.summary);
+        break;
+        
+      case 'done':
+        // 审计完成
+        console.log('[Evaluation] Audit completed:', data.message);
+        fetchEvaluation(); // 刷新评估状态
+        fetchMessages(); // 刷新消息列表
+        if (eventSource) {
+          eventSource.close();
+        }
+        break;
+        
+      case 'error':
+        console.error('[Evaluation] Error:', data.error);
+        break;
+        
+      case 'node_complete':
+        // 节点完成（工作流相关）
+        console.log('[Node] Completed:', data.nodeId);
+        break;
+        
+      case 'message':
+        // 消息块 - 实时添加到消息列表
+        if (data.content) {
+          setMessages(prev => {
+            // 避免重复添加
+            const exists = prev.some(m => m.id === data.id);
+            if (exists) return prev;
+            
+            return [...prev, {
+              id: data.id || `msg-${Date.now()}`,
+              role: 'assistant',
+              content: data.content,
+              createdAt: new Date().toISOString(),
+            }];
+          });
+          console.log('[Message] Real-time update received');
+        }
+        break;
+        
+      default:
+        // 忽略其他事件
+        break;
+    }
+  };
 
   useEffect(() => {
     if (!evaluation?.opencodeSessionId) return;
 
+    // 如果评估已完成，不需要轮询
+    if (evaluation.status === 'completed' || evaluation.status === 'failed') {
+      return;
+    }
+
+    // 如果没有 SSE 连接，则使用轮询作为后备
     const interval = setInterval(() => {
-      fetchTodos();
-      fetchSessionDetail();
-      fetchChildrenSessions();
-    }, 10000);
+      if (!eventSource) {
+        fetchMessages(); // 添加消息轮询
+        fetchTodos();
+        fetchSessionDetail();
+        fetchChildrenSessions();
+      }
+    }, 10000); // 10秒轮询一次
 
     return () => clearInterval(interval);
-  }, [evaluation?.opencodeSessionId]);
+  }, [evaluation?.opencodeSessionId, evaluation?.status, eventSource]);
 
   const fetchEvaluation = async () => {
     if (!evaluationId) return;
@@ -111,15 +242,13 @@ export default function SessionDetailPage({
   };
 
   const fetchMessages = async () => {
-    console.log('[fetchMessages] evaluationId:', evaluationId);
-    if (!evaluationId) {
-      console.log('[fetchMessages] No evaluationId, returning');
-      return;
-    }
+    if (!evaluationId) return;
 
     try {
       const token = localStorage.getItem('token');
+      console.log('[fetchMessages] evaluationId:', evaluationId);
       console.log('[fetchMessages] Fetching from:', `/api/evaluations/${evaluationId}/messages`);
+
       const response = await fetch(`/api/evaluations/${evaluationId}/messages`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -127,17 +256,29 @@ export default function SessionDetailPage({
       });
 
       console.log('[fetchMessages] Response status:', response.status, response.statusText);
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Messages] Failed to fetch:', response.status, errorText);
+        const data = await response.json();
+        console.error('[fetchMessages] Error response:', data);
+        setError(data.error || '获取消息失败');
+        setLoading(false);
         return;
       }
 
       const data = await response.json();
+      console.log('[fetchMessages] Response data:', {
+        messagesCount: data.messages?.length,
+        total: data.total,
+        firstMessage: data.messages?.[0],
+        lastMessage: data.messages?.[data.messages?.length - 1],
+      });
+      
       setMessages(data.messages || []);
-      console.log('[Messages] Fetched', data.messages?.length || 0, 'messages');
+      setLoading(false);
     } catch (err) {
-      console.error('[Messages] Error fetching:', err);
+      console.error('[fetchMessages] Error:', err);
+      setError('网络错误，请重试');
+      setLoading(false);
     }
   };
 
@@ -250,6 +391,77 @@ export default function SessionDetailPage({
       setChildrenSessions(data.children || []);
     } catch (err) {
       console.error('[Children] Error fetching:', err);
+    }
+  };
+
+  // 获取进展询问消息
+  const fetchProgressQuestion = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/config', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('[Config] Failed to fetch config');
+        return;
+      }
+
+      const data = await response.json();
+      const activeConfig = data.configs?.find((c: any) => c.isActive);
+      
+      if (activeConfig?.progressQuestion && activeConfig.progressQuestion.trim()) {
+        setProgressQuestion(activeConfig.progressQuestion);
+      } else {
+        setProgressQuestion('');
+      }
+    } catch (err) {
+      console.error('[Config] Error fetching progress question:', err);
+      setProgressQuestion('');
+    }
+  };
+
+  // 获取子会话消息
+  const fetchChildSessionMessages = async (childId: string) => {
+    setLoadingChildMessages(true);
+    try {
+      const token = localStorage.getItem('token');
+      
+      // 调用 children API 并传入 childId 参数
+      const response = await fetch(
+        `/api/sessions/${evaluation?.opencodeSessionId}/children?childId=${childId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.error('[Child Messages] Failed to fetch:', response.status);
+        setChildSessionMessages([]);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('[Child Messages] Received:', data.messages?.length || 0);
+      
+      // 转换消息格式为前端期望的格式
+      const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
+        id: msg.uuid || msg.id || `child-msg-${index}`,
+        role: msg.role || (msg.message?.role) || 'assistant',
+        content: msg.content || msg.message?.content || '',
+        createdAt: msg.timestamp || msg.createdAt || new Date().toISOString(),
+      }));
+      
+      setChildSessionMessages(formattedMessages);
+    } catch (err) {
+      console.error('[Child Messages] Error fetching:', err);
+      setChildSessionMessages([]);
+    } finally {
+      setLoadingChildMessages(false);
     }
   };
 
@@ -486,7 +698,13 @@ export default function SessionDetailPage({
                 <>
                   <button
                     onClick={handleAskProgress}
-                    className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded border border-blue-200"
+                    disabled={!progressQuestion}
+                    className={`flex items-center space-x-1 px-3 py-1.5 text-sm font-medium rounded border ${
+                      progressQuestion
+                        ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-50 border-blue-200'
+                        : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
+                    }`}
+                    title={!progressQuestion ? '请先在系统配置中设置"进展询问消息"' : ''}
                   >
                     <MessageSquare size={16} />
                     <span>询问进展</span>
@@ -516,13 +734,86 @@ export default function SessionDetailPage({
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left Panel: TODOs + Children + Messages */}
+        {/* Left Panel: Vulnerability Summary + TODOs + Children + Messages */}
         <div
           className={`${
             selectedMessage ? 'w-1/2' : 'flex-1'
           } bg-gray-50 overflow-y-auto transition-all duration-300`}
         >
           <div className="p-4">
+            {/* Vulnerability Summary */}
+            {vulnerabilitySummary && (
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <AlertTriangle size={18} className="mr-2 text-orange-600" />
+                  漏洞总结
+                </h3>
+                <div className="grid grid-cols-6 gap-3 mb-3">
+                  {vulnerabilitySummary.summary && (
+                    <>
+                      <div className="text-center p-2 bg-red-50 rounded border border-red-200">
+                        <div className="text-2xl font-bold text-red-600">
+                          {vulnerabilitySummary.summary.critical || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">严重</div>
+                      </div>
+                      <div className="text-center p-2 bg-orange-50 rounded border border-orange-200">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {vulnerabilitySummary.summary.high || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">高危</div>
+                      </div>
+                      <div className="text-center p-2 bg-yellow-50 rounded border border-yellow-200">
+                        <div className="text-2xl font-bold text-yellow-600">
+                          {vulnerabilitySummary.summary.medium || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">中危</div>
+                      </div>
+                      <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {vulnerabilitySummary.summary.low || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">低危</div>
+                      </div>
+                      <div className="text-center p-2 bg-gray-50 rounded border border-gray-200">
+                        <div className="text-2xl font-bold text-gray-600">
+                          {vulnerabilitySummary.summary.info || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">信息</div>
+                      </div>
+                      <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {vulnerabilitySummary.summary.total || 0}
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">总计</div>
+                      </div>
+                    </>
+                  )}
+                </div>
+                {vulnerabilitySummary.vulnerabilities && vulnerabilitySummary.vulnerabilities.length > 0 && (
+                  <details className="text-sm">
+                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+                      查看漏洞详情 ({vulnerabilitySummary.vulnerabilities.length} 个)
+                    </summary>
+                    <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
+                      {vulnerabilitySummary.vulnerabilities.map((vuln: any, index: number) => (
+                        <div key={index} className="p-2 bg-gray-50 rounded border border-gray-200">
+                          <div className="font-medium text-gray-900">{vuln.title}</div>
+                          <div className="text-xs text-gray-600 mt-1">
+                            <span className="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 mr-2">
+                              {vuln.severity}
+                            </span>
+                            {vuln.type && <span className="mr-2">类型: {vuln.type}</span>}
+                            {vuln.location && <span>位置: {vuln.location}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            )}
+            
             {/* TODO List */}
             <div className="mb-6">
               <button
@@ -542,8 +833,30 @@ export default function SessionDetailPage({
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {todos.map((todo) => (
-                      <TodoItem key={todo.id} todo={todo} />
+                    {todos.map((todo, index) => (
+                      <div key={todo.id || `todo-${index}-${todo.content?.substring(0, 20)}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
+                        {todo.status === 'completed' ? (
+                          <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" />
+                        ) : todo.status === 'in_progress' ? (
+                          <Loader2 size={18} className="text-blue-500 flex-shrink-0 animate-spin" />
+                        ) : (
+                          <Circle size={18} className="text-gray-400 flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900">
+                            {todo.content}
+                          </p>
+                          {todo.priority && (
+                            <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${
+                              todo.priority === 'high' ? 'bg-red-100 text-red-700' :
+                              todo.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {todo.priority === 'high' ? '高' : todo.priority === 'medium' ? '中' : '低'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )
@@ -566,42 +879,124 @@ export default function SessionDetailPage({
                 {isChildrenExpanded && (
                   <div className="space-y-2">
                     {childrenSessions.map((child) => (
-                      <div
-                        key={child.id}
-                        className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                          selectedChildSession === child.id
-                            ? 'bg-purple-50 border-purple-300'
-                            : 'bg-white border-gray-200 hover:border-purple-200'
-                        }`}
-                        onClick={() =>
-                          setSelectedChildSession(
-                            selectedChildSession === child.id ? null : child.id
-                          )
-                        }
-                      >
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-900 truncate">
-                              {child.title || '无标题'}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              ID: {child.id.substring(0, 20)}...
-                            </p>
-                          </div>
-                          <div className="flex items-center space-x-2 ml-2">
-                            {child.status && (
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded ${
-                                  child.status === 'active'
-                                    ? 'bg-green-100 text-green-700'
-                                    : 'bg-gray-100 text-gray-600'
+                      <div key={child.id}>
+                        <div
+                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                            selectedChildSession === child.id
+                              ? 'bg-purple-50 border-purple-300'
+                              : 'bg-white border-gray-200 hover:border-purple-200'
+                          }`}
+                          onClick={() => {
+                            if (selectedChildSession === child.id) {
+                              setSelectedChildSession(null);
+                              setChildSessionMessages([]);
+                            } else {
+                              setSelectedChildSession(child.id);
+                              fetchChildSessionMessages(child.id);
+                            }
+                            // 如果有关联消息索引，滚动到该消息
+                            if (child.messageIndex !== undefined && selectedChildSession !== child.id) {
+                              const messageElement = document.getElementById(`message-${child.messageIndex}`);
+                              if (messageElement) {
+                                messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                messageElement.classList.add('ring-2', 'ring-purple-400');
+                                setTimeout(() => {
+                                  messageElement.classList.remove('ring-2', 'ring-purple-400');
+                                }, 2000);
+                              }
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {child.title || '无标题'}
+                              </p>
+                              <div className="flex items-center space-x-2 mt-1">
+                                <p className="text-xs text-gray-500">
+                                  ID: {child.id.substring(0, 20)}...
+                                </p>
+                                {child.messageIndex !== undefined && (
+                                  <span className="text-xs text-blue-600">
+                                    (消息 #{child.messageIndex + 1})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 ml-2">
+                              {child.status && (
+                                <span
+                                  className={`text-xs px-2 py-0.5 rounded ${
+                                    child.status === 'active'
+                                      ? 'bg-green-100 text-green-700'
+                                      : 'bg-gray-100 text-gray-600'
+                                  }`}
+                                >
+                                  {child.status}
+                                </span>
+                              )}
+                              <ChevronRight
+                                size={16}
+                                className={`text-gray-400 transition-transform ${
+                                  selectedChildSession === child.id ? 'rotate-90' : ''
                                 }`}
-                              >
-                                {child.status}
-                              </span>
-                            )}
+                              />
+                            </div>
                           </div>
                         </div>
+                        
+                        {/* 子会话消息详情 */}
+                        {selectedChildSession === child.id && (
+                          <div className="mt-2 ml-4 pl-4 border-l-2 border-purple-200">
+                            {loadingChildMessages ? (
+                              <div className="flex items-center justify-center py-4">
+                                <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
+                                <span className="ml-2 text-sm text-gray-500">加载子会话消息...</span>
+                              </div>
+                            ) : childSessionMessages.length > 0 ? (
+                              <div className="space-y-2 max-h-96 overflow-y-auto">
+                                <p className="text-xs font-medium text-purple-700 mb-2">
+                                  子会话消息 ({childSessionMessages.length})
+                                </p>
+                                {childSessionMessages.slice(0, 10).map((msg, idx) => (
+                                  <div
+                                    key={msg.id || idx}
+                                    className={`p-2 rounded text-sm ${
+                                      msg.role === 'user'
+                                        ? 'bg-blue-50 text-blue-900'
+                                        : 'bg-gray-50 text-gray-900'
+                                    }`}
+                                  >
+                                    <div className="flex items-center space-x-2 mb-1">
+                                      <span className="text-xs font-medium">
+                                        {msg.role === 'user' ? '用户' : 'AI'}
+                                      </span>
+                                      {msg.createdAt && (
+                                        <span className="text-xs text-gray-400">
+                                          {new Date(msg.createdAt).toLocaleTimeString('zh-CN')}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs line-clamp-3">
+                                      {typeof msg.content === 'string'
+                                        ? msg.content
+                                        : Array.isArray(msg.content)
+                                        ? msg.content.find((p: any) => p.type === 'text')?.text || '(工具调用)'
+                                        : JSON.stringify(msg.content).substring(0, 200)}
+                                    </p>
+                                  </div>
+                                ))}
+                                {childSessionMessages.length > 10 && (
+                                  <p className="text-xs text-gray-500 text-center">
+                                    还有 {childSessionMessages.length - 10} 条消息...
+                                  </p>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 py-2">暂无消息</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -628,28 +1023,9 @@ export default function SessionDetailPage({
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {messages
-                      .filter((message) => {
-                        let textContent = '';
-                        if (typeof message.content === 'string') {
-                          textContent = message.content;
-                        } else if (Array.isArray(message.content)) {
-                          textContent = message.content
-                            .filter((part: any) => part.type === 'text')
-                            .map((part: any) => part.text || '')
-                            .join('\n');
-                          if (!textContent.trim()) {
-                            textContent = message.content
-                              .filter((part: any) => part.type === 'reasoning')
-                              .map((part: any) => part.reasoning || part.text || '')
-                              .join('\n');
-                          }
-                        }
-                        return textContent.trim().length > 0;
-                      })
-                      .map((message) => (
+                    {messages.map((message, index) => (
+                      <div key={message.id} id={`message-${index}`}>
                         <MessageBubble
-                          key={message.id}
                           message={message}
                           isSelected={selectedMessage?.id === message.id}
                           onClick={() => handleMessageClick(message)}
@@ -661,7 +1037,8 @@ export default function SessionDetailPage({
                             )
                           }
                         />
-                      ))}
+                      </div>
+                    ))}
                   </div>
                 )
               )}
@@ -768,59 +1145,35 @@ function MessageBubble({
   isSelected: boolean;
 }) {
   const isUser = message.role === 'user';
-  const [expanded, setExpanded] = useState(false);
+  const [expandedTools, setExpandedTools] = useState<Record<number, boolean>>({});
+  const [expandedThinking, setExpandedThinking] = useState(false);
+  const [expandedReasoning, setExpandedReasoning] = useState(false);
+  const [expandedToolSection, setExpandedToolSection] = useState(false);
+  const [expandedResultSection, setExpandedResultSection] = useState(false);
 
-  let textContent = '';
-  if (typeof message.content === 'string') {
-    textContent = message.content;
-  } else if (Array.isArray(message.content)) {
-    const textParts = message.content
-      .filter((part: any) => part.type === 'text')
-      .map((part: any) => part.text || '')
-      .join('\n');
-    textContent = textParts;
-  } else {
-    textContent = JSON.stringify(message.content, null, 2);
-  }
-
-  let reasoningContent = '';
-  if (Array.isArray(message.content)) {
-    const reasoningParts = message.content
-      .filter((part: any) => part.type === 'reasoning')
-      .map((part: any) => part.reasoning || part.text || '')
-      .join('\n');
-    reasoningContent = reasoningParts;
-  }
-
-  let subtasks: any[] = [];
-  if (Array.isArray(message.content)) {
-    const subtaskParts = message.content.filter(
-      (part: any) => part.type === 'subtask' || part.type === 'todo'
-    );
-    subtasks = subtaskParts.map((part: any) => ({
-      id: part.id || part.taskId,
-      title: part.title || part.text || '无标题',
-      status: part.status || 'pending',
-      completed: part.completed || part.status === 'completed',
-    }));
-  }
-
-  const content = textContent.trim() || reasoningContent || '（无内容）';
-  const hasReasoning = reasoningContent.length > 0 && !textContent.trim();
-  const hasSubtasks = subtasks.length > 0;
-  const isEmpty = content === '（无内容）' && !hasSubtasks;
-
-  if (isEmpty) {
-    return null;
-  }
-
-  const shouldTruncate = content.length > 150;
-  const displayContent = shouldTruncate && !expanded ? content.slice(0, 150) + '...' : content;
-
-  const toggleExpand = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpanded(!expanded);
+  // 解析所有内容部分
+  const parseContent = () => {
+    if (typeof message.content === 'string') {
+      return [{ type: 'text', text: message.content }];
+    }
+    if (Array.isArray(message.content)) {
+      return message.content;
+    }
+    return [{ type: 'text', text: JSON.stringify(message.content, null, 2) }];
   };
+
+  const parts = parseContent();
+
+  // 按类型分组
+  const textParts = parts.filter((p: any) => p.type === 'text');
+  const reasoningParts = parts.filter((p: any) => p.type === 'reasoning');
+  const toolUseParts = parts.filter((p: any) => p.type === 'tool_use');
+  const toolResultParts = parts.filter((p: any) => p.type === 'tool_result');
+  const subtaskParts = parts.filter((p: any) => p.type === 'subtask' || p.type === 'todo');
+  const thinkingParts = parts.filter((p: any) => p.type === 'thinking');
+
+  // 合并文本内容用于复制
+  const textContent = textParts.map((p: any) => p.text || '').join('\n');
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -828,22 +1181,25 @@ function MessageBubble({
         className={`max-w-[90%] rounded-lg px-4 py-3 transition-all duration-200 ${
           isSelected
             ? isUser
-              ? 'bg-blue-700 text-white ring-2 ring-blue-400'
+              ? 'bg-blue-600 text-white ring-2 ring-blue-400'
               : 'bg-blue-50 border-2 border-blue-400 shadow-md'
             : isUser
-            ? 'bg-blue-600 text-white hover:bg-blue-700'
+            ? 'bg-blue-500 text-white hover:bg-blue-600'
             : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
         }`}
       >
-        <div
-          className="flex items-start justify-between mb-2 cursor-pointer"
-          onClick={shouldTruncate ? toggleExpand : undefined}
-        >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-2">
           <div className="flex items-center space-x-2">
             <span className="text-xs font-medium">{isUser ? '用户' : 'AI 助手'}</span>
-            {hasReasoning && (
+            {reasoningParts.length > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
                 推理
+              </span>
+            )}
+            {thinkingParts.length > 0 && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">
+                思考
               </span>
             )}
           </div>
@@ -853,29 +1209,6 @@ function MessageBubble({
                 {new Date(message.createdAt).toLocaleTimeString('zh-CN')}
               </span>
             )}
-            {shouldTruncate && (
-              <button
-                onClick={toggleExpand}
-                className={`text-xs flex items-center ${
-                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div
-          className={`prose prose-sm max-w-none ${
-            isUser ? 'prose-invert' : ''
-          } ${!expanded && shouldTruncate ? 'line-clamp-3' : ''}`}
-        >
-          <ReactMarkdown>{displayContent}</ReactMarkdown>
-        </div>
-
-        <div className="mt-2 flex items-center justify-between">
-          <div className="flex items-center space-x-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -884,57 +1217,243 @@ function MessageBubble({
               className={`text-xs flex items-center space-x-1 ${
                 isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
               }`}
+              title="复制内容"
             >
-              <Copy size={12} />
-              <span>复制</span>
+              <Copy size={14} />
             </button>
           </div>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClick();
-            }}
-            className={`text-xs flex items-center space-x-1 ${
-              isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            <FileText size={12} />
-            <span>详情</span>
-          </button>
         </div>
 
-        {/* Subtasks */}
-        {hasSubtasks && (
-          <div className="mt-3 pt-3 border-t border-gray-200">
-            <div className="text-xs font-medium text-gray-700 mb-2">
-              子任务 ({subtasks.length})
+        {/* 文本内容 */}
+        {textParts.length > 0 && (
+          <div className="prose prose-sm max-w-none">
+            {textParts.map((part: any, idx: number) => (
+              <ReactMarkdown key={idx}>{part.text || ''}</ReactMarkdown>
+            ))}
+          </div>
+        )}
+
+        {/* 思考内容 */}
+        {thinkingParts.length > 0 && (
+          <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+            <div 
+              className="text-xs font-medium text-yellow-800 mb-2 flex items-center justify-between cursor-pointer"
+              onClick={() => setExpandedThinking(!expandedThinking)}
+            >
+              <div className="flex items-center">
+                <Info size={14} className="mr-1" />
+                思考过程 ({thinkingParts.length})
+              </div>
+              {expandedThinking ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
             </div>
-            <div className="space-y-1.5">
-              {subtasks.map((subtask, index) => (
-                <div
-                  key={subtask.id || index}
-                  className={`flex items-center space-x-2 p-2 rounded border ${
-                    subtask.completed
-                      ? 'bg-green-50 border-green-200'
-                      : 'bg-white border-gray-200'
-                  }`}
-                >
-                  <div
-                    className={`flex-shrink-0 ${
-                      subtask.completed ? 'text-green-600' : 'text-gray-400'
-                    }`}
-                  >
-                    {subtask.completed ? <CheckCircle2 size={14} /> : <Circle size={14} />}
+            {expandedThinking && (
+              <div className="text-sm text-yellow-900 whitespace-pre-wrap">
+                {thinkingParts.map((p: any, idx: number) => (
+                  <div key={idx}>{p.thinking || p.text || ''}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 推理内容 */}
+        {reasoningParts.length > 0 && (
+          <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+            <div 
+              className="text-xs font-medium text-purple-800 mb-2 flex items-center justify-between cursor-pointer"
+              onClick={() => setExpandedReasoning(!expandedReasoning)}
+            >
+              <div className="flex items-center">
+                <GitBranch size={14} className="mr-1" />
+                推理过程 ({reasoningParts.length})
+              </div>
+              {expandedReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </div>
+            {expandedReasoning && (
+              <div className="text-sm text-purple-900 whitespace-pre-wrap">
+                {reasoningParts.map((p: any, idx: number) => (
+                  <div key={idx}>{p.reasoning || p.text || ''}</div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 子任务 */}
+        {subtaskParts.length > 0 && (
+          <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+            <div className="text-xs font-medium text-green-800 mb-2 flex items-center">
+              <ListTodo size={14} className="mr-1" />
+              子任务 ({subtaskParts.length})
+            </div>
+            <div className="space-y-2">
+              {subtaskParts.map((subtask: any, idx: number) => (
+                <div key={subtask.id || idx} className="bg-white p-2 rounded border border-green-200">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {subtask.title || subtask.text || '无标题'}
+                      </p>
+                      {subtask.description && (
+                        <p className="text-xs text-gray-600 mt-1">{subtask.description}</p>
+                      )}
+                      {subtask.content && (
+                        <p className="text-xs text-gray-600 mt-1">{subtask.content}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2 ml-2">
+                      {subtask.status && (
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          subtask.status === 'completed' || subtask.status === 'done'
+                            ? 'bg-green-100 text-green-700'
+                            : subtask.status === 'in_progress'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {subtask.status}
+                        </span>
+                      )}
+                      {subtask.completed && (
+                        <CheckCircle2 size={16} className="text-green-600" />
+                      )}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900">{subtask.title}</p>
-                    {subtask.status && subtask.status !== 'completed' && (
-                      <p className="text-xs text-gray-500 mt-0.5">状态: {subtask.status}</p>
-                    )}
-                  </div>
+                  {/* 子任务的子任务 */}
+                  {subtask.subtasks && subtask.subtasks.length > 0 && (
+                    <div className="mt-2 pl-4 border-l-2 border-green-300 space-y-1">
+                      {subtask.subtasks.map((child: any, childIdx: number) => (
+                        <div key={child.id || childIdx} className="flex items-center space-x-2 text-xs">
+                          {child.completed ? (
+                            <CheckCircle2 size={12} className="text-green-600" />
+                          ) : (
+                            <Circle size={12} className="text-gray-400" />
+                          )}
+                          <span className={child.completed ? 'text-gray-500 line-through' : 'text-gray-700'}>
+                            {child.title || child.content || child.text || '未命名'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* 工具调用 */}
+        {toolUseParts.length > 0 && (
+          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div 
+              className="text-xs font-medium text-blue-800 mb-2 flex items-center justify-between cursor-pointer"
+              onClick={() => setExpandedToolSection(!expandedToolSection)}
+            >
+              <div className="flex items-center">
+                <Code size={14} className="mr-1" />
+                工具调用 ({toolUseParts.length})
+              </div>
+              {expandedToolSection ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </div>
+            {expandedToolSection && (
+              <div className="space-y-2">
+                {toolUseParts.map((tool: any, idx: number) => {
+                  const isExpanded = expandedTools[`tool-${idx}`];
+                  return (
+                    <div key={idx} className="bg-white p-2 rounded border border-blue-200">
+                      <div 
+                        className="flex items-center justify-between cursor-pointer"
+                        onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
+                      >
+                        <span className="text-sm font-medium text-blue-700">{tool.name || 'unknown'}</span>
+                        <div className="flex items-center space-x-2">
+                          {tool.input && (
+                            <span className="text-xs text-gray-500">
+                              {Object.keys(tool.input).length} 个参数
+                            </span>
+                          )}
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </div>
+                      </div>
+                      {isExpanded && tool.input && (
+                        <pre className="mt-2 text-xs overflow-auto max-h-64 text-gray-800 bg-gray-50 p-2 rounded">
+                          {JSON.stringify(tool.input, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 工具结果 */}
+        {toolResultParts.length > 0 && (
+          <div className="mt-3 p-3 bg-gray-100 rounded-lg border border-gray-300">
+            <div 
+              className="text-xs font-medium text-gray-700 mb-2 flex items-center justify-between cursor-pointer"
+              onClick={() => setExpandedResultSection(!expandedResultSection)}
+            >
+              <div className="flex items-center">
+                <FileText size={14} className="mr-1" />
+                工具结果 ({toolResultParts.length})
+              </div>
+              {expandedResultSection ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </div>
+            {expandedResultSection && (
+              <div className="space-y-2">
+                {toolResultParts.map((result: any, idx: number) => {
+                  const isExpanded = expandedTools[`result-${idx}`];
+                  const content = typeof result.content === 'string' 
+                    ? result.content 
+                    : JSON.stringify(result.content, null, 2);
+                  const isError = result.is_error || result.error;
+                  
+                  return (
+                    <div key={idx} className={`bg-white p-2 rounded border ${isError ? 'border-red-300' : 'border-gray-200'}`}>
+                      <div 
+                        className="flex items-center justify-between cursor-pointer"
+                        onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
+                      >
+                        <span className={`text-sm font-medium ${isError ? 'text-red-700' : 'text-gray-700'}`}>
+                          {result.tool_use_id ? `结果 #${idx + 1}` : '工具结果'}
+                          {isError && ' (错误)'}
+                        </span>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs text-gray-500">
+                            {content.length > 100 ? `${content.length} 字符` : ''}
+                          </span>
+                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <pre className={`mt-2 text-xs overflow-auto max-h-64 p-2 rounded ${isError ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'}`}>
+                          {content.length > 5000 ? content.substring(0, 5000) + '\n...(内容已截断)' : content}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 其他未知类型 */}
+        {parts.filter((p: any) => 
+          !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
+        ).length > 0 && (
+          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div className="text-xs font-medium text-gray-600 mb-2">其他内容</div>
+            <pre className="text-xs overflow-auto max-h-32 text-gray-700">
+              {JSON.stringify(
+                parts.filter((p: any) => 
+                  !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
+                ),
+                null,
+                2
+              )}
+            </pre>
           </div>
         )}
       </div>

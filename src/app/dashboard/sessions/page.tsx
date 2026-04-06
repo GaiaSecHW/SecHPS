@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow } from 'lucide-react';
 
 interface UploadedFile {
   id: string;
@@ -50,6 +50,8 @@ interface Project {
   adminPassword?: string;
   normalUsername?: string;
   normalPassword?: string;
+  // 漏洞数量
+  vulnerabilityCount?: number;
 }
 
 export default function SessionsPage() {
@@ -78,15 +80,85 @@ export default function SessionsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const filesModalInputRef = useRef<HTMLInputElement>(null);
+  
+  // 工作流相关状态
+  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>(null);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
+  const [showImagePreview, setShowImagePreview] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
+  
+  // 漏洞管理相关状态
+  const [showVulnerabilityModal, setShowVulnerabilityModal] = useState(false);
+  const [vulnerabilityProject, setVulnerabilityProject] = useState<Project | null>(null);
+  const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
+  const [loadingVulnerabilities, setLoadingVulnerabilities] = useState(false);
+  const [selectedVulnerability, setSelectedVulnerability] = useState<any | null>(null);
+
+  // 检查是否有运行中的评估
+  const hasRunningEvaluation = projects.some(p => 
+    p.evaluations?.some((e: any) => e.status === 'running')
+  );
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+    fetchWorkflows();
+  }, []); // 只在组件挂载时执行一次
+
+  // 单独的 effect 处理自动刷新
+  useEffect(() => {
+    if (!hasRunningEvaluation) {
+      return; // 如果没有运行中的评估，不启动定时器
+    }
+
+    console.log('[Auto Refresh] Starting auto-refresh due to running evaluation');
+    
+    const interval = setInterval(() => {
+      fetchProjects();
+    }, 5000);
+    
+    return () => {
+      console.log('[Auto Refresh] Clearing auto-refresh interval');
+      clearInterval(interval);
+    };
+  }, [hasRunningEvaluation]); // 只在 hasRunningEvaluation 变化时重新运行
+
+  const fetchWorkflows = async () => {
+    try {
+      setLoadingWorkflows(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/workflows', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('获取工作流列表失败');
+        return;
+      }
+
+      const data = await response.json();
+      // 只显示已发布的工作流，并映射 nodeCount
+      const publishedWorkflows = (data.data || [])
+        .filter((w: any) => w.status === 'published')
+        .map((w: any) => ({
+          ...w,
+          nodeCount: w._count?.nodes || 0,
+        }));
+      setWorkflows(publishedWorkflows);
+    } catch (err) {
+      console.error('获取工作流列表错误:', err);
+    } finally {
+      setLoadingWorkflows(false);
+    }
+  };
 
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/projects', {
+      const response = await fetch('/api/projects?include=evaluations', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -102,6 +174,8 @@ export default function SessionsPage() {
       const data = await response.json();
       setProjects(data.projects || []);
       setLoading(false);
+      
+      console.log('[Projects] Loaded', data.projects?.length || 0, 'projects with evaluations');
     } catch (err) {
       setError('网络错误，请重试');
       setLoading(false);
@@ -393,7 +467,7 @@ export default function SessionsPage() {
     }
   };
 
-  const startProject = async (projectId: string) => {
+  const startProject = async (projectId: string, workflowId?: string | null) => {
     setStartingProject(projectId);
 
     try {
@@ -404,6 +478,9 @@ export default function SessionsPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({
+          workflowId: workflowId || undefined,
+        }),
       });
 
       if (!response.ok) {
@@ -413,10 +490,13 @@ export default function SessionsPage() {
         return;
       }
 
-      // 处理 SSE 流式响应
+      // 立即刷新项目列表以显示"评估运行中"状态
+      await fetchProjects();
+
+      // 处理 SSE 流式响应（后台监听，不阻塞UI）
       const reader = response.body?.getReader();
       if (!reader) {
-        alert('响应体不可读');
+        console.warn('[SSE] 响应体不可读，但评估已启动');
         setStartingProject(null);
         return;
       }
@@ -424,42 +504,51 @@ export default function SessionsPage() {
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // 后台监听 SSE 流
+      (async () => {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const data = line.slice(6);
+                if (data === '[DONE]') continue;
 
-            try {
-              const event = JSON.parse(data);
+                try {
+                  const event = JSON.parse(data);
 
-              if (event.type === 'message') {
-                // 实时显示评估内容
-                console.log('[评估]', event.content);
-              } else if (event.type === 'done') {
-                alert('评估完成');
-                await fetchProjects();
-                setStartingProject(null);
-                return;
-              } else if (event.type === 'error') {
-                alert(`评估失败: ${event.error}`);
-                await fetchProjects();
-                setStartingProject(null);
-                return;
+                  if (event.type === 'message') {
+                    // 实时显示评估内容
+                    console.log('[评估]', event.content);
+                  } else if (event.type === 'done') {
+                    console.log('[评估完成]');
+                    await fetchProjects();
+                    setStartingProject(null);
+                    return;
+                  } else if (event.type === 'error') {
+                    console.error('[评估失败]', event.error);
+                    await fetchProjects();
+                    setStartingProject(null);
+                    return;
+                  }
+                } catch {
+                  // 忽略解析错误
+                }
               }
-            } catch {
-              // 忽略解析错误
             }
           }
+        } catch (error) {
+          console.error('[SSE] 流处理错误:', error);
+        } finally {
+          setStartingProject(null);
         }
-      }
+      })();
     } catch (err) {
       alert('网络错误，请重试');
       setStartingProject(null);
@@ -612,9 +701,59 @@ export default function SessionsPage() {
     alert(`环境 AI 渗透功能开发中\n\n目标环境: ${project.environmentUrl}`);
   };
 
-  const handleVulnerabilityManagement = (project: Project) => {
-    // TODO: 调用漏洞管理功能
-    alert(`漏洞管理功能开发中\n\n项目: ${project.name}`);
+  const handleVulnerabilityManagement = async (project: Project) => {
+    setVulnerabilityProject(project);
+    setShowVulnerabilityModal(true);
+    setLoadingVulnerabilities(true);
+    setVulnerabilities([]);
+    setSelectedVulnerability(null);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/vulnerabilities?projectId=${project.id}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // API 返回格式: { data: [...], pagination: {...} }
+        setVulnerabilities(data.data || []);
+      } else {
+        console.error('获取漏洞列表失败');
+      }
+    } catch (err) {
+      console.error('获取漏洞列表错误:', err);
+    } finally {
+      setLoadingVulnerabilities(false);
+    }
+  };
+
+  const handleVulnerabilityStatusChange = async (vulnId: string, action: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/vulnerabilities/${vulnId}/${action}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        alert(data.error || '操作失败');
+        return;
+      }
+      
+      // 刷新漏洞列表
+      if (vulnerabilityProject) {
+        handleVulnerabilityManagement(vulnerabilityProject);
+      }
+      setSelectedVulnerability(null);
+    } catch (err) {
+      alert('操作失败，请重试');
+    }
   };
 
   const downloadFile = async (projectId: string, fileId: string, fileName: string) => {
@@ -763,9 +902,9 @@ export default function SessionsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">项目管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900">我的项目</h1>
           <p className="mt-1 text-sm text-gray-600">
-            管理 AI 编程项目
+            管理您的 AI 编程评估项目
           </p>
         </div>
 
@@ -820,7 +959,15 @@ export default function SessionsPage() {
                 )}
 
                 <p className="mt-2 text-sm text-gray-600">
-                  创建于 {new Date(project.createdAt).toLocaleDateString()}
+                  创建于 {new Date(project.createdAt).toLocaleString('zh-CN', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: false
+                  })}
                 </p>
 
                 {project.projectPath && (
@@ -937,6 +1084,11 @@ export default function SessionsPage() {
                     >
                       <Bug size={16} />
                       <span>漏洞管理</span>
+                      {project.vulnerabilityCount && project.vulnerabilityCount > 0 && (
+                        <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                          {project.vulnerabilityCount}
+                        </span>
+                      )}
                     </button>
                   </div>
                 </div>
@@ -980,11 +1132,15 @@ export default function SessionsPage() {
                           );
                         })()}
                       </>
-                    ) : (
+                     ) : (
                       <>
                         {/* 无运行中的会话：显示启动评估 */}
                         <button
-                          onClick={() => startProject(project.id)}
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedWorkflow(null);
+                            setShowWorkflowModal(true);
+                          }}
                           disabled={startingProject === project.id}
                           className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
@@ -995,31 +1151,35 @@ export default function SessionsPage() {
                     )}
                     <button
                       onClick={() => openEditModal(project)}
-                      className="p-1 text-gray-400 hover:text-blue-600"
+                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
                       title="编辑"
                     >
-                      <Edit2 size={16} />
+                      <Edit2 size={14} />
+                      <span>编辑</span>
                     </button>
                     <button
                       onClick={() => openFilesModal(project)}
-                      className="p-1 text-gray-400 hover:text-blue-600"
+                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
                       title="文件管理"
                     >
-                      <File size={16} />
+                      <File size={14} />
+                      <span>文件</span>
                     </button>
                     <button
                       onClick={() => openHistoryModal(project)}
-                      className="p-1 text-gray-400 hover:text-blue-600"
+                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
                       title="评估历史"
                     >
-                      <History size={16} />
+                      <History size={14} />
+                      <span>历史</span>
                     </button>
                     <button
                       onClick={() => deleteProject(project.id)}
-                      className="p-1 text-gray-400 hover:text-red-600"
+                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
                       title="删除"
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={14} />
+                      <span>删除</span>
                     </button>
                   </div>
                 </div>
@@ -1702,6 +1862,475 @@ export default function SessionsPage() {
               >
                 {uploading ? '保存中...' : '保存配置'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 工作流选择模态框 */}
+      {showWorkflowModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">选择Agent编排流程</h3>
+                <p className="text-sm text-gray-500 mt-1">项目: {selectedProject.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowWorkflowModal(false);
+                  setSelectedProject(null);
+                  setSelectedWorkflow(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {loadingWorkflows ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-500">加载工作流中...</span>
+                </div>
+              ) : workflows.length === 0 ? (
+                <div className="text-center py-12">
+                  <Workflow className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                    暂无可用的工作流
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-600">
+                    请先创建并发布Agent编排流程
+                  </p>
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {workflows.map((workflow) => (
+                    <div
+                      key={workflow.id}
+                      onClick={() => setSelectedWorkflow(workflow.id)}
+                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedWorkflow === workflow.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-gray-900">
+                            {workflow.name}
+                          </h4>
+                          {workflow.description && (
+                            <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                              {workflow.description}
+                            </p>
+                          )}
+                        </div>
+                        {selectedWorkflow === workflow.id && (
+                          <CheckCircle size={20} className="text-blue-600 flex-shrink-0 ml-2" />
+                        )}
+                      </div>
+                      
+                      {/* 工作流缩略图 */}
+                      {workflow.thumbnail && (
+                        <div 
+                          className="mt-3 rounded-md overflow-hidden bg-gray-100 cursor-pointer hover:opacity-90 transition-opacity relative group"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImage({
+                              src: `data:image/png;base64,${workflow.thumbnail}`,
+                              alt: workflow.name
+                            });
+                            setShowImagePreview(true);
+                          }}
+                        >
+                          <img
+                            src={`data:image/png;base64,${workflow.thumbnail}`}
+                            alt={workflow.name}
+                            className="w-full h-32 object-cover"
+                          />
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-30">
+                            <span className="text-white text-sm font-medium flex items-center">
+                              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                              </svg>
+                              点击放大
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                        <span>节点: {workflow.nodeCount || 0}</span>
+                        <span>版本: {workflow.version || 1}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setShowWorkflowModal(false);
+                  setSelectedProject(null);
+                  setSelectedWorkflow(null);
+                }}
+                disabled={!!startingProject}
+                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                   onClick={async () => {
+                    if (!selectedProject) return;
+                    // 先关闭模态框
+                    setShowWorkflowModal(false);
+                    setSelectedProject(null);
+                    setSelectedWorkflow(null);
+                    // 然后启动项目
+                    await startProject(selectedProject.id, selectedWorkflow);
+                  }}
+                  disabled={!selectedWorkflow || !!startingProject}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {startingProject ? '启动中...' : '使用选定编排启动'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 图片预览模态框 */}
+      {showImagePreview && previewImage && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75"
+          onClick={() => {
+            setShowImagePreview(false);
+            setPreviewImage(null);
+          }}
+        >
+          <div className="relative max-w-6xl max-h-full p-4">
+            <button
+              onClick={() => {
+                setShowImagePreview(false);
+                setPreviewImage(null);
+              }}
+              className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 z-10"
+            >
+              <X size={24} className="text-gray-600" />
+            </button>
+            <img
+              src={previewImage.src}
+              alt={previewImage.alt}
+              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded-lg">
+              {previewImage.alt}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 漏洞管理弹窗 */}
+      {showVulnerabilityModal && vulnerabilityProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">漏洞管理</h3>
+                <p className="text-sm text-gray-500 mt-1">{vulnerabilityProject.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowVulnerabilityModal(false);
+                  setVulnerabilityProject(null);
+                  setVulnerabilities([]);
+                  setSelectedVulnerability(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {loadingVulnerabilities ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-500">加载漏洞数据...</span>
+                </div>
+              ) : vulnerabilities.length === 0 ? (
+                <div className="text-center py-12">
+                  <Bug className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">暂无漏洞</h3>
+                  <p className="mt-2 text-sm text-gray-600">
+                    该项目尚未发现漏洞，运行评估后会显示检测结果
+                  </p>
+                </div>
+              ) : (
+                <div className="flex h-full">
+                  {/* 左侧：漏洞列表 */}
+                  <div className={`border-r border-gray-200 ${selectedVulnerability ? 'w-1/2' : 'w-full'}`}>
+                    <div className="p-4 border-b border-gray-100 bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          共 {vulnerabilities.length} 个漏洞
+                        </span>
+                        <div className="flex gap-2">
+                          {['critical', 'high', 'medium', 'low'].map(severity => {
+                            const count = vulnerabilities.filter(v => v.severity === severity).length;
+                            if (count === 0) return null;
+                            const colors: Record<string, string> = {
+                              critical: 'bg-red-100 text-red-700',
+                              high: 'bg-orange-100 text-orange-700',
+                              medium: 'bg-yellow-100 text-yellow-700',
+                              low: 'bg-blue-100 text-blue-700',
+                            };
+                            const labels: Record<string, string> = {
+                              critical: '严重',
+                              high: '高危',
+                              medium: '中危',
+                              low: '低危',
+                            };
+                            return (
+                              <span key={severity} className={`px-2 py-0.5 text-xs rounded ${colors[severity]}`}>
+                                {labels[severity]}: {count}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {vulnerabilities.map((vuln) => (
+                        <div
+                          key={vuln.id}
+                          onClick={() => setSelectedVulnerability(vuln)}
+                          className={`p-4 cursor-pointer transition-colors ${
+                            selectedVulnerability?.id === vuln.id
+                              ? 'bg-blue-50 border-l-4 border-blue-500'
+                              : 'hover:bg-gray-50'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                  vuln.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                                  vuln.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                                  vuln.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  vuln.severity === 'low' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {vuln.severity === 'critical' ? '严重' :
+                                   vuln.severity === 'high' ? '高危' :
+                                   vuln.severity === 'medium' ? '中危' :
+                                   vuln.severity === 'low' ? '低危' : '信息'}
+                                </span>
+                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                                  vuln.status === 'new' ? 'bg-blue-100 text-blue-700' :
+                                  vuln.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
+                                  vuln.status === 'fixed' ? 'bg-green-100 text-green-700' :
+                                  vuln.status === 'verified' ? 'bg-purple-100 text-purple-700' :
+                                  vuln.status === 'false-positive' ? 'bg-gray-100 text-gray-600' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {vuln.status === 'new' ? '新建' :
+                                   vuln.status === 'confirmed' ? '已确认' :
+                                   vuln.status === 'fixed' ? '已修复' :
+                                   vuln.status === 'verified' ? '已验证' :
+                                   vuln.status === 'false-positive' ? '误报' :
+                                   vuln.status === 'closed' ? '已关闭' : vuln.status}
+                                </span>
+                              </div>
+                              <h4 className="text-sm font-medium text-gray-900 truncate">{vuln.title}</h4>
+                              <p className="text-xs text-gray-500 mt-1 truncate">{vuln.type}</p>
+                              {vuln.filePath && (
+                                <p className="text-xs text-gray-400 mt-1 truncate font-mono">
+                                  {vuln.filePath}{vuln.lineStart ? `:${vuln.lineStart}` : ''}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 右侧：漏洞详情 */}
+                  {selectedVulnerability && (
+                    <div className="w-1/2 p-6 overflow-y-auto">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                            selectedVulnerability.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                            selectedVulnerability.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                            selectedVulnerability.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            selectedVulnerability.severity === 'low' ? 'bg-blue-100 text-blue-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {selectedVulnerability.severity === 'critical' ? '严重' :
+                             selectedVulnerability.severity === 'high' ? '高危' :
+                             selectedVulnerability.severity === 'medium' ? '中危' :
+                             selectedVulnerability.severity === 'low' ? '低危' : '信息'}
+                          </span>
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                            selectedVulnerability.status === 'new' ? 'bg-blue-100 text-blue-700' :
+                            selectedVulnerability.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
+                            selectedVulnerability.status === 'fixed' ? 'bg-green-100 text-green-700' :
+                            selectedVulnerability.status === 'verified' ? 'bg-purple-100 text-purple-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {selectedVulnerability.status === 'new' ? '新建' :
+                             selectedVulnerability.status === 'confirmed' ? '已确认' :
+                             selectedVulnerability.status === 'fixed' ? '已修复' :
+                             selectedVulnerability.status === 'verified' ? '已验证' :
+                             selectedVulnerability.status === 'false-positive' ? '误报' : selectedVulnerability.status}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setSelectedVulnerability(null)}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <X size={20} />
+                        </button>
+                      </div>
+
+                       <h2 className="text-lg font-bold text-gray-900 mb-4">{selectedVulnerability.title}</h2>
+
+                       <div className="space-y-4">
+                         {/* 基本信息 */}
+                         <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                           <div className="grid grid-cols-2 gap-3">
+                             <div>
+                               <span className="text-xs text-gray-500">漏洞类型</span>
+                               <p className="text-sm font-medium text-gray-900">{selectedVulnerability.type}</p>
+                             </div>
+                             <div>
+                               <span className="text-xs text-gray-500">CWE 编号</span>
+                               <p className="text-sm font-medium text-gray-900">{selectedVulnerability.cwe || '无'}</p>
+                             </div>
+                             <div>
+                               <span className="text-xs text-gray-500">发现工具</span>
+                               <p className="text-sm font-medium text-gray-900">{selectedVulnerability.skill || '未知'}</p>
+                             </div>
+                             <div>
+                               <span className="text-xs text-gray-500">发现时间</span>
+                               <p className="text-sm font-medium text-gray-900">{new Date(selectedVulnerability.createdAt).toLocaleString('zh-CN')}</p>
+                             </div>
+                           </div>
+                         </div>
+
+                         {/* 描述 */}
+                         <div>
+                           <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
+                           <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedVulnerability.description}</p>
+                         </div>
+
+                         {/* 发现位置 */}
+                         {selectedVulnerability.filePath && (
+                           <div>
+                             <h4 className="text-sm font-medium text-gray-700 mb-2">发现位置</h4>
+                             <div className="bg-gray-900 text-gray-100 p-3 rounded-lg">
+                               <p className="text-sm font-mono break-all">
+                                 {selectedVulnerability.filePath}
+                                 {selectedVulnerability.lineStart && (
+                                   <span className="text-yellow-400">:{selectedVulnerability.lineStart}</span>
+                                 )}
+                                 {selectedVulnerability.lineEnd && selectedVulnerability.lineEnd !== selectedVulnerability.lineStart && (
+                                   <span className="text-yellow-400">-{selectedVulnerability.lineEnd}</span>
+                                 )}
+                               </p>
+                             </div>
+                           </div>
+                         )}
+
+                         {/* 代码片段 */}
+                         {selectedVulnerability.codeSnippet && (
+                           <div>
+                             <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞代码</h4>
+                             <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64">
+{selectedVulnerability.codeSnippet}
+                             </pre>
+                           </div>
+                         )}
+
+                         {/* AI 分析 */}
+                         {selectedVulnerability.aiAnalysis && (
+                           <div>
+                             <h4 className="text-sm font-medium text-gray-700 mb-2">
+                               <span className="inline-flex items-center">
+                                 <svg className="w-4 h-4 mr-1 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                                 </svg>
+                                 AI 分析
+                               </span>
+                             </h4>
+                             <div className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded-lg p-4">{selectedVulnerability.aiAnalysis}</div>
+                           </div>
+                         )}
+
+                         {/* 修复建议 */}
+                         {selectedVulnerability.fixSuggestion && (
+                           <div>
+                             <h4 className="text-sm font-medium text-gray-700 mb-2">
+                               <span className="inline-flex items-center">
+                                 <svg className="w-4 h-4 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                 </svg>
+                                 修复建议
+                               </span>
+                             </h4>
+                             <div className="text-sm text-gray-700 bg-green-50 border border-green-200 rounded-lg p-4">{selectedVulnerability.fixSuggestion}</div>
+                           </div>
+                         )}
+                       </div>
+
+                      {/* 操作按钮 */}
+                      <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap gap-2">
+                        {selectedVulnerability.status === 'new' && (
+                          <>
+                            <button
+                              onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'confirm')}
+                              className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm"
+                            >
+                              确认漏洞
+                            </button>
+                            <button
+                              onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'false-positive')}
+                              className="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm"
+                            >
+                              标记误报
+                            </button>
+                          </>
+                        )}
+                        {selectedVulnerability.status === 'confirmed' && (
+                          <button
+                            onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')}
+                            className="px-4 py-2 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm"
+                          >
+                            标记已修复
+                          </button>
+                        )}
+                        {selectedVulnerability.status === 'fixed' && (
+                          <button
+                            onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')}
+                            className="px-4 py-2 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm"
+                          >
+                            验证修复
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>

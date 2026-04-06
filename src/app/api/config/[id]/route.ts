@@ -29,7 +29,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt } = body;
 
     // Check if config exists and belongs to user
     const existingConfig = await prisma.opencodeConfig.findUnique({
@@ -72,6 +72,10 @@ export async function PATCH(
         ...(modelPreferences !== undefined && { modelPreferences }),
         // workflowConfig 是 JSON 字符串，直接存储
         ...(workflowConfig !== undefined && { workflowConfig }),
+        // 进展询问消息配置
+        ...(progressQuestion !== undefined && { progressQuestion }),
+        // 自定义系统提示词
+        ...(customSystemPrompt !== undefined && { customSystemPrompt }),
       },
     });
 
