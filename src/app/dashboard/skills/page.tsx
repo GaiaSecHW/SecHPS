@@ -419,8 +419,8 @@ export default function SkillsPage() {
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">工具</h4>
                       <div className="flex flex-wrap gap-1">
-                        {skill.tools && skill.tools.length > 0 ? (
-                          skill.tools.map((tool) => (
+                        {skill.tools && Array.isArray(skill.tools) && skill.tools.length > 0 ? (
+                          skill.tools.map((tool: string) => (
                             <span key={tool} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
                               {tool}
                             </span>
