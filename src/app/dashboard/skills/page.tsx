@@ -15,6 +15,8 @@ import {
   AlertTriangle,
   CheckCircle,
   XCircle,
+  Save,
+  RefreshCw,
 } from 'lucide-react';
 
 interface Skill {
@@ -28,11 +30,17 @@ interface Skill {
   isActive: boolean;
   isBuiltin: boolean;
   version: number;
+  parentId: string | null;
+  isLatest: boolean;
+  systemPrompt: string;
+  userPrompt: string;
+  tools: string[];
+  parameters: Record<string, unknown>;
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
-  tools: string[];
   createdAt: string;
+  updatedAt: string;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -74,6 +82,7 @@ export default function SkillsPage() {
   const [categories, setCategories] = useState<{ name: string; label: string; count: number }[]>([]);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [user, setUser] = useState<{ roles?: string[] } | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -106,7 +115,8 @@ export default function SkillsPage() {
       }
 
       const data = await response.json();
-      setSkills(data.skills || []);
+      // API returns { data: [...], pagination: {...} }
+      setSkills(data.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
@@ -129,6 +139,40 @@ export default function SkillsPage() {
       }
     } catch (err) {
       console.error('获取分类失败:', err);
+    }
+  };
+
+  const handleSyncToDisk = async () => {
+    if (!confirm('确定要将所有 Skills 同步到磁盘吗？此操作将更新 data/skills/ 目录。')) {
+      return;
+    }
+
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/sync/skills', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ action: 'sync' }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '同步失败');
+      }
+
+      const data = await response.json();
+      alert(`同步成功！\n\n总计: ${data.total}\n成功: ${data.success}\n失败: ${data.failed}`);
+      
+      // 刷新列表
+      fetchSkills();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '同步失败');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -207,13 +251,33 @@ export default function SkillsPage() {
           </p>
         </div>
         {isAdmin && (
-          <button
-            onClick={() => router.push('/dashboard/skills/create')}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus size={20} className="mr-2" />
-            创建 Skill
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleSyncToDisk}
+              disabled={syncing}
+              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="将所有 Skills 同步到磁盘存储"
+            >
+              {syncing ? (
+                <>
+                  <RefreshCw size={20} className="mr-2 animate-spin" />
+                  同步中...
+                </>
+              ) : (
+                <>
+                  <Save size={20} className="mr-2" />
+                  同步到磁盘
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => router.push('/dashboard/skills/create')}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus size={20} className="mr-2" />
+              创建 Skill
+            </button>
+          </div>
         )}
       </div>
 
@@ -340,13 +404,54 @@ export default function SkillsPage() {
                       <p className="text-sm text-gray-600">{skill.cwe || '无'}</p>
                     </div>
                     <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">版本信息</h4>
+                      <div className="flex items-center space-x-2 text-sm text-gray-600">
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
+                          v{skill.version}
+                        </span>
+                        {skill.isLatest && (
+                          <span className="px-2 py-0.5 bg-green-100 text-green-800 rounded text-xs">
+                            最新版本
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">工具</h4>
                       <div className="flex flex-wrap gap-1">
-                        {skill.tools.map((tool) => (
-                          <span key={tool} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
-                            {tool}
-                          </span>
-                        ))}
+                        {skill.tools && skill.tools.length > 0 ? (
+                          skill.tools.map((tool) => (
+                            <span key={tool} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                              {tool}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">无</span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">系统提示词</h4>
+                      <p className="text-sm text-gray-600 line-clamp-3">
+                        {skill.systemPrompt ? skill.systemPrompt.substring(0, 200) + (skill.systemPrompt.length > 200 ? '...' : '') : '无'}
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">用户提示词</h4>
+                      <p className="text-sm text-gray-600 line-clamp-3">
+                        {skill.userPrompt ? skill.userPrompt.substring(0, 200) + (skill.userPrompt.length > 200 ? '...' : '') : '无'}
+                      </p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">参数配置</h4>
+                      <div className="text-sm text-gray-600">
+                        {skill.parameters && Object.keys(skill.parameters).length > 0 ? (
+                          <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-24">
+                            {JSON.stringify(skill.parameters, null, 2)}
+                          </pre>
+                        ) : (
+                          <span className="text-gray-500">无</span>
+                        )}
                       </div>
                     </div>
                     <div>
@@ -361,10 +466,23 @@ export default function SkillsPage() {
                         )}
                       </div>
                     </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">创建时间</h4>
+                      <p className="text-sm text-gray-600">
+                        {new Date(skill.createdAt).toLocaleString('zh-CN')}
+                      </p>
+                    </div>
                   </div>
 
                   {isAdmin && (
                     <div className="mt-4 flex items-center space-x-2">
+                      <button
+                        onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                      >
+                        <Edit size={16} className="mr-1" />
+                        查看详情
+                      </button>
                       <button
                         onClick={() => handleToggleActive(skill.id, skill.isActive)}
                         className={`inline-flex items-center px-3 py-1.5 text-sm rounded ${
@@ -394,6 +512,17 @@ export default function SkillsPage() {
                           删除
                         </button>
                       )}
+                    </div>
+                  )}
+                  {!isAdmin && (
+                    <div className="mt-4 flex items-center space-x-2">
+                      <button
+                        onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                      >
+                        <Edit size={16} className="mr-1" />
+                        查看详情
+                      </button>
                     </div>
                   )}
                 </div>
