@@ -59,6 +59,14 @@ const PERMISSIONS = {
   WORKFLOW_EXECUTE: 'workflow:execute',
   WORKFLOW_EXPORT: 'workflow:export',
   WORKFLOW_IMPORT: 'workflow:import',
+
+  // 插件权限
+  PLUGIN_CREATE: 'plugin:create',
+  PLUGIN_READ: 'plugin:read',
+  PLUGIN_UPDATE: 'plugin:update',
+  PLUGIN_DELETE: 'plugin:delete',
+  PLUGIN_TOGGLE: 'plugin:toggle',
+  PLUGIN_EXECUTE: 'plugin:execute',
 };
 
 // 角色常量
@@ -101,6 +109,13 @@ const DEFAULT_ROLE_PERMISSIONS = {
     PERMISSIONS.WORKFLOW_EXECUTE,
     PERMISSIONS.WORKFLOW_EXPORT,
     PERMISSIONS.WORKFLOW_IMPORT,
+    // 插件权限
+    PERMISSIONS.PLUGIN_CREATE,
+    PERMISSIONS.PLUGIN_READ,
+    PERMISSIONS.PLUGIN_UPDATE,
+    PERMISSIONS.PLUGIN_DELETE,
+    PERMISSIONS.PLUGIN_TOGGLE,
+    PERMISSIONS.PLUGIN_EXECUTE,
   ],
 
   [ROLES.DEVELOPER]: [

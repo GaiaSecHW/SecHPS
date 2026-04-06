@@ -1,0 +1,115 @@
+import { NextResponse } from 'next/server';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PluginManager } from '@/services/plugin-manager';
+import { PERMISSIONS } from '@/types/permissions';
+import * as fs from 'fs';
+import * as path from 'path';
+import type { PluginManifest, InstallPluginFromUrlRequest } from '@/types/plugin';
+
+const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
+
+/**
+ * POST /api/plugins/install
+ * 从 URL 安装插件
+ */
+export async function POST(request: Request) {
+  try {
+    // 验证 Token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json(
+        { error: '未授权访问' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const payload = verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json(
+        { error: '无效的 Token' },
+        { status: 401 }
+      );
+    }
+
+    // 检查权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_CREATE)) {
+      return NextResponse.json(
+        { error: '没有安装插件的权限' },
+        { status: 403 }
+      );
+    }
+
+    // 解析请求体
+    const body: InstallPluginFromUrlRequest = await request.json();
+
+    if (!body.url) {
+      return NextResponse.json(
+        { error: '请提供插件 URL' },
+        { status: 400 }
+      );
+    }
+
+    // 获取 manifest.json
+    let manifest: PluginManifest;
+    let pluginDir: string;
+
+    if (body.url.endsWith('.json')) {
+      // 直接获取 manifest.json
+      const response = await fetch(body.url);
+      if (!response.ok) {
+        throw new Error('无法获取 manifest.json');
+      }
+      manifest = await response.json();
+      pluginDir = path.join(PLUGINS_DIR, manifest.name);
+    } else {
+      // 假设是压缩包 URL（暂不支持）
+      return NextResponse.json(
+        { error: '暂不支持从压缩包安装，请提供 manifest.json 的 URL' },
+        { status: 400 }
+      );
+    }
+
+    // 验证 manifest
+    if (!manifest.name || !manifest.displayName) {
+      return NextResponse.json(
+        { error: 'manifest.json 缺少必要字段（name, displayName）' },
+        { status: 400 }
+      );
+    }
+
+    // 创建插件目录
+    if (!fs.existsSync(pluginDir)) {
+      fs.mkdirSync(pluginDir, { recursive: true });
+    }
+
+    // 保存 manifest.json
+    fs.writeFileSync(
+      path.join(pluginDir, 'manifest.json'),
+      JSON.stringify(manifest, null, 2)
+    );
+
+    // 安装插件到数据库
+    const plugin = await PluginManager.installPlugin(manifest, pluginDir);
+
+    return NextResponse.json({
+      message: '插件安装成功',
+      plugin,
+    });
+  } catch (error) {
+    console.error('从 URL 安装插件失败:', error);
+    
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: '从 URL 安装插件失败' },
+      { status: 500 }
+    );
+  }
+}

@@ -54,6 +54,14 @@ export const PERMISSIONS = {
   WORKFLOW_EXECUTE: 'workflow:execute',
   WORKFLOW_EXPORT: 'workflow:export',
   WORKFLOW_IMPORT: 'workflow:import',
+
+  // 插件权限
+  PLUGIN_CREATE: 'plugin:create',
+  PLUGIN_READ: 'plugin:read',
+  PLUGIN_UPDATE: 'plugin:update',
+  PLUGIN_DELETE: 'plugin:delete',
+  PLUGIN_TOGGLE: 'plugin:toggle',
+  PLUGIN_EXECUTE: 'plugin:execute',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -100,6 +108,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.WORKFLOW_EXECUTE,
     PERMISSIONS.WORKFLOW_EXPORT,
     PERMISSIONS.WORKFLOW_IMPORT,
+    // 插件权限
+    PERMISSIONS.PLUGIN_READ,
+    PERMISSIONS.PLUGIN_CREATE,
+    PERMISSIONS.PLUGIN_UPDATE,
+    PERMISSIONS.PLUGIN_DELETE,
+    PERMISSIONS.PLUGIN_TOGGLE,
   ],
 
   [ROLES.DEVELOPER]: [

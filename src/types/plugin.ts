@@ -70,6 +70,7 @@ export interface PluginResponse {
   type: PluginType;
   status: PluginStatus;
   config?: Record<string, any>;
+  pluginPath?: string;
   isEnabled: boolean;
   isBuiltin: boolean;
   icon?: string;

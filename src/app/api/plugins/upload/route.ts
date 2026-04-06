@@ -1,0 +1,200 @@
+import { NextResponse } from 'next/server';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PluginManager } from '@/services/plugin-manager';
+import { PERMISSIONS } from '@/types/permissions';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+import { pipeline } from 'stream/promises';
+import { createReadStream, createWriteStream } from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
+const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
+
+/**
+ * 解压 zip 文件
+ */
+async function extractZip(zipPath: string, targetDir: string): Promise<void> {
+  // 在 Windows 上使用 PowerShell 解压
+  const isWindows = process.platform === 'win32';
+  
+  if (isWindows) {
+    await execAsync(`powershell -command "Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force"`);
+  } else {
+    // 在 Unix 系统上使用 unzip
+    await execAsync(`unzip -o "${zipPath}" -d "${targetDir}"`);
+  }
+}
+
+/**
+ * 解压 tar.gz 文件
+ */
+async function extractTarGz(tarPath: string, targetDir: string): Promise<void> {
+  // 在 Windows 上需要使用 tar 命令（Windows 10+ 自带）
+  const isWindows = process.platform === 'win32';
+  
+  if (isWindows) {
+    await execAsync(`tar -xzf "${tarPath}" -C "${targetDir}"`);
+  } else {
+    await execAsync(`tar -xzf "${tarPath}" -C "${targetDir}"`);
+  }
+}
+
+/**
+ * POST /api/plugins/upload
+ * 上传并安装插件
+ */
+export async function POST(request: Request) {
+  try {
+    // 验证 Token
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json(
+        { error: '未授权访问' },
+        { status: 401 }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const payload = verifyToken(token);
+
+    if (!payload) {
+      return NextResponse.json(
+        { error: '无效的 Token' },
+        { status: 401 }
+      );
+    }
+
+    // 检查权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_CREATE)) {
+      return NextResponse.json(
+        { error: '没有安装插件的权限' },
+        { status: 403 }
+      );
+    }
+
+    // 解析 multipart/form-data
+    const formData = await request.formData();
+    const file = formData.get('file') as File | null;
+
+    if (!file) {
+      return NextResponse.json(
+        { error: '请选择要上传的文件' },
+        { status: 400 }
+      );
+    }
+
+    // 验证文件类型
+    const fileName = file.name.toLowerCase();
+    const isZip = fileName.endsWith('.zip');
+    const isTarGz = fileName.endsWith('.tar.gz') || fileName.endsWith('.tgz');
+
+    if (!isZip && !isTarGz) {
+      return NextResponse.json(
+        { error: '不支持的文件格式，请上传 .zip、.tar.gz 或 .tgz 文件' },
+        { status: 400 }
+      );
+    }
+
+    // 创建临时目录
+    const tempDir = path.join(os.tmpdir(), `plugin-upload-${Date.now()}`);
+    fs.mkdirSync(tempDir, { recursive: true });
+
+    // 保存上传的文件
+    const tempFilePath = path.join(tempDir, file.name);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    fs.writeFileSync(tempFilePath, buffer);
+
+    // 创建解压目录
+    const extractDir = path.join(tempDir, 'extracted');
+    fs.mkdirSync(extractDir, { recursive: true });
+
+    try {
+      // 解压文件
+      if (isZip) {
+        await extractZip(tempFilePath, extractDir);
+      } else {
+        await extractTarGz(tempFilePath, extractDir);
+      }
+
+      // 查找 manifest.json
+      let manifestPath = path.join(extractDir, 'manifest.json');
+      let pluginRootDir = extractDir;
+
+      // 如果根目录没有 manifest.json，检查子目录
+      if (!fs.existsSync(manifestPath)) {
+        const entries = fs.readdirSync(extractDir, { withFileTypes: true });
+        const subDirs = entries.filter(e => e.isDirectory());
+        
+        for (const dir of subDirs) {
+          const subManifestPath = path.join(extractDir, dir.name, 'manifest.json');
+          if (fs.existsSync(subManifestPath)) {
+            manifestPath = subManifestPath;
+            pluginRootDir = path.join(extractDir, dir.name);
+            break;
+          }
+        }
+      }
+
+      if (!fs.existsSync(manifestPath)) {
+        throw new Error('压缩包中未找到 manifest.json 文件');
+      }
+
+      // 读取 manifest.json
+      const manifestContent = fs.readFileSync(manifestPath, 'utf-8');
+      const manifest = JSON.parse(manifestContent);
+
+      // 验证 manifest
+      if (!manifest.name || !manifest.displayName) {
+        throw new Error('manifest.json 缺少必要字段（name, displayName）');
+      }
+
+      // 确保插件目录存在
+      if (!fs.existsSync(PLUGINS_DIR)) {
+        fs.mkdirSync(PLUGINS_DIR, { recursive: true });
+      }
+
+      // 创建插件目标目录
+      const pluginTargetDir = path.join(PLUGINS_DIR, manifest.name);
+      
+      // 如果插件已存在，先删除
+      if (fs.existsSync(pluginTargetDir)) {
+        fs.rmSync(pluginTargetDir, { recursive: true, force: true });
+      }
+
+      // 复制插件文件到目标目录
+      fs.cpSync(pluginRootDir, pluginTargetDir, { recursive: true });
+
+      // 安装插件到数据库
+      const plugin = await PluginManager.installPlugin(manifest, pluginTargetDir);
+
+      return NextResponse.json({
+        message: '插件安装成功',
+        plugin,
+      });
+    } finally {
+      // 清理临时目录
+      try {
+        fs.rmSync(tempDir, { recursive: true, force: true });
+      } catch (cleanupError) {
+        console.error('清理临时目录失败:', cleanupError);
+      }
+    }
+  } catch (error) {
+    console.error('上传插件失败:', error);
+    
+    if (error instanceof Error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      );
+    }
+    
+    return NextResponse.json(
+      { error: '上传插件失败' },
+      { status: 500 }
+    );
+  }
+}
