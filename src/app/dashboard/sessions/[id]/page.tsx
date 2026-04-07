@@ -406,6 +406,7 @@ export default function SessionDetailPage({
 
       if (!response.ok) {
         console.error('[Config] Failed to fetch config');
+        setProgressQuestion('');
         return;
       }
 
@@ -414,9 +415,9 @@ export default function SessionDetailPage({
       
       if (activeConfig?.progressQuestion && activeConfig.progressQuestion.trim()) {
         setProgressQuestion(activeConfig.progressQuestion);
-      } else {
-        setProgressQuestion('');
       }
+      // 如果没有配置，保持为空，不设置空字符串
+      // 这样按钮会显示为"请先在系统配置中设置自定义进展询问消息"
     } catch (err) {
       console.error('[Config] Error fetching progress question:', err);
       setProgressQuestion('');

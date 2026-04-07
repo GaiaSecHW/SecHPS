@@ -57,14 +57,14 @@ const statusConfig = {
     color: '#9CA3AF',
     bgColor: '#F3F4F6',
     borderColor: '#D1D5DB',
-    label: '待执�?,
+    label: '待执行',
   },
   running: {
     icon: Loader2,
     color: '#3B82F6',
     bgColor: '#EFF6FF',
     borderColor: '#93C5FD',
-    label: '执行�?,
+    label: '执行中',
     animate: true,
   },
   completed: {
@@ -72,7 +72,7 @@ const statusConfig = {
     color: '#10B981',
     bgColor: '#ECFDF5',
     borderColor: '#6EE7B7',
-    label: '已完�?,
+    label: '已完成',
   },
   failed: {
     icon: AlertCircle,
@@ -86,7 +86,7 @@ const statusConfig = {
     color: '#F59E0B',
     bgColor: '#FFFBEB',
     borderColor: '#FCD34D',
-    label: '已跳�?,
+    label: '已跳过',
   },
 };
 
@@ -95,7 +95,7 @@ const nodeTypeConfig = {
     icon: Play,
     color: '#10B981',
     bgColor: '#ECFDF5',
-    label: '开�?,
+    label: '开始',
   },
   end: {
     icon: Square,
@@ -113,7 +113,7 @@ const nodeTypeConfig = {
     icon: Clock,
     color: '#8B5CF6',
     bgColor: '#F5F3FF',
-    label: '子任�?,
+    label: '子任务',
   },
 };
 
@@ -128,7 +128,8 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
   }, [evaluationId]);
 
   useEffect(() => {
-    // 定期刷新节点状态（如果会话正在运行�?    if (opencodeSessionId) {
+    // 定期刷新节点状态（如果会话正在运行）
+    if (opencodeSessionId) {
       const interval = setInterval(fetchWorkflowData, 5000);
       return () => clearInterval(interval);
     }
@@ -147,7 +148,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
 
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || '获取工作流数据失�?);
+        setError(data.error || '获取工作流数据失败');
         setLoading(false);
         return;
       }
@@ -157,7 +158,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
       setLoading(false);
     } catch (err) {
       console.error('Fetch workflow data error:', err);
-      setError('网络错误');
+      setError('');
       setLoading(false);
     }
   };
@@ -166,7 +167,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
     return (
       <div className="flex items-center justify-center py-8">
         <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-        <span className="ml-2 text-gray-500">加载工作�?..</span>
+        <span className="ml-2 text-gray-500">?..</span>
       </div>
     );
   }
@@ -181,14 +182,14 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
   }
 
   if (!workflowData?.workflow) {
-    return null; // 没有关联工作流时不显�?  }
+    return null; // ?  }
 
   const { workflow, nodes, edges } = workflowData;
 
-  // 构建节点映射
+  // 
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-  // 构建邻接�?  const outEdges = new Map<string, WorkflowEdge[]>();
+  // ?  const outEdges = new Map<string, WorkflowEdge[]>();
   edges.forEach(e => {
     if (!outEdges.has(e.source)) {
       outEdges.set(e.source, []);
@@ -196,11 +197,11 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
     outEdges.get(e.source)!.push(e);
   });
 
-  // 找到开始节点和结束节点
+  // 
   const startNode = nodes.find(n => n.type === 'start');
   const endNode = nodes.find(n => n.type === 'end');
 
-  // 按执行顺序排序节点（从开始节�?BFS 遍历�?  const sortedNodes: WorkflowNode[] = [];
+  // ?BFS ?  const sortedNodes: WorkflowNode[] = [];
   const visited = new Set<string>();
 
   if (startNode) {
@@ -211,7 +212,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
       visited.add(nodeId);
 
       const node = nodeMap.get(nodeId);
-      // 跳过结束节点，最后再添加
+      // 
       if (node && node.type !== 'end') {
         sortedNodes.push(node);
       }
@@ -225,23 +226,23 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
     }
   }
 
-  // 添加未访问的节点（可能是孤立的）
+  // 
   nodes.forEach(n => {
     if (!visited.has(n.id) && n.type !== 'end') {
       sortedNodes.push(n);
     }
   });
 
-  // 结束节点始终在最�?  if (endNode) {
+  // ?  if (endNode) {
     sortedNodes.push(endNode);
   }
 
-  // 计算进度
+  // 
   const completedCount = nodes.filter(n => n.status === 'completed').length;
   const totalCount = nodes.length;
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // 找到当前运行的节�?  const runningNode = nodes.find(n => n.status === 'running');
+  // ?  const runningNode = nodes.find(n => n.status === 'running');
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -256,7 +257,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
           </div>
           <div className="flex items-center space-x-2">
             <span className="text-xs text-gray-500">
-              {completedCount}/{totalCount} 完成
+              {completedCount}/{totalCount} 
             </span>
             <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
               <div
@@ -353,7 +354,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
           <div className="flex items-center space-x-2">
             <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
             <span className="text-sm text-blue-700">
-              正在执行: <strong>{runningNode.data?.label || '任务'}</strong>
+              : <strong>{runningNode.data?.label || ''}</strong>
             </span>
           </div>
         </div>

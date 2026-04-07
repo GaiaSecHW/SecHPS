@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, progressQuestion, customSystemPrompt } = body;
 
     if (!name) {
       return NextResponse.json({ error: '配置名称是必需的' }, { status: 400 });
@@ -95,6 +95,8 @@ export async function POST(request: Request) {
         keybinds: keybinds ? JSON.stringify(keybinds) : null,
         // modelPreferences 是字符串格式 "providerID/modelID"，直接存储
         modelPreferences: modelPreferences || null,
+        customSystemPrompt: customSystemPrompt || null,
+        progressQuestion: progressQuestion || null,
       },
     });
 
