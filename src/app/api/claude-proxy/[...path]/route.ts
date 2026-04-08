@@ -1,40 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { routeRequest, routeStreamRequest, RouteError } from '@/lib/claude-router/router';
-import { verifyToken } from '@/lib/auth';
-
-/**
- * 从请求中提取 API Key
- */
-function extractApiKey(request: NextRequest): string | null {
-  // 1. 从 x-api-key 头获取
-  const apiKey = request.headers.get('x-api-key');
-  if (apiKey) {
-    return apiKey;
-  }
-
-  // 2. 从 Authorization 头获取 (Bearer token)
-  const authHeader = request.headers.get('authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7);
-  }
-
-  return null;
-}
-
-/**
- * 验证请求认证
- */
-function authenticate(request: NextRequest): boolean {
-  const apiKey = extractApiKey(request);
-
-  if (!apiKey) {
-    return false;
-  }
-
-  // 验证 JWT Token
-  const payload = verifyToken(apiKey);
-  return payload !== null;
-}
 
 /**
  * 生成 Anthropic 格式的消息 ID
@@ -46,11 +11,8 @@ function generateMessageId(): string {
 /**
  * 处理非流式请求
  */
-async function handleNonStreamRequest(request: NextRequest) {
+async function handleNonStreamRequest(body: any) {
   try {
-    // 解析请求体
-    const body = await request.json();
-
     // 验证请求格式
     if (!body.model || !body.messages) {
       return NextResponse.json(
@@ -71,6 +33,7 @@ async function handleNonStreamRequest(request: NextRequest) {
     // 返回 Anthropic 格式响应
     return NextResponse.json(response, { status: 200 });
   } catch (error) {
+    console.error('[CCR Proxy] Non-stream request error:', error);
     if (error instanceof RouteError) {
       return NextResponse.json(
         {
@@ -84,13 +47,12 @@ async function handleNonStreamRequest(request: NextRequest) {
       );
     }
 
-    console.error('Non-stream request error:', error);
     return NextResponse.json(
       {
         type: 'error',
         error: {
           type: 'internal_error',
-          message: 'Internal server error',
+          message: error instanceof Error ? error.message : 'Internal server error',
         },
       },
       { status: 500 }
@@ -101,11 +63,8 @@ async function handleNonStreamRequest(request: NextRequest) {
 /**
  * 处理流式请求 (SSE)
  */
-async function handleStreamRequest(request: NextRequest) {
+async function handleStreamRequest(body: any) {
   try {
-    // 解析请求体
-    const body = await request.json();
-
     // 验证请求格式
     if (!body.model || !body.messages) {
       return NextResponse.json(
@@ -185,7 +144,7 @@ async function handleStreamRequest(request: NextRequest) {
             },
             // onError - 处理错误
             (error) => {
-              console.error('Stream error:', error);
+              console.error('[CCR Proxy] Stream error:', error);
               controller.enqueue(encoder.encode(`event: error\n`));
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({
                 type: 'error',
@@ -226,7 +185,7 @@ async function handleStreamRequest(request: NextRequest) {
             }
           );
         } catch (error) {
-          console.error('Stream setup error:', error);
+          console.error('[CCR Proxy] Stream setup error:', error);
           controller.enqueue(encoder.encode(`event: error\n`));
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({
             type: 'error',
@@ -249,7 +208,7 @@ async function handleStreamRequest(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Stream request error:', error);
+    console.error('[CCR Proxy] Stream request error:', error);
     return NextResponse.json(
       {
         type: 'error',
@@ -265,34 +224,22 @@ async function handleStreamRequest(request: NextRequest) {
 
 /**
  * POST handler - 处理 Anthropic API 请求
+ * CCR 是内部服务，不需要认证
  */
 export async function POST(request: NextRequest) {
-  // 验证认证
-  if (!authenticate(request)) {
-    return NextResponse.json(
-      {
-        type: 'error',
-        error: {
-          type: 'authentication_error',
-          message: 'Invalid or missing API key',
-        },
-      },
-      { status: 401 }
-    );
-  }
-
   try {
     // 解析请求体以判断是否为流式请求
     const body = await request.json();
+
     const isStream = body.stream === true;
 
     if (isStream) {
-      return handleStreamRequest(request);
+      return handleStreamRequest(body);
     } else {
-      return handleNonStreamRequest(request);
+      return handleNonStreamRequest(body);
     }
   } catch (error) {
-    console.error('Request parsing error:', error);
+    console.error('[CCR Proxy] Request parsing error:', error);
     return NextResponse.json(
       {
         type: 'error',

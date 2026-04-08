@@ -43,6 +43,9 @@ export class ConversationHistory {
       },
     });
 
+    // 更新消息计数
+    await this.updateMessageCount(evaluationId);
+
     return {
       id: message.id,
       role: 'user',
@@ -63,12 +66,36 @@ export class ConversationHistory {
       },
     });
 
+    // 更新消息计数
+    await this.updateMessageCount(evaluationId);
+
     return {
       id: message.id,
       role: 'assistant',
       content: message.content,
       createdAt: message.createdAt,
     };
+  }
+
+  /**
+   * 更新评估会话的消息计数
+   */
+  private async updateMessageCount(evaluationId: string): Promise<void> {
+    try {
+      const count = await prisma.sessionMessage.count({
+        where: { evaluationSessionId: evaluationId },
+      });
+
+      await prisma.evaluationSession.update({
+        where: { id: evaluationId },
+        data: {
+          messageCount: count,
+          lastActivity: new Date(),
+        },
+      });
+    } catch (error) {
+      console.error('更新消息计数失败:', error);
+    }
   }
 
   /**

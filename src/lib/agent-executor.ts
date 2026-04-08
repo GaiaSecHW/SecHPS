@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { createAIProvider, AIProvider, AIMessage, AIStreamCallbacks } from '@/services/ai';
+import { ClaudeAgentService, createClaudeAgentService } from '@/services/ai';
 import { ToolExecutor } from '@/lib/tool-executor';
 import { parseAIResponse, ParsedVulnerability, ParsedToolCall } from '@/lib/result-parser';
 
@@ -15,6 +15,8 @@ export interface AgentExecutionContext {
   };
   maxToolCalls?: number;
   maxIterations?: number;
+  testMode?: boolean; // 测试模式，不保存数据库记录
+  cwd?: string; // 工作目录
 }
 
 export interface AgentExecutionCallbacks {
@@ -40,11 +42,12 @@ export interface AgentExecutionResult {
 /**
  * Agent 执行引擎
  * 负责执行 Skill 并处理 AI 调用、工具执行、结果解析
+ * 使用 Claude Agent SDK
  */
 export class AgentExecutor {
   private context: AgentExecutionContext;
   private callbacks: AgentExecutionCallbacks;
-  private provider: AIProvider;
+  private agentService: ClaudeAgentService;
   private toolExecutor: ToolExecutor;
   private cancelled: boolean = false;
   private toolCallCount: number = 0;
@@ -55,22 +58,27 @@ export class AgentExecutor {
     this.context = context;
     this.callbacks = callbacks;
 
-    // 创建 AI 提供商
-    this.provider = createAIProvider(
-      (context.modelConfig.providerType === 'claude' ? 'claude' : 'ccr-proxy') as 'claude' | 'ccr-proxy',
-      {
-        apiKey: context.modelConfig.apiKey,
-        baseUrl: context.modelConfig.apiBaseUrl,
-        model: context.modelConfig.model,
-        maxTokens: 4096,
-      }
-    );
+    // 创建 Claude Agent Service
+    this.agentService = createClaudeAgentService({
+      apiKey: context.modelConfig.apiKey,
+      model: context.modelConfig.model,
+      maxTokens: 4096,
+      cwd: context.cwd,
+      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
+    });
 
     // 创建工具执行器
     this.toolExecutor = new ToolExecutor({
       projectId: context.projectId,
       timeout: 30000,
     });
+  }
+
+  /**
+   * 设置工作目录
+   */
+  setWorkingDirectory(dir: string): void {
+    this.agentService.setWorkingDirectory(dir);
   }
 
   /**
@@ -102,8 +110,13 @@ export class AgentExecutor {
         throw new Error('项目不存在');
       }
 
-      // 构建初始消息
-      const messages = this.buildMessages(skill, project);
+      // 设置工作目录
+      if (project.projectPath) {
+        this.agentService.setWorkingDirectory(project.projectPath);
+      }
+
+      // 构建初始提示
+      const prompt = this.buildPrompt(skill, project);
       let lastResponse = '';
 
       // 执行循环
@@ -111,7 +124,7 @@ export class AgentExecutor {
         this.iterationCount++;
 
         // 调用 AI
-        lastResponse = await this.callAI(messages);
+        lastResponse = await this.callAgent(prompt);
 
         // 解析响应
         const parsed = parseAIResponse(lastResponse);
@@ -126,16 +139,9 @@ export class AgentExecutor {
         if (parsed.needsToolCall && this.toolCallCount < (this.context.maxToolCalls || 20)) {
           const toolResults = await this.executeToolCalls(parsed.toolCalls);
 
-          // 将工具结果添加到消息
-          messages.push({
-            role: 'assistant',
-            content: lastResponse,
-          });
-          messages.push({
-            role: 'user',
-            content: `工具执行结果:\n${toolResults}`,
-          });
-
+          // 将工具结果添加到下一次提示
+          const newPrompt = `${prompt}\n\n---\n\n上一次执行结果:\n${toolResults}\n\n请继续分析。`;
+          lastResponse = await this.callAgent(newPrompt);
           continue;
         }
 
@@ -193,13 +199,17 @@ export class AgentExecutor {
    */
   cancel(): void {
     this.cancelled = true;
-    this.provider.abort();
+    this.agentService.abort();
   }
 
   /**
    * 创建执行记录
    */
   private async createExecutionRecord(): Promise<string> {
+    // 测试模式下不保存数据库记录
+    if (this.context.testMode) {
+      return `test-${Date.now()}`;
+    }
     const execution = await prisma.skillExecution.create({
       data: {
         skillId: this.context.skillId,
@@ -221,6 +231,10 @@ export class AgentExecutor {
     output: string,
     duration: number
   ): Promise<void> {
+    // 测试模式下不保存数据库记录
+    if (this.context.testMode) {
+      return;
+    }
     await prisma.skillExecution.update({
       where: { id: this.executionId },
       data: {
@@ -233,33 +247,29 @@ export class AgentExecutor {
   }
 
   /**
-   * 构建消息
+   * 构建提示
    */
-  private buildMessages(
+  private buildPrompt(
     skill: { systemPrompt: string; userPrompt: string; category: string },
     project: { name: string; description: string | null; files: Array<{ fileName: string; fileType: string }> }
-  ): AIMessage[] {
+  ): string {
     const systemMessage = skill.systemPrompt;
-
     const userMessage = skill.userPrompt
       .replace('{{projectName}}', project.name)
       .replace('{{projectDescription}}', project.description || '')
       .replace('{{fileCount}}', String(project.files.length));
 
-    return [
-      { role: 'system', content: systemMessage },
-      { role: 'user', content: userMessage },
-    ];
+    return `System: ${systemMessage}\n\n---\n\nHuman: ${userMessage}`;
   }
 
   /**
-   * 调用 AI
+   * 调用 Agent
    */
-  private async callAI(messages: AIMessage[]): Promise<string> {
+  private async callAgent(prompt: string): Promise<string> {
     return new Promise((resolve, reject) => {
       let fullResponse = '';
 
-      const callbacks: AIStreamCallbacks = {
+      this.agentService.sendPrompt(prompt, {
         onChunk: (text) => {
           fullResponse += text;
           this.callbacks.onChunk(text);
@@ -270,9 +280,7 @@ export class AgentExecutor {
         onError: (error) => {
           reject(error);
         },
-      };
-
-      this.provider.stream(messages, callbacks).catch(reject);
+      }).catch(reject);
     });
   }
 

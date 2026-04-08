@@ -17,6 +17,9 @@ import {
   XCircle,
   Save,
   RefreshCw,
+  Eye,
+  X,
+  Copy,
 } from 'lucide-react';
 
 interface Skill {
@@ -41,6 +44,16 @@ interface Skill {
   execCount: number;
   createdAt: string;
   updatedAt: string;
+  // 官方标准字段
+  disableModelInvocation: boolean;
+  userInvocable: boolean;
+  context: string | null;
+  agent: string | null;
+  argumentHint: string | null;
+  model: string | null;
+  effort: string | null;
+  paths: string | null;
+  shell: string | null;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -75,6 +88,7 @@ const severityLabels: Record<string, string> = {
 export default function SkillsPage() {
   const router = useRouter();
   const [skills, setSkills] = useState<Skill[]>([]);
+  const [totalSkills, setTotalSkills] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -83,6 +97,8 @@ export default function SkillsPage() {
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [user, setUser] = useState<{ roles?: string[] } | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [previewSkill, setPreviewSkill] = useState<Skill | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -117,6 +133,7 @@ export default function SkillsPage() {
       const data = await response.json();
       // API returns { data: [...], pagination: {...} }
       setSkills(data.data || []);
+      setTotalSkills(data.pagination?.total || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
@@ -232,6 +249,113 @@ export default function SkillsPage() {
 
   const isAdmin = user?.roles?.includes('admin');
 
+  // 生成 SKILL.md 格式内容
+  const generateSkillMd = (skill: Skill): string => {
+    // 构建 YAML frontmatter
+    const frontmatter: Record<string, unknown> = {
+      name: skill.name,
+      description: skill.description,
+    };
+
+    // 添加官方字段（仅在有值时）
+    if (skill.disableModelInvocation) {
+      frontmatter['disable-model-invocation'] = true;
+    }
+    if (!skill.userInvocable) {
+      frontmatter['user-invocable'] = false;
+    }
+    if (skill.context) {
+      frontmatter.context = skill.context;
+    }
+    if (skill.agent) {
+      frontmatter.agent = skill.agent;
+    }
+    if (skill.argumentHint) {
+      frontmatter['argument-hint'] = skill.argumentHint;
+    }
+    if (skill.model) {
+      frontmatter.model = skill.model;
+    }
+    if (skill.effort) {
+      frontmatter.effort = skill.effort;
+    }
+    if (skill.paths) {
+      try {
+        const paths = typeof skill.paths === 'string' ? JSON.parse(skill.paths) : skill.paths;
+        if (Array.isArray(paths) && paths.length > 0) {
+          frontmatter.paths = paths;
+        }
+      } catch {
+        // 忽略解析错误
+      }
+    }
+    if (skill.shell) {
+      frontmatter.shell = skill.shell;
+    }
+    if (skill.tools && Array.isArray(skill.tools) && skill.tools.length > 0) {
+      frontmatter['allowed-tools'] = skill.tools.join(' ');
+    }
+
+    // 构建 YAML 字符串
+    const yamlLines = ['---'];
+    for (const [key, value] of Object.entries(frontmatter)) {
+      if (typeof value === 'boolean') {
+        yamlLines.push(`${key}: ${value}`);
+      } else if (Array.isArray(value)) {
+        yamlLines.push(`${key}: ${JSON.stringify(value)}`);
+      } else {
+        yamlLines.push(`${key}: ${value}`);
+      }
+    }
+    yamlLines.push('---');
+
+    // 构建 markdown 内容
+    const sections: string[] = [];
+
+    if (skill.systemPrompt) {
+      sections.push('## 系统提示词\n', skill.systemPrompt);
+    }
+
+    if (skill.userPrompt) {
+      sections.push('## 用户提示词\n', skill.userPrompt);
+    }
+
+    if (skill.cwe) {
+      sections.push('## 相关 CWE\n', skill.cwe);
+    }
+
+    if (skill.severity) {
+      const severityMap: Record<string, string> = {
+        critical: '严重',
+        high: '高危',
+        medium: '中危',
+        low: '低危',
+        info: '信息',
+      };
+      sections.push('## 安全等级\n', severityMap[skill.severity] || skill.severity);
+    }
+
+    if (skill.parameters && Object.keys(skill.parameters).length > 0) {
+      sections.push('## 参数配置\n', '```json\n', JSON.stringify(skill.parameters, null, 2), '\n```');
+    }
+
+    // 组合最终内容
+    const content = [yamlLines.join('\n'), ...sections].join('\n\n');
+    return content;
+  };
+
+  // 复制 SKILL.md 到剪贴板
+  const handleCopySkillMd = async (skill: Skill) => {
+    try {
+      const content = generateSkillMd(skill);
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('复制失败:', err);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -247,7 +371,7 @@ export default function SkillsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Skills 库</h1>
           <p className="mt-1 text-sm text-gray-600">
-            管理 AI 漏洞检测技能，共 {skills.length} 个 Skills
+            管理 AI 漏洞检测技能，共 {totalSkills} 个 Skills
           </p>
         </div>
         {isAdmin && (
@@ -477,6 +601,17 @@ export default function SkillsPage() {
                   {isAdmin && (
                     <div className="mt-4 flex items-center space-x-2">
                       <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewSkill(skill);
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+                        title="预览 SKILL.md"
+                      >
+                        <Eye size={16} className="mr-1" />
+                        预览
+                      </button>
+                      <button
                         onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
                         className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
                       >
@@ -517,6 +652,17 @@ export default function SkillsPage() {
                   {!isAdmin && (
                     <div className="mt-4 flex items-center space-x-2">
                       <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPreviewSkill(skill);
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+                        title="预览 SKILL.md"
+                      >
+                        <Eye size={16} className="mr-1" />
+                        预览
+                      </button>
+                      <button
                         onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
                         className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
                       >
@@ -531,6 +677,50 @@ export default function SkillsPage() {
           ))
         )}
       </div>
+
+      {/* SKILL.md 预览模态框 */}
+      {previewSkill && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">
+                  SKILL.md 预览 - {previewSkill.displayName}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  这是最终生成的 SKILL.md 文件内容，可直接用于 Claude Code
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleCopySkillMd(previewSkill)}
+                  className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200 transition-colors"
+                >
+                  <Copy size={16} className="mr-1" />
+                  {copied ? '已复制!' : '复制'}
+                </button>
+                <button
+                  onClick={() => {
+                    setPreviewSkill(null);
+                    setCopied(false);
+                  }}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-auto p-4">
+              <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg text-sm font-mono whitespace-pre-wrap break-all leading-relaxed">
+                {generateSkillMd(previewSkill)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

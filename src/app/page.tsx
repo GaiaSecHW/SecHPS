@@ -9,12 +9,15 @@ export default function Home() {
   useEffect(() => {
     // 检查是否已登录
     const token = localStorage.getItem('token');
-    
+    console.log('Home page - checking token:', token ? 'exists' : 'not found');
+
     if (token) {
       // 已登录，跳转到 Dashboard
+      console.log('Redirecting to dashboard...');
       router.push('/dashboard');
     } else {
       // 未登录，跳转到登录页
+      console.log('Redirecting to login...');
       router.push('/login');
     }
   }, [router]);

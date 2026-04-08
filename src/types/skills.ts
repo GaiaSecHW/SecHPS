@@ -40,6 +40,7 @@ export interface CreateSkillRequest {
   userPrompt: string;
   tools: string[];
   parameters?: Record<string, unknown>;
+  userId?: string | null;  // null = 公共，有值 = 私有
 }
 
 // Skill 更新请求
@@ -81,6 +82,7 @@ export interface EvolveSkillRequest {
 // Skill 响应
 export interface SkillResponse {
   id: string;
+  userId: string | null;  // null = 公共，有值 = 私有
   name: string;
   displayName: string;
   description: string;
@@ -94,11 +96,22 @@ export interface SkillResponse {
   isActive: boolean;
   isBuiltin: boolean;
   version: number;
+  parentId: string | null;
+  isLatest: boolean;
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// Skill 版本信息
+export interface SkillVersionInfo {
+  id: string;
+  version: number;
+  isLatest: boolean;
+  createdAt: Date;
+  changeDesc?: string;  // 从进化记录中获取
 }
 
 // Skill 执行响应
@@ -120,4 +133,18 @@ export interface SkillExecutionResponse {
   inputTokens: number | null;
   outputTokens: number | null;
   createdAt: Date;
+}
+
+// 创建 Skill 新版本请求
+export interface CreateSkillVersionRequest {
+  changeType: EvolutionChangeType;
+  changeDesc: string;
+  reason: EvolutionReason;
+  updates: UpdateSkillRequest;
+}
+
+// 回滚 Skill 版本请求
+export interface RollbackSkillVersionRequest {
+  targetVersionId: string;
+  reason: string;
 }

@@ -64,6 +64,8 @@ export async function GET(
       id: edge.id,
       source: edge.sourceId,
       target: edge.targetId,
+      sourceHandle: edge.sourceHandle,
+      targetHandle: edge.targetHandle,
       label: edge.label,
       data: edge.data ? JSON.parse(edge.data) : undefined,
     }));
@@ -119,7 +121,7 @@ export async function PUT(
 
     // 解析请求体
     const body = await request.json();
-    const { nodes, edges } = body;
+    const { nodes, edges, thumbnail } = body;
 
     // 验证数据格式
     if (!Array.isArray(nodes) || !Array.isArray(edges)) {
@@ -129,10 +131,8 @@ export async function PUT(
       );
     }
 
-    // 验证工作流结构
-    // 如果工作流已启用（status === 'published'），使用严格验证
-    const strictValidation = existingWorkflow.status === 'published';
-    const validation = validateWorkflow(nodes, edges, strictValidation);
+    // 验证工作流结构（始终使用严格验证）
+    const validation = validateWorkflow(nodes, edges, true);
     if (!validation.valid) {
       return NextResponse.json(
         {
@@ -192,6 +192,8 @@ export async function PUT(
               workflowId: id,
               sourceId,
               targetId,
+              sourceHandle: edge.sourceHandle || null,
+              targetHandle: edge.targetHandle || null,
               label: edge.label || null,
               data: edge.data ? JSON.stringify(edge.data) : null,
             },
@@ -199,11 +201,12 @@ export async function PUT(
         })
       );
 
-      // 更新工作流版本
+      // 更新工作流版本和缩略图
       const updatedWorkflow = await tx.workflow.update({
         where: { id },
         data: {
           version: existingWorkflow.version + 1,
+          ...(thumbnail && { thumbnail }), // 如果有缩略图则更新
         },
         include: {
           nodes: true,

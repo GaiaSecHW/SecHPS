@@ -4,6 +4,18 @@ import { TransformerService } from './llms/services/transformer';
 import { ProviderService } from './llms/services/provider';
 import { LLMProvider, UnifiedChatRequest } from './llms/types/llm';
 import { TransformerContext } from './llms/types/transformer';
+import { AnthropicTransformer } from './llms/transformer/anthropic.transformer';
+
+// 创建全局的 Anthropic 转换器实例（用于 OpenAI 类型提供商）
+let anthropicTransformer: AnthropicTransformer | null = null;
+
+function getAnthropicTransformer(): AnthropicTransformer {
+  if (!anthropicTransformer) {
+    anthropicTransformer = new AnthropicTransformer();
+    (anthropicTransformer as any).logger = console;
+  }
+  return anthropicTransformer;
+}
 
 /**
  * 路由请求上下文
@@ -146,14 +158,18 @@ export async function routeRequest(request: any): Promise<any> {
     // 解析模型路由
     const routeInfo = parseModelRoute(targetModel);
     if (!routeInfo) {
+      console.error('[CCR] ERROR: Invalid model format:', targetModel);
       throw new RouteError(`Invalid model format: ${targetModel}`, 400);
     }
 
     // 获取提供商
     const provider = providerService.getProvider(routeInfo.providerName);
     if (!provider) {
+      console.error('[CCR] ERROR: Provider not found:', routeInfo.providerName);
       throw new RouteError(`Provider not found: ${routeInfo.providerName}`, 404);
     }
+
+    console.log(`[CCR] Routing: ${provider.name} (${provider.providerType}) -> ${routeInfo.modelName}`);
 
     // 构建转换上下文
     const context: TransformerContext = {
@@ -161,45 +177,67 @@ export async function routeRequest(request: any): Promise<any> {
       model: routeInfo.modelName,
     };
 
-    // 转换请求格式（Anthropic → OpenAI）
-    let transformedRequest: any = request;
+    // 根据提供商类型决定是否需要格式转换
+    const isClaudeProvider = provider.providerType === 'claude';
+    let internalRequest: any;
+    let needsResponseConversion = false;
 
-    // 应用转换器
-    if (provider.transformer?.use && Array.isArray(provider.transformer.use)) {
-      for (const transformer of provider.transformer.use) {
-        if (transformer.transformRequestOut) {
-          transformedRequest = await transformer.transformRequestOut(request, context);
-        }
+    if (isClaudeProvider) {
+      // Claude 类型：直接使用原始请求格式
+      internalRequest = {
+        model: routeInfo.modelName,
+        messages: request.messages || [],
+        max_tokens: request.max_tokens || 4096,
+        temperature: request.temperature || 0.7,
+        stream: request.stream || false,
+        tools: request.tools,
+        tool_choice: request.tool_choice,
+        system: request.system,
+      };
+    } else {
+      // OpenAI 类型：需要转换格式
+      needsResponseConversion = true;
+
+      // 使用 AnthropicTransformer 转换请求
+      const transformer = getAnthropicTransformer();
+      const unifiedRequest = await transformer.transformRequestOut(request, context);
+
+      internalRequest = {
+        model: routeInfo.modelName,
+        messages: unifiedRequest.messages || [],
+        max_tokens: unifiedRequest.max_tokens || 4096,
+        temperature: unifiedRequest.temperature || 0.7,
+        stream: unifiedRequest.stream || false,
+        tools: unifiedRequest.tools,
+        tool_choice: unifiedRequest.tool_choice,
+      };
+
+      if (unifiedRequest.reasoning) {
+        internalRequest.reasoning = unifiedRequest.reasoning;
       }
     }
-
-    // 构建内部请求
-    const internalRequest = {
-      model: routeInfo.modelName,
-      messages: transformedRequest.messages || [],
-      max_tokens: transformedRequest.max_tokens || 4096,
-      temperature: transformedRequest.temperature || 0.7,
-      stream: transformedRequest.stream || false,
-      tools: transformedRequest.tools,
-      tool_choice: transformedRequest.tool_choice,
-    };
 
     // 转发到内部大模型
     const response = await fetchInternalModel(provider, internalRequest);
 
-    // 转换响应格式（OpenAI → Anthropic）
-    let transformedResponse = response;
+    // 如果需要，转换响应格式
+    let finalResponse = response;
 
-    if (provider.transformer?.use && Array.isArray(provider.transformer.use)) {
-      for (const transformer of provider.transformer.use) {
-        if (transformer.transformResponseOut) {
-          transformedResponse = await transformer.transformResponseOut(response, context);
-        }
-      }
+    if (needsResponseConversion) {
+      const transformer = getAnthropicTransformer();
+
+      // 将响应对象转换为 Response 对象以便使用 transformResponseIn
+      const mockResponse = new Response(JSON.stringify(response), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      const convertedResponse = await transformer.transformResponseIn(mockResponse, context);
+      finalResponse = await convertedResponse.json();
     }
 
-    return transformedResponse;
+    return finalResponse;
   } catch (error) {
+    console.error('[CCR] ERROR routeRequest:', error);
     if (error instanceof RouteError) {
       throw error;
     }
@@ -242,57 +280,62 @@ export async function routeStreamRequest(
       throw new RouteError(`Provider not found: ${routeInfo.providerName}`, 404);
     }
 
+    console.log(`[CCR] Stream Routing: ${provider.name} (${provider.providerType}) -> ${routeInfo.modelName}`);
+
     // 构建转换上下文
     const context: TransformerContext = {
       provider,
       model: routeInfo.modelName,
     };
 
-    // 转换请求格式（Anthropic → OpenAI）
-    let transformedRequest: any = request;
+    // 根据提供商类型决定是否需要格式转换
+    const isClaudeProvider = provider.providerType === 'claude';
+    let internalRequest: any;
 
-    // 应用转换器
-    if (provider.transformer?.use && Array.isArray(provider.transformer.use)) {
-      for (const transformer of provider.transformer.use) {
-        if (transformer.transformRequestOut) {
-          transformedRequest = await transformer.transformRequestOut(request, context);
-        }
+    if (isClaudeProvider) {
+      // Claude 类型：直接使用原始请求格式
+      internalRequest = {
+        model: routeInfo.modelName,
+        messages: request.messages || [],
+        max_tokens: request.max_tokens || 4096,
+        temperature: request.temperature || 0.7,
+        stream: true,
+        tools: request.tools,
+        tool_choice: request.tool_choice,
+        system: request.system,
+      };
+    } else {
+      // OpenAI 类型：需要转换格式
+      // 使用 AnthropicTransformer 转换请求
+      const transformer = getAnthropicTransformer();
+      const unifiedRequest = await transformer.transformRequestOut(request, context);
+
+      internalRequest = {
+        model: routeInfo.modelName,
+        messages: unifiedRequest.messages || [],
+        max_tokens: unifiedRequest.max_tokens || 4096,
+        temperature: unifiedRequest.temperature || 0.7,
+        stream: true,
+        tools: unifiedRequest.tools,
+        tool_choice: unifiedRequest.tool_choice,
+      };
+
+      if (unifiedRequest.reasoning) {
+        internalRequest.reasoning = unifiedRequest.reasoning;
       }
     }
-
-    // 构建内部请求
-    const internalRequest = {
-      model: routeInfo.modelName,
-      messages: transformedRequest.messages || [],
-      max_tokens: transformedRequest.max_tokens || 4096,
-      temperature: transformedRequest.temperature || 0.7,
-      stream: true, // 强制流式
-      tools: transformedRequest.tools,
-      tool_choice: transformedRequest.tool_choice,
-    };
 
     // 转发到内部大模型（流式）
     await fetchInternalModelStream(
       provider,
       internalRequest,
-      async (chunk) => {
-        // 转换响应格式（OpenAI → Anthropic）
-        let transformedChunk = chunk;
-
-        if (provider.transformer?.use && Array.isArray(provider.transformer.use)) {
-          for (const transformer of provider.transformer.use) {
-            if (transformer.transformResponseOut) {
-              transformedChunk = await transformer.transformResponseOut(chunk, context);
-            }
-          }
-        }
-
-        onChunk(transformedChunk);
-      },
+      isClaudeProvider,
+      onChunk,
       onError,
       onComplete
     );
   } catch (error) {
+    console.error('[CCR] ERROR routeStreamRequest:', error);
     if (error instanceof RouteError) {
       onError(error);
     } else {
@@ -328,14 +371,15 @@ async function fetchClaudeApi(provider: LLMProvider, request: any): Promise<any>
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-api-key': provider.apiKey,
+      'x-api-key': provider.apiKey || '',
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify(request),
+    body: requestBody,
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[CCR] CLAUDE API ERROR:', response.status, errorText);
     throw new RouteError(
       `Claude API error: ${response.status} ${response.statusText}`,
       response.status,
@@ -343,24 +387,35 @@ async function fetchClaudeApi(provider: LLMProvider, request: any): Promise<any>
     );
   }
 
-  return response.json();
+  return await response.json();
 }
 
 /**
  * 调用 OpenAI 格式的内部大模型
  */
 async function fetchOpenAIModel(provider: LLMProvider, request: any): Promise<any> {
-  const response = await fetch(provider.baseUrl, {
+  // 构建完整的 API URL
+  // OpenAI 格式的 API 需要 /chat/completions 路径
+  let apiUrl = provider.baseUrl;
+  if (!apiUrl.endsWith('/chat/completions')) {
+    apiUrl = apiUrl.replace(/\/$/, '');
+    apiUrl = `${apiUrl}/chat/completions`;
+  }
+
+  const requestBody = JSON.stringify(request);
+
+  const response = await fetch(apiUrl, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${provider.apiKey}`,
+      'Authorization': `Bearer ${provider.apiKey || ''}`,
     },
-    body: JSON.stringify(request),
+    body: requestBody,
   });
 
   if (!response.ok) {
     const errorText = await response.text();
+    console.error('[CCR] OPENAI API ERROR:', response.status, errorText);
     throw new RouteError(
       `Internal model error: ${response.status} ${response.statusText}`,
       response.status,
@@ -368,7 +423,7 @@ async function fetchOpenAIModel(provider: LLMProvider, request: any): Promise<an
     );
   }
 
-  return response.json();
+  return await response.json();
 }
 
 /**
@@ -380,13 +435,14 @@ async function fetchOpenAIModel(provider: LLMProvider, request: any): Promise<an
 async function fetchInternalModelStream(
   provider: LLMProvider,
   request: any,
+  isClaudeProvider: boolean,
   onChunk: (chunk: any) => void,
   onError: (error: Error) => void,
   onComplete: () => void
 ): Promise<void> {
   try {
     // 根据 providerType 选择调用方式
-    if (provider.providerType === 'claude') {
+    if (isClaudeProvider) {
       await fetchClaudeApiStream(provider, request, onChunk, onError, onComplete);
     } else {
       await fetchOpenAIModelStream(provider, request, onChunk, onError, onComplete);
@@ -407,18 +463,21 @@ async function fetchClaudeApiStream(
   onComplete: () => void
 ): Promise<void> {
   try {
+    const requestBody = { ...request, stream: true };
+
     const response = await fetch(provider.baseUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': provider.apiKey,
+        'x-api-key': provider.apiKey || '',
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[CCR] CLAUDE API STREAM ERROR:', response.status, errorText);
       onError(new RouteError(
         `Claude API error: ${response.status} ${response.statusText}`,
         response.status,
@@ -467,12 +526,14 @@ async function fetchClaudeApiStream(
 
     onComplete();
   } catch (error) {
+    console.error('[CCR] CLAUDE STREAM ERROR:', error);
     onError(error instanceof Error ? error : new Error('Unknown error'));
   }
 }
 
 /**
  * 调用 OpenAI 格式的内部大模型（流式）
+ * 将 OpenAI 流式响应转换为 Anthropic 格式
  */
 async function fetchOpenAIModelStream(
   provider: LLMProvider,
@@ -482,17 +543,27 @@ async function fetchOpenAIModelStream(
   onComplete: () => void
 ): Promise<void> {
   try {
-    const response = await fetch(provider.baseUrl, {
+    // 构建完整的 API URL
+    let apiUrl = provider.baseUrl;
+    if (!apiUrl.endsWith('/chat/completions')) {
+      apiUrl = apiUrl.replace(/\/$/, '');
+      apiUrl = `${apiUrl}/chat/completions`;
+    }
+
+    const requestBody = { ...request, stream: true };
+
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${provider.apiKey}`,
+        'Authorization': `Bearer ${provider.apiKey || ''}`,
       },
-      body: JSON.stringify({ ...request, stream: true }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('[CCR] OPENAI API STREAM ERROR:', response.status, errorText);
       onError(new RouteError(
         `Internal model error: ${response.status} ${response.statusText}`,
         response.status,
@@ -501,8 +572,19 @@ async function fetchOpenAIModelStream(
       return;
     }
 
-    // 处理 SSE 流
-    const reader = response.body?.getReader();
+    // 使用 AnthropicTransformer 转换流式响应
+    const transformer = getAnthropicTransformer();
+    const context: TransformerContext = {
+      provider,
+      model: request.model,
+      req: { id: `req_${Date.now()}` } as any, // 用于日志
+    };
+
+    // 转换响应流
+    const convertedResponse = await transformer.transformResponseIn(response, context);
+
+    // 读取转换后的流
+    const reader = convertedResponse.body?.getReader();
     if (!reader) {
       onError(new Error('Response body is not readable'));
       return;
@@ -541,6 +623,7 @@ async function fetchOpenAIModelStream(
 
     onComplete();
   } catch (error) {
+    console.error('[CCR] OPENAI STREAM ERROR:', error);
     onError(error instanceof Error ? error : new Error('Unknown error'));
   }
 }

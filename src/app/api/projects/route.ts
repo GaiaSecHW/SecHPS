@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     const projects = await prisma.project.findMany({
       where,
       orderBy: {
-        updatedAt: 'desc',
+        createdAt: 'desc',  // 按创建时间降序排列
       },
       include: {
         files: {
@@ -44,10 +44,25 @@ export async function GET(request: Request) {
           },
           take: 1,
         },
+        _count: {
+          select: {
+            vulnerabilities: {
+              where: {
+                status: { notIn: ['false-positive', 'closed'] }
+              }
+            }
+          }
+        }
       },
     });
 
-    return NextResponse.json({ projects });
+    // 转换数据格式，添加漏洞数量
+    const projectsWithVulnCount = projects.map(project => ({
+      ...project,
+      vulnerabilityCount: project._count?.vulnerabilities || 0,
+    }));
+
+    return NextResponse.json({ projects: projectsWithVulnCount });
   } catch (error) {
     console.error('获取项目列表错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

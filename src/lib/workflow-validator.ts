@@ -1,4 +1,4 @@
-// 工作流验证工具函数
+// Agent编排验证工具函数
 
 import { FlowNode, FlowEdge, WorkflowNodeType } from '@/types/workflow';
 
@@ -9,10 +9,10 @@ export interface ValidationResult {
 }
 
 /**
- * 验证工作流数据
+ * 验证Agent编排数据
  * @param nodes 节点数组
  * @param edges 边数组
- * @param strict 是否严格模式（启用工作流时使用）
+ * @param strict 是否严格模式（启用编排时使用）
  * @returns 验证结果
  */
 export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: boolean = false): ValidationResult {
@@ -22,17 +22,17 @@ export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: b
   // 1. 检查是否有开始节点
   const startNodes = nodes.filter(n => n.type === 'start');
   if (startNodes.length === 0) {
-    errors.push('工作流必须有一个开始节点');
+    errors.push('编排必须有一个开始节点');
   } else if (startNodes.length > 1) {
-    errors.push('工作流只能有一个开始节点');
+    errors.push('编排只能有一个开始节点');
   }
 
   // 2. 检查是否有结束节点
   const endNodes = nodes.filter(n => n.type === 'end');
   if (endNodes.length === 0) {
-    errors.push('工作流必须有一个结束节点');
+    errors.push('编排必须有一个结束节点');
   } else if (endNodes.length > 1) {
-    errors.push('工作流只能有一个结束节点');
+    errors.push('编排只能有一个结束节点');
   }
 
   // 3. 检查所有节点是否都有连接（除了开始和结束节点）
@@ -106,14 +106,14 @@ export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: b
   // 5. 检查是否有循环依赖
   const hasCycle = detectCycle(nodes, edges);
   if (hasCycle) {
-    errors.push('工作流中存在循环依赖，请检查连接关系');
+    errors.push('编排中存在循环依赖，请检查连接关系');
   }
 
   // 6. 检查从开始节点到结束节点的路径
   if (startNodes.length > 0 && endNodes.length > 0) {
     const hasPath = checkPathExists(startNodes[0].id, endNodes[0].id, edges);
     if (!hasPath) {
-      errors.push('工作流中不存在从开始节点到结束节点的路径');
+      errors.push('编排中不存在从开始节点到结束节点的路径');
     }
   }
 

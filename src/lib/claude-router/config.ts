@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { AnthropicTransformer } from './llms/transformer/anthropic.transformer';
 
 /**
  * CCR 提供商配置接口
@@ -64,62 +65,81 @@ async function loadModelConfigs() {
 }
 
 /**
- * 从数据库加载路由配置
+ * 解析模型字段（支持 JSON 数组或单个字符串）
  */
-async function loadRouterConfigs() {
-  const routerConfigs = await prisma.routerConfig.findMany();
-
-  return routerConfigs;
+function parseModelsField(modelsData: string): string[] {
+  if (!modelsData) return ['default'];
+  try {
+    const parsed = JSON.parse(modelsData);
+    if (Array.isArray(parsed)) {
+      return parsed.length > 0 ? parsed : ['default'];
+    }
+    // 如果是字符串，转为数组
+    return [parsed];
+  } catch {
+    // 如果解析失败，直接作为模型名称
+    return [modelsData];
+  }
 }
 
 /**
  * 将数据库配置转换为 CCR 格式
+ * 所有配置都来自 ModelConfig 表
  */
-function transformToCcrConfig(
-  modelConfigs: any[],
-  routerConfigs: any[]
-): CcrConfig {
+function transformToCcrConfig(modelConfigs: any[]): CcrConfig {
   // 转换提供商配置
   const providers: CcrProviderConfig[] = modelConfigs.map((modelConfig) => {
+    const models = parseModelsField(modelConfig.models);
     return {
       name: modelConfig.name,
       providerType: modelConfig.providerType || 'openai',
       api_base_url: modelConfig.apiBaseUrl,
       api_key: modelConfig.apiKey,
-      models: JSON.parse(modelConfig.models),
-      transformer: modelConfig.transformer
-        ? JSON.parse(modelConfig.transformer)
-        : undefined
+      models,
     };
   });
 
-  // 创建路由配置映射
-  const routerMap = new Map<string, string>();
-  routerConfigs.forEach((routerConfig) => {
-    // 查找对应的模型配置
-    const modelConfig = modelConfigs.find(
-      (m) => m.id === routerConfig.modelId
-    );
-    if (modelConfig) {
-      // 解析模型列表，取第一个作为默认模型
-      const models = JSON.parse(modelConfig.models);
-      const firstModel = models[0];
-      routerMap.set(
-(routerConfig.routeType),
-        `${modelConfig.name},${firstModel}`
-      );
+  // 从 ModelConfig 的 routeType 字段构建路由配置
+  const router: CcrRouterConfig = {
+    default: '',
+    background: undefined,
+    think: undefined,
+    longContext: undefined,
+    webSearch: undefined,
+    longContextThreshold: 60000
+  };
+
+  // 默认路由使用 isDefault=true 的模型，或第一个激活的模型
+  const defaultModel = modelConfigs.find(m => m.isDefault) || modelConfigs[0];
+  if (defaultModel) {
+    const models = parseModelsField(defaultModel.models);
+    const firstModel = models[0] || 'default';
+    router.default = `${defaultModel.name},${firstModel}`;
+  }
+
+  // 根据每个模型的 routeType 字段设置路由
+  modelConfigs.forEach(modelConfig => {
+    if (!modelConfig.routeType) return;
+
+    const models = parseModelsField(modelConfig.models);
+    const firstModel = models[0] || 'default';
+    const routeValue = `${modelConfig.name},${firstModel}`;
+
+    switch (modelConfig.routeType) {
+      case 'think':
+        router.think = routeValue;
+        break;
+      case 'background':
+        router.background = routeValue;
+        break;
+      case 'longContext':
+        router.longContext = routeValue;
+        break;
+      case 'webSearch':
+        router.webSearch = routeValue;
+        break;
     }
   });
-
-  // 构建路由配置
-  const router: CcrRouterConfig = {
-    default: routerMap.get('default') || '',
-    background: routerMap.get('background'),
-    think: routerMap.get('think'),
-    longContext: routerMap.get('longContext'),
-    webSearch: routerMap.get('webSearch'),
-    longContextThreshold: 60000 // 默认阈值
-  };
 
   return {
     providers,
@@ -143,13 +163,10 @@ export async function getCcrConfig(): Promise<CcrConfig> {
   }
 
   // 从数据库加载配置
-  const [modelConfigs, routerConfigs] = await Promise.all([
-    loadModelConfigs(),
-    loadRouterConfigs()
-  ]);
+  const modelConfigs = await loadModelConfigs();
 
   // 转换为 CCR 格式
-  const config = transformToCcrConfig(modelConfigs, routerConfigs);
+  const config = transformToCcrConfig(modelConfigs);
 
   // 更新缓存
   configCache = {

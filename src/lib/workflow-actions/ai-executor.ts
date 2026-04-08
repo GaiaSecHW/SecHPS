@@ -2,7 +2,7 @@
 
 import type { ExecutionContext } from '@/types/workflow';
 import { ActionResult, AiProcessConfig, replaceVariables, getNestedValue, safeJsonParse } from './index';
-import { createAIProvider, AIProviderConfig } from '@/services/ai';
+import { createClaudeAgentService } from '@/services/ai';
 
 /**
  * 执行 AI 处理
@@ -45,37 +45,33 @@ export async function executeAiProcess(
 
     logs.push(`[AI] Prompt length: ${prompt.length} chars`);
 
-    // 创建 AI 提供商
-    const providerType = config.provider || modelConfig.providerType || 'claude';
-    const providerConfig: AIProviderConfig = {
+    // 添加系统提示
+    if (config.systemPrompt) {
+      prompt = `System: ${config.systemPrompt}\n\n---\n\nHuman: ${prompt}`;
+    }
+
+    // 创建 Claude Agent Service
+    const service = createClaudeAgentService({
       apiKey: modelConfig.apiKey,
-      baseUrl: modelConfig.apiBaseUrl,
       model: config.model || modelConfig.defaultModel || 'claude-sonnet-4-20250514',
       maxTokens: config.maxTokens || 4096,
-    };
-
-    const provider = createAIProvider(
-      providerType === 'claude' ? 'claude' : 'ccr-proxy',
-      providerConfig
-    );
-
-    // 构建消息
-    const messages = [];
-    if (config.systemPrompt) {
-      messages.push({ role: 'system', content: config.systemPrompt });
-    }
-    messages.push({ role: 'user', content: prompt });
+      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
+    });
 
     // 调用 AI
     let responseText = '';
-    await provider.stream(messages, {
-      onChunk: (text) => {
-        responseText += text;
-      },
-      onComplete: () => {},
-      onError: (error) => {
-        throw error;
-      },
+    await new Promise<void>((resolve, reject) => {
+      service.sendPrompt(prompt, {
+        onChunk: (text) => {
+          responseText += text;
+        },
+        onComplete: () => {
+          resolve();
+        },
+        onError: (error) => {
+          reject(error);
+        },
+      });
     });
 
     logs.push(`[AI] Response length: ${responseText.length} chars`);
@@ -113,20 +109,6 @@ async function getModelConfig(): Promise<{
   apiBaseUrl: string;
   defaultModel?: string;
 } | null> {
-  // 从环境变量获取
-  const envApiKey = process.env.ANTHROPIC_API_KEY;
-  const envBaseUrl = process.env.ANTHROPIC_BASE_URL;
-  const envModel = process.env.ANTHROPIC_MODEL;
-
-  if (envApiKey) {
-    return {
-      providerType: 'claude',
-      apiKey: envApiKey,
-      apiBaseUrl: envBaseUrl || 'https://api.anthropic.com/v1/messages',
-      defaultModel: envModel || 'claude-sonnet-4-20250514',
-    };
-  }
-
   // 从数据库获取
   try {
     const { prisma } = await import('@/lib/prisma');

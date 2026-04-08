@@ -59,6 +59,7 @@ export async function GET(request: Request) {
           updatedAt: true,
           _count: {
             select: {
+              nodes: true,
               executions: true,
             },
           },
@@ -104,16 +105,27 @@ export async function POST(request: Request) {
     const { name, description } = body;
 
     // 验证必填字段
-    if (!name) {
+    if (!name || !name.trim()) {
       return NextResponse.json({ error: '工作流名称不能为空' }, { status: 400 });
+    }
+
+    const trimmedName = name.trim();
+
+    // 验证名称长度
+    if (trimmedName.length < 2) {
+      return NextResponse.json({ error: '工作流名称至少需要2个字符' }, { status: 400 });
+    }
+
+    if (trimmedName.length > 100) {
+      return NextResponse.json({ error: '工作流名称不能超过100个字符' }, { status: 400 });
     }
 
     // 创建工作流
     const workflow = await prisma.workflow.create({
       data: {
         userId: payload.userId,
-        name,
-        description: description || undefined,
+        name: trimmedName,
+        description: description?.trim() || undefined,
         status: 'draft',
         version: 1,
       },

@@ -13,7 +13,6 @@ import {
   Globe,
   Key,
   List,
-  Settings,
   Save,
   X,
 } from 'lucide-react';
@@ -26,32 +25,11 @@ interface ModelConfig {
   apiBaseUrl: string;
   apiKey: string;
   models: string[];  // 解析后的数组
-  transformer: string | null;
+  routeType: string | null;  // 路由类型：default, think, background, longContext, webSearch
   isActive: boolean;
   isDefault: boolean;
   createdAt: string;
   updatedAt: string;
-}
-
-// RouterConfig 数据结构
-interface RouterConfig {
-  id: string;
-  routeType: string;  // default, background, think, longContext, webSearch
-  modelId: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-// 表单数据类型
-interface ModelFormData {
-  name: string;
-  providerType: 'claude' | 'openai';
-  apiBaseUrl: string;
-  apiKey: string;
-  models: string;
-  transformer: string;
-  isActive: boolean;
-  isDefault: boolean;
 }
 
 // 代理类型标签
@@ -61,18 +39,29 @@ const PROVIDER_TYPE_LABELS: Record<string, string> = {
 };
 
 // 路由类型映射
-const ROUTE_TYPE_LABELS: Record<string, string> = {
-  default: '默认路由',
-  background: '后台任务',
-  think: '思考模型',
-  longContext: '长上下文',
-  webSearch: '网络搜索',
-};
+const ROUTE_TYPE_OPTIONS = [
+  { value: 'default', label: '默认路由' },
+  { value: 'think', label: '思考模型' },
+  { value: 'background', label: '后台任务' },
+  { value: 'longContext', label: '长上下文' },
+  { value: 'webSearch', label: '网络搜索' },
+];
+
+// 表单数据类型
+interface ModelFormData {
+  name: string;
+  providerType: 'claude' | 'openai';
+  apiBaseUrl: string;
+  apiKey: string;
+  models: string;
+  routeType: string;
+  isActive: boolean;
+  isDefault: boolean;
+}
 
 export default function ModelsPage() {
   const [user, setUser] = useState<any>(null);
   const [models, setModels] = useState<ModelConfig[]>([]);
-  const [routers, setRouters] = useState<RouterConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,14 +79,11 @@ export default function ModelsPage() {
     providerType: 'openai',
     apiBaseUrl: '',
     apiKey: '',
-    models: '[]',
-    transformer: '',
+    models: '',
+    routeType: '',
     isActive: true,
     isDefault: false,
   });
-
-  // 路由配置编辑状态
-  const [editingRouters, setEditingRouters] = useState<RouterConfig[]>([]);
 
   // 过滤状态
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
@@ -108,7 +94,6 @@ export default function ModelsPage() {
       setUser(JSON.parse(userData));
     }
     fetchModels();
-    fetchRouters();
   }, []);
 
   const fetchModels = async () => {
@@ -135,27 +120,6 @@ export default function ModelsPage() {
     }
   };
 
-  const fetchRouters = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/admin/routers', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('获取路由配置失败');
-      }
-
-      const data = await response.json();
-      setRouters(data.routers || []);
-      setEditingRouters(data.routers || []);
-    } catch (err) {
-      console.error('Failed to fetch routers:', err);
-    }
-  };
-
   const handleOpenAddModal = () => {
     setEditingModel(null);
     setFormData({
@@ -163,8 +127,8 @@ export default function ModelsPage() {
       providerType: 'openai',
       apiBaseUrl: '',
       apiKey: '',
-      models: '[]',
-      transformer: '',
+      models: '',
+      routeType: '',
       isActive: true,
       isDefault: false,
     });
@@ -178,8 +142,9 @@ export default function ModelsPage() {
       providerType: model.providerType,
       apiBaseUrl: model.apiBaseUrl,
       apiKey: model.apiKey,
-      models: Array.isArray(model.models) ? JSON.stringify(model.models) : model.models,
-      transformer: model.transformer ? (typeof model.transformer === 'string' ? model.transformer : JSON.stringify(model.transformer)) : '',
+      // models 是数组，取第一个元素作为字符串
+      models: Array.isArray(model.models) ? (model.models[0] || '') : model.models,
+      routeType: model.routeType || '',
       isActive: model.isActive,
       isDefault: model.isDefault,
     });
@@ -194,8 +159,8 @@ export default function ModelsPage() {
       providerType: 'openai',
       apiBaseUrl: '',
       apiKey: '',
-      models: '[]',
-      transformer: '',
+      models: '',
+      routeType: '',
       isActive: true,
       isDefault: false,
     });
@@ -203,20 +168,8 @@ export default function ModelsPage() {
 
   const handleSaveModel = async () => {
     // 表单验证
-    if (!formData.name || !formData.apiBaseUrl || !formData.apiKey) {
+    if (!formData.name || !formData.apiBaseUrl || !formData.apiKey || !formData.models) {
       setError('请填写必填字段');
-      setTimeout(() => setError(null), 3000);
-      return;
-    }
-
-    // 验证 JSON 格式
-    try {
-      JSON.parse(formData.models);
-      if (formData.transformer) {
-        JSON.parse(formData.transformer);
-      }
-    } catch (e) {
-      setError('模型列表或转换器配置格式错误，必须是有效的 JSON');
       setTimeout(() => setError(null), 3000);
       return;
     }
@@ -231,14 +184,14 @@ export default function ModelsPage() {
 
       const method = editingModel ? 'PUT' : 'POST';
 
-      // 将 JSON 字符串解析为数组/对象后再发送
+      // 将模型名称作为单元素数组发送
       const body = {
         name: formData.name,
         providerType: formData.providerType,
         apiBaseUrl: formData.apiBaseUrl,
         apiKey: formData.apiKey,
-        models: JSON.parse(formData.models),
-        transformer: formData.transformer ? JSON.parse(formData.transformer) : undefined,
+        models: [formData.models],  // 单个模型名称转为数组
+        routeType: formData.providerType === 'openai' ? formData.routeType || undefined : undefined,
         isActive: formData.isActive,
         isDefault: formData.isDefault,
       };
@@ -298,41 +251,6 @@ export default function ModelsPage() {
       fetchModels();
     } catch (err) {
       setError('删除模型失败');
-      setTimeout(() => setError(null), 3000);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSaveRouters = async () => {
-    try {
-      setSaving(true);
-      const token = localStorage.getItem('token');
-
-      // 将数组转换为后端期望的对象格式 { routes: { default: "modelId", ... } }
-      const routes = editingRouters.reduce((acc, router) => {
-        acc[router.routeType] = router.modelId;
-        return acc;
-      }, {} as Record<string, string>);
-
-      const response = await fetch('/api/admin/routers', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ routes }),
-      });
-
-      if (!response.ok) {
-        throw new Error('保存路由配置失败');
-      }
-
-      setSuccess('路由配置保存成功');
-      setTimeout(() => setSuccess(null), 3000);
-      fetchRouters();
-    } catch (err) {
-      setError('保存路由配置失败');
       setTimeout(() => setError(null), 3000);
     } finally {
       setSaving(false);
@@ -557,63 +475,6 @@ export default function ModelsPage() {
         </div>
       </div>
 
-      {/* 路由配置 */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            路由配置
-          </h2>
-          <button
-            onClick={handleSaveRouters}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {saving ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                保存中...
-              </>
-            ) : (
-              <>
-                <Save size={16} />
-                保存配置
-              </>
-            )}
-          </button>
-        </div>
-
-        <div className="space-y-4">
-          {editingRouters.map((router) => (
-            <div key={router.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-md">
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {ROUTE_TYPE_LABELS[router.routeType] || router.routeType}
-                </label>
-                <select
-                  value={router.modelId}
-                  onChange={(e) => {
-                    setEditingRouters((prev) =>
-                      prev.map((r) =>
-                        r.id === router.id ? { ...r, modelId: e.target.value } : r
-                      )
-                    );
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">-- 请选择模型 --</option>
-                  {models.map((model) => (
-                    <option key={model.id} value={model.id}>
-                      {model.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* 添加/编辑模型模态框 */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -655,8 +516,8 @@ export default function ModelsPage() {
                   onChange={(e) => {
                     const providerType = e.target.value as 'claude' | 'openai';
                     // 根据代理类型设置默认 API 地址
-                    const defaultBaseUrl = providerType === 'claude' 
-                      ? 'https://api.anthropic.com/v1/messages' 
+                    const defaultBaseUrl = providerType === 'claude'
+                      ? 'https://api.anthropic.com/v1/messages'
                       : formData.apiBaseUrl;
                     setFormData({ ...formData, providerType, apiBaseUrl: formData.apiBaseUrl || defaultBaseUrl });
                   }}
@@ -666,11 +527,35 @@ export default function ModelsPage() {
                   <option value="claude">Claude API（原生）</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
-                  {formData.providerType === 'claude' 
+                  {formData.providerType === 'claude'
                     ? '直接调用 Anthropic Claude API，无需格式转换'
                     : '调用内部大模型，需要 Anthropic ↔ OpenAI 格式转换'}
                 </p>
               </div>
+
+              {/* 路由类型 - 仅 OpenAI 类型显示 */}
+              {formData.providerType === 'openai' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    路由类型
+                  </label>
+                  <select
+                    value={formData.routeType}
+                    onChange={(e) => setFormData({ ...formData, routeType: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">-- 不指定（使用默认路由）--</option>
+                    {ROUTE_TYPE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    选择此模型用于哪种路由场景。不指定则使用默认路由。
+                  </p>
+                </div>
+              )}
 
               {/* API 地址 */}
               <div>
@@ -702,37 +587,20 @@ export default function ModelsPage() {
                 />
               </div>
 
-              {/* 模型列表 */}
+              {/* 模型名称 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  模型列表 (JSON 数组)
+                  模型名称 <span className="text-red-500">*</span>
                 </label>
-                <textarea
+                <input
+                  type="text"
                   value={formData.models}
                   onChange={(e) => setFormData({ ...formData, models: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  rows={4}
-                  placeholder='["gpt-4", "gpt-3.5-turbo"]'
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="例如：gpt-4、claude-3-opus-20240229"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  输入 JSON 数组格式的模型名称列表
-                </p>
-              </div>
-
-              {/* 转换器配置 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  转换器配置 (JSON 对象，可选)
-                </label>
-                <textarea
-                  value={formData.transformer}
-                  onChange={(e) => setFormData({ ...formData, transformer: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  rows={4}
-                  placeholder='{"type": "openai", "stream": true}'
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  可选：输入 JSON 对象格式的转换器配置
+                  输入单个模型名称
                 </p>
               </div>
 

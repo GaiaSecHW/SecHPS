@@ -88,6 +88,7 @@ export class ProviderService {
           baseUrl: providerConfig.api_base_url,
           apiKey: providerConfig.api_key,
           models: providerConfig.models || [],
+          providerType: (providerConfig as any).providerType || 'openai',
           transformer: providerConfig.transformer ? transformer : undefined,
         });
 

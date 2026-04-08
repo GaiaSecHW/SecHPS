@@ -96,6 +96,7 @@ export async function GET(request: Request) {
       ...skill,
       tools: typeof skill.tools === 'string' ? JSON.parse(skill.tools) : skill.tools,
       parameters: typeof skill.parameters === 'string' ? JSON.parse(skill.parameters) : skill.parameters,
+      paths: typeof skill.paths === 'string' ? JSON.parse(skill.paths) : skill.paths,
     }));
 
     return NextResponse.json(createPaginatedResponse(parsedSkills, total, pageNum, pageLimit));

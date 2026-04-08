@@ -21,6 +21,8 @@ import {
   Code,
   Shield,
   Search,
+  Terminal,
+  Puzzle,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -37,12 +39,27 @@ export default function DashboardLayout({
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
 
+    console.log('Dashboard layout - token:', token ? 'exists' : 'not found');
+    console.log('Dashboard layout - userData:', userData ? 'exists' : 'not found');
+
     if (!token || !userData) {
+      console.log('Redirecting to login - missing token or userData');
       router.push('/login');
       return;
     }
 
-    setUser(JSON.parse(userData));
+    try {
+      const parsedUser = JSON.parse(userData);
+      console.log('Dashboard layout - parsed user:', parsedUser);
+      setUser(parsedUser);
+    } catch (e) {
+      // userData 损坏，清除并跳转登录
+      console.error('Failed to parse user data:', e);
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      router.push('/login');
+      return;
+    }
     setLoading(false);
   }, [router]);
 
@@ -76,20 +93,20 @@ export default function DashboardLayout({
             仪表盘
           </NavLink>
           <NavLink href="/dashboard/sessions" icon={<MessageSquare size={20} />}>
-            项目管理
+            我的项目
+          </NavLink>
+          <NavLink href="/dashboard/claude" icon={<Clock size={20} />}>
+            Claude 会话
           </NavLink>
 
-          {/* 工作流 */}
+          {/* Agent编排 */}
           <div className="pt-4 pb-2">
             <p className="text-xs text-gray-500 uppercase tracking-wider">
-              工作流
+              Agent编排
             </p>
           </div>
           <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />}>
-            工作流管理
-          </NavLink>
-          <NavLink href="/dashboard/executions" icon={<Clock size={20} />}>
-            执行历史
+            Agent编排管理
           </NavLink>
 
           {/* 安全测试 */}
@@ -101,11 +118,8 @@ export default function DashboardLayout({
           <NavLink href="/dashboard/skills" icon={<Award size={20} />}>
             Skills 库
           </NavLink>
-          <NavLink href="/dashboard/scans" icon={<Zap size={20} />}>
-            自动化扫描
-          </NavLink>
-          <NavLink href="/dashboard/code" icon={<Code size={20} />}>
-            代码理解
+          <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
+            插件管理
           </NavLink>
 
           {/* 个人中心 */}
@@ -140,9 +154,6 @@ export default function DashboardLayout({
               </NavLink>
               <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={20} />}>
                 漏洞管理
-              </NavLink>
-              <NavLink href="/dashboard/admin/patterns" icon={<Shield size={20} />}>
-                漏洞模式库
               </NavLink>
               <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={20} />}>
                 Skills 进化

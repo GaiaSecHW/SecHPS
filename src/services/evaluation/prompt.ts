@@ -1,11 +1,13 @@
 // src/services/evaluation/prompt.ts
 
 import { AIMessage } from '@/services/ai';
+import type { LoadedSkill, SkillCategory, Severity } from '@/services/skills';
 
 export interface PromptContext {
   projectName: string;
   projectDescription?: string;
   environmentUrl?: string;
+  projectPath?: string;  // 新增：项目路径
   files: Array<{
     name: string;
     type: string;
@@ -13,6 +15,12 @@ export interface PromptContext {
   }>;
   taskDescription?: string;
   conversationHistory?: AIMessage[];
+  skills?: LoadedSkill[];  // 新增：激活的 Skills
+  skillsContext?: {        // 新增：Skills 上下文变量
+    projectPath?: string;
+    targetFiles?: string[];
+    customVariables?: Record<string, string>;
+  };
 }
 
 /**
@@ -22,8 +30,8 @@ export class PromptBuilder {
   /**
    * 构建系统提示词
    */
-  buildSystemPrompt(): string {
-    return `你是一个专业的代码评估专家。你的任务是对项目进行全面评估，包括：
+  buildSystemPrompt(context?: PromptContext): string {
+    let systemPrompt = `你是一个专业的代码评估专家。你的任务是对项目进行全面评估，包括：
 
 1. 分析项目结构和代码质量
 2. 识别潜在的安全漏洞
@@ -32,6 +40,24 @@ export class PromptBuilder {
 5. 给项目整体评分（1-10 分）
 
 请使用专业的语气，提供具体、可操作的建议。如果用户有后续问题，请基于之前的评估内容进行回答。`;
+
+    // 如果有项目路径，提示 Claude 会自动发现 Skills
+    if (context?.projectPath) {
+      systemPrompt += '\n\n';
+      systemPrompt += `项目路径: ${context.projectPath}\n`;
+      systemPrompt += '\n';
+      systemPrompt += `注意：该项目目录下可能包含自定义 Skills（.claude/skills/），`;
+      systemPrompt += `请根据评估需求自动加载和使用这些 Skills。`;
+      systemPrompt += `你可以在评估过程中根据需要调用特定的 Skill，例如：`;
+      systemPrompt += `- /sql-injection - 检测 SQL 注入漏洞`;
+      systemPrompt += `- /xss-detection - 检测 XSS 漏洞`;
+      systemPrompt += `- /auth-bypass - 检测认证绕过漏洞`;
+      systemPrompt += `- /hardcoded-secrets - 检测硬编码密钥`;
+      systemPrompt += `\n`;
+      systemPrompt += `Skills 会根据其 description 字段自动匹配你的评估需求。`;
+    }
+
+    return systemPrompt;
   }
 
   /**
@@ -80,7 +106,7 @@ export class PromptBuilder {
    */
   buildMessages(context: PromptContext): AIMessage[] {
     const messages: AIMessage[] = [
-      { role: 'system', content: this.buildSystemPrompt() },
+      { role: 'system', content: this.buildSystemPrompt(context) },
     ];
 
     // 添加对话历史
@@ -107,4 +133,37 @@ export class PromptBuilder {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   }
+}
+
+/**
+ * 获取分类标签
+ */
+function getCategoryLabel(category: SkillCategory): string {
+  const labels: Record<SkillCategory, string> = {
+    'code-audit': '代码审计',
+    'auth': '认证鉴权',
+    'sensitive': '敏感信息',
+    'api': 'API 安全',
+    'config': '配置安全',
+    'crypto': '加密解密',
+    'web': 'Web 安全',
+    'business': '业务逻辑',
+    'client': '客户端安全',
+    'cloud': '云安全',
+  };
+  return labels[category] || category;
+}
+
+/**
+ * 获取严重程度标签
+ */
+function getSeverityLabel(severity: Severity): string {
+  const labels: Record<Severity, string> = {
+    critical: '严重',
+    high: '高危',
+    medium: '中危',
+    low: '低危',
+    info: '信息',
+  };
+  return labels[severity] || severity;
 }

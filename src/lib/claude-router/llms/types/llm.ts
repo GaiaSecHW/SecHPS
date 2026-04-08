@@ -202,6 +202,7 @@ export interface LLMProvider {
   baseUrl: string;
   apiKey: string;
   models: string[];
+  providerType?: 'claude' | 'openai';  // 提供商类型，用于确定请求格式
   transformer?: {
     [key: string]: {
       use?: Transformer[];
@@ -230,6 +231,7 @@ export interface ConfigProvider {
   api_base_url: string;
   api_key: string;
   models: string[];
+  providerType?: 'claude' | 'openai';  // 提供商类型
   transformer: {
     use?: string[] | Array<any>[];
   } & {

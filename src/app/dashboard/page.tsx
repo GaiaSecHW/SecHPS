@@ -67,25 +67,34 @@ export default function DashboardPage() {
 
   const connectEventStream = () => {
     const token = localStorage.getItem('token');
-    
-    eventSourceRef.current = new EventSource(`/api/events?token=${encodeURIComponent(token || '')}`);
 
-    eventSourceRef.current.onopen = () => {
-      setIsConnected(true);
-    };
+    try {
+      eventSourceRef.current = new EventSource(`/api/events?token=${encodeURIComponent(token || '')}`);
 
-    eventSourceRef.current.onmessage = (event) => {
-      try {
-        const eventData = JSON.parse(event.data);
-        handleEvent(eventData);
-      } catch (e) {
-        // 忽略解析错误
-      }
-    };
+      eventSourceRef.current.onopen = () => {
+        setIsConnected(true);
+      };
 
-    eventSourceRef.current.onerror = () => {
+      eventSourceRef.current.onmessage = (event) => {
+        try {
+          const eventData = JSON.parse(event.data);
+          handleEvent(eventData);
+        } catch (e) {
+          // 忽略解析错误
+        }
+      };
+
+      eventSourceRef.current.onerror = () => {
+        setIsConnected(false);
+        if (eventSourceRef.current) {
+          eventSourceRef.current.close();
+          eventSourceRef.current = null;
+        }
+      };
+    } catch (error) {
+      console.error('Failed to connect to event stream:', error);
       setIsConnected(false);
-    };
+    }
   };
 
   const handleEvent = (eventData: any) => {

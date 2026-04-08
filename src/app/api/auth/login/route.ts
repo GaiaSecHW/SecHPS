@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyPassword, generateToken, getUserWithPermissions } from '@/lib/auth';
 import { ROLES } from '@/types/permissions';
 import { auditLogAuth } from '@/lib/audit/logger';
+import { invalidateUserCaches } from '@/lib/cache';
 
 export async function POST(request: Request) {
   try {
@@ -48,7 +49,19 @@ export async function POST(request: Request) {
     }
 
     // 获取用户权限
-    const { roles, permissions } = await getUserWithPermissions(user.id);
+    const userWithPerms = await getUserWithPermissions(user.id);
+    
+    if (!userWithPerms) {
+      return NextResponse.json(
+        { error: '获取用户权限失败' },
+        { status: 500 }
+      );
+    }
+    
+    const { roles, permissions } = userWithPerms;
+
+    // 清除用户缓存，确保获取最新权限
+    invalidateUserCaches(user.id);
 
     // 生成 JWT Token
     const token = generateToken(user, roles, permissions);

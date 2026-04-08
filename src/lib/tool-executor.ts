@@ -163,14 +163,26 @@ export class ToolExecutor {
   /**
    * 执行工具
    */
-  async execute(toolId: string, params: Record<string, unknown>): Promise<ToolResult> {
+  async execute(toolIdOrName: string, params: Record<string, unknown>): Promise<ToolResult> {
     const startTime = Date.now();
 
-    // 获取工具定义
-    const tool = await prisma.tool.findUnique({ where: { id: toolId } });
+    // 尝试按名称查找工具
+    let tool = await prisma.tool.findFirst({
+      where: {
+        name: toolIdOrName,
+        isActive: true,
+      },
+    });
+
+    // 如果找不到，按 ID 查找
+    if (!tool) {
+      tool = await prisma.tool.findUnique({
+        where: { id: toolIdOrName },
+      });
+    }
 
     if (!tool) {
-      return { success: false, output: null, error: '工具不存在', duration: Date.now() - startTime };
+      return { success: false, output: null, error: `工具不存在: ${toolIdOrName}`, duration: Date.now() - startTime };
     }
 
     if (!tool.isActive) {

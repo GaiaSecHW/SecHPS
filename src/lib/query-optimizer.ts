@@ -62,7 +62,7 @@ export const workflowSelectWithUser = {
 
 /**
  * Common skill select for list views
- * 包含 Claude 官方新增字段：systemPrompt, userPrompt, tools, parameters, version, isBuiltin, isLatest, cwe, parentId
+ * 包含 Claude 官方新增字段
  */
 export const skillSelectMinimal = {
   id: true,
@@ -86,6 +86,16 @@ export const skillSelectMinimal = {
   execCount: true,
   createdAt: true,
   updatedAt: true,
+  // 官方标准字段
+  disableModelInvocation: true,
+  userInvocable: true,
+  context: true,
+  agent: true,
+  argumentHint: true,
+  model: true,
+  effort: true,
+  paths: true,
+  shell: true,
 };
 
 /**

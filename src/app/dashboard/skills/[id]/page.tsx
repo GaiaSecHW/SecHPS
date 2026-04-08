@@ -16,6 +16,8 @@ import {
   Code,
   History,
   Copy,
+  Save,
+  X,
 } from 'lucide-react';
 
 interface Skill {
@@ -101,8 +103,51 @@ export default function SkillDetailPage() {
   const [skill, setSkill] = useState<Skill | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'prompt' | 'executions' | 'evolutions'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'prompt' | 'test' | 'executions' | 'evolutions'>('overview');
   const [user, setUser] = useState<{ roles?: string[] } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState<{
+    displayName: string;
+    description: string;
+    category: string;
+    cwe: string;
+    severity: string;
+    systemPrompt: string;
+    userPrompt: string;
+    tools: string[];
+    isActive: boolean;
+  }>({
+    displayName: '',
+    description: '',
+    category: '',
+    cwe: '',
+    severity: '',
+    systemPrompt: '',
+    userPrompt: '',
+    tools: [],
+    isActive: true,
+  });
+  // 测试相关状态
+  const [testMode, setTestMode] = useState<'project' | 'code'>('code');
+  const [testProjectId, setTestProjectId] = useState('');
+  const [testCode, setTestCode] = useState('');
+  const [testLoading, setTestLoading] = useState(false);
+  const [testResult, setTestResult] = useState<{
+    status: string;
+    summary: string;
+    vulnerabilities: Array<{
+      title: string;
+      description: string;
+      severity: string;
+      filePath?: string;
+      lineStart?: number;
+    }>;
+    toolCalls: Array<{ tool: string; parameters: Record<string, unknown>; result: unknown }>;
+    duration: number;
+    error?: string;
+  } | null>(null);
+  const [projects, setProjects] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -116,6 +161,25 @@ export default function SkillDetailPage() {
       fetchSkill();
     }
   }, [skillId]);
+
+  useEffect(() => {
+    // 获取项目列表用于测试
+    const fetchProjects = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/projects', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setProjects(data.projects || []);
+        }
+      } catch (err) {
+        console.error('获取项目列表失败:', err);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   const fetchSkill = async () => {
     try {
@@ -189,9 +253,108 @@ export default function SkillDetailPage() {
     }
   };
 
+  const startEditing = () => {
+    if (!skill) return;
+    setEditForm({
+      displayName: skill.displayName,
+      description: skill.description,
+      category: skill.category,
+      cwe: skill.cwe || '',
+      severity: skill.severity,
+      systemPrompt: skill.systemPrompt,
+      userPrompt: skill.userPrompt,
+      tools: skill.tools,
+      isActive: skill.isActive,
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!skill) return;
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/${skillId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '保存失败');
+      }
+
+      setIsEditing(false);
+      fetchSkill();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '保存失败');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     alert('已复制到剪贴板');
+  };
+
+  const handleTestSkill = async () => {
+    if (!skill) return;
+    if (testMode === 'project' && !testProjectId) {
+      alert('请选择测试项目');
+      return;
+    }
+    if (testMode === 'code' && !testCode.trim()) {
+      alert('请输入测试代码');
+      return;
+    }
+
+    setTestLoading(true);
+    setTestResult(null);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/${skillId}/test`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          mode: testMode,
+          projectId: testMode === 'project' ? testProjectId : undefined,
+          code: testMode === 'code' ? testCode : undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '测试失败');
+      }
+
+      const data = await response.json();
+      setTestResult(data.result);
+    } catch (err) {
+      setTestResult({
+        status: 'failed',
+        summary: '',
+        vulnerabilities: [],
+        toolCalls: [],
+        duration: 0,
+        error: err instanceof Error ? err.message : '测试失败',
+      });
+    } finally {
+      setTestLoading(false);
+    }
   };
 
   const isAdmin = user?.roles?.includes('admin');
@@ -254,34 +417,64 @@ export default function SkillDetailPage() {
         </div>
         {isAdmin && (
           <div className="flex items-center space-x-2">
-            <button
-              onClick={handleToggleActive}
-              className={`inline-flex items-center px-4 py-2 rounded-lg ${
-                skill.isActive
-                  ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                  : 'bg-green-100 text-green-800 hover:bg-green-200'
-              }`}
-            >
-              {skill.isActive ? (
-                <>
-                  <XCircle size={16} className="mr-2" />
-                  禁用
-                </>
-              ) : (
-                <>
-                  <CheckCircle size={16} className="mr-2" />
-                  启用
-                </>
-              )}
-            </button>
-            {!skill.isBuiltin && (
-              <button
-                onClick={handleDelete}
-                className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
-              >
-                <Trash2 size={16} className="mr-2" />
-                删除
-              </button>
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleSaveEdit}
+                  disabled={saving}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save size={16} className="mr-2" />
+                  {saving ? '保存中...' : '保存'}
+                </button>
+                <button
+                  onClick={cancelEditing}
+                  disabled={saving}
+                  className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-800 rounded-lg hover:bg-gray-200"
+                >
+                  <X size={16} className="mr-2" />
+                  取消
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={startEditing}
+                  className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200"
+                >
+                  <Edit size={16} className="mr-2" />
+                  编辑
+                </button>
+                <button
+                  onClick={handleToggleActive}
+                  className={`inline-flex items-center px-4 py-2 rounded-lg ${
+                    skill.isActive
+                      ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                      : 'bg-green-100 text-green-800 hover:bg-green-200'
+                  }`}
+                >
+                  {skill.isActive ? (
+                    <>
+                      <XCircle size={16} className="mr-2" />
+                      禁用
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle size={16} className="mr-2" />
+                      启用
+                    </>
+                  )}
+                </button>
+                {!skill.isBuiltin && (
+                  <button
+                    onClick={handleDelete}
+                    className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200"
+                  >
+                    <Trash2 size={16} className="mr-2" />
+                    删除
+                  </button>
+                )}
+              </>
             )}
           </div>
         )}
@@ -345,6 +538,7 @@ export default function SkillDetailPage() {
           {[
             { id: 'overview', label: '概览', icon: Award },
             { id: 'prompt', label: 'Prompt', icon: Code },
+            { id: 'test', label: '测试', icon: Play },
             { id: 'executions', label: '执行历史', icon: History },
             { id: 'evolutions', label: '进化记录', icon: TrendingUp },
           ].map((tab) => (
@@ -368,71 +562,341 @@ export default function SkillDetailPage() {
       <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">描述</h3>
-              <p className="text-gray-600">{skill.description}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">分类</h3>
-                <p className="text-gray-600">{categoryLabels[skill.category] || skill.category}</p>
-              </div>
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">CWE</h3>
-                <p className="text-gray-600">{skill.cwe || '无'}</p>
-              </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">使用工具</h3>
-              <div className="flex flex-wrap gap-2">
-                {skill.tools.map((tool) => (
-                  <span key={tool} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                    {tool}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">参数定义</h3>
-              <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
-                {JSON.stringify(skill.parameters, null, 2)}
-              </pre>
-            </div>
+            {isEditing ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">显示名称</label>
+                  <input
+                    type="text"
+                    value={editForm.displayName}
+                    onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {Object.entries(categoryLabels).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">严重程度</label>
+                    <select
+                      value={editForm.severity}
+                      onChange={(e) => setEditForm({ ...editForm, severity: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      {Object.entries(severityLabels).map(([value, label]) => (
+                        <option key={value} value={value}>{label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">CWE</label>
+                  <input
+                    type="text"
+                    value={editForm.cwe}
+                    onChange={(e) => setEditForm({ ...editForm, cwe: e.target.value })}
+                    placeholder="例如: CWE-79"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">使用工具（逗号分隔）</label>
+                  <input
+                    type="text"
+                    value={editForm.tools.join(', ')}
+                    onChange={(e) => setEditForm({ ...editForm, tools: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">描述</h3>
+                  <p className="text-gray-600">{skill.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">分类</h3>
+                    <p className="text-gray-600">{categoryLabels[skill.category] || skill.category}</p>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">CWE</h3>
+                    <p className="text-gray-600">{skill.cwe || '无'}</p>
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">使用工具</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {skill.tools.map((tool) => (
+                      <span key={tool} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">参数定义</h3>
+                  <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
+                    {JSON.stringify(skill.parameters, null, 2)}
+                  </pre>
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {activeTab === 'prompt' && (
           <div className="space-y-6">
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium text-gray-900">系统提示词</h3>
-                <button
-                  onClick={() => copyToClipboard(skill.systemPrompt)}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
-                >
-                  <Copy size={14} className="mr-1" />
-                  复制
-                </button>
-              </div>
-              <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap">
-                {skill.systemPrompt}
-              </pre>
+            {isEditing ? (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">系统提示词</label>
+                  <textarea
+                    value={editForm.systemPrompt}
+                    onChange={(e) => setEditForm({ ...editForm, systemPrompt: e.target.value })}
+                    rows={10}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">用户提示词模板</label>
+                  <textarea
+                    value={editForm.userPrompt}
+                    onChange={(e) => setEditForm({ ...editForm, userPrompt: e.target.value })}
+                    rows={10}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium text-gray-900">系统提示词</h3>
+                    <button
+                      onClick={() => copyToClipboard(skill.systemPrompt)}
+                      className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      <Copy size={14} className="mr-1" />
+                      复制
+                    </button>
+                  </div>
+                  <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap">
+                    {skill.systemPrompt}
+                  </pre>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium text-gray-900">用户提示词模板</h3>
+                    <button
+                      onClick={() => copyToClipboard(skill.userPrompt)}
+                      className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      <Copy size={14} className="mr-1" />
+                      复制
+                    </button>
+                  </div>
+                  <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap">
+                    {skill.userPrompt}
+                  </pre>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'test' && (
+          <div className="space-y-6">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                测试功能可以帮助您验证Skill的提示词是否正确，以及工具调用是否符合预期。测试不会保存结果到数据库。
+              </p>
             </div>
+
+            {/* 测试模式选择 */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium text-gray-900">用户提示词模板</h3>
-                <button
-                  onClick={() => copyToClipboard(skill.userPrompt)}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
-                >
-                  <Copy size={14} className="mr-1" />
-                  复制
-                </button>
+              <label className="block text-sm font-medium text-gray-700 mb-2">测试模式</label>
+              <div className="flex space-x-4">
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    value="code"
+                    checked={testMode === 'code'}
+                    onChange={() => setTestMode('code')}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">代码片段</span>
+                </label>
+                <label className="flex items-center">
+                  <input
+                    type="radio"
+                    value="project"
+                    checked={testMode === 'project'}
+                    onChange={() => setTestMode('project')}
+                    className="mr-2"
+                  />
+                  <span className="text-sm">项目文件</span>
+                </label>
               </div>
-              <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap">
-                {skill.userPrompt}
-              </pre>
             </div>
+
+            {/* 测试输入 */}
+            {testMode === 'code' ? (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">测试代码</label>
+                <textarea
+                  value={testCode}
+                  onChange={(e) => setTestCode(e.target.value)}
+                  rows={10}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                  placeholder="粘贴要测试的代码片段..."
+                />
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">选择项目</label>
+                <select
+                  value={testProjectId}
+                  onChange={(e) => setTestProjectId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">请选择项目</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {projects.length === 0 && (
+                  <p className="mt-1 text-sm text-gray-500">暂无项目，请先在「我的项目」中创建项目</p>
+                )}
+              </div>
+            )}
+
+            {/* 执行按钮 */}
+            <div className="flex justify-end">
+              <button
+                onClick={handleTestSkill}
+                disabled={testLoading || !skill?.isActive}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {testLoading ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    测试中...
+                  </>
+                ) : (
+                  <>
+                    <Play size={16} className="mr-2" />
+                    执行测试
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* 测试结果 */}
+            {testResult && (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className={`px-4 py-3 ${
+                  testResult.status === 'completed' ? 'bg-green-50' : 'bg-red-50'
+                }`}>
+                  <div className="flex items-center justify-between">
+                    <span className={`font-medium ${
+                      testResult.status === 'completed' ? 'text-green-800' : 'text-red-800'
+                    }`}>
+                      {testResult.status === 'completed' ? '测试完成' : '测试失败'}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      耗时: {testResult.duration}ms
+                    </span>
+                  </div>
+                </div>
+
+                {testResult.error && (
+                  <div className="px-4 py-3 bg-red-50 border-t border-red-200">
+                    <p className="text-sm text-red-800">{testResult.error}</p>
+                  </div>
+                )}
+
+                {testResult.summary && (
+                  <div className="px-4 py-3 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">执行摘要</h4>
+                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{testResult.summary}</p>
+                  </div>
+                )}
+
+                {testResult.toolCalls && testResult.toolCalls.length > 0 && (
+                  <div className="px-4 py-3 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      工具调用 ({testResult.toolCalls.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {testResult.toolCalls.map((call, index) => (
+                        <div key={index} className="bg-gray-50 rounded p-2">
+                          <div className="flex items-center space-x-2">
+                            <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                              {call.tool}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {JSON.stringify(call.parameters).slice(0, 100)}...
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {testResult.vulnerabilities && testResult.vulnerabilities.length > 0 && (
+                  <div className="px-4 py-3 border-t border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      发现漏洞 ({testResult.vulnerabilities.length})
+                    </h4>
+                    <div className="space-y-2">
+                      {testResult.vulnerabilities.map((vuln, index) => (
+                        <div key={index} className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-900">{vuln.title}</span>
+                            <span className={`px-2 py-0.5 text-xs rounded ${
+                              vuln.severity === 'critical' ? 'bg-red-100 text-red-800' :
+                              vuln.severity === 'high' ? 'bg-orange-100 text-orange-800' :
+                              vuln.severity === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-blue-100 text-blue-800'
+                            }`}>
+                              {vuln.severity}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mt-1">{vuln.description}</p>
+                          {vuln.filePath && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              {vuln.filePath}{vuln.lineStart ? `:${vuln.lineStart}` : ''}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

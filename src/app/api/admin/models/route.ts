@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       apiBaseUrl: model.apiBaseUrl,
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
-      transformer: model.transformer ? JSON.parse(model.transformer) : null,
+      routeType: model.routeType,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, transformer, isActive, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isDefault } = body;
 
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
@@ -90,6 +90,15 @@ export async function POST(request: Request) {
     if (providerType && !validProviderTypes.includes(providerType)) {
       return NextResponse.json(
         { error: '无效的代理类型，必须是 claude 或 openai' },
+        { status: 400 }
+      );
+    }
+
+    // 验证 routeType（仅 OpenAI 类型需要）
+    const validRouteTypes = ['default', 'think', 'background', 'longContext', 'webSearch'];
+    if (providerType === 'openai' && routeType && !validRouteTypes.includes(routeType)) {
+      return NextResponse.json(
+        { error: '无效的路由类型' },
         { status: 400 }
       );
     }
@@ -118,7 +127,7 @@ export async function POST(request: Request) {
         apiBaseUrl,
         apiKey,
         models: JSON.stringify(models),
-        transformer: transformer ? JSON.stringify(transformer) : null,
+        routeType: providerType === 'openai' ? routeType || 'default' : null,
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isDefault || false,
       },
@@ -132,7 +141,7 @@ export async function POST(request: Request) {
       apiBaseUrl: model.apiBaseUrl,
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
-      transformer: model.transformer ? JSON.parse(model.transformer) : null,
+      routeType: model.routeType,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,

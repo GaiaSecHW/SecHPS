@@ -30,6 +30,7 @@ interface Vulnerability {
   codeSnippet: string | null;
   aiAnalysis: string | null;
   fixSuggestion: string | null;
+  skill: string | null;
   createdAt: string;
   project?: {
     id: string;
@@ -113,7 +114,8 @@ export default function VulnerabilitiesPage() {
       }
 
       const data = await response.json();
-      setVulnerabilities(data.vulnerabilities || []);
+      // API 返回格式: { data: [...], pagination: {...} }
+      setVulnerabilities(data.data || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
@@ -367,53 +369,89 @@ export default function VulnerabilitiesPage() {
               </div>
 
               <div className="mt-4 space-y-4">
+                {/* 基本信息 */}
+                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs text-gray-500">漏洞类型</span>
+                      <p className="text-sm font-medium text-gray-900">{selectedVuln.type}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">CWE 编号</span>
+                      <p className="text-sm font-medium text-gray-900">{selectedVuln.cwe || '无'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">发现工具</span>
+                      <p className="text-sm font-medium text-gray-900">{selectedVuln.skill || '未知'}</p>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">发现时间</span>
+                      <p className="text-sm font-medium text-gray-900">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 描述 */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">描述</h4>
-                  <p className="mt-1 text-sm text-gray-600">{selectedVuln.description}</p>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
+                  <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedVuln.description}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700">类型</h4>
-                    <p className="mt-1 text-sm text-gray-600">{selectedVuln.type}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700">CWE</h4>
-                    <p className="mt-1 text-sm text-gray-600">{selectedVuln.cwe || '无'}</p>
-                  </div>
-                </div>
-
+                {/* 发现位置 */}
                 {selectedVuln.filePath && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">位置</h4>
-                    <p className="mt-1 text-sm text-gray-600 font-mono">
-                      {selectedVuln.filePath}
-                      {selectedVuln.lineStart && `:${selectedVuln.lineStart}`}
-                      {selectedVuln.lineEnd && selectedVuln.lineEnd !== selectedVuln.lineStart && `-${selectedVuln.lineEnd}`}
-                    </p>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">发现位置</h4>
+                    <div className="bg-gray-900 text-gray-100 p-3 rounded-lg">
+                      <p className="text-sm font-mono break-all">
+                        {selectedVuln.filePath}
+                        {selectedVuln.lineStart && (
+                          <span className="text-yellow-400">:{selectedVuln.lineStart}</span>
+                        )}
+                        {selectedVuln.lineEnd && selectedVuln.lineEnd !== selectedVuln.lineStart && (
+                          <span className="text-yellow-400">-{selectedVuln.lineEnd}</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 )}
 
+                {/* 代码片段 */}
                 {selectedVuln.codeSnippet && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">代码片段</h4>
-                    <pre className="mt-1 p-3 bg-gray-100 rounded text-sm overflow-x-auto">
-                      {selectedVuln.codeSnippet}
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞代码</h4>
+                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64">
+{selectedVuln.codeSnippet}
                     </pre>
                   </div>
                 )}
 
+                {/* AI 分析 */}
                 {selectedVuln.aiAnalysis && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">AI 分析</h4>
-                    <p className="mt-1 text-sm text-gray-600">{selectedVuln.aiAnalysis}</p>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      <span className="inline-flex items-center">
+                        <svg className="w-4 h-4 mr-1 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                        AI 分析
+                      </span>
+                    </h4>
+                    <div className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded-lg p-4">{selectedVuln.aiAnalysis}</div>
                   </div>
                 )}
 
+                {/* 修复建议 */}
                 {selectedVuln.fixSuggestion && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">修复建议</h4>
-                    <p className="mt-1 text-sm text-gray-600">{selectedVuln.fixSuggestion}</p>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">
+                      <span className="inline-flex items-center">
+                        <svg className="w-4 h-4 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        修复建议
+                      </span>
+                    </h4>
+                    <div className="text-sm text-gray-700 bg-green-50 border border-green-200 rounded-lg p-4">{selectedVuln.fixSuggestion}</div>
                   </div>
                 )}
               </div>

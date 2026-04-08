@@ -278,19 +278,6 @@ export class ScanExecutor {
     apiBaseUrl: string;
     models: string;
   } | null> {
-    const envApiKey = process.env.ANTHROPIC_API_KEY;
-    const envBaseUrl = process.env.ANTHROPIC_BASE_URL;
-    const envModel = process.env.ANTHROPIC_MODEL;
-
-    if (envApiKey) {
-      return {
-        providerType: 'claude',
-        apiKey: envApiKey,
-        apiBaseUrl: envBaseUrl || 'https://api.anthropic.com/v1/messages',
-        models: JSON.stringify([envModel || 'claude-sonnet-4-20250514']),
-      };
-    }
-
     return prisma.modelConfig.findFirst({
       where: { isActive: true, isDefault: true },
     });

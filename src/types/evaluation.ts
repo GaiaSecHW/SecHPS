@@ -22,6 +22,7 @@ export interface EvaluationSession {
   completedAt?: Date;
   errorMessage?: string;
   messageCount: number;
+  skillsUsed?: string[]; // 使用的 Skills 列表
 }
 
 export interface ChatMessage {
@@ -42,4 +43,29 @@ export interface ProjectInfo {
     type: string;
     size: number;
   }>;
+}
+
+/**
+ * 评估结果摘要
+ */
+export interface EvaluationResultSummary {
+  evaluationId: string;
+  totalVulns: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  infoCount: number;
+  skillsUsed: string[];
+  createdAt: Date;
+}
+
+/**
+ * Skill 使用统计
+ */
+export interface SkillUsageStats {
+  skillName: string;
+  count: number;
+  successRate: number;
+  avgDuration: number;
 }

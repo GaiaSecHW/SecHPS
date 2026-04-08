@@ -43,7 +43,7 @@ export async function GET(
       apiBaseUrl: model.apiBaseUrl,
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
-      transformer: model.transformer ? JSON.parse(model.transformer) : null,
+      routeType: model.routeType,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,
@@ -78,7 +78,7 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, transformer, isActive, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isDefault } = body;
 
     // 检查模型是否存在
     const existingModel = await prisma.modelConfig.findUnique({
@@ -126,8 +126,11 @@ export async function PUT(
       }
       updateData.models = JSON.stringify(models);
     }
-    if (transformer !== undefined) {
-      updateData.transformer = transformer ? JSON.stringify(transformer) : null;
+    if (routeType !== undefined) {
+      // routeType 仅对 openai 类型有效
+      if (providerType === 'openai' || existingModel.providerType === 'openai') {
+        updateData.routeType = routeType;
+      }
     }
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isDefault !== undefined) updateData.isDefault = isDefault;
@@ -146,7 +149,7 @@ export async function PUT(
       apiBaseUrl: model.apiBaseUrl,
       apiKey: model.apiKey,
       models: JSON.parse(model.models),
-      transformer: model.transformer ? JSON.parse(model.transformer) : null,
+      routeType: model.routeType,
       isActive: model.isActive,
       isDefault: model.isDefault,
       createdAt: model.createdAt,
@@ -193,18 +196,6 @@ export async function DELETE(
       return NextResponse.json(
         { error: '模型配置不存在' },
         { status: 404 }
-      );
-    }
-
-    // 检查是否有路由配置使用此模型
-    const routerConfigs = await prisma.routerConfig.findMany({
-      where: { modelId: id },
-    });
-
-    if (routerConfigs.length > 0) {
-      return NextResponse.json(
-        { error: '无法删除：此模型配置正被路由配置使用' },
-        { status: 400 }
       );
     }
 

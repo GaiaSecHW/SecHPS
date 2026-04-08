@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Cog,
   Plus,
@@ -34,6 +35,7 @@ const categoryLabels: Record<string, string> = {
 };
 
 export default function ToolsPage() {
+  const router = useRouter();
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +102,7 @@ export default function ToolsPage() {
         </div>
         {isAdmin && (
           <button
+            onClick={() => router.push('/dashboard/admin/tools/create')}
             className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus size={20} className="mr-2" />

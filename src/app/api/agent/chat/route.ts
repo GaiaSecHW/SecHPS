@@ -54,7 +54,8 @@ export async function POST(request: Request) {
     // 创建 SSE 流
     const stream = new ReadableStream({
       async start(controller) {
-        const caller = createEvaluationCaller(modelConfig);
+        // 创建评估调用器，传递项目目录作为工作目录
+        const caller = createEvaluationCaller(modelConfig, execution.project?.projectPath || undefined);
         const project = execution.project;
 
         try {
@@ -121,19 +122,6 @@ export async function POST(request: Request) {
 }
 
 async function getModelConfig() {
-  const envApiKey = process.env.ANTHROPIC_API_KEY;
-  const envBaseUrl = process.env.ANTHROPIC_BASE_URL;
-  const envModel = process.env.ANTHROPIC_MODEL;
-
-  if (envApiKey) {
-    return {
-      providerType: 'claude',
-      apiKey: envApiKey,
-      apiBaseUrl: envBaseUrl || 'https://api.anthropic.com/v1/messages',
-      models: JSON.stringify([envModel || 'claude-sonnet-4-20250514']),
-    };
-  }
-
   return prisma.modelConfig.findFirst({
     where: { isActive: true, isDefault: true },
   });
