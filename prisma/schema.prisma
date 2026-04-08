@@ -498,6 +498,9 @@ model Skill {
   // Prompt 定义
   systemPrompt String  // 系统提示词
   userPrompt   String  // 用户提示词模板（支持变量）
+  
+  // 完整内容（Markdown 格式）
+  content      String? // 完整的 Skill 定义内容（Markdown 格式）
 
   // 工具和参数
   tools       String   // JSON: ["read_file", "search_pattern"]
@@ -1001,19 +1004,6 @@ model NotificationChannel {
 
   @@index([type])
   @@index([enabled])
-}
-
-// 系统配置（键值对存储）
-model SystemConfig {
-  id          String   @id @default(cuid())
-  key         String   @unique
-  value       String   // JSON: 配置值
-  description String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  @@index([key])
 }
 
 // ============================================

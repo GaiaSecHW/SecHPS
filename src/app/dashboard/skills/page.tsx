@@ -20,6 +20,7 @@ import {
   Eye,
   X,
   Copy,
+  Code,
 } from 'lucide-react';
 
 interface Skill {
@@ -493,11 +494,18 @@ export default function SkillsPage() {
               )}
             </button>
             <button
+              onClick={() => router.push('/dashboard/skills/create-wizard')}
+              className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              <Plus size={20} className="mr-2" />
+              引导式创建
+            </button>
+            <button
               onClick={() => router.push('/dashboard/skills/create')}
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              <Plus size={20} className="mr-2" />
-              创建 Skill
+              <Code size={20} className="mr-2" />
+              快速创建
             </button>
           </div>
         )}

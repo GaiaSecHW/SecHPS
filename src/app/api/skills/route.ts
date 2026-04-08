@@ -129,18 +129,19 @@ export async function POST(request: Request) {
       description,
       category,
       cwe,
-      severity,
-      systemPrompt,
-      userPrompt,
+      severity = 'medium',
+      systemPrompt = '',
+      userPrompt = '',
       tools,
       parameters,
+      content,  // 新增：完整的 Markdown 内容
       isPublic = false,  // 是否为公共 Skill，默认为私有
     } = body;
 
     // 验证必填字段
-    if (!name || !displayName || !description || !category || !severity || !systemPrompt || !userPrompt) {
+    if (!name || !displayName || !description || !category) {
       return NextResponse.json(
-        { error: '缺少必填字段' },
+        { error: '缺少必填字段：名称、描述、分类' },
         { status: 400 }
       );
     }
@@ -186,6 +187,7 @@ export async function POST(request: Request) {
         severity,
         systemPrompt,
         userPrompt,
+        content,  // 保存完整的 Markdown 内容
         tools: JSON.stringify(tools || []),
         parameters: JSON.stringify(parameters || {}),
         userId,
