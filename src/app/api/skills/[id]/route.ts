@@ -243,10 +243,25 @@ export async function PUT(
         data: updateData,
       });
 
-      // 双写：同步更新磁盘文件
-      saveSkillToDisk(updatedSkill).catch(err => {
-        console.error('[Skills API] 更新磁盘文件失败:', err);
-      });
+      // 双写：根据 isActive 状态同步磁盘文件
+      if (updates.isActive !== undefined) {
+        if (updatedSkill.isActive) {
+          // 启用：保存到磁盘
+          saveSkillToDisk(updatedSkill).catch(err => {
+            console.error('[Skills API] 更新磁盘文件失败:', err);
+          });
+        } else {
+          // 禁用：从磁盘删除
+          deleteSkillFromDisk(updatedSkill.name, updatedSkill.userId).catch(err => {
+            console.error('[Skills API] 删除磁盘文件失败:', err);
+          });
+        }
+      } else {
+        // 其他更新：直接保存
+        saveSkillToDisk(updatedSkill).catch(err => {
+          console.error('[Skills API] 更新磁盘文件失败:', err);
+        });
+      }
     }
 
     return NextResponse.json({

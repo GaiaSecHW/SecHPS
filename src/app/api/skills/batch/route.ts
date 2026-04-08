@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 
 // POST /api/skills/batch - 批量操作
 export async function POST(request: Request) {
@@ -78,6 +79,12 @@ export async function POST(request: Request) {
             isActive: true,
           },
         });
+        // 启用：同步保存到磁盘
+        for (const skill of skills) {
+          saveSkillToDisk(skill).catch(err => {
+            console.error(`[Skills API] 批量启用保存磁盘文件失败 (${skill.name}):`, err);
+          });
+        }
         break;
 
       case 'disable':
@@ -89,6 +96,12 @@ export async function POST(request: Request) {
             isActive: false,
           },
         });
+        // 禁用：同步从磁盘删除
+        for (const skill of skills) {
+          deleteSkillFromDisk(skill.name, skill.userId).catch(err => {
+            console.error(`[Skills API] 批量禁用删除磁盘文件失败 (${skill.name}):`, err);
+          });
+        }
         break;
 
       case 'delete':
@@ -113,6 +126,12 @@ export async function POST(request: Request) {
             where: { id: { in: skillIds } },
           });
         });
+        // 删除：同步从磁盘删除
+        for (const skill of skills) {
+          deleteSkillFromDisk(skill.name, skill.userId).catch(err => {
+            console.error(`[Skills API] 批量删除磁盘文件失败 (${skill.name}):`, err);
+          });
+        }
         result = { count: skillIds.length };
         break;
 
