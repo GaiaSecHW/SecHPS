@@ -309,6 +309,16 @@ export default function SkillDetailPage() {
   const handleToggleActive = async () => {
     if (!skill) return;
 
+    // 检查是否可以修改
+    if (skill.isBuiltin) {
+      alert('内置 Skill 不能禁用/启用');
+      return;
+    }
+    if (!skill.isLatest) {
+      alert('只能修改最新版本的 Skill');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/skills/${skillId}`, {
@@ -321,7 +331,8 @@ export default function SkillDetailPage() {
       });
 
       if (!response.ok) {
-        throw new Error('更新失败');
+        const data = await response.json();
+        throw new Error(data.error || '更新失败');
       }
 
       fetchSkill();

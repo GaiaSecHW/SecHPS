@@ -99,6 +99,8 @@ export default function SkillsPage() {
   const [syncing, setSyncing] = useState(false);
   const [previewSkill, setPreviewSkill] = useState<Skill | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
+  const [batchOperating, setBatchOperating] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -231,12 +233,73 @@ export default function SkillsPage() {
       });
 
       if (!response.ok) {
-        throw new Error('更新失败');
+        const data = await response.json();
+        throw new Error(data.error || '更新失败');
       }
 
       fetchSkills();
     } catch (err) {
       alert(err instanceof Error ? err.message : '更新失败');
+    }
+  };
+
+  // 批量选择相关函数
+  const handleSelectSkill = (skillId: string) => {
+    const newSelected = new Set(selectedSkills);
+    if (newSelected.has(skillId)) {
+      newSelected.delete(skillId);
+    } else {
+      newSelected.add(skillId);
+    }
+    setSelectedSkills(newSelected);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedSkills.size === filteredSkills.length) {
+      setSelectedSkills(new Set());
+    } else {
+      setSelectedSkills(new Set(filteredSkills.map(s => s.id)));
+    }
+  };
+
+  const handleBatchOperation = async (action: 'enable' | 'disable' | 'delete') => {
+    if (selectedSkills.size === 0) {
+      alert('请先选择要操作的 Skill');
+      return;
+    }
+
+    const actionText = action === 'enable' ? '启用' : action === 'disable' ? '禁用' : '删除';
+    if (!confirm(`确定要批量${actionText} ${selectedSkills.size} 个 Skill 吗？`)) {
+      return;
+    }
+
+    try {
+      setBatchOperating(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills/batch', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          skillIds: Array.from(selectedSkills),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '操作失败');
+      }
+
+      setSelectedSkills(new Set());
+      fetchSkills();
+      alert(`成功${actionText} ${selectedSkills.size} 个 Skill`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '操作失败');
+    } finally {
+      setBatchOperating(false);
     }
   };
 
@@ -376,6 +439,41 @@ export default function SkillsPage() {
         </div>
         {isAdmin && (
           <div className="flex items-center gap-3">
+            {/* 批量操作按钮 */}
+            {selectedSkills.size > 0 && (
+              <>
+                <span className="text-sm text-gray-600">
+                  已选择 {selectedSkills.size} 项
+                </span>
+                <button
+                  onClick={() => handleBatchOperation('enable')}
+                  disabled={batchOperating}
+                  className="inline-flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                  title="批量启用选中的 Skills"
+                >
+                  <CheckCircle size={16} className="mr-1" />
+                  批量启用
+                </button>
+                <button
+                  onClick={() => handleBatchOperation('disable')}
+                  disabled={batchOperating}
+                  className="inline-flex items-center px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors disabled:opacity-50"
+                  title="批量禁用选中的 Skills"
+                >
+                  <XCircle size={16} className="mr-1" />
+                  批量禁用
+                </button>
+                <button
+                  onClick={() => handleBatchOperation('delete')}
+                  disabled={batchOperating}
+                  className="inline-flex items-center px-3 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+                  title="批量删除选中的 Skills"
+                >
+                  <Trash2 size={16} className="mr-1" />
+                  批量删除
+                </button>
+              </>
+            )}
             <button
               onClick={handleSyncToDisk}
               disabled={syncing}
@@ -419,20 +517,34 @@ export default function SkillsPage() {
             />
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={20} className="text-gray-400" />
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">所有分类</option>
-            {categories.map((cat) => (
-              <option key={cat.name} value={cat.name}>
-                {cat.label} ({cat.count})
-              </option>
-            ))}
-          </select>
+        <div className="flex items-center gap-4">
+          {/* 全选复选框 */}
+          {isAdmin && filteredSkills.length > 0 && (
+            <label className="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selectedSkills.size === filteredSkills.length && filteredSkills.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">全选</span>
+            </label>
+          )}
+          <div className="flex items-center gap-2">
+            <Filter size={20} className="text-gray-400" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">所有分类</option>
+              {categories.map((cat) => (
+                <option key={cat.name} value={cat.name}>
+                  {cat.label} ({cat.count})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -480,6 +592,27 @@ export default function SkillsPage() {
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
+                    {/* 复选框 */}
+                    {isAdmin && (
+                      <input
+                        type="checkbox"
+                        checked={selectedSkills.has(skill.id)}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleSelectSkill(skill.id);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        disabled={skill.isBuiltin || !skill.isLatest}
+                        title={
+                          skill.isBuiltin
+                            ? '内置 Skill 不能选择'
+                            : !skill.isLatest
+                            ? '只能选择最新版本'
+                            : ''
+                        }
+                      />
+                    )}
                     <div className={`p-2 rounded-lg ${skill.isActive ? 'bg-green-100' : 'bg-gray-100'}`}>
                       <Award className={skill.isActive ? 'text-green-600' : 'text-gray-400'} size={24} />
                     </div>
