@@ -39,31 +39,31 @@ export async function POST(request: Request) {
     }
 
     // 检查权限
-    const publicSkills = skills.filter(s => s.userId === null);
-    const privateSkills = skills.filter(s => s.userId !== null);
+    const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
 
-    // 如果有公共 Skill，需要管理员权限
-    if (publicSkills.length > 0) {
-      if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
+    if (!isAdmin) {
+      // 非管理员检查权限
+      const publicSkills = skills.filter(s => s.userId === null);
+      if (publicSkills.length > 0) {
         return NextResponse.json({ error: '修改公共 Skill 需要管理员权限' }, { status: 403 });
       }
-    }
 
-    // 如果有私有 Skill，只能修改自己的
-    const notOwnPrivate = privateSkills.filter(s => s.userId !== payload.userId);
-    if (notOwnPrivate.length > 0) {
-      return NextResponse.json({ error: '只能修改自己的私有 Skill' }, { status: 403 });
-    }
+      const notOwnPrivate = skills.filter(s => s.userId !== payload.userId);
+      if (notOwnPrivate.length > 0) {
+        return NextResponse.json({ error: '只能修改自己的私有 Skill' }, { status: 403 });
+      }
 
-    // 检查内置 Skill 和版本
-    const builtinSkills = skills.filter(s => s.isBuiltin);
-    if (builtinSkills.length > 0) {
-      return NextResponse.json({ error: '内置 Skill 不能修改' }, { status: 400 });
-    }
+      // 非管理员不能修改内置 Skill
+      const builtinSkills = skills.filter(s => s.isBuiltin);
+      if (builtinSkills.length > 0) {
+        return NextResponse.json({ error: '内置 Skill 只有管理员可以修改' }, { status: 400 });
+      }
 
-    const notLatestSkills = skills.filter(s => !s.isLatest);
-    if (notLatestSkills.length > 0) {
-      return NextResponse.json({ error: '只能修改最新版本的 Skill' }, { status: 400 });
+      // 非管理员只能修改最新版本
+      const notLatestSkills = skills.filter(s => !s.isLatest);
+      if (notLatestSkills.length > 0) {
+        return NextResponse.json({ error: '只能修改最新版本的 Skill' }, { status: 400 });
+      }
     }
 
     let result;

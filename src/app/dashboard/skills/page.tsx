@@ -603,14 +603,6 @@ export default function SkillsPage() {
                         }}
                         onClick={(e) => e.stopPropagation()}
                         className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                        disabled={skill.isBuiltin || !skill.isLatest}
-                        title={
-                          skill.isBuiltin
-                            ? '内置 Skill 不能选择'
-                            : !skill.isLatest
-                            ? '只能选择最新版本'
-                            : ''
-                        }
                       />
                     )}
                     <div className={`p-2 rounded-lg ${skill.isActive ? 'bg-green-100' : 'bg-gray-100'}`}>

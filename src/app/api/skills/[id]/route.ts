@@ -108,24 +108,27 @@ export async function PUT(
     }
 
     // 检查权限
-    // 1. 公共 Skill 需要管理员权限
-    // 2. 私有 Skill 只有创建者可以修改
-    if (skill.userId === null) {
-      if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
+    // 管理员可以修改任何 Skill
+    const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
+    
+    if (!isAdmin) {
+      // 非管理员只能修改自己的私有 Skill
+      if (skill.userId === null) {
         return NextResponse.json({ error: '禁止访问 - 修改公共 Skill 需要管理员权限' }, { status: 403 });
       }
-    } else if (skill.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问 - 只能修改自己的私有 Skill' }, { status: 403 });
+      if (skill.userId !== payload.userId) {
+        return NextResponse.json({ error: '禁止访问 - 只能修改自己的私有 Skill' }, { status: 403 });
+      }
     }
 
-    // 内置 Skill 不能修改
-    if (skill.isBuiltin) {
-      return NextResponse.json({ error: '内置 Skill 不能修改' }, { status: 400 });
+    // 管理员可以修改内置 Skill，普通用户不能修改
+    if (skill.isBuiltin && !isAdmin) {
+      return NextResponse.json({ error: '内置 Skill 只有管理员可以修改' }, { status: 400 });
     }
 
-    // 只能修改最新版本
-    if (!skill.isLatest) {
-      return NextResponse.json({ error: '只能修改最新版本，请先切换到最新版本' }, { status: 400 });
+    // 管理员可以修改任何版本，普通用户只能修改最新版本
+    if (!skill.isLatest && !isAdmin) {
+      return NextResponse.json({ error: '只能修改最新版本的 Skill' }, { status: 400 });
     }
 
     let updatedSkill;
@@ -285,21 +288,22 @@ export async function DELETE(
     }
 
     // 检查权限
-    // 1. 公共 Skill 需要管理员权限
-    // 2. 私有 Skill 只有创建者可以删除
-    if (skill.userId === null) {
-      if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE)) {
+    // 管理员可以删除任何 Skill
+    const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE);
+    
+    if (!isAdmin) {
+      // 非管理员只能删除自己的私有 Skill
+      if (skill.userId === null) {
         return NextResponse.json({ error: '禁止访问 - 删除公共 Skill 需要管理员权限' }, { status: 403 });
       }
-    } else if (skill.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问 - 只能删除自己的私有 Skill' }, { status: 403 });
+      if (skill.userId !== payload.userId) {
+        return NextResponse.json({ error: '禁止访问 - 只能删除自己的私有 Skill' }, { status: 403 });
+      }
     }
 
-    if (skill.isBuiltin) {
-      return NextResponse.json(
-        { error: '内置 Skill 不能删除' },
-        { status: 400 }
-      );
+    // 管理员可以删除内置 Skill，普通用户不能删除
+    if (skill.isBuiltin && !isAdmin) {
+      return NextResponse.json({ error: '内置 Skill 只有管理员可以删除' }, { status: 400 });
     }
 
     // 删除 Skill 及其所有版本
