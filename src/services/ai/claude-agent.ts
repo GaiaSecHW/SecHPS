@@ -177,10 +177,24 @@ export class ClaudeAgentService {
           }
         }
       }
-      if (Object.keys(mcpServers).length > 0) {
-        options.mcpServers = mcpServers;
-      }
-    }
+       if (Object.keys(mcpServers).length > 0) {
+         options.mcpServers = mcpServers;
+        
+        // 根据 MCP 服务器名称自动添加 allowedTools
+        // 官方文档要求：MCP 工具必须通过 allowedTools 授权才能使用
+        // 格式：mcp__<server-name>__* 表示允许该服务器的所有工具
+        const mcpAllowedTools = Object.keys(mcpServers).map(
+          serverName => `mcp__${serverName}__*`
+        );
+        
+        // 合并到现有的 allowedTools
+        if (mcpAllowedTools.length > 0) {
+          const existingTools = options.allowedTools || [];
+          options.allowedTools = [...existingTools, ...mcpAllowedTools];
+          console.log('[ClaudeAgentService] 已添加 MCP 工具权限:', mcpAllowedTools);
+        }
+       }
+     }
     
     // 配置系统提示词
     if (this.config.systemPrompt) {

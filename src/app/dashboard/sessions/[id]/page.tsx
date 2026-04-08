@@ -24,6 +24,7 @@ import {
   MessageSquare,
   ChevronUp,
   AlertTriangle,
+  Server,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -695,6 +696,17 @@ export default function SessionDetailPage({
 
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
+              {/* MCP 服务器管理入口 */}
+              {evaluation.projectId && (
+                <button
+                  onClick={() => router.push(`/dashboard/projects/${evaluation.projectId}/mcp-servers`)}
+                  className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded border border-purple-200"
+                  title="管理 MCP 服务器"
+                >
+                  <Server size={16} />
+                  <span>MCP 服务器</span>
+                </button>
+              )}
               {evaluation.status === 'running' && (
                 <>
                   <button

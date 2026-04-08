@@ -66,6 +66,101 @@ interface Evolution {
   createdAt: string;
 }
 
+const CATEGORIES = [
+  { value: 'code-audit', label: '代码审计' },
+  { value: 'auth', label: '认证鉴权' },
+  { value: 'sensitive', label: '敏感信息' },
+  { value: 'api', label: 'API 安全' },
+  { value: 'config', label: '配置安全' },
+  { value: 'crypto', label: '加密解密' },
+  { value: 'web', label: 'Web 安全' },
+  { value: 'business', label: '业务逻辑' },
+  { value: 'client', label: '客户端安全' },
+  { value: 'cloud', label: '云安全' },
+];
+
+const parseMarkdown = (content: string) => {
+  const lines = content.split('\n');
+  let name = '';
+  let description = '';
+  let severity = 'medium';
+  let cwe = '';
+  let systemPrompt = '';
+  let userPrompt = '';
+  const tools: string[] = [];
+  
+  let currentSection = '';
+  let currentContent: string[] = [];
+  
+  for (const line of lines) {
+    if (line.startsWith('# ')) {
+      name = line.substring(2).trim();
+    } else if (line.startsWith('## ')) {
+      if (currentSection) {
+        const content = currentContent.join('\n').trim();
+        if (currentSection === '描述') {
+          description = content;
+        } else if (currentSection === '严重程度') {
+          severity = content.toLowerCase().trim();
+        } else if (currentSection === 'CWE 编号') {
+          cwe = content.trim();
+        } else if (currentSection === '系统提示词') {
+          systemPrompt = content;
+        } else if (currentSection === '用户提示词') {
+          userPrompt = content;
+        }
+      }
+      currentSection = line.substring(3).trim();
+      currentContent = [];
+    } else if (line.startsWith('- ')) {
+      const tool = line.substring(2).trim();
+      if (tool) tools.push(tool);
+    } else {
+      currentContent.push(line);
+    }
+  }
+  
+  if (currentSection) {
+    const content = currentContent.join('\n').trim();
+    if (currentSection === '描述') {
+      description = content;
+    } else if (currentSection === '严重程度') {
+      severity = content.toLowerCase().trim();
+    } else if (currentSection === 'CWE 编号') {
+      cwe = content.trim();
+    } else if (currentSection === '系统提示词') {
+      systemPrompt = content;
+    } else if (currentSection === '用户提示词') {
+      userPrompt = content;
+    }
+  }
+  
+  return { name, description, severity, cwe, systemPrompt, userPrompt, tools };
+};
+
+const generateMarkdown = (skill: Skill) => {
+  return `# ${skill.displayName}
+
+## 描述
+${skill.description}
+
+## 严重程度
+${skill.severity}
+
+## CWE 编号
+${skill.cwe || '无'}
+
+## 系统提示词
+${skill.systemPrompt}
+
+## 用户提示词
+${skill.userPrompt}
+
+## 工具
+${skill.tools.map(t => `- ${t}`).join('\n')}
+`;
+};
+
 const categoryLabels: Record<string, string> = {
   'code-audit': '代码安全审计',
   'auth': '认证与授权',
@@ -107,27 +202,9 @@ export default function SkillDetailPage() {
   const [user, setUser] = useState<{ roles?: string[] } | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState<{
-    displayName: string;
-    description: string;
-    category: string;
-    cwe: string;
-    severity: string;
-    systemPrompt: string;
-    userPrompt: string;
-    tools: string[];
-    isActive: boolean;
-  }>({
-    displayName: '',
-    description: '',
-    category: '',
-    cwe: '',
-    severity: '',
-    systemPrompt: '',
-    userPrompt: '',
-    tools: [],
-    isActive: true,
-  });
+  const [editMarkdown, setEditMarkdown] = useState('');
+  const [editCategory, setEditCategory] = useState('code-audit');
+  const [editIsActive, setEditIsActive] = useState(true);
   // 测试相关状态
   const [testMode, setTestMode] = useState<'project' | 'code'>('code');
   const [testProjectId, setTestProjectId] = useState('');
@@ -255,17 +332,9 @@ export default function SkillDetailPage() {
 
   const startEditing = () => {
     if (!skill) return;
-    setEditForm({
-      displayName: skill.displayName,
-      description: skill.description,
-      category: skill.category,
-      cwe: skill.cwe || '',
-      severity: skill.severity,
-      systemPrompt: skill.systemPrompt,
-      userPrompt: skill.userPrompt,
-      tools: skill.tools,
-      isActive: skill.isActive,
-    });
+    setEditMarkdown(generateMarkdown(skill));
+    setEditCategory(skill.category);
+    setEditIsActive(skill.isActive);
     setIsEditing(true);
   };
 
@@ -278,6 +347,21 @@ export default function SkillDetailPage() {
 
     try {
       setSaving(true);
+      const parsed = parseMarkdown(editMarkdown);
+      
+      if (!parsed.name) {
+        throw new Error('请填写 Skill 名称（# 标题）');
+      }
+      if (!parsed.description) {
+        throw new Error('请填写描述（## 描述）');
+      }
+      if (!parsed.systemPrompt) {
+        throw new Error('请填写系统提示词（## 系统提示词）');
+      }
+      if (!parsed.userPrompt) {
+        throw new Error('请填写用户提示词（## 用户提示词）');
+      }
+
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/skills/${skillId}`, {
         method: 'PUT',
@@ -285,7 +369,17 @@ export default function SkillDetailPage() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify({
+          displayName: parsed.name,
+          description: parsed.description,
+          category: editCategory,
+          cwe: parsed.cwe,
+          severity: parsed.severity || 'medium',
+          systemPrompt: parsed.systemPrompt,
+          userPrompt: parsed.userPrompt,
+          tools: parsed.tools,
+          isActive: editIsActive,
+        }),
       });
 
       if (!response.ok) {
@@ -564,96 +658,107 @@ export default function SkillDetailPage() {
           <div className="space-y-6">
             {isEditing ? (
               <>
+                {/* 漏洞分类 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">显示名称</label>
-                  <input
-                    type="text"
-                    value={editForm.displayName}
-                    onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-2">漏洞分类</label>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {CATEGORIES.map((cat) => (
+                      <button
+                        key={cat.value}
+                        type="button"
+                        onClick={() => setEditCategory(cat.value)}
+                        className={`px-4 py-2 rounded-md border-2 transition-all ${
+                          editCategory === cat.value
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                        }`}
+                      >
+                        {cat.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
+
+                {/* Markdown 编辑器 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Skill 定义（Markdown 格式）
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (skill) {
+                          setEditMarkdown(generateMarkdown(skill));
+                        }
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      重置为原始内容
+                    </button>
+                  </div>
+                  <div className="mb-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
+                    <p className="text-sm text-gray-600 mb-2">格式说明：</p>
+                    <div className="text-xs text-gray-500 font-mono space-y-1">
+                      <p># Skill 名称</p>
+                      <p>## 描述</p>
+                      <p>## 严重程度 (critical | high | medium | low | info)</p>
+                      <p>## CWE 编号</p>
+                      <p>## 系统提示词</p>
+                      <p>## 用户提示词</p>
+                      <p>## 工具 (使用 - 列表)</p>
+                    </div>
+                  </div>
                   <textarea
-                    value={editForm.description}
-                    onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={editMarkdown}
+                    onChange={(e) => setEditMarkdown(e.target.value)}
+                    className="w-full h-[500px] px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                    placeholder="输入 Markdown 格式的 Skill 定义..."
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">分类</label>
-                    <select
-                      value={editForm.category}
-                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {Object.entries(categoryLabels).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">严重程度</label>
-                    <select
-                      value={editForm.severity}
-                      onChange={(e) => setEditForm({ ...editForm, severity: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      {Object.entries(severityLabels).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+
+                {/* 是否启用 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">CWE</label>
-                  <input
-                    type="text"
-                    value={editForm.cwe}
-                    onChange={(e) => setEditForm({ ...editForm, cwe: e.target.value })}
-                    placeholder="例如: CWE-79"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">使用工具（逗号分隔）</label>
-                  <input
-                    type="text"
-                    value={editForm.tools.join(', ')}
-                    onChange={(e) => setEditForm({ ...editForm, tools: e.target.value.split(',').map(t => t.trim()).filter(Boolean) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editIsActive}
+                      onChange={(e) => setEditIsActive(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="ml-2 text-sm text-gray-700">启用此 Skill</span>
+                  </label>
                 </div>
               </>
             ) : (
               <>
+                {/* 查看 Markdown 内容 */}
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">描述</h3>
-                  <p className="text-gray-600">{skill.description}</p>
-                </div>
-                <div className="grid grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">分类</h3>
-                    <p className="text-gray-600">{categoryLabels[skill.category] || skill.category}</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-medium text-gray-900">Skill 定义</h3>
+                    <button
+                      onClick={() => {
+                        if (skill) {
+                          navigator.clipboard.writeText(generateMarkdown(skill));
+                          alert('已复制到剪贴板');
+                        }
+                      }}
+                      className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+                    >
+                      <Copy size={14} className="mr-1" />
+                      复制 Markdown
+                    </button>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">CWE</h3>
-                    <p className="text-gray-600">{skill.cwe || '无'}</p>
-                  </div>
+                  <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap font-mono">
+                    {skill && generateMarkdown(skill)}
+                  </pre>
                 </div>
+                
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">使用工具</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {skill.tools.map((tool) => (
-                      <span key={tool} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">漏洞分类</h3>
+                  <p className="text-gray-600">{categoryLabels[skill.category] || skill.category}</p>
                 </div>
+
                 <div>
                   <h3 className="text-lg font-medium text-gray-900 mb-2">参数定义</h3>
                   <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm">
@@ -667,27 +772,13 @@ export default function SkillDetailPage() {
 
         {activeTab === 'prompt' && (
           <div className="space-y-6">
+            {/* Prompt 标签页在编辑模式下不显示，因为已经在 overview 中编辑 */}
             {isEditing ? (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">系统提示词</label>
-                  <textarea
-                    value={editForm.systemPrompt}
-                    onChange={(e) => setEditForm({ ...editForm, systemPrompt: e.target.value })}
-                    rows={10}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">用户提示词模板</label>
-                  <textarea
-                    value={editForm.userPrompt}
-                    onChange={(e) => setEditForm({ ...editForm, userPrompt: e.target.value })}
-                    rows={10}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                  />
-                </div>
-              </>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  提示词编辑已移至「概览」标签页，请切换到概览标签页进行编辑。
+                </p>
+              </div>
             ) : (
               <>
                 <div>
