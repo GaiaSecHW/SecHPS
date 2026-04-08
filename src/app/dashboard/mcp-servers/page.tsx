@@ -10,6 +10,9 @@ import {
   Power,
   PowerOff,
   Loader2,
+  CheckCircle,
+  XCircle,
+  TestTube,
 } from 'lucide-react';
 
 interface McpServer {
@@ -34,6 +37,13 @@ export default function McpServersPage() {
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingServer, setEditingServer] = useState<McpServer | null>(null);
+  const [testingServer, setTestingServer] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{
+    serverId: string;
+    success: boolean;
+    message: string;
+    tools?: string[];
+  } | null>(null);
 
   // 表单状态
   const [formData, setFormData] = useState({
@@ -204,6 +214,47 @@ export default function McpServersPage() {
     }
   };
 
+  const handleTest = async (server: McpServer) => {
+    setTestingServer(server.id);
+    setTestResult(null);
+    setError('');
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/mcp-servers/test', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type: server.type,
+          command: server.command,
+          args: server.args ? JSON.parse(server.args) : undefined,
+          url: server.url,
+          env: server.env ? JSON.parse(server.env) : undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      setTestResult({
+        serverId: server.id,
+        success: data.success || data.connected,
+        message: data.message || data.error || '测试完成',
+        tools: data.tools || [],
+      });
+    } catch (err) {
+      setTestResult({
+        serverId: server.id,
+        success: false,
+        message: err instanceof Error ? err.message : '测试失败',
+      });
+    } finally {
+      setTestingServer(null);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -363,8 +414,20 @@ export default function McpServersPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <button
+                        onClick={() => handleTest(server)}
+                        disabled={testingServer === server.id}
+                        className="text-purple-600 hover:text-purple-700 mr-3 disabled:opacity-50"
+                        title="测试连接"
+                      >
+                        {testingServer === server.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <TestTube size={16} />
+                        )}
+                      </button>
+                      <button
                         onClick={() => handleEdit(server)}
-                        className="text-blue-600 hover:text-blue-700 mr-4"
+                        className="text-blue-600 hover:text-blue-700 mr-3"
                       >
                         <Edit size={16} />
                       </button>
@@ -379,6 +442,58 @@ export default function McpServersPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Test Result */}
+        {testResult && (
+          <div className={`mt-4 p-4 rounded-lg ${
+            testResult.success 
+              ? 'bg-green-50 border border-green-200' 
+              : 'bg-red-50 border border-red-200'
+          }`}>
+            <div className="flex items-start">
+              {testResult.success ? (
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3" />
+              )}
+              <div className="flex-1">
+                <h4 className={`text-sm font-medium ${
+                  testResult.success ? 'text-green-800' : 'text-red-800'
+                }`}>
+                  {testResult.success ? '测试成功' : '测试失败'}
+                </h4>
+                <p className={`text-sm mt-1 ${
+                  testResult.success ? 'text-green-700' : 'text-red-700'
+                }`}>
+                  {testResult.message}
+                </p>
+                {testResult.tools && testResult.tools.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm font-medium text-gray-700 mb-2">
+                      可用工具 ({testResult.tools.length}):
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {testResult.tools.map((tool, index) => (
+                        <span
+                          key={index}
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                        >
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setTestResult(null)}
+                className="text-gray-400 hover:text-gray-600 ml-4"
+              >
+                <XCircle size={16} />
+              </button>
+            </div>
           </div>
         )}
 
