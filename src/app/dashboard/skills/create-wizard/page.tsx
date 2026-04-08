@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import IntentStep from './IntentStep';
+import ResearchStep from './ResearchStep';
+import DraftStep from './DraftStep';
+import TestCasesStep from './TestCasesStep';
+import EvaluationStep from './EvaluationStep';
+import IterationStep from './IterationStep';
+import OptimizationStep from './OptimizationStep';
 
 // 步骤定义
 const WIZARD_STEPS = [
@@ -306,40 +312,61 @@ export default function SkillCreateWizardPage() {
               />
             )}
             {currentStep === 'research' && (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">调研访谈</h2>
-                <p className="text-gray-600">步骤正在开发中...</p>
-              </div>
+              <ResearchStep
+                data={wizardData.research}
+                onChange={(research) => saveData({ research })}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+              />
             )}
             {currentStep === 'draft' && (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">编写 Skill</h2>
-                <p className="text-gray-600">步骤正在开发中...</p>
-              </div>
+              <DraftStep
+                intentData={wizardData.intent}
+                researchData={wizardData.research}
+                skillData={wizardData.skill}
+                onChange={(skill) => saveData({ skill })}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+              />
             )}
             {currentStep === 'testcases' && (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">创建测试</h2>
-                <p className="text-gray-600">步骤正在开发中...</p>
-              </div>
+              <TestCasesStep
+                testCases={wizardData.testCases}
+                onChange={(testCases) => saveData({ testCases })}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+                needsTestCases={wizardData.intent.needsTestCases}
+              />
             )}
             {currentStep === 'evaluation' && (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">运行评估</h2>
-                <p className="text-gray-600">步骤正在开发中...</p>
-              </div>
+              <EvaluationStep
+                skillData={wizardData.skill}
+                testCases={wizardData.testCases}
+                evaluationData={wizardData.evaluation}
+                onChange={(evaluation) => saveData({ evaluation })}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+              />
             )}
             {currentStep === 'iteration' && (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">迭代改进</h2>
-                <p className="text-gray-600">步骤正在开发中...</p>
-              </div>
+              <IterationStep
+                evaluationData={wizardData.evaluation}
+                skillData={wizardData.skill}
+                iterations={wizardData.iterations}
+                onChange={(data) => saveData(data)}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+                onRerunTests={() => setCurrentStep('evaluation')}
+              />
             )}
             {currentStep === 'optimization' && (
-              <div className="text-center py-12">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">描述优化</h2>
-                <p className="text-gray-600">步骤正在开发中...</p>
-              </div>
+              <OptimizationStep
+                skillData={wizardData.skill}
+                optimizationData={wizardData.optimization}
+                onChange={(data) => saveData(data)}
+                onNext={handleComplete}
+                onPrevious={handlePrevious}
+              />
             )}
           </div>
 
