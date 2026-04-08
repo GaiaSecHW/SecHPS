@@ -1,0 +1,9 @@
+{
+  "id": "cmnixa3i10006fu51b2jbvt4c",
+  "name": "ldap-injection",
+  "displayName": "LDAP 注入检测",
+  "userId": null,
+  "latestVersion": 1,
+  "isActive": true,
+  "updatedAt": "2026-04-06T08:08:40.194Z"
+}

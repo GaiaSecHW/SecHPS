@@ -80,12 +80,33 @@ export async function POST(
       console.log('[启动评估] ⚠️  未找到激活的全局配置');
     }
 
-    // 加载 MCP 服务器配置
+    // 加载 MCP 服务器配置（全局 + 项目级别）
     let mcpServers: any[] = [];
     if (enableMcp) {
-      mcpServers = await prisma.mcpServerConfig.findMany({
+      // 加载全局 MCP 配置
+      const globalMcpServers = await prisma.mcpServerConfig.findMany({
+        where: { 
+          userId: null, 
+          projectId: null, 
+          isEnabled: true 
+        },
+      });
+      
+      // 加载项目级别 MCP 配置
+      const projectMcpServers = await prisma.mcpServerConfig.findMany({
         where: { projectId: id, isEnabled: true },
       });
+      
+      // 合并配置（项目级别优先级更高）
+      const globalNames = new Set(globalMcpServers.map(s => s.name));
+      const projectNames = new Set(projectMcpServers.map(s => s.name));
+      
+      // 添加全局配置（不在项目配置中的）
+      mcpServers = [...globalMcpServers.filter(s => !projectNames.has(s.name))];
+      // 添加项目配置
+      mcpServers = [...mcpServers, ...projectMcpServers];
+      
+      console.log(`[启动评估] 加载 MCP 服务器: 全局 ${globalMcpServers.length} 个, 项目 ${projectMcpServers.length} 个, 合并后 ${mcpServers.length} 个`);
     }
 
     // 加载工具权限配置

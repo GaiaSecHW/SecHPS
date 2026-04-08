@@ -23,6 +23,7 @@ import {
   Search,
   Terminal,
   Puzzle,
+  Server,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -120,6 +121,9 @@ export default function DashboardLayout({
           </NavLink>
           <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
             插件管理
+          </NavLink>
+          <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />}>
+            MCP 服务器
           </NavLink>
 
           {/* 个人中心 */}
