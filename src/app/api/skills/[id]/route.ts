@@ -138,7 +138,6 @@ export async function PUT(
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.category !== undefined) updateData.category = updates.category;
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
-      if (updates.severity !== undefined) updateData.severity = updates.severity;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
 
@@ -150,7 +149,6 @@ export async function PUT(
           description: (updateData.description as string) ?? skill.description,
           category: (updateData.category as string) ?? skill.category,
           cwe: (updateData.cwe as string | null) ?? skill.cwe,
-          severity: (updateData.severity as string) ?? skill.severity,
           content: (updateData.content as string) ?? skill.content,
           userId: skill.userId,
           isBuiltin: skill.isBuiltin,
@@ -203,7 +201,6 @@ export async function PUT(
       if (updates.description !== undefined) updateData.description = updates.description;
       if (updates.category !== undefined) updateData.category = updates.category;
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
-      if (updates.severity !== undefined) updateData.severity = updates.severity;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
 

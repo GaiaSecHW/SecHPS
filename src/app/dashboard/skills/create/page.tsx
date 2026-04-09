@@ -15,9 +15,6 @@ const DEFAULT_TEMPLATE = `# Skill 名称
 ## 描述
 简要描述这个 Skill 的作用和检测目标...
 
-## 严重程度
-medium
-
 ## CWE 编号
 （可选，如 CWE-89）
 
@@ -213,7 +210,6 @@ export default function CreateSkillPage() {
               <div className="text-xs text-gray-500 font-mono space-y-1">
                 <p># Skill 名称</p>
                 <p>## 描述</p>
-                <p>## 严重程度 (critical | high | medium | low | info)</p>
                 <p>## CWE 编号</p>
                 <p>## 系统提示词</p>
                 <p>## 用户提示词</p>

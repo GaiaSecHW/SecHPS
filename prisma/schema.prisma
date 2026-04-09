@@ -490,47 +490,28 @@ model Skill {
   userId      String?  // null = 公共，有值 = 私有
   name        String   // 作用域 + 名称组合唯一（公共或用户私有的名称唯一）
   displayName String
-  description String
+  description String   // 简短描述（用于列表显示）
   category    String   // code-audit, auth, sensitive, api, config, crypto, web, business, client, cloud
-  cwe         String?  // CWE 编号，如 CWE-89
-  severity    String   // critical, high, medium, low, info
-
-  // Prompt 定义
-  systemPrompt String  // 系统提示词
-  userPrompt   String  // 用户提示词模板（支持变量）
   
-  // 完整内容（Markdown 格式）
-  content      String? // 完整的 Skill 定义内容（Markdown 格式）
-
-  // 工具和参数
-  tools       String   // JSON: ["read_file", "search_pattern"]
-  parameters  String   // JSON: 参数定义
+  // 核心：完整的 Markdown 内容
+  content     String   // 完整的 Skill 定义内容（Markdown 格式）
+  
+  // 元数据（可选）
+  cwe         String?  // CWE 编号，如 CWE-89
 
   // 状态
   isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(true)  // 是否内置（不可删除）
+  isBuiltin   Boolean  @default(false)  // 是否内置（不可删除）
 
   // 版本管理
   version     Int      @default(1)
   parentId    String?  // 父版本 ID（用于版本链）
   isLatest    Boolean  @default(true)  // 是否为最新版本
 
-  // 进化相关
+  // 统计
   successRate Float?   // 成功率
   avgDuration Int?     // 平均执行时间（毫秒）
   execCount   Int      @default(0)     // 执行次数
-  
-  // 官方标准字段
-  disableModelInvocation Boolean  @default(false)  // 阻止 Claude 自动调用
-  userInvocable        Boolean  @default(true)       // 是否显示在 `/` 菜单
-  context              String?                        // 'inline' | 'fork'
-  agent               String?                        // 子代理类型
-  argumentHint        String?                        // 参数提示
-  model               String?                        // 指定模型
-  effort              String?                        // 'low' | 'medium' | 'high' | 'max'
-  paths              String?                        // JSON: Glob 模式数组
-  shell              String?                        // 'bash' | 'powershell'
-  hooks              String?                        // JSON: Hooks 配置
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

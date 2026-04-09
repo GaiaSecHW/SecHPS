@@ -29,7 +29,6 @@ interface Skill {
   description: string;
   category: string;
   cwe: string | null;
-  severity: string;
   content: string;
   isActive: boolean;
   isBuiltin: boolean;
@@ -42,22 +41,6 @@ interface Skill {
   createdAt: string;
   updatedAt: string;
 }
-
-const severityColors: Record<string, string> = {
-  critical: 'bg-red-100 text-red-800',
-  high: 'bg-orange-100 text-orange-800',
-  medium: 'bg-yellow-100 text-yellow-800',
-  low: 'bg-blue-100 text-blue-800',
-  info: 'bg-gray-100 text-gray-800',
-};
-
-const severityLabels: Record<string, string> = {
-  critical: '严重',
-  high: '高危',
-  medium: '中危',
-  low: '低危',
-  info: '信息',
-};
 
 export default function SkillDetailPage() {
   const params = useParams();
@@ -511,12 +494,6 @@ export default function SkillDetailPage() {
                 <p className="text-gray-900">
                   {categories.find(c => c.value === skill.category)?.label || skill.category}
                 </p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">严重程度</h3>
-                <span className={`px-2 py-1 text-sm rounded-full ${severityColors[skill.severity]}`}>
-                  {severityLabels[skill.severity] || skill.severity}
-                </span>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">CWE</h3>

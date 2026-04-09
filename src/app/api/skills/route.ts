@@ -121,7 +121,6 @@ export async function POST(request: Request) {
       description,
       category,
       cwe,
-      severity = 'medium',
       content,  // 完整的 Markdown 内容
       isPublic = false,  // 是否为公共 Skill，默认为私有
     } = body;
@@ -172,7 +171,6 @@ export async function POST(request: Request) {
         description,
         category,
         cwe: cwe || null,
-        severity: severity || 'medium',
         content,  // 保存完整的 Markdown 内容
         userId,
         isBuiltin,

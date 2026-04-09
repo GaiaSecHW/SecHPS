@@ -30,7 +30,6 @@ interface Skill {
   description: string;
   category: string;
   cwe: string | null;
-  severity: string;
   content: string;
   isActive: boolean;
   isBuiltin: boolean;
@@ -43,35 +42,6 @@ interface Skill {
   createdAt: string;
   updatedAt: string;
 }
-
-const categoryLabels: Record<string, string> = {
-  'code-audit': '代码安全审计',
-  'auth': '认证与授权',
-  'sensitive': '敏感信息泄露',
-  'api': 'API 安全',
-  'config': '依赖与配置',
-  'crypto': '加密与数据',
-  'web': 'Web 安全',
-  'business': '业务逻辑',
-  'client': '客户端安全',
-  'cloud': '云与容器安全',
-};
-
-const severityColors: Record<string, string> = {
-  critical: 'bg-red-100 text-red-800',
-  high: 'bg-orange-100 text-orange-800',
-  medium: 'bg-yellow-100 text-yellow-800',
-  low: 'bg-blue-100 text-blue-800',
-  info: 'bg-gray-100 text-gray-800',
-};
-
-const severityLabels: Record<string, string> = {
-  critical: '严重',
-  high: '高危',
-  medium: '中危',
-  low: '低危',
-  info: '信息',
-};
 
 export default function SkillsPage() {
   const router = useRouter();
@@ -516,9 +486,6 @@ export default function SkillsPage() {
                     <div>
                       <div className="flex items-center space-x-2">
                         <h3 className="font-semibold text-gray-900">{skill.displayName}</h3>
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${severityColors[skill.severity]}`}>
-                          {severityLabels[skill.severity] || skill.severity}
-                        </span>
                         {skill.isBuiltin && (
                           <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full">
                             内置
