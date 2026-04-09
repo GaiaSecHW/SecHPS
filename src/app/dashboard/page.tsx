@@ -152,7 +152,7 @@ export default function DashboardPage() {
   const getStatusBgColor = (status?: string) => {
     switch (status) {
       case 'running':
-        return 'bg-blue-50 text-blue'700 border-blue-200';
+        return 'bg-blue-50 text-blue-700 border-blue-200';
       case 'completed':
         return 'bg-green-50 text-green-700 border-green-200';
       case 'failed':
@@ -455,7 +455,7 @@ function SessionRow({
   getStatusBgColor: (status?: string) => string;
   getProgressPercentage: (session: Session) => number;
 }) {
-  const' progress = getProgressPercentage(session);
+  const progress = getProgressPercentage(session);
 
   return (
     <div className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:bg-primary-50/30 transition-all">
