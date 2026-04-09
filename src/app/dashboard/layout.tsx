@@ -97,9 +97,6 @@ export default function DashboardLayout({
           <NavLink href="/dashboard/sessions" icon={<MessageSquare size={20} />}>
             我的项目
           </NavLink>
-          <NavLink href="/dashboard/claude" icon={<Clock size={20} />}>
-            Claude 会话
-          </NavLink>
 
           {/* Agent编排 */}
           <div className="pt-4 pb-2">
@@ -149,6 +146,9 @@ export default function DashboardLayout({
               </NavLink>
               <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
                 插件管理
+              </NavLink>
+              <NavLink href="/dashboard/claude" icon={<Clock size={20} />}>
+                Claude 会话
               </NavLink>
               <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />}>
                 漏洞分类
