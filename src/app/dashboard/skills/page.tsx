@@ -501,9 +501,9 @@ export default function SkillsPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <span className="text-sm text-gray-500">
-                      {categoryLabels[skill.category] || skill.category}
-                    </span>
+                      <span className={`text-sm text-gray-500 ${
+                        categoryLabels[skill.category] || 'text-gray-400'
+                      }`}>
                     {expandedSkill === skill.id ? (
                       <ChevronUp size={20} className="text-gray-400" />
                     ) : (
