@@ -117,16 +117,6 @@ export default function DashboardLayout({
             MCP 服务器
           </NavLink>
 
-          {/* 安全测试 */}
-          <div className="pt-4 pb-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">
-              安全测试
-            </p>
-          </div>
-          <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
-            插件管理
-          </NavLink>
-
           {/* 个人中心 */}
           <div className="pt-4 pb-2">
             <p className="text-xs text-gray-500 uppercase tracking-wider">
@@ -156,6 +146,9 @@ export default function DashboardLayout({
               </NavLink>
               <NavLink href="/dashboard/admin/models" icon={<Brain size={20} />}>
                 模型管理
+              </NavLink>
+              <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
+                插件管理
               </NavLink>
               <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />}>
                 漏洞分类
