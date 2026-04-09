@@ -110,6 +110,12 @@ export default function DashboardLayout({
           <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />}>
             Agent编排管理
           </NavLink>
+          <NavLink href="/dashboard/skills" icon={<Award size={20} />}>
+            Skills 库
+          </NavLink>
+          <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />}>
+            MCP 服务器
+          </NavLink>
 
           {/* 安全测试 */}
           <div className="pt-4 pb-2">
@@ -117,14 +123,8 @@ export default function DashboardLayout({
               安全测试
             </p>
           </div>
-          <NavLink href="/dashboard/skills" icon={<Award size={20} />}>
-            Skills 库
-          </NavLink>
           <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
             插件管理
-          </NavLink>
-          <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />}>
-            MCP 服务器
           </NavLink>
 
           {/* 个人中心 */}
