@@ -59,6 +59,7 @@ export default function SessionDetailPage({
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
+  const [showAllChildMessages, setShowAllChildMessages] = useState(false);
 
   useEffect(() => {
     if (evaluationId) {
@@ -960,7 +961,7 @@ export default function SessionDetailPage({
                                 <p className="text-xs font-medium text-purple-700 mb-2">
                                   子会话消息 ({childSessionMessages.length})
                                 </p>
-                                {childSessionMessages.slice(0, 10).map((msg, idx) => (
+                                {(showAllChildMessages ? childSessionMessages : childSessionMessages.slice(0, 10)).map((msg, idx) => (
                                   <div
                                     key={msg.id || idx}
                                     className={`p-2 rounded text-sm ${
@@ -989,9 +990,14 @@ export default function SessionDetailPage({
                                   </div>
                                 ))}
                                 {childSessionMessages.length > 10 && (
-                                  <p className="text-xs text-gray-500 text-center">
-                                    还有 {childSessionMessages.length - 10} 条消息...
-                                  </p>
+                                  <button
+                                    onClick={() => setShowAllChildMessages(!showAllChildMessages)}
+                                    className="w-full text-xs text-purple-600 hover:text-purple-800 text-center py-2 bg-purple-50 hover:bg-purple-100 rounded transition-colors"
+                                  >
+                                    {showAllChildMessages 
+                                      ? `收起 (显示前 10 条)` 
+                                      : `显示全部 ${childSessionMessages.length} 条消息`}
+                                  </button>
                                 )}
                               </div>
                             ) : (
