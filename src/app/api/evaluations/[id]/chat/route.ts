@@ -73,19 +73,9 @@ export async function POST(
     const skills = await loadActiveSkills();
     console.log(`[Chat] 加载了 ${skills.length} 个激活的 Skills`);
 
-    // 从 Skills 中提取工具名称
-    const skillTools = new Set<string>();
-    for (const skill of skills) {
-      if (skill.tools && skill.tools.length > 0) {
-        skill.tools.forEach(tool => {
-          if (tool.name) {
-            skillTools.add(tool.name);
-          }
-        });
-      }
-    }
-    const allowedTools = Array.from(skillTools);
-    console.log(`[Chat] 从 Skills 中提取了 ${allowedTools.length} 个工具:`, allowedTools);
+    // Skill 不再包含工具定义，直接使用空数组
+    const allowedTools: string[] = [];
+    console.log(`[Chat] Skills 不包含工具定义，使用默认工具`);
 
     // 创建评估调用器，传递项目目录作为工作目录和允许的工具
     const caller = createEvaluationCaller(modelConfig, project.projectPath || undefined, allowedTools);

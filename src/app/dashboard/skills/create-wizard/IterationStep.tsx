@@ -33,9 +33,12 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
 
   const { runs } = evaluationData;
   
+  // 确保 runs 是数组
+  const runsArray = Array.isArray(runs) ? runs : [];
+  
   // 分组测试结果
   const groupedResults: Record<string, { withSkill?: TestRun; withoutSkill?: TestRun }> = {};
-  runs.forEach((run) => {
+  runsArray.forEach((run) => {
     if (!groupedResults[run.testCaseId]) {
       groupedResults[run.testCaseId] = {};
     }
@@ -107,7 +110,7 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
   };
 
   // 统计数据
-  const completedRuns = runs.filter((r) => r.status === 'completed');
+  const completedRuns = runsArray.filter((r) => r.status === 'completed');
   const avgDurationWithSkill = 
     completedRuns
       .filter((r) => r.type === 'with_skill' && r.duration)

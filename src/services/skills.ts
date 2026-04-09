@@ -26,27 +26,8 @@ export type SkillCategory =
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
 /**
- * Skill 工具定义
- */
-export interface SkillTool {
-  name: string;
-  description?: string;
-  parameters?: Record<string, unknown>;
-}
-
-/**
- * Skill 参数定义
- */
-export interface SkillParameter {
-  name: string;
-  type: 'string' | 'number' | 'boolean' | 'array' | 'object';
-  description?: string;
-  required?: boolean;
-  default?: unknown;
-}
-
-/**
  * 加载后的 Skill 数据
+ * Skill 存储为完整的 Markdown 内容，不再解析为多个字段
  */
 export interface LoadedSkill {
   id: string;
@@ -57,28 +38,15 @@ export interface LoadedSkill {
   category: SkillCategory;
   severity: Severity;
   cwe?: string | null;
-  systemPrompt: string;
-  userPrompt: string;
-  tools: SkillTool[];
-  parameters: SkillParameter[];
+  content: string;  // 完整的 Markdown 内容
   version: number;
   parentId?: string | null;
   isLatest: boolean;
   successRate?: number | null;
   avgDuration?: number | null;
   execCount: number;
-  
-  // 官方标准字段
-  disableModelInvocation?: boolean;
-  userInvocable?: boolean;
-  context?: 'inline' | 'fork';
-  agent?: string;
-  argumentHint?: string;
-  model?: string;
-  effort?: 'low' | 'medium' | 'high' | 'max';
-  paths?: string[];
-  shell?: 'bash' | 'powershell';
-  hooks?: Record<string, unknown>;
+  isActive: boolean;
+  isBuiltin: boolean;
 }
 
 /**
@@ -138,29 +106,38 @@ export async function loadActiveSkills(): Promise<LoadedSkill[]> {
  */
 export async function loadAllAvailableSkills(userId: string | null): Promise<LoadedSkill[]> {
   try {
-    const whereClause: { isActive: boolean; isLatest: boolean; OR?: Array<{ userId: string | null }> } = {
-      isActive: true,
-      isLatest: true,
-    };
-
+    let skills;
+    
     if (userId) {
       // 用户可以访问公共 Skills 和自己的私有 Skills
-      whereClause.OR = [
-        { userId: null },      // 公共 Skills
-        { userId: userId },    // 用户私有 Skills
-      ];
+      skills = await prisma.skill.findMany({
+        where: {
+          isActive: true,
+          isLatest: true,
+          OR: [
+            { userId: null },      // 公共 Skills
+            { userId: userId },    // 用户私有 Skills
+          ],
+        },
+        orderBy: [
+          { severity: 'desc' },
+          { successRate: 'desc' },
+        ],
+      });
     } else {
       // 未登录用户只能访问公共 Skills
-      whereClause.userId = null;
+      skills = await prisma.skill.findMany({
+        where: {
+          isActive: true,
+          isLatest: true,
+          userId: null,
+        },
+        orderBy: [
+          { severity: 'desc' },
+          { successRate: 'desc' },
+        ],
+      });
     }
-
-    const skills = await prisma.skill.findMany({
-      where: whereClause,
-      orderBy: [
-        { severity: 'desc' },
-        { successRate: 'desc' },
-      ],
-    });
 
     return skills.map(skill => parseSkill(skill));
   } catch (error) {
@@ -227,10 +204,7 @@ export async function createSkill(
     category: string;
     cwe?: string | null;
     severity: string;
-    systemPrompt: string;
-    userPrompt: string;
-    tools: SkillTool[];
-    parameters: SkillParameter[];
+    content: string;  // 完整的 Markdown 内容
     userId?: string | null;  // null = 公共，有值 = 私有
     isBuiltin?: boolean;
   }
@@ -256,10 +230,7 @@ export async function createSkill(
         category: data.category,
         cwe: data.cwe,
         severity: data.severity,
-        systemPrompt: data.systemPrompt,
-        userPrompt: data.userPrompt,
-        tools: JSON.stringify(data.tools),
-        parameters: JSON.stringify(data.parameters),
+        content: data.content,
         userId: data.userId ?? null,
         isBuiltin: data.isBuiltin ?? false,
         version: 1,
@@ -285,10 +256,7 @@ export async function createSkillVersion(
     category?: string;
     cwe?: string | null;
     severity?: string;
-    systemPrompt?: string;
-    userPrompt?: string;
-    tools?: SkillTool[];
-    parameters?: SkillParameter[];
+    content?: string;  // 完整的 Markdown 内容
   },
   evolutionData: {
     changeType: EvolutionChangeType;
@@ -321,10 +289,7 @@ export async function createSkillVersion(
         category: updates.category ?? currentSkill.category,
         cwe: updates.cwe ?? currentSkill.cwe,
         severity: updates.severity ?? currentSkill.severity,
-        systemPrompt: updates.systemPrompt ?? currentSkill.systemPrompt,
-        userPrompt: updates.userPrompt ?? currentSkill.userPrompt,
-        tools: updates.tools ? JSON.stringify(updates.tools) : currentSkill.tools,
-        parameters: updates.parameters ? JSON.stringify(updates.parameters) : currentSkill.parameters,
+        content: updates.content ?? currentSkill.content,
         userId: currentSkill.userId,
         isBuiltin: currentSkill.isBuiltin,
         isActive: currentSkill.isActive,
@@ -341,19 +306,13 @@ export async function createSkillVersion(
     const beforeData = {
       displayName: currentSkill.displayName,
       description: currentSkill.description,
-      systemPrompt: currentSkill.systemPrompt,
-      userPrompt: currentSkill.userPrompt,
-      tools: JSON.parse(currentSkill.tools),
-      parameters: JSON.parse(currentSkill.parameters),
+      content: currentSkill.content,
     };
 
     const afterData = {
       displayName: newSkill.displayName,
       description: newSkill.description,
-      systemPrompt: newSkill.systemPrompt,
-      userPrompt: newSkill.userPrompt,
-      tools: JSON.parse(newSkill.tools),
-      parameters: JSON.parse(newSkill.parameters),
+      content: newSkill.content,
     };
 
     await prisma.skillEvolution.create({
@@ -423,10 +382,7 @@ export async function rollbackSkillVersion(
         category: targetSkill.category,
         cwe: targetSkill.cwe,
         severity: targetSkill.severity,
-        systemPrompt: targetSkill.systemPrompt,
-        userPrompt: targetSkill.userPrompt,
-        tools: targetSkill.tools,
-        parameters: targetSkill.parameters,
+        content: targetSkill.content,
         userId: targetSkill.userId,
         isBuiltin: targetSkill.isBuiltin,
         isActive: targetSkill.isActive,
@@ -450,14 +406,12 @@ export async function rollbackSkillVersion(
         beforeData: JSON.stringify({
           displayName: currentLatest.displayName,
           description: currentLatest.description,
-          systemPrompt: currentLatest.systemPrompt,
-          userPrompt: currentLatest.userPrompt,
+          content: currentLatest.content,
         }),
         afterData: JSON.stringify({
           displayName: targetSkill.displayName,
           description: targetSkill.description,
-          systemPrompt: targetSkill.systemPrompt,
-          userPrompt: targetSkill.userPrompt,
+          content: targetSkill.content,
         }),
         reason: `回滚: ${reason}`,
         beforeRate: currentLatest.successRate,
@@ -595,27 +549,9 @@ export function filterSkillsBySeverity(
 
 /**
  * 解析 Skill 数据
+ * Skill 现在存储为完整的 Markdown 内容，不再需要解析 tools 和 parameters
  */
 function parseSkill(skill: Skill): LoadedSkill {
-  let tools: SkillTool[] = [];
-  let parameters: SkillParameter[] = [];
-
-  try {
-    if (skill.tools) {
-      tools = JSON.parse(skill.tools);
-    }
-  } catch (error) {
-    console.warn(`[SkillsService] 解析 Skill ${skill.name} 的 tools 失败:`, error);
-  }
-
-  try {
-    if (skill.parameters) {
-      parameters = JSON.parse(skill.parameters);
-    }
-  } catch (error) {
-    console.warn(`[SkillsService] 解析 Skill ${skill.name} 的 parameters 失败:`, error);
-  }
-
   return {
     id: skill.id,
     userId: skill.userId,
@@ -625,21 +561,21 @@ function parseSkill(skill: Skill): LoadedSkill {
     category: skill.category as SkillCategory,
     severity: skill.severity as Severity,
     cwe: skill.cwe,
-    systemPrompt: skill.systemPrompt,
-    userPrompt: skill.userPrompt,
-    tools,
-    parameters,
+    content: skill.content || '',
     version: skill.version,
     parentId: skill.parentId,
     isLatest: skill.isLatest,
     successRate: skill.successRate,
     avgDuration: skill.avgDuration,
     execCount: skill.execCount,
+    isActive: skill.isActive,
+    isBuiltin: skill.isBuiltin,
   };
 }
 
 /**
  * 将 Skills 转换为系统提示词
+ * Skill 现在存储为完整的 Markdown 内容，直接返回 content
  */
 export function buildSkillsSystemPrompt(skills: LoadedSkill[]): string {
   if (skills.length === 0) {
@@ -658,10 +594,6 @@ export function buildSkillsSystemPrompt(skills: LoadedSkill[]): string {
     }
     prompt += `- **描述**: ${skill.description}\n`;
 
-    if (skill.tools.length > 0) {
-      prompt += `- **所需工具**: ${skill.tools.map(t => t.name).join(', ')}\n`;
-    }
-
     if (skill.successRate !== null && skill.successRate !== undefined) {
       prompt += `- **成功率**: ${(skill.successRate * 100).toFixed(1)}%\n`;
     }
@@ -679,12 +611,13 @@ export function buildSkillsSystemPrompt(skills: LoadedSkill[]): string {
 
 /**
  * 构建 Skill 的用户提示词（带变量替换）
+ * Skill 现在存储为完整的 Markdown 内容，直接返回 content
  */
 export function buildSkillUserPrompt(
   skill: LoadedSkill,
   context: SkillsPromptContext
 ): string {
-  let prompt = skill.userPrompt;
+  let prompt = skill.content;
 
   // 替换内置变量
   prompt = prompt.replace(/\{\{projectPath\}\}/g, context.projectPath || '当前目录');
@@ -740,40 +673,25 @@ function getSeverityLabel(severity: Severity): string {
 }
 
 /**
- * 获取 Skill 工具列表（用于 AI SDK 配置）
+ * 获取 Skill 内容（用于 AI SDK 配置）
+ * Skill 现在存储为完整的 Markdown 内容
  */
-export function getSkillTools(skills: LoadedSkill[]): SkillTool[] {
-  const toolMap = new Map<string, SkillTool>();
-
-  for (const skill of skills) {
-    for (const tool of skill.tools) {
-      // 避免重复
-      if (!toolMap.has(tool.name)) {
-        toolMap.set(tool.name, tool);
-      }
-    }
-  }
-
-  return Array.from(toolMap.values());
+export function getSkillContent(skill: LoadedSkill): string {
+  return skill.content;
 }
 
 /**
- * 获取 Skill 参数默认值
+ * 获取 Skill 完整内容
  */
-export function getSkillParameterDefaults(skill: LoadedSkill): Record<string, unknown> {
-  const defaults: Record<string, unknown> = {};
-  
-  for (const param of skill.parameters) {
-    if (param.default !== undefined) {
-      defaults[param.name] = param.default;
-    }
-  }
-  
-  return defaults;
+export function getFullSkillContent(skills: LoadedSkill[]): string {
+  return skills.map(skill => 
+    `## ${skill.displayName}\n\n${skill.content}`
+  ).join('\n\n---\n\n');
 }
 
 /**
  * 将 Skills 导出到 SKILL.md 文件
+ * Skill 现在存储为完整的 Markdown 内容，直接导出 content
  */
 export function exportSkillToFile(skill: LoadedSkill, targetDir: string): string {
   const skillDir = path.join(targetDir, skill.name);
@@ -784,89 +702,13 @@ export function exportSkillToFile(skill: LoadedSkill, targetDir: string): string
     fs.mkdirSync(skillDir, { recursive: true });
   }
   
-  // 生成 Markdown 内容
-  const markdown = generateSkillMarkdown(skill);
-  
-  // 写入文件
-  fs.writeFileSync(skillFile, markdown, 'utf-8');
+  // 直接写入 content
+  fs.writeFileSync(skillFile, skill.content, 'utf-8');
   
   return skillFile;
 }
 
-/**
- * 生成符合 Claude 官方格式的 SKILL.md 内容
- */
-function generateSkillMarkdown(skill: LoadedSkill): string {
-  let markdown = '---\n';
-  
-  // 必需字段
-  markdown += `name: ${skill.name}\n`;
-  markdown += `description: ${skill.description}\n`;
-  
-  // 可选字段
-  if (skill.disableModelInvocation) {
-    markdown += `disable-model-invocation: true\n`;
-  }
-  
-  if (skill.userInvocable === false) {
-    markdown += `user-invocable: false\n`;
-  }
-  
-  if (skill.tools && skill.tools.length > 0) {
-    const toolNames = skill.tools.map(t => t.name).join(' ');
-    markdown += `allowed-tools: ${toolNames}\n`;
-  }
-  
-  if (skill.context) {
-    markdown += `context: ${skill.context}\n`;
-  }
-  
-  if (skill.agent) {
-    markdown += `agent: ${skill.agent}\n`;
-  }
-  
-  if (skill.argumentHint) {
-    markdown += `argument-hint: ${skill.argumentHint}\n`;
-  }
-  
-  if (skill.model) {
-    markdown += `model: ${skill.model}\n`;
-  }
-  
-  if (skill.effort) {
-    markdown += `effort: ${skill.effort}\n`;
-  }
-  
-  if (skill.paths && skill.paths.length > 0) {
-    markdown += `paths: ${skill.paths.join(', ')}\n`;
-  }
-  
-  if (skill.shell) {
-    markdown += `shell: ${skill.shell}\n`;
-  }
-  
-  if (skill.hooks) {
-    const hooksJson = typeof skill.hooks === 'string' 
-      ? skill.hooks 
-      : JSON.stringify(skill.hooks, null, 2);
-    markdown += `hooks: ${hooksJson}\n`;
-  }
-  
-  // 结束 frontmatter
-  markdown += '---\n\n';
-  
-  // 添加内容
-  markdown += skill.systemPrompt;
-  
-  // 如果有用户提示词，添加到末尾
-  if (skill.userPrompt && skill.userPrompt !== skill.systemPrompt) {
-    markdown += '\n\n---\n\n';
-    markdown += '## 用户提示词\n\n';
-    markdown += skill.userPrompt;
-  }
-  
-  return markdown;
-}
+
 
 /**
  * 批量导出 Skills 到项目目录
@@ -917,22 +759,18 @@ export function cleanupProjectSkills(projectPath: string): void {
 
 /**
  * 从官方格式的 SKILL.md 导入 Skill
+ * Skill 存储为完整的 Markdown 内容
  */
 export async function importSkillFromMarkdown(
   markdown: string,
   userId?: string | null
 ): Promise<LoadedSkill> {
-  // 解析 YAML frontmatter
+  // 解析 YAML frontmatter 获取元数据
   const frontmatterMatch = markdown.match(/^---\n([\s\S]*?)\n---\n/);
+  const content = frontmatterMatch ? markdown.slice(frontmatterMatch[0].length) : markdown;
+  const frontmatterText = frontmatterMatch ? (frontmatterMatch[1] || '') : '';
   
-  if (!frontmatterMatch) {
-    throw new Error('无效的 SKILL.md 格式：缺少 YAML frontmatter');
-  }
-  
-  const frontmatterText = frontmatterMatch[1] || '';
-  const content = markdown.slice(frontmatterMatch[0].length);
-  
-  // 简单解析 frontmatter（实际项目应使用 YAML 解析库）
+  // 简单解析 frontmatter
   const frontmatter: Record<string, any> = {};
   const lines = frontmatterText.split('\n');
   
@@ -959,12 +797,9 @@ export async function importSkillFromMarkdown(
     description: frontmatter.description || content.slice(0, 200),
     category: inferCategory(frontmatter.description || content),
     severity: 'medium',  // 默认值
-    cwe: extractCWE(frontmatter.description || content),
-    systemPrompt: content,
-    userPrompt: content,
-    tools: parseTools(frontmatter['allowed-tools']),
-    parameters: [],
-    userId,
+    cwe: extractCWE(frontmatter.description || content) ?? null,  // 确保 null 而非 undefined
+    content: markdown,  // 保存完整的 Markdown 内容
+    userId: userId ?? null,  // 确保 null 而非 undefined
     isBuiltin: false,
     isActive: true,
     version: 1,
@@ -973,18 +808,6 @@ export async function importSkillFromMarkdown(
     successRate: null,
     avgDuration: null,
     execCount: 0,
-    
-    // 新增字段
-    disableModelInvocation: frontmatter['disable-model-invocation'] || false,
-    userInvocable: frontmatter['user-invocable'] !== false,
-    context: frontmatter.context,
-    agent: frontmatter.agent,
-    argumentHint: frontmatter['argument-hint'],
-    model: frontmatter.model,
-    effort: frontmatter.effort,
-    paths: parsePaths(frontmatter.paths),
-    shell: frontmatter.shell,
-    hooks: parseHooks(frontmatter.hooks),
   };
 }
 
@@ -1020,41 +843,4 @@ function inferCategory(description: string): SkillCategory {
 function extractCWE(description: string): string | null {
   const match = description.match(/CWE-\d+/);
   return match ? match[0] : null;
-}
-
-/**
- * 解析工具列表
- */
-function parseTools(allowedTools?: string): SkillTool[] {
-  if (!allowedTools) return [];
-  
-  const tools = allowedTools.split(' ').filter(t => t.trim());
-  
-  return tools.map(name => ({
-    name,
-    description: '',
-    parameters: {},
-  }));
-}
-
-/**
- * 解析路径列表
- */
-function parsePaths(paths?: string): string[] {
-  if (!paths) return [];
-  
-  return paths.split(',').map(p => p.trim()).filter(p => p);
-}
-
-/**
- * 解析 Hooks 配置
- */
-function parseHooks(hooks?: string): Record<string, unknown> {
-  if (!hooks) return {};
-  
-  try {
-    return JSON.parse(hooks);
-  } catch {
-    return {};
-  }
 }

@@ -87,10 +87,7 @@ export async function POST(
         category: targetSkill.category,
         cwe: targetSkill.cwe,
         severity: targetSkill.severity,
-        systemPrompt: targetSkill.systemPrompt,
-        userPrompt: targetSkill.userPrompt,
-        tools: targetSkill.tools,
-        parameters: targetSkill.parameters,
+        content: targetSkill.content,
         userId: targetSkill.userId,
         isBuiltin: targetSkill.isBuiltin,
         isActive: targetSkill.isActive,
@@ -114,14 +111,12 @@ export async function POST(
         beforeData: JSON.stringify({
           displayName: currentLatest.displayName,
           description: currentLatest.description,
-          systemPrompt: currentLatest.systemPrompt,
-          userPrompt: currentLatest.userPrompt,
+          content: currentLatest.content,
         }),
         afterData: JSON.stringify({
           displayName: targetSkill.displayName,
           description: targetSkill.description,
-          systemPrompt: targetSkill.systemPrompt,
-          userPrompt: targetSkill.userPrompt,
+          content: targetSkill.content,
         }),
         reason: `回滚: ${reason}`,
         beforeRate: currentLatest.successRate,
@@ -130,11 +125,7 @@ export async function POST(
     });
 
     return NextResponse.json({
-      skill: {
-        ...newSkill,
-        tools: JSON.parse(newSkill.tools),
-        parameters: JSON.parse(newSkill.parameters),
-      },
+      skill: newSkill,
       message: `成功回滚到版本 ${targetSkill.version}`,
     });
   } catch (error) {

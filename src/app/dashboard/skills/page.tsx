@@ -31,30 +31,17 @@ interface Skill {
   category: string;
   cwe: string | null;
   severity: string;
+  content: string;
   isActive: boolean;
   isBuiltin: boolean;
   version: number;
   parentId: string | null;
   isLatest: boolean;
-  systemPrompt: string;
-  userPrompt: string;
-  tools: string[];
-  parameters: Record<string, unknown>;
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
   createdAt: string;
   updatedAt: string;
-  // 官方标准字段
-  disableModelInvocation: boolean;
-  userInvocable: boolean;
-  context: string | null;
-  agent: string | null;
-  argumentHint: string | null;
-  model: string | null;
-  effort: string | null;
-  paths: string | null;
-  shell: string | null;
 }
 
 const categoryLabels: Record<string, string> = {
@@ -313,99 +300,9 @@ export default function SkillsPage() {
 
   const isAdmin = user?.roles?.includes('admin');
 
-  // 生成 SKILL.md 格式内容
+  // 生成 SKILL.md 格式内容 - 直接返回 content 字段
   const generateSkillMd = (skill: Skill): string => {
-    // 构建 YAML frontmatter
-    const frontmatter: Record<string, unknown> = {
-      name: skill.name,
-      description: skill.description,
-    };
-
-    // 添加官方字段（仅在有值时）
-    if (skill.disableModelInvocation) {
-      frontmatter['disable-model-invocation'] = true;
-    }
-    if (!skill.userInvocable) {
-      frontmatter['user-invocable'] = false;
-    }
-    if (skill.context) {
-      frontmatter.context = skill.context;
-    }
-    if (skill.agent) {
-      frontmatter.agent = skill.agent;
-    }
-    if (skill.argumentHint) {
-      frontmatter['argument-hint'] = skill.argumentHint;
-    }
-    if (skill.model) {
-      frontmatter.model = skill.model;
-    }
-    if (skill.effort) {
-      frontmatter.effort = skill.effort;
-    }
-    if (skill.paths) {
-      try {
-        const paths = typeof skill.paths === 'string' ? JSON.parse(skill.paths) : skill.paths;
-        if (Array.isArray(paths) && paths.length > 0) {
-          frontmatter.paths = paths;
-        }
-      } catch {
-        // 忽略解析错误
-      }
-    }
-    if (skill.shell) {
-      frontmatter.shell = skill.shell;
-    }
-    if (skill.tools && Array.isArray(skill.tools) && skill.tools.length > 0) {
-      frontmatter['allowed-tools'] = skill.tools.join(' ');
-    }
-
-    // 构建 YAML 字符串
-    const yamlLines = ['---'];
-    for (const [key, value] of Object.entries(frontmatter)) {
-      if (typeof value === 'boolean') {
-        yamlLines.push(`${key}: ${value}`);
-      } else if (Array.isArray(value)) {
-        yamlLines.push(`${key}: ${JSON.stringify(value)}`);
-      } else {
-        yamlLines.push(`${key}: ${value}`);
-      }
-    }
-    yamlLines.push('---');
-
-    // 构建 markdown 内容
-    const sections: string[] = [];
-
-    if (skill.systemPrompt) {
-      sections.push('## 系统提示词\n', skill.systemPrompt);
-    }
-
-    if (skill.userPrompt) {
-      sections.push('## 用户提示词\n', skill.userPrompt);
-    }
-
-    if (skill.cwe) {
-      sections.push('## 相关 CWE\n', skill.cwe);
-    }
-
-    if (skill.severity) {
-      const severityMap: Record<string, string> = {
-        critical: '严重',
-        high: '高危',
-        medium: '中危',
-        low: '低危',
-        info: '信息',
-      };
-      sections.push('## 安全等级\n', severityMap[skill.severity] || skill.severity);
-    }
-
-    if (skill.parameters && Object.keys(skill.parameters).length > 0) {
-      sections.push('## 参数配置\n', '```json\n', JSON.stringify(skill.parameters, null, 2), '\n```');
-    }
-
-    // 组合最终内容
-    const content = [yamlLines.join('\n'), ...sections].join('\n\n');
-    return content;
+    return skill.content || '';  // 直接返回完整的 Markdown 内容
   };
 
   // 复制 SKILL.md 到剪贴板
@@ -673,43 +570,11 @@ export default function SkillsPage() {
                         )}
                       </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">工具</h4>
-                      <div className="flex flex-wrap gap-1">
-                        {skill.tools && Array.isArray(skill.tools) && skill.tools.length > 0 ? (
-                          skill.tools.map((tool: string) => (
-                            <span key={tool} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
-                              {tool}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-sm text-gray-500">无</span>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">系统提示词</h4>
+                    <div className="md:col-span-2">
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">内容预览</h4>
                       <p className="text-sm text-gray-600 line-clamp-3">
-                        {skill.systemPrompt ? skill.systemPrompt.substring(0, 200) + (skill.systemPrompt.length > 200 ? '...' : '') : '无'}
+                        {skill.content ? skill.content.substring(0, 300) + (skill.content.length > 300 ? '...' : '') : '无'}
                       </p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">用户提示词</h4>
-                      <p className="text-sm text-gray-600 line-clamp-3">
-                        {skill.userPrompt ? skill.userPrompt.substring(0, 200) + (skill.userPrompt.length > 200 ? '...' : '') : '无'}
-                      </p>
-                    </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">参数配置</h4>
-                      <div className="text-sm text-gray-600">
-                        {skill.parameters && Object.keys(skill.parameters).length > 0 ? (
-                          <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto max-h-24">
-                            {JSON.stringify(skill.parameters, null, 2)}
-                          </pre>
-                        ) : (
-                          <span className="text-gray-500">无</span>
-                        )}
-                      </div>
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">统计</h4>

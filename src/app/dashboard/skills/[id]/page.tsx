@@ -14,10 +14,13 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  Download,
+  FileText,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/auth';
 import { getCategories, Category } from '@/lib/categories';
+import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 
 interface Skill {
   id: string;
@@ -27,16 +30,12 @@ interface Skill {
   category: string;
   cwe: string | null;
   severity: string;
+  content: string;
   isActive: boolean;
   isBuiltin: boolean;
   version: number;
   parentId: string | null;
   isLatest: boolean;
-  systemPrompt: string;
-  userPrompt: string;
-  content: string | null;
-  tools: string[];
-  parameters: Record<string, unknown>;
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
@@ -76,6 +75,8 @@ export default function SkillDetailPage() {
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [exporting, setExporting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -233,6 +234,33 @@ export default function SkillDetailPage() {
     navigator.clipboard.writeText(text);
   };
 
+  const handleExport = async () => {
+    if (!skill) return;
+    
+    setExporting(true);
+    try {
+      await exportAsSkillFile(skill);
+    } catch (error) {
+      console.error('导出失败:', error);
+      alert('导出失败，请重试');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleCopyMd = async () => {
+    if (!skill) return;
+    
+    try {
+      await copySkillMdToClipboard(skill);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error('复制失败:', error);
+      alert('复制失败，请重试');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -278,6 +306,41 @@ export default function SkillDetailPage() {
           </div>
         </div>
         <div className="flex items-center space-x-3">
+          {/* 导出按钮 */}
+          <button
+            onClick={handleCopyMd}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            {copied ? (
+              <>
+                <CheckCircle size={16} className="mr-2 text-green-600" />
+                已复制
+              </>
+            ) : (
+              <>
+                <Copy size={16} className="mr-2" />
+                复制 MD
+              </>
+            )}
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
+          >
+            {exporting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                导出中...
+              </>
+            ) : (
+              <>
+                <Download size={16} className="mr-2" />
+                导出 .skill
+              </>
+            )}
+          </button>
+          
           {isAdmin && (
             <>
               {!isEditing ? (

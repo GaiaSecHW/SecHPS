@@ -25,6 +25,7 @@ export interface SkillMetadata {
 
 /**
  * 磁盘存储的 Skill 数据
+ * Skill 存储为完整的 Markdown 内容
  */
 export interface DiskSkill {
   id: string;
@@ -35,10 +36,7 @@ export interface DiskSkill {
   category: string;
   severity: string;
   cwe: string | null;
-  systemPrompt: string;
-  userPrompt: string;
-  tools: any[];
-  parameters: any[];
+  content: string;  // 完整的 Markdown 内容
   version: number;
   parentId: string | null;
   isLatest: boolean;
@@ -109,28 +107,10 @@ export function getSkillMetadata(skillName: string, userId: string | null): Skil
 
 /**
  * 生成符合 Claude 官方格式的 SKILL.md 内容
+ * 直接返回 content 字段
  */
 function generateSkillMarkdown(skill: DiskSkill): string {
-  let markdown = '---\n';
-  
-  // 必需字段
-  markdown += `name: ${skill.name}\n`;
-  markdown += `description: ${skill.description}\n`;
-  
-  // 结束 frontmatter
-  markdown += '---\n\n';
-  
-  // 添加内容
-  markdown += skill.systemPrompt;
-  
-  // 如果有用户提示词，添加到末尾
-  if (skill.userPrompt && skill.userPrompt !== skill.systemPrompt) {
-    markdown += '\n\n---\n\n';
-    markdown += '## 用户提示词\n\n';
-    markdown += skill.userPrompt;
-  }
-  
-  return markdown;
+  return skill.content || '';
 }
 
 /**
@@ -154,10 +134,7 @@ export async function saveSkillToDisk(skill: Skill): Promise<boolean> {
       category: skill.category,
       severity: skill.severity,
       cwe: skill.cwe,
-      systemPrompt: skill.systemPrompt,
-      userPrompt: skill.userPrompt,
-      tools: JSON.parse(skill.tools || '[]'),
-      parameters: JSON.parse(skill.parameters || '[]'),
+      content: skill.content || '',
       version: skill.version,
       parentId: skill.parentId,
       isLatest: skill.isLatest,

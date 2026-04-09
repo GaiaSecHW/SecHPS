@@ -91,15 +91,7 @@ export async function GET(request: Request) {
       prisma.skill.count({ where }),
     ]);
 
-    // 解析 JSON 字段
-    const parsedSkills = skills.map((skill: typeof skills[0]) => ({
-      ...skill,
-      tools: typeof skill.tools === 'string' ? JSON.parse(skill.tools) : skill.tools,
-      parameters: typeof skill.parameters === 'string' ? JSON.parse(skill.parameters) : skill.parameters,
-      paths: typeof skill.paths === 'string' ? JSON.parse(skill.paths) : skill.paths,
-    }));
-
-    return NextResponse.json(createPaginatedResponse(parsedSkills, total, pageNum, pageLimit));
+    return NextResponse.json(createPaginatedResponse(skills, total, pageNum, pageLimit));
   } catch (error) {
     console.error('获取 Skills 列表错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
@@ -130,18 +122,14 @@ export async function POST(request: Request) {
       category,
       cwe,
       severity = 'medium',
-      systemPrompt = '',
-      userPrompt = '',
-      tools,
-      parameters,
-      content,  // 新增：完整的 Markdown 内容
+      content,  // 完整的 Markdown 内容
       isPublic = false,  // 是否为公共 Skill，默认为私有
     } = body;
 
     // 验证必填字段
-    if (!name || !displayName || !description || !category) {
+    if (!name || !displayName || !description || !category || !content) {
       return NextResponse.json(
-        { error: '缺少必填字段：名称、描述、分类' },
+        { error: '缺少必填字段：名称、显示名称、描述、分类、内容' },
         { status: 400 }
       );
     }
@@ -183,13 +171,9 @@ export async function POST(request: Request) {
         displayName,
         description,
         category,
-        cwe,
-        severity,
-        systemPrompt,
-        userPrompt,
+        cwe: cwe || null,
+        severity: severity || 'medium',
         content,  // 保存完整的 Markdown 内容
-        tools: JSON.stringify(tools || []),
-        parameters: JSON.stringify(parameters || {}),
         userId,
         isBuiltin,
         version: 1,
@@ -203,16 +187,7 @@ export async function POST(request: Request) {
       // 不阻塞响应，仅记录错误
     });
 
-    return NextResponse.json(
-      {
-        skill: {
-          ...skill,
-          tools: JSON.parse(skill.tools),
-          parameters: JSON.parse(skill.parameters),
-        },
-      },
-      { status: 201 }
-    );
+    return NextResponse.json({ skill }, { status: 201 });
   } catch (error) {
     console.error('创建 Skill 错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

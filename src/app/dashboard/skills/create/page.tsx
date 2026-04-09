@@ -95,11 +95,9 @@ export default function CreateSkillPage() {
           description: name.trim(),
           category,
           content,
+          cwe: null,
+          severity: 'medium',
           isPublic,
-          systemPrompt: '',
-          userPrompt: '',
-          tools: '[]',
-          parameters: '[]',
         }),
       });
 

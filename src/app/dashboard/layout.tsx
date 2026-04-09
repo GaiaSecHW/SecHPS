@@ -24,6 +24,7 @@ import {
   Terminal,
   Puzzle,
   Server,
+  Tags,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -155,6 +156,9 @@ export default function DashboardLayout({
               </NavLink>
               <NavLink href="/dashboard/admin/models" icon={<Brain size={20} />}>
                 模型管理
+              </NavLink>
+              <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />}>
+                漏洞分类
               </NavLink>
               <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={20} />}>
                 漏洞管理

@@ -54,23 +54,7 @@ export async function GET(
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    return NextResponse.json({
-      skill: {
-        ...skill,
-        tools: JSON.parse(skill.tools),
-        parameters: JSON.parse(skill.parameters),
-        executions: skill.executions.map(e => ({
-          ...e,
-          input: JSON.parse(e.input),
-          output: e.output ? JSON.parse(e.output) : null,
-        })),
-        evolutions: skill.evolutions.map(ev => ({
-          ...ev,
-          beforeData: JSON.parse(ev.beforeData),
-          afterData: JSON.parse(ev.afterData),
-        })),
-      },
-    });
+    return NextResponse.json({ skill });
   } catch (error) {
     console.error('获取 Skill 详情错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
@@ -155,10 +139,7 @@ export async function PUT(
       if (updates.category !== undefined) updateData.category = updates.category;
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.severity !== undefined) updateData.severity = updates.severity;
-      if (updates.systemPrompt !== undefined) updateData.systemPrompt = updates.systemPrompt;
-      if (updates.userPrompt !== undefined) updateData.userPrompt = updates.userPrompt;
-      if (updates.tools !== undefined) updateData.tools = JSON.stringify(updates.tools);
-      if (updates.parameters !== undefined) updateData.parameters = JSON.stringify(updates.parameters);
+      if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
 
       // 创建新版本
@@ -170,10 +151,7 @@ export async function PUT(
           category: (updateData.category as string) ?? skill.category,
           cwe: (updateData.cwe as string | null) ?? skill.cwe,
           severity: (updateData.severity as string) ?? skill.severity,
-          systemPrompt: (updateData.systemPrompt as string) ?? skill.systemPrompt,
-          userPrompt: (updateData.userPrompt as string) ?? skill.userPrompt,
-          tools: (updateData.tools as string) ?? skill.tools,
-          parameters: (updateData.parameters as string) ?? skill.parameters,
+          content: (updateData.content as string) ?? skill.content,
           userId: skill.userId,
           isBuiltin: skill.isBuiltin,
           isActive: (updateData.isActive as boolean) ?? skill.isActive,
@@ -190,19 +168,13 @@ export async function PUT(
       const beforeData = {
         displayName: skill.displayName,
         description: skill.description,
-        systemPrompt: skill.systemPrompt,
-        userPrompt: skill.userPrompt,
-        tools: JSON.parse(skill.tools),
-        parameters: JSON.parse(skill.parameters),
+        content: skill.content,
       };
 
       const afterData = {
         displayName: updatedSkill.displayName,
         description: updatedSkill.description,
-        systemPrompt: updatedSkill.systemPrompt,
-        userPrompt: updatedSkill.userPrompt,
-        tools: JSON.parse(updatedSkill.tools),
-        parameters: JSON.parse(updatedSkill.parameters),
+        content: updatedSkill.content,
       };
 
       await prisma.skillEvolution.create({
@@ -232,10 +204,7 @@ export async function PUT(
       if (updates.category !== undefined) updateData.category = updates.category;
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.severity !== undefined) updateData.severity = updates.severity;
-      if (updates.systemPrompt !== undefined) updateData.systemPrompt = updates.systemPrompt;
-      if (updates.userPrompt !== undefined) updateData.userPrompt = updates.userPrompt;
-      if (updates.tools !== undefined) updateData.tools = JSON.stringify(updates.tools);
-      if (updates.parameters !== undefined) updateData.parameters = JSON.stringify(updates.parameters);
+      if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
 
       updatedSkill = await prisma.skill.update({
@@ -264,13 +233,7 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json({
-      skill: {
-        ...updatedSkill,
-        tools: JSON.parse(updatedSkill.tools),
-        parameters: JSON.parse(updatedSkill.parameters),
-      },
-    });
+    return NextResponse.json({ skill: updatedSkill });
   } catch (error) {
     console.error('更新 Skill 错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

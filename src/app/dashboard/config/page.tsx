@@ -12,7 +12,6 @@ import {
   FolderOpen,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
-import SkillCategoriesSection from './SkillCategoriesSection';
 
 interface Config {
   id: string;
@@ -399,11 +398,6 @@ export default function ConfigPage() {
             </p>
           </div>
         </div>
-
-        {/* Skill Categories Management */}
-        {hasPermission(PERMISSIONS.CONFIG_UPDATE) && (
-          <SkillCategoriesSection />
-        )}
 
         {/* MCP Servers */}
         {mcpServers.length > 0 && (

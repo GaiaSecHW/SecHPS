@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Save, FolderOpen, Trash2 } from 'lucide-react';
 import IntentStep from './IntentStep';
 import ResearchStep from './ResearchStep';
 import DraftStep from './DraftStep';
@@ -23,6 +23,19 @@ const WIZARD_STEPS = [
 ] as const;
 
 type StepId = typeof WIZARD_STEPS[number]['id'];
+
+// 草稿存储键
+const DRAFT_STORAGE_KEY = 'skill-wizard-drafts';
+const CURRENT_DRAFT_KEY = 'skill-wizard-current';
+
+// 草稿元数据
+interface DraftMeta {
+  id: string;
+  name: string;
+  step: StepId;
+  savedAt: string;
+  preview: string;
+}
 
 // 临时数据存储接口
 interface SkillWizardData {
@@ -54,10 +67,7 @@ interface SkillWizardData {
     category: string;
     cwe?: string;
     severity: string;
-    systemPrompt: string;
-    userPrompt: string;
-    tools: string[];
-    parameters: Record<string, unknown>;
+    content: string;  // 完整的 Markdown 内容
   };
   
   // 步骤 4: 测试用例
@@ -81,9 +91,9 @@ interface SkillWizardData {
       tokens?: number;
     }>;
     benchmark?: {
-      passRate: number;
-      avgDuration: number;
-      avgTokens: number;
+      baselineScore: number;
+      skillScore: number;
+      improvement: number;
     };
   };
   
@@ -95,7 +105,7 @@ interface SkillWizardData {
     timestamp: string;
   }>;
   
-  // 步骤 7: 描述优化
+  // 步骤 7: 优化结果
   optimization: {
     originalDescription: string;
     optimizedDescription: string;
@@ -103,7 +113,6 @@ interface SkillWizardData {
   };
 }
 
-// 初始数据
 const initialWizardData: SkillWizardData = {
   intent: {
     name: '',
@@ -127,10 +136,7 @@ const initialWizardData: SkillWizardData = {
     description: '',
     category: 'code-audit',
     severity: 'medium',
-    systemPrompt: '',
-    userPrompt: '',
-    tools: [],
-    parameters: {},
+    content: '',  // 完整的 Markdown 内容
   },
   testCases: [],
   evaluation: {
@@ -149,25 +155,124 @@ export default function SkillCreateWizardPage() {
   const [currentStep, setCurrentStep] = useState<StepId>('intent');
   const [wizardData, setWizardData] = useState<SkillWizardData>(initialWizardData);
   const [isSaving, setIsSaving] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const [drafts, setDrafts] = useState<DraftMeta[]>([]);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
 
-  // 从 sessionStorage 加载数据
+  // 加载草稿列表
+  const loadDrafts = () => {
+    try {
+      const saved = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        setDrafts(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('加载草稿列表失败:', error);
+    }
+  };
+
+  // 从 localStorage 加载当前草稿
   useEffect(() => {
-    const saved = sessionStorage.getItem('skill-wizard-data');
+    loadDrafts();
+    
+    const saved = localStorage.getItem(CURRENT_DRAFT_KEY);
     if (saved) {
       try {
         const data = JSON.parse(saved);
-        setWizardData(data);
+        setWizardData(data.wizardData);
+        setCurrentStep(data.currentStep);
+        setCurrentDraftId(data.draftId);
       } catch (error) {
         console.error('加载向导数据失败:', error);
       }
     }
   }, []);
 
-  // 保存数据到 sessionStorage
+  // 保存数据到 localStorage
   const saveData = (data: Partial<SkillWizardData>) => {
     const newData = { ...wizardData, ...data };
     setWizardData(newData);
-    sessionStorage.setItem('skill-wizard-data', JSON.stringify(newData));
+    
+    // 自动保存当前进度
+    const draftId = currentDraftId || `draft-${Date.now()}`;
+    if (!currentDraftId) {
+      setCurrentDraftId(draftId);
+    }
+    
+    localStorage.setItem(CURRENT_DRAFT_KEY, JSON.stringify({
+      wizardData: newData,
+      currentStep,
+      draftId,
+      savedAt: new Date().toISOString(),
+    }));
+  };
+
+  // 保存为草稿
+  const saveAsDraft = () => {
+    const draftId = currentDraftId || `draft-${Date.now()}`;
+    const draftName = wizardData.intent.name || wizardData.skill.name || '未命名 Skill';
+    
+    const draft: DraftMeta = {
+      id: draftId,
+      name: draftName,
+      step: currentStep,
+      savedAt: new Date().toISOString(),
+      preview: wizardData.intent.description || wizardData.skill.description || '暂无描述',
+    };
+    
+    // 更新草稿列表
+    const existingIndex = drafts.findIndex(d => d.id === draftId);
+    let newDrafts: DraftMeta[];
+    if (existingIndex >= 0) {
+      newDrafts = [...drafts];
+      newDrafts[existingIndex] = draft;
+    } else {
+      newDrafts = [draft, ...drafts];
+    }
+    
+    setDrafts(newDrafts);
+    setCurrentDraftId(draftId);
+    
+    // 保存到 localStorage
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(newDrafts));
+    localStorage.setItem(`skill-wizard-draft-${draftId}`, JSON.stringify({
+      wizardData,
+      currentStep,
+      savedAt: new Date().toISOString(),
+    }));
+    
+    alert('草稿已保存！');
+  };
+
+  // 加载草稿
+  const loadDraft = (draftId: string) => {
+    try {
+      const saved = localStorage.getItem(`skill-wizard-draft-${draftId}`);
+      if (saved) {
+        const data = JSON.parse(saved);
+        setWizardData(data.wizardData);
+        setCurrentStep(data.currentStep);
+        setCurrentDraftId(draftId);
+        setShowDrafts(false);
+      }
+    } catch (error) {
+      console.error('加载草稿失败:', error);
+      alert('加载草稿失败');
+    }
+  };
+
+  // 删除草稿
+  const deleteDraft = (draftId: string) => {
+    if (!confirm('确定要删除这个草稿吗？')) return;
+    
+    const newDrafts = drafts.filter(d => d.id !== draftId);
+    setDrafts(newDrafts);
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(newDrafts));
+    localStorage.removeItem(`skill-wizard-draft-${draftId}`);
+    
+    if (currentDraftId === draftId) {
+      setCurrentDraftId(null);
+    }
   };
 
   // 获取当前步骤索引
@@ -177,7 +282,9 @@ export default function SkillCreateWizardPage() {
   const handleNext = () => {
     const nextIndex = currentStepIndex + 1;
     if (nextIndex < WIZARD_STEPS.length) {
-      setCurrentStep(WIZARD_STEPS[nextIndex].id);
+      const nextStep = WIZARD_STEPS[nextIndex].id;
+      setCurrentStep(nextStep);
+      saveData({});
     }
   };
 
@@ -185,20 +292,22 @@ export default function SkillCreateWizardPage() {
   const handlePrevious = () => {
     const prevIndex = currentStepIndex - 1;
     if (prevIndex >= 0) {
-      setCurrentStep(WIZARD_STEPS[prevIndex].id);
+      const prevStep = WIZARD_STEPS[prevIndex].id;
+      setCurrentStep(prevStep);
+      saveData({});
     }
   };
 
   // 跳转到指定步骤
   const handleGoToStep = (stepId: StepId) => {
     setCurrentStep(stepId);
+    saveData({});
   };
 
   // 完成创建
   const handleComplete = async () => {
     setIsSaving(true);
     try {
-      // TODO: 调用 API 保存 Skill
       const token = localStorage.getItem('token');
       const response = await fetch('/api/skills', {
         method: 'POST',
@@ -218,8 +327,11 @@ export default function SkillCreateWizardPage() {
 
       const data = await response.json();
       
-      // 清除临时数据
-      sessionStorage.removeItem('skill-wizard-data');
+      // 清除临时数据和草稿
+      localStorage.removeItem(CURRENT_DRAFT_KEY);
+      if (currentDraftId) {
+        deleteDraft(currentDraftId);
+      }
       
       // 跳转到详情页
       router.push(`/dashboard/skills/${data.skill.id}`);
@@ -231,26 +343,121 @@ export default function SkillCreateWizardPage() {
     }
   };
 
+  // 格式化日期
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleString('zh-CN', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <div className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-4">
-            <button
-              onClick={() => {
-                if (confirm('确定要退出向导吗？未保存的数据将会丢失。')) {
-                  sessionStorage.removeItem('skill-wizard-data');
-                  router.push('/dashboard/skills');
-                }
-              }}
-              className="flex items-center text-gray-600 hover:text-gray-900 mb-2"
-            >
-              <ArrowLeft size={20} className="mr-2" />
-              返回 Skills 列表
-            </button>
-            <h1 className="text-2xl font-bold text-gray-900">创建新 Skill</h1>
-            <p className="text-sm text-gray-600 mt-1">引导式创建流程</p>
+            <div className="flex items-center justify-between">
+              <div>
+                <button
+                  onClick={() => {
+                    if (confirm('确定要退出向导吗？未保存的更改可以稍后从草稿恢复。')) {
+                      router.push('/dashboard/skills');
+                    }
+                  }}
+                  className="flex items-center text-gray-600 hover:text-gray-900 mb-2"
+                >
+                  <ArrowLeft size={20} className="mr-2" />
+                  返回 Skills 列表
+                </button>
+                <h1 className="text-2xl font-bold text-gray-900">创建新 Skill</h1>
+                <p className="text-sm text-gray-600 mt-1">引导式创建流程</p>
+              </div>
+              
+              {/* 草稿操作按钮 */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={saveAsDraft}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Save size={16} className="mr-2" />
+                  保存草稿
+                </button>
+                <button
+                  onClick={() => setShowDrafts(!showDrafts)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors relative"
+                >
+                  <FolderOpen size={16} className="mr-2" />
+                  加载草稿
+                  {drafts.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                      {drafts.length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+            
+            {/* 草稿列表 */}
+            {showDrafts && (
+              <div className="mt-4 border border-gray-200 rounded-lg bg-gray-50 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-medium text-gray-900">已保存的草稿</h3>
+                  <button
+                    onClick={() => setShowDrafts(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                
+                {drafts.length === 0 ? (
+                  <p className="text-sm text-gray-500">暂无保存的草稿</p>
+                ) : (
+                  <div className="space-y-2 max-h-64 overflow-auto">
+                    {drafts.map((draft) => (
+                      <div
+                        key={draft.id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${
+                          currentDraftId === draft.id
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="flex-1 cursor-pointer" onClick={() => loadDraft(draft.id)}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-gray-900">{draft.name}</span>
+                            {currentDraftId === draft.id && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                当前
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500 mt-1">
+                            <span>步骤: {WIZARD_STEPS.find(s => s.id === draft.step)?.label}</span>
+                            <span className="mx-2">•</span>
+                            <span>{formatDate(draft.savedAt)}</span>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-1 line-clamp-1">{draft.preview}</p>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteDraft(draft.id);
+                          }}
+                          className="ml-3 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -368,38 +575,6 @@ export default function SkillCreateWizardPage() {
                 onPrevious={handlePrevious}
               />
             )}
-          </div>
-
-          {/* Navigation Buttons */}
-          <div className="border-t border-gray-200 px-6 py-4">
-            <div className="flex justify-between">
-              <button
-                onClick={handlePrevious}
-                disabled={currentStepIndex === 0}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                上一步
-              </button>
-              
-              <div className="flex space-x-2">
-                {currentStepIndex === WIZARD_STEPS.length - 1 ? (
-                  <button
-                    onClick={handleComplete}
-                    disabled={isSaving}
-                    className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
-                  >
-                    {isSaving ? '保存中...' : '完成创建'}
-                  </button>
-                ) : (
-                  <button
-                    onClick={handleNext}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                  >
-                    下一步
-                  </button>
-                )}
-              </div>
-            </div>
           </div>
         </div>
       </div>

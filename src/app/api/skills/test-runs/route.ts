@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,27 +17,89 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { testCase, skillData, runType } = body;
+    const { testCase, skillData, runType, projectId } = body;
 
     if (!testCase || !skillData) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
     }
 
-    // 模拟测试运行（实际应该调用 AI4WEB API 或 Python 脚本）
     const startTime = Date.now();
-    
-    // TODO: 实际实现应该：
-    // 1. 如果 runType === 'with_skill'，使用 skillData.systemPrompt 和 skillData.userPrompt
-    // 2. 如果 runType === 'without_skill'，使用默认提示词
-    // 3. 调用 AI4WEB API 或 Claude API
-    // 4. 收集输出和指标
-    
-    // 模拟输出
+
+    // 如果提供了 projectId 并且有 AI4WEB 配置，使用真实执行
+    if (projectId && runType === 'with_skill') {
+      try {
+        // 获取项目配置
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          include: {
+            config: true,
+          },
+        });
+
+        if (project?.config) {
+          // 动态导入执行器（避免在不使用时加载）
+          const { AgentExecutor } = await import('@/lib/agent-executor');
+          
+          // 准备执行上下文
+          const executionContext = {
+            skillId: 'test-skill', // 临时 ID
+            projectId: projectId,
+            modelConfig: {
+              providerType: project.config.modelPreferences ? 
+                JSON.parse(project.config.modelPreferences as string).provider || 'claude' : 'claude',
+              apiKey: process.env.CLAUDE_API_KEY || '',
+              apiBaseUrl: project.config.baseURL,
+              model: 'claude-3-5-sonnet-20241022',
+            },
+            maxToolCalls: 10,
+            maxIterations: 5,
+            testMode: true, // 测试模式
+            cwd: project.projectPath || process.cwd(),
+          };
+
+          // 构建提示词
+          const prompt = runType === 'with_skill' 
+            ? `${skillData.systemPrompt}\n\n${testCase.prompt}`
+            : testCase.prompt;
+
+          // 执行并收集结果
+          const outputChunks: string[] = [];
+          const toolCalls: any[] = [];
+
+          const result = await new Promise((resolve, reject) => {
+            const executor = new AgentExecutor(executionContext, {
+              onChunk: (text) => {
+                outputChunks.push(text);
+              },
+              onToolCall: (tool, parameters) => {
+                toolCalls.push({ tool, parameters });
+              },
+              onVulnerability: () => {},
+              onComplete: resolve,
+              onError: reject,
+            });
+
+            executor.execute(prompt).catch(reject);
+          });
+
+          const duration = Date.now() - startTime;
+
+          return NextResponse.json({
+            output: outputChunks.join(''),
+            duration,
+            tokens: 0, // TODO: 从 result 中提取
+            toolCalls,
+          });
+        }
+      } catch (error) {
+        console.error('真实执行失败，回退到模拟:', error);
+        // 继续使用模拟
+      }
+    }
+
+    // 模拟测试运行（用于无项目配置或对比测试）
     const simulatedOutput = await simulateTestRun(testCase, skillData, runType);
-    
     const duration = Date.now() - startTime;
-    
-    // 模拟 token 使用
     const tokens = Math.floor(Math.random() * 2000) + 500;
 
     return NextResponse.json({

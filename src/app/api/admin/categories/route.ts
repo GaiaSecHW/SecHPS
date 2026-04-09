@@ -34,26 +34,39 @@ export async function GET(request: Request) {
     }
 
     // 从数据库获取配置
-    let config = await prisma.systemConfig.findUnique({
-      where: { key: 'skill_categories' },
-    });
+    let config = null;
+    try {
+      config = await prisma.systemConfig.findUnique({
+        where: { key: 'skill_categories' },
+      });
+    } catch (dbError) {
+      console.warn('数据库连接失败，使用默认分类:', dbError);
+      // 如果数据库连接失败，返回默认值
+      return NextResponse.json({ categories: DEFAULT_CATEGORIES });
+    }
 
     // 如果没有配置，使用默认值并创建
     if (!config) {
-      config = await prisma.systemConfig.create({
-        data: {
-          key: 'skill_categories',
-          value: JSON.stringify(DEFAULT_CATEGORIES),
-          description: '漏洞分类配置',
-        },
-      });
+      try {
+        config = await prisma.systemConfig.create({
+          data: {
+            key: 'skill_categories',
+            value: JSON.stringify(DEFAULT_CATEGORIES),
+            description: '漏洞分类配置',
+          },
+        });
+      } catch (createError) {
+        console.warn('创建配置失败，使用默认分类:', createError);
+        return NextResponse.json({ categories: DEFAULT_CATEGORIES });
+      }
     }
 
     const categories = JSON.parse(config.value);
     return NextResponse.json({ categories });
   } catch (error) {
     console.error('获取漏洞分类错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    // 返回默认分类而不是错误
+    return NextResponse.json({ categories: DEFAULT_CATEGORIES });
   }
 }
 

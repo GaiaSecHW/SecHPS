@@ -10,10 +10,7 @@ interface SkillDraft {
   category: string;
   cwe?: string;
   severity: string;
-  systemPrompt: string;
-  userPrompt: string;
-  tools: string[];
-  parameters: Record<string, unknown>;
+  content: string;  // 完整的 Markdown 内容
 }
 
 interface Props {
@@ -26,6 +23,7 @@ interface Props {
     expectedOutput: string;
     needsTestCases: boolean;
   };
+  
   researchData: {
     edgeCases: string[];
     inputOutputFormats: string;
@@ -33,6 +31,7 @@ interface Props {
     successCriteria: string[];
     dependencies: string[];
   };
+  
   skillData: SkillDraft;
   onChange: (data: SkillDraft) => void;
   onNext: () => void;
@@ -47,21 +46,10 @@ const SEVERITY_OPTIONS = [
   { value: 'info', label: '信息', color: 'bg-gray-100 text-gray-800' },
 ];
 
-const COMMON_TOOLS = [
-  'read_file',
-  'write_file',
-  'search_pattern',
-  'grep',
-  'bash',
-  'python',
-  'node',
-];
-
 export default function DraftStep({ intentData, researchData, skillData, onChange, onNext, onPrevious }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
 
   // 自动生成 Skill 草稿
   const generateSkillDraft = async () => {
@@ -96,38 +84,16 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
       setGenerateError(error instanceof Error ? error.message : '生成失败，请重试');
       
       // 使用模板生成基础草稿
+      const fallbackContent = generateMarkdownContent(intentData, researchData);
+      
       const fallbackDraft: SkillDraft = {
         name: intentData.name || 'untitled-skill',
         displayName: intentData.name || 'Untitled Skill',
         description: intentData.description || '',
         category: intentData.category || 'code-audit',
+        cwe: undefined,
         severity: 'medium',
-        systemPrompt: `你是一个专业的安全审计专家，专注于${intentData.whatDoesItDo || '代码安全分析'}。
-
-你的任务是：
-${intentData.whatDoesItDo || '检测代码中的安全漏洞'}
-
-触发条件：
-${intentData.whenShouldItTrigger || '当用户请求安全审计时'}
-
-期望输出：
-${intentData.expectedOutput || '结构化的安全审计报告'}
-
-注意事项：
-- 考虑边缘情况：${researchData.edgeCases.join('、') || '无特殊要求'}
-- 成功标准：${researchData.successCriteria.join('、') || '准确识别安全问题'}
-- 依赖工具：${researchData.dependencies.join('、') || '标准工具集'}`,
-        userPrompt: `请分析以下内容，识别其中的安全问题：
-
-{{input}}
-
-请按照以下格式输出：
-1. 发现的问题
-2. 风险等级
-3. 详细说明
-4. 修复建议`,
-        tools: researchData.dependencies.length > 0 ? researchData.dependencies : ['read_file', 'search_pattern'],
-        parameters: {},
+        content: fallbackContent,
       };
       
       onChange(fallbackDraft);
@@ -136,51 +102,81 @@ ${intentData.expectedOutput || '结构化的安全审计报告'}
     }
   };
 
+  // 生成 Markdown 内容
+  const generateMarkdownContent = (intent: any, research: any): string => {
+    const lines: string[] = [];
+    
+    lines.push(`# ${intent.name || 'Skill 名称'}`);
+    lines.push('');
+    lines.push('## 描述');
+    lines.push(intent.description || '简要描述这个 Skill 的作用...');
+    lines.push('');
+    lines.push('## 严重程度');
+    lines.push('medium');
+    lines.push('');
+    
+    if (intent.whatDoesItDo) {
+      lines.push('## 功能说明');
+      lines.push(intent.whatDoesItDo);
+      lines.push('');
+    }
+    
+    if (intent.whenShouldItTrigger) {
+      lines.push('## 触发条件');
+      lines.push(intent.whenShouldItTrigger);
+      lines.push('');
+    }
+    
+    if (intent.expectedOutput) {
+      lines.push('## 期望输出');
+      lines.push(intent.expectedOutput);
+      lines.push('');
+    }
+    
+    if (research.edgeCases && research.edgeCases.length > 0) {
+      lines.push('## 边缘情况');
+      research.edgeCases.forEach((ec: string) => {
+        lines.push(`- ${ec}`);
+      });
+      lines.push('');
+    }
+    
+    if (research.inputOutputFormats) {
+      lines.push('## 输入输出格式');
+      lines.push(research.inputOutputFormats);
+      lines.push('');
+    }
+    
+    if (research.successCriteria && research.successCriteria.length > 0) {
+      lines.push('## 成功标准');
+      research.successCriteria.forEach((sc: string) => {
+        lines.push(`- ${sc}`);
+      });
+      lines.push('');
+    }
+    
+    if (research.dependencies && research.dependencies.length > 0) {
+      lines.push('## 依赖项');
+      research.dependencies.forEach((dep: string) => {
+        lines.push(`- ${dep}`);
+      });
+      lines.push('');
+    }
+    
+    return lines.join('\n');
+  };
+
   // 组件挂载时自动生成一次
   useEffect(() => {
-    if (!skillData.systemPrompt) {
+    if (!skillData.content) {
       generateSkillDraft();
     }
   }, []);
 
   const handleCopy = async () => {
-    const skillMd = generateSkillMd(skillData);
-    await navigator.clipboard.writeText(skillMd);
+    await navigator.clipboard.writeText(skillData.content);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const generateSkillMd = (skill: SkillDraft): string => {
-    let md = `# ${skill.displayName}
-
-## 描述
-${skill.description}
-
-## 分类
-${skill.category}
-
-## 严重程度
-${skill.severity}
-
-`;
-    if (skill.cwe) {
-      md += `## CWE 编号
-${skill.cwe}
-
-`;
-    }
-    
-    md += `## 系统提示词
-${skill.systemPrompt}
-
-## 用户提示词
-${skill.userPrompt}
-
-## 工具
-${skill.tools.map(t => `- ${t}`).join('\n')}
-`;
-    
-    return md;
   };
 
   const isValid = () => {
@@ -188,8 +184,7 @@ ${skill.tools.map(t => `- ${t}`).join('\n')}
       skillData.name.trim() !== '' &&
       skillData.displayName.trim() !== '' &&
       skillData.description.trim() !== '' &&
-      skillData.systemPrompt.trim() !== '' &&
-      skillData.userPrompt.trim() !== ''
+      (skillData.content?.trim() ?? '') !== ''
     );
   };
 
@@ -202,7 +197,7 @@ ${skill.tools.map(t => `- ${t}`).join('\n')}
           <div className="text-sm text-purple-800">
             <p className="font-medium mb-2">AI 自动生成</p>
             <p className="text-purple-700">
-              我们会根据你提供的信息自动生成 Skill 定义。你可以直接使用，也可以手动修改优化。
+              我们会根据你提供的信息自动生成 Skill 定义。你可以直接使用，也可以手动编辑优化。
             </p>
           </div>
         </div>
@@ -240,7 +235,7 @@ ${skill.tools.map(t => `- ${t}`).join('\n')}
           ) : (
             <>
               <Copy size={16} className="mr-2" />
-              复制为 Markdown
+              复制 Markdown
             </>
           )}
         </button>
@@ -342,66 +337,31 @@ ${skill.tools.map(t => `- ${t}`).join('\n')}
         </div>
       </div>
 
-      {/* 系统提示词 */}
+      {/* Markdown 内容 */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
           <FileText size={16} className="inline mr-1" />
-          系统提示词 <span className="text-red-500">*</span>
+          Skill 内容（Markdown 格式）<span className="text-red-500">*</span>
         </label>
         <textarea
-          value={skillData.systemPrompt}
-          onChange={(e) => onChange({ ...skillData, systemPrompt: e.target.value })}
-          rows={8}
+          value={skillData.content}
+          onChange={(e) => onChange({ ...skillData, content: e.target.value })}
+          rows={20}
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+          placeholder="# Skill 名称
+
+## 描述
+简要描述这个 Skill 的作用...
+
+## 严重程度
+medium
+
+## 系统提示词
+你是一个专业的..."
         />
         <p className="mt-1 text-xs text-gray-500">
-          定义 Skill 的角色、任务和行为准则
+          完整的 Skill 定义，使用 Markdown 格式编写
         </p>
-      </div>
-
-      {/* 用户提示词 */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          <FileText size={16} className="inline mr-1" />
-          用户提示词 <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          value={skillData.userPrompt}
-          onChange={(e) => onChange({ ...skillData, userPrompt: e.target.value })}
-          rows={6}
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-        />
-        <p className="mt-1 text-xs text-gray-500">
-          定义用户请求的模板，可使用 {'{{input}}'} 等变量
-        </p>
-      </div>
-
-      {/* 工具选择 */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          允许使用的工具
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {COMMON_TOOLS.map((tool) => (
-            <button
-              key={tool}
-              type="button"
-              onClick={() => {
-                const tools = skillData.tools.includes(tool)
-                  ? skillData.tools.filter((t) => t !== tool)
-                  : [...skillData.tools, tool];
-                onChange({ ...skillData, tools });
-              }}
-              className={`px-3 py-1 rounded-full text-sm font-medium ${
-                skillData.tools.includes(tool)
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {tool}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* 导航按钮 */}

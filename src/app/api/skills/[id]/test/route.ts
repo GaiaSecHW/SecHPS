@@ -119,12 +119,9 @@ export async function POST(
       );
     }
 
-    // 构建提示
-    const systemMessage = skill.systemPrompt;
-    const userMessage = skill.userPrompt
-      .replace('{{projectName}}', projectName)
-      .replace('{{projectDescription}}', projectDescription)
-      .replace('{{fileCount}}', String(files.length));
+    // 构建提示 - 使用 content 字段
+    const systemMessage = skill.content;
+    const userMessage = skill.content;  // content 包含完整的 Markdown 内容
 
     const prompt = `System: ${systemMessage}\n\n---\n\nHuman: ${userMessage}`;
 
