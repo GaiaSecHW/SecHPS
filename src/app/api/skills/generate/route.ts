@@ -57,7 +57,6 @@ function generateSkillFromInput(intent: any, research: any) {
     description: intent.description || '',
     category: intent.category || 'code-audit',
     cwe: intent.cwe,
-    severity: determineSeverity(intent.category),
     systemPrompt,
     userPrompt,
     tools,
@@ -165,21 +164,4 @@ function determineTools(dependencies: string[]): string[] {
   });
 
   return Array.from(tools);
-}
-
-function determineSeverity(category: string): string {
-  const severityMap: Record<string, string> = {
-    'code-audit': 'high',
-    'auth': 'critical',
-    'sensitive': 'high',
-    'api': 'medium',
-    'config': 'medium',
-    'crypto': 'high',
-    'web': 'medium',
-    'business': 'medium',
-    'client': 'low',
-    'cloud': 'high',
-  };
-
-  return severityMap[category] || 'medium';
 }

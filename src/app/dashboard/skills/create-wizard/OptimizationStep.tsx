@@ -62,7 +62,7 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
       '',
       '使用场景：',
       `- ${skill.category === 'code-audit' ? '代码安全审计' : '安全检测'}`,
-      `- ${skill.severity === 'critical' || skill.severity === 'high' ? '高危漏洞发现' : '安全问题检测'}`,
+      `- 安全问题检测`,
     ];
 
     if (skill.tools && skill.tools.length > 0) {

@@ -66,7 +66,6 @@ interface SkillWizardData {
     description: string;
     category: string;
     cwe?: string;
-    severity: string;
     content: string;  // 完整的 Markdown 内容
   };
   
@@ -135,7 +134,6 @@ const initialWizardData: SkillWizardData = {
     displayName: '',
     description: '',
     category: 'code-audit',
-    severity: 'medium',
     content: '',  // 完整的 Markdown 内容
   },
   testCases: [],

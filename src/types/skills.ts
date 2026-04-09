@@ -35,7 +35,6 @@ export interface CreateSkillRequest {
   description: string;
   category: SkillCategory;
   cwe?: string;
-  severity: SkillSeverity;
   systemPrompt: string;
   userPrompt: string;
   tools: string[];
@@ -49,7 +48,6 @@ export interface UpdateSkillRequest {
   description?: string;
   category?: SkillCategory;
   cwe?: string;
-  severity?: SkillSeverity;
   systemPrompt?: string;
   userPrompt?: string;
   tools?: string[];
@@ -88,7 +86,6 @@ export interface SkillResponse {
   description: string;
   category: SkillCategory;
   cwe: string | null;
-  severity: SkillSeverity;
   systemPrompt: string;
   userPrompt: string;
   tools: string[];

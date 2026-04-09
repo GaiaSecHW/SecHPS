@@ -9,7 +9,6 @@ interface SkillDraft {
   description: string;
   category: string;
   cwe?: string;
-  severity: string;
   content: string;  // 完整的 Markdown 内容
 }
 
@@ -38,13 +37,7 @@ interface Props {
   onPrevious: () => void;
 }
 
-const SEVERITY_OPTIONS = [
-  { value: 'critical', label: '严重', color: 'bg-red-100 text-red-800' },
-  { value: 'high', label: '高危', color: 'bg-orange-100 text-orange-800' },
-  { value: 'medium', label: '中危', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'low', label: '低危', color: 'bg-blue-100 text-blue-800' },
-  { value: 'info', label: '信息', color: 'bg-gray-100 text-gray-800' },
-];
+
 
 export default function DraftStep({ intentData, researchData, skillData, onChange, onNext, onPrevious }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -92,7 +85,6 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
         description: intentData.description || '',
         category: intentData.category || 'code-audit',
         cwe: undefined,
-        severity: 'medium',
         content: fallbackContent,
       };
       
@@ -110,9 +102,6 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
     lines.push('');
     lines.push('## 描述');
     lines.push(intent.description || '简要描述这个 Skill 的作用...');
-    lines.push('');
-    lines.push('## 严重程度');
-    lines.push('medium');
     lines.push('');
     
     if (intent.whatDoesItDo) {
@@ -293,24 +282,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            严重程度
-          </label>
-          <select
-            value={skillData.severity}
-            onChange={(e) => onChange({ ...skillData, severity: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            {SEVERITY_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             CWE 编号（可选）
@@ -352,9 +324,6 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
 
 ## 描述
 简要描述这个 Skill 的作用...
-
-## 严重程度
-medium
 
 ## 系统提示词
 你是一个专业的..."

@@ -93,7 +93,6 @@ export default function CreateSkillPage() {
           category,
           content,
           cwe: null,
-          severity: 'medium',
           isPublic,
         }),
       });
