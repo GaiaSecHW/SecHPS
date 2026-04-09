@@ -1,9 +1,0 @@
-{
-  "id": "cmnixa3ha0002fu512ais6e74",
-  "name": "command-injection",
-  "displayName": "命令注入检测",
-  "userId": null,
-  "latestVersion": 1,
-  "isActive": true,
-  "updatedAt": "2026-04-06T08:08:40.190Z"
-}

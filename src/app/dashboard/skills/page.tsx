@@ -43,6 +43,20 @@ interface Skill {
   updatedAt: string;
 }
 
+// 分类标签映射
+const categoryLabels: Record<string, string> = {
+  'code-audit': '代码安全审计',
+  'auth': '认证与授权',
+  'sensitive': '敏感信息泄露',
+  'api': 'API 安全',
+  'config': '依赖与配置',
+  'crypto': '加密与数据',
+  'web': 'Web 安全',
+  'business': '业务逻辑',
+  'client': '客户端安全',
+  'cloud': '云与容器安全',
+};
+
 export default function SkillsPage() {
   const router = useRouter();
   const [skills, setSkills] = useState<Skill[]>([]);
@@ -501,9 +515,9 @@ export default function SkillsPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                      <span className={`text-sm text-gray-500 ${
-                        categoryLabels[skill.category] || 'text-gray-400'
-                      }`}>
+                    <span className="text-sm text-gray-500">
+                      {categoryLabels[skill.category] || skill.category}
+                    </span>
                     {expandedSkill === skill.id ? (
                       <ChevronUp size={20} className="text-gray-400" />
                     ) : (

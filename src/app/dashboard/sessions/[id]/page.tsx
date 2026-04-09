@@ -980,13 +980,55 @@ export default function SessionDetailPage({
                                         </span>
                                       )}
                                     </div>
-                                    <p className="text-xs line-clamp-3">
-                                      {typeof msg.content === 'string'
-                                        ? msg.content
-                                        : Array.isArray(msg.content)
-                                        ? msg.content.find((p: any) => p.type === 'text')?.text || '(工具调用)'
-                                        : JSON.stringify(msg.content).substring(0, 200)}
-                                    </p>
+                                    {/* 显示消息内容的详细信息 */}
+                                    {Array.isArray(msg.content) ? (
+                                      <div className="space-y-1">
+                                        {msg.content.map((part: any, partIdx: number) => (
+                                          <div key={partIdx} className="text-xs">
+                                            {part.type === 'text' && part.text && (
+                                              <p className="text-xs line-clamp-3">{part.text}</p>
+                                            )}
+                                            {part.type === 'tool' && (
+                                              <div className="bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
+                                                <div className="font-medium text-green-300">🔧 工具调用</div>
+                                                <div className="mt-1">名称: {part.name}</div>
+                                                <div className="mt-1 text-gray-300">参数:</div>
+                                                <pre className="text-xs text-gray-400 overflow-x-auto">
+                                                  {JSON.stringify(part.input, null, 2)}
+                                                </pre>
+                                              </div>
+                                            )}
+                                            {part.type === 'tool_result' && (
+                                              <div className="bg-gray-800 text-yellow-400 p-2 rounded overflow-x-auto">
+                                                <div className="font-medium text-yellow-300">📤 工具结果</div>
+                                                <div className="mt-1 text-gray-300">来源: {part.toolName || part.name}</div>
+                                                {part.output && (
+                                                  <pre className="text-xs text-gray-400 overflow-x-auto mt-1">
+                                                    {typeof part.output === 'string' 
+                                                      ? part.output.substring(0, 500)
+                                                      : JSON.stringify(part.output, null, 2).substring(0, 500)}
+                                                  </pre>
+                                                )}
+                                                {part.error && (
+                                                  <div className="text-red-400 mt-1">错误: {part.error}</div>
+                                                )}
+                                              </div>
+                                            )}
+                                            {part.type === 'reasoning' && part.text && (
+                                              <div className="bg-yellow-50 text-yellow-800 p-1 rounded text-xs italic">
+                                                💭 {part.text}
+                                              </div>
+                                            )}
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : typeof msg.content === 'string' ? (
+                                      <p className="text-xs line-clamp-3">{msg.content}</p>
+                                    ) : (
+                                      <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
+                                        {JSON.stringify(msg.content, null, 2).substring(0, 200)}
+                                      </pre>
+                                    )}
                                   </div>
                                 ))}
                                 {childSessionMessages.length > 10 && (

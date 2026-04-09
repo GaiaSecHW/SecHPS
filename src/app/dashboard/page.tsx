@@ -382,6 +382,7 @@ export default function DashboardPage() {
       </div>
     </div>
   );
+}
 
 function StatCard({
   title,
