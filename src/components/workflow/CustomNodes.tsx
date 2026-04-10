@@ -35,7 +35,7 @@ interface NodeData {
   [key: string]: any; // 添加索引签名
 }
 
-// 基础节点组件（左右连接 - 用于开始、结束、任务）
+// 基础节点组件（左右连接 - 用于开始、结束、Agent）
 const BaseNode = memo((props: NodeProps) => {
   const { data, type, selected } = props;
   const nodeData = data as NodeData;
@@ -128,7 +128,7 @@ const BaseNode = memo((props: NodeProps) => {
 
 BaseNode.displayName = 'BaseNode';
 
-// 子任务节点组件（上下连接 - 挂在任务下方）
+// 子Agent节点组件（上下连接 - 挂在Agent下方）
 const SubtaskNode = memo((props: NodeProps) => {
   const { data, type, selected } = props;
   const nodeData = data as NodeData;
@@ -218,7 +218,7 @@ export const EndNode = memo((props: NodeProps) => {
 
 EndNode.displayName = 'EndNode';
 
-// 任务节点（三个连接点：左输入、右输出、底子任务输出）
+// Agent节点（三个连接点：左输入、右输出、底子Agent输出）
 export const TaskNode = memo((props: NodeProps) => {
   const { data, type, selected } = props;
   const nodeData = data as NodeData;
@@ -240,7 +240,7 @@ export const TaskNode = memo((props: NodeProps) => {
     height: '12px',
     border: '2px solid white',
     borderRadius: '50%',
-    backgroundColor: '#8B5CF6', // 子任务节点颜色
+    backgroundColor: '#8B5CF6', // 子Agent节点颜色
     boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
     transition: 'all 0.2s',
   };
@@ -299,7 +299,7 @@ export const TaskNode = memo((props: NodeProps) => {
         }}
       />
 
-      {/* 子任务输出句柄 - 底部 */}
+      {/* 子Agent输出句柄 - 底部 */}
       <Handle
         type="source"
         position={Position.Bottom}

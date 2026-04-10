@@ -334,49 +334,49 @@ const [showPreview, setShowPreview] = useState(false);
       const targetHandle = connection.targetHandle;
       
       // 连接规则验证
-      // 1. 开始节点只能连接到任务节点（左侧输入）
+      // 1. 开始节点只能连接到Agent节点（左侧输入）
       if (sourceType === 'start' && targetType !== 'task') {
-        alert('开始节点只能连接到任务节点');
+        alert('开始节点只能连接到Agent节点');
         return;
       }
       
-      // 2. 结束节点只能被任务节点连接（右侧输出）
+      // 2. 结束节点只能被Agent节点连接（右侧输出）
       if (targetType === 'end' && sourceType !== 'task') {
-        alert('只有任务节点可以连接到结束节点');
+        alert('只有Agent节点可以连接到结束节点');
         return;
       }
       
-      // 3. 任务节点连接规则
+      // 3. Agent节点连接规则
       if (sourceType === 'task') {
-        // 从右侧输出连接到任务节点（左侧输入）或结束节点
+        // 从右侧输出连接到Agent节点（左侧输入）或结束节点
         if (sourceHandle === 'out' || !sourceHandle) {
           if (targetType !== 'task' && targetType !== 'end') {
-            alert('任务节点的右侧输出只能连接到任务节点或结束节点');
+            alert('Agent节点的右侧输出只能连接到Agent节点或结束节点');
             return;
           }
           // 目标节点应该通过左侧输入句柄连接
           if (targetHandle && targetHandle !== 'in') {
-            alert('请连接到任务节点的左侧输入');
+            alert('请连接到Agent节点的左侧输入');
             return;
           }
         }
-        // 从底部子任务输出连接到子任务节点（顶部输入）
+        // 从底部子Agent输出连接到子Agent节点（顶部输入）
         else if (sourceHandle === 'subtask') {
           if (targetType !== 'subtask') {
-            alert('任务节点的底部输出只能连接到子任务节点');
+            alert('Agent节点的底部输出只能连接到子Agent节点');
             return;
           }
           // 目标节点应该通过顶部输入句柄连接
           if (targetHandle && targetHandle !== 'in') {
-            alert('请连接到子任务节点的顶部输入');
+            alert('请连接到子Agent节点的顶部输入');
             return;
           }
         }
       }
       
-      // 4. 子任务节点可以连接到子任务节点（上下连接）
+      // 4. 子Agent节点可以连接到子Agent节点（上下连接）
       if (sourceType === 'subtask' && targetType !== 'subtask') {
-        alert('子任务节点只能连接到子任务节点');
+        alert('子Agent节点只能连接到子Agent节点');
         return;
       }
       
@@ -959,7 +959,7 @@ const [showPreview, setShowPreview] = useState(false);
                   </div>
                 </div>
 
-                {/* Skill 预测 - 仅对 task 类型节点显示 */}
+                {/* Skill 预测 - 仅对 Agent 类型节点显示 */}
                 {selectedNode.type === 'task' && (
                   <div className="pt-4 border-t border-gray-200">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -983,7 +983,7 @@ const [showPreview, setShowPreview] = useState(false);
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
                       >
                         <Sparkles size={12} />
-                        查看任务 ({predictionTasks.length})
+                        查看预测 ({predictionTasks.length})
                       </button>
                     </div>
                   </div>

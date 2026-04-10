@@ -34,8 +34,8 @@ export interface FlowEdge {
 export type WorkflowNodeType = 
   | 'start'      // 开始节点
   | 'end'        // 结束节点
-  | 'task'       // 任务节点（串行）
-  | 'subtask';   // 子任务节点（并行）
+  | 'task'       // Agent节点（串行）
+  | 'subtask';   // 子Agent节点（并行）
 
 export interface NodeData {
   label: string;
@@ -206,36 +206,36 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
   },
   {
     type: 'task',
-    label: '任务',
+    label: 'Agent',
     category: 'action',
     icon: 'Cog',
-    description: '执行一个任务（串行执行）',
+    description: '执行一个Agent（串行执行）',
     color: '#3B82F6',
     inputs: [{ id: 'in', label: '输入', type: 'object', required: true }],
     outputs: [
       { id: 'out', label: '输出', type: 'object', required: true },
-      { id: 'subtask', label: '子任务', type: 'object', required: false },
+      { id: 'subtask', label: '子Agent', type: 'object', required: false },
     ],
     config: [
-      { id: 'name', label: '任务名称', type: 'text', required: true },
-      { id: 'description', label: '任务描述', type: 'textarea', required: false },
+      { id: 'name', label: 'Agent名称', type: 'text', required: true },
+      { id: 'description', label: 'Agent描述', type: 'textarea', required: false },
     ],
-    editable: true, // 任务节点可编辑
+    editable: true, // Agent节点可编辑
   },
   {
     type: 'subtask',
-    label: '子任务',
+    label: '子Agent',
     category: 'action',
     icon: 'Cog',
-    description: '挂在任务下的子任务（并行执行）',
+    description: '挂在Agent下的子Agent（并行执行）',
     color: '#8B5CF6',
     inputs: [{ id: 'in', label: '输入', type: 'object', required: true }],
     outputs: [{ id: 'out', label: '输出', type: 'object', required: true }],
     config: [
-      { id: 'name', label: '子任务名称', type: 'text', required: true },
-      { id: 'description', label: '子任务描述', type: 'textarea', required: false },
+      { id: 'name', label: '子Agent名称', type: 'text', required: true },
+      { id: 'description', label: '子Agent描述', type: 'textarea', required: false },
     ],
-    editable: true, // 子任务节点可编辑
+    editable: true, // 子Agent节点可编辑
   },
 ];
 
