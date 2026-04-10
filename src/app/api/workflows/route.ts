@@ -52,6 +52,7 @@ export async function GET(request: Request) {
           name: true,
           description: true,
           thumbnail: true,
+          techStack: true,
           status: true,
           version: true,
           isActive: true,
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
 
     // 解析请求体
     const body = await request.json();
-    const { name, description } = body;
+    const { name, description, techStack } = body;
 
     // 验证必填字段
     if (!name || !name.trim()) {
@@ -120,12 +121,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '工作流名称不能超过100个字符' }, { status: 400 });
     }
 
+    // 处理技术栈数据
+    let techStackJson: string | null = null;
+    if (techStack && Array.isArray(techStack) && techStack.length > 0) {
+      techStackJson = JSON.stringify(techStack);
+    }
+
     // 创建工作流
     const workflow = await prisma.workflow.create({
       data: {
         userId: payload.userId,
         name: trimmedName,
         description: description?.trim() || undefined,
+        techStack: techStackJson,
         status: 'draft',
         version: 1,
       },

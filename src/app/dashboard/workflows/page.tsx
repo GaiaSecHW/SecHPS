@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2 } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 interface Workflow {
   id: string;
@@ -28,7 +29,13 @@ export default function WorkflowsPage() {
   const [statusFilter, setStatusFilter] = useState<WorkflowStatus | 'all'>('all');
   const [workflowName, setWorkflowName] = useState('');
   const [workflowDescription, setWorkflowDescription] = useState('');
+  const [workflowTechStack, setWorkflowTechStack] = useState<string[]>([]);
+  const [techStackSearch, setTechStackSearch] = useState('');
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   const [creating, setCreating] = useState(false);
+  
+  // 使用 Hook 获取技术栈选项
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
 
   useEffect(() => {
     fetchWorkflows();
@@ -97,6 +104,7 @@ export default function WorkflowsPage() {
         body: JSON.stringify({
           name: trimmedName,
           description: workflowDescription,
+          techStack: workflowTechStack,
         }),
       });
 
@@ -110,6 +118,7 @@ export default function WorkflowsPage() {
       setShowCreateModal(false);
       setWorkflowName('');
       setWorkflowDescription('');
+      setWorkflowTechStack([]);
       await fetchWorkflows();
     } catch (err) {
       alert('网络错误，请重试');
@@ -569,6 +578,88 @@ export default function WorkflowsPage() {
                   placeholder="请输入编排描述（可选）"
                 />
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  适合的技术栈
+                </label>
+                <div className="relative">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {workflowTechStack.map((ts) => (
+                      <span
+                        key={ts}
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        {ts}
+                        <button
+                          type="button"
+                          onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== ts))}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={techStackSearch}
+                      onChange={(e) => {
+                        setTechStackSearch(e.target.value);
+                        setShowTechStackDropdown(true);
+                      }}
+                      onFocus={() => setShowTechStackDropdown(true)}
+                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      disabled={loadingTechStack}
+                    />
+                    {showTechStackDropdown && !loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {techStackOptions
+                          .filter((option) => 
+                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !workflowTechStack.includes(option)
+                          )
+                          .slice(0, 20)
+                          .map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setWorkflowTechStack([...workflowTechStack, option]);
+                                setTechStackSearch('');
+                                setShowTechStackDropdown(false);
+                              }}
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        {techStackOptions.filter((option) => 
+                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !workflowTechStack.includes(option)
+                        ).length === 0 && (
+                          <div className="px-4 py-2 text-sm text-gray-500">
+                            无匹配选项
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">加载技术栈选项...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    可选择多个技术栈，表示此编排适用于这些技术
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
@@ -577,6 +668,7 @@ export default function WorkflowsPage() {
                   setShowCreateModal(false);
                   setWorkflowName('');
                   setWorkflowDescription('');
+                  setWorkflowTechStack([]);
                 }}
                 disabled={creating}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"

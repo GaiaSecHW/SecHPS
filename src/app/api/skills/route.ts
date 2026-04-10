@@ -120,6 +120,7 @@ export async function POST(request: Request) {
       displayName,
       description,
       category,
+      techStack,  // 技术栈 ["Java", "Spring"]
       cwe,
       content,  // 完整的 Markdown 内容
       isPublic = false,  // 是否为公共 Skill，默认为私有
@@ -131,6 +132,12 @@ export async function POST(request: Request) {
         { error: '缺少必填字段：名称、显示名称、描述、分类、内容' },
         { status: 400 }
       );
+    }
+
+    // 处理技术栈数据
+    let techStackJson: string | null = null;
+    if (techStack && Array.isArray(techStack) && techStack.length > 0) {
+      techStackJson = JSON.stringify(techStack);
     }
 
     // 确定作用域
@@ -170,6 +177,7 @@ export async function POST(request: Request) {
         displayName,
         description,
         category,
+        techStack: techStackJson,
         cwe: cwe || null,
         content,  // 保存完整的 Markdown 内容
         userId,

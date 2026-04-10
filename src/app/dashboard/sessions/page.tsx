@@ -89,6 +89,12 @@ export default function SessionsPage() {
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   
+  // 模型选择相关状态
+  const [showModelModal, setShowModelModal] = useState(false);
+  const [models, setModels] = useState<any[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
+  
   // 漏洞管理相关状态
   const [showVulnerabilityModal, setShowVulnerabilityModal] = useState(false);
   const [vulnerabilityProject, setVulnerabilityProject] = useState<Project | null>(null);
@@ -152,6 +158,31 @@ export default function SessionsPage() {
       console.error('获取工作流列表错误:', err);
     } finally {
       setLoadingWorkflows(false);
+    }
+  };
+
+  // 获取模型列表
+  const fetchModels = async () => {
+    try {
+      setLoadingModels(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/models?isActive=true', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('获取模型列表失败');
+        return;
+      }
+
+      const data = await response.json();
+      setModels(data.models || []);
+    } catch (err) {
+      console.error('获取模型列表错误:', err);
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -467,7 +498,7 @@ export default function SessionsPage() {
     }
   };
 
-  const startProject = async (projectId: string, workflowId?: string | null) => {
+  const startProject = async (projectId: string, workflowId?: string | null, modelId?: string | null) => {
     setStartingProject(projectId);
 
     try {
@@ -480,6 +511,7 @@ export default function SessionsPage() {
         },
         body: JSON.stringify({
           workflowId: workflowId || undefined,
+          modelId: modelId || undefined,
         }),
       });
 
@@ -1986,18 +2018,17 @@ export default function SessionsPage() {
               <div className="flex items-center space-x-3">
                 <button
                    onClick={async () => {
-                    if (!selectedProject) return;
-                    // 先关闭模态框
+                    if (!selectedProject || !selectedWorkflow) return;
+                    // 关闭工作流选择模态框，打开模型选择模态框
                     setShowWorkflowModal(false);
-                    setSelectedProject(null);
-                    setSelectedWorkflow(null);
-                    // 然后启动项目
-                    await startProject(selectedProject.id, selectedWorkflow);
+                    // 获取模型列表
+                    await fetchModels();
+                    setShowModelModal(true);
                   }}
                   disabled={!selectedWorkflow || !!startingProject}
                   className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {startingProject ? '启动中...' : '使用选定编排启动'}
+                  {startingProject ? '启动中...' : '下一步：选择模型'}
                 </button>
               </div>
             </div>
@@ -2032,6 +2063,138 @@ export default function SessionsPage() {
             />
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded-lg">
               {previewImage.alt}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 模型选择模态框 */}
+      {showModelModal && selectedProject && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">选择评估大模型</h3>
+                <p className="text-sm text-gray-500 mt-1">项目: {selectedProject.name}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowModelModal(false);
+                  setSelectedProject(null);
+                  setSelectedWorkflow(null);
+                  setSelectedModel(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {loadingModels ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-500">加载模型列表中...</span>
+                </div>
+              ) : models.length === 0 ? (
+                <div className="text-center py-12">
+                  <Zap className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                    暂无可用模型
+                  </h3>
+                  <p className="mt-2 text-sm text-gray-600">
+                    请先在模型管理中添加模型配置
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <label htmlFor="modelSelect" className="block text-sm font-medium text-gray-700">
+                    选择要使用的模型
+                  </label>
+                  <select
+                    id="modelSelect"
+                    value={selectedModel || ''}
+                    onChange={(e) => setSelectedModel(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">请选择模型</option>
+                    {models.map((model) => (
+                      <option key={model.id} value={model.id}>
+                        {model.name} ({model.providerType}) - {model.models?.join(', ')}
+                        {model.isDefault ? ' [默认]' : ''}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* 显示选中模型的详情 */}
+                  {selectedModel && (
+                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      {(() => {
+                        const model = models.find(m => m.id === selectedModel);
+                        if (!model) return null;
+                        return (
+                          <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">模型名称:</span>
+                              <span className="font-medium text-gray-900">{model.name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">提供商类型:</span>
+                              <span className="font-medium text-gray-900">{model.providerType}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">支持模型:</span>
+                              <span className="font-medium text-gray-900">{model.models?.join(', ')}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">API地址:</span>
+                              <span className="font-medium text-gray-900 truncate max-w-[250px]">{model.apiBaseUrl}</span>
+                            </div>
+                            {model.routeType && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-600">路由类型:</span>
+                                <span className="font-medium text-gray-900">{model.routeType}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setShowModelModal(false);
+                  // 返回工作流选择
+                  setShowWorkflowModal(true);
+                }}
+                disabled={!!startingProject}
+                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                上一步
+              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={async () => {
+                    if (!selectedProject || !selectedWorkflow || !selectedModel) return;
+                    // 关闭模态框
+                    setShowModelModal(false);
+                    setSelectedProject(null);
+                    setSelectedWorkflow(null);
+                    setSelectedModel(null);
+                    // 启动评估
+                    await startProject(selectedProject.id, selectedWorkflow, selectedModel);
+                  }}
+                  disabled={!selectedModel || !!startingProject}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {startingProject ? '启动中...' : '启动评估'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

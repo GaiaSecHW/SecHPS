@@ -140,6 +140,12 @@ export async function PUT(
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+      // 处理技术栈
+      if (updates.techStack !== undefined) {
+        updateData.techStack = updates.techStack && Array.isArray(updates.techStack) && updates.techStack.length > 0
+          ? JSON.stringify(updates.techStack)
+          : null;
+      }
 
       // 创建新版本
       updatedSkill = await prisma.skill.create({
@@ -148,6 +154,7 @@ export async function PUT(
           displayName: (updateData.displayName as string) ?? skill.displayName,
           description: (updateData.description as string) ?? skill.description,
           category: (updateData.category as string) ?? skill.category,
+          techStack: (updateData.techStack as string | null) ?? skill.techStack,
           cwe: (updateData.cwe as string | null) ?? skill.cwe,
           content: (updateData.content as string) ?? skill.content,
           userId: skill.userId,

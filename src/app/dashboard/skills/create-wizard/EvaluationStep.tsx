@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, CheckCircle, XCircle, Clock, AlertCircle, FileText, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { 
+  Play, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, 
+  TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Eye, EyeOff
+} from 'lucide-react';
+import type { 
+  SkillEvaluationComparison,
+  ExpectationComparison,
+} from '@/types/evaluation';
 
 interface TestCase {
   id: string;
@@ -50,7 +58,7 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
     }
 
     setIsRunning(true);
-    setProgress({ current: 0, total: testCases.length * 2 }); // 每个用例运行两次
+    setProgress({ current: 0, total: testCases.length * 2 });
 
     // 初始化测试运行
     const initialRuns: TestRun[] = [];
@@ -72,67 +80,105 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
     });
     setRuns(initialRuns);
 
-    try {
-      const token = localStorage.getItem('token');
+    await runTests(initialRuns);
+  };
 
-      // 并行运行所有测试
-      const runPromises = initialRuns.map(async (run, index) => {
-        const testCase = testCases.find((tc) => tc.id === run.testCaseId);
-        if (!testCase) return run;
+  // 运行测试（可重试单个或全部）
+  const runTests = async (runsToExecute: TestRun[], isRetry: boolean = false) => {
+    const token = localStorage.getItem('token');
 
-        // 更新状态为运行中
-        setRuns((prev) =>
-          prev.map((r) => (r.id === run.id ? { ...r, status: 'running' } : r))
-        );
-
-        try {
-          const response = await fetch('/api/skills/test-runs', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              testCase,
-              skillData,
-              runType: run.type,
-            }),
-          });
-
-          if (!response.ok) {
-            throw new Error('测试运行失败');
-          }
-
-          const data = await response.json();
-
-          // 更新进度
-          setProgress((prev) => ({ ...prev, current: prev.current + 1 }));
-
-          return {
-            ...run,
-            status: 'completed',
-            output: data.output,
-            duration: data.duration,
-            tokens: data.tokens,
-          };
-        } catch (error) {
-          setProgress((prev) => ({ ...prev, current: prev.current + 1 }));
-          return {
-            ...run,
-            status: 'failed',
-            error: error instanceof Error ? error.message : '未知错误',
-          };
-        }
-      });
-
-      const results = await Promise.all(runPromises);
-      setRuns(results);
-    } catch (error) {
-      console.error('评估失败:', error);
-      alert('评估失败，请重试');
-    } finally {
-      setIsRunning(false);
+    if (isRetry) {
+      setIsRunning(true);
     }
+
+    // 并行运行所有测试
+    const runPromises = runsToExecute.map(async (run) => {
+      const testCase = testCases.find((tc) => tc.id === run.testCaseId);
+      if (!testCase) return run;
+
+      // 更新状态为运行中，清除旧的错误和输出
+      setRuns((prev) =>
+        prev.map((r) => 
+          r.id === run.id 
+            ? { ...r, status: 'running', error: undefined, output: undefined } 
+            : r
+        )
+      );
+
+      try {
+        const response = await fetch('/api/skills/test-runs', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            testCase,
+            skillData,
+            runType: run.type,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || '测试运行失败');
+        }
+
+        const data = await response.json();
+
+        // 更新进度
+        setProgress((prev) => ({ ...prev, current: prev.current + 1 }));
+
+        const result = {
+          ...run,
+          status: 'completed' as const,
+          output: data.output,
+          duration: data.duration,
+          tokens: data.tokens,
+          error: undefined, // 清除错误
+        };
+
+        setRuns((prev) => prev.map((r) => (r.id === run.id ? result : r)));
+        return result;
+      } catch (error) {
+        setProgress((prev) => ({ ...prev, current: prev.current + 1 }));
+        const result = {
+          ...run,
+          status: 'failed' as const,
+          error: error instanceof Error ? error.message : '未知错误',
+        };
+        setRuns((prev) => prev.map((r) => (r.id === run.id ? result : r)));
+        return result;
+      }
+    });
+
+    await Promise.all(runPromises);
+    setIsRunning(false);
+  };
+
+  // 重试单个测试
+  const retryTest = async (runId: string) => {
+    const run = runs.find((r) => r.id === runId);
+    if (!run) return;
+
+    setProgress({ current: 0, total: 1 });
+
+    // 运行该测试（isRetry=true）
+    await runTests([{ ...run, status: 'pending', error: undefined, output: undefined }], true);
+  };
+
+  // 重试所有失败的测试
+  const retryFailed = async () => {
+    const failedRuns = runs.filter((r) => r.status === 'failed');
+    if (failedRuns.length === 0) return;
+
+    setProgress({ current: 0, total: failedRuns.length });
+
+    // 运行所有失败的测试（isRetry=true）
+    await runTests(
+      failedRuns.map((r) => ({ ...r, status: 'pending', error: undefined, output: undefined })),
+      true
+    );
   };
 
   const getStatusIcon = (status: TestRun['status']) => {
@@ -225,7 +271,7 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
       )}
 
       {/* 运行按钮 */}
-      <div className="flex justify-center">
+      <div className="flex justify-center gap-4">
         <button
           onClick={startEvaluation}
           disabled={isRunning || testCases.length === 0}
@@ -239,10 +285,20 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
           ) : (
             <>
               <Play size={20} className="mr-2" />
-              开始评估
+              {runs.length > 0 ? '重新评估' : '开始评估'}
             </>
           )}
         </button>
+
+        {failedCount > 0 && !isRunning && (
+          <button
+            onClick={retryFailed}
+            className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 flex items-center"
+          >
+            <RefreshCw size={20} className="mr-2" />
+            重试失败项 ({failedCount})
+          </button>
+        )}
       </div>
 
       {/* 测试用例列表 */}
@@ -262,47 +318,25 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
                 <div className="divide-y divide-gray-200">
                   {/* With Skill */}
                   {withSkillRun && (
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        {getStatusIcon(withSkillRun.status)}
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">使用 Skill</div>
-                          {withSkillRun.status === 'completed' && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              耗时: {withSkillRun.duration}ms | Tokens: {withSkillRun.tokens}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-sm">
-                        {getStatusText(withSkillRun.status)}
-                        {withSkillRun.error && (
-                          <div className="text-red-600 text-xs mt-1">{withSkillRun.error}</div>
-                        )}
-                      </div>
-                    </div>
+                    <TestRunItem 
+                      run={withSkillRun} 
+                      label="使用 Skill" 
+                      getStatusIcon={getStatusIcon}
+                      getStatusText={getStatusText}
+                      onRetry={retryTest}
+                      isRunning={isRunning}
+                    />
                   )}
                   {/* Without Skill */}
                   {withoutSkillRun && (
-                    <div className="px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        {getStatusIcon(withoutSkillRun.status)}
-                        <div>
-                          <div className="text-sm font-medium text-gray-900">不使用 Skill（基线）</div>
-                          {withoutSkillRun.status === 'completed' && (
-                            <div className="text-xs text-gray-500 mt-1">
-                              耗时: {withoutSkillRun.duration}ms | Tokens: {withoutSkillRun.tokens}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="text-sm">
-                        {getStatusText(withoutSkillRun.status)}
-                        {withoutSkillRun.error && (
-                          <div className="text-red-600 text-xs mt-1">{withoutSkillRun.error}</div>
-                        )}
-                      </div>
-                    </div>
+                    <TestRunItem 
+                      run={withoutSkillRun} 
+                      label="不使用 Skill（基线）" 
+                      getStatusIcon={getStatusIcon}
+                      getStatusText={getStatusText}
+                      onRetry={retryTest}
+                      isRunning={isRunning}
+                    />
                   )}
                 </div>
               </div>
@@ -343,6 +377,106 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
           {canProceed ? '下一步：查看结果和改进' : isRunning ? '评估进行中...' : '请先运行评估'}
         </button>
       </div>
+    </div>
+  );
+}
+
+// 测试运行项组件
+function TestRunItem({ 
+  run, 
+  label, 
+  getStatusIcon, 
+  getStatusText,
+  onRetry,
+  isRunning,
+}: { 
+  run: TestRun; 
+  label: string;
+  getStatusIcon: (status: TestRun['status']) => React.ReactNode;
+  getStatusText: (status: TestRun['status']) => string;
+  onRetry: (runId: string) => void;
+  isRunning: boolean;
+}) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <div className="bg-white">
+      <div 
+        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        onClick={() => run.output && setIsExpanded(!isExpanded)}
+      >
+        <div className="flex items-center space-x-3">
+          {getStatusIcon(run.status)}
+          <div>
+            <div className="text-sm font-medium text-gray-900">{label}</div>
+            {run.status === 'completed' && (
+              <div className="text-xs text-gray-500 mt-1">
+                耗时: {run.duration}ms | Tokens: {run.tokens}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <span className="text-sm">{getStatusText(run.status)}</span>
+          {run.status === 'failed' && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onRetry(run.id);
+              }}
+              disabled={isRunning}
+              className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 disabled:opacity-50"
+            >
+              重试
+            </button>
+          )}
+          {run.output && (
+            isExpanded ? 
+              <ChevronUp size={16} className="text-gray-400" /> : 
+              <ChevronDown size={16} className="text-gray-400" />
+          )}
+        </div>
+      </div>
+      
+      {run.error && (
+        <div className="px-4 py-2 bg-red-50 text-red-600 text-sm flex items-center justify-between">
+          <span>{run.error}</span>
+          <button
+            onClick={() => onRetry(run.id)}
+            disabled={isRunning}
+            className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50 ml-2"
+          >
+            重试
+          </button>
+        </div>
+      )}
+      
+      {isExpanded && run.output && (
+        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+          <div className="prose prose-sm max-w-none">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => <h1 className="text-base font-bold text-gray-900 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-sm font-semibold text-gray-900 mb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-xs font-semibold text-gray-800 mb-1">{children}</h3>,
+                p: ({ children }) => <p className="text-xs text-gray-700 mb-2">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 mb-2">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside text-xs text-gray-700 space-y-1 mb-2">{children}</ol>,
+                code: ({ children, className }) => {
+                  const isInline = !className;
+                  return isInline ? (
+                    <code className="px-1 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-mono">{children}</code>
+                  ) : (
+                    <code className="block bg-gray-900 text-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
+                  );
+                },
+              }}
+            >
+              {run.output}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

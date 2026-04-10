@@ -8,10 +8,14 @@ import {
   Check,
   AlertCircle,
   Loader2,
-  RefreshCw,
   FolderOpen,
+  FileText,
+  Layers,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
+import TechStackSection from './TechStackSection';
 
 interface Config {
   id: string;
@@ -44,6 +48,9 @@ export default function ConfigPage() {
   // 自定义进展询问消息
   const [customProgressQuestion, setCustomProgressQuestion] = useState('');
 
+  // Skill标准输出模板
+  const [skillOutputTemplate, setSkillOutputTemplate] = useState('');
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
@@ -73,6 +80,7 @@ export default function ConfigPage() {
         setProjectUploadDir(activeConfig.projectUploadDir || '');
         setCustomSystemPrompt(activeConfig.customSystemPrompt || '');
         setCustomProgressQuestion(activeConfig.progressQuestion || '');
+        setSkillOutputTemplate(activeConfig.skillOutputTemplate || '');
         
         // 解析工作流配置
         if (activeConfig.workflowConfig) {
@@ -100,6 +108,10 @@ export default function ConfigPage() {
 
   // 从 OpenCode 获取 MCP 服务器配置
   const [mcpServers, setMcpServers] = useState<{ name: string; type: string; enabled: boolean }[]>([]);
+
+  // 导入/导出状态
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   
   const fetchMcpServers = async () => {
     try {
@@ -119,6 +131,68 @@ export default function ConfigPage() {
   useEffect(() => {
     fetchMcpServers();
   }, []);
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/config/export', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || '导出失败');
+      }
+      // 触发浏览器下载
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const filename = response.headers.get('content-disposition')
+        ?.match(/filename="(.+)"/)?.[1] ?? `ai4web-config-${new Date().toISOString().slice(0, 10)}.json`;
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+      setSuccess('配置已导出');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || '导出配置失败');
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // 重置 input 让同一文件可再次选择
+    e.target.value = '';
+    try {
+      setImporting(true);
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/config/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(json),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '导入失败');
+      setSuccess(data.message || '配置导入成功，页面数据已刷新');
+      fetchConfig();
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err: any) {
+      setError(err.message || '导入配置失败，请确认文件格式正确');
+      setTimeout(() => setError(null), 4000);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!config) {
@@ -149,6 +223,7 @@ export default function ConfigPage() {
           workflowConfig,
           customSystemPrompt,
           progressQuestion: customProgressQuestion,
+          skillOutputTemplate,
         }),
       });
 
@@ -220,25 +295,52 @@ export default function ConfigPage() {
             管理您的 OpenCode 配置
           </p>
         </div>
-        {hasPermission(PERMISSIONS.CONFIG_UPDATE) && (
+        <div className="flex items-center gap-2">
+          {/* 导出按钮 */}
           <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            title="导出当前配置为 JSON 文件"
           >
-            {saving ? (
-              <>
-                <Loader2 size={18} className="animate-spin" />
-                保存中...
-              </>
-            ) : (
-              <>
-                <Save size={18} />
-                保存配置
-              </>
-            )}
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+            导出配置
           </button>
-        )}
+          {/* 导入按钮 */}
+          <label
+            className={`flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}
+            title="从 JSON 文件导入配置（将覆盖当前配置）"
+          >
+            {importing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+            导入配置
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={handleImport}
+              disabled={importing}
+            />
+          </label>
+          {hasPermission(PERMISSIONS.CONFIG_UPDATE) && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {saving ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <Save size={18} />
+                  保存配置
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Success/Error Messages */}
@@ -399,6 +501,29 @@ export default function ConfigPage() {
           </div>
         </div>
 
+        {/* Skill Output Template */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <FileText size={20} />
+            Skill标准输出模板
+          </h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              模板内容
+            </label>
+            <textarea
+              value={skillOutputTemplate}
+              onChange={(e) => setSkillOutputTemplate(e.target.value)}
+              rows={10}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              placeholder={'# 安全审计报告\n\n## 漏洞列表\n\n### 1. [漏洞标题] [严重性]\n\n**位置**: `文件路径:行号`\n\n**问题描述**: ...\n\n**修复建议**: ...\n\n---\n\n## 摘要统计\n\n- 总计: N 个漏洞\n- 高危: N 个\n- 中危: N 个\n- 低危: N 个'}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              定义 Skill 的标准化输出格式模板。创建 Skill 时用户只能查看此模板，不能修改。支持任意文本格式（Markdown、JSON、纯文本等）。
+            </p>
+          </div>
+        </div>
+
         {/* MCP Servers */}
         {mcpServers.length > 0 && (
           <div className="space-y-4 border-t border-gray-200 pt-6">
@@ -429,6 +554,18 @@ export default function ConfigPage() {
             </div>
           </div>
         )}
+
+        {/* Tech Stack Options */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Layers size={20} />
+            技术栈管理
+          </h3>
+          <p className="text-sm text-gray-500">
+            管理可用于 Skill 和 Workflow 的技术栈选项
+          </p>
+          <TechStackSection token={localStorage.getItem('token') || ''} />
+        </div>
       </div>
 
       {/* Save Button (Bottom) */}

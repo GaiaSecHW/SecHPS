@@ -25,6 +25,8 @@ import {
   Puzzle,
   Server,
   Tags,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -35,6 +37,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     // 检查认证状态
@@ -82,97 +85,121 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen flex">
       {/* 侧边栏 */}
-      <div className="w-64 bg-gray-900 text-white flex flex-col">
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-xl font-bold">AI4WEB 平台</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {user?.name || user?.username}
-          </p>
+      <div
+        className={`${collapsed ? 'w-16' : 'w-64'} bg-gray-900 text-white flex flex-col transition-all duration-300 ease-in-out relative flex-shrink-0`}
+      >
+        {/* 收缩/展开按钮 */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-6 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-gray-700 text-gray-300 hover:bg-blue-600 hover:text-white transition-colors shadow-md"
+          title={collapsed ? '展开菜单' : '收起菜单'}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+
+        {/* 品牌区 */}
+        <div className={`border-b border-gray-800 overflow-hidden ${collapsed ? 'p-4' : 'p-6'}`}>
+          {collapsed ? (
+            <div className="flex justify-center">
+              <Brain size={24} className="text-blue-400" />
+            </div>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold">AI4WEB 平台</h1>
+              <p className="text-sm text-gray-400 mt-1">
+                {user?.name || user?.username}
+              </p>
+            </>
+          )}
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
-          <NavLink href="/dashboard" icon={<LayoutDashboard size={20} />}>
+        <nav className="flex-1 p-2 space-y-1 overflow-y-auto overflow-x-hidden">
+          <NavLink href="/dashboard" icon={<LayoutDashboard size={20} />} collapsed={collapsed}>
             仪表盘
           </NavLink>
-          <NavLink href="/dashboard/sessions" icon={<MessageSquare size={20} />}>
+          <NavLink href="/dashboard/sessions" icon={<MessageSquare size={20} />} collapsed={collapsed}>
             我的项目
           </NavLink>
 
           {/* Agent编排 */}
-          <div className="pt-4 pb-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">
-              Agent编排
-            </p>
-          </div>
-          <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />}>
+          {!collapsed && (
+            <div className="pt-4 pb-1">
+              <p className="text-xs text-gray-500 uppercase tracking-wider px-2">Agent编排</p>
+            </div>
+          )}
+          {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
+          <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />} collapsed={collapsed}>
             Agent编排管理
           </NavLink>
-          <NavLink href="/dashboard/skills" icon={<Award size={20} />}>
+          <NavLink href="/dashboard/skills" icon={<Award size={20} />} collapsed={collapsed}>
             Skills 库
           </NavLink>
-          <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />}>
+          <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />} collapsed={collapsed}>
             MCP 服务器
           </NavLink>
 
           {/* 个人中心 */}
-          <div className="pt-4 pb-2">
-            <p className="text-xs text-gray-500 uppercase tracking-wider">
-              个人
-            </p>
-          </div>
-          <NavLink href="/dashboard/profile" icon={<User size={20} />}>
+          {!collapsed && (
+            <div className="pt-4 pb-1">
+              <p className="text-xs text-gray-500 uppercase tracking-wider px-2">个人</p>
+            </div>
+          )}
+          {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
+          <NavLink href="/dashboard/profile" icon={<User size={20} />} collapsed={collapsed}>
             个人中心
           </NavLink>
 
           {/* 管理功能 - 根据权限显示 */}
           {user?.roles?.includes('admin') && (
             <>
-              <div className="pt-4 pb-2">
-                <p className="text-xs text-gray-500 uppercase tracking-wider">
-                  管理员
-                </p>
-              </div>
-              <NavLink href="/dashboard/users" icon={<Users size={20} />}>
+              {!collapsed && (
+                <div className="pt-4 pb-1">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider px-2">管理员</p>
+                </div>
+              )}
+              {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
+              <NavLink href="/dashboard/users" icon={<Users size={20} />} collapsed={collapsed}>
                 用户管理
               </NavLink>
-              <NavLink href="/dashboard/roles" icon={<Settings size={20} />}>
+              <NavLink href="/dashboard/roles" icon={<Settings size={20} />} collapsed={collapsed}>
                 角色权限
               </NavLink>
-              <NavLink href="/dashboard/config" icon={<Cog size={20} />}>
+              <NavLink href="/dashboard/config" icon={<Cog size={20} />} collapsed={collapsed}>
                 系统配置
               </NavLink>
-              <NavLink href="/dashboard/admin/models" icon={<Brain size={20} />}>
+              <NavLink href="/dashboard/admin/models" icon={<Brain size={20} />} collapsed={collapsed}>
                 模型管理
               </NavLink>
-              <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />}>
+              <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
                 插件管理
               </NavLink>
-              <NavLink href="/dashboard/claude" icon={<Clock size={20} />}>
+              <NavLink href="/dashboard/claude" icon={<Clock size={20} />} collapsed={collapsed}>
                 Claude 会话
               </NavLink>
-              <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />}>
+              <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />} collapsed={collapsed}>
                 漏洞分类
               </NavLink>
-              <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={20} />}>
+              <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={20} />} collapsed={collapsed}>
                 漏洞管理
               </NavLink>
-              <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={20} />}>
+              <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={20} />} collapsed={collapsed}>
                 Skills 进化
               </NavLink>
-              <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />}>
+              <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
                 工具管理
               </NavLink>
             </>
           )}
         </nav>
 
-        <div className="p-4 border-t border-gray-800">
+        <div className={`border-t border-gray-800 ${collapsed ? 'p-2' : 'p-4'}`}>
           <button
             onClick={handleLogout}
-            className="flex items-center space-x-2 text-gray-400 hover:text-white transition-colors w-full"
+            className={`flex items-center text-gray-400 hover:text-white transition-colors w-full rounded-md px-2 py-2 hover:bg-gray-800 ${collapsed ? 'justify-center' : 'space-x-2'}`}
+            title={collapsed ? '退出登录' : undefined}
           >
-            <LogOut size={20} />
-            <span>退出登录</span>
+            <LogOut size={20} className="flex-shrink-0" />
+            {!collapsed && <span>退出登录</span>}
           </button>
         </div>
       </div>
@@ -219,18 +246,21 @@ function NavLink({
   href,
   icon,
   children,
+  collapsed,
 }: {
   href: string;
   icon: React.ReactNode;
   children: React.ReactNode;
+  collapsed?: boolean;
 }) {
   return (
     <Link
       href={href}
-      className="flex items-center space-x-3 px-3 py-2 rounded-md text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+      className={`flex items-center px-3 py-2 rounded-md text-gray-300 hover:bg-gray-800 hover:text-white transition-colors ${collapsed ? 'justify-center' : 'space-x-3'}`}
+      title={collapsed ? String(children) : undefined}
     >
-      {icon}
-      <span>{children}</span>
+      <span className="flex-shrink-0">{icon}</span>
+      {!collapsed && <span className="truncate">{children}</span>}
     </Link>
   );
 }

@@ -33,11 +33,13 @@ export async function POST(
 
     // 解析请求体获取 workflowId 和其他选项
     let workflowId: string | null = null;
+    let modelId: string | null = null;
     let enableMcp = true;
     let enableToolPermissions = true;
     try {
       const body = await request.json();
       workflowId = body.workflowId || null;
+      modelId = body.modelId || null;
       enableMcp = body.enableMcp !== false;
       enableToolPermissions = body.enableToolPermissions !== false;
     } catch {
@@ -127,10 +129,10 @@ export async function POST(
     }
 
     // 获取模型配置
-    const modelConfig = await getModelConfig();
+    const modelConfig = await getModelConfig(modelId);
     if (!modelConfig) {
       return NextResponse.json(
-        { error: '请先在配置中设置模型' },
+        { error: '请先在模型管理中配置模型' },
         { status: 400 }
       );
     }
@@ -789,8 +791,20 @@ function getCodeBlockLang(filename: string): string {
 
 /**
  * 获取模型配置
+ * @param modelId 可选的模型ID，如果提供则使用该模型，否则使用默认模型
  */
-async function getModelConfig() {
+async function getModelConfig(modelId?: string | null) {
+  // 如果提供了 modelId，直接使用该模型
+  if (modelId) {
+    const selectedModel = await prisma.modelConfig.findUnique({
+      where: { id: modelId },
+    });
+    if (selectedModel && selectedModel.isActive) {
+      return selectedModel;
+    }
+    console.warn(`[getModelConfig] 指定的模型 ${modelId} 不存在或未激活，将使用默认模型`);
+  }
+  
   // 使用数据库配置
   const defaultModel = await prisma.modelConfig.findFirst({
     where: {

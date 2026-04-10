@@ -8,6 +8,7 @@ interface SkillDraft {
   displayName: string;
   description: string;
   category: string;
+  techStack: string[];
   cwe?: string;
   content: string;  // 完整的 Markdown 内容
 }
@@ -17,6 +18,7 @@ interface Props {
     name: string;
     description: string;
     category: string;
+    techStack: string[];
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -71,6 +73,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
       }
 
       const data = await response.json();
+      console.log('[DraftStep] API 返回的 skill:', data.skill);
       onChange(data.skill);
     } catch (error) {
       console.error('生成 Skill 失败:', error);

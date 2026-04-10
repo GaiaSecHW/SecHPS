@@ -16,11 +16,13 @@ import {
   AlertTriangle,
   Download,
   FileText,
+  Loader2,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/auth';
 import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 interface Skill {
   id: string;
@@ -28,6 +30,7 @@ interface Skill {
   displayName: string;
   description: string;
   category: string;
+  techStack: string | null;
   cwe: string | null;
   content: string;
   isActive: boolean;
@@ -55,11 +58,19 @@ export default function SkillDetailPage() {
   const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState('');
   const [editCategory, setEditCategory] = useState('');
+  const [editTechStack, setEditTechStack] = useState<string[]>([]);
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  
+  // 技术栈选择相关
+  const [techStackSearch, setTechStackSearch] = useState('');
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  
+  // 使用 Hook 获取技术栈选项
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -163,6 +174,12 @@ export default function SkillDetailPage() {
     if (!skill) return;
     setEditName(skill.displayName);
     setEditCategory(skill.category);
+    // 解析技术栈 JSON
+    try {
+      setEditTechStack(skill.techStack ? JSON.parse(skill.techStack) : []);
+    } catch {
+      setEditTechStack([]);
+    }
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
     setIsEditing(true);
@@ -194,6 +211,7 @@ export default function SkillDetailPage() {
           displayName: editName.trim(),
           description: editName.trim(),
           category: editCategory,
+          techStack: editTechStack,
           content: editContent,
           isActive: editIsActive,
         }),
@@ -430,6 +448,86 @@ export default function SkillDetailPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+
+              {/* 技术栈选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  适合的技术栈
+                </label>
+                <div className="relative">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {editTechStack.map((ts) => (
+                      <span
+                        key={ts}
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        {ts}
+                        <button
+                          type="button"
+                          onClick={() => setEditTechStack(editTechStack.filter((t) => t !== ts))}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={techStackSearch}
+                      onChange={(e) => {
+                        setTechStackSearch(e.target.value);
+                        setShowTechStackDropdown(true);
+                      }}
+                      onFocus={() => setShowTechStackDropdown(true)}
+                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      disabled={loadingTechStack}
+                    />
+                    {showTechStackDropdown && !loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {techStackOptions
+                          .filter((option) => 
+                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !editTechStack.includes(option)
+                          )
+                          .slice(0, 20)
+                          .map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setEditTechStack([...editTechStack, option]);
+                                setTechStackSearch('');
+                                setShowTechStackDropdown(false);
+                              }}
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        {techStackOptions.filter((option) => 
+                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !editTechStack.includes(option)
+                        ).length === 0 && (
+                          <div className="px-4 py-2 text-sm text-gray-500">
+                            无匹配选项
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">加载中...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
 

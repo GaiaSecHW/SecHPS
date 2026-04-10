@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
+/**
+ * Skill 测试运行 API
+ * POST /api/skills/test-runs
+ * 
+ * 真实调用大模型进行 Skill 测试，支持多用户并发
+ */
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -11,13 +17,13 @@ export async function POST(request: NextRequest) {
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
-    
+
     if (!payload) {
       return NextResponse.json({ error: '无效的 token' }, { status: 401 });
     }
 
     const body = await request.json();
-    const { testCase, skillData, runType, projectId } = body;
+    const { testCase, skillData, runType } = body;
 
     if (!testCase || !skillData) {
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
@@ -25,144 +31,225 @@ export async function POST(request: NextRequest) {
 
     const startTime = Date.now();
 
-    // 如果提供了 projectId 并且有 AI4WEB 配置，使用真实执行
-    if (projectId && runType === 'with_skill') {
-      try {
-        // 获取项目配置
-        const project = await prisma.project.findUnique({
-          where: { id: projectId },
-          include: {
-            config: true,
-          },
-        });
-
-        if (project?.config) {
-          // 动态导入执行器（避免在不使用时加载）
-          const { AgentExecutor } = await import('@/lib/agent-executor');
-          
-          // 准备执行上下文
-          const executionContext = {
-            skillId: 'test-skill', // 临时 ID
-            projectId: projectId,
-            modelConfig: {
-              providerType: project.config.modelPreferences ? 
-                JSON.parse(project.config.modelPreferences as string).provider || 'claude' : 'claude',
-              apiKey: process.env.CLAUDE_API_KEY || '',
-              apiBaseUrl: project.config.baseURL,
-              model: 'claude-3-5-sonnet-20241022',
-            },
-            maxToolCalls: 10,
-            maxIterations: 5,
-            testMode: true, // 测试模式
-            cwd: project.projectPath || process.cwd(),
-          };
-
-          // 构建提示词
-          const prompt = runType === 'with_skill' 
-            ? `${skillData.systemPrompt}\n\n${testCase.prompt}`
-            : testCase.prompt;
-
-          // 执行并收集结果
-          const outputChunks: string[] = [];
-          const toolCalls: any[] = [];
-
-          const result = await new Promise((resolve, reject) => {
-            const executor = new AgentExecutor(executionContext, {
-              onChunk: (text) => {
-                outputChunks.push(text);
-              },
-              onToolCall: (tool, parameters) => {
-                toolCalls.push({ tool, parameters });
-              },
-              onVulnerability: () => {},
-              onComplete: resolve,
-              onError: reject,
-            });
-
-            executor.execute(prompt).catch(reject);
-          });
-
-          const duration = Date.now() - startTime;
-
-          return NextResponse.json({
-            output: outputChunks.join(''),
-            duration,
-            tokens: 0, // TODO: 从 result 中提取
-            toolCalls,
-          });
-        }
-      } catch (error) {
-        console.error('真实执行失败，回退到模拟:', error);
-        // 继续使用模拟
-      }
+    // 获取模型配置
+    const modelConfig = await getModelConfig();
+    
+    if (!modelConfig) {
+      return NextResponse.json(
+        { error: '模型配置不存在，请先在系统设置中配置 AI 模型' },
+        { status: 500 }
+      );
     }
 
-    // 模拟测试运行（用于无项目配置或对比测试）
-    const simulatedOutput = await simulateTestRun(testCase, skillData, runType);
+    console.log('[test-runs] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel, '提供商:', modelConfig.providerType);
+    
+    // 构建提示词
+    let prompt = '';
+    if (runType === 'with_skill' && skillData.systemPrompt) {
+      prompt = `${skillData.systemPrompt}\n\n用户请求: ${testCase.prompt}`;
+    } else {
+      prompt = testCase.prompt;
+    }
+
+    // 添加测试文件内容（如果有）
+    if (testCase.testFiles && testCase.testFiles.length > 0) {
+      prompt += '\n\n测试文件:\n';
+      testCase.testFiles.forEach((file: string) => {
+        prompt += `- ${file}\n`;
+      });
+    }
+
+    // 添加期望输出（如果有）
+    if (testCase.expectedOutput) {
+      prompt += `\n\n期望输出格式:\n${testCase.expectedOutput}`;
+    }
+
+    console.log('[test-runs] 发送的提示词长度:', prompt.length);
+    console.log('[test-runs] 提示词内容:', prompt.substring(0, 500) + '...');
+
+    // 调用大模型
+    const output = await callModelForTest(modelConfig, prompt);
     const duration = Date.now() - startTime;
-    const tokens = Math.floor(Math.random() * 2000) + 500;
 
     return NextResponse.json({
-      output: simulatedOutput,
+      output,
       duration,
-      tokens,
+      tokens: 0,
     });
   } catch (error) {
-    console.error('测试运行失败:', error);
+    console.error('[test-runs] 测试运行失败:', error);
     return NextResponse.json(
-      { error: '测试运行失败' },
+      { error: `测试运行失败: ${error instanceof Error ? error.message : '未知错误'}` },
       { status: 500 }
     );
   }
 }
 
-async function simulateTestRun(testCase: any, skillData: any, runType: string): Promise<string> {
-  // 模拟 API 调用延迟
-  await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 2000));
+/**
+ * GET 接口 - 获取评估运行列表（当前返回空，未来可实现持久化存储）
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader) {
+      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    }
 
-  // 根据是否有 Skill 生成不同的输出
-  if (runType === 'with_skill') {
-    return `## 安全审计报告
+    const token = authHeader.replace('Bearer ', '');
+    const payload = verifyToken(token);
 
-### 发现的问题
-1. **SQL 注入漏洞** - 高危
-   - 位置: UserController.java:45
-   - 代码: \`String query = "SELECT * FROM users WHERE id = " + userId;\`
-   - 影响: 攻击者可以执行任意 SQL 命令
+    if (!payload) {
+      return NextResponse.json({ error: '无效的 token' }, { status: 401 });
+    }
 
-2. **XSS 漏洞** - 中危
-   - 位置: CommentRenderer.java:123
-   - 代码: \`output += "<div>" + comment + "</div>";\`
-   - 影响: 可能执行恶意脚本
+    // TODO: 未来可从数据库读取用户的历史评估记录
+    return NextResponse.json({
+      runs: [],
+      notes: '评估数据由大模型实时生成',
+    });
+  } catch (error) {
+    console.error('[test-runs] 获取评估列表失败:', error);
+    return NextResponse.json(
+      { error: '获取评估列表失败' },
+      { status: 500 }
+    );
+  }
+}
 
-### 风险等级
-- 高危: 1
-- 中危: 1
-- 低危: 0
+/**
+ * 获取模型配置（从数据库，支持多用户共享）
+ */
+async function getModelConfig(): Promise<{
+  providerType: string;
+  apiKey: string;
+  apiBaseUrl: string;
+  defaultModel: string;
+} | null> {
+  try {
+    const config = await prisma.modelConfig.findFirst({
+      where: { isActive: true, isDefault: true },
+    });
 
-### 详细说明
-SQL 注入漏洞存在于用户查询接口，攻击者可以通过构造特殊的 userId 参数来绕过认证或获取敏感数据。XSS 漏洞存在于评论渲染逻辑，未对用户输入进行转义。
+    if (config) {
+      let models: string[] = ['default'];
+      try {
+        const parsed = JSON.parse(config.models);
+        models = Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        models = [config.models || 'default'];
+      }
 
-### 修复建议
-1. 使用参数化查询替代字符串拼接：
-   \`PreparedStatement stmt = conn.prepareStatement("SELECT * FROM users WHERE id = ?");\`
-   
-2. 对用户输入进行 HTML 转义：
-   \`output += "<div>" + StringEscapeUtils.escapeHtml4(comment) + "</div>";\`
+      return {
+        providerType: config.providerType,
+        apiKey: config.apiKey,
+        apiBaseUrl: config.apiBaseUrl,
+        defaultModel: models[0] || 'default',
+      };
+    }
+  } catch (error) {
+    console.error('[test-runs] 获取模型配置失败:', error);
+  }
 
-### 统计
-- 扫描文件数: 156
-- 分析代码行数: 12,345
-- 发现漏洞数: 2
-- 扫描耗时: ${Date.now() % 1000 + 500}ms`;
-  } else {
-    return `## 代码审查结果
+  return null;
+}
 
-发现了以下问题：
+/**
+ * 调用大模型进行测试（无状态，支持并发）
+ */
+async function callModelForTest(
+  config: { providerType: string; apiKey: string; apiBaseUrl: string; defaultModel: string },
+  prompt: string
+): Promise<string> {
+  // 设置 2 分钟超时
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
 
-1. 第45行有字符串拼接，可能有安全问题
-2. 第123行有未转义的用户输入
+  try {
+    if (config.providerType === 'claude') {
+      // Claude API 格式
+      let apiUrl = config.apiBaseUrl;
+      if (!apiUrl.includes('/v1/messages') && !apiUrl.endsWith('/messages')) {
+        apiUrl = apiUrl.replace(/\/$/, '') + '/v1/messages';
+      }
 
-建议进一步检查这些代码位置。`;
+      console.log('[test-runs] Claude API URL:', apiUrl);
+      console.log('[test-runs] 开始调用模型...');
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: config.defaultModel,
+          max_tokens: 4096,
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Claude API 错误 (${response.status}): ${errorText}`);
+      }
+
+      console.log('[test-runs] 收到响应，开始解析...');
+      const data = await response.json();
+      console.log('[test-runs] 响应解析完成');
+      
+      // 解析响应 - Claude 格式 content 数组
+      if (data.content && Array.isArray(data.content)) {
+        const textBlock = data.content.find((block: any) => block.type === 'text');
+        if (textBlock?.text) {
+          console.log('[test-runs] 输出长度:', textBlock.text.length);
+          return textBlock.text;
+        }
+      }
+      throw new Error('无法解析模型响应');
+    } else {
+      // OpenAI 格式
+      let apiUrl = config.apiBaseUrl;
+      if (!apiUrl.endsWith('/chat/completions')) {
+        apiUrl = apiUrl.replace(/\/$/, '') + '/v1/chat/completions';
+      }
+
+      console.log('[test-runs] OpenAI API URL:', apiUrl);
+      console.log('[test-runs] 开始调用模型...');
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.defaultModel,
+          max_tokens: 4096,
+          messages: [
+            { role: 'user', content: prompt }
+          ],
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API 错误 (${response.status}): ${errorText}`);
+      }
+
+      console.log('[test-runs] 收到响应，开始解析...');
+      const data = await response.json();
+      console.log('[test-runs] 响应解析完成');
+
+      const content = data.choices?.[0]?.message?.content || '';
+      console.log('[test-runs] 输出长度:', content.length);
+      return content;
+    }
+  } finally {
+    clearTimeout(timeoutId);
   }
 }

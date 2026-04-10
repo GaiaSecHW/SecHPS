@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { HelpCircle, Lightbulb } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { HelpCircle, Lightbulb, Eye, X, Loader2 } from 'lucide-react';
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 const CATEGORIES = [
   { value: 'code-audit', label: '代码安全审计', description: '检测代码中的安全漏洞' },
@@ -20,6 +21,7 @@ interface IntentData {
   name: string;
   description: string;
   category: string;
+  techStack: string[];
   whatDoesItDo: string;
   whenShouldItTrigger: string;
   expectedOutput: string;
@@ -34,6 +36,37 @@ interface Props {
 
 export default function IntentStep({ data, onChange, onNext }: Props) {
   const [showExamples, setShowExamples] = useState(false);
+  const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  
+  // 技术栈选择相关
+  const [techStackSearch, setTechStackSearch] = useState('');
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  
+  // 使用 Hook 获取技术栈选项
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+
+  // 加载 Skill 标准输出模板（从系统配置）
+  useEffect(() => {
+    const fetchTemplate = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/config', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const resData = await response.json();
+          const activeConfig = resData.configs?.find((c: any) => c.isActive);
+          if (activeConfig?.skillOutputTemplate) {
+            setSkillOutputTemplate(activeConfig.skillOutputTemplate);
+          }
+        }
+      } catch (error) {
+        console.error('加载 Skill 标准输出模板失败:', error);
+      }
+    };
+    fetchTemplate();
+  }, []);
 
   const handleChange = (field: keyof IntentData, value: string | boolean) => {
     onChange({ ...data, [field]: value });
@@ -120,6 +153,96 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
             ))}
           </div>
         </div>
+
+        {/* 技术栈选择 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            适合的技术栈
+          </label>
+          <div className="relative">
+            {/* 已选择的技术栈 */}
+            <div className="flex flex-wrap gap-2 mb-2">
+              {(data.techStack || []).map((ts) => (
+                <span
+                  key={ts}
+                  className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                >
+                  {ts}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleChange('techStack', (data.techStack || []).filter((t: string) => t !== ts));
+                    }}
+                    className="ml-2 text-blue-600 hover:text-blue-800"
+                  >
+                    <X size={14} />
+                  </button>
+                </span>
+              ))}
+            </div>
+            
+            {/* 搜索输入 */}
+            <div className="relative">
+              <input
+                type="text"
+                value={techStackSearch}
+                onChange={(e) => {
+                  setTechStackSearch(e.target.value);
+                  setShowTechStackDropdown(true);
+                }}
+                onFocus={() => setShowTechStackDropdown(true)}
+                placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loadingTechStack}
+              />
+              
+              {/* 下拉选项 */}
+              {showTechStackDropdown && !loadingTechStack && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  {techStackOptions
+                    .filter((option) => 
+                      option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                      !(data.techStack || []).includes(option)
+                    )
+                    .slice(0, 20)
+                    .map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => {
+                          handleChange('techStack', [...(data.techStack || []), option]);
+                          setTechStackSearch('');
+                          setShowTechStackDropdown(false);
+                        }}
+                        className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  {techStackOptions.filter((option) => 
+                    option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                    !(data.techStack || []).includes(option)
+                  ).length === 0 && (
+                    <div className="px-4 py-2 text-sm text-gray-500">
+                      无匹配选项
+                    </div>
+                  )}
+                </div>
+              )}
+              {loadingTechStack && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+                  <div className="flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <span className="text-sm text-gray-500">加载中...</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              可选择多个技术栈，表示此 Skill 适用于这些技术（可选）
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 详细需求 */}
@@ -186,16 +309,36 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             期望的输出是什么？
           </label>
-          <textarea
-            value={data.expectedOutput}
-            onChange={(e) => handleChange('expectedOutput', e.target.value)}
-            rows={3}
-            placeholder="描述输出格式和内容，例如：包含漏洞列表的 JSON、带修复建议的 Markdown 报告..."
-            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          <p className="mt-1 text-xs text-gray-500">
-            如果不确定，可以留空，我们会在后续步骤中帮你完善
-          </p>
+          {skillOutputTemplate ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500 mb-1">
+                    系统已配置标准输出模板，Skill 将按照此格式输出结果
+                  </p>
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">
+                    {skillOutputTemplate.length > 200 
+                      ? skillOutputTemplate.substring(0, 200) + '...' 
+                      : skillOutputTemplate}
+                  </pre>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTemplateModal(true)}
+                  className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                  title="查看完整模板"
+                >
+                  <Eye size={16} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+              <p className="text-sm text-yellow-800">
+                系统尚未配置标准输出模板，请在"配置管理"中设置
+              </p>
+            </div>
+          )}
         </div>
 
         <div>
@@ -226,6 +369,39 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           下一步：调研访谈
         </button>
       </div>
+
+      {/* 查看完整模板对话框 */}
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Skill 标准输出模板</h3>
+                <p className="text-sm text-gray-500 mt-1">由系统配置定义，所有 Skill 统一使用此输出格式</p>
+              </div>
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div>
+              <pre className="text-sm bg-gray-50 p-4 rounded border border-gray-200 whitespace-pre-wrap overflow-x-auto font-mono">
+                {skillOutputTemplate || '（未配置）'}
+              </pre>
+            </div>
+            <div className="flex justify-end pt-4">
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

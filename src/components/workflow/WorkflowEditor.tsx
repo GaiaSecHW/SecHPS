@@ -17,10 +17,11 @@ import {
 } from '@xyflow/react';
 import { toPng } from 'html-to-image';
 import '@xyflow/react/dist/style.css';
-import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff } from 'lucide-react';
+import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff, Sparkles, Loader2, Edit2, Check } from 'lucide-react';
 import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
 import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP, WorkflowNodeType } from '@/types/workflow';
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 interface WorkflowEditorProps {
   workflowId?: string;
@@ -51,8 +52,50 @@ function WorkflowEditorContent({
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'node' | 'edge', id: string } | null>(null);
-  const [showPreview, setShowPreview] = useState(false);
+const [showPreview, setShowPreview] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
+  
+  // 使用 Hook 获取技术栈选项
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  
+  // 预测任务
+  const [predictionTasks, setPredictionTasks] = useState<Array<{
+    id: string;
+    taskName: string;
+    taskDescription: string;
+    topK: number;
+    status: string;
+    progress: number;
+    errorMessage: string | null;
+    matches: Array<{
+      skillId: string;
+      skillName: string;
+      displayName: string;
+      category: string;
+      techStack: string[];
+      relevance: number;
+      reason: string;
+    }> | null;
+    method: string | null;
+    matchCount: number | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    duration: number | null;
+    createdAt: string;
+    workflowId: string | null;
+  }>>([]);
+  const [showPredictionTasks, setShowPredictionTasks] = useState(false);
+  const [loadingTasks, setLoadingTasks] = useState(false);
+  const [pollingTaskId, setPollingTaskId] = useState<string | null>(null);
+  
+  // 工作流信息编辑模态框
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editTechStack, setEditTechStack] = useState<string[]>([]);
+  const [techStackSearch, setTechStackSearch] = useState('');
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  const [updatingInfo, setUpdatingInfo] = useState(false);
   
   // 工作流配置（从系统配置读取）
   const [workflowConfig, setWorkflowConfig] = useState<{
@@ -93,24 +136,147 @@ function WorkflowEditorContent({
     fetchWorkflowConfig();
   }, []);
 
-  // 保存当前状态到历史记录
+// 保存当前状态到历史记录
   const saveToHistory = useCallback(() => {
     const currentState: WorkflowData = {
       nodes: JSON.parse(JSON.stringify(nodes)),
       edges: JSON.parse(JSON.stringify(edges)),
       viewport: undefined,
     };
-
+ 
     const newHistory = history.slice(0, historyIndex + 1);
     newHistory.push(currentState);
-
+ 
     if (newHistory.length > 50) {
       newHistory.shift();
     }
-
+ 
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
   }, [nodes, edges, history, historyIndex]);
+ 
+  // 创建预测任务（异步）
+  const createPredictionTask = async (nodeName: string, nodeDescription: string) => {
+    if (!workflowId || !nodeName) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch('/api/skills/predict-tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          taskName: nodeName,
+          taskDescription: nodeDescription || '',
+          workflowId,
+          topK: 5,
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error('创建预测任务失败');
+      }
+      
+      const data = await response.json();
+      console.log('[WorkflowEditor] 预测任务已创建:', data.task);
+      
+      // 刷新任务列表
+      fetchPredictionTasks();
+      
+      // 开始轮询任务状态
+      setPollingTaskId(data.task.id);
+    } catch (error) {
+      console.error('创建预测任务失败:', error);
+      alert('创建预测任务失败');
+    }
+  };
+  
+  // 加载预测任务列表
+  const fetchPredictionTasks = async () => {
+    if (!workflowId) return;
+    
+    try {
+      setLoadingTasks(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/predict-tasks?workflowId=${workflowId}&limit=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setPredictionTasks(data.tasks || []);
+      }
+    } catch (error) {
+      console.error('加载预测任务失败:', error);
+    } finally {
+      setLoadingTasks(false);
+    }
+  };
+  
+  // 取消任务
+  const cancelTask = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/predict-tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (response.ok) {
+        // 刷新任务列表
+        fetchPredictionTasks();
+      } else {
+        alert('取消任务失败');
+      }
+    } catch (error) {
+      console.error('取消任务失败:', error);
+      alert('取消任务失败');
+    }
+  };
+  
+  // 轮询任务状态
+  useEffect(() => {
+    if (!pollingTaskId) return;
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`/api/skills/predict-tasks/${pollingTaskId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const task = data.task;
+          
+          // 更新任务列表中的状态
+          setPredictionTasks(prev =>
+            prev.map(t => t.id === task.id ? task : t)
+          );
+          
+          // 如果任务完成或失败，停止轮询
+          if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
+            setPollingTaskId(null);
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (error) {
+        console.error('轮询任务状态失败:', error);
+      }
+    }, 2000); // 每 2 秒轮询一次
+    
+    return () => clearInterval(pollInterval);
+  }, [pollingTaskId]);
+  
+  // 初始加载预测任务
+  useEffect(() => {
+    if (workflowId) {
+      fetchPredictionTasks();
+    }
+  }, [workflowId]);
 
   // 为节点添加 workflowConfig
   const nodesWithConfig = useMemo(() => {
@@ -792,6 +958,36 @@ function WorkflowEditorContent({
                     {selectedNode.id}
                   </div>
                 </div>
+
+                {/* Skill 预测 - 仅对 task 类型节点显示 */}
+                {selectedNode.type === 'task' && (
+                  <div className="pt-4 border-t border-gray-200">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Skill 匹配预测
+                    </label>
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => {
+                          if (selectedNode.data.label) {
+                            createPredictionTask(selectedNode.data.label, selectedNode.data.description || '');
+                          }
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm"
+                      >
+                        <Sparkles size={14} />
+                        预测匹配
+                      </button>
+                      
+                      <button
+                        onClick={() => setShowPredictionTasks(true)}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                      >
+                        <Sparkles size={12} />
+                        查看任务 ({predictionTasks.length})
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -898,6 +1094,145 @@ function WorkflowEditorContent({
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
               <button
                 onClick={() => setShowPreview(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 预测任务弹窗 */}
+      {showPredictionTasks && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
+            {/* 头部 */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                <Sparkles size={20} />
+                预测任务
+              </h3>
+              <button
+                onClick={() => setShowPredictionTasks(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* 内容 */}
+            <div className="flex-1 overflow-auto p-6">
+              {loadingTasks ? (
+                <div className="flex items-center justify-center h-64">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                </div>
+              ) : predictionTasks.length === 0 ? (
+                <div className="text-center text-gray-500 py-8">
+                  暂无预测任务
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {predictionTasks.map((task) => (
+                    <div key={task.id} className="border border-gray-200 rounded-lg p-4">
+                      {/* 标题和时间 */}
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h4 className="font-semibold text-gray-900">{task.taskName}</h4>
+                          <p className="text-sm text-gray-600 mt-1">{task.taskDescription}</p>
+                        </div>
+                        <div className="text-right ml-4">
+                          <div className="text-xs text-gray-500">
+                            {new Date(task.createdAt).toLocaleString('zh-CN')}
+                          </div>
+                          {/* 状态标签 */}
+                          <div className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full mt-1 ${
+                            task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                            task.status === 'running' ? 'bg-blue-100 text-blue-800' :
+                            task.status === 'failed' ? 'bg-red-100 text-red-800' :
+                            task.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {task.status === 'pending' && '等待中'}
+                            {task.status === 'running' && (
+                              <>
+                                <Loader2 size={10} className="animate-spin" />
+                                运行中
+                              </>
+                            )}
+                            {task.status === 'completed' && '已完成'}
+                            {task.status === 'failed' && '失败'}
+                            {task.status === 'cancelled' && '已取消'}
+                          </div>
+                          {/* 进度条 */}
+                          {(task.status === 'running' || task.status === 'pending') && (
+                            <div className="mt-2 w-32">
+                              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                <div 
+                                  className="bg-blue-500 h-1.5 rounded-full transition-all"
+                                  style={{ width: `${task.progress}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-500">{task.progress}%</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      
+                      {/* 错误信息 */}
+                      {task.errorMessage && (
+                        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-3">
+                          <p className="text-sm text-red-700">{task.errorMessage}</p>
+                        </div>
+                      )}
+                      
+                      {/* 匹配结果 */}
+                      {task.status === 'completed' && task.matches && (
+                        <div className="space-y-2">
+                          <h5 className="text-sm font-medium text-gray-700">
+                            匹配的 Skills ({task.matchCount}) - {task.method === 'llm' ? 'AI 匹配' : '关键词匹配'}
+                          </h5>
+                          <div className="grid grid-cols-1 gap-2">
+                            {task.matches.map((match, idx) => (
+                              <div key={idx} className="bg-gray-50 rounded-md p-3">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-medium text-sm text-gray-900">{match.displayName}</span>
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                    {(match.relevance * 100).toFixed(0)}%
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-600 mb-1">{match.category}</p>
+                                <p className="text-xs text-gray-500">{match.reason}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 操作按钮 */}
+                      {(task.status === 'pending' || task.status === 'running') && (
+                        <div className="mt-3">
+                          <button
+                            onClick={() => cancelTask(task.id)}
+                            className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors"
+                          >
+                            取消任务
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 底部 */}
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+              <span className="text-sm text-gray-500">
+                共 {predictionTasks.length} 个任务
+              </span>
+              <button
+                onClick={() => setShowPredictionTasks(false)}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
               >
                 关闭

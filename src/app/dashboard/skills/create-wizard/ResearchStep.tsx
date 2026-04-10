@@ -126,18 +126,21 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
         </div>
       </div>
 
-      {/* 输入输出格式 */}
+      {/* 输入格式 */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          期望的输入输出格式是什么？ <span className="text-red-500">*</span>
+          期望的输入格式是什么？ <span className="text-red-500">*</span>
         </label>
         <textarea
           value={data.inputOutputFormats}
           onChange={(e) => onChange({ ...data, inputOutputFormats: e.target.value })}
           rows={4}
-          placeholder="描述输入数据的格式和期望的输出格式。例如：&#10;输入：Java 代码文件，包含用户输入验证逻辑&#10;输出：JSON 格式的漏洞报告，包含文件路径、行号、漏洞类型、风险等级"
+          placeholder="描述输入数据的格式。例如：&#10;- Java 代码文件，包含用户输入验证逻辑&#10;- 项目目录路径，包含多个源代码文件&#10;- 特定格式的配置文件（YAML/JSON）"
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
+        <p className="mt-1 text-xs text-gray-500">
+          输出格式由系统配置的标准输出模板统一规定
+        </p>
       </div>
 
       {/* 示例文件 */}

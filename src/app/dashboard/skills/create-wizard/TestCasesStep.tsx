@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Play, FileText, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Play, FileText, AlertCircle, ChevronDown, ChevronUp, Edit2, X, Check } from 'lucide-react';
 
 interface TestCase {
   id: string;
@@ -27,6 +27,9 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
     testFiles: [],
   });
   const [newTestFile, setNewTestFile] = useState('');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTestCase, setEditingTestCase] = useState<Partial<TestCase>>({});
 
   const handleAddTestCase = () => {
     if (newTestCase.name?.trim() && newTestCase.prompt?.trim()) {
@@ -34,7 +37,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
         id: Date.now().toString(),
         name: newTestCase.name.trim(),
         prompt: newTestCase.prompt.trim(),
-        expectedOutput: newTestCase.expectedOutput?.trim(),
+        expectedOutput: newTestCase.expectedOutput?.trim() || undefined,
         testFiles: newTestCase.testFiles || [],
       };
       onChange([...testCases, testCase]);
@@ -49,6 +52,70 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
 
   const handleRemoveTestCase = (id: string) => {
     onChange(testCases.filter((tc) => tc.id !== id));
+    if (expandedId === id) setExpandedId(null);
+    if (editingId === id) {
+      setEditingId(null);
+      setEditingTestCase({});
+    }
+  };
+
+  const handleToggleExpand = (id: string) => {
+    // 如果正在编辑，先取消编辑
+    if (editingId === id) {
+      setEditingId(null);
+      setEditingTestCase({});
+    }
+    setExpandedId(expandedId === id ? null : id);
+  };
+
+  const handleStartEdit = (testCase: TestCase) => {
+    setEditingId(testCase.id);
+    setEditingTestCase({ ...testCase });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditingTestCase({});
+  };
+
+  const handleSaveEdit = () => {
+    const name = editingTestCase.name?.trim();
+    const prompt = editingTestCase.prompt?.trim();
+    
+    if (editingId && name && prompt) {
+      const updated = testCases.map((tc) =>
+        tc.id === editingId
+          ? {
+              ...tc,
+              name,
+              prompt,
+              expectedOutput: editingTestCase.expectedOutput?.trim(),
+              testFiles: editingTestCase.testFiles || [],
+            }
+          : tc
+      );
+      onChange(updated);
+      setEditingId(null);
+      setEditingTestCase({});
+    }
+  };
+
+  const handleEditTestFileAdd = () => {
+    const currentFiles = editingTestCase.testFiles || [];
+    const newFile = prompt('请输入测试文件路径:');
+    if (newFile?.trim()) {
+      setEditingTestCase({
+        ...editingTestCase,
+        testFiles: [...currentFiles, newFile.trim()],
+      });
+    }
+  };
+
+  const handleEditTestFileRemove = (index: number) => {
+    setEditingTestCase({
+      ...editingTestCase,
+      testFiles: editingTestCase.testFiles?.filter((_, i) => i !== index),
+    });
   };
 
   const handleAddTestFile = () => {
@@ -126,35 +193,203 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
       {testCases.length > 0 && (
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-gray-700">已添加的测试用例 ({testCases.length})</h3>
-          {testCases.map((testCase, index) => (
-            <div key={testCase.id} className="bg-white border border-gray-200 rounded-lg p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-gray-900">
-                    {index + 1}. {testCase.name}
-                  </h4>
-                  <p className="mt-1 text-xs text-gray-500 line-clamp-2">
-                    {testCase.prompt}
-                  </p>
-                  {testCase.testFiles && testCase.testFiles.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {testCase.testFiles.map((file, i) => (
-                        <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
-                          {file}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => handleRemoveTestCase(testCase.id)}
-                  className="ml-4 text-gray-400 hover:text-red-600"
+          {testCases.map((testCase, index) => {
+            const isExpanded = expandedId === testCase.id;
+            const isEditing = editingId === testCase.id;
+            
+            return (
+              <div key={testCase.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                {/* 标题栏 - 始终显示 */}
+                <div 
+                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => !isEditing && handleToggleExpand(testCase.id)}
                 >
-                  <Trash2 size={16} />
-                </button>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-sm font-medium text-gray-900">
+                          {index + 1}. {testCase.name}
+                        </h4>
+                        {isExpanded ? (
+                          <ChevronUp size={16} className="text-gray-400" />
+                        ) : (
+                          <ChevronDown size={16} className="text-gray-400" />
+                        )}
+                      </div>
+                      {!isExpanded && (
+                        <p className="mt-1 text-xs text-gray-500 line-clamp-2">
+                          {testCase.prompt}
+                        </p>
+                      )}
+                      {!isExpanded && testCase.testFiles && testCase.testFiles.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {testCase.testFiles.map((file, i) => (
+                            <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                              {file}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 ml-4">
+                      {!isEditing && isExpanded && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartEdit(testCase);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                          title="编辑"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveTestCase(testCase.id);
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        title="删除"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 展开内容 */}
+                {isExpanded && (
+                  <div className="border-t border-gray-200 p-4 bg-gray-50">
+                    {isEditing ? (
+                      /* 编辑模式 */
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            测试用例名称 <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editingTestCase.name || ''}
+                            onChange={(e) => setEditingTestCase({ ...editingTestCase, name: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            测试提示词 <span className="text-red-500">*</span>
+                          </label>
+                          <textarea
+                            value={editingTestCase.prompt || ''}
+                            onChange={(e) => setEditingTestCase({ ...editingTestCase, prompt: e.target.value })}
+                            rows={4}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            期望输出（可选）
+                          </label>
+                          <textarea
+                            value={editingTestCase.expectedOutput || ''}
+                            onChange={(e) => setEditingTestCase({ ...editingTestCase, expectedOutput: e.target.value })}
+                            rows={4}
+                            placeholder="描述你期望的输出结果..."
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <FileText size={14} className="inline mr-1" />
+                            测试文件（可选）
+                          </label>
+                          {editingTestCase.testFiles && editingTestCase.testFiles.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-2">
+                              {editingTestCase.testFiles.map((file, i) => (
+                                <span
+                                  key={i}
+                                  className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                                >
+                                  {file}
+                                  <button
+                                    onClick={() => handleEditTestFileRemove(i)}
+                                    className="ml-1 text-blue-600 hover:text-blue-800"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={handleEditTestFileAdd}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100"
+                          >
+                            <Plus size={14} className="inline mr-1" />
+                            添加文件
+                          </button>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2">
+                          <button
+                            onClick={handleCancelEdit}
+                            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
+                          >
+                            <X size={16} className="inline mr-1" />
+                            取消
+                          </button>
+                          <button
+                            onClick={handleSaveEdit}
+                            disabled={!editingTestCase.name?.trim() || !editingTestCase.prompt?.trim()}
+                            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Check size={16} className="inline mr-1" />
+                            保存
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* 查看模式 */
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-500 mb-1">测试提示词</label>
+                          <pre className="text-sm text-gray-800 bg-white p-3 rounded border border-gray-200 whitespace-pre-wrap font-mono">
+                            {testCase.prompt}
+                          </pre>
+                        </div>
+
+                        {testCase.expectedOutput && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">期望输出</label>
+                            <pre className="text-sm text-gray-800 bg-white p-3 rounded border border-gray-200 whitespace-pre-wrap font-mono">
+                              {testCase.expectedOutput}
+                            </pre>
+                          </div>
+                        )}
+
+                        {testCase.testFiles && testCase.testFiles.length > 0 && (
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">测试文件</label>
+                            <div className="flex flex-wrap gap-2">
+                              {testCase.testFiles.map((file, i) => (
+                                <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded font-mono">
+                                  {file}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -194,12 +429,15 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
               期望输出（可选）
             </label>
             <textarea
-              value={newTestCase.expectedOutput}
+              value={newTestCase.expectedOutput || ''}
               onChange={(e) => setNewTestCase({ ...newTestCase, expectedOutput: e.target.value })}
-              rows={3}
-              placeholder="描述你期望的输出结果..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={6}
+              placeholder="描述你期望的输出结果，评估时会与实际输出进行对比..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              期望输出用于评估时对比实际输出，帮助判断 Skill 效果。留空则不进行对比。
+            </p>
           </div>
 
           <div>
@@ -267,7 +505,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
             <ul className="text-yellow-700 space-y-1">
               <li>• 创建 2-5 个测试用例以获得最佳效果</li>
               <li>• 涵盖不同的场景和边缘情况</li>
-              <li>• 包含清晰的期望输出描述</li>
+              <li>• 期望输出应明确描述，便于评估时对比</li>
             </ul>
           </div>
         </div>

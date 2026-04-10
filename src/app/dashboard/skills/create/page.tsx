@@ -5,10 +5,13 @@ import { useRouter } from 'next/navigation';
 import {
   ArrowLeft,
   Save,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/auth';
 import { getCategories, Category } from '@/lib/categories';
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 const DEFAULT_TEMPLATE = `# Skill 名称
 
@@ -39,6 +42,12 @@ export default function CreateSkillPage() {
   const [content, setContent] = useState(DEFAULT_TEMPLATE);
   const [isPublic, setIsPublic] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [techStack, setTechStack] = useState<string[]>([]);
+  const [techStackSearch, setTechStackSearch] = useState('');
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  
+  // 使用 Hook 获取技术栈选项
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -91,6 +100,7 @@ export default function CreateSkillPage() {
           displayName: name.trim(),
           description: name.trim(),
           category,
+          techStack,
           content,
           cwe: null,
           isPublic,
@@ -170,6 +180,89 @@ export default function CreateSkillPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* 技术栈 */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                适合的技术栈
+              </label>
+              <div className="relative">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {techStack.map((ts) => (
+                    <span
+                      key={ts}
+                      className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                    >
+                      {ts}
+                      <button
+                        type="button"
+                        onClick={() => setTechStack(techStack.filter((t) => t !== ts))}
+                        className="ml-2 text-blue-600 hover:text-blue-800"
+                      >
+                        <X size={14} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={techStackSearch}
+                    onChange={(e) => {
+                      setTechStackSearch(e.target.value);
+                      setShowTechStackDropdown(true);
+                    }}
+                    onFocus={() => setShowTechStackDropdown(true)}
+                    placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={loadingTechStack}
+                  />
+                  {showTechStackDropdown && !loadingTechStack && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {techStackOptions
+                        .filter((option) => 
+                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !techStack.includes(option)
+                        )
+                        .slice(0, 20)
+                        .map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => {
+                              setTechStack([...techStack, option]);
+                              setTechStackSearch('');
+                              setShowTechStackDropdown(false);
+                            }}
+                            className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      {techStackOptions.filter((option) => 
+                        option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                        !techStack.includes(option)
+                      ).length === 0 && (
+                        <div className="px-4 py-2 text-sm text-gray-500">
+                          无匹配选项
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {loadingTechStack && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <span className="text-sm text-gray-500">加载中...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  可选择多个技术栈，表示此Skill适用于这些技术
+                </p>
+              </div>
             </div>
           </div>
 

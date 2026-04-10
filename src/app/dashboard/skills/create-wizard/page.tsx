@@ -44,6 +44,7 @@ interface SkillWizardData {
     name: string;
     description: string;
     category: string;
+    techStack: string[];
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -65,6 +66,7 @@ interface SkillWizardData {
     displayName: string;
     description: string;
     category: string;
+    techStack: string[];
     cwe?: string;
     content: string;  // 完整的 Markdown 内容
   };
@@ -106,9 +108,9 @@ interface SkillWizardData {
   
   // 步骤 7: 优化结果
   optimization: {
-    originalDescription: string;
-    optimizedDescription: string;
-    triggerAccuracy: number;
+    optimizedSkill?: any;
+    triggerAccuracy?: number;
+    suggestions?: string[];
   };
 }
 
@@ -117,6 +119,7 @@ const initialWizardData: SkillWizardData = {
     name: '',
     description: '',
     category: 'code-audit',
+    techStack: [],
     whatDoesItDo: '',
     whenShouldItTrigger: '',
     expectedOutput: '',
@@ -134,6 +137,7 @@ const initialWizardData: SkillWizardData = {
     displayName: '',
     description: '',
     category: 'code-audit',
+    techStack: [],
     content: '',  // 完整的 Markdown 内容
   },
   testCases: [],
@@ -142,9 +146,9 @@ const initialWizardData: SkillWizardData = {
   },
   iterations: [],
   optimization: {
-    originalDescription: '',
-    optimizedDescription: '',
-    triggerAccuracy: 0,
+    optimizedSkill: undefined,
+    triggerAccuracy: undefined,
+    suggestions: [],
   },
 };
 
@@ -307,20 +311,37 @@ export default function SkillCreateWizardPage() {
     setIsSaving(true);
     try {
       const token = localStorage.getItem('token');
+      
+      const skillData = {
+        ...wizardData.skill,
+        isPublic: false, // 默认私有
+      };
+      
+      // 检查必填字段
+      const missingFields = [];
+      if (!skillData.name) missingFields.push('name');
+      if (!skillData.displayName) missingFields.push('displayName');
+      if (!skillData.description) missingFields.push('description');
+      if (!skillData.category) missingFields.push('category');
+      if (!skillData.content) missingFields.push('content');
+      
+      if (missingFields.length > 0) {
+        throw new Error(`缺少必填字段: ${missingFields.join(', ')}`);
+      }
+      
       const response = await fetch('/api/skills', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          ...wizardData.skill,
-          isPublic: false, // 默认私有
-        }),
+        body: JSON.stringify(skillData),
       });
 
       if (!response.ok) {
-        throw new Error('保存失败');
+        const errorData = await response.json();
+        console.error('服务器返回错误:', errorData);
+        throw new Error(errorData.error || '保存失败');
       }
 
       const data = await response.json();
@@ -335,7 +356,7 @@ export default function SkillCreateWizardPage() {
       router.push(`/dashboard/skills/${data.skill.id}`);
     } catch (error) {
       console.error('保存 Skill 失败:', error);
-      alert('保存失败，请重试');
+      alert(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsSaving(false);
     }
@@ -567,6 +588,9 @@ export default function SkillCreateWizardPage() {
             {currentStep === 'optimization' && (
               <OptimizationStep
                 skillData={wizardData.skill}
+                testCases={wizardData.testCases}
+                evaluationData={wizardData.evaluation}
+                iterations={wizardData.iterations}
                 optimizationData={wizardData.optimization}
                 onChange={(data) => saveData(data)}
                 onNext={handleComplete}

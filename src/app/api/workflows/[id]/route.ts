@@ -123,7 +123,7 @@ export async function PATCH(
 
     // 解析请求体
     const body = await request.json();
-    const { name, description, status, thumbnail } = body;
+    const { name, description, status, thumbnail, techStack } = body;
 
     // 构建更新数据
     const updateData: any = {};
@@ -131,6 +131,14 @@ export async function PATCH(
     if (description !== undefined) updateData.description = description;
     if (status !== undefined) updateData.status = status;
     if (thumbnail !== undefined) updateData.thumbnail = thumbnail;
+    if (techStack !== undefined) {
+      // 处理技术栈数据
+      if (techStack && Array.isArray(techStack) && techStack.length > 0) {
+        updateData.techStack = JSON.stringify(techStack);
+      } else {
+        updateData.techStack = null;
+      }
+    }
 
     // 更新工作流
     const workflow = await prisma.workflow.update({

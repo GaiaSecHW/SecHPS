@@ -1,95 +1,98 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, CheckCircle, TrendingUp, AlertCircle, Copy } from 'lucide-react';
+import { Sparkles, CheckCircle, TrendingUp, AlertCircle, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
   skillData: any;
+  testCases: any[];
+  evaluationData: any;
+  iterations: any[];
   optimizationData: {
-    originalDescription: string;
-    optimizedDescription: string;
-    triggerAccuracy: number;
+    optimizedSkill?: any;
+    triggerAccuracy?: number;
+    suggestions?: string[];
   };
   onChange: (data: any) => void;
   onNext: () => void;
   onPrevious: () => void;
 }
 
-export default function OptimizationStep({ skillData, optimizationData, onChange, onNext, onPrevious }: Props) {
+export default function OptimizationStep({ 
+  skillData, 
+  testCases, 
+  evaluationData, 
+  iterations,
+  optimizationData, 
+  onChange, 
+  onNext, 
+  onPrevious 
+}: Props) {
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>('description');
 
   const handleOptimize = async () => {
     setIsOptimizing(true);
     try {
       const token = localStorage.getItem('token');
       
-      // TODO: 调用真实的优化 API
-      // const response = await fetch('/api/skills/optimize-description', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     Authorization: `Bearer ${token}`,
-      //   },
-      //   body: JSON.stringify({ skillData }),
-      // });
+      const response = await fetch('/api/skills/optimize-skill', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ 
+          skillData, 
+          testCases,
+          evaluationData,
+          iterations,
+        }),
+      });
 
-      // 模拟优化过程
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || '优化失败');
+      }
 
-      // 模拟优化结果
-      const optimizedDescription = generateOptimizedDescription(skillData);
-      const triggerAccuracy = 0.75 + Math.random() * 0.2; // 75-95%
+      const result = await response.json();
 
       onChange({
         optimization: {
-          originalDescription: skillData.description,
-          optimizedDescription,
-          triggerAccuracy,
+          optimizedSkill: result.optimizedSkill,
+          triggerAccuracy: result.triggerAccuracy,
+          suggestions: result.suggestions,
         },
       });
     } catch (error) {
       console.error('优化失败:', error);
-      alert('优化失败，请重试');
+      alert(error instanceof Error ? error.message : '优化失败，请重试');
     } finally {
       setIsOptimizing(false);
     }
   };
 
-  const generateOptimizedDescription = (skill: any): string => {
-    const parts = [
-      skill.description,
-      '',
-      '使用场景：',
-      `- ${skill.category === 'code-audit' ? '代码安全审计' : '安全检测'}`,
-      `- 安全问题检测`,
-    ];
-
-    if (skill.tools && skill.tools.length > 0) {
-      parts.push('', `使用工具：${skill.tools.join(', ')}`);
-    }
-
-    parts.push('', '触发关键词：代码审查、安全扫描、漏洞检测');
-
-    return parts.join('\n');
-  };
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(optimizationData.optimizedDescription);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async (text: string, field: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(field);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   const handleApplyOptimized = () => {
-    // 将优化后的描述应用到 Skill
-    onChange({
-      skill: {
-        ...skillData,
-        description: optimizationData.optimizedDescription,
-      },
-    });
-    alert('已应用优化后的描述！');
+    if (optimizationData.optimizedSkill) {
+      onChange({
+        skill: optimizationData.optimizedSkill,
+      });
+      alert('已应用优化后的 Skill 定义！');
+    }
   };
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
+  const optimizedSkill = optimizationData.optimizedSkill;
 
   return (
     <div className="space-y-6">
@@ -98,23 +101,39 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
         <div className="flex items-start">
           <Sparkles className="w-5 h-5 text-indigo-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-indigo-800">
-            <p className="font-medium mb-2">描述优化</p>
+            <p className="font-medium mb-2">Skill 整体优化</p>
             <p className="text-indigo-700">
-              优化 Skill 的描述可以提高触发准确性。我们会生成更详细、更具描述性的内容，
-              帮助 Claude 更好地识别何时应该使用这个 Skill。
+              AI 会分析你的 Skill 定义和测试用例，优化整个 Skill 包括：描述、系统提示词、用户提示词、工具列表等，提高触发准确性和执行效果。
             </p>
           </div>
         </div>
       </div>
 
-      {/* 当前描述 */}
+      {/* 当前 Skill 概览 */}
       <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-2">当前描述</h3>
-        <p className="text-gray-900">{skillData.description}</p>
+        <h3 className="text-sm font-medium text-gray-700 mb-3">当前 Skill 概览</h3>
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span className="text-gray-500">名称:</span>
+            <span className="ml-2 text-gray-900">{skillData.displayName || skillData.name}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">分类:</span>
+            <span className="ml-2 text-gray-900">{skillData.category || 'code-audit'}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">测试用例:</span>
+            <span className="ml-2 text-gray-900">{testCases?.length || 0} 个</span>
+          </div>
+          <div>
+            <span className="text-gray-500">工具:</span>
+            <span className="ml-2 text-gray-900">{skillData.tools?.length || 0} 个</span>
+          </div>
+        </div>
       </div>
 
       {/* 优化按钮 */}
-      {!optimizationData.optimizedDescription && (
+      {!optimizedSkill && (
         <div className="flex justify-center">
           <button
             onClick={handleOptimize}
@@ -129,7 +148,7 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
             ) : (
               <>
                 <Sparkles size={20} className="mr-2" />
-                开始优化描述
+                开始优化 Skill
               </>
             )}
           </button>
@@ -137,12 +156,15 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
       )}
 
       {/* 优化结果 */}
-      {optimizationData.optimizedDescription && (
+      {optimizedSkill && (
         <div className="space-y-4">
           {/* 准确率 */}
           <div className="bg-white border border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">预估触发准确率</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">预估触发准确率</span>
+                <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">模型预估</span>
+              </div>
               <TrendingUp className="w-5 h-5 text-green-500" />
             </div>
             <div className="flex items-center space-x-4">
@@ -150,58 +172,131 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
                 <div className="w-full bg-gray-200 rounded-full h-3">
                   <div
                     className="bg-green-500 h-3 rounded-full transition-all duration-500"
-                    style={{ width: `${optimizationData.triggerAccuracy * 100}%` }}
+                    style={{ width: `${(optimizationData.triggerAccuracy || 0.85) * 100}%` }}
                   />
                 </div>
               </div>
               <span className="text-2xl font-bold text-green-600">
-                {(optimizationData.triggerAccuracy * 100).toFixed(0)}%
+                {((optimizationData.triggerAccuracy || 0.85) * 100).toFixed(0)}%
               </span>
             </div>
+            <p className="text-xs text-gray-500 mt-2">
+              此数值由 AI 模型根据优化内容估算，仅供参考，不代表实际触发准确率。
+            </p>
           </div>
 
-          {/* 对比 */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* 原始描述 */}
-            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-700">原始描述</h3>
-                <span className="text-xs text-gray-500">之前</span>
-              </div>
-              <p className="text-sm text-gray-900">{optimizationData.originalDescription}</p>
-            </div>
+          {/* 优化对比 */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-gray-700">优化对比</h3>
 
-            {/* 优化后描述 */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-green-700">优化后描述</h3>
-                <span className="text-xs text-green-600">推荐</span>
+            {/* 描述对比 */}
+            <CompareSection
+              title="描述"
+              original={skillData.description}
+              optimized={optimizedSkill.description}
+              isExpanded={expandedSection === 'description'}
+              onToggle={() => toggleSection('description')}
+              onCopy={(text) => handleCopy(text, 'description')}
+              copied={copied === 'description'}
+            />
+
+            {/* 系统提示词对比 */}
+            <CompareSection
+              title="系统提示词"
+              original={skillData.systemPrompt}
+              optimized={optimizedSkill.systemPrompt}
+              isExpanded={expandedSection === 'systemPrompt'}
+              onToggle={() => toggleSection('systemPrompt')}
+              onCopy={(text) => handleCopy(text, 'systemPrompt')}
+              copied={copied === 'systemPrompt'}
+              isCode
+            />
+
+            {/* 用户提示词对比 */}
+            <CompareSection
+              title="用户提示词模板"
+              original={skillData.userPrompt}
+              optimized={optimizedSkill.userPrompt}
+              isExpanded={expandedSection === 'userPrompt'}
+              onToggle={() => toggleSection('userPrompt')}
+              onCopy={(text) => handleCopy(text, 'userPrompt')}
+              copied={copied === 'userPrompt'}
+              isCode
+            />
+
+            {/* 触发关键词 */}
+            {optimizedSkill.triggerKeywords && optimizedSkill.triggerKeywords.length > 0 && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-700">触发关键词</h4>
+                  <button
+                    onClick={() => handleCopy(optimizedSkill.triggerKeywords.join(', '), 'keywords')}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                  >
+                    {copied === 'keywords' ? '已复制' : '复制'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {optimizedSkill.triggerKeywords.map((keyword: string, index: number) => (
+                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                      {keyword}
+                    </span>
+                  ))}
+                </div>
               </div>
-              <p className="text-sm text-gray-900">{optimizationData.optimizedDescription}</p>
+            )}
+
+            {/* 工具对比 */}
+            <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">工具列表</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 mb-1">原始</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(skillData.tools || []).map((tool: string, index: number) => (
+                      <span key={index} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-green-600 mb-1">优化后</p>
+                  <div className="flex flex-wrap gap-1">
+                    {(optimizedSkill.tools || []).map((tool: string, index: number) => (
+                      <span key={index} className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* 优化建议 */}
+          {optimizationData.suggestions && optimizationData.suggestions.length > 0 && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start">
+                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+                <div className="text-sm text-yellow-800">
+                  <p className="font-medium mb-2">优化建议</p>
+                  <ul className="text-yellow-700 space-y-1">
+                    {optimizationData.suggestions.map((suggestion, index) => (
+                      <li key={index}>• {suggestion}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 操作按钮 */}
           <div className="flex justify-center space-x-3">
             <button
-              onClick={handleCopy}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
-            >
-              {copied ? (
-                <>
-                  <CheckCircle size={16} className="mr-2 text-green-600" />
-                  已复制
-                </>
-              ) : (
-                <>
-                  <Copy size={16} className="mr-2" />
-                  复制
-                </>
-              )}
-            </button>
-            <button
               onClick={handleOptimize}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
+              disabled={isOptimizing}
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center disabled:opacity-50"
             >
               <Sparkles size={16} className="mr-2" />
               重新优化
@@ -217,27 +312,12 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
         </div>
       )}
 
-      {/* 优化建议 */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <div className="flex items-start">
-          <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-yellow-800">
-            <p className="font-medium mb-2">优化建议</p>
-            <ul className="text-yellow-700 space-y-1">
-              <li>• 描述应该明确说明 Skill 的功能和用途</li>
-              <li>• 包含触发关键词可以帮助 Claude 更准确地识别</li>
-              <li>• 描述使用场景和适用范围</li>
-              <li>• 保持简洁但信息丰富</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
       {/* 导航按钮 */}
       <div className="flex justify-between pt-4 border-t">
         <button
           onClick={onPrevious}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          disabled={isOptimizing}
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
         >
           上一步
         </button>
@@ -248,6 +328,84 @@ export default function OptimizationStep({ skillData, optimizationData, onChange
           完成创建
         </button>
       </div>
+    </div>
+  );
+}
+
+// 对比区域组件
+function CompareSection({
+  title,
+  original,
+  optimized,
+  isExpanded,
+  onToggle,
+  onCopy,
+  copied,
+  isCode = false,
+}: {
+  title: string;
+  original: string;
+  optimized: string;
+  isExpanded: boolean;
+  onToggle: () => void;
+  onCopy: (text: string) => void;
+  copied: boolean;
+  isCode?: boolean;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div 
+        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-medium text-gray-700">{title}</h4>
+          {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
+        <div className="flex items-center gap-2">
+          {optimized !== original && (
+            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">已优化</span>
+          )}
+        </div>
+      </div>
+      
+      {isExpanded && (
+        <div className="border-t border-gray-200">
+          <div className="grid grid-cols-2 divide-x divide-gray-200">
+            {/* 原始 */}
+            <div className="p-4 bg-gray-50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-gray-500">原始</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCopy(original); }}
+                  className="text-xs text-gray-500 hover:text-gray-700"
+                >
+                  复制
+                </button>
+              </div>
+              <div className={`text-sm text-gray-700 ${isCode ? 'font-mono text-xs whitespace-pre-wrap' : ''}`}>
+                {original || <span className="text-gray-400 italic">无</span>}
+              </div>
+            </div>
+            
+            {/* 优化后 */}
+            <div className="p-4 bg-green-50">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-green-600">优化后</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onCopy(optimized); }}
+                  className="text-xs text-green-600 hover:text-green-800"
+                >
+                  {copied ? '已复制' : '复制'}
+                </button>
+              </div>
+              <div className={`text-sm text-gray-900 ${isCode ? 'font-mono text-xs whitespace-pre-wrap' : ''}`}>
+                {optimized || <span className="text-gray-400 italic">无</span>}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

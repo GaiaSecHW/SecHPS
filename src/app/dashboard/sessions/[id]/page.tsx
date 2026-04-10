@@ -60,6 +60,7 @@ export default function SessionDetailPage({
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
   const [showAllChildMessages, setShowAllChildMessages] = useState(false);
+  const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (evaluationId) {
@@ -988,32 +989,74 @@ export default function SessionDetailPage({
                                             {part.type === 'text' && part.text && (
                                               <p className="text-xs line-clamp-3">{part.text}</p>
                                             )}
-                                            {part.type === 'tool' && (
+                                            {(part.type === 'tool' || part.type === 'tool_use') && (
                                               <div className="bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
                                                 <div className="font-medium text-green-300">🔧 工具调用</div>
                                                 <div className="mt-1">名称: {part.name}</div>
-                                                <div className="mt-1 text-gray-300">参数:</div>
-                                                <pre className="text-xs text-gray-400 overflow-x-auto">
-                                                  {JSON.stringify(part.input, null, 2)}
-                                                </pre>
-                                              </div>
-                                            )}
-                                            {part.type === 'tool_result' && (
-                                              <div className="bg-gray-800 text-yellow-400 p-2 rounded overflow-x-auto">
-                                                <div className="font-medium text-yellow-300">📤 工具结果</div>
-                                                <div className="mt-1 text-gray-300">来源: {part.toolName || part.name}</div>
-                                                {part.output && (
-                                                  <pre className="text-xs text-gray-400 overflow-x-auto mt-1">
-                                                    {typeof part.output === 'string' 
-                                                      ? part.output.substring(0, 500)
-                                                      : JSON.stringify(part.output, null, 2).substring(0, 500)}
-                                                  </pre>
-                                                )}
-                                                {part.error && (
-                                                  <div className="text-red-400 mt-1">错误: {part.error}</div>
+                                                {(part.input || part.parameters) && (
+                                                  <>
+                                                    <div className="mt-1 text-gray-300">参数:</div>
+                                                    <pre className="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-all">
+                                                      {JSON.stringify(part.input ?? part.parameters, null, 2).substring(0, 500)}
+                                                    </pre>
+                                                  </>
                                                 )}
                                               </div>
                                             )}
+                                            {part.type === 'tool_result' && (() => {
+                                              const key = `${idx}-${partIdx}`;
+                                              const isExpanded = expandedToolResults.has(key);
+                                              const raw = part.content ?? part.output ?? part.result;
+                                              let text = '';
+                                              if (raw !== null && raw !== undefined) {
+                                                if (typeof raw === 'string') {
+                                                  text = raw;
+                                                } else if (Array.isArray(raw)) {
+                                                  text = raw.map((item: any) =>
+                                                    typeof item === 'string' ? item :
+                                                    item.text ?? item.content ?? JSON.stringify(item)
+                                                  ).join('\n');
+                                                } else {
+                                                  text = JSON.stringify(raw, null, 2);
+                                                }
+                                              }
+                                              const label = part.toolName || part.name || part.tool_use_id || '';
+                                              return (
+                                                <div className="bg-gray-800 text-yellow-400 rounded overflow-hidden">
+                                                  {/* 可点击的标题行（默认收起）*/}
+                                                  <button
+                                                    className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-700 transition-colors"
+                                                    onClick={() => {
+                                                      setExpandedToolResults(prev => {
+                                                        const next = new Set(prev);
+                                                        next.has(key) ? next.delete(key) : next.add(key);
+                                                        return next;
+                                                      });
+                                                    }}
+                                                  >
+                                                    <span className="font-medium text-yellow-300 text-xs flex items-center gap-1">
+                                                      📤 工具结果{label ? ` · ${label.length > 30 ? label.slice(0, 30) + '…' : label}` : ''}
+                                                      {part.is_error && <span className="text-red-400 ml-1">⚠️</span>}
+                                                    </span>
+                                                    <span className="text-gray-500 text-xs">{isExpanded ? '▲ 收起' : '▼ 展开'}</span>
+                                                  </button>
+                                                  {/* 展开内容 */}
+                                                  {isExpanded && (
+                                                    <div className="px-2 pb-2">
+                                                      {text ? (
+                                                        <pre className="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-all">
+                                                          {text.length > 2000 ? text.substring(0, 2000) + '\n...(内容已截断)' : text}
+                                                        </pre>
+                                                      ) : (
+                                                        <span className="text-xs text-gray-500">（无内容）</span>
+                                                      )}
+                                                      {part.is_error && <div className="text-red-400 mt-1 text-xs">⚠️ 工具返回错误</div>}
+                                                      {part.error && <div className="text-red-400 mt-1 text-xs">错误: {part.error}</div>}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              );
+                                            })()}
                                             {part.type === 'reasoning' && part.text && (
                                               <div className="bg-yellow-50 text-yellow-800 p-1 rounded text-xs italic">
                                                 💭 {part.text}
@@ -1454,20 +1497,38 @@ function MessageBubble({
               <div className="space-y-2">
                 {toolResultParts.map((result: any, idx: number) => {
                   const isExpanded = expandedTools[`result-${idx}`];
-                  const content = typeof result.content === 'string' 
-                    ? result.content 
-                    : JSON.stringify(result.content, null, 2);
                   const isError = result.is_error || result.error;
+
+                  // 兼容多种 content 格式
+                  const raw = result.content ?? result.output ?? result.result;
+                  let content = '';
+                  if (raw === null || raw === undefined) {
+                    content = '';
+                  } else if (typeof raw === 'string') {
+                    content = raw;
+                  } else if (Array.isArray(raw)) {
+                    // Claude SDK 标准格式: [{type:'text', text:'...'}]
+                    content = raw.map((item: any) =>
+                      typeof item === 'string' ? item :
+                      item.text ?? item.content ?? JSON.stringify(item)
+                    ).join('\n');
+                  } else {
+                    content = JSON.stringify(raw, null, 2);
+                  }
+
+                  // 尝试从 toolUseParts 里找对应工具名
+                  const toolName = result.toolName || result.name ||
+                    toolUseParts.find((t: any) => t.id === result.tool_use_id)?.name ||
+                    (result.tool_use_id ? `#${idx + 1}` : '工具结果');
                   
                   return (
                     <div key={idx} className={`bg-white p-2 rounded border ${isError ? 'border-red-300' : 'border-gray-200'}`}>
-                      <div 
+                      <div
                         className="flex items-center justify-between cursor-pointer"
                         onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
                       >
                         <span className={`text-sm font-medium ${isError ? 'text-red-700' : 'text-gray-700'}`}>
-                          {result.tool_use_id ? `结果 #${idx + 1}` : '工具结果'}
-                          {isError && ' (错误)'}
+                          {toolName}{isError && ' ⚠️'}
                         </span>
                         <div className="flex items-center space-x-2">
                           <span className="text-xs text-gray-500">
@@ -1477,9 +1538,12 @@ function MessageBubble({
                         </div>
                       </div>
                       {isExpanded && (
-                        <pre className={`mt-2 text-xs overflow-auto max-h-64 p-2 rounded ${isError ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'}`}>
-                          {content.length > 5000 ? content.substring(0, 5000) + '\n...(内容已截断)' : content}
+                        <pre className={`mt-2 text-xs overflow-auto max-h-64 p-2 rounded whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'}`}>
+                          {content ? (content.length > 5000 ? content.substring(0, 5000) + '\n...(内容已截断)' : content) : '（无内容）'}
                         </pre>
+                      )}
+                      {isExpanded && result.error && (
+                        <div className="mt-1 text-xs text-red-600">错误: {result.error}</div>
                       )}
                     </div>
                   );
