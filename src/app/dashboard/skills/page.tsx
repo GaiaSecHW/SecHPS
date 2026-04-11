@@ -335,7 +335,7 @@ export default function SkillsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Skills 库</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Skills 管理</h1>
           <p className="mt-1 text-sm text-gray-600">
             管理 AI 漏洞检测技能，共 {totalSkills} 个 Skills
           </p>

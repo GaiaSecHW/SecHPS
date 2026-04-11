@@ -132,7 +132,7 @@ export default function DashboardLayout({
             Agent编排管理
           </NavLink>
           <NavLink href="/dashboard/skills" icon={<Award size={20} />} collapsed={collapsed}>
-            Skills 库
+            Skills 管理
           </NavLink>
           <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />} collapsed={collapsed}>
             MCP 服务器
