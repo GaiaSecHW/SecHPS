@@ -269,15 +269,13 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                       >
                         <Edit2 size={14} />
                       </button>
-                      {!opt.isBuiltin && (
-                        <button
-                          onClick={() => handleDelete(opt.id)}
-                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
-                          title="删除"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleDelete(opt.id)}
+                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        title="删除"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                       <button
                         onClick={() => handleToggleActive(opt)}
                         className={`p-1 rounded ${

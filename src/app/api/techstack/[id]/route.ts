@@ -112,11 +112,6 @@ export async function DELETE(
       return NextResponse.json({ error: '技术栈选项不存在' }, { status: 404 });
     }
 
-    // 内置选项不能删除
-    if (existing.isBuiltin) {
-      return NextResponse.json({ error: '内置技术栈选项不能删除' }, { status: 400 });
-    }
-
     await prisma.techStackOption.delete({
       where: { id },
     });

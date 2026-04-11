@@ -82,7 +82,7 @@ async function main() {
     await prisma.techStackOption.create({
       data: {
         ...data,
-        isBuiltin: true,
+        isBuiltin: false,  // 允许删除所有技术栈
         isActive: true,
       },
     });
