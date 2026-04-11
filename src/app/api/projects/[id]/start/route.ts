@@ -280,15 +280,9 @@ export async function POST(
     // 创建 Ralph Loop Agent，传递项目目录作为工作目录
     // Ralph Loop Agent 会在任务未完成时自动迭代
     
-    // 确保路径是 Windows 格式
-    const { wslToWindowsPath } = await import('@/lib/path-utils');
-    const workingDirectory = project.projectPath ? wslToWindowsPath(project.projectPath) : undefined;
-    console.log('[Evaluation] 原始 projectPath:', project.projectPath);
-    console.log('[Evaluation] 转换后 workingDirectory:', workingDirectory);
-    
     const agent = createRalphLoopAgent(
       modelConfig,
-      workingDirectory,
+      project.projectPath || undefined,
       {
         maxIterations: 15,  // 最大迭代次数
         maxTokens: 100000,  // 最大 token 数
