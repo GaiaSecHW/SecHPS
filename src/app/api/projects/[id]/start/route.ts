@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { createRalphLoopAgent, RalphLoopAgentCallbacks } from '@/services/evaluation';
+import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, createCombinedVerifier, createWorkflowNodeVerifier } from '@/services/evaluation';
 import { NODE_TYPE_MAP } from '@/types/workflow';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
@@ -280,6 +280,12 @@ export async function POST(
     // 创建 Ralph Loop Agent，传递项目目录作为工作目录
     // Ralph Loop Agent 会在任务未完成时自动迭代
     
+    // 创建组合验证器：安全审计 + 工作流节点
+    const verifier = createCombinedVerifier([
+      securityAuditVerifier,
+      createWorkflowNodeVerifier(workflowId ? undefined : undefined), // 不强制节点数量
+    ], 'any'); // 任一验证器通过即完成
+    
     const agent = createRalphLoopAgent(
       modelConfig,
       project.projectPath || undefined,
@@ -287,6 +293,7 @@ export async function POST(
         maxIterations: 15,  // 最大迭代次数
         maxTokens: 100000,  // 最大 token 数
         maxCost: 5.00,      // 最大成本 $5
+        verifyCompletion: verifier, // 使用组合验证器判断任务完成
         onIterationStart: (iteration) => {
           console.log(`[Ralph Loop] ========== 开始第 ${iteration} 次迭代 ==========`);
         },
@@ -309,12 +316,6 @@ export async function POST(
             // 表不存在时忽略
             console.log(`[Ralph Loop] 保存迭代记录失败（可能表不存在）:`, err);
           }
-        },
-        onRalphComplete: async () => {
-          // Agent 完成后移除注册
-          const { removeAgent } = await import('@/lib/agent-registry');
-          removeAgent(evaluation.id);
-          console.log(`[Ralph Loop] Agent 完成，已从注册表移除: ${evaluation.id}`);
         },
       },
       // SDK 高级配置
@@ -735,6 +736,11 @@ export async function POST(
                 where: { id },
                 data: { status: 'completed' },
               });
+
+              // 从注册表移除 agent
+              const { removeAgent } = await import('@/lib/agent-registry');
+              removeAgent(evaluation.id);
+              console.log(`[Ralph Loop] Agent 完成，已从注册表移除: ${evaluation.id}`);
 
               // 发送审计完成事件
               const { emitEvaluationComplete } = require('@/lib/event-bus');

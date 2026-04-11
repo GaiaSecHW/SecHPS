@@ -32,6 +32,18 @@ export type {
   CostRates,
 } from './ralph-loop-agent';
 
+// 完成验证器导出
+export {
+  securityAuditVerifier,
+  createKeywordVerifier,
+  createJsonReportVerifier,
+  createCombinedVerifier,
+  createMaxIterationsVerifier,
+  createWorkflowNodeVerifier,
+  createCustomVerifier,
+  defaultVerifier,
+} from './verifiers';
+
 export type { EvaluationConfig, EvaluationCallbacks } from './caller';
 export type { EnhancedEvaluationConfig, EnhancedEvaluationCallbacks, ToolResult } from './enhanced-caller';
 export type { PromptContext } from './prompt';
