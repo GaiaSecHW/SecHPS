@@ -11,7 +11,10 @@
     "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts && tsx prisma/seed-skills.ts"
+    "db:seed": "tsx prisma/seed.ts && tsx prisma/seed-skills.ts",
+    "db:seed-techstack": "tsx prisma/seed-techstack.ts",
+    "clean": "rmdir /s .next &&  rmdir /s node_modules && del package-lock.json && npm install",
+    "f-build": "rmdir /s  .next && npm run build"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.92",
@@ -43,13 +46,13 @@
     "jszip": "^3.10.1",
     "lru-cache": "^11.2.2",
     "lucide-react": "^0.460.0",
-    "next": "^16.2.2",
+    "next": "^16.2.3",
     "next-auth": "^4.24.10",
     "node-pty": "^1.1.0",
     "openai": "^5.6.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-markdown": "^9.0.1",
+    "react-markdown": "^9.1.0",
     "tiktoken": "^1.0.21",
     "undici": "^7.10.0",
     "uuid": "^11.1.0",

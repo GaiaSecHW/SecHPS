@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1775400244281,
+  "lastScanned": 1775932572723,
   "projectRoot": "D:\\claude-web-platform",
   "techStack": {
     "languages": [
@@ -29,7 +29,7 @@
       },
       {
         "name": "next",
-        "version": "16.2.1",
+        "version": "16.2.2",
         "category": "fullstack"
       },
       {
@@ -52,16 +52,15 @@
     "lintCommand": "npm run lint",
     "devCommand": "npm run dev",
     "scripts": {
-      "dev": "tsx server.ts",
-      "dev:next": "next dev",
+      "dev": "next dev",
       "build": "next build",
-      "start": "NODE_ENV=production tsx server.ts",
-      "start:next": "next start",
+      "start": "next start",
       "lint": "next lint",
       "postinstall": "prisma generate",
       "db:generate": "prisma generate",
       "db:push": "prisma db push",
-      "db:seed": "tsx prisma/seed.ts"
+      "db:seed": "tsx prisma/seed.ts && tsx prisma/seed-skills.ts",
+      "db:seed-techstack": "tsx prisma/seed-techstack.ts"
     }
   },
   "conventions": {
@@ -86,15 +85,26 @@
       "path": "-p",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775400244251,
+      "lastAccessed": 1775932572693,
+      "keyFiles": []
+    },
+    "data": {
+      "path": "data",
+      "purpose": "Data files",
+      "fileCount": 0,
+      "lastAccessed": 1775932572708,
       "keyFiles": []
     },
     "docs": {
       "path": "docs",
       "purpose": "Documentation",
-      "fileCount": 1,
-      "lastAccessed": 1775400244251,
+      "fileCount": 9,
+      "lastAccessed": 1775932572709,
       "keyFiles": [
+        "ralph-loop-agent-best-practices.md",
+        "ralph-loop-agent-usage.md",
+        "realtime-features.md",
+        "sdk-api-design.md",
         "SDK-FEATURES.md"
       ]
     },
@@ -102,56 +112,94 @@
       "path": "plugins",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775400244251,
+      "lastAccessed": 1775932572709,
       "keyFiles": []
     },
     "prisma": {
       "path": "prisma",
       "purpose": null,
-      "fileCount": 4,
-      "lastAccessed": 1775400244266,
+      "fileCount": 10,
+      "lastAccessed": 1775932572709,
       "keyFiles": [
+        "clear-builtin-skills.ts",
         "dev.db",
-        "schema.prisma",
-        "seed-skills.ts",
-        "seed.ts"
+        "import-all-skills.ts",
+        "import-skills.ts",
+        "reset-admin-password.ts"
       ]
+    },
+    "project": {
+      "path": "project",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775932572709,
+      "keyFiles": []
     },
     "scripts": {
       "path": "scripts",
       "purpose": "Build/utility scripts",
-      "fileCount": 1,
-      "lastAccessed": 1775400244266,
+      "fileCount": 13,
+      "lastAccessed": 1775932572709,
       "keyFiles": [
-        "check-admin-permissions.ts"
+        "add-plugin-permissions.ts",
+        "check-admin-permissions.ts",
+        "check-eval-status.js",
+        "check-skills.js",
+        "find-todowrite.js"
+      ]
+    },
+    "skills.clone": {
+      "path": "skills.clone",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1775932572710,
+      "keyFiles": [
+        "README.md",
+        "THIRD_PARTY_NOTICES.md"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 0,
-      "lastAccessed": 1775400244267,
+      "lastAccessed": 1775932572710,
+      "keyFiles": []
+    },
+    "test-skills-output": {
+      "path": "test-skills-output",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1775932572710,
       "keyFiles": []
     },
     "tmp": {
       "path": "tmp",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775400244267,
+      "lastAccessed": 1775932572711,
       "keyFiles": []
     },
     "uploads": {
       "path": "uploads",
       "purpose": null,
       "fileCount": 0,
-      "lastAccessed": 1775400244267,
+      "lastAccessed": 1775932572711,
       "keyFiles": []
+    },
+    "skills.clone\\spec": {
+      "path": "skills.clone\\spec",
+      "purpose": "Test specifications",
+      "fileCount": 1,
+      "lastAccessed": 1775932572712,
+      "keyFiles": [
+        "agent-skills-spec.md"
+      ]
     },
     "src\\app": {
       "path": "src\\app",
       "purpose": "Application code",
       "fileCount": 3,
-      "lastAccessed": 1775400244268,
+      "lastAccessed": 1775932572713,
       "keyFiles": [
         "globals.css",
         "layout.tsx",
@@ -162,16 +210,27 @@
       "path": "src\\components",
       "purpose": "UI components",
       "fileCount": 1,
-      "lastAccessed": 1775400244268,
+      "lastAccessed": 1775932572713,
       "keyFiles": [
         "MarkdownRenderer.tsx"
+      ]
+    },
+    "src\\examples": {
+      "path": "src\\examples",
+      "purpose": "Example code",
+      "fileCount": 3,
+      "lastAccessed": 1775932572713,
+      "keyFiles": [
+        "ralph-code-refactor.ts",
+        "ralph-test-runner.ts",
+        "ralph-vulnerability-scan.ts"
       ]
     },
     "src\\lib": {
       "path": "src\\lib",
       "purpose": "Library code",
-      "fileCount": 12,
-      "lastAccessed": 1775400244269,
+      "fileCount": 18,
+      "lastAccessed": 1775932572714,
       "keyFiles": [
         "agent-executor.ts",
         "auth.ts",
@@ -181,31 +240,37 @@
     "src\\services": {
       "path": "src\\services",
       "purpose": "Business logic services",
-      "fileCount": 4,
-      "lastAccessed": 1775400244269,
+      "fileCount": 8,
+      "lastAccessed": 1775932572714,
       "keyFiles": [
+        "claude-code-reader.ts",
         "claude-stream.ts",
-        "plugin-manager.ts",
-        "session-manager.ts"
+        "plugin-manager.ts"
       ]
     },
     "src\\types": {
       "path": "src\\types",
       "purpose": "Type definitions",
-      "fileCount": 13,
-      "lastAccessed": 1775400244269,
+      "fileCount": 15,
+      "lastAccessed": 1775932572714,
       "keyFiles": [
         "audit.ts",
-        "code.ts",
-        "config.ts"
+        "claude-code.ts",
+        "code.ts"
       ]
     }
   },
   "hotPaths": [
     {
       "path": "prisma\\schema.prisma",
-      "accessCount": 64,
-      "lastAccessed": 1775400546232,
+      "accessCount": 68,
+      "lastAccessed": 1775810806569,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\dashboard\\sessions\\[id]\\page.tsx",
+      "accessCount": 56,
+      "lastAccessed": 1775932618465,
       "type": "file"
     },
     {
@@ -215,9 +280,9 @@
       "type": "file"
     },
     {
-      "path": "src\\app\\dashboard\\sessions\\[id]\\page.tsx",
-      "accessCount": 37,
-      "lastAccessed": 1775334817078,
+      "path": "src\\app\\api\\projects\\[id]\\start\\route.ts",
+      "accessCount": 41,
+      "lastAccessed": 1775933513852,
       "type": "file"
     },
     {
@@ -227,15 +292,9 @@
       "type": "file"
     },
     {
-      "path": "src\\app\\api\\projects\\[id]\\start\\route.ts",
-      "accessCount": 31,
-      "lastAccessed": 1775361381705,
-      "type": "file"
-    },
-    {
       "path": "src\\app\\dashboard\\layout.tsx",
-      "accessCount": 14,
-      "lastAccessed": 1775401658969,
+      "accessCount": 17,
+      "lastAccessed": 1775810458810,
       "type": "file"
     },
     {
@@ -258,8 +317,14 @@
     },
     {
       "path": "src\\services\\evaluation\\caller.ts",
+      "accessCount": 10,
+      "lastAccessed": 1775802791078,
+      "type": "file"
+    },
+    {
+      "path": "src\\services\\evaluation\\index.ts",
       "accessCount": 9,
-      "lastAccessed": 1775305396459,
+      "lastAccessed": 1775805283377,
       "type": "file"
     },
     {
@@ -296,12 +361,6 @@
       "path": "src\\app\\api\\skills\\route.ts",
       "accessCount": 6,
       "lastAccessed": 1775275532157,
-      "type": "file"
-    },
-    {
-      "path": "src\\services\\evaluation\\index.ts",
-      "accessCount": 6,
-      "lastAccessed": 1775305192823,
       "type": "file"
     },
     {

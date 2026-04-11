@@ -1,0 +1,20 @@
+﻿node : 
+所在位置 行:1 字符: 35
++ ... tform\prisma; node --loader tsx/esm import-all-skills.ts 2>&1 | Out-F ...
++                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+Error: tsx must be loaded with --import instead of --loader
+The --loader flag was deprecated in Node v20.6.0 and v18.19.0
+    at initialize (file:///D:/claude-web-platform/node_modules/tsx/dist/esm/index.mjs:1:985)
+    at AsyncLoaderHooksOnLoaderHookWorker.addCustomLoader (node:internal/modules/esm/hooks:212:24)
+    at AsyncLoaderHooksOnLoaderHookWorker.register (node:internal/modules/esm/hooks:186:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async initializeAsyncLoaderHooksOnLoaderHookWorker (node:internal/modules/esm/worker:76:5)
+    at async customizedModuleWorker (node:internal/modules/esm/worker:161:24)
+
+Node.js v24.14.0

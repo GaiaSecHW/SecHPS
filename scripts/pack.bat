@@ -6,6 +6,9 @@ echo ==========================================
 echo AI4WEB Packing Script
 echo ==========================================
 
+rmdir /s /q  .next
+rmdir /s /q  node_modules
+
 where node >nul 2>&1
 if %errorlevel% neq 0 (
     echo [ERROR] Node.js not found
