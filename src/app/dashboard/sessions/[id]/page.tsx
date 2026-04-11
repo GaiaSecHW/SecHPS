@@ -27,6 +27,29 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
+// 辅助函数：获取消息内容预览
+function getContentPreview(content: any): string {
+  if (!content) return '（空）';
+  
+  if (typeof content === 'string') {
+    return content.substring(0, 50) + (content.length > 50 ? '...' : '');
+  }
+  
+  if (Array.isArray(content)) {
+    const textPart = content.find((p: any) => p.type === 'text' && p.text);
+    if (textPart) {
+      return textPart.text.substring(0, 50) + (textPart.text.length > 50 ? '...' : '');
+    }
+    const toolPart = content.find((p: any) => p.type === 'tool_use' || p.type === 'tool');
+    if (toolPart) {
+      return `🔧 工具: ${toolPart.name || 'unknown'}`;
+    }
+    return `${content.length} 个部分`;
+  }
+  
+  return JSON.stringify(content).substring(0, 50) + '...';
+}
+
 export default function SessionDetailPage({
   params,
 }: {
@@ -61,6 +84,7 @@ export default function SessionDetailPage({
   const [progressQuestion, setProgressQuestion] = useState<string>('');
   const [showAllChildMessages, setShowAllChildMessages] = useState(false);
   const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(new Set());
+  const [expandedChildMessages, setExpandedChildMessages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (evaluationId) {
@@ -988,129 +1012,151 @@ export default function SessionDetailPage({
                                 <span className="ml-2 text-sm text-gray-500">加载子会话消息...</span>
                               </div>
                             ) : childSessionMessages.length > 0 ? (
-                              <div className="space-y-2 max-h-96 overflow-y-auto">
+                              <div className="space-y-1">
                                 <p className="text-xs font-medium text-purple-700 mb-2">
                                   子会话消息 ({childSessionMessages.length})
                                 </p>
-                                {(showAllChildMessages ? childSessionMessages : childSessionMessages.slice(0, 10)).map((msg, idx) => (
-                                  <div
-                                    key={msg.id || idx}
-                                    className={`p-2 rounded text-sm ${
-                                      msg.role === 'user'
-                                        ? 'bg-blue-50 text-blue-900'
-                                        : 'bg-gray-50 text-gray-900'
-                                    }`}
-                                  >
-                                    <div className="flex items-center space-x-2 mb-1">
-                                      <span className="text-xs font-medium">
-                                        {msg.role === 'user' ? '用户' : 'AI'}
-                                      </span>
-                                      {msg.createdAt && (
-                                        <span className="text-xs text-gray-400">
-                                          {new Date(msg.createdAt).toLocaleTimeString('zh-CN')}
-                                        </span>
-                                      )}
-                                    </div>
-                                    {/* 显示消息内容的详细信息 */}
-                                    {Array.isArray(msg.content) ? (
-                                      <div className="space-y-1">
-                                        {msg.content.map((part: any, partIdx: number) => (
-                                          <div key={partIdx} className="text-xs">
-                                            {part.type === 'text' && part.text && (
-                                              <p className="text-xs line-clamp-3">{part.text}</p>
-                                            )}
-                                            {(part.type === 'tool' || part.type === 'tool_use') && (
-                                              <div className="bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
-                                                <div className="font-medium text-green-300">🔧 工具调用</div>
-                                                <div className="mt-1">名称: {part.name}</div>
-                                                {(part.input || part.parameters) && (
-                                                  <>
-                                                    <div className="mt-1 text-gray-300">参数:</div>
-                                                    <pre className="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-all">
-                                                      {JSON.stringify(part.input ?? part.parameters, null, 2).substring(0, 500)}
-                                                    </pre>
-                                                  </>
-                                                )}
-                                              </div>
-                                            )}
-                                            {part.type === 'tool_result' && (() => {
-                                              const key = `${idx}-${partIdx}`;
-                                              const isExpanded = expandedToolResults.has(key);
-                                              const raw = part.content ?? part.output ?? part.result;
-                                              let text = '';
-                                              if (raw !== null && raw !== undefined) {
-                                                if (typeof raw === 'string') {
-                                                  text = raw;
-                                                } else if (Array.isArray(raw)) {
-                                                  text = raw.map((item: any) =>
-                                                    typeof item === 'string' ? item :
-                                                    item.text ?? item.content ?? JSON.stringify(item)
-                                                  ).join('\n');
-                                                } else {
-                                                  text = JSON.stringify(raw, null, 2);
-                                                }
-                                              }
-                                              const label = part.toolName || part.name || part.tool_use_id || '';
-                                              return (
-                                                <div className="bg-gray-800 text-yellow-400 rounded overflow-hidden">
-                                                  {/* 可点击的标题行（默认收起）*/}
-                                                  <button
-                                                    className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-700 transition-colors"
-                                                    onClick={() => {
-                                                      setExpandedToolResults(prev => {
-                                                        const next = new Set(prev);
-                                                        next.has(key) ? next.delete(key) : next.add(key);
-                                                        return next;
-                                                      });
-                                                    }}
-                                                  >
-                                                    <span className="font-medium text-yellow-300 text-xs flex items-center gap-1">
-                                                      📤 工具结果{label ? ` · ${label.length > 30 ? label.slice(0, 30) + '…' : label}` : ''}
-                                                      {part.is_error && <span className="text-red-400 ml-1">⚠️</span>}
-                                                    </span>
-                                                    <span className="text-gray-500 text-xs">{isExpanded ? '▲ 收起' : '▼ 展开'}</span>
-                                                  </button>
-                                                  {/* 展开内容 */}
-                                                  {isExpanded && (
-                                                    <div className="px-2 pb-2">
-                                                      {text ? (
-                                                        <pre className="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-all">
-                                                          {text.length > 2000 ? text.substring(0, 2000) + '\n...(内容已截断)' : text}
+                                {(showAllChildMessages ? childSessionMessages : childSessionMessages.slice(0, 5)).map((msg, idx) => {
+                                  const msgKey = msg.id || `msg-${idx}`;
+                                  const isMsgExpanded = expandedChildMessages.has(msgKey);
+                                  const contentPreview = getContentPreview(msg.content);
+                                  
+                                  return (
+                                    <div
+                                      key={msgKey}
+                                      className={`rounded border ${
+                                        msg.role === 'user'
+                                          ? 'bg-blue-50 border-blue-200'
+                                          : 'bg-gray-50 border-gray-200'
+                                      }`}
+                                    >
+                                      {/* 可点击的消息标题行 */}
+                                      <button
+                                        className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-100 transition-colors"
+                                        onClick={() => {
+                                          setExpandedChildMessages(prev => {
+                                            const next = new Set(prev);
+                                            next.has(msgKey) ? next.delete(msgKey) : next.add(msgKey);
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                          <span className={`text-xs font-medium flex-shrink-0 ${
+                                            msg.role === 'user' ? 'text-blue-700' : 'text-gray-700'
+                                          }`}>
+                                            {msg.role === 'user' ? '👤 用户' : '🤖 AI'}
+                                          </span>
+                                          <span className="text-xs text-gray-500 truncate">
+                                            {contentPreview}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+                                          {msg.createdAt && (
+                                            <span className="text-xs text-gray-400">
+                                              {new Date(msg.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                            </span>
+                                          )}
+                                          <span className="text-xs text-gray-400">
+                                            {isMsgExpanded ? '▲' : '▼'}
+                                          </span>
+                                        </div>
+                                      </button>
+                                      
+                                      {/* 展开的消息内容 */}
+                                      {isMsgExpanded && (
+                                        <div className="px-2 pb-2 border-t border-gray-200">
+                                          {/* 显示消息内容的详细信息 */}
+                                          {Array.isArray(msg.content) ? (
+                                            <div className="space-y-1 pt-2">
+                                              {msg.content.map((part: any, partIdx: number) => (
+                                                <div key={partIdx} className="text-xs">
+                                                  {part.type === 'text' && part.text && (
+                                                    <p className="text-xs whitespace-pre-wrap">{part.text}</p>
+                                                  )}
+                                                  {(part.type === 'tool' || part.type === 'tool_use') && (
+                                                    <div className="bg-gray-800 text-green-400 p-2 rounded overflow-x-auto">
+                                                      <div className="font-medium text-green-300">🔧 工具调用: {part.name}</div>
+                                                      {(part.input || part.parameters) && (
+                                                        <pre className="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-all mt-1">
+                                                          {JSON.stringify(part.input ?? part.parameters, null, 2).substring(0, 500)}
                                                         </pre>
-                                                      ) : (
-                                                        <span className="text-xs text-gray-500">（无内容）</span>
                                                       )}
-                                                      {part.is_error && <div className="text-red-400 mt-1 text-xs">⚠️ 工具返回错误</div>}
-                                                      {part.error && <div className="text-red-400 mt-1 text-xs">错误: {part.error}</div>}
+                                                    </div>
+                                                  )}
+                                                  {part.type === 'tool_result' && (() => {
+                                                    const key = `${idx}-${partIdx}`;
+                                                    const isExpanded = expandedToolResults.has(key);
+                                                    const raw = part.content ?? part.output ?? part.result;
+                                                    let text = '';
+                                                    if (raw !== null && raw !== undefined) {
+                                                      if (typeof raw === 'string') {
+                                                        text = raw;
+                                                      } else if (Array.isArray(raw)) {
+                                                        text = raw.map((item: any) =>
+                                                          typeof item === 'string' ? item :
+                                                          item.text ?? item.content ?? JSON.stringify(item)
+                                                        ).join('\n');
+                                                      } else {
+                                                        text = JSON.stringify(raw, null, 2);
+                                                      }
+                                                    }
+                                                    const label = part.toolName || part.name || part.tool_use_id || '';
+                                                    return (
+                                                      <div className="bg-gray-800 text-yellow-400 rounded overflow-hidden">
+                                                        <button
+                                                          className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-700 transition-colors"
+                                                          onClick={() => {
+                                                            setExpandedToolResults(prev => {
+                                                              const next = new Set(prev);
+                                                              next.has(key) ? next.delete(key) : next.add(key);
+                                                              return next;
+                                                            });
+                                                          }}
+                                                        >
+                                                          <span className="font-medium text-yellow-300 text-xs flex items-center gap-1">
+                                                            📤 工具结果{label ? ` · ${label.length > 20 ? label.slice(0, 20) + '…' : label}` : ''}
+                                                            {part.is_error && <span className="text-red-400 ml-1">⚠️</span>}
+                                                          </span>
+                                                          <span className="text-gray-500 text-xs">{isExpanded ? '▲' : '▼'}</span>
+                                                        </button>
+                                                        {isExpanded && (
+                                                          <div className="px-2 pb-2">
+                                                            <pre className="text-xs text-gray-400 overflow-x-auto whitespace-pre-wrap break-all max-h-40">
+                                                              {text.length > 1000 ? text.substring(0, 1000) + '\n...(已截断)' : text}
+                                                            </pre>
+                                                          </div>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })()}
+                                                  {part.type === 'reasoning' && part.text && (
+                                                    <div className="bg-yellow-50 text-yellow-800 p-1 rounded text-xs italic">
+                                                      💭 {part.text.substring(0, 200)}{part.text.length > 200 ? '...' : ''}
                                                     </div>
                                                   )}
                                                 </div>
-                                              );
-                                            })()}
-                                            {part.type === 'reasoning' && part.text && (
-                                              <div className="bg-yellow-50 text-yellow-800 p-1 rounded text-xs italic">
-                                                💭 {part.text}
-                                              </div>
-                                            )}
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : typeof msg.content === 'string' ? (
-                                      <p className="text-xs line-clamp-3">{msg.content}</p>
-                                    ) : (
-                                      <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto">
-                                        {JSON.stringify(msg.content, null, 2).substring(0, 200)}
-                                      </pre>
-                                    )}
-                                  </div>
-                                ))}
-                                {childSessionMessages.length > 10 && (
+                                              ))}
+                                            </div>
+                                          ) : typeof msg.content === 'string' ? (
+                                            <p className="text-xs pt-2 whitespace-pre-wrap">{msg.content}</p>
+                                          ) : (
+                                            <pre className="text-xs bg-gray-100 p-2 rounded overflow-x-auto mt-2">
+                                              {JSON.stringify(msg.content, null, 2).substring(0, 500)}
+                                            </pre>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {childSessionMessages.length > 5 && (
                                   <button
                                     onClick={() => setShowAllChildMessages(!showAllChildMessages)}
-                                    className="w-full text-xs text-purple-600 hover:text-purple-800 text-center py-2 bg-purple-50 hover:bg-purple-100 rounded transition-colors"
+                                    className="w-full text-xs text-purple-600 hover:text-purple-800 text-center py-1.5 bg-purple-50 hover:bg-purple-100 rounded transition-colors"
                                   >
                                     {showAllChildMessages 
-                                      ? `收起 (显示前 10 条)` 
+                                      ? `收起 (显示前 5 条)` 
                                       : `显示全部 ${childSessionMessages.length} 条消息`}
                                   </button>
                                 )}
