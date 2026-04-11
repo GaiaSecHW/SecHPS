@@ -20,6 +20,7 @@ export {
   tokenCountIs,
   costIs,
   getModelPricing,
+  getModelPricingOrDefault,
   calculateCost,
   addLanguageModelUsage,
   aggregateStepUsage,

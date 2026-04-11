@@ -3,13 +3,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { createEnhancedEvaluationCaller, EnhancedEvaluationConfig } from '@/services/evaluation';
+import { createRalphLoopAgent, RalphLoopAgentCallbacks } from '@/services/evaluation';
 import { NODE_TYPE_MAP } from '@/types/workflow';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 import { copySkillsToProject } from '@/services/skill-files';
+import { registerAgent } from '@/lib/agent-registry';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -244,6 +245,8 @@ export async function POST(
         projectId: id,
         workflowId: workflowId, // 关联工作流
         status: 'running',
+        modelName: modelConfig.name, // 保存模型名称
+        providerType: modelConfig.providerType, // 保存提供商类型
       },
     });
 
@@ -274,8 +277,54 @@ export async function POST(
       }
     }
 
-    // 创建增强版评估调用器，传递项目目录作为工作目录
-    const caller = createEnhancedEvaluationCaller(modelConfig, project.projectPath || undefined, sdkOptions);
+    // 创建 Ralph Loop Agent，传递项目目录作为工作目录
+    // Ralph Loop Agent 会在任务未完成时自动迭代
+    const agent = createRalphLoopAgent(
+      modelConfig,
+      project.projectPath || undefined,
+      {
+        maxIterations: 15,  // 最大迭代次数
+        maxTokens: 100000,  // 最大 token 数
+        maxCost: 5.00,      // 最大成本 $5
+        onIterationStart: (iteration) => {
+          console.log(`[Ralph Loop] ========== 开始第 ${iteration} 次迭代 ==========`);
+        },
+        onIterationEnd: async (iteration, duration) => {
+          console.log(`[Ralph Loop] 第 ${iteration} 次迭代完成，耗时 ${duration}ms`);
+          
+          // 保存迭代记录到数据库
+          try {
+            await prisma.evaluationIteration.create({
+              data: {
+                evaluationSessionId: evaluation.id,
+                iterationNumber: iteration,
+                status: 'completed',
+                duration,
+                completedAt: new Date(),
+              },
+            });
+            console.log(`[Ralph Loop] 迭代记录已保存到数据库`);
+          } catch (err) {
+            // 表不存在时忽略
+            console.log(`[Ralph Loop] 保存迭代记录失败（可能表不存在）:`, err);
+          }
+        },
+        onRalphComplete: async () => {
+          // Agent 完成后移除注册
+          const { removeAgent } = await import('@/lib/agent-registry');
+          removeAgent(evaluation.id);
+          console.log(`[Ralph Loop] Agent 完成，已从注册表移除: ${evaluation.id}`);
+        },
+      },
+      // SDK 高级配置
+      sdkOptions
+    );
+    
+    console.log('[Ralph Loop] Agent 已创建，准备启动循环');
+
+    // 注册 agent 到注册表（用于后续中止）
+    registerAgent(evaluation.id, agent);
+    console.log(`[Evaluation] Agent 已注册: ${evaluation.id}`);
 
     // 获取任务描述（来自全局配置的 taskDescription）
     const taskDescription = globalConfig?.taskDescription || null;
@@ -418,15 +467,11 @@ export async function POST(
         };
 
         try {
-          await caller.startEvaluation(evaluation.id, id, {
-            projectName: project.name,
-            projectDescription: project.description || undefined,
-            environmentUrl: project.environmentUrl || undefined,
-            files,
-            taskDescription: taskDescription || undefined,
-            initialMessage,
-            workflowName,
-          }, {
+          // 使用 Ralph Loop Agent 进行迭代评估
+          // Ralph Loop 会在任务未完成时自动进行下一轮迭代
+          console.log('[Ralph Loop] 开始执行 loop() 方法');
+          
+          const callbacks: RalphLoopAgentCallbacks = {
             onChunk: (text) => {
               fullResponse += text;
 
@@ -472,7 +517,7 @@ export async function POST(
                   timestamp: Date.now(),
                 });
                 safeEnqueue(`data: ${todoEvent}\n\n`);
-                console.log('[Evaluation] TODO 更新:', parameters.todos.length, '项');
+                console.log('[Ralph Loop] TODO 更新:', parameters.todos.length, '项');
                 
                 // 通过事件总线广播 TODO 更新
                 const { emitTodoUpdate } = require('@/lib/event-bus');
@@ -501,152 +546,38 @@ export async function POST(
               });
               safeEnqueue(`data: ${data}\n\n`);
             },
-            onComplete: async () => {
-              // 尝试从完整响应中解析评估结果
-              if (!evaluationResult) {
-                parseEvaluationResult(fullResponse);
-              }
-
-              // 如果没有检测到结果，尝试解析 JSON 报告
-              if (!evaluationResult) {
-                // 匹配 ```json 代码块中的内容
-                const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-                if (jsonMatch) {
-                  try {
-                    const jsonResult = JSON.parse(jsonMatch[1].trim());
-                    
-                    // 解析标准格式的 JSON 报告
-                    if (jsonResult.summary) {
-                      const summary = jsonResult.summary;
-                      evaluationResult = {
-                        total: summary.total || 0,
-                        critical: typeof summary.critical === 'string' ? parseInt(summary.critical) || 0 : (summary.critical || 0),
-                        high: typeof summary.high === 'string' ? parseInt(summary.high) || 0 : (summary.high || 0),
-                        medium: typeof summary.medium === 'string' ? parseInt(summary.medium) || 0 : (summary.medium || 0),
-                        low: typeof summary.low === 'string' ? parseInt(summary.low) || 0 : (summary.low || 0),
-                        info: typeof summary.info === 'string' ? parseInt(summary.info) || 0 : (summary.info || 0),
-                        skills_used: summary.skills_used || [],
-                        vulnerabilities: jsonResult.vulnerabilities || [],
-                      };
-                      console.log('[Evaluation] 从 JSON 报告解析到漏洞:', jsonResult.vulnerabilities?.length);
-                      
-                      // 实时推送漏洞总结
-                      const { emitEvaluationComplete } = require('@/lib/event-bus');
-                      emitEvaluationComplete(evaluation.id, {
-                        total: evaluationResult.total,
-                        critical: evaluationResult.critical,
-                        high: evaluationResult.high,
-                        medium: evaluationResult.medium,
-                        low: evaluationResult.low,
-                        info: evaluationResult.info,
-                        vulnerabilities: evaluationResult.vulnerabilities,
-                      });
-                      
-                      // 通过 SSE 推送漏洞总结
-                      const vulnEvent = JSON.stringify({
-                        type: 'vulnerability_summary',
-                        summary: evaluationResult,
-                        vulnerabilities: evaluationResult.vulnerabilities,
-                        timestamp: Date.now(),
-                      });
-                      safeEnqueue(`data: ${vulnEvent}\n\n`);
-                    }
-                  } catch (e) {
-                    console.error('[Evaluation] Failed to parse JSON result:', e);
-                  }
-                }
-              }
-
-              // 保存评估结果到数据库
-              if (evaluationResult) {
-                try {
-                  // 创建评估结果记录
-                  await prisma.evaluationResult.upsert({
-                    where: { evaluationId: evaluation.id },
-                    update: {
-                      totalVulns: evaluationResult.total || 0,
-                      criticalCount: evaluationResult.critical || 0,
-                      highCount: evaluationResult.high || 0,
-                      mediumCount: evaluationResult.medium || 0,
-                      lowCount: evaluationResult.low || 0,
-                      infoCount: evaluationResult.info || 0,
-                      skillsUsed: JSON.stringify(evaluationResult.skills_used || []),
-                      rawReport: JSON.stringify(evaluationResult),
-                    },
-                    create: {
-                      evaluationId: evaluation.id,
-                      totalVulns: evaluationResult.total || 0,
-                      criticalCount: evaluationResult.critical || 0,
-                      highCount: evaluationResult.high || 0,
-                      mediumCount: evaluationResult.medium || 0,
-                      lowCount: evaluationResult.low || 0,
-                      infoCount: evaluationResult.info || 0,
-                      skillsUsed: JSON.stringify(evaluationResult.skills_used || []),
-                      rawReport: JSON.stringify(evaluationResult),
-                    },
-                  });
-                  console.log('[Evaluation] 评估结果已保存到数据库');
-
-                  // 保存漏洞详情
-                  if (evaluationResult.vulnerabilities && evaluationResult.vulnerabilities.length > 0) {
-                    for (const vuln of evaluationResult.vulnerabilities) {
-                      await prisma.vulnerability.create({
-                        data: {
-                          projectId: id,
-                          evaluationId: evaluation.id,
-                          title: vuln.title || '未命名漏洞',
-                          type: vuln.type || 'unknown',
-                          severity: vuln.severity || 'info',
-                          description: vuln.description || '',
-                          filePath: vuln.location || vuln.filePath,
-                          lineStart: vuln.lineStart,
-                          lineEnd: vuln.lineEnd,
-                          codeSnippet: vuln.codeSnippet,
-                          fixSuggestion: vuln.recommendation,
-                          cwe: vuln.cwe_id,
-                          skill: vuln.skill,
-                          status: 'new',
-                        },
-                      });
-                    }
-                    console.log(`[Evaluation] 保存了 ${evaluationResult.vulnerabilities.length} 个漏洞详情`);
-                  }
-                } catch (e) {
-                  console.error('[Evaluation] 保存评估结果失败:', e);
-                }
-              }
-
-              // 更新评估状态
-              await prisma.evaluationSession.update({
-                where: { id: evaluation.id },
-                data: {
-                  status: 'completed',
-                  completedAt: new Date(),
-                },
-              });
-
-              await prisma.project.update({
-                where: { id },
-                data: { status: 'completed' },
-              });
-
-              // 发送审计完成事件
-              const { emitEvaluationComplete } = require('@/lib/event-bus');
-              emitEvaluationComplete(evaluation.id, evaluationResult);
-              
-              // 发送完成事件（SSE）
-              const data = JSON.stringify({
-                type: 'done',
-                evaluationId: evaluation.id,
-                result: evaluationResult,
-                message: '本次审计工作已完成',
-                timestamp: Date.now(),
-              });
-              safeEnqueue(`data: ${data}\n\n`);
-              safeClose();
+            onComplete: (fullResponseText) => {
+              console.log('[Ralph Loop] 单次迭代完成，文本长度:', fullResponseText.length);
             },
             onError: async (error) => {
-              console.error('[Evaluation] 错误:', error);
+              // 判断是否为致命错误（需要终止评估）
+              const isFatal =
+                error.message.includes('error_max_turns') ||
+                error.message.includes('error_max_budget_usd') ||
+                error.message.includes('error_max_structured_output_retries');
+
+              if (!isFatal) {
+                // 非致命错误（如 error_during_execution）：记录日志，不终止评估
+                console.warn('[Ralph Loop] 非致命错误，评估继续:', error.message);
+                const data = JSON.stringify({
+                  type: 'error',
+                  error: error.message,
+                  fatal: false,
+                  timestamp: Date.now(),
+                });
+                safeEnqueue(`data: ${data}\n\n`);
+                return;
+              }
+
+              console.error('[Ralph Loop] 致命错误，终止评估:', error);
+
+              // 从注册表移除 agent
+              try {
+                const { removeAgent } = await import('@/lib/agent-registry');
+                removeAgent(evaluation.id);
+              } catch (e) {
+                console.error('移除 agent 注册失败:', e);
+              }
 
               // 保存错误消息
               await prisma.sessionMessage.create({
@@ -672,11 +603,12 @@ export async function POST(
                 data: { status: 'failed' },
               });
 
-              // 发送错误事件（安全地处理 controller 状态）
+              // 发送错误事件
               try {
                 const data = JSON.stringify({
                   type: 'error',
                   error: error.message,
+                  fatal: true,
                   timestamp: Date.now(),
                 });
                 safeEnqueue(`data: ${data}\n\n`);
@@ -685,7 +617,162 @@ export async function POST(
                 // Controller 可能已关闭，忽略错误
               }
             },
+            onRalphComplete: async (result) => {
+              console.log('[Ralph Loop] ========================================');
+              console.log('[Ralph Loop] 任务完成!');
+              console.log('[Ralph Loop] - 迭代次数:', result.iterations);
+              console.log('[Ralph Loop] - 完成原因:', result.completionReason);
+              console.log('[Ralph Loop] - 原因:', result.reason || '无');
+              console.log('[Ralph Loop] - Token 使用:', result.totalUsage);
+              console.log('[Ralph Loop] ========================================');
+
+              // 尝试从完整响应中解析评估结果
+              if (!evaluationResult) {
+                parseEvaluationResult(fullResponse);
+              }
+
+              // 如果没有检测到结果，尝试解析 JSON 报告
+              if (!evaluationResult) {
+                const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
+                if (jsonMatch) {
+                  try {
+                    const jsonResult = JSON.parse(jsonMatch[1].trim());
+                    
+                    if (jsonResult.summary) {
+                      const summary = jsonResult.summary;
+                      evaluationResult = {
+                        total: summary.total || 0,
+                        critical: typeof summary.critical === 'string' ? parseInt(summary.critical) || 0 : (summary.critical || 0),
+                        high: typeof summary.high === 'string' ? parseInt(summary.high) || 0 : (summary.high || 0),
+                        medium: typeof summary.medium === 'string' ? parseInt(summary.medium) || 0 : (summary.medium || 0),
+                        low: typeof summary.low === 'string' ? parseInt(summary.low) || 0 : (summary.low || 0),
+                        info: typeof summary.info === 'string' ? parseInt(summary.info) || 0 : (summary.info || 0),
+                        skills_used: summary.skills_used || [],
+                        vulnerabilities: jsonResult.vulnerabilities || [],
+                      };
+                      console.log('[Ralph Loop] 从 JSON 报告解析到漏洞:', jsonResult.vulnerabilities?.length);
+                    }
+                  } catch (e) {
+                    console.error('[Ralph Loop] 解析 JSON 结果失败:', e);
+                  }
+                }
+              }
+
+              // 保存评估结果到数据库
+              if (evaluationResult) {
+                try {
+                  await prisma.evaluationResult.upsert({
+                    where: { evaluationId: evaluation.id },
+                    update: {
+                      totalVulns: evaluationResult.total || 0,
+                      criticalCount: evaluationResult.critical || 0,
+                      highCount: evaluationResult.high || 0,
+                      mediumCount: evaluationResult.medium || 0,
+                      lowCount: evaluationResult.low || 0,
+                      infoCount: evaluationResult.info || 0,
+                      skillsUsed: JSON.stringify(evaluationResult.skills_used || []),
+                      rawReport: JSON.stringify(evaluationResult),
+                    },
+                    create: {
+                      evaluationId: evaluation.id,
+                      totalVulns: evaluationResult.total || 0,
+                      criticalCount: evaluationResult.critical || 0,
+                      highCount: evaluationResult.high || 0,
+                      mediumCount: evaluationResult.medium || 0,
+                      lowCount: evaluationResult.low || 0,
+                      infoCount: evaluationResult.info || 0,
+                      skillsUsed: JSON.stringify(evaluationResult.skills_used || []),
+                      rawReport: JSON.stringify(evaluationResult),
+                    },
+                  });
+                  console.log('[Ralph Loop] 评估结果已保存到数据库');
+
+                  if (evaluationResult.vulnerabilities && evaluationResult.vulnerabilities.length > 0) {
+                    for (const vuln of evaluationResult.vulnerabilities) {
+                      await prisma.vulnerability.create({
+                        data: {
+                          projectId: id,
+                          evaluationId: evaluation.id,
+                          title: vuln.title || '未命名漏洞',
+                          type: vuln.type || 'unknown',
+                          severity: vuln.severity || 'info',
+                          description: vuln.description || '',
+                          filePath: vuln.location || vuln.filePath,
+                          lineStart: vuln.lineStart,
+                          lineEnd: vuln.lineEnd,
+                          codeSnippet: vuln.codeSnippet,
+                          fixSuggestion: vuln.recommendation,
+                          cwe: vuln.cwe_id,
+                          skill: vuln.skill,
+                          status: 'new',
+                        },
+                      });
+                    }
+                    console.log(`[Ralph Loop] 保存了 ${evaluationResult.vulnerabilities.length} 个漏洞详情`);
+                  }
+                } catch (e) {
+                  console.error('[Ralph Loop] 保存评估结果失败:', e);
+                }
+              }
+
+              // 更新评估状态
+              // verified = 检测到完成信号；max-iterations = 跑完所有迭代（视为完成）；aborted = 主动中止（失败）
+              const finalStatus = result.completionReason === 'aborted' ? 'failed' : 'completed';
+              const summaryLabel =
+                result.completionReason === 'verified' ? '验证完成' :
+                result.completionReason === 'max-iterations' ? '迭代完成' : '已中止';
+              await prisma.evaluationSession.update({
+                where: { id: evaluation.id },
+                data: {
+                  status: finalStatus,
+                  completedAt: new Date(),
+                  summary: `[Ralph Loop] ${summaryLabel}。共迭代 ${result.iterations} 次。${result.reason || ''}`,
+                },
+              });
+
+              await prisma.project.update({
+                where: { id },
+                data: { status: 'completed' },
+              });
+
+              // 发送审计完成事件
+              const { emitEvaluationComplete } = require('@/lib/event-bus');
+              emitEvaluationComplete(evaluation.id, evaluationResult);
+              
+              // 发送完成事件（SSE）
+              const data = JSON.stringify({
+                type: 'done',
+                evaluationId: evaluation.id,
+                result: evaluationResult,
+                ralphResult: {
+                  iterations: result.iterations,
+                  completionReason: result.completionReason,
+                  reason: result.reason,
+                },
+                message: '评估工作已完成',
+                timestamp: Date.now(),
+              });
+              safeEnqueue(`data: ${data}\n\n`);
+              safeClose();
+            },
+          };
+
+          // 启动 Ralph Loop
+          await agent.loop({
+            evaluationId: evaluation.id,
+            projectId: id,
+            context: {
+              projectName: project.name,
+              projectDescription: project.description || undefined,
+              environmentUrl: project.environmentUrl || undefined,
+              files,
+              taskDescription: taskDescription || undefined,
+              initialMessage,
+              workflowName,
+            },
+            callbacks,
           });
+          
         } catch (error) {
           console.error('[Evaluation] 启动失败:', error);
           const errorMessage = error instanceof Error ? error.message : '未知错误';

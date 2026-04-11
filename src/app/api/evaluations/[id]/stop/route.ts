@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { abortAgent } from '@/lib/agent-registry';
 
 // POST /api/evaluations/[id]/stop - 停止评估会话
 export async function POST(
@@ -37,12 +38,31 @@ export async function POST(
       return NextResponse.json({ error: '评估会话不在运行中' }, { status: 400 });
     }
 
+    // 尝试中止运行中的 Agent
+    const aborted = abortAgent(id);
+    if (aborted) {
+      console.log(`[Stop Evaluation] 成功中止 Agent: ${id}`);
+    } else {
+      console.log(`[Stop Evaluation] Agent 不在运行中或已结束: ${id}`);
+    }
+
     // 更新状态为已取消
     const updatedEvaluation = await prisma.evaluationSession.update({
       where: { id },
       data: {
         status: 'cancelled',
         completedAt: new Date(),
+      },
+    });
+
+    // 更新项目状态（如果有正在运行的评估）
+    await prisma.project.updateMany({
+      where: {
+        id: evaluation.projectId,
+        status: 'running',
+      },
+      data: {
+        status: 'idle',
       },
     });
 

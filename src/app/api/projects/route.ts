@@ -87,7 +87,18 @@ export async function POST(request: Request) {
     const formData = await request.formData();
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
+    const techStackStr = formData.get('techStack') as string;
     const files = formData.getAll('files') as File[];
+
+    // 解析技术栈（JSON 字符串）
+    let techStack: string[] = [];
+    if (techStackStr) {
+      try {
+        techStack = JSON.parse(techStackStr);
+      } catch {
+        // 解析失败，忽略
+      }
+    }
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: '项目名称是必需的' }, { status: 400 });
@@ -102,8 +113,17 @@ export async function POST(request: Request) {
       where: { isActive: true },
     });
 
-    const uploadBaseDir = config?.projectUploadDir || join(process.cwd(), 'uploads');
+    // 使用配置的目录或默认目录
+    const uploadBaseDir = config?.projectUploadDir 
+      ? config.projectUploadDir
+      : join(process.cwd(), 'uploads');
+    
+    console.log('[Project] uploadBaseDir:', uploadBaseDir);
+    
+    // 创建项目目录
     const projectDir = join(uploadBaseDir, 'projects', Date.now().toString());
+    console.log('[Project] projectDir:', projectDir);
+    
     await mkdir(projectDir, { recursive: true });
 
     // 保存文件
@@ -128,6 +148,7 @@ export async function POST(request: Request) {
         name: name.trim(),
         description: description || null,
         projectPath: projectDir,
+        techStack: techStack.length > 0 ? JSON.stringify(techStack) : null,
         userId: payload.userId,
         status: 'idle',
       },

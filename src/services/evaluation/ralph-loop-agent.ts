@@ -79,6 +79,28 @@ const MODEL_PRICING: Record<string, CostRates> = {
     inputCostPerMillionTokens: 0.15,
     outputCostPerMillionTokens: 0.6,
   },
+  // GLM 系列
+  'zai-org/GLM-5': {
+    inputCostPerMillionTokens: 0.25,
+    outputCostPerMillionTokens: 1.0,
+  },
+  'THUDM/GLM-4': {
+    inputCostPerMillionTokens: 0.25,
+    outputCostPerMillionTokens: 1.0,
+  },
+  // OpenAI 兼容格式的模型
+  'gpt-4o': {
+    inputCostPerMillionTokens: 2.5,
+    outputCostPerMillionTokens: 10.0,
+  },
+  'gpt-4o-mini': {
+    inputCostPerMillionTokens: 0.15,
+    outputCostPerMillionTokens: 0.6,
+  },
+  'claude-3-5-sonnet': {
+    inputCostPerMillionTokens: 3.0,
+    outputCostPerMillionTokens: 15.0,
+  },
 };
 
 /**
@@ -86,6 +108,22 @@ const MODEL_PRICING: Record<string, CostRates> = {
  */
 export function getModelPricing(model: string): CostRates | undefined {
   return MODEL_PRICING[model];
+}
+
+/**
+ * 获取模型定价，如果不存在则返回默认值
+ */
+export function getModelPricingOrDefault(model: string): CostRates {
+  const pricing = MODEL_PRICING[model];
+  if (pricing) {
+    return pricing;
+  }
+  // 对于未知模型，使用默认定价（GPT-4o 级别）
+  console.warn(`[CostRates] 未知模型 "${model}"，使用默认定价`);
+  return {
+    inputCostPerMillionTokens: 2.5,
+    outputCostPerMillionTokens: 10.0,
+  };
 }
 
 /**
@@ -176,13 +214,8 @@ export function costIs(
       rates = ratesOrModel as CostRates;
     } else {
       const modelToUse = typeof ratesOrModel === 'string' ? ratesOrModel : model;
-      const pricing = getModelPricing(modelToUse);
-
-      if (!pricing) {
-        throw new Error(`Unknown model "${modelToUse}". Provide explicit rates.`);
-      }
-
-      rates = pricing;
+      // 使用默认定价而不是抛出错误
+      rates = getModelPricingOrDefault(modelToUse);
     }
 
     const currentCost = calculateCost(totalUsage, rates);

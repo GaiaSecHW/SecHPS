@@ -106,31 +106,9 @@ export default function ConfigPage() {
     return user?.permissions?.includes(permission) || user?.roles?.includes('admin');
   };
 
-  // 从 OpenCode 获取 MCP 服务器配置
-  const [mcpServers, setMcpServers] = useState<{ name: string; type: string; enabled: boolean }[]>([]);
-
   // 导入/导出状态
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  
-  const fetchMcpServers = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/opencode/config', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setMcpServers(data.mcpServers || []);
-      }
-    } catch (err) {
-      console.error('Failed to fetch MCP servers:', err);
-    }
-  };
-
-  useEffect(() => {
-    fetchMcpServers();
-  }, []);
 
   const handleExport = async () => {
     try {
@@ -523,37 +501,6 @@ export default function ConfigPage() {
             </p>
           </div>
         </div>
-
-        {/* MCP Servers */}
-        {mcpServers.length > 0 && (
-          <div className="space-y-4 border-t border-gray-200 pt-6">
-            <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-              <Server size={20} />
-              MCP 服务器
-            </h3>
-            <p className="text-sm text-gray-500">
-              以下 MCP 服务器由 OpenCode 服务端配置，在此仅展示不可编辑
-            </p>
-            <div className="bg-gray-50 rounded-md p-3 space-y-2">
-              {mcpServers.map((server, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between text-sm py-1"
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`w-2 h-2 rounded-full ${
-                        server.enabled ? 'bg-green-500' : 'bg-gray-400'
-                      }`}
-                    />
-                    <span className="text-gray-700">{server.name}</span>
-                  </div>
-                  <span className="text-gray-500 text-xs">{server.type}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Tech Stack Options */}
         <div className="space-y-4 border-t border-gray-200 pt-6">
