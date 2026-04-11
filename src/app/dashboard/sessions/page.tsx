@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow } from 'lucide-react';
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 interface UploadedFile {
   id: string;
@@ -38,6 +39,7 @@ interface Project {
   name: string;
   description?: string;
   projectPath?: string;
+  techStack?: string;  // JSON 字符串
   status: 'idle' | 'running' | 'completed' | 'failed';
   files?: ProjectFile[];
   evaluations?: EvaluationRecord[];
@@ -71,6 +73,11 @@ export default function SessionsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [startingProject, setStartingProject] = useState<string | null>(null);
+  // 技术栈选择状态
+  const [projectTechStack, setProjectTechStack] = useState<string[]>([]);
+  const [techStackSearch, setTechStackSearch] = useState('');
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
   // 环境配置表单状态
   const [environmentUrl, setEnvironmentUrl] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
@@ -451,6 +458,7 @@ export default function SessionsPage() {
       const formData = new FormData();
       formData.append('name', projectName);
       formData.append('description', projectDescription);
+      formData.append('techStack', JSON.stringify(projectTechStack));
 
       // 从 uploadedFiles 中获取文件对象
       for (const uploadedFile of uploadedFiles) {
@@ -487,6 +495,8 @@ export default function SessionsPage() {
         setProjectName('');
         setProjectDescription('');
         setUploadedFiles([]);
+        setProjectTechStack([]);
+        setTechStackSearch('');
       }, 1000);
 
       await fetchProjects();
@@ -617,6 +627,16 @@ export default function SessionsPage() {
     setSelectedProject(project);
     setProjectName(project.name || '');
     setProjectDescription(project.description || '');
+    // 加载项目的技术栈
+    if (project.techStack) {
+      try {
+        setProjectTechStack(JSON.parse(project.techStack));
+      } catch {
+        setProjectTechStack([]);
+      }
+    } else {
+      setProjectTechStack([]);
+    }
     setUploadedFiles([]);
     setShowEditModal(true);
   };
@@ -872,6 +892,7 @@ export default function SessionsPage() {
         body: JSON.stringify({
           name: projectName,
           description: projectDescription,
+          techStack: projectTechStack.length > 0 ? JSON.stringify(projectTechStack) : null,
         }),
       });
 
@@ -886,6 +907,7 @@ export default function SessionsPage() {
       setSelectedProject(null);
       setProjectName('');
       setProjectDescription('');
+      setProjectTechStack([]);
       setUploadedFiles([]);
 
       await fetchProjects();
@@ -988,6 +1010,27 @@ export default function SessionsPage() {
                   <p className="mt-2 text-sm text-gray-600 line-clamp-2">
                     {project.description}
                   </p>
+                )}
+
+                {/* 技术栈显示 */}
+                {project.techStack && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(() => {
+                      try {
+                        const techStackArr = JSON.parse(project.techStack);
+                        return techStackArr.map((ts: string) => (
+                          <span
+                            key={ts}
+                            className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
+                          >
+                            {ts}
+                          </span>
+                        ));
+                      } catch {
+                        return null;
+                      }
+                    })()}
+                  </div>
                 )}
 
                 <p className="mt-2 text-sm text-gray-600">
@@ -1233,6 +1276,8 @@ export default function SessionsPage() {
                   setProjectName('');
                   setProjectDescription('');
                   setUploadedFiles([]);
+                  setProjectTechStack([]);
+                  setTechStackSearch('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -1268,6 +1313,92 @@ export default function SessionsPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="请输入项目描述（可选）"
                 />
+              </div>
+
+              {/* 技术栈选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  技术栈
+                </label>
+                <div className="relative">
+                  {/* 已选择的技术栈标签 */}
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {projectTechStack.map((ts) => (
+                      <span
+                        key={ts}
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        {ts}
+                        <button
+                          type="button"
+                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== ts))}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  {/* 技术栈搜索和选择 */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={techStackSearch}
+                      onChange={(e) => {
+                        setTechStackSearch(e.target.value);
+                        setShowTechStackDropdown(true);
+                      }}
+                      onFocus={() => setShowTechStackDropdown(true)}
+                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      disabled={loadingTechStack}
+                    />
+                    {/* 下拉选项 */}
+                    {showTechStackDropdown && !loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {techStackOptions
+                          .filter((option) => 
+                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !projectTechStack.includes(option)
+                          )
+                          .slice(0, 20)
+                          .map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setProjectTechStack([...projectTechStack, option]);
+                                setTechStackSearch('');
+                                setShowTechStackDropdown(false);
+                              }}
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        {techStackOptions.filter((option) => 
+                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !projectTechStack.includes(option)
+                        ).length === 0 && (
+                          <div className="px-4 py-2 text-sm text-gray-500">
+                            无匹配选项
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">加载技术栈选项...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    可选择多个技术栈，帮助匹配适合的审计工具
+                  </p>
+                </div>
               </div>
 
               <div>
@@ -1399,6 +1530,8 @@ export default function SessionsPage() {
                   setSelectedProject(null);
                   setProjectName('');
                   setProjectDescription('');
+                  setProjectTechStack([]);
+                  setTechStackSearch('');
                   setUploadedFiles([]);
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -1434,6 +1567,84 @@ export default function SessionsPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
+
+              {/* 技术栈选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  技术栈
+                </label>
+                <div className="relative">
+                  {/* 已选择的技术栈标签 */}
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {projectTechStack.map((ts) => (
+                      <span
+                        key={ts}
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        {ts}
+                        <button
+                          type="button"
+                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== ts))}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  {/* 技术栈搜索和选择 */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={techStackSearch}
+                      onChange={(e) => {
+                        setTechStackSearch(e.target.value);
+                        setShowTechStackDropdown(true);
+                      }}
+                      onFocus={() => setShowTechStackDropdown(true)}
+                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      disabled={loadingTechStack}
+                    />
+                    {/* 下拉选项 */}
+                    {showTechStackDropdown && !loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {techStackOptions
+                          .filter((option) => 
+                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !projectTechStack.includes(option)
+                          )
+                          .slice(0, 20)
+                          .map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setProjectTechStack([...projectTechStack, option]);
+                                setTechStackSearch('');
+                                setShowTechStackDropdown(false);
+                              }}
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        {techStackOptions.filter((option) => 
+                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !projectTechStack.includes(option)
+                        ).length === 0 && (
+                          <div className="px-4 py-2 text-sm text-gray-500">
+                            无匹配选项
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    可选择多个技术栈，帮助匹配适合的审计工具
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
@@ -1443,6 +1654,8 @@ export default function SessionsPage() {
                   setSelectedProject(null);
                   setProjectName('');
                   setProjectDescription('');
+                  setProjectTechStack([]);
+                  setTechStackSearch('');
                   setUploadedFiles([]);
                 }}
                 disabled={uploading}
@@ -1942,19 +2155,36 @@ export default function SessionsPage() {
                     <div
                       key={workflow.id}
                       onClick={() => setSelectedWorkflow(workflow.id)}
-                      className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all ${
                         selectedWorkflow === workflow.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-blue-300'
+                          ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-300 ring-offset-2'
+                          : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
                       }`}
                     >
-                      <div className="flex items-start justify-between mb-2">
+                      {/* 选中指示器 - 左上角 */}
+                      <div className={`absolute top-3 left-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                        selectedWorkflow === workflow.id
+                          ? 'bg-blue-600 border-blue-600'
+                          : 'bg-white border-gray-300'
+                      }`}>
+                        {selectedWorkflow === workflow.id && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-start justify-between mb-2 pl-7">
                         <div className="flex-1">
-                          <h4 className="text-sm font-semibold text-gray-900">
+                          <h4 className={`text-sm font-semibold ${
+                            selectedWorkflow === workflow.id ? 'text-blue-900' : 'text-gray-900'
+                          }`}>
                             {workflow.name}
                           </h4>
                           {workflow.description && (
-                            <p className="text-xs text-gray-600 mt-1 line-clamp-2">
+                            <p className={`text-xs mt-1 line-clamp-2 ${
+                              selectedWorkflow === workflow.id ? 'text-blue-700' : 'text-gray-600'
+                            }`}>
                               {workflow.description}
                             </p>
                           )}

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { sanitizePath } from '@/lib/path-utils';
 
 // PATCH /api/config/[id] - Update a config
 export async function PATCH(
@@ -62,7 +63,7 @@ export async function PATCH(
       data: {
         ...(name !== undefined && { name }),
         ...(baseURL !== undefined && { baseURL }),
-        ...(projectUploadDir !== undefined && { projectUploadDir }),
+        ...(projectUploadDir !== undefined && { projectUploadDir: projectUploadDir ? sanitizePath(projectUploadDir) : null }),
         ...(taskDescription !== undefined && { taskDescription }),
         ...(description !== undefined && { description }),
         ...(isActive !== undefined && { isActive }),

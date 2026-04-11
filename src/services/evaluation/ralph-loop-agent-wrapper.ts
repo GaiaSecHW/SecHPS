@@ -299,7 +299,29 @@ export class RalphLoopAgent {
               } as unknown as GenerateTextResult<any, never>);
             },
             onError: (error) => {
-              reject(error);
+              // 区分致命错误和可恢复错误
+              const isFatal =
+                error.message.includes('error_max_turns') ||
+                error.message.includes('error_max_budget_usd') ||
+                error.message.includes('error_max_structured_output_retries');
+
+              if (isFatal) {
+                console.error(`[Ralph Loop] 致命错误，终止迭代:`, error.message);
+                reject(error);
+              } else {
+                // error_during_execution 等可恢复错误：记录日志，用空结果继续
+                console.warn(`[Ralph Loop] 迭代 ${iteration} 遇到可恢复错误，继续下一轮:`, error.message);
+                resolve({
+                  text: `[迭代错误] ${error.message}`,
+                  steps: [],
+                  usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                  response: { messages: [] },
+                  finishReason: 'error',
+                  experimental_providerMetadata: undefined,
+                  warnings: undefined,
+                  request: { messages: [] },
+                } as unknown as GenerateTextResult<any, never>);
+              }
             },
           };
 
@@ -371,7 +393,10 @@ export class RalphLoopAgent {
       } else {
         // 没有验证函数时，检查文本是否包含完成信号
         const text = result.text.toLowerCase();
-        const completionKeywords = ['任务完成', '评估完成', '扫描完成', 'task complete', 'completed'];
+        const completionKeywords = [
+          '任务完成', '评估完成', '扫描完成', '已完成', '完成了', '全部完成',
+          'task complete', 'completed', 'done', 'finished', 'all tasks', 'successfully completed',
+        ];
         if (completionKeywords.some((kw) => text.includes(kw))) {
           completionReason = 'verified';
           reason = '检测到完成关键词';
@@ -431,6 +456,26 @@ export function createRalphLoopAgent(
       summarizedIterations: number;
       tokensSaved: number;
     }) => void | Promise<void>;
+  },
+  sdkOptions?: {
+    mcpServers?: Array<{
+      name: string;
+      type: 'local' | 'remote';
+      command?: string;
+      args?: string[];
+      url?: string;
+      env?: Record<string, string>;
+      isEnabled?: boolean;
+      autoStart?: boolean;
+    }>;
+    toolPermissions?: Array<{
+      toolPattern: string;
+      permission: 'allow' | 'deny' | 'ask';
+    }>;
+    systemPrompt?: string;
+    settingSources?: ('project' | 'user' | 'local')[];
+    permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
+    allowDangerouslySkipPermissions?: boolean;
   }
 ): RalphLoopAgent {
   // 解析模型名称
@@ -451,6 +496,14 @@ export function createRalphLoopAgent(
     baseUrl: modelConfig.apiBaseUrl || undefined,
     model,
     cwd: workingDirectory,
+    // SDK 高级配置
+    mcpServers: sdkOptions?.mcpServers,
+    toolPermissions: sdkOptions?.toolPermissions,
+    systemPrompt: sdkOptions?.systemPrompt,
+    settingSources: sdkOptions?.settingSources,
+    permissionMode: sdkOptions?.permissionMode,
+    allowDangerouslySkipPermissions: sdkOptions?.allowDangerouslySkipPermissions,
+    // Ralph Loop 配置
     ...ralphConfig,
   });
 

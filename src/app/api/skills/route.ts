@@ -32,6 +32,7 @@ export async function GET(request: Request) {
     const isActive = searchParams.get('isActive');
     const search = searchParams.get('search') || undefined;
     const scope = searchParams.get('scope') || 'all'; // public | mine | all
+    const techStack = searchParams.get('techStack') || undefined; // 技术栈过滤
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
 
@@ -41,6 +42,12 @@ export async function GET(request: Request) {
     const where: Record<string, unknown> = {};
     if (category) where.category = category;
     if (isActive !== null) where.isActive = isActive === 'true';
+    
+    // 技术栈过滤
+    if (techStack) {
+      // techStack 字段是 JSON 字符串，需要检查是否包含指定技术栈
+      where.techStack = { contains: techStack };
+    }
     
     // 默认只返回最新版本
     where.isLatest = true;

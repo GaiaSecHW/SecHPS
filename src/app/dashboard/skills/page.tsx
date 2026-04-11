@@ -65,6 +65,7 @@ export default function SkillsPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedTechStack, setSelectedTechStack] = useState<string>('');
   const [categories, setCategories] = useState<{ name: string; label: string; count: number }[]>([]);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [user, setUser] = useState<{ roles?: string[] } | null>(null);
@@ -73,6 +74,22 @@ export default function SkillsPage() {
   const [copied, setCopied] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [batchOperating, setBatchOperating] = useState(false);
+  
+  // 技术栈选项
+  const techStackOptions = [
+    { name: 'Java', label: 'Java' },
+    { name: 'Python', label: 'Python' },
+    { name: 'Go', label: 'Go' },
+    { name: 'PHP', label: 'PHP' },
+    { name: 'JavaScript', label: 'JavaScript' },
+    { name: 'Node.js', label: 'Node.js' },
+    { name: 'C#', label: 'C#' },
+    { name: '.NET', label: '.NET' },
+    { name: 'Ruby', label: 'Ruby' },
+    { name: 'Rust', label: 'Rust' },
+    { name: 'C', label: 'C' },
+    { name: 'C++', label: 'C++' },
+  ];
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -84,15 +101,19 @@ export default function SkillsPage() {
   useEffect(() => {
     fetchSkills();
     fetchCategories();
-  }, [selectedCategory]);
+  }, [selectedCategory, selectedTechStack]);
 
   const fetchSkills = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const url = selectedCategory
-        ? `/api/skills?category=${selectedCategory}`
-        : '/api/skills';
+      
+      // 构建 URL 参数
+      const params = new URLSearchParams();
+      if (selectedCategory) params.append('category', selectedCategory);
+      if (selectedTechStack) params.append('techStack', selectedTechStack);
+      
+      const url = params.toString() ? `/api/skills?${params.toString()}` : '/api/skills';
 
       const response = await fetch(url, {
         headers: {
@@ -430,6 +451,21 @@ export default function SkillsPage() {
               {categories.map((cat) => (
                 <option key={cat.name} value={cat.name}>
                   {cat.label} ({cat.count})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Code size={20} className="text-gray-400" />
+            <select
+              value={selectedTechStack}
+              onChange={(e) => setSelectedTechStack(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">所有技术栈</option>
+              {techStackOptions.map((tech) => (
+                <option key={tech.name} value={tech.name}>
+                  {tech.label}
                 </option>
               ))}
             </select>

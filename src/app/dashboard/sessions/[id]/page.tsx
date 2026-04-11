@@ -735,7 +735,37 @@ export default function SessionDetailPage({
           </div>
         </div>
       </div>
-
+      
+      {/* 评估信息面板 */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">启动时间</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.startedAt ? new Date(evaluation.startedAt).toLocaleString('zh-CN') : '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">停止时间</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.completedAt ? new Date(evaluation.completedAt).toLocaleString('zh-CN') : '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">使用的模型</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.modelName || '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">模型提供商</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.providerType || '-'}
+            </p>
+          </div>
+        </div>
+      </div>
+      
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Panel: Vulnerability Summary + TODOs + Children + Messages */}

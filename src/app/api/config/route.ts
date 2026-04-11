@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { sanitizePath } from '@/lib/path-utils';
 
 // GET /api/config - Get all configs for authenticated user
 export async function GET(request: Request) {
@@ -87,7 +88,7 @@ export async function POST(request: Request) {
         userId: payload.userId,
         name,
         baseURL: baseURL || 'http://localhost:54321',
-        projectUploadDir,
+        projectUploadDir: projectUploadDir ? sanitizePath(projectUploadDir) : null,
         taskDescription,
         description,
         isActive: isActive !== undefined ? isActive : true,

@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
 }
 
 datasource db {
@@ -135,6 +136,7 @@ model Project {
   fullPath        String?  // 完整路径
   description     String?  // 项目描述
   projectPath     String?  // 项目目录路径
+  techStack       String?  // JSON: ["Java", "Spring"] - 项目技术栈
   status          String   @default("idle") // 项目状态：idle, running, completed, failed
   
   // 环境配置字段
@@ -193,20 +195,24 @@ model EvaluationSession {
   workflowId       String?  // 关联的工作流（Agent编排）
   opencodeSessionId String? @unique // AI4WEB SDK 返回的会话 ID（唯一）
   
-  // 多提供者支持
-  provider         String   @default("claude") // claude | cursor | codex | gemini
-  
-  // 会话信息
-  title            String?  // 会话标题
-  summary          String?  // 会话摘要
-  messageCount     Int      @default(0) // 消息数量
-  lastActivity     DateTime? @default(now()) // 最近活动时间
-  
-  port             Int?     // OpenCode 服务器运行端口
-  status           String   @default("running") // running, completed, failed, cancelled
-  startedAt        DateTime  @default(now())
-  completedAt      DateTime?
-  errorMessage     String?
+    // 多提供者支持
+    provider         String   @default("claude") // claude | cursor | codex | gemini
+    
+    // 会话信息
+    title            String?  // 会话标题
+    summary          String?  // 会话摘要
+    messageCount     Int      @default(0) // 消息数量
+    lastActivity     DateTime? @default(now()) // 最近活动时间?
+    
+    port             Int?     // OpenCode 服务器运行端口?
+    status           String   @default("running") // running, completed, failed, cancelled
+    startedAt        DateTime  @default(now())
+    completedAt      DateTime?
+    errorMessage     String?
+    
+    // 模型信息
+    modelName        String?  // 使用的模型名称
+    providerType     String?  // 模型提供商类型
 
   // 关系
   project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1268,4 +1274,21 @@ model TechStackOption {
   @@index([name])
   @@index([category])
   @@index([isActive])
+}
+
+// ============================================
+// 系统配置
+// ============================================
+
+// 系统配置 - 存储各种系统级配置
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique // 配置键名，如 "skill_categories"
+  value       String   // 配置值（JSON 字符串）
+  description String?  // 配置描述
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([key])
 }

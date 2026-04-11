@@ -72,6 +72,7 @@ export async function PUT(
       data: {
         name: body.name,
         description: body.description,
+        techStack: body.techStack,
       },
     });
 
@@ -103,15 +104,21 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    // 构建更新数据
+    const updateData: any = {};
+    
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.techStack !== undefined) updateData.techStack = body.techStack;
+    if (body.environmentUrl !== undefined) updateData.environmentUrl = body.environmentUrl;
+    if (body.adminUsername !== undefined) updateData.adminUsername = body.adminUsername;
+    if (body.adminPassword !== undefined) updateData.adminPassword = body.adminPassword;
+    if (body.normalUsername !== undefined) updateData.normalUsername = body.normalUsername;
+    if (body.normalPassword !== undefined) updateData.normalPassword = body.normalPassword;
+
     const project = await prisma.project.update({
       where: { id },
-      data: {
-        environmentUrl: body.environmentUrl,
-        adminUsername: body.adminUsername,
-        adminPassword: body.adminPassword,
-        normalUsername: body.normalUsername,
-        normalPassword: body.normalPassword,
-      },
+      data: updateData,
     });
 
     return NextResponse.json({ project });

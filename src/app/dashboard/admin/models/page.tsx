@@ -15,6 +15,7 @@ import {
   List,
   Save,
   X,
+  Play,
 } from 'lucide-react';
 
 // ModelConfig 数据结构
@@ -72,6 +73,15 @@ export default function ModelsPage() {
   const [editingModel, setEditingModel] = useState<ModelConfig | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deletingModel, setDeletingModel] = useState<ModelConfig | null>(null);
+
+  // 测试状态
+  const [testingModelId, setTestingModelId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { 
+    success: boolean; 
+    message: string; 
+    timestamp: number;
+    response?: string;
+  }>>({});
 
   // 表单数据
   const [formData, setFormData] = useState<ModelFormData>({
@@ -257,6 +267,72 @@ export default function ModelsPage() {
     }
   };
 
+  const handleTestModel = async (model: ModelConfig) => {
+    try {
+      setTestingModelId(model.id);
+      setError(null);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/admin/models/${model.id}/test`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (!response.ok && !data.success) {
+        throw new Error(data.error || data.message || '测试失败');
+      }
+
+      setTestResults({
+        ...testResults,
+        [model.id]: {
+          success: data.success,
+          message: data.message || (data.success ? '连接成功' : '连接失败'),
+          timestamp: Date.now(),
+          response: data.response?.body,
+        },
+      });
+
+      if (data.success) {
+        const responseInfo = data.response?.body 
+          ? `\n\n响应内容:\n${data.response.body.substring(0, 500)}`
+          : '';
+        setSuccess(`模型 "${model.name}" 连接测试成功${responseInfo}`);
+        setTimeout(() => setSuccess(null), 5000);
+      } else {
+        // 构建详细的错误信息
+        let errorMsg = data.message || '连接失败';
+        if (data.url) {
+          errorMsg += `\n\n请求地址: ${data.url}`;
+        }
+        if (data.error) {
+          errorMsg += `\n\n${data.error}`;
+        }
+        if (data.details) {
+          errorMsg += `\n\n响应内容:\n${data.details}`;
+        }
+        setError(errorMsg);
+        setTimeout(() => setError(null), 10000);
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || '模型连接测试失败';
+      setError(errorMsg);
+      setTimeout(() => setError(null), 5000);
+      setTestResults({
+        ...testResults,
+        [model.id]: {
+          success: false,
+          message: errorMsg,
+          timestamp: Date.now(),
+        },
+      });
+    } finally {
+      setTestingModelId(null);
+    }
+  };
+
   // 过滤模型
   const filteredModels = models.filter((model) => {
     if (filterStatus === 'active') return model.isActive;
@@ -306,16 +382,16 @@ export default function ModelsPage() {
 
       {/* Success/Error Messages */}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md flex items-center gap-2">
-          <Check className="h-5 w-5" />
-          {success}
+        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md flex items-start gap-2">
+          <Check className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <pre className="whitespace-pre-wrap text-sm font-mono overflow-auto max-h-60">{success}</pre>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md flex items-center gap-2">
-          <AlertCircle className="h-5 w-5" />
-          {error}
+        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <pre className="whitespace-pre-wrap text-sm font-mono">{error}</pre>
         </div>
       )}
 
@@ -367,6 +443,9 @@ export default function ModelsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   默认
                 </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  连接状态
+                </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   操作
                 </th>
@@ -375,7 +454,7 @@ export default function ModelsPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredModels.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                     暂无模型配置
                   </td>
                 </tr>
@@ -448,8 +527,44 @@ export default function ModelsPage() {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-4">
+                        {testResults[model.id] ? (
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
+                              testResults[model.id].success
+                                ? 'bg-green-100 text-green-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}
+                          >
+                            {testResults[model.id].success ? (
+                              <Check size={12} />
+                            ) : (
+                              <AlertCircle size={12} />
+                            )}
+                            {testResults[model.id].success ? '正常' : '异常'}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">未测试</span>
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleTestModel(model)}
+                            disabled={testingModelId === model.id}
+                            className={`p-1.5 rounded-md transition-colors ${
+                              testingModelId === model.id
+                                ? 'text-blue-600 bg-blue-50 cursor-wait'
+                                : 'text-gray-600 hover:text-green-600 hover:bg-green-50'
+                            }`}
+                            title="测试连接"
+                          >
+                            {testingModelId === model.id ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <Play size={16} />
+                            )}
+                          </button>
                           <button
                             onClick={() => handleOpenEditModal(model)}
                             className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
