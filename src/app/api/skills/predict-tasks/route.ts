@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { taskName, taskDescription, workflowId, topK = 5 } = body;
+    const { taskName, taskDescription, workflowId, nodeId, topK = 5 } = body;
 
     // 验证必填字段
     if (!taskName || !taskDescription) {
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       data: {
         userId: payload.userId,
         workflowId,
+        nodeId,
         taskName,
         taskDescription,
         topK,
@@ -81,6 +82,7 @@ export async function GET(request: Request) {
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const workflowId = searchParams.get('workflowId');
+    const nodeId = searchParams.get('nodeId');
     const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
@@ -89,6 +91,9 @@ export async function GET(request: Request) {
     const where: any = { userId: payload.userId };
     if (workflowId) {
       where.workflowId = workflowId;
+    }
+    if (nodeId) {
+      where.nodeId = nodeId;
     }
     if (status) {
       where.status = status;

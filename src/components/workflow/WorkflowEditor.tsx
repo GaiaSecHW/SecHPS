@@ -63,6 +63,7 @@ const [showPreview, setShowPreview] = useState(false);
     id: string;
     taskName: string;
     taskDescription: string;
+    nodeId: string | null;
     topK: number;
     status: string;
     progress: number;
@@ -184,7 +185,7 @@ const [showPreview, setShowPreview] = useState(false);
   };
  
   // 创建预测任务（异步）
-  const createPredictionTask = async (nodeName: string, nodeDescription: string) => {
+  const createPredictionTask = async (nodeName: string, nodeDescription: string, nodeId: string) => {
     if (!workflowId || !nodeName) return;
     
     try {
@@ -200,6 +201,7 @@ const [showPreview, setShowPreview] = useState(false);
           taskName: nodeName,
           taskDescription: nodeDescription || '',
           workflowId,
+          nodeId,
           topK: 5,
         }),
       });
@@ -223,13 +225,14 @@ const [showPreview, setShowPreview] = useState(false);
   };
   
   // 加载预测任务列表
-  const fetchPredictionTasks = async () => {
+  const fetchPredictionTasks = async (nodeId?: string) => {
     if (!workflowId) return;
     
     try {
       setLoadingTasks(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/skills/predict-tasks?workflowId=${workflowId}&limit=10`, {
+      const nodeIdParam = nodeId ? `&nodeId=${nodeId}` : '';
+      const response = await fetch(`/api/skills/predict-tasks?workflowId=${workflowId}${nodeIdParam}&limit=10`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
@@ -1004,13 +1007,15 @@ const [showPreview, setShowPreview] = useState(false);
                               const agentContent = collectAgentContent(selectedNode.id);
                               createPredictionTask(
                                 selectedNode.data.label,
-                                agentContent
+                                agentContent,
+                                selectedNode.id
                               );
                             } else {
                               // 子 Agent 只预测自己
                               createPredictionTask(
                                 selectedNode.data.label,
-                                selectedNode.data.description || ''
+                                selectedNode.data.description || '',
+                                selectedNode.id
                               );
                             }
                           }
@@ -1022,11 +1027,15 @@ const [showPreview, setShowPreview] = useState(false);
                       </button>
                       
                       <button
-                        onClick={() => setShowPredictionTasks(true)}
+                        onClick={() => {
+                          // 加载当前节点的预测任务
+                          fetchPredictionTasks(selectedNode.id);
+                          setShowPredictionTasks(true);
+                        }}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
                       >
                         <Sparkles size={12} />
-                        查看预测 ({predictionTasks.length})
+                        查看预测 ({predictionTasks.filter(t => t.nodeId === selectedNode.id).length})
                       </button>
                     </div>
                   </div>
@@ -1179,11 +1188,14 @@ const [showPreview, setShowPreview] = useState(false);
                   {predictionTasks.map((task) => (
                     <div key={task.id} className="border border-gray-200 rounded-lg p-4">
                       {/* 标题和时间 */}
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">{task.taskName}</h4>
-                          <p className="text-sm text-gray-600 mt-1">{task.taskDescription}</p>
-                        </div>
+                       <div className="flex items-start justify-between mb-3">
+                         <div className="flex-1">
+                           <h4 className="font-semibold text-gray-900">{task.taskName}</h4>
+                           <p className="text-sm text-gray-600 mt-1">{task.taskDescription}</p>
+                           {task.nodeId && (
+                             <p className="text-xs text-gray-400 mt-1 font-mono">节点: {task.nodeId}</p>
+                           )}
+                         </div>
                         <div className="text-right ml-4">
                           <div className="text-xs text-gray-500">
                             {new Date(task.createdAt).toLocaleString('zh-CN')}

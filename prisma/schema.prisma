@@ -533,6 +533,7 @@ model SkillPredictionTask {
   id          String   @id @default(cuid())
   userId      String
   workflowId  String?  // 关联的工作流
+  nodeId      String?  // 关联的节点 ID（区分不同 Agent/子Agent）
 
   // 任务信息
   taskName    String
@@ -563,9 +564,11 @@ model SkillPredictionTask {
 
   @@index([userId])
   @@index([workflowId])
+  @@index([nodeId])
   @@index([status])
   @@index([createdAt])
   @@index([userId, status])
+  @@index([workflowId, nodeId])
 }
 
 // Skill 定义
