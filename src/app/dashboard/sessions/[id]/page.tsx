@@ -1512,41 +1512,43 @@ function MessageBubble({
 
         {/* 工具调用 */}
         {toolUseParts.length > 0 && (
-          <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-            <div 
-              className="text-xs font-medium text-blue-800 mb-2 flex items-center justify-between cursor-pointer"
+          <div className="mt-3 bg-blue-50 rounded-lg border border-blue-200 overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-blue-100 transition-colors"
               onClick={() => setExpandedToolSection(!expandedToolSection)}
             >
-              <div className="flex items-center">
+              <div className="flex items-center text-xs font-medium text-blue-800">
                 <Code size={14} className="mr-1" />
                 工具调用 ({toolUseParts.length})
               </div>
-              {expandedToolSection ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </div>
+              <span className="text-xs text-blue-600">{expandedToolSection ? '▲ 收起' : '▼ 展开'}</span>
+            </button>
             {expandedToolSection && (
-              <div className="space-y-2">
+              <div className="px-3 pb-3 space-y-1">
                 {toolUseParts.map((tool: any, idx: number) => {
                   const isExpanded = expandedTools[`tool-${idx}`];
                   return (
-                    <div key={idx} className="bg-white p-2 rounded border border-blue-200">
-                      <div 
-                        className="flex items-center justify-between cursor-pointer"
+                    <div key={idx} className="bg-white rounded border border-blue-200 overflow-hidden">
+                      <button
+                        className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
                         onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
                       >
-                        <span className="text-sm font-medium text-blue-700">{tool.name || 'unknown'}</span>
-                        <div className="flex items-center space-x-2">
+                        <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                          🔧 {tool.name || 'unknown'}
                           {tool.input && (
-                            <span className="text-xs text-gray-500">
-                              {Object.keys(tool.input).length} 个参数
+                            <span className="text-gray-400 font-normal">
+                              ({Object.keys(tool.input).length} 个参数)
                             </span>
                           )}
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </div>
-                      </div>
+                        </span>
+                        <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
                       {isExpanded && tool.input && (
-                        <pre className="mt-2 text-xs overflow-auto max-h-64 text-gray-800 bg-gray-50 p-2 rounded">
-                          {JSON.stringify(tool.input, null, 2)}
-                        </pre>
+                        <div className="px-2 pb-2 border-t border-blue-100">
+                          <pre className="text-xs overflow-auto max-h-40 text-gray-800 bg-gray-50 p-2 rounded mt-1">
+                            {JSON.stringify(tool.input, null, 2)}
+                          </pre>
+                        </div>
                       )}
                     </div>
                   );
@@ -1558,19 +1560,19 @@ function MessageBubble({
 
         {/* 工具结果 */}
         {toolResultParts.length > 0 && (
-          <div className="mt-3 p-3 bg-gray-100 rounded-lg border border-gray-300">
-            <div 
-              className="text-xs font-medium text-gray-700 mb-2 flex items-center justify-between cursor-pointer"
+          <div className="mt-3 bg-gray-100 rounded-lg border border-gray-300 overflow-hidden">
+            <button
+              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-200 transition-colors"
               onClick={() => setExpandedResultSection(!expandedResultSection)}
             >
-              <div className="flex items-center">
+              <div className="flex items-center text-xs font-medium text-gray-700">
                 <FileText size={14} className="mr-1" />
                 工具结果 ({toolResultParts.length})
               </div>
-              {expandedResultSection ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </div>
+              <span className="text-xs text-gray-500">{expandedResultSection ? '▲ 收起' : '▼ 展开'}</span>
+            </button>
             {expandedResultSection && (
-              <div className="space-y-2">
+              <div className="px-3 pb-3 space-y-1">
                 {toolResultParts.map((result: any, idx: number) => {
                   const isExpanded = expandedTools[`result-${idx}`];
                   const isError = result.is_error || result.error;
@@ -1583,7 +1585,6 @@ function MessageBubble({
                   } else if (typeof raw === 'string') {
                     content = raw;
                   } else if (Array.isArray(raw)) {
-                    // Claude SDK 标准格式: [{type:'text', text:'...'}]
                     content = raw.map((item: any) =>
                       typeof item === 'string' ? item :
                       item.text ?? item.content ?? JSON.stringify(item)
@@ -1598,28 +1599,31 @@ function MessageBubble({
                     (result.tool_use_id ? `#${idx + 1}` : '工具结果');
                   
                   return (
-                    <div key={idx} className={`bg-white p-2 rounded border ${isError ? 'border-red-300' : 'border-gray-200'}`}>
-                      <div
-                        className="flex items-center justify-between cursor-pointer"
+                    <div key={idx} className={`bg-white rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-200'}`}>
+                      <button
+                        className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
                         onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
                       >
-                        <span className={`text-sm font-medium ${isError ? 'text-red-700' : 'text-gray-700'}`}>
-                          {toolName}{isError && ' ⚠️'}
+                        <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-700' : 'text-gray-700'}`}>
+                          📤 {toolName}
+                          {content.length > 0 && (
+                            <span className="text-gray-400 font-normal">
+                              ({content.length} 字符)
+                            </span>
+                          )}
+                          {isError && <span>⚠️</span>}
                         </span>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs text-gray-500">
-                            {content.length > 100 ? `${content.length} 字符` : ''}
-                          </span>
-                          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                        </div>
-                      </div>
+                        <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
                       {isExpanded && (
-                        <pre className={`mt-2 text-xs overflow-auto max-h-64 p-2 rounded whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'}`}>
-                          {content ? (content.length > 5000 ? content.substring(0, 5000) + '\n...(内容已截断)' : content) : '（无内容）'}
-                        </pre>
-                      )}
-                      {isExpanded && result.error && (
-                        <div className="mt-1 text-xs text-red-600">错误: {result.error}</div>
+                        <div className="px-2 pb-2 border-t border-gray-100">
+                          <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'}`}>
+                            {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
+                          </pre>
+                          {result.error && (
+                            <div className="text-xs text-red-600 mt-1">错误: {result.error}</div>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
