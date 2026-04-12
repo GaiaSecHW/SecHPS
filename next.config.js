@@ -7,9 +7,15 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
-   allowedDevOrigins: ['172.31.31.229'],
-  // 如果你需要生成独立包，只在生产构建时启用
-   output: process.env.NODE_ENV === 'production' ? 'standalone' : undefined,
+  allowedDevOrigins: ['172.31.31.229'],
+  
+  // standalone 输出配置
+  output: 'standalone',
+  
+  // 打包后自动排除不需要的目录
+  async headers() {
+    return [];
+  },
 };
 
 module.exports = nextConfig;
