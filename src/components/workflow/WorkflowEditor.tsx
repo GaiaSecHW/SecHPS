@@ -92,6 +92,10 @@ const [showPreview, setShowPreview] = useState(false);
   // 当前查看预测任务的节点 ID
   const [viewingNodeId, setViewingNodeId] = useState<string | null>(null);
   
+  // 预测按钮禁用状态（防止重复点击）
+  const [predictionDisabled, setPredictionDisabled] = useState(false);
+  const [predictionCountdown, setPredictionCountdown] = useState(0);
+  
   // 工作流信息编辑模态框
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -304,6 +308,23 @@ const [showPreview, setShowPreview] = useState(false);
     
     return () => clearInterval(pollInterval);
   }, [pollingTaskId]);
+  
+  // 预测按钮倒计时
+  useEffect(() => {
+    if (predictionCountdown <= 0) return;
+    
+    const timer = setInterval(() => {
+      setPredictionCountdown(prev => {
+        if (prev <= 1) {
+          setPredictionDisabled(false);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [predictionCountdown]);
   
   // 初始加载预测任务
   useEffect(() => {
@@ -1021,12 +1042,16 @@ const [showPreview, setShowPreview] = useState(false);
                                 selectedNode.id
                               );
                             }
+                            // 禁用按钮 60 秒
+                            setPredictionDisabled(true);
+                            setPredictionCountdown(60);
                           }
                         }}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm"
+                        disabled={predictionDisabled}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm disabled:bg-gray-400 disabled:cursor-not-allowed"
                       >
                         <Sparkles size={14} />
-                        预测匹配
+                        {predictionDisabled ? `请等待 ${predictionCountdown} 秒` : '预测匹配'}
                       </button>
                       
                       <button
