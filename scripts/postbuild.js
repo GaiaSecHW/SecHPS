@@ -22,7 +22,8 @@ const DIR_COPY_RULES = {
   'next-files': {
     src: path.join(ROOT_DIR, '.next'),
     dest: '.next',
-    mode: 'selective-next',
+    mode: 'exclude-next',
+    exclude: ['cache', 'dev', 'diagnostics', 'standalone', 'node_modules', 'types', 'turbopack', 'trace', 'trace-build', 'build', 'export-marker.json', 'fallback-build-manifest.json', 'images-manifest.json', 'next-minimal-server.js.nft.json', 'next-server.js.nft.json', 'standalone.zip', 'required-server-files.js'],
   },
   // data 目录：运行时不需要，可以排除
   'data': {
@@ -78,17 +79,14 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
     fs.rmSync(dest, { recursive: true, force: true });
   }
 
-  // 模式：selective-next - 只复制 .next 中必要的文件/目录
-  if (rules.mode === 'selective-next') {
+  // 模式：exclude-next - 排除不需要的 .next 项
+  if (rules.mode === 'exclude-next') {
     const entries = fs.readdirSync(src, { withFileTypes: true });
     fs.mkdirSync(dest, { recursive: true });
     
-    const requiredItems = ['static', 'server', 'BUILD_ID', 'app-path-routes-manifest.json', 
-                           'build-manifest.json', 'prerender-manifest.json', 'routes-manifest.json',
-                           'required-server-files.json', 'package.json'];
-    
     for (const entry of entries) {
-      if (!requiredItems.includes(entry.name)) {
+      // 跳过排除的项
+      if (rules.exclude && rules.exclude.includes(entry.name)) {
         console.log(`  ⏭️  跳过 ${entry.name}`);
         continue;
       }
@@ -105,7 +103,7 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
       }
     }
     
-    console.log(`✅ ${dirName} -> ${rules.dest || dirName} (选择性复制)`);
+    console.log(`✅ ${dirName} -> ${rules.dest || dirName} (排除模式)`);
     return true;
   }
 
