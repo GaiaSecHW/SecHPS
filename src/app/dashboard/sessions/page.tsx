@@ -2555,173 +2555,78 @@ export default function SessionsPage() {
                       ))}
                     </div>
                   </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-                  {/* 右侧：漏洞详情 */}
-                  {selectedVulnerability && (
-                    <div className="w-1/2 p-6 overflow-y-auto">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            selectedVulnerability.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                            selectedVulnerability.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                            selectedVulnerability.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            selectedVulnerability.severity === 'low' ? 'bg-blue-100 text-blue-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {selectedVulnerability.severity === 'critical' ? '严重' :
-                             selectedVulnerability.severity === 'high' ? '高危' :
-                             selectedVulnerability.severity === 'medium' ? '中危' :
-                             selectedVulnerability.severity === 'low' ? '低危' : '信息'}
-                          </span>
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            selectedVulnerability.status === 'new' ? 'bg-blue-100 text-blue-700' :
-                            selectedVulnerability.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
-                            selectedVulnerability.status === 'fixed' ? 'bg-green-100 text-green-700' :
-                            selectedVulnerability.status === 'verified' ? 'bg-purple-100 text-purple-700' :
-                            'bg-gray-100 text-gray-600'
-                          }`}>
-                            {selectedVulnerability.status === 'new' ? '新建' :
-                             selectedVulnerability.status === 'confirmed' ? '已确认' :
-                             selectedVulnerability.status === 'fixed' ? '已修复' :
-                             selectedVulnerability.status === 'verified' ? '已验证' :
-                             selectedVulnerability.status === 'false-positive' ? '误报' : selectedVulnerability.status}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => setSelectedVulnerability(null)}
-                          className="text-gray-400 hover:text-gray-600"
-                        >
-                          <X size={20} />
-                        </button>
-                      </div>
-
-                       <h2 className="text-lg font-bold text-gray-900 mb-4">{selectedVulnerability.title}</h2>
-
-                       <div className="space-y-4">
-                         {/* 基本信息 */}
-                         <div className="bg-gray-50 rounded-lg p-4 space-y-3">
-                           <div className="grid grid-cols-2 gap-3">
-                             <div>
-                               <span className="text-xs text-gray-500">漏洞类型</span>
-                               <p className="text-sm font-medium text-gray-900">{selectedVulnerability.type}</p>
-                             </div>
-                             <div>
-                               <span className="text-xs text-gray-500">CWE 编号</span>
-                               <p className="text-sm font-medium text-gray-900">{selectedVulnerability.cwe || '无'}</p>
-                             </div>
-                             <div>
-                               <span className="text-xs text-gray-500">发现工具</span>
-                               <p className="text-sm font-medium text-gray-900">{selectedVulnerability.skill || '未知'}</p>
-                             </div>
-                             <div>
-                               <span className="text-xs text-gray-500">发现时间</span>
-                               <p className="text-sm font-medium text-gray-900">{new Date(selectedVulnerability.createdAt).toLocaleString('zh-CN')}</p>
-                             </div>
-                           </div>
-                         </div>
-
-                         {/* 描述 */}
-                         <div>
-                           <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                           <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedVulnerability.description}</p>
-                         </div>
-
-                         {/* 发现位置 */}
-                         {selectedVulnerability.filePath && (
-                           <div>
-                             <h4 className="text-sm font-medium text-gray-700 mb-2">发现位置</h4>
-                             <div className="bg-gray-900 text-gray-100 p-3 rounded-lg">
-                               <p className="text-sm font-mono break-all">
-                                 {selectedVulnerability.filePath}
-                                 {selectedVulnerability.lineStart && (
-                                   <span className="text-yellow-400">:{selectedVulnerability.lineStart}</span>
-                                 )}
-                                 {selectedVulnerability.lineEnd && selectedVulnerability.lineEnd !== selectedVulnerability.lineStart && (
-                                   <span className="text-yellow-400">-{selectedVulnerability.lineEnd}</span>
-                                 )}
-                               </p>
-                             </div>
-                           </div>
-                         )}
-
-                         {/* 代码片段 */}
-                         {selectedVulnerability.codeSnippet && (
-                           <div>
-                             <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞代码</h4>
-                             <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64">
-{selectedVulnerability.codeSnippet}
-                             </pre>
-                           </div>
-                         )}
-
-                         {/* AI 分析 */}
-                         {selectedVulnerability.aiAnalysis && (
-                           <div>
-                             <h4 className="text-sm font-medium text-gray-700 mb-2">
-                               <span className="inline-flex items-center">
-                                 <svg className="w-4 h-4 mr-1 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                 </svg>
-                                 AI 分析
-                               </span>
-                             </h4>
-                             <div className="text-sm text-gray-700 bg-blue-50 border border-blue-200 rounded-lg p-4">{selectedVulnerability.aiAnalysis}</div>
-                           </div>
-                         )}
-
-                         {/* 修复建议 */}
-                         {selectedVulnerability.fixSuggestion && (
-                           <div>
-                             <h4 className="text-sm font-medium text-gray-700 mb-2">
-                               <span className="inline-flex items-center">
-                                 <svg className="w-4 h-4 mr-1 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                 </svg>
-                                 修复建议
-                               </span>
-                             </h4>
-                             <div className="text-sm text-gray-700 bg-green-50 border border-green-200 rounded-lg p-4">{selectedVulnerability.fixSuggestion}</div>
-                           </div>
-                         )}
-                       </div>
-
-                      {/* 操作按钮 */}
-                      <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap gap-2">
-                        {selectedVulnerability.status === 'new' && (
-                          <>
-                            <button
-                              onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'confirm')}
-                              className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm"
-                            >
-                              确认漏洞
-                            </button>
-                            <button
-                              onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'false-positive')}
-                              className="px-4 py-2 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm"
-                            >
-                              标记误报
-                            </button>
-                          </>
-                        )}
-                        {selectedVulnerability.status === 'confirmed' && (
-                          <button
-                            onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')}
-                            className="px-4 py-2 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm"
-                          >
-                            标记已修复
-                          </button>
-                        )}
-                        {selectedVulnerability.status === 'fixed' && (
-                          <button
-                            onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')}
-                            className="px-4 py-2 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm"
-                          >
-                            验证修复
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )}
+      {/* 漏洞全屏详情 */}
+      {selectedVulnerability && (
+        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setSelectedVulnerability(null)}
+                className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                <X size={18} className="mr-1" />
+                返回
+              </button>
+              <span className="text-gray-300">|</span>
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${
+                selectedVulnerability.status === 'new' ? 'bg-blue-100 text-blue-700' :
+                selectedVulnerability.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
+                selectedVulnerability.status === 'fixed' ? 'bg-green-100 text-green-700' :
+                selectedVulnerability.status === 'verified' ? 'bg-purple-100 text-purple-700' :
+                'bg-gray-100 text-gray-600'
+              }`}>
+                {selectedVulnerability.status === 'new' ? '新建' :
+                 selectedVulnerability.status === 'confirmed' ? '已确认' :
+                 selectedVulnerability.status === 'fixed' ? '已修复' :
+                 selectedVulnerability.status === 'verified' ? '已验证' :
+                 selectedVulnerability.status === 'false-positive' ? '误报' : selectedVulnerability.status}
+              </span>
+              <h2 className="text-lg font-bold text-gray-900">{selectedVulnerability.title}</h2>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedVulnerability.status === 'new' && (
+                <>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'confirm')} className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">确认漏洞</button>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'false-positive')} className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm">标记误报</button>
+                </>
+              )}
+              {selectedVulnerability.status === 'confirmed' && (
+                <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')} className="px-3 py-1.5 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm">标记已修复</button>
+              )}
+              {selectedVulnerability.status === 'fixed' && (
+                <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')} className="px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm">验证修复</button>
+              )}
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-5xl mx-auto p-6 space-y-4">
+              <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-2 gap-3">
+                <div><span className="text-xs text-gray-500">漏洞类型</span><p className="text-sm font-medium text-gray-900">{selectedVulnerability.type}</p></div>
+                <div><span className="text-xs text-gray-500">CWE 编号</span><p className="text-sm font-medium text-gray-900">{selectedVulnerability.cwe || '无'}</p></div>
+                <div><span className="text-xs text-gray-500">发现工具</span><p className="text-sm font-medium text-gray-900">{selectedVulnerability.skill || '未知'}</p></div>
+                <div><span className="text-xs text-gray-500">发现时间</span><p className="text-sm font-medium text-gray-900">{new Date(selectedVulnerability.createdAt).toLocaleString('zh-CN')}</p></div>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
+                <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedVulnerability.description}</p>
+              </div>
+              {selectedVulnerability.filePath && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码</h4>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.filePath}</pre>
+                </div>
+              )}
+              {selectedVulnerability.codeSnippet && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">POC</h4>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.codeSnippet}</pre>
                 </div>
               )}
             </div>

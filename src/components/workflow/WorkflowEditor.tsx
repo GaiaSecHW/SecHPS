@@ -155,6 +155,34 @@ const [showPreview, setShowPreview] = useState(false);
     setHistoryIndex(newHistory.length - 1);
   }, [nodes, edges, history, historyIndex]);
  
+  // 收集 Agent 及其子 Agent 的内容
+  const collectAgentContent = (agentNodeId: string): string => {
+    const agentNode = nodes.find(n => n.id === agentNodeId);
+    if (!agentNode) return '';
+    
+    const parts: string[] = [];
+    
+    // 添加主 Agent 内容
+    parts.push(`【Agent】${agentNode.data.label}`);
+    if (agentNode.data.description) {
+      parts.push(agentNode.data.description);
+    }
+    
+    // 查找所有直接连接的子 Agent（通过边连接的 subtask 节点）
+    const childEdges = edges.filter(e => e.source === agentNodeId);
+    for (const edge of childEdges) {
+      const childNode = nodes.find(n => n.id === edge.target && n.type === 'subtask');
+      if (childNode) {
+        parts.push(`\n【子Agent】${childNode.data.label}`);
+        if (childNode.data.description) {
+          parts.push(childNode.data.description);
+        }
+      }
+    }
+    
+    return parts.join('\n');
+  };
+ 
   // 创建预测任务（异步）
   const createPredictionTask = async (nodeName: string, nodeDescription: string) => {
     if (!workflowId || !nodeName) return;
@@ -959,8 +987,8 @@ const [showPreview, setShowPreview] = useState(false);
                   </div>
                 </div>
 
-                {/* Skill 预测 - 仅对 Agent 类型节点显示 */}
-                {selectedNode.type === 'task' && (
+                {/* Skill 预测 - 对 Agent 和子Agent 类型节点显示 */}
+                {(selectedNode.type === 'task' || selectedNode.type === 'subtask') && (
                   <div className="pt-4 border-t border-gray-200">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Skill 匹配预测
@@ -969,7 +997,22 @@ const [showPreview, setShowPreview] = useState(false);
                       <button
                         onClick={() => {
                           if (selectedNode.data.label) {
-                            createPredictionTask(selectedNode.data.label, selectedNode.data.description || '');
+                            // Agent 节点：包含子 Agent 内容
+                            // 子 Agent 节点：只预测自己
+                            if (selectedNode.type === 'task') {
+                              // 收集当前 Agent 及其子 Agent 的内容
+                              const agentContent = collectAgentContent(selectedNode.id);
+                              createPredictionTask(
+                                selectedNode.data.label,
+                                agentContent
+                              );
+                            } else {
+                              // 子 Agent 只预测自己
+                              createPredictionTask(
+                                selectedNode.data.label,
+                                selectedNode.data.description || ''
+                              );
+                            }
                           }
                         }}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors text-sm"
