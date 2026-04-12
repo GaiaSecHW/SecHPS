@@ -26,7 +26,6 @@ interface Vulnerability {
   lineEnd: number | null;
   codeSnippet: string | null;
   aiAnalysis: string | null;
-  fixSuggestion: string | null;
   skill: string | null;
   createdAt: string;
   project?: {

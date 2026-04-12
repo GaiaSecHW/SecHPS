@@ -263,8 +263,8 @@
   "hotPaths": [
     {
       "path": "src\\app\\dashboard\\sessions\\[id]\\page.tsx",
-      "accessCount": 82,
-      "lastAccessed": 1776010391475,
+      "accessCount": 83,
+      "lastAccessed": 1776011267714,
       "type": "file"
     },
     {
@@ -293,8 +293,8 @@
     },
     {
       "path": "src\\app\\dashboard\\admin\\vulnerabilities\\page.tsx",
-      "accessCount": 41,
-      "lastAccessed": 1776011218914,
+      "accessCount": 42,
+      "lastAccessed": 1776011229457,
       "type": "file"
     },
     {

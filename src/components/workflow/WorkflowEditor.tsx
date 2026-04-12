@@ -1187,7 +1187,7 @@ const [showPreview, setShowPreview] = useState(false);
                       )}
                       
                       {/* 匹配结果 */}
-                      {task.status === 'completed' && task.matches && (
+                      {task.status === 'completed' && task.matches && Array.isArray(task.matches) && (
                         <div className="space-y-2">
                           <h5 className="text-sm font-medium text-gray-700">
                             匹配的 Skills ({task.matchCount}) - {task.method === 'llm' ? 'AI 匹配' : '关键词匹配'}
