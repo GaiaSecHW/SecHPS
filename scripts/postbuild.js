@@ -44,10 +44,9 @@ const DIR_COPY_RULES = {
   'plugins': {
     mode: 'all',
   },
-  // uploads: 排除测试数据
+  // uploads: 不复制（用户上传文件目录）
   'uploads': {
-    mode: 'exclude',
-    exclude: ['performs', 'projects'],
+    mode: 'none',  // 不复制
   },
 };
 
