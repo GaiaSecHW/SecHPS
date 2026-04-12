@@ -89,6 +89,7 @@ export default function SessionDetailPage({
   const [childSessionMessages, setChildSessionMessages] = useState<any[]>([]);
   const [loadingChildMessages, setLoadingChildMessages] = useState(false);
   const [isTodosExpanded, setIsTodosExpanded] = useState(true);
+  const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(true);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
@@ -867,14 +868,16 @@ export default function SessionDetailPage({
                     </summary>
                     <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
                       {vulnerabilitySummary.vulnerabilities.map((vuln: any, index: number) => (
-                        <div key={index} className="p-2 bg-gray-50 rounded border border-gray-200">
+                        <div
+                          key={index}
+                          className="p-2 bg-gray-50 rounded border border-gray-200 cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
+                          onClick={() => setSelectedSessionVuln(vuln)}
+                        >
                           <div className="font-medium text-gray-900">{vuln.title}</div>
                           <div className="text-xs text-gray-600 mt-1">
-                            <span className="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 mr-2">
-                              {vuln.severity}
-                            </span>
                             {vuln.type && <span className="mr-2">类型: {vuln.type}</span>}
-                            {vuln.location && <span>位置: {vuln.location}</span>}
+                            {vuln.cwe_id && <span className="mr-2">CWE: {vuln.cwe_id}</span>}
+                            {vuln.skill && <span className="mr-2">工具: {vuln.skill}</span>}
                           </div>
                         </div>
                       ))}
@@ -1280,6 +1283,52 @@ export default function SessionDetailPage({
           </div>
         )}
       </div>
+
+      {/* 漏洞全屏详情 */}
+      {selectedSessionVuln && (
+        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setSelectedSessionVuln(null)}
+                className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
+              >
+                <ArrowLeft size={18} className="mr-1" />
+                返回
+              </button>
+              <span className="text-gray-300">|</span>
+              <h2 className="text-lg font-bold text-gray-900">{selectedSessionVuln.title}</h2>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <div className="max-w-5xl mx-auto p-6 space-y-4">
+              <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-2 gap-3">
+                <div><span className="text-xs text-gray-500">漏洞类型</span><p className="text-sm font-medium text-gray-900">{selectedSessionVuln.type || '未知'}</p></div>
+                <div><span className="text-xs text-gray-500">CWE 编号</span><p className="text-sm font-medium text-gray-900">{selectedSessionVuln.cwe_id || '无'}</p></div>
+                <div><span className="text-xs text-gray-500">发现工具</span><p className="text-sm font-medium text-gray-900">{selectedSessionVuln.skill || '未知'}</p></div>
+              </div>
+              {selectedSessionVuln.description && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
+                  <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedSessionVuln.description}</p>
+                </div>
+              )}
+              {selectedSessionVuln.location && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码</h4>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedSessionVuln.location}</pre>
+                </div>
+              )}
+              {selectedSessionVuln.POC && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">POC</h4>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedSessionVuln.POC}</pre>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

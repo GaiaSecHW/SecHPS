@@ -7,7 +7,7 @@ import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, c
 import { NODE_TYPE_MAP } from '@/types/workflow';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
-import { mkdir, writeFile, readFile } from 'fs/promises';
+import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
 import { join } from 'path';
 import { copySkillsToProject } from '@/services/skill-files';
 import { registerAgent } from '@/lib/agent-registry';
@@ -210,6 +210,26 @@ export async function POST(
       sdkOptions.settingSources = ['project', 'user', 'local'];
     }
 
+    // 清理项目目录中的旧文件/目录，确保每次评估从干净状态开始
+    if (project.projectPath) {
+      const cleanupTargets = [
+        { path: join(project.projectPath, 'workspace'), type: 'dir' },
+        { path: join(project.projectPath, 'vulnerabilities'), type: 'dir' },
+        { path: join(project.projectPath, '.claude'), type: 'dir' },
+        { path: join(project.projectPath, 'vulnerabilities.json'), type: 'file' },
+        { path: join(project.projectPath, 'cloubugs4ai.cache.bin'), type: 'file' },
+      ];
+      for (const target of cleanupTargets) {
+        try {
+          await access(target.path);
+          await rm(target.path, { recursive: true, force: true });
+          console.log(`[启动评估] 已清理: ${target.path}`);
+        } catch {
+          // 不存在，跳过
+        }
+      }
+    }
+
     // 同步 Skills 到项目目录（直接从磁盘拷贝，无需查询数据库）
     if (project.projectPath) {
       try {
@@ -280,10 +300,26 @@ export async function POST(
     // 创建 Ralph Loop Agent，传递项目目录作为工作目录
     // Ralph Loop Agent 会在任务未完成时自动迭代
     
-    // 创建组合验证器：安全审计 + 工作流节点
+    // 创建组合验证器：优先检测 vulnerabilities.json 文件，其次用安全审计关键词
+    const projectPath = project.projectPath;
+    const vulnFileVerifier = async (context: any) => {
+      // 检查项目目录下是否存在 vulnerabilities.json
+      if (projectPath) {
+        try {
+          await access(join(projectPath, 'vulnerabilities.json'));
+          console.log('[Verifier] 检测到 vulnerabilities.json，任务完成');
+          return { complete: true, reason: '检测到 vulnerabilities.json 文件，审计完成' };
+        } catch {
+          // 文件不存在，继续其他检测
+        }
+      }
+      // 回退到原有的文本检测
+      return securityAuditVerifier(context);
+    };
+
     const verifier = createCombinedVerifier([
-      securityAuditVerifier,
-      createWorkflowNodeVerifier(workflowId ? undefined : undefined), // 不强制节点数量
+      vulnFileVerifier,
+      createWorkflowNodeVerifier(workflowId ? undefined : undefined),
     ], 'any'); // 任一验证器通过即完成
     
     const agent = createRalphLoopAgent(
@@ -377,6 +413,7 @@ export async function POST(
       async start(controller) {
         let fullResponse = '';
         let isControllerClosed = false; // 跟踪 controller 状态
+        let lastTodoSnapshot = ''; // 上次保存的 TODO 快照（JSON 字符串）
         let evaluationResult: {
           total: number;
           critical: number;
@@ -513,17 +550,29 @@ export async function POST(
             onToolCall: (name, parameters) => {
               // 检测 TodoWrite 工具调用，提取 TODO 列表
               if (name === 'TodoWrite' && parameters?.todos && Array.isArray(parameters.todos)) {
+                const todos = parameters.todos;
                 const todoEvent = JSON.stringify({
                   type: 'todo_update',
-                  todos: parameters.todos,
+                  todos,
                   timestamp: Date.now(),
                 });
                 safeEnqueue(`data: ${todoEvent}\n\n`);
-                console.log('[Ralph Loop] TODO 更新:', parameters.todos.length, '项');
-                
+                console.log('[Ralph Loop] TODO 更新:', todos.length, '项');
+
                 // 通过事件总线广播 TODO 更新
                 const { emitTodoUpdate } = require('@/lib/event-bus');
-                emitTodoUpdate(evaluation.id, parameters.todos);
+                emitTodoUpdate(evaluation.id, todos);
+
+                // 对比变化：只有内容有变化时才写数据库
+                const newSnapshot = JSON.stringify(todos);
+                if (newSnapshot !== lastTodoSnapshot && todos.length > 0) {
+                  lastTodoSnapshot = newSnapshot;
+                  prisma.evaluationSession.update({
+                    where: { id: evaluation.id },
+                    data: { todoList: newSnapshot },
+                  }).catch(err => console.error('[Ralph Loop] 保存 TODO 到数据库失败:', err));
+                  console.log('[Ralph Loop] TODO 有变化，已保存到数据库');
+                }
               }
 
               // 发送工具调用事件
@@ -640,8 +689,9 @@ export async function POST(
                     const summary = jsonReport.summary;
                     const toInt = (v: any) => typeof v === 'string' ? parseInt(v) || 0 : (v || 0);
                     const vulns = Array.isArray(jsonReport.vulnerabilities) ? jsonReport.vulnerabilities : [];
+                    const isVulnerable = (v: any) => v.vulnerable === true || v.vulnerable === 'true';
                     evaluationResult = {
-                      total: toInt(summary.total) || vulns.filter((v: any) => v.vulnerable === true).length,
+                      total: toInt(summary.total) || vulns.filter(isVulnerable).length,
                       critical: 0,
                       high: 0,
                       medium: 0,
@@ -650,7 +700,7 @@ export async function POST(
                       skills_used: [],
                       vulnerabilities: vulns,
                     };
-                    console.log('[Ralph Loop] 从 vulnerabilities.json 读取到漏洞:', vulns.length, '条，其中 vulnerable=true:', vulns.filter((v: any) => v.vulnerable === true).length, '条');
+                    console.log('[Ralph Loop] 从 vulnerabilities.json 读取到漏洞:', vulns.length, '条，其中 vulnerable=true:', vulns.filter(isVulnerable).length, '条');
                   }
                 } catch (e: any) {
                   if (e.code === 'ENOENT') {
@@ -690,10 +740,9 @@ export async function POST(
                   });
                   console.log('[Ralph Loop] 评估结果已保存到数据库');
 
-                  // 只保存 vulnerable: true 的漏洞
-                  const vulnsToSave = evaluationResult.vulnerabilities.filter(
-                    (v: any) => v.vulnerable === true
-                  );
+                  // 只保存 vulnerable: true 的漏洞（兼容布尔和字符串 "true"）
+                  const isVulnerable = (v: any) => v.vulnerable === true || v.vulnerable === 'true';
+                  const vulnsToSave = evaluationResult.vulnerabilities.filter(isVulnerable);
                   console.log(`[Ralph Loop] 共 ${evaluationResult.vulnerabilities.length} 条，其中 vulnerable=true: ${vulnsToSave.length} 条`);
 
                   for (const vuln of vulnsToSave) {

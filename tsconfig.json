@@ -51,7 +51,7 @@
     "src/lib/claude-router",
     "src/examples",
     "tmp",
-    "scripts",
+    "scripts","uploads",
     "data",
     "prisma",
     "docs",

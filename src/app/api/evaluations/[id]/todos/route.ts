@@ -87,11 +87,29 @@ export async function GET(
     }
 
     console.log('[TODO] Fetching todos for session:', evaluation.opencodeSessionId);
-    
-    // 从会话文件中解析 TODO
+
+    // 优先从数据库读取快照
+    const evalSession = await prisma.evaluationSession.findUnique({
+      where: { id },
+      select: { todoList: true, status: true },
+    });
+
+    if (evalSession?.todoList) {
+      try {
+        const todos = JSON.parse(evalSession.todoList);
+        if (Array.isArray(todos) && todos.length > 0) {
+          console.log('[TODO] Returning', todos.length, 'todos from DB snapshot');
+          return NextResponse.json({ todos, source: 'db' });
+        }
+      } catch {
+        // JSON 解析失败，继续从文件读
+      }
+    }
+
+    // 数据库没有快照时，从会话文件中解析 TODO
     const todos = await getTodosFromSession(evaluation.opencodeSessionId);
-    
-    console.log('[TODO] Returning', todos.length, 'todos');
+
+    console.log('[TODO] Returning', todos.length, 'todos from session file');
 
     return NextResponse.json({ todos });
   } catch (error) {

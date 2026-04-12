@@ -213,6 +213,7 @@ model EvaluationSession {
     // 模型信息
     modelName        String?  // 使用的模型名称
     providerType     String?  // 模型提供商类型
+    todoList         String?  // JSON: 最新任务列表快照
 
   // 关系
   project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)

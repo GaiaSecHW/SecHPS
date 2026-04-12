@@ -262,27 +262,27 @@
   },
   "hotPaths": [
     {
+      "path": "src\\app\\dashboard\\sessions\\[id]\\page.tsx",
+      "accessCount": 82,
+      "lastAccessed": 1776010391475,
+      "type": "file"
+    },
+    {
       "path": "prisma\\schema.prisma",
-      "accessCount": 69,
-      "lastAccessed": 1775979379848,
+      "accessCount": 72,
+      "lastAccessed": 1776009500995,
+      "type": "file"
+    },
+    {
+      "path": "src\\app\\api\\projects\\[id]\\start\\route.ts",
+      "accessCount": 71,
+      "lastAccessed": 1776009480283,
       "type": "file"
     },
     {
       "path": "src\\app\\dashboard\\skills\\[id]\\page.tsx",
       "accessCount": 67,
       "lastAccessed": 1775978100846,
-      "type": "file"
-    },
-    {
-      "path": "src\\app\\dashboard\\sessions\\[id]\\page.tsx",
-      "accessCount": 67,
-      "lastAccessed": 1775981281668,
-      "type": "file"
-    },
-    {
-      "path": "src\\app\\api\\projects\\[id]\\start\\route.ts",
-      "accessCount": 48,
-      "lastAccessed": 1775980069259,
       "type": "file"
     },
     {
@@ -293,8 +293,8 @@
     },
     {
       "path": "src\\app\\dashboard\\admin\\vulnerabilities\\page.tsx",
-      "accessCount": 27,
-      "lastAccessed": 1775979611875,
+      "accessCount": 41,
+      "lastAccessed": 1776011218914,
       "type": "file"
     },
     {
@@ -382,6 +382,12 @@
       "type": "file"
     },
     {
+      "path": "src\\app\\api\\vulnerabilities\\route.ts",
+      "accessCount": 5,
+      "lastAccessed": 1776007907287,
+      "type": "file"
+    },
+    {
       "path": "docs\\superpowers\\specs\\2025-04-03-ai-vulnerability-platform-design.md",
       "accessCount": 4,
       "lastAccessed": 1775225700302,
@@ -391,12 +397,6 @@
       "path": "prisma\\seed-skills.ts",
       "accessCount": 4,
       "lastAccessed": 1775231316997,
-      "type": "file"
-    },
-    {
-      "path": "src\\app\\api\\vulnerabilities\\route.ts",
-      "accessCount": 4,
-      "lastAccessed": 1775241719075,
       "type": "file"
     },
     {

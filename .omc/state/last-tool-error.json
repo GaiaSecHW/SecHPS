@@ -1,7 +1,7 @@
 {
   "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"powershell -Command \\\"cd D:\\\\claude-web-platform; git status\\\"\",\"description\":\"Git status via PowerShell\"}",
-  "error": "Exit code 254\n      0 [main] bash 1613 dofork: child -1 - forked process 18424 died unexpectedly, retry 0, exit code 0xC0000142, errno 11\n/etc/profile: fork: retry: Resource temporarily unavailable\n1098908 [main] bash 1613 dofork: child -1 - forked process 7684 died unexpectedly, retry 0, exit code 0xC0000142, errno 11\n/etc/profile: fork: retry: Resource temporarily unavailable\n3207139 [main] bash 1613 dofork: child -1 - forked process 7668 died unexpectedly, retry 0, exit code 0xC0000142, errno...",
-  "timestamp": "2026-04-12T06:44:02.723Z",
-  "retry_count": 2
+  "tool_input_preview": "{\"command\":\"wc -l \\\"D:\\\\claude-web-platform\\\\src\\\\app\\\\dashboard\\\\sessions\\\\[id]\\\\page.tsx\\\"\"}",
+  "error": "Exit code 254\n      0 [main] bash 2024 dofork: child -1 - forked process 30224 died unexpectedly, retry 0, exit code 0xC0000142, errno 11\n/etc/profile: fork: retry: Resource temporarily unavailable\n1073596 [main] bash 2024 dofork: child -1 - forked process 32516 died unexpectedly, retry 0, exit code 0xC0000142, errno 11\n/etc/profile: fork: retry: Resource temporarily unavailable\n3174333 [main] bash 2024 dofork: child -1 - forked process 37104 died unexpectedly, retry 0, exit code 0xC0000142, err...",
+  "timestamp": "2026-04-12T16:09:56.317Z",
+  "retry_count": 1
 }
