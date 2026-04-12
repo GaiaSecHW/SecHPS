@@ -1357,10 +1357,34 @@ function MessageBubble({
             : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
         }`}
       >
-        {/* Header */}
+        {/* Header - 根据内容类型动态显示 */}
         <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2 flex-wrap">
             <span className="text-xs font-medium">{isUser ? '用户' : 'AI 助手'}</span>
+            {/* 工具调用标签 - 合并到标题栏 */}
+            {toolUseParts.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedToolSection(!expandedToolSection);
+                }}
+                className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors cursor-pointer"
+              >
+                🔧 工具调用 ({toolUseParts.length}) {expandedToolSection ? '▲' : '▼'}
+              </button>
+            )}
+            {/* 工具结果标签 - 合并到标题栏 */}
+            {toolResultParts.length > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedResultSection(!expandedResultSection);
+                }}
+                className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors cursor-pointer"
+              >
+                📤 工具结果 ({toolResultParts.length}) {expandedResultSection ? '▲' : '▼'}
+              </button>
+            )}
             {reasoningParts.length > 0 && (
               <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
                 推理
@@ -1510,126 +1534,96 @@ function MessageBubble({
           </div>
         )}
 
-        {/* 工具调用 */}
-        {toolUseParts.length > 0 && (
-          <div className="mt-3 bg-blue-50 rounded-lg border border-blue-200 overflow-hidden">
-            <button
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-blue-100 transition-colors"
-              onClick={() => setExpandedToolSection(!expandedToolSection)}
-            >
-              <div className="flex items-center text-xs font-medium text-blue-800">
-                <Code size={14} className="mr-1" />
-                工具调用 ({toolUseParts.length})
-              </div>
-              <span className="text-xs text-blue-600">{expandedToolSection ? '▲ 收起' : '▼ 展开'}</span>
-            </button>
-            {expandedToolSection && (
-              <div className="px-3 pb-3 space-y-1">
-                {toolUseParts.map((tool: any, idx: number) => {
-                  const isExpanded = expandedTools[`tool-${idx}`];
-                  return (
-                    <div key={idx} className="bg-white rounded border border-blue-200 overflow-hidden">
-                      <button
-                        className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
-                        onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
-                      >
-                        <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
-                          🔧 {tool.name || 'unknown'}
-                          {tool.input && (
-                            <span className="text-gray-400 font-normal">
-                              ({Object.keys(tool.input).length} 个参数)
-                            </span>
-                          )}
+        {/* 工具调用展开内容 */}
+        {toolUseParts.length > 0 && expandedToolSection && (
+          <div className="mt-2 space-y-1">
+            {toolUseParts.map((tool: any, idx: number) => {
+              const isExpanded = expandedTools[`tool-${idx}`];
+              return (
+                <div key={idx} className="bg-blue-50 rounded border border-blue-200 overflow-hidden">
+                  <button
+                    className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-blue-100 transition-colors"
+                    onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
+                  >
+                    <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                      🔧 {tool.name || 'unknown'}
+                      {tool.input && (
+                        <span className="text-gray-400 font-normal">
+                          ({Object.keys(tool.input).length} 个参数)
                         </span>
-                        <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
-                      </button>
-                      {isExpanded && tool.input && (
-                        <div className="px-2 pb-2 border-t border-blue-100">
-                          <pre className="text-xs overflow-auto max-h-40 text-gray-800 bg-gray-50 p-2 rounded mt-1">
-                            {JSON.stringify(tool.input, null, 2)}
-                          </pre>
-                        </div>
                       )}
+                    </span>
+                    <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+                  {isExpanded && tool.input && (
+                    <div className="px-2 pb-2 border-t border-blue-100">
+                      <pre className="text-xs overflow-auto max-h-40 text-gray-800 bg-white p-2 rounded mt-1">
+                        {JSON.stringify(tool.input, null, 2)}
+                      </pre>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* 工具结果 */}
-        {toolResultParts.length > 0 && (
-          <div className="mt-3 bg-gray-100 rounded-lg border border-gray-300 overflow-hidden">
-            <button
-              className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-gray-200 transition-colors"
-              onClick={() => setExpandedResultSection(!expandedResultSection)}
-            >
-              <div className="flex items-center text-xs font-medium text-gray-700">
-                <FileText size={14} className="mr-1" />
-                工具结果 ({toolResultParts.length})
-              </div>
-              <span className="text-xs text-gray-500">{expandedResultSection ? '▲ 收起' : '▼ 展开'}</span>
-            </button>
-            {expandedResultSection && (
-              <div className="px-3 pb-3 space-y-1">
-                {toolResultParts.map((result: any, idx: number) => {
-                  const isExpanded = expandedTools[`result-${idx}`];
-                  const isError = result.is_error || result.error;
+        {/* 工具结果展开内容 */}
+        {toolResultParts.length > 0 && expandedResultSection && (
+          <div className="mt-2 space-y-1">
+            {toolResultParts.map((result: any, idx: number) => {
+              const isExpanded = expandedTools[`result-${idx}`];
+              const isError = result.is_error || result.error;
 
-                  // 兼容多种 content 格式
-                  const raw = result.content ?? result.output ?? result.result;
-                  let content = '';
-                  if (raw === null || raw === undefined) {
-                    content = '';
-                  } else if (typeof raw === 'string') {
-                    content = raw;
-                  } else if (Array.isArray(raw)) {
-                    content = raw.map((item: any) =>
-                      typeof item === 'string' ? item :
-                      item.text ?? item.content ?? JSON.stringify(item)
-                    ).join('\n');
-                  } else {
-                    content = JSON.stringify(raw, null, 2);
-                  }
+              const raw = result.content ?? result.output ?? result.result;
+              let content = '';
+              if (raw === null || raw === undefined) {
+                content = '';
+              } else if (typeof raw === 'string') {
+                content = raw;
+              } else if (Array.isArray(raw)) {
+                content = raw.map((item: any) =>
+                  typeof item === 'string' ? item :
+                  item.text ?? item.content ?? JSON.stringify(item)
+                ).join('\n');
+              } else {
+                content = JSON.stringify(raw, null, 2);
+              }
 
-                  // 尝试从 toolUseParts 里找对应工具名
-                  const toolName = result.toolName || result.name ||
-                    toolUseParts.find((t: any) => t.id === result.tool_use_id)?.name ||
-                    (result.tool_use_id ? `#${idx + 1}` : '工具结果');
-                  
-                  return (
-                    <div key={idx} className={`bg-white rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-200'}`}>
-                      <button
-                        className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
-                        onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
-                      >
-                        <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-700' : 'text-gray-700'}`}>
-                          📤 {toolName}
-                          {content.length > 0 && (
-                            <span className="text-gray-400 font-normal">
-                              ({content.length} 字符)
-                            </span>
-                          )}
-                          {isError && <span>⚠️</span>}
+              const toolName = result.toolName || result.name ||
+                toolUseParts.find((t: any) => t.id === result.tool_use_id)?.name ||
+                (result.tool_use_id ? `#${idx + 1}` : '工具结果');
+              
+              return (
+                <div key={idx} className={`bg-gray-50 rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-200'}`}>
+                  <button
+                    className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-100 transition-colors"
+                    onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
+                  >
+                    <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-700' : 'text-gray-700'}`}>
+                      📤 {toolName}
+                      {content.length > 0 && (
+                        <span className="text-gray-400 font-normal">
+                          ({content.length} 字符)
                         </span>
-                        <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
-                      </button>
-                      {isExpanded && (
-                        <div className="px-2 pb-2 border-t border-gray-100">
-                          <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-gray-50 text-gray-800'}`}>
-                            {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
-                          </pre>
-                          {result.error && (
-                            <div className="text-xs text-red-600 mt-1">错误: {result.error}</div>
-                          )}
-                        </div>
+                      )}
+                      {isError && <span>⚠️</span>}
+                    </span>
+                    <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                  </button>
+                  {isExpanded && (
+                    <div className="px-2 pb-2 border-t border-gray-100">
+                      <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-white text-gray-800'}`}>
+                        {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
+                      </pre>
+                      {result.error && (
+                        <div className="text-xs text-red-600 mt-1">错误: {result.error}</div>
                       )}
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
 
