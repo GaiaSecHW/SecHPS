@@ -1102,13 +1102,55 @@ export default function SessionDetailPage({
                                         </div>
                                       </button>
                                       
-                                      {/* 展开的消息内容 - 只显示文本，工具调用/结果在标题栏已显示 */}
-                                      {isMsgExpanded && hasText && (
+                                      {/* 展开的消息内容 */}
+                                      {isMsgExpanded && (
                                         <div className="px-2 pb-2 border-t border-gray-200">
-                                          <div className="pt-2">
-                                            {msgParts.filter((p: any) => p.type === 'text' && p.text).map((part: any, partIdx: number) => (
-                                              <p key={partIdx} className="text-xs whitespace-pre-wrap">{part.text}</p>
+                                          <div className="pt-2 space-y-1">
+                                            {/* 文本内容 */}
+                                            {hasText && msgParts.filter((p: any) => p.type === 'text' && p.text).map((part: any, partIdx: number) => (
+                                              <p key={`text-${partIdx}`} className="text-xs whitespace-pre-wrap">{part.text}</p>
                                             ))}
+                                            {/* 工具调用 */}
+                                            {toolUseCount > 0 && msgParts.filter((p: any) => p.type === 'tool_use' || p.type === 'tool').map((part: any, partIdx: number) => (
+                                              <div key={`tool-${partIdx}`} className="bg-blue-50 rounded border border-blue-200 p-1.5">
+                                                <span className="text-xs font-medium text-blue-700">🔧 {part.name || 'unknown'}</span>
+                                                {part.input && (
+                                                  <pre className="text-xs text-gray-600 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
+                                                    {JSON.stringify(part.input, null, 2).substring(0, 300)}
+                                                  </pre>
+                                                )}
+                                              </div>
+                                            ))}
+                                            {/* 工具结果 */}
+                                            {toolResultCount > 0 && msgParts.filter((p: any) => p.type === 'tool_result').map((part: any, partIdx: number) => {
+                                              const raw = part.content ?? part.output ?? part.result;
+                                              let text = '';
+                                              if (raw !== null && raw !== undefined) {
+                                                if (typeof raw === 'string') {
+                                                  text = raw;
+                                                } else if (Array.isArray(raw)) {
+                                                  text = raw.map((item: any) =>
+                                                    typeof item === 'string' ? item :
+                                                    item.text ?? item.content ?? JSON.stringify(item)
+                                                  ).join('\n');
+                                                } else {
+                                                  text = JSON.stringify(raw, null, 2);
+                                                }
+                                              }
+                                              const label = part.toolName || part.name || part.tool_use_id || '';
+                                              return (
+                                                <div key={`result-${partIdx}`} className={`rounded border p-1.5 ${part.is_error ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                                                  <span className={`text-xs font-medium ${part.is_error ? 'text-red-700' : 'text-gray-700'}`}>
+                                                    📤 {label || '工具结果'} {part.is_error && '⚠️'}
+                                                  </span>
+                                                  {text && (
+                                                    <pre className="text-xs text-gray-600 mt-1 overflow-x-auto whitespace-pre-wrap break-all max-h-32">
+                                                      {text.length > 500 ? text.substring(0, 500) + '...' : text}
+                                                    </pre>
+                                                  )}
+                                                </div>
+                                              );
+                                            })}
                                           </div>
                                         </div>
                                       )}
