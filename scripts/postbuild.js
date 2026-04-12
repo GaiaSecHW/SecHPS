@@ -18,6 +18,12 @@ const STANDALONE_DIR = path.join(ROOT_DIR, '.next/standalone');
 
 // 需要复制到 standalone 输出目录的目录
 const DIR_COPY_RULES = {
+  // 从 .next 复制必要文件（排除 cache, dev 等）
+  'next-files': {
+    src: path.join(ROOT_DIR, '.next'),
+    dest: '.next',
+    mode: 'selective-next',
+  },
   // data 目录：运行时不需要，可以排除
   'data': {
     mode: 'none',  // 不复制
@@ -44,7 +50,7 @@ function shouldExclude(name, rules) {
   return false;
 }
 
-function copyDir(dirName, rules) {
+function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
   // mode: 'none' 表示不复制
   if (rules.mode === 'none') {
     console.log(`  ⏭️  跳过 (不需要)`);
@@ -52,56 +58,68 @@ function copyDir(dirName, rules) {
     return false;
   }
   
-  const src = path.join(ROOT_DIR, dirName);
-  const dest = path.join(STANDALONE_DIR, dirName);
+  // 使用传入的 srcRoot，如果指定了 rules.src 则使用它
+  const src = rules.src || path.join(srcRoot, dirName);
+  const dest = rules.dest ? path.join(STANDALONE_DIR, rules.dest) : path.join(STANDALONE_DIR, dirName);
   
   if (!fs.existsSync(src)) {
-    console.log(`⚠️  源目录不存在: ${dirName}/`);
+    console.log(`⚠️  源目录不存在: ${src}`);
     return false;
   }
 
   // 确保目标父目录存在
-  if (!fs.existsSync(STANDALONE_DIR)) {
-    fs.mkdirSync(STANDALONE_DIR, { recursive: true });
+  const destParent = path.dirname(dest);
+  if (!fs.existsSync(destParent)) {
+    fs.mkdirSync(destParent, { recursive: true });
   }
 
   // 如果目标已存在，先删除
   if (fs.existsSync(dest)) {
     fs.rmSync(dest, { recursive: true, force: true });
   }
-  fs.mkdirSync(dest, { recursive: true });
 
-  const entries = fs.readdirSync(src, { withFileTypes: true });
-  let copiedCount = 0;
-
-  for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
-    const destPath = path.join(dest, entry.name);
+  // 模式：selective-next - 只复制 .next 中必要的文件/目录
+  if (rules.mode === 'selective-next') {
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    fs.mkdirSync(dest, { recursive: true });
     
-    // 根据规则过滤
-    if (shouldExclude(entry.name, rules)) {
-      console.log(`  ⏭️  跳过 ${entry.name}`);
-      continue;
-    }
-
-    if (entry.isDirectory()) {
-      fs.cpSync(srcPath, destPath, { recursive: true });
-      console.log(`  📂 ${entry.name}/`);
-      copiedCount++;
-    } else if (entry.isFile()) {
-      // 对于 selective 模式，检查文件是否在 include 列表中
-      if (rules.mode === 'selective' && rules.include && !rules.include.includes(entry.name)) {
+    const requiredItems = ['static', 'server', 'BUILD_ID', 'app-path-routes-manifest.json', 
+                           'build-manifest.json', 'prerender-manifest.json', 'routes-manifest.json',
+                           'required-server-files.json', 'package.json'];
+    
+    for (const entry of entries) {
+      if (!requiredItems.includes(entry.name)) {
         console.log(`  ⏭️  跳过 ${entry.name}`);
         continue;
       }
-      fs.copyFileSync(srcPath, destPath);
-      console.log(`  📄 ${entry.name}`);
-      copiedCount++;
+      
+      const srcPath = path.join(src, entry.name);
+      const destPath = path.join(dest, entry.name);
+      
+      if (entry.isDirectory()) {
+        fs.cpSync(srcPath, destPath, { recursive: true });
+        console.log(`  📂 ${entry.name}/`);
+      } else {
+        fs.copyFileSync(srcPath, destPath);
+        console.log(`  📄 ${entry.name}`);
+      }
     }
+    
+    console.log(`✅ ${dirName} -> ${rules.dest || dirName} (选择性复制)`);
+    return true;
   }
 
-  console.log(`✅ ${dirName}/ (${copiedCount} 项)`);
-  return copiedCount > 0;
+  // 对于目录，直接复制
+  if (fs.statSync(src).isDirectory()) {
+    fs.mkdirSync(dest, { recursive: true });
+    fs.cpSync(src, dest, { recursive: true });
+  } else {
+    // 对于文件，直接复制
+    fs.copyFileSync(src, dest);
+  }
+  
+  console.log(`✅ ${dirName} -> ${rules.dest || dirName}`);
+  return true;
 }
 
 function main() {
@@ -117,7 +135,9 @@ function main() {
 
   for (const [dirName, rules] of Object.entries(DIR_COPY_RULES)) {
     console.log(`📦 处理 ${dirName}/...`);
-    if (copyDir(dirName, rules)) {
+    // 对于 next-files，需要使用 ROOT_DIR 作为 srcRoot
+    const srcRoot = dirName === 'next-files' ? ROOT_DIR : ROOT_DIR;
+    if (copyDir(dirName, rules, srcRoot)) {
       copiedCount++;
     }
   }
