@@ -25,23 +25,37 @@ const nextConfig = {
       '.claude/**',
       'data/**',
       'project/**',
-      // 测试相关目录
       'test-results/**',
       'test-outputs/**',
-      // 根目录测试和脚本文件
+      // 根目录测试相关
       '*.test.ts',
       '*.test.js',
       'test*.ts',
       'test*.js',
       'test*.ps1',
       'test*.py',
-      // 测试报告
       '*TEST*.md',
       '*test*.md',
-      // zip 打包文件
+      // 压缩包
       '*.zip',
       '*.tar.gz',
       '*.7z',
+      // 根目录无关文件
+      '*.md',
+      'check-*.js',
+      'diagnose-*.js',
+      'fix_*.py',
+      'modify*.py',
+      'generate_*.py',
+      'run.bat',
+      'run.sh',
+      'run.log',
+      'dev.log',
+      'commit_msg.txt',
+      // 根目录多余服务器文件
+      'server.ts',
+      'server-new.ts',
+      'server-new1.ts',
     ],
   },
 };
