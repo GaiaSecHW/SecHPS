@@ -53,8 +53,8 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
   const compareResults = (withSkill?: TestRun, withoutSkill?: TestRun) => {
     if (!withSkill || !withoutSkill) return null;
 
-    const improvements = [];
-    const regressions = [];
+    const improvements: string[] = [];
+    const regressions: string[] = [];
 
     // 简单的对比逻辑（实际应该更复杂）
     if (withSkill.output && withoutSkill.output) {

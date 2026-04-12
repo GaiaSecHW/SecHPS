@@ -85,6 +85,7 @@ interface SkillWizardData {
     runs: Array<{
       id: string;
       testCaseId: string;
+      testCaseName: string;
       type: 'with_skill' | 'without_skill';
       status: 'pending' | 'running' | 'completed' | 'failed';
       output?: string;

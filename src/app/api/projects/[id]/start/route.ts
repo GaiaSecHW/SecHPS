@@ -7,7 +7,7 @@ import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, c
 import { NODE_TYPE_MAP } from '@/types/workflow';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
-import { mkdir, writeFile } from 'fs/promises';
+import { mkdir, writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
 import { copySkillsToProject } from '@/services/skill-files';
 import { registerAgent } from '@/lib/agent-registry';
@@ -162,7 +162,7 @@ export async function POST(
     const sdkOptions: {
       mcpServers?: AppMcpServerConfig[];
       toolPermissions?: { toolPattern: string; permission: 'allow' | 'deny' | 'ask' }[];
-      systemPrompt?: string | { type: 'preset'; preset: 'claude_code'; append?: string };
+      systemPrompt?: string;
       settingSources?: ('project' | 'user' | 'local')[];
       permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
       allowDangerouslySkipPermissions?: boolean;
@@ -628,34 +628,35 @@ export async function POST(
               console.log('[Ralph Loop] - Token 使用:', result.totalUsage);
               console.log('[Ralph Loop] ========================================');
 
-              // 尝试从完整响应中解析评估结果
-              if (!evaluationResult) {
-                parseEvaluationResult(fullResponse);
-              }
+              // 从项目目录读取 vulnerabilities.json 文件
+              if (project.projectPath) {
+                try {
+                  const vulnFilePath = join(project.projectPath, 'vulnerabilities.json');
+                  console.log('[Ralph Loop] 读取漏洞文件:', vulnFilePath);
+                  const fileContent = await readFile(vulnFilePath, 'utf-8');
+                  const jsonReport = JSON.parse(fileContent);
 
-              // 如果没有检测到结果，尝试解析 JSON 报告
-              if (!evaluationResult) {
-                const jsonMatch = fullResponse.match(/```json\s*([\s\S]*?)```/);
-                if (jsonMatch) {
-                  try {
-                    const jsonResult = JSON.parse(jsonMatch[1].trim());
-                    
-                    if (jsonResult.summary) {
-                      const summary = jsonResult.summary;
-                      evaluationResult = {
-                        total: summary.total || 0,
-                        critical: typeof summary.critical === 'string' ? parseInt(summary.critical) || 0 : (summary.critical || 0),
-                        high: typeof summary.high === 'string' ? parseInt(summary.high) || 0 : (summary.high || 0),
-                        medium: typeof summary.medium === 'string' ? parseInt(summary.medium) || 0 : (summary.medium || 0),
-                        low: typeof summary.low === 'string' ? parseInt(summary.low) || 0 : (summary.low || 0),
-                        info: typeof summary.info === 'string' ? parseInt(summary.info) || 0 : (summary.info || 0),
-                        skills_used: summary.skills_used || [],
-                        vulnerabilities: jsonResult.vulnerabilities || [],
-                      };
-                      console.log('[Ralph Loop] 从 JSON 报告解析到漏洞:', jsonResult.vulnerabilities?.length);
-                    }
-                  } catch (e) {
-                    console.error('[Ralph Loop] 解析 JSON 结果失败:', e);
+                  if (jsonReport.summary) {
+                    const summary = jsonReport.summary;
+                    const toInt = (v: any) => typeof v === 'string' ? parseInt(v) || 0 : (v || 0);
+                    const vulns = Array.isArray(jsonReport.vulnerabilities) ? jsonReport.vulnerabilities : [];
+                    evaluationResult = {
+                      total: toInt(summary.total) || vulns.filter((v: any) => v.vulnerable === true).length,
+                      critical: 0,
+                      high: 0,
+                      medium: 0,
+                      low: 0,
+                      info: 0,
+                      skills_used: [],
+                      vulnerabilities: vulns,
+                    };
+                    console.log('[Ralph Loop] 从 vulnerabilities.json 读取到漏洞:', vulns.length, '条，其中 vulnerable=true:', vulns.filter((v: any) => v.vulnerable === true).length, '条');
+                  }
+                } catch (e: any) {
+                  if (e.code === 'ENOENT') {
+                    console.warn('[Ralph Loop] vulnerabilities.json 不存在，跳过漏洞导入');
+                  } else {
+                    console.error('[Ralph Loop] 读取 vulnerabilities.json 失败:', e);
                   }
                 }
               }
@@ -689,28 +690,33 @@ export async function POST(
                   });
                   console.log('[Ralph Loop] 评估结果已保存到数据库');
 
-                  if (evaluationResult.vulnerabilities && evaluationResult.vulnerabilities.length > 0) {
-                    for (const vuln of evaluationResult.vulnerabilities) {
-                      await prisma.vulnerability.create({
-                        data: {
-                          projectId: id,
-                          evaluationId: evaluation.id,
-                          title: vuln.title || '未命名漏洞',
-                          type: vuln.type || 'unknown',
-                          severity: vuln.severity || 'info',
-                          description: vuln.description || '',
-                          filePath: vuln.location || vuln.filePath,
-                          lineStart: vuln.lineStart,
-                          lineEnd: vuln.lineEnd,
-                          codeSnippet: vuln.codeSnippet,
-                          fixSuggestion: vuln.recommendation,
-                          cwe: vuln.cwe_id,
-                          skill: vuln.skill,
-                          status: 'new',
-                        },
-                      });
-                    }
-                    console.log(`[Ralph Loop] 保存了 ${evaluationResult.vulnerabilities.length} 个漏洞详情`);
+                  // 只保存 vulnerable: true 的漏洞
+                  const vulnsToSave = evaluationResult.vulnerabilities.filter(
+                    (v: any) => v.vulnerable === true
+                  );
+                  console.log(`[Ralph Loop] 共 ${evaluationResult.vulnerabilities.length} 条，其中 vulnerable=true: ${vulnsToSave.length} 条`);
+
+                  for (const vuln of vulnsToSave) {
+                    await prisma.vulnerability.create({
+                      data: {
+                        projectId: id,
+                        evaluationId: evaluation.id,
+                        title: vuln.title || '未命名漏洞',
+                        type: vuln.type || 'unknown',       // 漏洞类型字段
+                        severity: vuln.severity || 'info',
+                        description: vuln.description || '',
+                        filePath: vuln.location || null,
+                        codeSnippet: vuln.POC || null,
+                        fixSuggestion: null,
+                        aiAnalysis: vuln.description || null,
+                        cwe: vuln.cwe_id || null,
+                        skill: vuln.skill || null,          // 发现工具/skill字段
+                        status: 'new',
+                      },
+                    });
+                  }
+                  if (vulnsToSave.length > 0) {
+                    console.log(`[Ralph Loop] 保存了 ${vulnsToSave.length} 个漏洞详情`);
                   }
                 } catch (e) {
                   console.error('[Ralph Loop] 保存评估结果失败:', e);
@@ -1106,7 +1112,7 @@ function generatePreviewMarkdown(
   if (startNode) {
     const startLabel = workflowConfig.startNodeLabel || '开始';
     const startDesc = workflowConfig.startNodeDescription || 'Agent编排的起始点';
-    const startType = NODE_TYPE_MAP[startNode.type as any];
+    const startType = NODE_TYPE_MAP[startNode.type as keyof typeof NODE_TYPE_MAP];
     markdown += `## 1. ${startLabel}\n`;
     markdown += `**类型**: ${startType?.label || startNode.type}  \n`;
     markdown += `**描述**: ${startDesc}\n\n`;
@@ -1116,7 +1122,7 @@ function generatePreviewMarkdown(
   taskNodes.forEach((task, taskIdx) => {
     const taskData = task.node.data || {};
     const taskNumber = taskIdx + 2; // 从2开始（1是开始节点）
-    const taskType = NODE_TYPE_MAP[task.node.type as any];
+    const taskType = NODE_TYPE_MAP[task.node.type as keyof typeof NODE_TYPE_MAP];
 
     markdown += `## ${taskNumber}. ${taskData.label || taskType?.label || '任务'}\n`;
     markdown += `**类型**: ${taskType?.label || task.node.type}  \n`;
@@ -1128,7 +1134,7 @@ function generatePreviewMarkdown(
     // 输出子任务
     task.subtasks.forEach((subtask, subtaskIdx) => {
       const subtaskData = subtask.data || {};
-      const subtaskType = NODE_TYPE_MAP[subtask.type as any];
+      const subtaskType = NODE_TYPE_MAP[subtask.type as keyof typeof NODE_TYPE_MAP];
       const subtaskNumber = `${taskNumber}.${subtaskIdx + 1}`;
 
       markdown += `### ${subtaskNumber}. ${subtaskData.label || subtaskType?.label || '子任务'}\n`;
@@ -1145,7 +1151,7 @@ function generatePreviewMarkdown(
     const endLabel = workflowConfig.endNodeLabel || '结束';
     const endDesc = workflowConfig.endNodeDescription || 'Agent编排的结束点';
     const endNumber = taskNodes.length + 2; // 开始节点 + 任务节点数 + 1
-    const endType = NODE_TYPE_MAP[endNode.type as any];
+    const endType = NODE_TYPE_MAP[endNode.type as keyof typeof NODE_TYPE_MAP];
     markdown += `## ${endNumber}. ${endLabel}\n`;
     markdown += `**类型**: ${endType?.label || endNode.type}  \n`;
     markdown += `**描述**: ${endDesc}\n\n`;

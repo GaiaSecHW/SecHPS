@@ -383,10 +383,10 @@ async function callLLMForMatch(
     apiBaseUrl: string;
     apiKey: string;
     models: string;
-    provider: string;
+    providerType: string;
   },
   prompt: string,
-  skills: Array<{ id: string; name: string; displayName: string; category: string; techStack: string[] }>,
+  skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[] }>,
   topK: number
 ): Promise<any[]> {
   // 解析 models JSON 字符串并取第一个模型

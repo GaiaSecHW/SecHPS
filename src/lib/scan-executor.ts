@@ -20,7 +20,7 @@ export interface ScanResult {
   status: 'completed' | 'failed' | 'skipped';
   findings: number;
   output: Record<string, unknown> | null;
-  error: string | null;
+  error: string | null | undefined;
   duration: number;
 }
 
@@ -95,7 +95,7 @@ export class ScanExecutor {
       });
 
       // 执行单个 Skill
-      const result = await this.executeSkill(skill, task.project);
+      const result = await this.executeSkill(skill as any, task.project);
       results.push(result);
 
       // 创建执行记录
@@ -108,7 +108,7 @@ export class ScanExecutor {
           output: result.output ? JSON.stringify(result.output) : null,
           status: result.status,
           duration: result.duration,
-          error: result.error,
+        error: result.error ?? null,
           startedAt: new Date(Date.now() - result.duration),
           completedAt: new Date(),
         },
@@ -214,7 +214,7 @@ export class ScanExecutor {
           vulnerabilities: result.vulnerabilities,
           toolCalls: result.toolCalls,
         },
-        error: result.error,
+        error: result.error ?? undefined,
         duration: result.duration,
       };
 

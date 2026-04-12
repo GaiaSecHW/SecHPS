@@ -132,7 +132,7 @@ const SYNTAX_HIGHLIGHTS: Record<string, { keywords: string[]; color: string }> =
 };
 
 // 注释模式定义
-const COMMENT_PATTERNS: Record<string, { single: string; multiStart?: string; multiEnd?: string }> = {
+const COMMENT_PATTERNS: Record<string, { single?: string; multiStart?: string; multiEnd?: string }> = {
   TypeScript: { single: '//', multiStart: '/*', multiEnd: '*/' },
   JavaScript: { single: '//', multiStart: '/*', multiEnd: '*/' },
   Python: { single: '#' },

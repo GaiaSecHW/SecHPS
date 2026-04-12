@@ -87,6 +87,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
         displayName: intentData.name || 'Untitled Skill',
         description: intentData.description || '',
         category: intentData.category || 'code-audit',
+        techStack: intentData.techStack || [],
         cwe: undefined,
         content: fallbackContent,
       };

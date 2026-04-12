@@ -193,7 +193,7 @@ function executeJqLike(expression: string, input: unknown, logs: string[]): unkn
     // unique
     if (token === 'unique') {
       if (Array.isArray(current)) {
-        current = [...new Set(current.map(JSON.stringify))].map(JSON.parse);
+        current = [...new Set(current.map((item: any) => JSON.stringify(item)))].map((item: string) => JSON.parse(item));
       }
       continue;
     }
@@ -293,8 +293,8 @@ async function executeTransformScript(
     output;
   `;
 
-  const script = new vm.Script(wrappedCode, { timeout: 5000 });
-  return script.runInContext(context, { timeout: 5000 });
+  const script = new vm.Script(wrappedCode, { timeout: 5000 } as any);
+  return script.runInContext(context, { timeout: 5000 } as any);
 }
 
 /**
@@ -310,13 +310,14 @@ function evaluateSimpleCondition(item: unknown, condition: string): boolean {
       : undefined;
 
     let compareValue: unknown = valueStr.trim();
-    if (compareValue.startsWith('"') || compareValue.startsWith("'")) {
-      compareValue = compareValue.slice(1, -1);
-    } else if (!isNaN(Number(compareValue))) {
-      compareValue = Number(compareValue);
-    } else if (compareValue === 'true') {
+    const compareStr = String(compareValue);
+    if (compareStr.startsWith('"') || compareStr.startsWith("'")) {
+      compareValue = compareStr.slice(1, -1);
+    } else if (!isNaN(Number(compareStr))) {
+      compareValue = Number(compareStr);
+    } else if (compareStr === 'true') {
       compareValue = true;
-    } else if (compareValue === 'false') {
+    } else if (compareStr === 'false') {
       compareValue = false;
     }
 

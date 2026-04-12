@@ -210,6 +210,12 @@ export async function PUT(
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+      // 处理技术栈
+      if (updates.techStack !== undefined) {
+        updateData.techStack = updates.techStack && Array.isArray(updates.techStack) && updates.techStack.length > 0
+          ? JSON.stringify(updates.techStack)
+          : null;
+      }
 
       updatedSkill = await prisma.skill.update({
         where: { id },

@@ -1,0 +1,9 @@
+{
+  "id": "cmnuv8bnh004rigjp9hyk91tx",
+  "name": "code-audit-references-security-memory_native",
+  "displayName": "Java 内存/原生层风险检测模块",
+  "userId": null,
+  "latestVersion": 1,
+  "isActive": true,
+  "updatedAt": "2026-04-11T22:36:01.664Z"
+}

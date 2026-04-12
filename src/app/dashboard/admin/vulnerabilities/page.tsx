@@ -4,15 +4,13 @@ import { useEffect, useState } from 'react';
 import {
   Bug,
   Search,
-  Filter,
   AlertTriangle,
   CheckCircle,
   XCircle,
   RefreshCw,
-  Eye,
   Shield,
   Clock,
-  TrendingUp,
+  Trash2,
 } from 'lucide-react';
 
 interface Vulnerability {
@@ -22,7 +20,6 @@ interface Vulnerability {
   description: string;
   type: string;
   cwe: string | null;
-  severity: string;
   status: string;
   filePath: string | null;
   lineStart: number | null;
@@ -41,26 +38,9 @@ interface Vulnerability {
 interface Stats {
   total: number;
   byStatus: Record<string, number>;
-  bySeverity: Record<string, number>;
   byType: Record<string, number>;
   trend: Array<{ date: string; count: number }>;
 }
-
-const severityColors: Record<string, string> = {
-  critical: 'bg-red-100 text-red-800 border-red-200',
-  high: 'bg-orange-100 text-orange-800 border-orange-200',
-  medium: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  low: 'bg-blue-100 text-blue-800 border-blue-200',
-  info: 'bg-gray-100 text-gray-800 border-gray-200',
-};
-
-const severityLabels: Record<string, string> = {
-  critical: '严重',
-  high: '高危',
-  medium: '中危',
-  low: '低危',
-  info: '信息',
-};
 
 const statusColors: Record<string, string> = {
   new: 'bg-blue-100 text-blue-800',
@@ -86,21 +66,19 @@ export default function VulnerabilitiesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedSeverity, setSelectedSeverity] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
 
   useEffect(() => {
     fetchVulnerabilities();
     fetchStats();
-  }, [selectedSeverity, selectedStatus]);
+  }, [selectedStatus]);
 
   const fetchVulnerabilities = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       const params = new URLSearchParams();
-      if (selectedSeverity) params.append('severity', selectedSeverity);
       if (selectedStatus) params.append('status', selectedStatus);
 
       const response = await fetch(`/api/vulnerabilities?${params.toString()}`, {
@@ -161,6 +139,27 @@ export default function VulnerabilitiesPage() {
       setSelectedVuln(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : '操作失败');
+    }
+  };
+
+  const handleDelete = async (vulnId: string, title: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!confirm(`确定要删除漏洞「${title}」吗？此操作不可恢复。`)) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/vulnerabilities/${vulnId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '删除失败');
+      }
+      setSelectedVuln(null);
+      fetchVulnerabilities();
+      fetchStats();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '删除失败');
     }
   };
 
@@ -263,18 +262,6 @@ export default function VulnerabilitiesPage() {
           </div>
         </div>
         <select
-          value={selectedSeverity}
-          onChange={(e) => setSelectedSeverity(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="">所有严重程度</option>
-          <option value="critical">严重</option>
-          <option value="high">高危</option>
-          <option value="medium">中危</option>
-          <option value="low">低危</option>
-          <option value="info">信息</option>
-        </select>
-        <select
           value={selectedStatus}
           onChange={(e) => setSelectedStatus(e.target.value)}
           className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -303,7 +290,7 @@ export default function VulnerabilitiesPage() {
               <Shield className="mx-auto h-16 w-16 text-gray-400" />
               <h3 className="mt-4 text-lg font-medium text-gray-900">暂无漏洞</h3>
               <p className="mt-2 text-sm text-gray-600">
-                {searchTerm || selectedSeverity || selectedStatus
+                {searchTerm || selectedStatus
                   ? '没有找到匹配的漏洞'
                   : '系统运行良好，暂未发现安全漏洞'}
               </p>
@@ -319,9 +306,6 @@ export default function VulnerabilitiesPage() {
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded border ${severityColors[vuln.severity] || 'bg-gray-100 text-gray-800'}`}>
-                      {severityLabels[vuln.severity] || vuln.severity}
-                    </span>
                     <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusColors[vuln.status] || 'bg-gray-100 text-gray-800'}`}>
                       {statusLabels[vuln.status] || vuln.status}
                     </span>
@@ -334,8 +318,17 @@ export default function VulnerabilitiesPage() {
                     {vuln.filePath && <span>文件: {vuln.filePath}</span>}
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  {new Date(vuln.createdAt).toLocaleDateString()}
+                <div className="flex items-center gap-3">
+                  <div className="text-sm text-gray-500">
+                    {new Date(vuln.createdAt).toLocaleDateString()}
+                  </div>
+                  <button
+                    onClick={(e) => handleDelete(vuln.id, vuln.title, e)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="删除漏洞"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
             </div>
@@ -351,9 +344,6 @@ export default function VulnerabilitiesPage() {
               <div className="flex items-start justify-between">
                 <div>
                   <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded border ${severityColors[selectedVuln.severity] || 'bg-gray-100 text-gray-800'}`}>
-                      {severityLabels[selectedVuln.severity] || selectedVuln.severity}
-                    </span>
                     <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusColors[selectedVuln.status] || 'bg-gray-100 text-gray-800'}`}>
                       {statusLabels[selectedVuln.status] || selectedVuln.status}
                     </span>
@@ -457,7 +447,8 @@ export default function VulnerabilitiesPage() {
               </div>
 
               {/* Actions */}
-              <div className="mt-6 flex items-center space-x-2 border-t pt-4">
+              <div className="mt-6 flex items-center justify-between border-t pt-4">
+                <div className="flex items-center space-x-2">
                 {selectedVuln.status === 'new' && (
                   <>
                     <button
@@ -494,6 +485,15 @@ export default function VulnerabilitiesPage() {
                     验证修复
                   </button>
                 )}
+                </div>
+                {/* 删除按钮始终显示，放右侧 */}
+                <button
+                  onClick={() => handleDelete(selectedVuln.id, selectedVuln.title)}
+                  className="inline-flex items-center px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 transition-colors"
+                >
+                  <Trash2 size={16} className="mr-2" />
+                  删除漏洞
+                </button>
               </div>
             </div>
           </div>

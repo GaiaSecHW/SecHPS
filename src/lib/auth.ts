@@ -48,10 +48,18 @@ export function verifyToken(token: string): JWTPayload | null {
 }
 
 // 获取用户完整信息（包含角色和权限）- 使用缓存
-export async function getUserWithPermissions(userId: string) {
+export async function getUserWithPermissions(userId: string): Promise<{
+  user: User;
+  roles: Role[];
+  permissions: string[];
+} | null> {
   const cacheKey = cacheKeys.userPermissions(userId);
 
-  return getOrSet(
+  return getOrSet<{
+    user: User;
+    roles: Role[];
+    permissions: string[];
+  } | null>(
     permissionCache,
     cacheKey,
     async () => {

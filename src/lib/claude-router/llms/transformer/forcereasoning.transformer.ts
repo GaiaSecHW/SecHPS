@@ -309,7 +309,7 @@ export class ForceReasoningTransformer implements Transformer {
               console.error("Error releasing reader lock:", e);
             }
 
-            if (fsmState === "REASONING") {
+            if ((fsmState as string) === "REASONING") {
               const signatureDelta = {
                 thinking: { signature: new Date().getTime().toString() },
               };

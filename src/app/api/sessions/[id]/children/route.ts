@@ -93,22 +93,46 @@ export async function GET(
           messageIndex: number;
           description: string;
           status: string;
+          startedAt: string | null;
+          completedAt: string | null;
         }> = [];
+
+        // 建立 tool_use id -> tool_result 的映射，用于提取结束时间
+        const toolResultMap = new Map<string, { timestamp: string | null }>();
+        messages.forEach((msg: any) => {
+          if (msg.message?.content && Array.isArray(msg.message.content)) {
+            msg.message.content.forEach((part: any) => {
+              if (part.type === 'tool_result' && part.tool_use_id) {
+                toolResultMap.set(part.tool_use_id, {
+                  timestamp: msg.message?.timestamp || msg.timestamp || null,
+                });
+              }
+            });
+          }
+        });
 
         messages.forEach((msg: any, msgIndex: number) => {
           if (msg.message?.content && Array.isArray(msg.message.content)) {
             msg.message.content.forEach((part: any) => {
               if (part.type === 'tool_use' && (part.name === 'Agent' || part.name === 'task')) {
-                const description = part.input?.description || 
+                const description = part.input?.description ||
                                    part.input?.prompt?.substring(0, 100) ||
                                    `子任务 ${msgIndex + 1}`;
-                
+
+                // 提取开始时间（工具调用所在消息的时间戳）
+                const startedAt = msg.message?.timestamp || msg.timestamp || null;
+                // 提取结束时间（对应 tool_result 消息的时间戳）
+                const resultInfo = toolResultMap.get(part.id);
+                const completedAt = resultInfo?.timestamp || null;
+
                 agentCalls.push({
                   id: part.id || `agent-${msgIndex}-${Date.now()}`,
                   messageId: msg.uuid || `msg-${msgIndex}`,
                   messageIndex: msgIndex,
                   description: description.substring(0, 100),
                   status: 'active',
+                  startedAt,
+                  completedAt,
                 });
               }
             });
@@ -116,7 +140,7 @@ export async function GET(
         });
 
         console.log('[Children API] Found', agentCalls.length, 'agent calls from messages');
-        
+
         // 转换为前端期望的格式
         const children = agentCalls.map(call => ({
           id: call.id,
@@ -125,6 +149,8 @@ export async function GET(
           messageIndex: call.messageIndex,
           title: call.description,
           status: call.status,
+          startedAt: call.startedAt,
+          completedAt: call.completedAt,
         }));
 
         return NextResponse.json({

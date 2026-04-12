@@ -374,7 +374,7 @@ async function fetchClaudeApi(provider: LLMProvider, request: any): Promise<any>
       'x-api-key': provider.apiKey || '',
       'anthropic-version': '2023-06-01',
     },
-    body: requestBody,
+    body: request,
   });
 
   if (!response.ok) {

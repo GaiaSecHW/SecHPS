@@ -67,7 +67,7 @@ export async function GET(
 
     // 使用 SDK 获取消息
     const sdkMessages = await getSessionMessages(sessionId, {
-      dir: projectPath,
+      dir: projectPath ?? undefined,
     });
 
     console.log(`[API Messages] SDK returned:`, {

@@ -4,16 +4,42 @@
 // 定义完成验证的接口和类型
 //
 
-import type { GenerateTextResult, ToolSet } from 'ai';
+/**
+ * 简化的 ToolSet 类型（替代 ai 包）
+ */
+export type SimpleToolSet = Record<string, any>;
+
+/**
+ * 简化的 GenerateTextResult 类型（替代 ai 包）
+ */
+export interface SimpleGenerateTextResult<TOOLS extends SimpleToolSet = {}> {
+  readonly text: string;
+  readonly toolCalls?: Array<{
+    toolName: string;
+    args: Record<string, any>;
+  }>;
+  readonly usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  readonly steps?: Array<{
+    readonly usage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    };
+  }>;
+}
 
 /**
  * 验证上下文
  */
-export interface VerifyCompletionContext<TOOLS extends ToolSet = {}> {
+export interface VerifyCompletionContext<TOOLS extends SimpleToolSet = {}> {
   /**
    * 当前迭代的结果
    */
-  readonly result: GenerateTextResult<TOOLS, never>;
+  readonly result: SimpleGenerateTextResult<TOOLS>;
 
   /**
    * 当前迭代次数（1-indexed）
@@ -23,7 +49,7 @@ export interface VerifyCompletionContext<TOOLS extends ToolSet = {}> {
   /**
    * 所有已完成迭代的结果
    */
-  readonly allResults: Array<GenerateTextResult<TOOLS, never>>;
+  readonly allResults: Array<SimpleGenerateTextResult<TOOLS>>;
 
   /**
    * 原始提示/任务
@@ -51,6 +77,6 @@ export interface VerifyCompletionResult {
 /**
  * 验证函数类型
  */
-export type VerifyCompletionFunction<TOOLS extends ToolSet = {}> = (
+export type VerifyCompletionFunction<TOOLS extends SimpleToolSet = {}> = (
   context: VerifyCompletionContext<TOOLS>,
 ) => VerifyCompletionResult | Promise<VerifyCompletionResult>;

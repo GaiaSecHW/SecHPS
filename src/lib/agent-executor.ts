@@ -250,14 +250,12 @@ export class AgentExecutor {
    * 构建提示
    */
   private buildPrompt(
-    skill: { systemPrompt: string; userPrompt: string; category: string },
+    skill: { content: string; category: string; description?: string | null },
     project: { name: string; description: string | null; files: Array<{ fileName: string; fileType: string }> }
   ): string {
-    const systemMessage = skill.systemPrompt;
-    const userMessage = skill.userPrompt
-      .replace('{{projectName}}', project.name)
-      .replace('{{projectDescription}}', project.description || '')
-      .replace('{{fileCount}}', String(project.files.length));
+    // skill.content 是完整的 Markdown 内容，作为系统提示
+    const systemMessage = skill.content || skill.description || '';
+    const userMessage = `请分析项目 ${project.name}。${project.description ? `项目描述: ${project.description}` : ''}。项目共有 ${project.files.length} 个文件。`;
 
     return `System: ${systemMessage}\n\n---\n\nHuman: ${userMessage}`;
   }

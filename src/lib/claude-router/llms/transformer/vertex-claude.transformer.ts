@@ -76,6 +76,6 @@ export class VertexClaudeTransformer implements Transformer {
   }
 
   async transformResponseOut(response: Response): Promise<Response> {
-    return transformResponseOut(response, this.name, this.logger);
+    return transformResponseOut(response, this.name);
   }
 }

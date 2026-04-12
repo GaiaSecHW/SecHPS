@@ -182,14 +182,19 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
   }
 
   if (!workflowData?.workflow) {
-    return null; // ?  }
+    return null;
+  }
 
   const { workflow, nodes, edges } = workflowData;
+  
+  // workflow 已经确保不为 null
+  if (!workflow) return null;
 
   // 
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
 
-  // ?  const outEdges = new Map<string, WorkflowEdge[]>();
+  // 构建出边映射
+  const outEdges = new Map<string, WorkflowEdge[]>();
   edges.forEach(e => {
     if (!outEdges.has(e.source)) {
       outEdges.set(e.source, []);
@@ -201,7 +206,8 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
   const startNode = nodes.find(n => n.type === 'start');
   const endNode = nodes.find(n => n.type === 'end');
 
-  // ?BFS ?  const sortedNodes: WorkflowNode[] = [];
+  // BFS 排序节点
+  const sortedNodes: WorkflowNode[] = [];
   const visited = new Set<string>();
 
   if (startNode) {
@@ -233,7 +239,8 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
     }
   });
 
-  // ?  if (endNode) {
+  // 添加结束节点
+  if (endNode) {
     sortedNodes.push(endNode);
   }
 
@@ -242,7 +249,8 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
   const totalCount = nodes.length;
   const progress = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
-  // ?  const runningNode = nodes.find(n => n.status === 'running');
+  // 获取当前正在运行的节点
+  const runningNode = nodes.find(n => n.status === 'running');
 
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -295,7 +303,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
                     className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center"
                     style={{ backgroundColor: status.color }}
                   >
-                    {status.animate ? (
+                    {'animate' in status ? (
                       <StatusIcon size={14} className="text-white animate-spin" />
                     ) : (
                       <StatusIcon size={14} className="text-white" />

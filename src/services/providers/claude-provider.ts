@@ -60,7 +60,7 @@ export class ClaudeProvider extends BaseProvider {
           const filePath = path.join(projectDir, file);
           const stats = await fs.stat(filePath);
 
-          const session = await this.parseSessionFile(filePath, sessionId, projectPath);
+          const session = await this.parseSessionFile(filePath, sessionId);
           if (session) {
             sessions.push({
               id: sessionId,

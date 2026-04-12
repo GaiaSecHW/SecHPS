@@ -4,17 +4,14 @@ import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import type { TogglePluginRequest } from '@/types/plugin';
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
 /**
  * POST /api/plugins/[id]/toggle
  * 启用/禁用插件
  */
-export async function POST(request: Request, { params }: RouteParams) {
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
@@ -46,9 +43,12 @@ export async function POST(request: Request, { params }: RouteParams) {
     // 解析请求体
     const body: TogglePluginRequest = await request.json();
 
+    // 解析 params (Next.js 15+ 要求 await)
+    const { id } = await params;
+
     // 切换插件状态
     const plugin = await PluginManager.togglePlugin(
-      params.id,
+      id,
       body.enabled
     );
 

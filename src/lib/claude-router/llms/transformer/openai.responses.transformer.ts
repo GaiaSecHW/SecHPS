@@ -13,6 +13,16 @@ interface ResponsesAPIOutputItem {
     image_url?: string;
     mime_type?: string;
     image_base64?: string;
+    annotations?: Array<{
+      type: string;
+      url_citation?: {
+        url?: string;
+        title?: string;
+        content?: string;
+        start_index?: number;
+        end_index?: number;
+      };
+    }>;
   }>;
   reasoning?: string;
 }
@@ -62,6 +72,16 @@ interface ResponsesStreamEvent {
     }>;
   };
   reasoning_summary?: string; // 添加推理摘要支持
+  annotation?: {
+    url?: string;
+    title?: string;
+    start_index?: number;
+    end_index?: number;
+  };
+  part?: {
+    type?: string;
+    text?: string;
+  };
 }
 
 export class OpenAIResponsesTransformer implements Transformer {
@@ -652,20 +672,15 @@ export class OpenAIResponsesTransformer implements Transformer {
         return {
           type: "url_citation",
           url_citation: {
-            url: item.url || "",
-            title: item.title || "",
-            content: "",
-            start_index: item.start_index || 0,
-            end_index: item.end_index || 0,
+            url: item.url_citation?.url || "",
+            title: item.url_citation?.title || "",
+            content: item.url_citation?.content || "",
+            start_index: item.url_citation?.start_index || 0,
+            end_index: item.url_citation?.end_index || 0,
           },
         };
       });
     }
-
-    this.logger.debug({
-      data: annotations,
-      type: "url_citation",
-    });
 
     let messageContent: string | MessageContent[] | null = null;
     let toolCalls = null;

@@ -4,15 +4,38 @@
 // 基于 ralph-loop-agent 的核心代码，适配到项目现有的评估系统
 //
 
-import type {
-  ToolSet,
-  GenerateTextResult,
-} from 'ai';
+/**
+ * 简化的 ToolSet 类型（替代 ai 包）
+ */
+type SimpleToolSet = Record<string, any>;
+
+/**
+ * 简化的 GenerateTextResult 类型（替代 ai 包）
+ */
+interface SimpleGenerateTextResult<TOOLS extends SimpleToolSet = {}> {
+  readonly text: string;
+  readonly toolCalls?: Array<{
+    toolName: string;
+    args: Record<string, any>;
+  }>;
+  readonly usage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
+  readonly steps?: Array<{
+    readonly usage?: {
+      inputTokens: number;
+      outputTokens: number;
+      totalTokens: number;
+    };
+  }>;
+}
 
 /**
  * 停止条件上下文
  */
-export type RalphStopConditionContext<TOOLS extends ToolSet = {}> = {
+export type RalphStopConditionContext<TOOLS extends SimpleToolSet = {}> = {
   /**
    * 当前迭代次数（1-indexed）
    */
@@ -21,7 +44,7 @@ export type RalphStopConditionContext<TOOLS extends ToolSet = {}> = {
   /**
    * 所有已完成迭代的结果
    */
-  readonly allResults: Array<GenerateTextResult<TOOLS, never>>;
+  readonly allResults: Array<SimpleGenerateTextResult<TOOLS>>;
 
   /**
    * 聚合的 token 使用量
@@ -41,7 +64,7 @@ export type RalphStopConditionContext<TOOLS extends ToolSet = {}> = {
 /**
  * 停止条件函数
  */
-export type RalphStopCondition<TOOLS extends ToolSet = {}> = (
+export type RalphStopCondition<TOOLS extends SimpleToolSet = {}> = (
   context: RalphStopConditionContext<TOOLS>
 ) => PromiseLike<boolean> | boolean;
 
@@ -143,8 +166,8 @@ export function addLanguageModelUsage(
 /**
  * 聚合步骤的 token 使用量
  */
-export function aggregateStepUsage<TOOLS extends ToolSet>(
-  result: GenerateTextResult<TOOLS, never>
+export function aggregateStepUsage<TOOLS extends SimpleToolSet>(
+  result: SimpleGenerateTextResult<TOOLS>
 ): { inputTokens: number; outputTokens: number; totalTokens: number } {
   let aggregated = {
     inputTokens: 0,
@@ -152,7 +175,7 @@ export function aggregateStepUsage<TOOLS extends ToolSet>(
     totalTokens: 0,
   };
 
-  for (const step of result.steps) {
+  for (const step of result.steps || []) {
     if (step.usage) {
       aggregated = addLanguageModelUsage(aggregated, {
         inputTokens: step.usage.inputTokens || 0,
@@ -164,9 +187,9 @@ export function aggregateStepUsage<TOOLS extends ToolSet>(
 
   // 使用 result.usage 和聚合值中的较大者
   return {
-    inputTokens: Math.max(aggregated.inputTokens, result.usage.inputTokens || 0),
-    outputTokens: Math.max(aggregated.outputTokens, result.usage.outputTokens || 0),
-    totalTokens: Math.max(aggregated.totalTokens, result.usage.totalTokens || 0),
+    inputTokens: Math.max(aggregated.inputTokens, result.usage?.inputTokens || 0),
+    outputTokens: Math.max(aggregated.outputTokens, result.usage?.outputTokens || 0),
+    totalTokens: Math.max(aggregated.totalTokens, result.usage?.totalTokens || 0),
   };
 }
 
@@ -226,7 +249,7 @@ export function costIs(
 /**
  * 检查是否满足任何停止条件
  */
-export async function isRalphStopConditionMet<TOOLS extends ToolSet>({
+export async function isRalphStopConditionMet<TOOLS extends SimpleToolSet>({
   stopConditions,
   context,
 }: {

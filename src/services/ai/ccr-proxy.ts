@@ -44,7 +44,7 @@ export class CCRProxyProvider extends AIProvider {
           })),
           stream: true,
         }),
-        signal: this.abortController.signal,
+        signal: this.abortController!.signal,
       });
 
       if (!response.ok) {
@@ -90,12 +90,9 @@ export class CCRProxyProvider extends AIProvider {
             }
 
             try {
-              const chunk = JSON.parse(data);
-              const content = (chunk as Record<string, unknown>).choices?.[0] &&
-                ((chunk as Record<string, unknown>).choices as Array<Record<string, unknown>>)[0]?.delta &&
-                typeof (((chunk as Record<string, unknown>).choices as Array<Record<string, unknown>>)[0].delta as Record<string, unknown>).content === 'string'
-                ? (((chunk as Record<string, unknown>).choices as Array<Record<string, unknown>>)[0].delta as Record<string, unknown>).content as string
-                : '';
+              const chunk = JSON.parse(data) as any;
+              const choices = chunk.choices as any[];
+              const content = choices?.[0]?.delta?.content || '';
               if (content) {
                 fullResponse += content;
                 callbacks.onChunk(content);

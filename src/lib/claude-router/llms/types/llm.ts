@@ -84,13 +84,22 @@ export interface UnifiedTool {
 
 export type ThinkLevel = "none" | "low" | "medium" | "high";
 
-// 统一的请求接�?
+// 统一的请求接口
 export interface UnifiedChatRequest {
   messages: UnifiedMessage[];
   model: string;
   max_tokens?: number;
+  max_completion_tokens?: number;
   temperature?: number;
+  top_p?: number;
+  top_k?: number;
+  frequency_penalty?: number;
+  presence_penalty?: number;
+  repetition_penalty?: number;
   stream?: boolean;
+  stream_options?: {
+    include_usage?: boolean;
+  };
   tools?: UnifiedTool[];
   tool_choice?:
     | "auto"
@@ -98,6 +107,12 @@ export interface UnifiedChatRequest {
     | "required"
     | string
     | { type: "function"; function: { name: string } };
+  parallel_tool_calls?: boolean;
+  thinking?: {
+    type?: "enabled" | "disabled";
+    budget_tokens?: number;
+  };
+  enable_thinking?: boolean;
   reasoning?: {
     // OpenAI-style
     effort?: ThinkLevel;

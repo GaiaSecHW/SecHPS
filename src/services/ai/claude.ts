@@ -49,7 +49,7 @@ export class ClaudeProvider extends AIProvider {
           })),
           stream: true,
         }),
-        signal: this.abortController.signal,
+        signal: this.abortController!.signal,
       });
 
       if (!response.ok) {

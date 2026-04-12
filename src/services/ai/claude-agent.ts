@@ -150,10 +150,7 @@ export class ClaudeAgentService {
       
       // 扩展思考（Extended Thinking）- 让 Claude 深度推理
       thinking: { type: 'enabled', budgetTokens: 10000 },
-      
-      // 启用 context_management（丢弃思考过程和工具使用）
-      contextManagement: this.config.contextManagement,
-    };
+    } as any;
     
     // 配置 MCP 服务器
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {

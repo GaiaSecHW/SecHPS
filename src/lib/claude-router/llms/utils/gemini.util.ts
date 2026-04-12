@@ -113,7 +113,7 @@ function flattenTypeArrayToAnyOf(
  * @returns {Object} - The processed schema
  */
 function processJsonSchema(_jsonSchema: any): any {
-  const genAISchema = {};
+  const genAISchema: Record<string, any> = {};
   const schemaFieldNames = ["items"];
   const listSchemaFieldNames = ["anyOf"];
   const dictSchemaFieldNames = ["properties"];
@@ -159,7 +159,7 @@ function processJsonSchema(_jsonSchema: any): any {
     if (fieldName == "type") {
       if (fieldValue === "null") {
         throw new Error(
-          "type: null can not be the only possible type for the field."
+          "type: null can not be the only possible type for a field."
         );
       }
       if (Array.isArray(fieldValue)) {
@@ -167,15 +167,15 @@ function processJsonSchema(_jsonSchema: any): any {
         // beginning of this function.
         continue;
       }
-      const upperCaseValue = fieldValue.toUpperCase();
+      const upperCaseValue = (fieldValue as string).toUpperCase();
       genAISchema["type"] = Object.values(Type).includes(upperCaseValue)
         ? upperCaseValue
         : Type.TYPE_UNSPECIFIED;
     } else if (schemaFieldNames.includes(fieldName)) {
       genAISchema[fieldName] = processJsonSchema(fieldValue);
     } else if (listSchemaFieldNames.includes(fieldName)) {
-      const listSchemaFieldValue = [];
-      for (const item of fieldValue) {
+      const listSchemaFieldValue: any[] = [];
+      for (const item of fieldValue as any[]) {
         if (item["type"] == "null") {
           genAISchema["nullable"] = true;
           continue;
@@ -184,7 +184,7 @@ function processJsonSchema(_jsonSchema: any): any {
       }
       genAISchema[fieldName] = listSchemaFieldValue;
     } else if (dictSchemaFieldNames.includes(fieldName)) {
-      const dictSchemaFieldValue = {};
+      const dictSchemaFieldValue: Record<string, any> = {};
       for (const [key, value] of Object.entries(fieldValue)) {
         dictSchemaFieldValue[key] = processJsonSchema(value);
       }
@@ -321,8 +321,9 @@ export function buildRequestBody(
         );
       } else if (message.content && typeof message.content === "object") {
         // Object like { text: "..." }
-        if (message.content.text) {
-          parts.push({ text: message.content.text });
+        const contentObj = message.content as Record<string, any>;
+        if (contentObj.text) {
+          parts.push({ text: contentObj.text });
         } else {
           parts.push({ text: JSON.stringify(message.content) });
         }
@@ -410,14 +411,14 @@ export function buildRequestBody(
     }
   }
 
-  const body = {
+  const body: any = {
     contents,
     tools: tools.length ? tools : undefined,
     generationConfig,
   };
 
   if (request.tool_choice) {
-    const toolConfig = {
+    const toolConfig: any = {
       functionCallingConfig: {},
     };
     if (request.tool_choice === "auto") {
@@ -426,10 +427,10 @@ export function buildRequestBody(
       toolConfig.functionCallingConfig.mode = "none";
     } else if (request.tool_choice === "required") {
       toolConfig.functionCallingConfig.mode = "any";
-    } else if (request.tool_choice?.function?.name) {
+    } else if (typeof request.tool_choice === "object" && "function" in request.tool_choice) {
       toolConfig.functionCallingConfig.mode = "any";
       toolConfig.functionCallingConfig.allowedFunctionNames = [
-        request.tool_choice?.function?.name,
+        (request.tool_choice as any).function?.name,
       ];
     }
     body.toolConfig = toolConfig;
@@ -494,9 +495,9 @@ export function transformRequestOut(
 
   if (Array.isArray(tools)) {
     unifiedChatRequest.tools = [];
-    tools.forEach((tool) => {
+    tools.forEach((tool: any) => {
       if (Array.isArray(tool.functionDeclarations)) {
-        tool.functionDeclarations.forEach((tool) => {
+        tool.functionDeclarations.forEach((tool: any) => {
           unifiedChatRequest.tools!.push({
             type: "function",
             function: {
@@ -920,7 +921,7 @@ export async function transformResponseOut(
                 }
 
                 if (tool_calls.length > 0) {
-                  tool_calls.forEach((tool) => {
+                  tool_calls.forEach((tool: any) => {
                     contentIndex++;
                     toolCallIndex++;
                     const res = {
@@ -1041,4 +1042,6 @@ export async function transformResponseOut(
       headers: response.headers,
     });
   }
+
+  return response;
 }

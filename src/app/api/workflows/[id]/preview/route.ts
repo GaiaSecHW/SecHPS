@@ -211,7 +211,7 @@ function generatePreviewMarkdown(
   if (startNode) {
     const startLabel = workflowConfig.startNodeLabel || '开始';
     const startDesc = workflowConfig.startNodeDescription || 'Agent编排的起始点';
-    const startType = NODE_TYPE_MAP[startNode.type as any];
+    const startType = NODE_TYPE_MAP[startNode.type as keyof typeof NODE_TYPE_MAP];
     markdown += `## 1. ${startLabel}\n`;
     markdown += `**类型**: ${startType?.label || startNode.type}  \n`;
     markdown += `**描述**: ${startDesc}\n\n`;
@@ -221,7 +221,7 @@ function generatePreviewMarkdown(
   taskNodes.forEach((task, taskIdx) => {
     const taskData = task.node.data || {};
     const taskNumber = taskIdx + 2; // 从2开始（1是开始节点）
-    const taskType = NODE_TYPE_MAP[task.node.type as any];
+    const taskType = NODE_TYPE_MAP[task.node.type as keyof typeof NODE_TYPE_MAP];
 
     markdown += `## ${taskNumber}. ${taskData.label || taskType?.label || '任务'}\n`;
     markdown += `**类型**: ${taskType?.label || task.node.type}  \n`;
@@ -233,7 +233,7 @@ function generatePreviewMarkdown(
     // 输出子任务
     task.subtasks.forEach((subtask, subtaskIdx) => {
       const subtaskData = subtask.data || {};
-      const subtaskType = NODE_TYPE_MAP[subtask.type as any];
+      const subtaskType = NODE_TYPE_MAP[subtask.type as keyof typeof NODE_TYPE_MAP];
       const subtaskNumber = `${taskNumber}.${subtaskIdx + 1}`;
 
       markdown += `### ${subtaskNumber}. ${subtaskData.label || subtaskType?.label || '子任务'}\n`;
@@ -250,7 +250,7 @@ function generatePreviewMarkdown(
     const endLabel = workflowConfig.endNodeLabel || '结束';
     const endDesc = workflowConfig.endNodeDescription || 'Agent编排的结束点';
     const endNumber = taskNodes.length + 2; // 开始节点 + 任务节点数 + 1
-    const endType = NODE_TYPE_MAP[endNode.type as any];
+    const endType = NODE_TYPE_MAP[endNode.type as keyof typeof NODE_TYPE_MAP];
     markdown += `## ${endNumber}. ${endLabel}\n`;
     markdown += `**类型**: ${endType?.label || endNode.type}  \n`;
     markdown += `**描述**: ${endDesc}\n\n`;

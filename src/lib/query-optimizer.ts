@@ -123,7 +123,7 @@ export function buildWhereClause<T extends Record<string, unknown>>(
 export function buildSearchFilter(
   searchFields: string[],
   searchTerm?: string
-): Prisma.WhereInput | undefined {
+): any | undefined {
   if (!searchTerm || searchTerm.trim() === '') {
     return undefined;
   }
@@ -182,8 +182,8 @@ export function buildStatusFilter(
  * Combine multiple where clauses
  */
 export function combineWhereClauses(
-  ...clauses: (Prisma.WhereInput | undefined)[]
-): Prisma.WhereInput {
+  ...clauses: (any | undefined)[]
+): any {
   const validClauses = clauses.filter((c) => c !== undefined && Object.keys(c).length > 0);
 
   if (validClauses.length === 0) {
@@ -191,7 +191,7 @@ export function combineWhereClauses(
   }
 
   if (validClauses.length === 1) {
-    return validClauses[0] as Prisma.WhereInput;
+    return validClauses[0] as any;
   }
 
   return { AND: validClauses };

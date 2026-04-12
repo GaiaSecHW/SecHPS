@@ -46,44 +46,50 @@ export async function POST(request: NextRequest) {
     console.log('[optimize-skill] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
 
     // 构建提示词
-    const systemPrompt = `你是一个专业的 AI Skill 优化专家。你的任务是分析 Skill 的执行效果和用户反馈，优化完整的 Skill 定义。
+    const systemPrompt = `你是一个专业的 AI Skill 优化专家。你的任务是在用户已有 Skill 内容的基础上进行优化和补充，而不是推翻重写。
 
-优化目标：
-1. 根据评估结果改进系统提示词，解决发现的问题
-2. 根据用户反馈调整 Skill 行为
-3. 优化描述和触发关键词，提高触发准确性
-4. 完善工具列表和用户提示词模板
+## 核心原则
+1. **保留用户意图**：用户已经写好的内容代表他的意图，必须完整保留，不得删除或替换
+2. **补充遗漏**：如果用户内容有缺失的部分（如缺少系统提示词、工具列表等），在不改变现有内容的前提下补充完整
+3. **优化表达**：可以改善措辞、补充细节、使描述更清晰，但不改变原有语义
+4. **提升触发准确性**：在现有描述基础上补充触发关键词，使 Skill 更容易被正确识别
+5. **禁止推翻重写**：不允许因为"觉得自己写得更好"就删掉用户内容重新写一套
 
-请按照以下 JSON 格式返回优化后的完整 Skill 定义（只返回 JSON）：
+## 优化优先级
+- 高优先级：补充明显缺失的字段、修复明显错误
+- 中优先级：丰富系统提示词的检测细节、补充边缘案例
+- 低优先级：润色描述文字
+
+请按照以下 JSON 格式返回优化后的 Skill 定义（只返回 JSON）：
 {
   "name": "skill-name",
   "displayName": "显示名称",
-  "description": "优化后的描述...",
+  "description": "优化后的描述（保留用户原意）",
   "category": "code-audit",
   "cwe": "CWE-78",
-  "systemPrompt": "优化后的系统提示词...",
-  "userPrompt": "优化后的用户提示词模板...",
+  "systemPrompt": "在用户原有系统提示词基础上优化补充...",
+  "userPrompt": "在用户原有用户提示词基础上优化补充...",
   "tools": ["tool1", "tool2"],
   "triggerKeywords": ["关键词1", "关键词2"],
   "triggerAccuracy": 0.92,
-  "suggestions": ["优化建议1", "优化建议2"],
-  "changes": ["本次优化的主要改动说明"]
+  "suggestions": ["补充了哪些内容", "优化了哪些表达"],
+  "changes": ["本次主要改动说明，明确哪些是新增，哪些是保留"]
 }`;
 
     // 构建用户提示词，包含当前 Skill 的完整信息
-    let userPrompt = `请优化以下 Skill 的完整定义：
+    let userPrompt = `请在以下用户已编写的 Skill 内容基础上进行优化补充，不得删除用户已有内容：
 
-## 当前 Skill 信息
+## 用户当前编写的完整 Skill 内容（必须保留，只可补充优化）
+\`\`\`
+${skillData.content || skillData.systemPrompt || '（空）'}
+\`\`\`
+
+## Skill 基本信息
 - 名称: ${skillData.name || '未命名'}
 - 显示名称: ${skillData.displayName || '未命名'}
 - 描述: ${skillData.description || '无'}
 - 分类: ${skillData.category || 'code-audit'}
-- CWE: ${skillData.cwe || '无'}
-- 系统提示词: 
-${skillData.systemPrompt || '无'}
-- 用户提示词模板: 
-${skillData.userPrompt || '无'}
-- 工具: ${skillData.tools?.join(', ') || '无'}`;
+- CWE: ${skillData.cwe || '无'}`;
 
     // 添加测试用例信息
     if (testCases && testCases.length > 0) {

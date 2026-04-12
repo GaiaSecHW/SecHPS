@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   ArrowLeft,
@@ -17,6 +17,10 @@ import {
   Download,
   FileText,
   Loader2,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Eye,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/auth';
@@ -32,6 +36,7 @@ interface Skill {
   category: string;
   techStack: string | null;
   cwe: string | null;
+  severity: string | null;
   content: string;
   isActive: boolean;
   isBuiltin: boolean;
@@ -64,7 +69,36 @@ export default function SkillDetailPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
-  
+
+  // AI 优化相关状态
+  const [aiOptimizing, setAiOptimizing] = useState(false);
+  const [aiOptimizeError, setAiOptimizeError] = useState('');
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [showAiSuggestions, setShowAiSuggestions] = useState(false);
+  const [aiOptimizeSuccess, setAiOptimizeSuccess] = useState(false);
+  const [aiDiffContent, setAiDiffContent] = useState('');   // AI 优化后的内容（待对比）
+  const [showDiffModal, setShowDiffModal] = useState(false); // 对比弹窗
+  const [aiCountdown, setAiCountdown] = useState(0); // 剩余秒数，0 表示未开始
+  const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showFormatHint, setShowFormatHint] = useState(true); // 格式建议默认展开
+
+  // 清理定时器
+  const clearAiTimers = () => {
+    if (aiTimeoutRef.current) { clearTimeout(aiTimeoutRef.current); aiTimeoutRef.current = null; }
+    if (aiCountdownRef.current) { clearInterval(aiCountdownRef.current); aiCountdownRef.current = null; }
+  };
+
+  // 解锁（手动或超时）
+  const unlockAi = (reason?: 'timeout') => {
+    clearAiTimers();
+    setAiOptimizing(false);
+    setAiCountdown(0);
+    if (reason === 'timeout') {
+      setAiOptimizeError('AI 优化超时（5 分钟），界面已自动解锁，请稍后重试。');
+    }
+  };
+
   // 技术栈选择相关
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
@@ -240,7 +274,15 @@ export default function SkillDetailPage() {
     
     setExporting(true);
     try {
-      await exportAsSkillFile(skill);
+      await exportAsSkillFile({
+        name: skill.name,
+        displayName: skill.displayName,
+        description: skill.description,
+        category: skill.category,
+        cwe: skill.cwe,
+        severity: skill.severity || 'medium',
+        content: skill.content,
+      });
     } catch (error) {
       console.error('导出失败:', error);
       alert('导出失败，请重试');
@@ -251,14 +293,102 @@ export default function SkillDetailPage() {
 
   const handleCopyMd = async () => {
     if (!skill) return;
-    
+
     try {
-      await copySkillMdToClipboard(skill);
+      await copySkillMdToClipboard({
+        name: skill.name,
+        displayName: skill.displayName,
+        description: skill.description,
+        category: skill.category,
+        cwe: skill.cwe,
+        severity: skill.severity || 'medium',
+        content: skill.content,
+      });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('复制失败:', error);
       alert('复制失败，请重试');
+    }
+  };
+
+  // AI 优化当前编辑内容
+  const handleAiOptimize = async () => {
+    if (!skill) return;
+    setAiOptimizing(true);
+    setAiOptimizeError('');
+    setAiSuggestions([]);
+    setAiOptimizeSuccess(false);
+
+    // 启动 5 分钟超时自动解锁
+    const TIMEOUT_MS = 5 * 60 * 1000;
+    setAiCountdown(TIMEOUT_MS / 1000);
+    clearAiTimers();
+
+    // 每秒倒计时
+    aiCountdownRef.current = setInterval(() => {
+      setAiCountdown((prev) => {
+        if (prev <= 1) {
+          clearAiTimers();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    // 5 分钟强制解锁
+    aiTimeoutRef.current = setTimeout(() => {
+      unlockAi('timeout');
+    }, TIMEOUT_MS);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills/optimize-skill', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          skillData: {
+            name: skill.name,
+            displayName: editName || skill.displayName,
+            description: editName || skill.displayName,
+            category: editCategory || skill.category,
+            content: editContent,  // 用户当前完整编辑内容，AI 必须在此基础上优化
+            systemPrompt: '',
+            userPrompt: '',
+            tools: [],
+          },
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'AI 优化失败');
+      }
+
+      // 将优化后的 content 存入待对比状态，打开对比弹窗
+      if (data.optimizedSkill?.content) {
+        setAiDiffContent(data.optimizedSkill.content);
+        setShowDiffModal(true);
+      }
+      // 若后端返回 displayName，同步更新
+      if (data.optimizedSkill?.displayName && !editName) {
+        setEditName(data.optimizedSkill.displayName);
+      }
+      // 展示优化建议
+      if (data.suggestions && data.suggestions.length > 0) {
+        setAiSuggestions(data.suggestions);
+        setShowAiSuggestions(true);
+      }
+      setAiOptimizeSuccess(true);
+      setTimeout(() => setAiOptimizeSuccess(false), 3000);
+    } catch (err) {
+      setAiOptimizeError(err instanceof Error ? err.message : 'AI 优化失败，请重试');
+    } finally {
+      unlockAi();
     }
   };
 
@@ -280,6 +410,31 @@ export default function SkillDetailPage() {
 
   return (
     <div className="space-y-6">
+      {/* AI 优化全屏遮罩 */}
+      {aiOptimizing && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center animate-pulse">
+              <Sparkles size={32} className="text-white" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900">AI 正在优化 Skill</h3>
+            <p className="text-sm text-gray-500 text-center">
+              大模型分析中，请勿关闭页面或进行其他操作...
+            </p>
+            {/* 进度条动画 */}
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"
+                style={{ width: `${Math.max(5, 100 - (aiCountdown / 300) * 100)}%`, transition: 'width 1s linear' }} />
+            </div>
+            {/* 倒计时 */}
+            {aiCountdown > 0 && (
+              <p className="text-xs text-gray-400">
+                最长等待 {Math.floor(aiCountdown / 60)}:{String(aiCountdown % 60).padStart(2, '0')}，超时将自动解锁
+              </p>
+            )}
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -537,29 +692,115 @@ export default function SkillDetailPage() {
                 <label className="block text-sm font-medium text-gray-700">
                   Skill 内容（Markdown 格式）
                 </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleAiOptimize}
+                    disabled={aiOptimizing}
+                    className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                    title="使用大模型 AI 优化当前 Skill 内容，提升触发准确性和功能完整性"
+                  >
+                    {aiOptimizing ? (
+                      <>
+                        <Loader2 size={14} className="mr-1.5 animate-spin" />
+                        AI 优化中...
+                      </>
+                    ) : aiOptimizeSuccess ? (
+                      <>
+                        <CheckCircle size={14} className="mr-1.5" />
+                        优化完成！
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} className="mr-1.5" />
+                        AI 优化
+                      </>
+                    )}
+                  </button>
+                  {/* 有缓存的 AI 结果时，显示重新查看对比按钮 */}
+                  {aiDiffContent && !aiOptimizing && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDiffModal(true)}
+                      className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
+                      title="重新打开上次 AI 优化结果的对比弹窗"
+                    >
+                      <Eye size={14} className="mr-1.5" />
+                      查看上次对比
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (skill) {
+                        setEditContent(skill.content || '');
+                      }
+                    }}
+                    className="text-sm text-blue-600 hover:text-blue-800"
+                  >
+                    重置为原始内容
+                  </button>
+                </div>
+              </div>
+
+              {/* AI 优化错误提示 */}
+              {aiOptimizeError && (
+                <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                  <span>{aiOptimizeError}</span>
+                </div>
+              )}
+
+              {/* AI 优化建议 */}
+              {aiSuggestions.length > 0 && (
+                <div className="mb-3 bg-purple-50 border border-purple-200 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowAiSuggestions(!showAiSuggestions)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-purple-800 hover:bg-purple-100 transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles size={14} />
+                      AI 优化建议（{aiSuggestions.length} 条）
+                    </span>
+                    {showAiSuggestions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  {showAiSuggestions && (
+                    <ul className="px-4 pb-3 space-y-1.5">
+                      {aiSuggestions.map((suggestion, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm text-purple-700">
+                          <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center text-xs font-bold">
+                            {idx + 1}
+                          </span>
+                          {suggestion}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              <div className="mb-3 border border-gray-200 rounded-lg overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => {
-                    if (skill) {
-                      setEditContent(skill.content || '');
-                    }
-                  }}
-                  className="text-sm text-blue-600 hover:text-blue-800"
+                  onClick={() => setShowFormatHint(!showFormatHint)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-gray-600"
                 >
-                  重置为原始内容
+                  <span>格式建议</span>
+                  {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
-              </div>
-              <div className="mb-3 bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <p className="text-sm text-gray-600 mb-2">格式建议：</p>
-                <div className="text-xs text-gray-500 font-mono space-y-1">
-                  <p># Skill 名称</p>
-                  <p>## 描述</p>
-                  <p>## 严重程度 (critical | high | medium | low | info)</p>
-                  <p>## CWE 编号</p>
-                  <p>## 系统提示词</p>
-                  <p>## 用户提示词</p>
-                  <p>## 工具 (使用 - 列表)</p>
-                </div>
+                {showFormatHint && (
+                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                    <div className="text-xs text-gray-500 font-mono space-y-1">
+                      <p># Skill 名称</p>
+                      <p>## 描述</p>
+                      <p>## CWE 编号</p>
+                      <p>## 系统提示词</p>
+                      <p>## 用户提示词</p>
+                      <p>## 工具 (使用 - 列表)</p>
+                    </div>
+                  </div>
+                )}
               </div>
               <textarea
                 value={editContent}
@@ -642,6 +883,196 @@ export default function SkillDetailPage() {
           </div>
         )}
       </div>
+
+      {/* AI 优化内容对比弹窗 */}
+      {showDiffModal && (() => {
+        // ── 轻量 LCS diff 引擎 ──
+        const leftLines = editContent.split('\n');
+        const rightLines = aiDiffContent.split('\n');
+
+        // LCS 动态规划
+        const lcs = (a: string[], b: string[]) => {
+          const m = a.length, n = b.length;
+          const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+          for (let i = 1; i <= m; i++)
+            for (let j = 1; j <= n; j++)
+              dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] + 1 : Math.max(dp[i-1][j], dp[i][j-1]);
+          return dp;
+        };
+
+        type DiffRow = { type: 'same'|'removed'|'added'|'empty'; text: string; lineNo: number|null };
+
+        const buildDiff = (a: string[], b: string[]): { left: DiffRow[]; right: DiffRow[] } => {
+          const dp = lcs(a, b);
+          const left: DiffRow[] = [], right: DiffRow[] = [];
+          let i = a.length, j = b.length;
+          const ops: Array<'same'|'removed'|'added'> = [];
+          while (i > 0 || j > 0) {
+            if (i > 0 && j > 0 && a[i-1] === b[j-1]) { ops.unshift('same'); i--; j--; }
+            else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) { ops.unshift('added'); j--; }
+            else { ops.unshift('removed'); i--; }
+          }
+          let li = 0, ri = 0;
+          for (const op of ops) {
+            if (op === 'same') {
+              left.push({ type: 'same', text: a[li], lineNo: li + 1 }); li++;
+              right.push({ type: 'same', text: b[ri], lineNo: ri + 1 }); ri++;
+            } else if (op === 'removed') {
+              left.push({ type: 'removed', text: a[li], lineNo: li + 1 }); li++;
+              right.push({ type: 'empty', text: '', lineNo: null });
+            } else {
+              left.push({ type: 'empty', text: '', lineNo: null });
+              right.push({ type: 'added', text: b[ri], lineNo: ri + 1 }); ri++;
+            }
+          }
+          return { left, right };
+        };
+
+        const { left: leftDiff, right: rightDiff } = buildDiff(leftLines, rightLines);
+
+        const rowBg = (type: DiffRow['type'], side: 'left'|'right') => {
+          if (type === 'removed') return 'bg-red-50';
+          if (type === 'added') return 'bg-green-50';
+          if (type === 'empty') return side === 'left' ? 'bg-green-50/40' : 'bg-red-50/40';
+          return '';
+        };
+        const textColor = (type: DiffRow['type']) => {
+          if (type === 'removed') return 'text-red-700';
+          if (type === 'added') return 'text-green-700';
+          if (type === 'empty') return 'text-transparent select-none';
+          return 'text-gray-700';
+        };
+        const lineNoBg = (type: DiffRow['type']) => {
+          if (type === 'removed') return 'bg-red-100 text-red-400';
+          if (type === 'added') return 'bg-green-100 text-green-500';
+          if (type === 'empty') return 'bg-gray-50 text-transparent';
+          return 'bg-gray-50 text-gray-300';
+        };
+        const marker = (type: DiffRow['type']) => {
+          if (type === 'removed') return <span className="text-red-400 select-none mr-1">−</span>;
+          if (type === 'added') return <span className="text-green-500 select-none mr-1">+</span>;
+          return <span className="select-none mr-1 opacity-0">·</span>;
+        };
+
+        const changedCount = rightDiff.filter(r => r.type === 'added').length +
+                             leftDiff.filter(r => r.type === 'removed').length;
+
+        // 同步滚动
+        const leftRef = (el: HTMLDivElement | null) => { (window as any).__diffLeft = el; };
+        const rightRef = (el: HTMLDivElement | null) => { (window as any).__diffRight = el; };
+        const onLeftScroll = (e: React.UIEvent<HTMLDivElement>) => {
+          const r = (window as any).__diffRight;
+          if (r) r.scrollTop = (e.target as HTMLDivElement).scrollTop;
+        };
+        const onRightScroll = (e: React.UIEvent<HTMLDivElement>) => {
+          const l = (window as any).__diffLeft;
+          if (l) l.scrollTop = (e.target as HTMLDivElement).scrollTop;
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
+
+              {/* 弹窗头部 */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
+                    <Sparkles size={16} className="text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">AI 优化内容对比</h2>
+                    <p className="text-xs text-gray-500">
+                      共 <span className="font-medium text-orange-500">{changedCount}</span> 处变更 &nbsp;·&nbsp;
+                      <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block"/>删除</span> &nbsp;
+                      <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300 inline-block"/>新增</span>
+                    </p>
+                  </div>
+                </div>
+                <button onClick={() => setShowDiffModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* AI 优化建议 */}
+              {aiSuggestions.length > 0 && (
+                <div className="px-6 py-2.5 bg-purple-50 border-b border-purple-100 flex-shrink-0">
+                  <span className="text-xs font-medium text-purple-700">AI 优化说明：</span>
+                  <span className="text-xs text-purple-600 ml-2">{aiSuggestions.join('；')}</span>
+                </div>
+              )}
+
+              {/* 列标题 */}
+              <div className="flex divide-x divide-gray-200 flex-shrink-0 border-b border-gray-200">
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50">
+                  <span className="w-2 h-2 rounded-full bg-red-400"/>
+                  <span className="text-sm font-medium text-gray-600">原始内容（你编辑的）</span>
+                </div>
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-50">
+                  <span className="w-2 h-2 rounded-full bg-purple-500"/>
+                  <span className="text-sm font-medium text-purple-700">AI 优化后的内容</span>
+                </div>
+              </div>
+
+              {/* diff 主体 — 同步滚动 */}
+              <div className="flex-1 flex divide-x divide-gray-200 min-h-0 overflow-hidden">
+                {/* 左侧 */}
+                <div ref={leftRef} onScroll={onLeftScroll}
+                  className="flex-1 overflow-auto font-mono text-xs leading-5">
+                  {leftDiff.map((row, idx) => (
+                    <div key={idx} className={`flex min-w-0 ${rowBg(row.type, 'left')}`}>
+                      <span className={`w-10 shrink-0 text-right pr-2 py-0.5 select-none text-[10px] border-r border-gray-100 ${lineNoBg(row.type)}`}>
+                        {row.lineNo ?? ''}
+                      </span>
+                      <span className={`w-4 shrink-0 flex items-center justify-center py-0.5`}>
+                        {marker(row.type)}
+                      </span>
+                      <span className={`flex-1 py-0.5 pr-4 whitespace-pre ${textColor(row.type)}`}>
+                        {row.type === 'empty' ? '\u00a0' : row.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 右侧 */}
+                <div ref={rightRef} onScroll={onRightScroll}
+                  className="flex-1 overflow-auto font-mono text-xs leading-5">
+                  {rightDiff.map((row, idx) => (
+                    <div key={idx} className={`flex min-w-0 ${rowBg(row.type, 'right')}`}>
+                      <span className={`w-10 shrink-0 text-right pr-2 py-0.5 select-none text-[10px] border-r border-gray-100 ${lineNoBg(row.type)}`}>
+                        {row.lineNo ?? ''}
+                      </span>
+                      <span className={`w-4 shrink-0 flex items-center justify-center py-0.5`}>
+                        {marker(row.type)}
+                      </span>
+                      <span className={`flex-1 py-0.5 pr-4 whitespace-pre ${textColor(row.type)}`}>
+                        {row.type === 'empty' ? '\u00a0' : row.text}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 底部操作 */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0 bg-gray-50 rounded-b-2xl">
+                <button
+                  onClick={() => { setShowDiffModal(false); }}
+                  className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  放弃，保留原始内容
+                </button>
+                <button
+                  onClick={() => { setEditContent(aiDiffContent); setShowDiffModal(false); setAiDiffContent(''); }}
+                  className="inline-flex items-center px-5 py-2 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm"
+                >
+                  <CheckCircle size={15} className="mr-1.5" />
+                  采用 AI 优化内容
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

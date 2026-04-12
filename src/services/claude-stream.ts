@@ -60,12 +60,13 @@ class ClaudeAdapter {
    */
   normalizeMessage(message: SDKMessage, sessionId: string | null): NormalizedMessage[] {
     const normalized: NormalizedMessage[] = [];
+    const safeSessionId = sessionId ?? undefined;
 
-    switch (message.type) {
+    switch (message.type as string) {
       case 'assistant':
         normalized.push({
           kind: 'assistant_message',
-          sessionId,
+          safeSessionId,
           provider: 'claude',
           timestamp: Date.now(),
           role: 'assistant',
@@ -76,7 +77,7 @@ class ClaudeAdapter {
       case 'user':
         normalized.push({
           kind: 'user_message',
-          sessionId,
+          safeSessionId,
           provider: 'claude',
           timestamp: Date.now(),
           role: 'user',
@@ -87,7 +88,7 @@ class ClaudeAdapter {
       case 'tool_use':
         normalized.push({
           kind: 'tool_use',
-          sessionId,
+          safeSessionId,
           provider: 'claude',
           timestamp: Date.now(),
           tool_name: (message as any).name,
@@ -99,7 +100,7 @@ class ClaudeAdapter {
       case 'tool_result':
         normalized.push({
           kind: 'tool_result',
-          sessionId,
+          safeSessionId,
           provider: 'claude',
           timestamp: Date.now(),
           tool_name: (message as any).name,
@@ -113,7 +114,7 @@ class ClaudeAdapter {
         if ((message as any).subtype === 'success') {
           normalized.push({
             kind: 'result',
-            sessionId,
+            safeSessionId,
             provider: 'claude',
             timestamp: Date.now(),
             result: (message as any).result,
@@ -121,7 +122,7 @@ class ClaudeAdapter {
         } else if ((message as any).subtype?.startsWith('error')) {
           normalized.push({
             kind: 'error',
-            sessionId,
+            safeSessionId,
             provider: 'claude',
             timestamp: Date.now(),
             error: (message as any).errors?.join('\n') || 'Unknown error',
@@ -132,7 +133,7 @@ class ClaudeAdapter {
       case 'text':
         normalized.push({
           kind: 'text',
-          sessionId,
+          safeSessionId,
           provider: 'claude',
           timestamp: Date.now(),
           text: (message as any).text,
@@ -142,11 +143,10 @@ class ClaudeAdapter {
       default:
         // 其他消息类型，直接传递
         normalized.push({
-          kind: message.type,
-          sessionId,
+          kind: String(message.type),
+          safeSessionId,
           provider: 'claude',
           timestamp: Date.now(),
-          ...message,
         });
     }
 
@@ -198,6 +198,7 @@ export class ClaudeStreamService {
     callbacks: ClaudeStreamCallbacks = {}
   ): Promise<{ response: string; sessionId: string }> {
     this.abortController = new AbortController();
+    let fullResponse = '';
 
     try {
       // 构建 SDK 选项
@@ -294,7 +295,7 @@ export class ClaudeStreamService {
   private buildOptions(): Options {
     const options: Options = {
       model: this.config.model,
-      abortController: this.abortController,
+      abortController: this.abortController ?? undefined,
     };
 
     // 设置工作目录
@@ -387,12 +388,5 @@ export class ClaudeStreamService {
 }
 
 // ============================================
-// 导出
+// 导出（已在接口定义处导出）
 // ============================================
-
-export type {
-  ClaudeStreamConfig,
-  ClaudeStreamCallbacks,
-  NormalizedMessage,
-  TokenBudget,
-};

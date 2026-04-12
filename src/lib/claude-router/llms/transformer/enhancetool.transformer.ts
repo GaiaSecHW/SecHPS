@@ -12,8 +12,7 @@ export class EnhanceToolTransformer implements Transformer {
         for (const toolCall of jsonResponse.choices[0].message.tool_calls) {
           if (toolCall.function?.arguments) {
             toolCall.function.arguments = parseToolArguments(
-              toolCall.function.arguments,
-              this.logger
+              toolCall.function.arguments
             );
           }
         }
@@ -71,7 +70,7 @@ export class EnhanceToolTransformer implements Transformer {
           ) => {
             let finalArgs = "";
             try {
-              finalArgs = parseToolArguments(currentToolCall.arguments || "", this.logger);
+              finalArgs = parseToolArguments(currentToolCall.arguments || "");
             } catch (e: any) {
               console.error(
                 `${e.message} ${

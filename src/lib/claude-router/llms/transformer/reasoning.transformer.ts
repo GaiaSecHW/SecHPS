@@ -79,7 +79,7 @@ export class ReasoningTransformer implements Transformer {
             line: string,
             context: {
               controller: ReadableStreamDefaultController;
-              encoder: typeof TextEncoder;
+              encoder: TextEncoder;
               reasoningContent: () => string;
               appendReasoningContent: (content: string) => void;
               isReasoningComplete: () => boolean;
@@ -87,8 +87,6 @@ export class ReasoningTransformer implements Transformer {
             }
           ) => {
             const { controller, encoder } = context;
-
-            this.logger?.debug({ line }, `Processing reason line`);
 
             if (line.startsWith("data: ") && line.trim() !== "data: [DONE]") {
               try {

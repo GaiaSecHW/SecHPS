@@ -68,7 +68,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
     fetchTemplate();
   }, []);
 
-  const handleChange = (field: keyof IntentData, value: string | boolean) => {
+  const handleChange = (field: keyof IntentData, value: string | boolean | string[]) => {
     onChange({ ...data, [field]: value });
   };
 

@@ -134,8 +134,8 @@ async function executeJavaScript(
       SyntaxError,
     });
 
-    const script = new vm.Script(wrappedCode, { timeout });
-    const result = script.runInContext(context, { timeout });
+    const script = new vm.Script(wrappedCode, { timeout } as any);
+    const result = script.runInContext(context, { timeout } as any);
 
     logs.push(`[Script] Execution completed`);
     return result;

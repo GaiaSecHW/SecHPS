@@ -32,9 +32,11 @@ export class GeminiTransformer implements Transformer {
     };
   }
 
-  transformRequestOut = transformRequestOut;
+  transformRequestOut = async (request: any, context: any): Promise<UnifiedChatRequest> => {
+    return transformRequestOut(request);
+  };
 
   async transformResponseOut(response: Response): Promise<Response> {
-    return transformResponseOut(response, this.name, this.logger);
+    return transformResponseOut(response, this.name);
   }
 }

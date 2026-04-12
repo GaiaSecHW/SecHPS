@@ -36,7 +36,7 @@ export async function POST(
     const projectPath = decodedProjectName.replace(/-/g, '/');
 
     const sessionManager = new SessionManager(projectPath);
-    const claudeAgent = new ClaudeAgentService(projectPath);
+    const claudeAgent = new ClaudeAgentService({ cwd: projectPath });
 
     let currentSessionId = sessionId;
 

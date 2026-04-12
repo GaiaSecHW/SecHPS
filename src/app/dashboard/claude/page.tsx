@@ -382,7 +382,7 @@ export default function ClaudePage() {
           })}
 
           {/* 多源会话 */}
-          {multiSource && (multiSource.cursorSessions.length > 0 || multiSource.codexSessions.length > 0 || multiSource.geminiSessions.length > 0) && (
+          {multiSource && ((multiSource.cursorSessions?.length ?? 0) > 0 || (multiSource.codexSessions?.length ?? 0) > 0 || (multiSource.geminiSessions?.length ?? 0) > 0) && (
             <div className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               <div
                 className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
@@ -404,19 +404,19 @@ export default function ClaudePage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
-                  {multiSource.cursorSessions.length > 0 && (
+                  {(multiSource.cursorSessions?.length ?? 0) > 0 && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {multiSource.cursorSessions.length} Cursor
+                      {multiSource.cursorSessions?.length} Cursor
                     </span>
                   )}
-                  {multiSource.codexSessions.length > 0 && (
+                  {(multiSource.codexSessions?.length ?? 0) > 0 && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                      {multiSource.codexSessions.length} Codex
+                      {multiSource.codexSessions?.length} Codex
                     </span>
                   )}
-                  {multiSource.geminiSessions.length > 0 && (
+                  {(multiSource.geminiSessions?.length ?? 0) > 0 && (
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                      {multiSource.geminiSessions.length} Gemini
+                      {multiSource.geminiSessions?.length} Gemini
                     </span>
                   )}
                 </div>

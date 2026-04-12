@@ -1,14 +1,18 @@
-import { UnifiedChatRequest } from "../types/llm";
-import { Transformer } from "../types/transformer";
+import { LLMProvider, UnifiedChatRequest } from "../types/llm";
+import { Transformer, TransformerContext } from "../types/transformer";
 
 export class TooluseTransformer implements Transformer {
   name = "tooluse";
 
-  transformRequestIn(request: UnifiedChatRequest): UnifiedChatRequest {
+  async transformRequestIn(
+    request: UnifiedChatRequest,
+    provider: LLMProvider,
+    context: TransformerContext
+  ): Promise<Record<string, any>> {
     request.messages.push({
       role: "system",
       content: `<system-reminder>Tool mode is active. The user expects you to proactively execute the most suitable tool to help complete the task. 
-Before invoking a tool, you must carefully evaluate whether it matches the current task. If no available tool is appropriate for the task, you MUST call the \`ExitTool\` to exit tool mode �?this is the only valid way to terminate tool mode.
+Before invoking a tool, you must carefully evaluate whether it matches the current task. If no available tool is appropriate for the task, you MUST call the \`ExitTool\` to exit tool mode – this is the only valid way to terminate tool mode.
 Always prioritize completing the user's task effectively and efficiently by using tools whenever appropriate.</system-reminder>`,
     });
     if (request.tools?.length) {
@@ -18,17 +22,17 @@ Always prioritize completing the user's task effectively and efficiently by usin
         function: {
           name: "ExitTool",
           description: `Use this tool when you are in tool mode and have completed the task. This is the only valid way to exit tool mode.
-IMPORTANT: Before using this tool, ensure that none of the available tools are applicable to the current task. You must evaluate all available options �?only if no suitable tool can help you complete the task should you use ExitTool to terminate tool mode.
+IMPORTANT: Before using this tool, ensure that none of the available tools are applicable to the current task. You must evaluate all available options – only if no suitable tool can help you complete the task should you use ExitTool to terminate tool mode.
 Examples:
-1. Task: "Use a tool to summarize this document" �?Do not use ExitTool if a summarization tool is available.
-2. Task: "What’s the weather today?" �?If no tool is available to answer, use ExitTool after reasoning that none can fulfill the task.`,
+1. Task: "Use a tool to summarize this document" – Do not use ExitTool if a summarization tool is available.
+2. Task: "What's the weather today?" – If no tool is available to answer, use ExitTool after reasoning that none can fulfill the task.`,
           parameters: {
             type: "object",
             properties: {
               response: {
                 type: "string",
                 description:
-                  "Your response will be forwarded to the user exactly as returned �?the tool will not modify or post-process it in any way.",
+                  "Your response will be forwarded to the user exactly as returned – the tool will not modify or post-process it in any way.",
               },
             },
             required: ["response"],

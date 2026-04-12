@@ -1,0 +1,9 @@
+{
+  "id": "cmnuv8bh60039igjpo76w8ww3",
+  "name": "code-audit-references-languages-java_jndi_injection",
+  "displayName": "Java JNDI Injection - JNDI 注入完整审计规则",
+  "userId": null,
+  "latestVersion": 1,
+  "isActive": true,
+  "updatedAt": "2026-04-11T22:36:01.632Z"
+}

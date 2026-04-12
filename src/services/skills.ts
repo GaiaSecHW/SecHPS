@@ -792,6 +792,7 @@ export async function importSkillFromMarkdown(
   }
   
   return {
+    id: `skill-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     name: frontmatter.name || 'unnamed',
     displayName: frontmatter.name || 'Unnamed',
     description: frontmatter.description || content.slice(0, 200),

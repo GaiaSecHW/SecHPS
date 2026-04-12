@@ -1,0 +1,9 @@
+{
+  "id": "cmnuv8boj0051igjp5hfbhsbs",
+  "name": "code-audit-references-security-realtime_protocols",
+  "displayName": "实时协议与缺失框架扩展 (WebSocket/gRPC/SSE + .NET/Rails/Rust/Nest/Fastify)",
+  "userId": null,
+  "latestVersion": 1,
+  "isActive": true,
+  "updatedAt": "2026-04-11T22:36:01.670Z"
+}

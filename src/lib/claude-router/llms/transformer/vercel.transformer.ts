@@ -105,10 +105,6 @@ export class VercelTransformer implements Transformer {
               try {
                 const data = JSON.parse(jsonStr);
                 if (data.usage) {
-                  this.logger?.debug(
-                    { usage: data.usage, hasToolCall },
-                    "usage"
-                  );
                   data.choices[0].finish_reason = hasToolCall
                     ? "tool_calls"
                     : "stop";

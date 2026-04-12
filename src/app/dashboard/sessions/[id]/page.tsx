@@ -982,13 +982,38 @@ export default function SessionDetailPage({
                               <p className="text-sm font-medium text-gray-900 truncate">
                                 {child.title || '无标题'}
                               </p>
-                              <div className="flex items-center space-x-2 mt-1">
+                              <div className="flex items-center space-x-2 mt-1 flex-wrap gap-y-0.5">
                                 <p className="text-xs text-gray-500">
                                   ID: {child.id.substring(0, 20)}...
                                 </p>
                                 {child.messageIndex !== undefined && (
                                   <span className="text-xs text-blue-600">
                                     (消息 #{child.messageIndex + 1})
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-0.5">
+                                {child.startedAt && (
+                                  <span className="text-xs text-green-600 flex items-center">
+                                    <Clock size={10} className="mr-1" />
+                                    启动: {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                  </span>
+                                )}
+                                {child.completedAt && (
+                                  <span className="text-xs text-gray-500 flex items-center">
+                                    <CheckCircle2 size={10} className="mr-1" />
+                                    结束: {new Date(child.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                                  </span>
+                                )}
+                                {child.startedAt && child.completedAt && (
+                                  <span className="text-xs text-purple-600">
+                                    耗时: {Math.round((new Date(child.completedAt).getTime() - new Date(child.startedAt).getTime()) / 1000)}s
+                                  </span>
+                                )}
+                                {child.startedAt && !child.completedAt && (
+                                  <span className="text-xs text-orange-500 flex items-center">
+                                    <Loader2 size={10} className="mr-1 animate-spin" />
+                                    运行中
                                   </span>
                                 )}
                               </div>
@@ -1321,7 +1346,7 @@ function MessageBubble({
   isSelected: boolean;
 }) {
   const isUser = message.role === 'user';
-  const [expandedTools, setExpandedTools] = useState<Record<number, boolean>>({});
+  const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState(false);
   const [expandedToolSection, setExpandedToolSection] = useState(false);
@@ -1500,6 +1525,26 @@ function MessageBubble({
                       {subtask.content && (
                         <p className="text-xs text-gray-600 mt-1">{subtask.content}</p>
                       )}
+                      {/* 时间信息 */}
+                      <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-0.5">
+                        {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && (
+                          <span className="text-xs text-green-600 flex items-center">
+                            <Clock size={10} className="mr-1" />
+                            启动: {new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        )}
+                        {subtask.completedAt && (
+                          <span className="text-xs text-gray-500 flex items-center">
+                            <CheckCircle2 size={10} className="mr-1" />
+                            结束: {new Date(subtask.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                          </span>
+                        )}
+                        {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && subtask.completedAt && (
+                          <span className="text-xs text-purple-600">
+                            耗时: {Math.round((new Date(subtask.completedAt).getTime() - new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).getTime()) / 1000)}s
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center space-x-2 ml-2">
                       {subtask.status && (

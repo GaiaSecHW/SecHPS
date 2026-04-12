@@ -616,7 +616,7 @@ const [showPreview, setShowPreview] = useState(false);
     
     sortedNodes.forEach((node, index) => {
       const nodeData = node.data as NodeData;
-      const nodeType = NODE_TYPE_MAP[node.type as any];
+      const nodeType = NODE_TYPE_MAP[node.type as keyof typeof NODE_TYPE_MAP];
       
       markdown += `## ${index + 1}. ${nodeData.label}\n\n`;
       
@@ -668,7 +668,7 @@ const [showPreview, setShowPreview] = useState(false);
     });
     
     typeCount.forEach((count, type) => {
-      const nodeType = NODE_TYPE_MAP[type as any];
+      const nodeType = NODE_TYPE_MAP[type as keyof typeof NODE_TYPE_MAP];
       markdown += `  - ${nodeType?.label || type}: ${count}\n`;
     });
     

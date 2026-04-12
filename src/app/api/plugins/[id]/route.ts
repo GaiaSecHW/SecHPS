@@ -5,9 +5,9 @@ import { PERMISSIONS } from '@/types/permissions';
 import type { UpdatePluginConfigRequest } from '@/types/plugin';
 
 interface RouteParams {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 }
 
 /**
@@ -16,6 +16,8 @@ interface RouteParams {
  */
 export async function GET(request: Request, { params }: RouteParams) {
   try {
+    const { id } = await params;
+
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
@@ -44,7 +46,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     }
 
     // 获取插件详情
-    const plugin = await PluginManager.getPlugin(params.id);
+    const plugin = await PluginManager.getPlugin(id);
 
     if (!plugin) {
       return NextResponse.json(
@@ -69,6 +71,8 @@ export async function GET(request: Request, { params }: RouteParams) {
  */
 export async function PATCH(request: Request, { params }: RouteParams) {
   try {
+    const { id } = await params;
+
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
@@ -101,7 +105,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     // 更新插件配置
     const plugin = await PluginManager.updatePluginConfig(
-      params.id,
+      id,
       body.config
     );
 
@@ -132,6 +136,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
  */
 export async function DELETE(request: Request, { params }: RouteParams) {
   try {
+    const { id } = await params;
+
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
@@ -154,13 +160,13 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     // 检查权限
     if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_DELETE)) {
       return NextResponse.json(
-        { error: '没有卸载插件的权限' },
+        { error: '没有卸载插插件的权限' },
         { status: 403 }
       );
     }
 
     // 卸载插件
-    await PluginManager.uninstallPlugin(params.id);
+    await PluginManager.uninstallPlugin(id);
 
     return NextResponse.json({
       message: '插件卸载成功',

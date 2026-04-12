@@ -1093,10 +1093,10 @@ export default function SessionsPage() {
 
               {/* 最新完成的评估会话信息 */}
               {!project.evaluations?.some((e: any) => e.status === 'running') && 
-               project.evaluations?.length > 0 && (
+               (project.evaluations?.length ?? 0) > 0 && (
                 <div className="bg-gray-50 px-6 py-2 border-t border-gray-100">
                   {(() => {
-                    const latestEval = project.evaluations
+                    const latestEval = (project.evaluations ?? [])
                       .filter((e: any) => e.status === 'completed' || e.status === 'failed')
                       .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
                     if (!latestEval) return null;

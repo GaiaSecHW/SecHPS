@@ -1,0 +1,9 @@
+{
+  "id": "cmnuv8bpi0059igjp3cfeyph3",
+  "name": "code-audit-references-wooyun-file-traversal",
+  "displayName": "文件遍历/任意文件读取漏洞分析知识库",
+  "userId": null,
+  "latestVersion": 1,
+  "isActive": true,
+  "updatedAt": "2026-04-11T22:36:01.675Z"
+}

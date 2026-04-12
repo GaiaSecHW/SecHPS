@@ -281,7 +281,7 @@ export class SessionManager {
           return { file, mtime: stats.mtime };
         })
       );
-      filesWithStats.sort((a, b) => b.mtime - a.mtime);
+      filesWithStats.sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
 
       // 解析所有会话
       const allSessions: Session[] = [];
@@ -495,7 +495,7 @@ export class SessionManager {
       await fs.unlink(sessionFilePath);
 
       // 清除缓存
-      this.messageCache.delete.delete(sessionId);
+      this.messageCache.delete(sessionId);
 
       return true;
     } catch (error) {
@@ -1288,15 +1288,4 @@ export class ProjectDiscovery {
   }
 }
 
-// ============================================
-// 导出
-// ============================================
-
-export {
-  SessionManager,
-  ProjectDiscovery,
-  type SessionMessage,
-  type Session,
-  type SessionListResult,
-  type SessionMessagesResult,
-};
+// 类型已在接口定义处导出

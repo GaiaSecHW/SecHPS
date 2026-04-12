@@ -8,15 +8,36 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
+type TestSkill = {
+  id: string;
+  userId: string | null;
+  name: string;
+  displayName: string;
+  description: string;
+  category: string;
+  severity: string;
+  cwe: string;
+  systemPrompt: string;
+  userPrompt: string;
+  tools: unknown[];
+  parameters: unknown[];
+  version: number;
+  parentId: string | null;
+  isLatest: boolean;
+  successRate: number;
+  avgDuration: number;
+  execCount: number;
+};
+
 // 模拟测试 Skill 数据
-const testSkill = {
+const testSkill: TestSkill = {
   id: 'test-id-1',
   userId: null,
   name: 'sql-injection',
   displayName: 'SQL 注入检测',
   description: '检测 SQL 注入漏洞',
-  category: 'code-audit' as const,
-  severity: 'critical' as const,
+  category: 'code-audit',
+  severity: 'critical',
   cwe: 'CWE-89',
   systemPrompt: '你是一个 SQL 注入检测专家...',
   userPrompt: '请检查以下代码是否存在 SQL 注入漏洞...',
@@ -30,14 +51,14 @@ const testSkill = {
   execCount: 100,
 };
 
-const testSkill2 = {
+const testSkill2: TestSkill = {
   id: 'test-id-2',
   userId: null,
   name: 'xss-detection',
   displayName: 'XSS 检测',
   description: '检测跨站脚本攻击',
-  category: 'web' as const,
-  severity: 'high' as const,
+  category: 'web',
+  severity: 'high',
   cwe: 'CWE-79',
   systemPrompt: '你是一个 XSS 检测专家...',
   userPrompt: '请检查以下代码是否存在 XSS 漏洞...',
@@ -60,7 +81,7 @@ function cleanup() {
   }
 }
 
-function generateSkillMarkdown(skill: typeof testSkill): string {
+function generateSkillMarkdown(skill: TestSkill): string {
   let markdown = '---\n';
   markdown += `name: ${skill.name}\n`;
   markdown += `description: ${skill.description}\n`;
@@ -76,7 +97,7 @@ function generateSkillMarkdown(skill: typeof testSkill): string {
   return markdown;
 }
 
-function exportSkillToFile(skill: typeof testSkill, targetDir: string): string {
+function exportSkillToFile(skill: TestSkill, targetDir: string): string {
   const skillDir = path.join(targetDir, skill.name);
   const skillFile = path.join(skillDir, `SKILL-v${skill.version}.md`);
   

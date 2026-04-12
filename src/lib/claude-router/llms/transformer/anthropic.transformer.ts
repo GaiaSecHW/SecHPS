@@ -45,7 +45,8 @@ export class AnthropicTransformer implements Transformer {
   }
 
   async transformRequestOut(
-    request: Record<string, any>
+    request: Record<string, any>,
+    context?: TransformerContext
   ): Promise<UnifiedChatRequest> {
     const messages: UnifiedMessage[] = [];
 

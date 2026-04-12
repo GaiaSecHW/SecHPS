@@ -7,8 +7,7 @@
 import { EnhancedEvaluationCaller } from './enhanced-caller';
 import type { EnhancedEvaluationConfig, EnhancedEvaluationCallbacks } from './enhanced-caller';
 import { prisma } from '@/lib/prisma';
-import type { GenerateTextResult, ToolSet } from 'ai';
-import type { VerifyCompletionFunction, VerifyCompletionResult } from './ralph-loop-agent-evaluator';
+import type { VerifyCompletionFunction, VerifyCompletionResult, SimpleGenerateTextResult } from './ralph-loop-agent-evaluator';
 import {
   iterationCountIs,
   tokenCountIs,
@@ -51,7 +50,7 @@ export interface RalphLoopAgentConfig extends EnhancedEvaluationConfig {
   /**
    * 迭代结束回调
    */
-  onIterationEnd?: (iteration: number, duration: number, result: GenerateTextResult<any, never>) => void | Promise<void>;
+  onIterationEnd?: (iteration: number, duration: number, result: SimpleGenerateTextResult) => void | Promise<void>;
 
   /**
    * 上下文总结回调
@@ -75,7 +74,7 @@ export interface RalphLoopAgentCallbacks extends EnhancedEvaluationCallbacks {
     iterations: number;
     completionReason: 'verified' | 'max-iterations' | 'aborted';
     reason?: string;
-    allResults: GenerateTextResult<any, never>[];
+    allResults: SimpleGenerateTextResult[];
     totalUsage: {
       inputTokens: number;
       outputTokens: number;
@@ -111,12 +110,12 @@ export interface RalphLoopAgentResult {
   /**
    * 最后一次迭代的结果
    */
-  readonly result: GenerateTextResult<any, never>;
+  readonly result: SimpleGenerateTextResult;
 
   /**
    * 所有迭代的结果
    */
-  readonly allResults: GenerateTextResult<any, never>[];
+  readonly allResults: SimpleGenerateTextResult[];
 
   /**
    * 聚合的 token 使用量
@@ -228,7 +227,7 @@ export class RalphLoopAgent {
     };
     callbacks: RalphLoopAgentCallbacks;
   }): Promise<RalphLoopAgentResult> {
-    const allResults: GenerateTextResult<any, never>[] = [];
+    const allResults: SimpleGenerateTextResult[] = [];
     let iteration = 0;
     let totalUsage = this.createEmptyUsage();
     let completionReason: RalphLoopAgentResult['completionReason'] = 'max-iterations';
@@ -257,7 +256,7 @@ export class RalphLoopAgent {
       };
 
       // 执行一次评估
-      const result = await new Promise<GenerateTextResult<any, never>>(
+      const result = await new Promise<SimpleGenerateTextResult>(
         (resolve, reject) => {
           let fullText = '';
 
@@ -296,7 +295,7 @@ export class RalphLoopAgent {
                 request: {
                   messages: [],
                 },
-              } as unknown as GenerateTextResult<any, never>);
+              } as unknown as SimpleGenerateTextResult);
             },
             onError: (error) => {
               // 区分致命错误和可恢复错误
@@ -320,7 +319,7 @@ export class RalphLoopAgent {
                   experimental_providerMetadata: undefined,
                   warnings: undefined,
                   request: { messages: [] },
-                } as unknown as GenerateTextResult<any, never>);
+                } as unknown as SimpleGenerateTextResult);
               }
             },
           };
@@ -450,7 +449,7 @@ export function createRalphLoopAgent(
     maxCost?: number;
     verifyCompletion?: VerifyCompletionFunction<any>;
     onIterationStart?: (iteration: number) => void | Promise<void>;
-    onIterationEnd?: (iteration: number, duration: number, result: GenerateTextResult<any, never>) => void | Promise<void>;
+  onIterationEnd?: (iteration: number, duration: number, result: SimpleGenerateTextResult<any>) => void | Promise<void>;
     onContextSummarized?: (data: {
       iteration: number;
       summarizedIterations: number;

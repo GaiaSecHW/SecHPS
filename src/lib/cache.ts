@@ -98,12 +98,12 @@ class LRUCache<T> {
 }
 
 // Global cache instances
-export const userCache = new LRUCache(200, 5 * 60 * 1000); // 5 minutes
-export const permissionCache = new LRUCache(500, 10 * 60 * 1000); // 10 minutes
-export const workflowCache = new LRUCache(100, 2 * 60 * 1000); // 2 minutes
-export const configCache = new LRUCache(50, 30 * 60 * 1000); // 30 minutes
-export const skillCache = new LRUCache(100, 15 * 60 * 1000); // 15 minutes
-export const patternCache = new LRUCache(100, 15 * 60 * 1000); // 15 minutes
+export const userCache = new LRUCache<any>(200, 5 * 60 * 1000); // 5 minutes
+export const permissionCache = new LRUCache<any>(500, 10 * 60 * 1000); // 10 minutes
+export const workflowCache = new LRUCache<any>(100, 2 * 60 * 1000); // 2 minutes
+export const configCache = new LRUCache<any>(50, 30 * 60 * 1000); // 30 minutes
+export const skillCache = new LRUCache<any>(100, 15 * 60 * 1000); // 15 minutes
+export const patternCache = new LRUCache<any>(100, 15 * 60 * 1000); // 15 minutes
 
 // Cache key generators
 export const cacheKeys = {

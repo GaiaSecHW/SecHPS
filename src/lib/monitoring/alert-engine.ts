@@ -208,7 +208,7 @@ export class AlertEngine {
 
     // 发送通知
     const channels = JSON.parse(rule.notificationChannels) as string[];
-    await sendAlertNotification(alert, channels);
+    await sendAlertNotification(alert as any, channels);
   }
 
   /**

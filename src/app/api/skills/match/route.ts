@@ -271,7 +271,7 @@ async function callLLMForMatch(
     providerType: string;
   },
   prompt: string,
-  skills: Array<{ id: string; name: string; displayName: string; category: string; techStack: string[] }>,
+  skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[] }>,
   topK: number
 ): Promise<SkillMatch[]> {
   try {
