@@ -4,7 +4,6 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { createClaudeAgentService, ClaudeAgentCallbacks } from '@/services/ai';
-import { SessionManager } from '@/services/session-manager';
 
 // POST /api/evaluations/[id]/ask-progress - 询问评估进展
 export async function POST(
@@ -31,7 +30,7 @@ export async function POST(
       where: { id },
       include: {
         project: {
-          include: { files: true, config: true },
+          include: { files: true, config: true, user: true },
         },
       },
     });
@@ -59,7 +58,7 @@ export async function POST(
         // 获取用户的默认配置（isActive: true）
         const userDefaultConfig = await prisma.opencodeConfig.findFirst({
           where: {
-            userId: evaluation.userId,
+            userId: evaluation.project.user.id,
             isActive: true,
           },
           select: { progressQuestion: true },
@@ -87,47 +86,15 @@ export async function POST(
       return NextResponse.json({ error: '模型配置不存在' }, { status: 500 });
     }
 
-    // 获取会话历史（从 JSONL 文件）
-    let historyMessages: string[] = [];
-    const sessionId = evaluation.opencodeSessionId || id;
-    
-    if (evaluation.project?.projectPath) {
-      try {
-        const sessionManager = new SessionManager(evaluation.project.projectPath);
-        const result = await sessionManager.getSessionMessages(sessionId, 100, 0);
-        
-        // 将消息转换为 prompt 格式
-        historyMessages = result.messages.map(msg => {
-          if (msg.type === 'tool_use') {
-            return `[工具调用: ${msg.tool_name}]\n${JSON.stringify(msg.tool_input, null, 2)}`;
-          } else if (msg.type === 'tool_result') {
-            return `[工具结果: ${msg.tool_name}]\n${JSON.stringify(msg.tool_result, null, 2)}`;
-          } else if (msg.message?.content) {
-            const content = typeof msg.message.content === 'string' 
-              ? msg.message.content 
-              : JSON.stringify(msg.message.content);
-            const role = msg.message.role === 'assistant' ? 'Assistant' : 'Human';
-            return `${role}: ${content}`;
-          }
-          return '';
-        }).filter(Boolean);
-      } catch (error) {
-        console.warn('从 JSONL 获取历史消息失败:', error);
-      }
-    }
-
-    // 添加进展询问消息
-    historyMessages.push(`Human: ${progressQuestion}`);
-
     // 创建 Claude Agent 服务
     const agentService = createClaudeAgentService({
       apiKey: modelConfig.apiKey,
       model: modelConfig.model,
-      baseUrl: modelConfig.baseUrl, // CCR 代理地址
+      baseUrl: modelConfig.baseUrl,
       maxTokens: 4096,
       cwd: evaluation.project?.projectPath || undefined,
       allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
-      resumeSession: evaluation.opencodeSessionId || undefined, // 尝试恢复会话
+      resumeSession: evaluation.opencodeSessionId || undefined,
     });
 
     // 创建 SSE 流
@@ -172,10 +139,9 @@ export async function POST(
         };
 
         try {
-          // 将历史消息连接成完整的 prompt
-          const prompt = historyMessages.join('\n\n');
-          console.log('[AskProgress] 发送询问进展，消息数量:', historyMessages.length);
-          await agentService.sendPrompt(prompt, callbacks);
+          // 只发送配置的进展询问消息，不附加历史消息
+          console.log('[AskProgress] 发送询问进展消息');
+          await agentService.sendPrompt(progressQuestion, callbacks);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : '未知错误';
           console.error('[AskProgress] 发送失败:', errorMessage);
