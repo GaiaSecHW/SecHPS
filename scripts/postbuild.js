@@ -23,7 +23,13 @@ const DIR_COPY_RULES = {
     src: path.join(ROOT_DIR, '.next'),
     dest: '.next',
     mode: 'exclude-next',
-    exclude: ['cache', 'dev', 'diagnostics', 'standalone', 'node_modules', 'types', 'turbopack', 'trace', 'trace-build', 'build', 'export-marker.json', 'fallback-build-manifest.json', 'images-manifest.json', 'next-minimal-server.js.nft.json', 'next-server.js.nft.json', 'standalone.zip', 'required-server-files.js'],
+    exclude: ['cache', 'dev', 'diagnostics', 'standalone', 'types', 'turbopack', 'trace', 'trace-build', 'build', 'export-marker.json', 'fallback-build-manifest.json', 'images-manifest.json', 'next-minimal-server.js.nft.json', 'next-server.js.nft.json', 'standalone.zip', 'required-server-files.js'],
+  },
+  // 从 .next/node_modules 复制 Prisma 客户端
+  'next-node-modules': {
+    src: path.join(ROOT_DIR, '.next', 'node_modules'),
+    dest: '.next/node_modules',
+    mode: 'all',
   },
   // data 目录：运行时不需要，可以排除
   'data': {
