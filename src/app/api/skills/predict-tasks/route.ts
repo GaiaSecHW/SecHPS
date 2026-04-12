@@ -102,7 +102,13 @@ export async function GET(request: Request) {
       skip: offset,
     });
 
-    return NextResponse.json({ tasks });
+    // 解析 matches 字段（存储为 JSON 字符串）
+    const parsedTasks = tasks.map(task => ({
+      ...task,
+      matches: task.matches ? JSON.parse(task.matches) : null,
+    }));
+
+    return NextResponse.json({ tasks: parsedTasks });
   } catch (error) {
     console.error('查询预测任务失败:', error);
     return NextResponse.json(
