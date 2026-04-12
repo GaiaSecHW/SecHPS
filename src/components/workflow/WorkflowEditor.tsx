@@ -89,6 +89,9 @@ const [showPreview, setShowPreview] = useState(false);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [pollingTaskId, setPollingTaskId] = useState<string | null>(null);
   
+  // 当前查看预测任务的节点 ID
+  const [viewingNodeId, setViewingNodeId] = useState<string | null>(null);
+  
   // 工作流信息编辑模态框
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -1028,8 +1031,8 @@ const [showPreview, setShowPreview] = useState(false);
                       
                       <button
                         onClick={() => {
-                          // 加载当前节点的预测任务
-                          fetchPredictionTasks(selectedNode.id);
+                          // 设置当前查看的节点，并显示弹窗
+                          setViewingNodeId(selectedNode.id);
                           setShowPredictionTasks(true);
                         }}
                         className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
@@ -1179,13 +1182,18 @@ const [showPreview, setShowPreview] = useState(false);
                 <div className="flex items-center justify-center h-64">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
                 </div>
-              ) : predictionTasks.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">
-                  暂无预测任务
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {predictionTasks.map((task) => (
+              ) : (() => {
+                  // 按当前查看的节点过滤任务
+                  const filteredTasks = viewingNodeId 
+                    ? predictionTasks.filter(t => t.nodeId === viewingNodeId)
+                    : predictionTasks;
+                  return filteredTasks.length === 0 ? (
+                    <div className="text-center text-gray-500 py-8">
+                      暂无预测任务
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {filteredTasks.map((task) => (
                     <div key={task.id} className="border border-gray-200 rounded-lg p-4">
                       {/* 标题和时间 */}
                        <div className="flex items-start justify-between mb-3">
@@ -1278,13 +1286,16 @@ const [showPreview, setShowPreview] = useState(false);
                     </div>
                   ))}
                 </div>
-              )}
+                  );
+                })()}
             </div>
 
             {/* 底部 */}
             <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
               <span className="text-sm text-gray-500">
-                共 {predictionTasks.length} 个任务
+                共 {viewingNodeId 
+                  ? predictionTasks.filter(t => t.nodeId === viewingNodeId).length 
+                  : predictionTasks.length} 个任务
               </span>
               <button
                 onClick={() => setShowPredictionTasks(false)}
