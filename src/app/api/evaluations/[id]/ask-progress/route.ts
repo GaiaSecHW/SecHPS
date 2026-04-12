@@ -47,20 +47,30 @@ export async function POST(
     // 获取用户的配置中的进展询问消息
     let progressQuestion = '';
     
-    // 尝试从用户的 OpencodeConfig 中获取 progressQuestion
-    if (evaluation.project?.configId) {
+    // 方法1: 从项目的关联配置中获取 progressQuestion
+    if (evaluation.project?.config?.progressQuestion) {
+      progressQuestion = evaluation.project.config.progressQuestion;
+      console.log('[AskProgress] 使用项目关联配置的进展询问消息');
+    }
+    
+    // 方法2: 如果项目没有关联配置或配置没有 progressQuestion，尝试从用户默认配置获取
+    if (!progressQuestion || !progressQuestion.trim()) {
       try {
-        const userConfig = await prisma.opencodeConfig.findUnique({
-          where: { id: evaluation.project.configId },
+        // 获取用户的默认配置（isActive: true）
+        const userDefaultConfig = await prisma.opencodeConfig.findFirst({
+          where: {
+            userId: evaluation.userId,
+            isActive: true,
+          },
           select: { progressQuestion: true },
         });
         
-        if (userConfig?.progressQuestion && userConfig.progressQuestion.trim()) {
-          progressQuestion = userConfig.progressQuestion;
-          console.log('[AskProgress] 使用用户配置的进展询问消息');
+        if (userDefaultConfig?.progressQuestion && userDefaultConfig.progressQuestion.trim()) {
+          progressQuestion = userDefaultConfig.progressQuestion;
+          console.log('[AskProgress] 使用用户默认配置的进展询问消息');
         }
       } catch (e) {
-        console.warn('获取用户配置失败:', e);
+        console.warn('获取用户默认配置失败:', e);
       }
     }
 
