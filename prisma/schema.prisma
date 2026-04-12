@@ -2,8 +2,8 @@
 // RBAC (Role-Based Access Control) System
 
 generator client {
-  provider = "prisma-client-js"
-  binaryTargets = ["native", "windows"]
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
