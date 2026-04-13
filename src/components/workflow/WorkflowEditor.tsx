@@ -17,7 +17,7 @@ import {
 } from '@xyflow/react';
 import { toPng } from 'html-to-image';
 import '@xyflow/react/dist/style.css';
-import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff, Sparkles, Loader2, Edit2, Check } from 'lucide-react';
+import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff, Sparkles, Loader2, Edit2, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
 import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP, WorkflowNodeType } from '@/types/workflow';
@@ -95,6 +95,9 @@ const [showPreview, setShowPreview] = useState(false);
   // 预测按钮禁用状态（防止重复点击）
   const [predictionDisabled, setPredictionDisabled] = useState(false);
   const [predictionCountdown, setPredictionCountdown] = useState(0);
+  
+  // 展开的预测任务 ID 集合
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   
   // 工作流信息编辑模态框
   const [showEditModal, setShowEditModal] = useState(false);
@@ -1226,15 +1229,35 @@ const [showPreview, setShowPreview] = useState(false);
                   ) : (
                     <div className="space-y-4">
                       {filteredTasks.map((task) => (
-                    <div key={task.id} className="border border-gray-200 rounded-lg p-4">
-                      {/* 标题和时间 */}
-                       <div className="flex items-start justify-between mb-3">
-                         <div className="flex-1">
-                           <h4 className="font-semibold text-gray-900">{task.taskName}</h4>
-                           <p className="text-sm text-gray-600 mt-1">{task.taskDescription}</p>
-                           {task.nodeId && (
-                             <p className="text-xs text-gray-400 mt-1 font-mono">节点: {task.nodeId}</p>
+                    <div key={task.id} className="border border-gray-200 rounded-lg">
+                      {/* 标题和时间 - 可点击展开/收缩 */}
+                       <div 
+                         className="flex items-start justify-between p-4 cursor-pointer hover:bg-gray-50"
+                         onClick={() => {
+                           setExpandedTasks(prev => {
+                             const next = new Set(prev);
+                             if (next.has(task.id)) {
+                               next.delete(task.id);
+                             } else {
+                               next.add(task.id);
+                             }
+                             return next;
+                           });
+                         }}
+                       >
+                         <div className="flex items-start gap-2 flex-1">
+                           {expandedTasks.has(task.id) ? (
+                             <ChevronDown size={16} className="text-gray-400 mt-1 flex-shrink-0" />
+                           ) : (
+                             <ChevronRight size={16} className="text-gray-400 mt-1 flex-shrink-0" />
                            )}
+                           <div className="flex-1">
+                             <h4 className="font-semibold text-gray-900">{task.taskName}</h4>
+                             <p className="text-sm text-gray-600 mt-1 line-clamp-2">{task.taskDescription}</p>
+                             {task.nodeId && (
+                               <p className="text-xs text-gray-400 mt-1 font-mono">节点: {task.nodeId}</p>
+                             )}
+                           </div>
                          </div>
                         <div className="text-right ml-4">
                           <div className="text-xs text-gray-500">
@@ -1274,49 +1297,57 @@ const [showPreview, setShowPreview] = useState(false);
                         </div>
                       </div>
                       
-                      {/* 错误信息 */}
-                      {task.errorMessage && (
-                        <div className="bg-red-50 border border-red-200 rounded-md p-3 mb-3">
-                          <p className="text-sm text-red-700">{task.errorMessage}</p>
-                        </div>
-                      )}
-                      
-                      {/* 匹配结果 */}
-                      {task.status === 'completed' && task.matches && Array.isArray(task.matches) && (
-                        <div className="space-y-2">
-                          <h5 className="text-sm font-medium text-gray-700">
-                            匹配的 Skills ({task.matchCount}) - {task.method === 'llm' ? 'AI 匹配' : '关键词匹配'}
-                          </h5>
-                          <div className="grid grid-cols-1 gap-2">
-                            {task.matches.map((match, idx) => (
-                              <div key={idx} className="bg-gray-50 rounded-md p-3">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-medium text-sm text-gray-900">{match.displayName}</span>
-                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-                                    {(match.relevance * 100).toFixed(0)}%
-                                  </span>
-                                </div>
-                                <p className="text-xs text-gray-600 mb-1">{match.category}</p>
-                                <p className="text-xs text-gray-500">{match.reason}</p>
+                      {/* 展开内容 */}
+                      {expandedTasks.has(task.id) && (
+                        <div className="px-4 pb-4 border-t border-gray-100">
+                          {/* 错误信息 */}
+                          {task.errorMessage && (
+                            <div className="bg-red-50 border border-red-200 rounded-md p-3 mt-3">
+                              <p className="text-sm text-red-700">{task.errorMessage}</p>
+                            </div>
+                          )}
+                          
+                          {/* 匹配结果 */}
+                          {task.status === 'completed' && task.matches && Array.isArray(task.matches) && (
+                            <div className="space-y-2 mt-3">
+                              <h5 className="text-sm font-medium text-gray-700">
+                                匹配的 Skills ({task.matchCount}) - {task.method === 'llm' ? 'AI 匹配' : '关键词匹配'}
+                              </h5>
+                              <div className="grid grid-cols-1 gap-2">
+                                {task.matches.map((match, idx) => (
+                                  <div key={idx} className="bg-gray-50 rounded-md p-3">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="font-medium text-sm text-gray-900">{match.displayName}</span>
+                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                        {(match.relevance * 100).toFixed(0)}%
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 mb-1">{match.category}</p>
+                                    <p className="text-xs text-gray-500">{match.reason}</p>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* 操作按钮 */}
-                      {(task.status === 'pending' || task.status === 'running') && (
-                        <div className="mt-3">
-                          <button
-                            onClick={() => cancelTask(task.id)}
-                            className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors"
-                          >
-                            取消任务
-                          </button>
+                            </div>
+                          )}
+                          
+                          {/* 操作按钮 */}
+                          {(task.status === 'pending' || task.status === 'running') && (
+                            <div className="mt-3">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cancelTask(task.id);
+                                }}
+                                className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors"
+                              >
+                                取消任务
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
-                  ))}
+                   ))}
                 </div>
                   );
                 })()}
