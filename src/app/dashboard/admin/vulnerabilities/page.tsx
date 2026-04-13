@@ -412,7 +412,7 @@ export default function VulnerabilitiesPage() {
                 {/* 描述 */}
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                  <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedVuln.description}</p>
+                  <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{selectedVuln.description}</div>
                 </div>
 
                 {/* 问题代码 */}

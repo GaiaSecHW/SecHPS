@@ -268,6 +268,44 @@ export default function SessionsPage() {
     }
   };
 
+  // 处理拖拽上传
+  const handleFileDrop = (files: File[]) => {
+    const newFiles: UploadedFile[] = [];
+    const maxSize = 5 * 1024 * 1024 * 1024; // 5GB
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+
+      // 检查文件大小
+      if (file.size > maxSize) {
+        alert(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+        continue;
+      }
+
+      // 检查文件格式
+      const allowedTypes = [
+        '.zip', '.jar', '.war', '.ear', '.tar', '.gz', '.rar', '.7z',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt',
+        '.md', '.csv', '.json', '.xml', '.yaml', '.yml'
+      ];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!allowedTypes.includes(ext)) {
+        alert(`文件 ${file.name} 格式不支持，仅支持 ZIP、JAR 等格式`);
+        continue;
+      }
+
+      newFiles.push({
+        id: `${Date.now()}-${i}`,
+        name: file.name,
+        size: file.size,
+        status: 'pending',
+        file: file,
+      });
+    }
+
+    setUploadedFiles(prev => [...prev, ...newFiles]);
+  };
+
   const handleAdditionalFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -1405,7 +1443,28 @@ export default function SessionsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   上传文件
                 </label>
-                <div className="border-2 border-dashed border-gray-300 rounded-md p-6">
+                <div 
+                  className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-blue-400 transition-colors"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.classList.add('border-blue-400', 'bg-blue-50');
+                  }}
+                  onDragLeave={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+                    const files = Array.from(e.dataTransfer.files);
+                    if (files.length > 0) {
+                      handleFileDrop(files);
+                    }
+                  }}
+                >
                   <div className="text-center">
                     <Upload className="mx-auto h-12 w-12 text-gray-400" />
                     <div className="mt-4">
