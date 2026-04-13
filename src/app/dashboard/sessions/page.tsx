@@ -1148,7 +1148,7 @@ export default function SessionsPage() {
                             最新评估: {latestEval.status === 'completed' ? '已完成' : '失败'}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {new Date(latestEval.startedAt).toLocaleString('zh-CN', {
+                            {new Date(latestEval.completedAt || latestEval.startedAt).toLocaleString('zh-CN', {
                               year: 'numeric',
                               month: '2-digit',
                               day: '2-digit',
