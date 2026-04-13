@@ -1281,6 +1281,79 @@ model TechStackOption {
 }
 
 // ============================================
+// 执行自主进化
+// ============================================
+
+// 自主进化经验库
+model AutonomousEvolutionExperience {
+  id              String   @id @default(cuid())
+
+  // 基本信息
+  title           String                    // 经验标题（大模型生成）
+  errorCategory   String                    // 错误分类：tool_failure/path_error/permission/mcp_timeout/other
+  errorPatterns   String                    // 触发特征（JSON数组，多个关键词）
+
+  // 来源信息
+  sourceModel     String                    // 产生该经验的评估模型
+  sourceSessionId String                    // 来源评估会话 ID（可跳转）
+  sourceProjectId String?                   // 来源项目 ID
+
+  // 尝试序列（原始数据，折叠展示）
+  attemptSequence String                    // JSON：完整的失败→成功序列
+
+  // 核心内容（大模型生成，可编辑）
+  directSolution  String                    // 直达方案：遇到此错误直接怎么做
+  lesson          String                    // 教训：为什么这样做有效
+
+  // 注入控制
+  isInjected      Boolean  @default(false)  // 是否注入到 System Prompt
+  injectedAt      DateTime?                 // 注入时间
+
+  // 统计
+  hitCount        Int      @default(1)      // 出现次数（合并时累加）
+  savedAttempts   Float    @default(0)      // 平均节省尝试次数
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([errorCategory])
+  @@index([isInjected])
+  @@index([sourceModel])
+  @@index([hitCount])
+}
+
+// 日志文件处理记录（哈希去重）
+model LogFileRecord {
+  id            String   @id @default(cuid())
+  filePath      String   @unique              // .jsonl 文件路径
+  fileHash      String                        // 路径+最后修改时间的哈希
+  processedAt   DateTime @default(now())      // 最后处理时间
+  sequenceCount Int      @default(0)          // 从该文件提取的序列数
+
+  @@index([filePath])
+}
+
+// 自主进化提取运行历史
+model AutonomousEvolutionRunLog {
+  id            String   @id @default(cuid())
+  mode          String                        // "incremental" | "full" | "auto"
+  trigger       String   @default("manual")  // "manual" | "auto"
+  scanned       Int      @default(0)
+  skipped       Int      @default(0)
+  newFiles      Int      @default(0)
+  sequences     Int      @default(0)
+  created       Int      @default(0)
+  merged        Int      @default(0)
+  status        String   @default("running") // "running" | "done" | "error"
+  errorMessage  String?
+  startedAt     DateTime @default(now())
+  finishedAt    DateTime?
+
+  @@index([startedAt])
+  @@index([trigger])
+}
+
+// ============================================
 // 系统配置
 // ============================================
 

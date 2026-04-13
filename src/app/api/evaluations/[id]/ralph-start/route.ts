@@ -7,8 +7,36 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { createRalphLoopAgent } from '@/services/evaluation';
+import { createRalphLoopAgent, parseAndSaveResults } from '@/services/evaluation';
 import type { RalphLoopAgentConfig, RalphLoopAgentCallbacks } from '@/services/evaluation';
+
+// ============================================
+// 日志工具
+// ============================================
+
+const LOG_PREFIX = '[RalphStart]';
+
+function logInfo(message: string, ...args: unknown[]) {
+  console.log(`${LOG_PREFIX} [INFO] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logWarn(message: string, ...args: unknown[]) {
+  console.warn(`${LOG_PREFIX} [WARN] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logError(message: string, ...args: unknown[]) {
+  console.error(`${LOG_PREFIX} [ERROR] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logSuccess(message: string, ...args: unknown[]) {
+  console.log(`${LOG_PREFIX} [SUCCESS] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logSeparator(title: string) {
+  console.log(`${LOG_PREFIX} ${'='.repeat(50)}`);
+  console.log(`${LOG_PREFIX} ${title}`);
+  console.log(`${LOG_PREFIX} ${'='.repeat(50)}`);
+}
 
 /**
  * 从数据库获取模型配置（与其他 evaluation 路由保持一致）
@@ -205,6 +233,19 @@ export async function POST(
       },
     });
 
+    // 日志：评估开始
+    logSeparator('评估开始');
+    logInfo(`评估会话ID: ${id}`);
+    logInfo(`项目ID: ${evaluation.projectId}`);
+    logInfo(`项目名称: ${evaluation.project.name}`);
+    logInfo(`项目路径: ${evaluation.project.projectPath || '未设置'}`);
+    logInfo(`模型: ${modelConfig.model}`);
+    logInfo(`最大迭代次数: ${maxIterations}`);
+    logInfo(`最大Token数: ${maxTokens}`);
+    logInfo(`最大成本: $${maxCost}`);
+    logInfo(`任务描述: ${opencodeConfig?.taskDescription?.substring(0, 200) || '未设置'}...`);
+    logSeparator('');
+
     // 9. 构建 context
     const context = {
       projectName: evaluation.project.name,
@@ -249,12 +290,33 @@ export async function POST(
         });
       },
       onRalphComplete: async (result) => {
-        console.log('[Ralph] 任务完成:', {
-          iterations: result.iterations,
-          completionReason: result.completionReason,
-          reason: result.reason,
-          totalTokens: result.totalUsage.totalTokens,
-        });
+        // 日志：评估结束
+        logSeparator('评估结束');
+        logInfo(`评估会话ID: ${id}`);
+        logInfo(`迭代次数: ${result.iterations}`);
+        logInfo(`完成原因: ${result.completionReason}`);
+        logInfo(`原因详情: ${result.reason || '无'}`);
+        logInfo(`总Token数: ${result.totalUsage.totalTokens}`);
+        logInfo(`输入Token: ${result.totalUsage.inputTokens}`);
+        logInfo(`输出Token: ${result.totalUsage.outputTokens}`);
+        
+        // 尝试解析并保存结果
+        logInfo('开始解析评估结果...');
+        const fullResponse = result.text;
+        
+        try {
+          const parseResult = await parseAndSaveResults(id, evaluation.projectId, fullResponse);
+          
+          if (parseResult.success) {
+            logSuccess(`漏洞入库成功: ${parseResult.vulnCount} 个`);
+          } else {
+            logWarn(`漏洞入库失败: ${parseResult.error}`);
+          }
+        } catch (parseError) {
+          logError('解析结果时发生异常:', parseError);
+        }
+        
+        logSeparator('');
 
         await prisma.evaluationSession.update({
           where: { id },

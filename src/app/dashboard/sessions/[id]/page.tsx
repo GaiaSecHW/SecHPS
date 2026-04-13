@@ -98,6 +98,8 @@ export default function SessionDetailPage({
   const [showAllChildMessages, setShowAllChildMessages] = useState(false);
   const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(new Set());
   const [expandedChildMessages, setExpandedChildMessages] = useState<Set<string>>(new Set());
+  const [injectedExperiences, setInjectedExperiences] = useState<{ id: string; title: string; errorCategory: string; hitCount: number }[]>([]);
+  const [experienceInjectionChecked, setExperienceInjectionChecked] = useState(false);
 
   useEffect(() => {
     if (evaluationId) {
@@ -204,6 +206,13 @@ export default function SessionDetailPage({
       case 'node_complete':
         // 节点完成（工作流相关）
         console.log('[Node] Completed:', data.nodeId);
+        break;
+
+      case 'experience_injected':
+        // 自主进化经验注入信息
+        setInjectedExperiences(data.experiences || []);
+        setExperienceInjectionChecked(true);
+        console.log(`[Experience] Injected ${data.count} experiences`);
         break;
         
       case 'message':
@@ -812,6 +821,33 @@ export default function SessionDetailPage({
           } bg-gray-50 overflow-y-auto transition-all duration-300`}
         >
           <div className="p-4">
+            {/* 自主进化经验注入信息 */}
+            {experienceInjectionChecked && (
+              <div className={`mb-4 rounded-lg border px-4 py-3 text-sm flex items-start gap-2 ${
+                injectedExperiences.length > 0
+                  ? 'bg-purple-50 border-purple-200 text-purple-800'
+                  : 'bg-gray-50 border-gray-200 text-gray-500'
+              }`}>
+                <span className="mt-0.5 flex-shrink-0">{injectedExperiences.length > 0 ? '🧠' : '○'}</span>
+                <div>
+                  {injectedExperiences.length > 0 ? (
+                    <>
+                      <span className="font-medium">已注入 {injectedExperiences.length} 条自主进化经验</span>
+                      <ul className="mt-1 space-y-0.5">
+                        {injectedExperiences.map(e => (
+                          <li key={e.id} className="text-xs text-purple-700">
+                            · [{e.errorCategory}] {e.title}（命中 {e.hitCount} 次）
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  ) : (
+                    <span>无自主进化经验注入（暂无 isInjected=true 的记录）</span>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Vulnerability Summary */}
             {vulnerabilitySummary && (
               <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">

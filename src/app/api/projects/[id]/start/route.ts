@@ -11,6 +11,7 @@ import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
 import { join } from 'path';
 import { copySkillsToProject } from '@/services/skill-files';
 import { registerAgent } from '@/lib/agent-registry';
+import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -203,6 +204,24 @@ export async function POST(
       console.log('[启动评估] 系统提示词内容:', globalConfig.customSystemPrompt.substring(0, 200) + '...');
     } else {
       console.log('[启动评估] ⚠️  未配置系统提示词');
+    }
+
+    // 注入自主进化经验到 System Prompt
+    let injectedExperiences: { id: string; title: string; errorCategory: string; hitCount: number }[] = [];
+    try {
+      const expResult = await buildExperiencePromptWithMeta();
+      if (expResult.prompt) {
+        sdkOptions.systemPrompt = (sdkOptions.systemPrompt || '') + '\n\n' + expResult.prompt;
+        injectedExperiences = expResult.experiences;
+        console.log(`[启动评估] 已注入自主进化经验到 System Prompt，共 ${expResult.count} 条:`);
+        expResult.experiences.forEach((e, i) => {
+          console.log(`[启动评估]   ${i + 1}. [${e.errorCategory}] ${e.title} (命中${e.hitCount}次)`);
+        });
+      } else {
+        console.log('[启动评估] 无已注入的自主进化经验（isInjected=true 的记录为空）');
+      }
+    } catch (err) {
+      console.warn('[启动评估] 注入自主进化经验失败:', err);
     }
 
     // 设置源（加载 CLAUDE.md）
@@ -504,6 +523,23 @@ export async function POST(
             }
           }
         };
+
+        // 发送自主进化经验注入信息
+        if (injectedExperiences.length > 0) {
+          safeEnqueue(`data: ${JSON.stringify({
+            type: 'experience_injected',
+            count: injectedExperiences.length,
+            experiences: injectedExperiences,
+            timestamp: Date.now(),
+          })}\n\n`);
+        } else {
+          safeEnqueue(`data: ${JSON.stringify({
+            type: 'experience_injected',
+            count: 0,
+            experiences: [],
+            timestamp: Date.now(),
+          })}\n\n`);
+        }
 
         try {
           // 使用 Ralph Loop Agent 进行迭代评估

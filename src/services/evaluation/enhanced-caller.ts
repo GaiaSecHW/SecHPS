@@ -4,6 +4,28 @@ import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService, App
 import { parseAndSaveResults } from './result-parser';
 import { prisma } from '@/lib/prisma';
 
+// ============================================
+// 日志工具
+// ============================================
+
+const LOG_PREFIX = '[EnhancedCaller]';
+
+function logInfo(message: string, ...args: unknown[]) {
+  console.log(`${LOG_PREFIX} [INFO] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logWarn(message: string, ...args: unknown[]) {
+  console.warn(`${LOG_PREFIX} [WARN] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logError(message: string, ...args: unknown[]) {
+  console.error(`${LOG_PREFIX} [ERROR] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
+function logSuccess(message: string, ...args: unknown[]) {
+  console.log(`${LOG_PREFIX} [SUCCESS] ${new Date().toISOString()} - ${message}`, ...args);
+}
+
 export interface ToolResult {
   success: boolean;
   output: unknown;
@@ -60,7 +82,12 @@ export class EnhancedEvaluationCaller {
 
   constructor(config: EnhancedEvaluationConfig) {
     // 日志：记录从路由/配置加载的系统提示词配置
-    console.log('[EnhancedEvaluationCaller] Received config.systemPrompt =', config.systemPrompt);
+    logInfo('初始化 EnhancedEvaluationCaller');
+    logInfo(`Provider类型: ${config.providerType}`);
+    logInfo(`模型: ${config.model}`);
+    logInfo(`工作目录: ${config.cwd || '未设置'}`);
+    logInfo(`系统提示词类型: ${typeof config.systemPrompt}`);
+    
     // 确定 baseUrl
     let agentBaseUrl: string | undefined;
     let agentApiKey = config.apiKey;
@@ -93,8 +120,10 @@ export class EnhancedEvaluationCaller {
       allowDangerouslySkipPermissions: config.allowDangerouslySkipPermissions,
       resumeSession: config.resumeSession,
     });
-    console.log('[EnhancedEvaluationCaller] ClaudeAgentService initialized with baseUrl =', agentBaseUrl);
-    console.log('[EnhancedEvaluationCaller] Permission mode =', config.permissionMode, ', allowDangerouslySkipPermissions =', config.allowDangerouslySkipPermissions);
+    logInfo(`ClaudeAgentService 初始化完成`);
+    logInfo(`Base URL: ${agentBaseUrl}`);
+    logInfo(`权限模式: ${config.permissionMode}`);
+    logInfo(`允许跳过权限: ${config.allowDangerouslySkipPermissions}`);
   }
 
   /**
@@ -156,10 +185,30 @@ export class EnhancedEvaluationCaller {
         callbacks.onToolResult(name, toolResult);
       },
       onComplete: async (fullResponse) => {
+        // 日志：单次迭代完成
+        logInfo('========================================');
+        logInfo('单次迭代完成');
+        logInfo(`评估ID: ${this.currentEvaluationId}`);
+        logInfo(`项目ID: ${this.currentProjectId}`);
+        logInfo(`响应长度: ${fullResponse.length} 字符`);
+        logInfo(`响应预览: ${fullResponse.substring(0, 500)}...`);
+        logInfo('========================================');
+
         // 会话结束时才保存数据
         if (this.currentEvaluationId && this.currentProjectId && fullResponse.trim()) {
-          // 解析并保存结构化漏洞结果
-          await parseAndSaveResults(this.currentEvaluationId, this.currentProjectId, fullResponse);
+          logInfo('开始解析并保存漏洞结果...');
+          try {
+            const result = await parseAndSaveResults(this.currentEvaluationId, this.currentProjectId, fullResponse);
+            if (result.success) {
+              logSuccess(`漏洞入库成功: ${result.vulnCount} 个`);
+            } else {
+              logWarn(`漏洞入库失败: ${result.error}`);
+            }
+          } catch (parseError) {
+            logError('解析保存结果时发生异常:', parseError);
+          }
+        } else {
+          logWarn('跳过漏洞解析: 评估ID、项目ID或响应为空');
         }
         callbacks.onComplete(fullResponse);
       },

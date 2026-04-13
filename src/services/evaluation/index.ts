@@ -5,6 +5,9 @@ export { PromptBuilder } from './prompt';
 export { EvaluationCaller, createEvaluationCaller } from './caller';
 export { EnhancedEvaluationCaller, createEnhancedEvaluationCaller } from './enhanced-caller';
 
+// 结果解析器导出
+export { parseAndSaveResults, parseResultsOnly, extractUsedSkills } from './result-parser';
+
 // Ralph Loop Agent 导出
 export { RalphLoopAgent, createRalphLoopAgent } from './ralph-loop-agent-wrapper';
 export type {
