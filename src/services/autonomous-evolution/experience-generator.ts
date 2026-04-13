@@ -103,7 +103,7 @@ function buildPrompt(seq: FailureSuccessSequence): string {
     `工具: ${seq.success.toolName}\n  输入: ${JSON.stringify(seq.success.toolInput)}`;
 
   return `你是一个 AI Agent 执行经验分析专家。
-以下是一段 AI Agent 执行过程中的失败→成功尝试序列，请分析并生成结构化经验。
+以下是一段 AI Agent 执行过程中的失败→成功尝试序列，请分析并提炼可复用的通用经验。
 
 ## 失败尝试
 ${failureLines}
@@ -114,9 +114,14 @@ ${successLine}
 请以 JSON 格式输出，字段如下：
 - title: 一句话概括这条经验（中文，20字以内）
 - errorCategory: 错误分类，从以下选择：tool_failure / path_error / permission / mcp_timeout / other
-- errorPatterns: 触发特征关键词数组（3-5个，用于后续匹配）
-- directSolution: 直达方案，下次遇到此错误直接怎么做（中文，50字以内）
-- lesson: 教训，为什么这样做有效（中文，100字以内）
+- errorPatterns: 触发特征关键词数组（3-5个，来自错误消息的通用关键词，不含具体路径）
+- directSolution: 解决思路——描述**为什么会出错、应该如何判断和处理**，而不是"执行某个具体操作"（中文，80字以内）
+- lesson: 深层规律——这类错误的根本原因和通用应对原则（中文，100字以内）
+
+⚠️ 核心原则：授人以渔，不授人以鱼
+- 不要写"用 X 工具"、"执行 Y 命令"这类具体操作
+- 要写"为什么会出现这个错误"、"遇到此类问题应该先检查什么、怎么判断"
+- 经验必须适用于任何项目，不得包含具体路径、文件名、项目名、用户名
 
 只输出 JSON，不要其他内容。`;
 }
@@ -140,14 +145,16 @@ export async function generateExperience(seq: FailureSuccessSequence): Promise<G
     if (!Array.isArray(parsed.errorPatterns)) parsed.errorPatterns = [];
     return parsed;
   } catch {
-    // Fallback: build a minimal experience from the raw data
+    // Fallback: build a minimal experience, strip paths from error messages
     const errorMessages = seq.failures.map(f => f.errorMessage);
+    const stripPaths = (s: string) =>
+      s.replace(/([A-Za-z]:)?[\\/][^\s:,'"]+/g, '<path>').slice(0, 80);
     return {
       title: `${seq.failures[0]?.toolName || '工具'} 失败 → ${seq.success.toolName} 成功`,
       errorCategory: guessCategory(errorMessages),
-      errorPatterns: errorMessages.slice(0, 3).map(e => e.slice(0, 80)),
+      errorPatterns: errorMessages.slice(0, 3).map(stripPaths),
       directSolution: `遇到此错误时，改用 ${seq.success.toolName} 工具`,
-      lesson: raw.slice(0, 200) || '参见尝试序列',
+      lesson: '参见尝试序列',
     };
   }
 }
