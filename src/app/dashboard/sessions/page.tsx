@@ -1148,7 +1148,15 @@ export default function SessionsPage() {
                             最新评估: {latestEval.status === 'completed' ? '已完成' : '失败'}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {new Date(latestEval.startedAt).toLocaleDateString('zh-CN')}
+                            {new Date(latestEval.startedAt).toLocaleString('zh-CN', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: false
+                            })}
                           </span>
                         </div>
                         <div className="flex space-x-2">
