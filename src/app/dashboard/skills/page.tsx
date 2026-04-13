@@ -23,6 +23,8 @@ import {
   Code,
   ChevronLeft,
   ChevronRight,
+  Download,
+  Upload,
 } from 'lucide-react';
 
 interface Skill {
@@ -76,6 +78,11 @@ export default function SkillsPage() {
   const [copied, setCopied] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [batchOperating, setBatchOperating] = useState(false);
+  
+  // 导出/导入状态
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useState<HTMLInputElement | null>(null);
   
   // 分页状态
   const [currentPage, setCurrentPage] = useState(1);
@@ -323,6 +330,106 @@ export default function SkillsPage() {
     }
   };
 
+  // 导出所有 Skills
+  const handleExportSkills = async () => {
+    if (!confirm('确定要导出所有 Skills 吗？')) {
+      return;
+    }
+
+    try {
+      setExporting(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills/export', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '导出失败');
+      }
+
+      const data = await response.json();
+      
+      // 创建下载文件
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `skills-export-${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      alert(`导出成功！共 ${data.totalCount} 个 Skills`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '导出失败');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // 导入 Skills
+  const handleImportSkills = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const token = localStorage.getItem('token');
+      
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      const response = await fetch('/api/skills/import', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || '导入失败');
+      }
+
+      const result = await response.json();
+      
+      // 显示导入结果
+      const { results } = result;
+      let message = `导入完成！\n\n`;
+      message += `总计: ${results.total}\n`;
+      message += `成功: ${results.success}\n`;
+      message += `跳过: ${results.skipped}\n`;
+      message += `失败: ${results.failed}`;
+      
+      if (results.errors.length > 0) {
+        message += `\n\n详细信息:\n${results.errors.slice(0, 10).join('\n')}`;
+        if (results.errors.length > 10) {
+          message += `\n... 还有 ${results.errors.length - 10} 条`;
+        }
+      }
+
+      alert(message);
+      
+      // 刷新列表
+      fetchSkills();
+      fetchCategories();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '导入失败');
+    } finally {
+      setImporting(false);
+      // 清空 input
+      if (e.target) {
+        e.target.value = '';
+      }
+    }
+  };
+
   // 服务端已经过滤，直接使用 skills
   const filteredSkills = skills;
 
@@ -418,6 +525,49 @@ export default function SkillsPage() {
                 </>
               )}
             </button>
+            {/* 导出按钮 */}
+            <button
+              onClick={handleExportSkills}
+              disabled={exporting}
+              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="导出所有 Skills 为 JSON 文件"
+            >
+              {exporting ? (
+                <>
+                  <RefreshCw size={20} className="mr-2 animate-spin" />
+                  导出中...
+                </>
+              ) : (
+                <>
+                  <Download size={20} className="mr-2" />
+                  导出
+                </>
+              )}
+            </button>
+            {/* 导入按钮 */}
+            <label
+              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50"
+              title="从 JSON 文件导入 Skills"
+            >
+              {importing ? (
+                <>
+                  <RefreshCw size={20} className="mr-2 animate-spin" />
+                  导入中...
+                </>
+              ) : (
+                <>
+                  <Upload size={20} className="mr-2" />
+                  导入
+                </>
+              )}
+              <input
+                type="file"
+                accept=".json"
+                onChange={handleImportSkills}
+                disabled={importing}
+                className="sr-only"
+              />
+            </label>
             <button
               onClick={() => router.push('/dashboard/skills/create-wizard')}
               className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
