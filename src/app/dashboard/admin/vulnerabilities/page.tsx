@@ -59,6 +59,34 @@ const statusLabels: Record<string, string> = {
   closed: '已关闭',
 };
 
+// 格式化漏洞描述 - 按语义分行
+const formatDescription = (text: string): string => {
+  if (!text) return '';
+  
+  // 如果已经有换行符，直接返回
+  if (text.includes('\n')) return text;
+  
+  // 按句号、问号、感叹号分行（中文和英文）
+  let formatted = text
+    // 先处理中文标点
+    .replace(/([。！？])/g, '$1\n')
+    // 处理英文标点后跟空格的情况
+    .replace(/([.!?])\s+/g, '$1\n')
+    // 处理常见的分段关键词
+    .replace(/([；;])/g, '$1\n')
+    // 处理冒号后面的内容（通常是列表或说明）
+    .replace(/([：:])\s*/g, '$1\n  ')
+    // 处理数字编号（如 1. 2. 3.）
+    .replace(/(\d+)[.、．]\s*/g, '\n$1. ')
+    // 处理常见的漏洞描述关键词换行
+    .replace(/(漏洞位置|风险等级|影响范围|攻击路径|修复建议|危害|建议|原因|解决方案)[：:]/g, '\n$1:')
+    // 清理多余空行
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+    
+  return formatted;
+};
+
 export default function VulnerabilitiesPage() {
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -412,7 +440,7 @@ export default function VulnerabilitiesPage() {
                 {/* 描述 */}
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                  <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{selectedVuln.description}</div>
+                  <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
                 </div>
 
                 {/* 问题代码 */}
