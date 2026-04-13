@@ -45,8 +45,11 @@ export async function GET(request: Request) {
     
     // 技术栈过滤
     if (techStack) {
-      // techStack 字段是 JSON 字符串，需要检查是否包含指定技术栈
-      where.techStack = { contains: techStack };
+      // techStack 字段是 JSON 数组字符串，需要使用 JSON 路径过滤
+      where.techStack = {
+        path: '$',
+        string_contains: techStack
+      };
     }
     
     // 默认只返回最新版本
