@@ -43,6 +43,7 @@ export async function GET(
       id: task.id,
       taskName: task.taskName,
       taskDescription: task.taskDescription,
+      nodeId: task.nodeId,
       topK: task.topK,
       status: task.status,
       progress: task.progress,
