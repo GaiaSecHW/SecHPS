@@ -45,11 +45,9 @@ export async function GET(request: Request) {
     
     // 技术栈过滤
     if (techStack) {
-      // techStack 字段是 JSON 数组字符串，需要使用 JSON 路径过滤
-      where.techStack = {
-        path: '$',
-        string_contains: techStack
-      };
+      // techStack 字段是 JSON 数组字符串，使用 contains 匹配
+      // 例如: ["Java", "Python"] 包含 "Java"
+      where.techStack = { contains: techStack };
     }
     
     // 默认只返回最新版本
