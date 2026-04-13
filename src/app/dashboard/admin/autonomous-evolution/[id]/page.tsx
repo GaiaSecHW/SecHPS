@@ -59,11 +59,15 @@ export default function ExperienceDetailPage() {
   const [editSolution, setEditSolution] = useState('');
   const [editLesson, setEditLesson] = useState('');
   const [saving, setSaving] = useState(false);
+  const [usageLogs, setUsageLogs] = useState<{ id: string; evaluationId: string; projectId: string | null; projectName: string | null; usedAt: string; sessionUrl: string | null }[]>([]);
+  const [usageTotal, setUsageTotal] = useState(0);
+  const [usageExpanded, setUsageExpanded] = useState(false);
 
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : '';
 
   useEffect(() => {
     fetchDetail();
+    fetchUsage();
   }, [id]);
 
   const fetchDetail = async () => {
@@ -78,6 +82,17 @@ export default function ExperienceDetailPage() {
       setEditLesson(data.lesson);
     }
     setLoading(false);
+  };
+
+  const fetchUsage = async () => {
+    const res = await fetch(`/api/autonomous-evolution/${id}/usage`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setUsageLogs(data.logs || []);
+      setUsageTotal(data.total || 0);
+    }
   };
 
   const handleToggleInject = async () => {
@@ -151,11 +166,11 @@ export default function ExperienceDetailPage() {
           <span className="text-gray-300">|</span>
           {exp.isInjected ? (
             <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
-              <CheckCircle size={12} /> 已注入
+              <CheckCircle size={12} /> 已启用
             </span>
           ) : (
             <span className="flex items-center gap-1 text-xs text-gray-400">
-              <Circle size={12} /> 未注入
+              <Circle size={12} /> 未启用
             </span>
           )}
           <h2 className="text-lg font-bold text-gray-900">{exp.title}</h2>
@@ -169,7 +184,7 @@ export default function ExperienceDetailPage() {
                 : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
             }`}
           >
-            {exp.isInjected ? '停用注入' : '启用注入'}
+            {exp.isInjected ? '停用' : '启用'}
           </button>
           {!editing && (
             <button
@@ -327,6 +342,46 @@ export default function ExperienceDetailPage() {
           </button>
         </div>
       )}
+
+      {/* 引用历史 */}
+      <div>
+        <button
+          onClick={() => setUsageExpanded(!usageExpanded)}
+          className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+        >
+          {usageExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          引用历史（共 {usageTotal} 次）
+        </button>
+        {usageExpanded && (
+          <div className="mt-2">
+            {usageLogs.length === 0 ? (
+              <p className="text-sm text-gray-400 py-2">暂无引用记录</p>
+            ) : (
+              <div className="space-y-1">
+                {usageLogs.map(log => (
+                  <div key={log.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded text-xs text-gray-600">
+                    <div className="flex items-center gap-3">
+                      <span className="text-gray-400">{new Date(log.usedAt).toLocaleString('zh-CN')}</span>
+                      {log.projectName && <span className="font-medium text-gray-700">{log.projectName}</span>}
+                    </div>
+                    {log.sessionUrl && (
+                      <button
+                        onClick={() => router.push(log.sessionUrl!)}
+                        className="text-blue-500 hover:text-blue-700 flex items-center gap-1"
+                      >
+                        <ExternalLink size={11} /> 查看评估
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {usageTotal > 20 && (
+                  <p className="text-xs text-gray-400 pt-1">仅显示最近 20 条</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

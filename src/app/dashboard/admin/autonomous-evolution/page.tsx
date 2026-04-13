@@ -37,6 +37,7 @@ interface Stats {
   weekNew: number;
   avgSavedAttempts: number;
   lastAutoExtract: string | null;
+  totalUsage: number;
 }
 
 interface IdleConfig {
@@ -94,6 +95,32 @@ export default function AutonomousEvolutionPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Batch selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelect = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleSelectAll = () => {
+    if (selectedIds.size === experiences.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(experiences.map(e => e.id)));
+    }
+  };
+  const handleBatchInject = async (action: 'enable' | 'disable') => {
+    if (selectedIds.size === 0) return;
+    await fetch('/api/autonomous-evolution/batch-inject', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.from(selectedIds), action }),
+    });
+    setSelectedIds(new Set());
+    fetchExperiences();
+    fetchStats();
+  };
+
   // Extract panel
   const [extracting, setExtracting] = useState(false);
   const [extractLogs, setExtractLogs] = useState<string[]>([]);
@@ -101,6 +128,29 @@ export default function AutonomousEvolutionPage() {
   const [showExtractPanel, setShowExtractPanel] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+
+  // Injection toggle
+  const [injectionEnabled, setInjectionEnabled] = useState<boolean>(true);
+
+  const fetchInjectionConfig = async () => {
+    const res = await fetch('/api/autonomous-evolution/injection-config', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setInjectionEnabled(data.enabled);
+    }
+  };
+
+  const toggleInjection = async () => {
+    const next = !injectionEnabled;
+    setInjectionEnabled(next);
+    await fetch('/api/autonomous-evolution/injection-config', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    });
+  };
 
   // Idle config panel
   const [showIdleConfig, setShowIdleConfig] = useState(false);
@@ -124,6 +174,7 @@ export default function AutonomousEvolutionPage() {
   useEffect(() => {
     fetchExperiences();
     fetchStats();
+    fetchInjectionConfig();
   }, [page, filterCategory, filterInjected]);
 
   useEffect(() => {
@@ -267,6 +318,21 @@ export default function AutonomousEvolutionPage() {
           <p className="mt-1 text-sm text-gray-600">从评估日志中提取失败→成功经验，注入 System Prompt 跳过重复失败</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Injection on/off toggle */}
+          <button
+            onClick={toggleInjection}
+            className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+              injectionEnabled
+                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+            }`}
+            title="控制提取时新经验是否默认启用"
+          >
+            <span className={`w-7 h-4 rounded-full relative inline-block transition-colors ${injectionEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${injectionEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </span>
+            自动启用
+          </button>
           <button
             onClick={() => { setShowIdleConfig(true); fetchIdleConfig(); }}
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
@@ -308,9 +374,9 @@ export default function AutonomousEvolutionPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
             { label: '经验总量', value: stats.total },
-            { label: '已注入', value: stats.injected },
+            { label: '已启用', value: stats.injected },
             { label: '本周新增', value: stats.weekNew },
-            { label: '平均节省', value: `${stats.avgSavedAttempts.toFixed(1)}次` },
+            { label: '总引用次数', value: stats.totalUsage },
           ].map(card => (
             <div key={card.label} className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-500">{card.label}</p>
@@ -430,45 +496,84 @@ export default function AutonomousEvolutionPage() {
             <p className="mt-3 text-gray-500">暂无经验数据，点击「立即提取」开始分析评估日志</p>
           </div>
         ) : (
-          experiences.map(exp => {
+          <>
+          {/* 批量操作栏 */}
+          {experiences.length > 0 && (
+            <div className="flex items-center gap-3 px-1 py-2">
+              <input
+                type="checkbox"
+                checked={selectedIds.size === experiences.length && experiences.length > 0}
+                onChange={toggleSelectAll}
+                className="w-4 h-4 rounded"
+              />
+              <span className="text-xs text-gray-500">
+                {selectedIds.size > 0 ? `已选 ${selectedIds.size} 条` : '全选'}
+              </span>
+              {selectedIds.size > 0 && (
+                <>
+                  <button
+                    onClick={() => handleBatchInject('enable')}
+                    className="px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
+                  >
+                    批量启用
+                  </button>
+                  <button
+                    onClick={() => handleBatchInject('disable')}
+                    className="px-3 py-1 text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100"
+                  >
+                    批量停用
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {experiences.map(exp => {
             let patterns: string[] = [];
             try { patterns = JSON.parse(exp.errorPatterns); } catch { /* ignore */ }
             return (
               <div
                 key={exp.id}
-                className="bg-white rounded-lg border border-gray-200 p-4 hover:border-gray-300 transition-colors"
+                className={`bg-white rounded-lg border p-4 hover:border-gray-300 transition-colors ${selectedIds.has(exp.id) ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200'}`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {exp.isInjected ? (
-                        <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
-                          <CheckCircle size={12} /> 已注入
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(exp.id)}
+                      onChange={() => toggleSelect(exp.id)}
+                      className="mt-1 w-4 h-4 rounded flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {exp.isInjected ? (
+                          <span className="flex items-center gap-1 text-xs text-green-700 font-medium">
+                            <CheckCircle size={12} /> 已启用
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs text-gray-400">
+                            <Circle size={12} /> 未启用
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                          {CATEGORY_LABELS[exp.errorCategory] || exp.errorCategory}
                         </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-xs text-gray-400">
-                          <Circle size={12} /> 未注入
-                        </span>
+                      </div>
+                      <h3
+                        className="mt-1.5 font-semibold text-gray-900 cursor-pointer hover:text-blue-600"
+                        onClick={() => router.push(`/dashboard/admin/autonomous-evolution/${exp.id}`)}
+                      >
+                        {exp.title}
+                      </h3>
+                      {patterns.length > 0 && (
+                        <p className="mt-1 text-xs text-gray-500 truncate">
+                          触发: {patterns.slice(0, 3).join(' / ')}
+                        </p>
                       )}
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                        {CATEGORY_LABELS[exp.errorCategory] || exp.errorCategory}
-                      </span>
-                    </div>
-                    <h3
-                      className="mt-1.5 font-semibold text-gray-900 cursor-pointer hover:text-blue-600"
-                      onClick={() => router.push(`/dashboard/admin/autonomous-evolution/${exp.id}`)}
-                    >
-                      {exp.title}
-                    </h3>
-                    {patterns.length > 0 && (
-                      <p className="mt-1 text-xs text-gray-500 truncate">
-                        触发: {patterns.slice(0, 3).join(' / ')}
-                      </p>
-                    )}
-                    <div className="mt-2 flex items-center gap-4 text-xs text-gray-400">
-                      <span>出现 {exp.hitCount} 次</span>
-                      <span>来源: {exp.sourceModel || '未知'}</span>
-                      <span>{new Date(exp.createdAt).toLocaleDateString('zh-CN')}</span>
+                      <div className="mt-2 flex items-center gap-4 text-xs text-gray-400">
+                        <span>出现 {exp.hitCount} 次</span>
+                        <span>来源: {exp.sourceModel || '未知'}</span>
+                        <span>{new Date(exp.createdAt).toLocaleDateString('zh-CN')}</span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
@@ -477,7 +582,7 @@ export default function AutonomousEvolutionPage() {
                         onClick={() => handleToggleInject(exp.id)}
                         className="px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
                       >
-                        注入
+                        启用
                       </button>
                     )}
                     {exp.isInjected && (
@@ -504,7 +609,8 @@ export default function AutonomousEvolutionPage() {
                 </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
       </div>
 

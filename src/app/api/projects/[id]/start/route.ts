@@ -218,7 +218,7 @@ export async function POST(
           console.log(`[启动评估]   ${i + 1}. [${e.errorCategory}] ${e.title} (命中${e.hitCount}次)`);
         });
       } else {
-        console.log('[启动评估] 无已注入的自主进化经验（isInjected=true 的记录为空）');
+        console.log('[启动评估] 无已启用的自主进化经验（isInjected=true 的记录为空）');
       }
     } catch (err) {
       console.warn('[启动评估] 注入自主进化经验失败:', err);
@@ -288,6 +288,18 @@ export async function POST(
         providerType: modelConfig.providerType, // 保存提供商类型
       },
     });
+
+    // 记录经验引用（哪些经验被注入到本次评估）
+    if (injectedExperiences.length > 0) {
+      await prisma.experienceUsageLog.createMany({
+        data: injectedExperiences.map(e => ({
+          experienceId: e.id,
+          evaluationId: evaluation.id,
+          projectId: id,
+        })),
+      });
+      console.log(`[启动评估] 已记录 ${injectedExperiences.length} 条经验引用`);
+    }
 
     // 初始化工作流节点执行记录
     if (workflowId) {
