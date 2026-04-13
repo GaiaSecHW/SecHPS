@@ -21,6 +21,8 @@ import {
   X,
   Copy,
   Code,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Skill {
@@ -75,6 +77,12 @@ export default function SkillsPage() {
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [batchOperating, setBatchOperating] = useState(false);
   
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(null);
+  
   // 技术栈选项
   const techStackOptions = [
     { name: 'Java', label: 'Java' },
@@ -101,7 +109,22 @@ export default function SkillsPage() {
   useEffect(() => {
     fetchSkills();
     fetchCategories();
-  }, [selectedCategory, selectedTechStack]);
+  }, [selectedCategory, selectedTechStack, currentPage, pageSize]);
+  
+  // 搜索防抖
+  useEffect(() => {
+    if (searchDebounce) {
+      clearTimeout(searchDebounce);
+    }
+    const timer = setTimeout(() => {
+      setCurrentPage(1); // 搜索时重置到第一页
+      fetchSkills();
+    }, 300);
+    setSearchDebounce(timer);
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [searchTerm]);
 
   const fetchSkills = async () => {
     try {
@@ -112,8 +135,11 @@ export default function SkillsPage() {
       const params = new URLSearchParams();
       if (selectedCategory) params.append('category', selectedCategory);
       if (selectedTechStack) params.append('techStack', selectedTechStack);
+      if (searchTerm) params.append('search', searchTerm);
+      params.append('page', currentPage.toString());
+      params.append('limit', pageSize.toString());
       
-      const url = params.toString() ? `/api/skills?${params.toString()}` : '/api/skills';
+      const url = `/api/skills?${params.toString()}`;
 
       const response = await fetch(url, {
         headers: {
@@ -129,6 +155,7 @@ export default function SkillsPage() {
       // API returns { data: [...], pagination: {...} }
       setSkills(data.data || []);
       setTotalSkills(data.pagination?.total || 0);
+      setTotalPages(data.pagination?.totalPages || 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
@@ -296,12 +323,8 @@ export default function SkillsPage() {
     }
   };
 
-  const filteredSkills = skills.filter(
-    (skill) =>
-      skill.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      skill.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      skill.description.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // 服务端已经过滤，直接使用 skills
+  const filteredSkills = skills;
 
   const isAdmin = user?.roles?.includes('admin');
 
@@ -692,6 +715,69 @@ export default function SkillsPage() {
           ))
         )}
       </div>
+
+      {/* 分页控件 */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white rounded-lg shadow border border-gray-200 px-4 py-3">
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">
+              共 {totalSkills} 条记录，第 {currentPage} / {totalPages} 页
+            </span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="px-2 py-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="10">10 条/页</option>
+              <option value="20">20 条/页</option>
+              <option value="50">50 条/页</option>
+              <option value="100">100 条/页</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={currentPage === 1}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              title="首页"
+            >
+              <ChevronLeft size={16} />
+              <ChevronLeft size={16} className="-ml-2" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              title="上一页"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <span className="px-3 py-1 text-sm text-gray-700">
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              title="下一页"
+            >
+              <ChevronRight size={20} />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={currentPage === totalPages}
+              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              title="末页"
+            >
+              <ChevronRight size={16} />
+              <ChevronRight size={16} className="-ml-2" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* SKILL.md 预览模态框 */}
       {previewSkill && (
