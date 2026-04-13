@@ -291,9 +291,16 @@ const [showPreview, setShowPreview] = useState(false);
           const task = data.task;
           
           // 更新任务列表中的状态
-          setPredictionTasks(prev =>
-            prev.map(t => t.id === task.id ? task : t)
-          );
+          setPredictionTasks(prev => {
+            const existingIndex = prev.findIndex(t => t.id === task.id);
+            if (existingIndex >= 0) {
+              // 任务已存在，更新它
+              return prev.map(t => t.id === task.id ? task : t);
+            } else {
+              // 任务不存在，添加它
+              return [task, ...prev];
+            }
+          });
           
           // 如果任务完成或失败，停止轮询
           if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
