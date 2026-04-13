@@ -54,7 +54,15 @@ export async function buildExperiencePromptWithMeta(): Promise<BuildExperienceRe
     }
     lines.push(`直达方案: ${exp.directSolution}`);
     lines.push('');
+
+    console.log(
+      `[经验注入] 注入经验: [${exp.errorCategory}] ${exp.title}` +
+      (patterns.length > 0 ? ` | 触发特征: ${patterns.join(' / ')}` : '') +
+      ` | 命中次数: ${exp.hitCount}`
+    );
   }
+
+  console.log(`[经验注入] 共注入 ${experiences.length} 条经验到 System Prompt`);
 
   return {
     prompt: lines.join('\n'),

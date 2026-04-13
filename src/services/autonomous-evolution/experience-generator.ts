@@ -102,26 +102,30 @@ function buildPrompt(seq: FailureSuccessSequence): string {
   const successLine =
     `工具: ${seq.success.toolName}\n  输入: ${JSON.stringify(seq.success.toolInput)}`;
 
-  return `你是一个 AI Agent 执行经验分析专家。
-以下是一段 AI Agent 执行过程中的失败→成功尝试序列，请分析并提炼可复用的通用经验。
+  const contextSection = seq.fullContext
+    ? `\n## 完整执行过程（含中间思考）\n${seq.fullContext}\n`
+    : '';
 
-## 失败尝试
+  return `你是一个 AI Agent 执行经验分析专家。
+以下是一段 AI Agent 执行过程中从"遇到问题"到"解决问题"的完整记录，请分析并提炼可复用的经验。
+
+## 失败尝试（汇总）
 ${failureLines}
 
 ## 最终成功操作
 ${successLine}
-
+${contextSection}
 请以 JSON 格式输出，字段如下：
 - title: 一句话概括这条经验（中文，20字以内）
 - errorCategory: 错误分类，从以下选择：tool_failure / path_error / permission / mcp_timeout / other
 - errorPatterns: 触发特征关键词数组（3-5个，来自错误消息的通用关键词，不含具体路径）
-- directSolution: 解决思路——描述**为什么会出错、应该如何判断和处理**，而不是"执行某个具体操作"（中文，80字以内）
-- lesson: 深层规律——这类错误的根本原因和通用应对原则（中文，100字以内）
+- directSolution: 【直接可用的解决方案】——必须写清楚：遇到什么错误时，应该用什么替代方案，包括具体的命令或工具用法。这是注入给 AI Agent 的操作指南，必须足够具体，让 Agent 看到后能直接执行正确操作，不需要再试错。（中文，150字以内）
+- lesson: 深层原因——为什么会出现这个错误，根本原因是什么（中文，80字以内）
 
-⚠️ 核心原则：授人以渔，不授人以鱼
-- 不要写"用 X 工具"、"执行 Y 命令"这类具体操作
-- 要写"为什么会出现这个错误"、"遇到此类问题应该先检查什么、怎么判断"
-- 经验必须适用于任何项目，不得包含具体路径、文件名、项目名、用户名
+⚠️ 关键要求：
+- directSolution 必须包含具体的替代方案，例如"在 Windows 环境下，mkdir -p 不可用，应改用 md 命令或 mkdir 不带 -p 参数"
+- 不要用"检查环境"、"注意兼容性"这类空话，要写出具体怎么做
+- errorPatterns 不含具体路径，但 directSolution 可以包含具体命令
 
 只输出 JSON，不要其他内容。`;
 }
@@ -183,6 +187,10 @@ export async function saveExperience(
     return { action: 'merged', id: updated.id };
   }
 
+  // 读取全局开关：决定新经验默认是否启用
+  const { getInjectionEnabled } = await import('@/services/autonomous-evolution/idle-trigger');
+  const defaultEnabled = await getInjectionEnabled();
+
   const created = await prisma.autonomousEvolutionExperience.create({
     data: {
       title: exp.title,
@@ -196,6 +204,8 @@ export async function saveExperience(
       }),
       directSolution: exp.directSolution,
       lesson: exp.lesson,
+      isInjected: defaultEnabled,
+      injectedAt: defaultEnabled ? new Date() : null,
     },
   });
   return { action: 'created', id: created.id };
