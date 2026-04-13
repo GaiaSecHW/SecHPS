@@ -67,7 +67,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         : `grep -r -n "${pattern}" ${directory || '.'}`;
 
       const { stdout } = await execAsync(cmd, {
-        timeout: context.timeout || 30000,
+        timeout: context.timeout || 600000, // 默认 10 分钟
       });
 
       const matches = stdout.split('\n').filter(Boolean).slice(0, 100);
@@ -130,7 +130,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
       }
 
       const { stdout, stderr } = await execAsync(command, {
-        timeout: context.timeout || 30000,
+        timeout: context.timeout || 600000, // 默认 10 分钟
         cwd: context.workingDirectory,
       });
 
