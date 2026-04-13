@@ -1264,7 +1264,7 @@ export default function SessionDetailPage({
                 ) : (
                   <div className="space-y-4">
                     {messages.map((message, index) => (
-                      <div key={message.id} id={`message-${index}`}>
+                      <div key={`${message.id}-${index}`} id={`message-${index}`}>
                         <MessageBubble
                           message={message}
                           isSelected={selectedMessage?.id === message.id}
