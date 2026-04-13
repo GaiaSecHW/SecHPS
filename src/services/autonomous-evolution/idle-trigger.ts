@@ -22,6 +22,23 @@ const DEFAULT_CONFIG: IdleTriggerConfig = {
 };
 
 const CONFIG_KEY = 'autonomous_evolution_idle_trigger';
+const INJECTION_KEY = 'autonomous_evolution_injection_enabled';
+
+export async function getInjectionEnabled(): Promise<boolean> {
+  try {
+    const record = await prisma.systemConfig.findUnique({ where: { key: INJECTION_KEY } });
+    if (record) return record.value === 'true';
+  } catch { /* ignore */ }
+  return true; // 默认启用
+}
+
+export async function setInjectionEnabled(enabled: boolean): Promise<void> {
+  await prisma.systemConfig.upsert({
+    where: { key: INJECTION_KEY },
+    create: { key: INJECTION_KEY, value: String(enabled), description: '执行自主进化 - 评估时注入经验开关' },
+    update: { value: String(enabled) },
+  });
+}
 
 export async function getIdleTriggerConfig(): Promise<IdleTriggerConfig> {
   try {

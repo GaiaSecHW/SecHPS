@@ -11,7 +11,7 @@ export async function GET(request: Request) {
   const payload = verifyToken(authHeader.replace('Bearer ', ''));
   if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
 
-  const [total, injected, weekNew, avgSaved, lastAutoExtract] = await Promise.all([
+  const [total, injected, weekNew, avgSaved, lastAutoExtract, totalUsage] = await Promise.all([
     prisma.autonomousEvolutionExperience.count(),
     prisma.autonomousEvolutionExperience.count({ where: { isInjected: true } }),
     prisma.autonomousEvolutionExperience.count({
@@ -19,6 +19,7 @@ export async function GET(request: Request) {
     }),
     prisma.autonomousEvolutionExperience.aggregate({ _avg: { savedAttempts: true } }),
     getLastAutoExtract(),
+    prisma.experienceUsageLog.count(),
   ]);
 
   return NextResponse.json({
@@ -27,5 +28,6 @@ export async function GET(request: Request) {
     weekNew,
     avgSavedAttempts: avgSaved._avg.savedAttempts ?? 0,
     lastAutoExtract,
+    totalUsage,
   });
 }
