@@ -2626,9 +2626,10 @@ toast.error(data.error || '更新项目失败');
                                vuln.status === 'fixed' ? '已修复' :
                                vuln.status === 'verified' ? '已验证' :
                                vuln.status === 'false-positive' ? '误报' : vuln.status}
-                            </span>
-                            <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
-                          </div>
+                             </span>
+                             <span className="text-xs text-gray-500 flex-shrink-0">{vuln.type}</span>
+                             <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
+                           </div>
                         </div>
                       ))}
                     </div>

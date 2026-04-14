@@ -356,34 +356,24 @@ export default function VulnerabilitiesPage() {
           filteredVulnerabilities.map((vuln) => (
             <div
               key={vuln.id}
-              className="bg-white rounded-lg shadow border border-gray-200 p-4 hover:border-gray-300 transition-colors cursor-pointer"
+              className="bg-white rounded-lg shadow border border-gray-200 px-4 py-3 hover:border-gray-300 transition-colors cursor-pointer"
               onClick={() => setSelectedVuln(vuln)}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2">
-                    <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusColors[vuln.status] || 'bg-gray-100 text-gray-800'}`}>
-                      {statusLabels[vuln.status] || vuln.status}
-                    </span>
-                  </div>
-                  <h3 className="mt-2 font-semibold text-gray-900">{vuln.title}</h3>
-                  <div className="mt-2 flex items-center gap-3 text-sm text-gray-500">
-                    {vuln.project && <span className="text-blue-600">项目: {vuln.project.name}</span>}
-                    <span>类型: {vuln.type}</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="text-sm text-gray-500">
-                    {new Date(vuln.createdAt).toLocaleDateString()}
-                  </div>
-                  <button
-                    onClick={(e) => handleDelete(vuln.id, vuln.title, e)}
-                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="删除漏洞"
-                  >
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+              <div className="flex items-center gap-3">
+                <span className={`px-2 py-0.5 text-xs font-medium rounded flex-shrink-0 ${statusColors[vuln.status] || 'bg-gray-100 text-gray-800'}`}>
+                  {statusLabels[vuln.status] || vuln.status}
+                </span>
+                <h3 className="font-semibold text-gray-900 truncate flex-1 min-w-0">{vuln.title}</h3>
+                {vuln.project && <span className="text-sm text-blue-600 flex-shrink-0">项目: {vuln.project.name}</span>}
+                <span className="text-sm text-gray-500 flex-shrink-0">类型: {vuln.type}</span>
+                <span className="text-sm text-gray-400 flex-shrink-0">{new Date(vuln.createdAt).toLocaleDateString()}</span>
+                <button
+                  onClick={(e) => handleDelete(vuln.id, vuln.title, e)}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                  title="删除漏洞"
+                >
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
           ))
