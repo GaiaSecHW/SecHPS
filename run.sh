@@ -7,14 +7,22 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# 创建日志目录
+mkdir -p logs
+
+# 日志文件名（带日期）
+LOG_FILE="logs/app-$(date +%Y%m%d).log"
+
 # 颜色输出
 RED='\033[0;31m'
-GREEN='\033[0;32m'
+GREEN='\033[0;33m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "=========================================="
 echo "AI4WEB 平台启动脚本"
+echo "=========================================="
+echo -e "日志文件: ${GREEN}$LOG_FILE${NC}"
 echo "=========================================="
 
 # 检查 .env 文件
@@ -61,8 +69,13 @@ echo ""
 echo -e "${GREEN}[OK] 启动服务...${NC}"
 echo ""
 echo "访问地址: http://localhost:3000"
+echo -e "日志文件: ${GREEN}$LOG_FILE${NC}"
 echo "按 Ctrl+C 停止服务"
 echo "=========================================="
 echo ""
 
-npm start
+# 写入启动日志
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] AI4WEB 平台启动" >> "$LOG_FILE"
+
+# 启动服务并输出日志到文件（同时显示在终端）
+npm start 2>&1 | tee -a "$LOG_FILE"
