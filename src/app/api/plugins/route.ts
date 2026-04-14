@@ -3,6 +3,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import type { InstallPluginRequest } from '@/types/plugin';
+import { getOffsetPagination } from '@/lib/pagination';
 
 /**
  * GET /api/plugins
@@ -46,12 +47,28 @@ export async function GET(request: Request) {
       );
     }
 
+    // 解析分页参数
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+
+    // 获取分页配置
+    const { skip, take } = getOffsetPagination({ page, limit });
+
     // 获取插件列表
-    const plugins = await PluginManager.getPlugins();
+    const allPlugins = await PluginManager.getPlugins();
+    const total = allPlugins.length;
+    const plugins = allPlugins.slice(skip, skip + take);
+    const totalPages = Math.ceil(total / take);
 
     return NextResponse.json({
       plugins,
-      total: plugins.length,
+      pagination: {
+        total,
+        page,
+        limit: take,
+        totalPages,
+      },
     });
   } catch (error) {
     console.error('获取插件列表失败:', error);

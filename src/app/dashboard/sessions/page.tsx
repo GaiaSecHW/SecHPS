@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -131,6 +131,9 @@ export default function SessionsPage() {
   const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
   const [loadingVulnerabilities, setLoadingVulnerabilities] = useState(false);
   const [selectedVulnerability, setSelectedVulnerability] = useState<any | null>(null);
+  const [vulnPage, setVulnPage] = useState(1);
+  const [vulnTotalCount, setVulnTotalCount] = useState(0);
+  const vulnPageSize = 10;
 
   // 检查是否有运行中的评估
   const hasRunningEvaluation = projects.some(p => 
@@ -814,16 +817,17 @@ export default function SessionsPage() {
     toast(`环境 AI 渗透功能开发中\n\n目标环境: ${project.environmentUrl}`, { icon: '🔧' });
   };
 
-  const handleVulnerabilityManagement = async (project: Project) => {
+  const handleVulnerabilityManagement = async (project: Project, page: number = 1) => {
     setVulnerabilityProject(project);
     setShowVulnerabilityModal(true);
     setLoadingVulnerabilities(true);
     setVulnerabilities([]);
     setSelectedVulnerability(null);
+    setVulnPage(page);
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/vulnerabilities?projectId=${project.id}`, {
+      const response = await fetch(`/api/vulnerabilities?projectId=${project.id}&page=${page}&limit=${vulnPageSize}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -833,6 +837,7 @@ export default function SessionsPage() {
         const data = await response.json();
         // API 返回格式: { data: [...], pagination: {...} }
         setVulnerabilities(data.data || []);
+        setVulnTotalCount(data.pagination?.total || 0);
       } else {
         console.error('获取漏洞列表失败');
       }
@@ -2603,18 +2608,6 @@ toast.error(data.error || '更新项目失败');
                         >
                           <div className="flex items-center gap-2">
                             <span className={`px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0 ${
-                              vuln.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                              vuln.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                              vuln.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                              vuln.severity === 'low' ? 'bg-blue-100 text-blue-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}>
-                              {vuln.severity === 'critical' ? '严重' :
-                               vuln.severity === 'high' ? '高危' :
-                               vuln.severity === 'medium' ? '中危' :
-                               vuln.severity === 'low' ? '低危' : '信息'}
-                            </span>
-                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0 ${
                               vuln.status === 'new' ? 'bg-blue-100 text-blue-700' :
                               vuln.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
                               vuln.status === 'fixed' ? 'bg-green-100 text-green-700' :
@@ -2626,13 +2619,38 @@ toast.error(data.error || '更新项目失败');
                                vuln.status === 'fixed' ? '已修复' :
                                vuln.status === 'verified' ? '已验证' :
                                vuln.status === 'false-positive' ? '误报' : vuln.status}
-                             </span>
-                             <span className="text-xs text-gray-500 flex-shrink-0">{vuln.type}</span>
-                             <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
-                           </div>
+                            </span>
+                            <span className="text-xs text-gray-500 flex-shrink-0">{vuln.type}</span>
+                            <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
+                          </div>
                         </div>
                       ))}
                     </div>
+                    {/* 分页 */}
+                    {vulnTotalCount > vulnPageSize && (
+                      <div className="flex items-center justify-between px-4 py-2 border-t border-gray-100">
+                        <span className="text-xs text-gray-500">
+                          共 {vulnTotalCount} 条，第 {vulnPage}/{Math.ceil(vulnTotalCount / vulnPageSize)} 页
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, vulnPage - 1)}
+                            disabled={vulnPage === 1}
+                            className="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <ChevronLeft size={16} />
+                          </button>
+                          <span className="text-xs text-gray-600 px-2">{vulnPage}</span>
+                          <button
+                            onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, vulnPage + 1)}
+                            disabled={vulnPage >= Math.ceil(vulnTotalCount / vulnPageSize)}
+                            className="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <ChevronRight size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

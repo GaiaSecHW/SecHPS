@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   Users,
   Plus,
@@ -10,6 +11,8 @@ import {
   Search,
   ChevronDown,
   UserPlus,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -22,16 +25,19 @@ export default function UsersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
     fetchUsers();
     fetchRoles();
-  }, []);
+  }, [page]);
 
   const fetchUsers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/users', {
+      const response = await fetch(`/api/users?page=${page}&limit=${pageSize}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -46,6 +52,7 @@ export default function UsersPage() {
 
       const data = await response.json();
       setUsers(data.users || []);
+      setTotalCount(data.pagination?.total || data.users?.length || 0);
       setLoading(false);
     } catch (err) {
       setError('网络错误，请重试');
@@ -87,13 +94,13 @@ export default function UsersPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '删除用户失败');
+        toast.error(data.error || '删除用户失败');
         return;
       }
 
       await fetchUsers();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -208,6 +215,31 @@ export default function UsersPage() {
             )}
           </tbody>
         </table>
+        {/* 分页 */}
+        {totalCount > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+            <span className="text-sm text-gray-600">
+              共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm text-gray-600">第 {page} 页</span>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={page >= Math.ceil(totalCount / pageSize)}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 创建用户模态框 */}

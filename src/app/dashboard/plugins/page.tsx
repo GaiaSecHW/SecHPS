@@ -14,6 +14,8 @@ import {
   ExternalLink,
   Plus,
   Play,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import type { PluginResponse, PluginType } from '@/types/plugin';
@@ -27,6 +29,9 @@ export default function PluginsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [executingPlugin, setExecutingPlugin] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -34,7 +39,7 @@ export default function PluginsPage() {
       setUser(JSON.parse(userData));
     }
     fetchPlugins();
-  }, []);
+  }, [page]);
 
   const fetchPlugins = async () => {
     try {
@@ -47,7 +52,7 @@ export default function PluginsPage() {
         return;
       }
       
-      const response = await fetch('/api/plugins', {
+      const response = await fetch(`/api/plugins?page=${page}&limit=${pageSize}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -64,7 +69,8 @@ export default function PluginsPage() {
       }
 
       const data = await response.json();
-      setPlugins(data.plugins);
+      setPlugins(data.plugins || []);
+      setTotalCount(data.pagination?.total || data.plugins?.length || 0);
     } catch (err) {
       setError('加载插件列表失败');
     } finally {
@@ -444,6 +450,32 @@ export default function PluginsPage() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* 分页 */}
+      {totalCount > pageSize && (
+        <div className="flex items-center justify-between mt-4 px-4 py-3 bg-white rounded-lg border border-gray-200">
+          <span className="text-sm text-gray-600">
+            共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-sm text-gray-600">第 {page} 页</span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= Math.ceil(totalCount / pageSize)}
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   Shield,
   Plus,
@@ -10,6 +11,8 @@ import {
   X,
   ChevronDown,
   Settings,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 export default function RolesPage() {
@@ -21,16 +24,19 @@ export default function RolesPage() {
   const [showCreatePermissionModal, setShowCreatePermissionModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
   const [selectedRole, setSelectedRole] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
   useEffect(() => {
     fetchRoles();
     fetchPermissions();
-  }, []);
+  }, [page]);
 
   const fetchRoles = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/roles', {
+      const response = await fetch(`/api/roles?page=${page}&limit=${pageSize}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -45,6 +51,7 @@ export default function RolesPage() {
 
       const data = await response.json();
       setRoles(data.roles || []);
+      setTotalCount(data.pagination?.total || data.roles?.length || 0);
       setLoading(false);
     } catch (err) {
       setError('网络错误，请重试');
@@ -86,13 +93,13 @@ export default function RolesPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '删除角色失败');
+        toast.error(data.error || '删除角色失败');
         return;
       }
 
       await fetchRoles();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -160,7 +167,7 @@ export default function RolesPage() {
             <p className="mt-4 text-sm text-gray-600">未找到角色</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+           <div className="divide-y divide-gray-200">
             {roles.map((role) => (
               <RoleCard
                 key={role.id}
@@ -173,6 +180,31 @@ export default function RolesPage() {
                 onDelete={() => handleDeleteRole(role.id, role.name)}
               />
             ))}
+          </div>
+        )}
+        {/* 分页 */}
+        {totalCount > pageSize && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+            <span className="text-sm text-gray-600">
+              共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm text-gray-600">第 {page} 页</span>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={page >= Math.ceil(totalCount / pageSize)}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
       </div>

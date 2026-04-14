@@ -13,6 +13,8 @@ import {
   CheckCircle,
   XCircle,
   TestTube,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface McpServer {
@@ -44,6 +46,9 @@ export default function McpServersPage() {
     message: string;
     tools?: string[];
   } | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 10;
 
   // 表单状态
   const [formData, setFormData] = useState({
@@ -57,13 +62,17 @@ export default function McpServersPage() {
     autoStart: false,
   });
 
+  useEffect(() => {
+    fetchServers();
+  }, [page]);
+
   const fetchServers = async () => {
     setLoading(true);
     setError('');
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/mcp-servers', {
+      const response = await fetch(`/api/mcp-servers?page=${page}&limit=${pageSize}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -74,7 +83,8 @@ export default function McpServersPage() {
       }
 
       const data = await response.json();
-      setServers(data.mcpServers || []);
+      setServers(data.mcpServers || data.servers || []);
+      setTotalCount(data.pagination?.total || (data.mcpServers || data.servers || []).length);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
@@ -439,6 +449,32 @@ export default function McpServersPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* 分页 */}
+        {totalCount > pageSize && (
+          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-white rounded-lg border border-gray-200">
+            <span className="text-sm text-gray-600">
+              共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm text-gray-600">第 {page} 页</span>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={page >= Math.ceil(totalCount / pageSize)}
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
           </div>
         )}
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS, ROLES } from '@/types/permissions';
+import { getOffsetPagination } from '@/lib/pagination';
 
 // 获取所有角色
 export async function GET(request: Request) {
@@ -24,8 +25,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    // 获取所有角色
+    // 解析 URL 参数
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+
+    // 获取分页参数
+    const { skip, take, page: currentPage, limit: currentLimit } = getOffsetPagination({ page, limit });
+
+    // 获取总数
+    const total = await prisma.role.count();
+
+    // 获取角色列表
     const roles = await prisma.role.findMany({
+      skip,
+      take,
       include: {
         permissions: true,
         userRoles: {
@@ -43,7 +57,18 @@ export async function GET(request: Request) {
       },
     });
 
-    return NextResponse.json({ roles });
+    // 计算总页数
+    const totalPages = Math.ceil(total / currentLimit);
+
+    return NextResponse.json({
+      roles,
+      pagination: {
+        total,
+        page: currentPage,
+        limit: currentLimit,
+        totalPages,
+      },
+    });
   } catch (error) {
     console.error('Get roles error:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

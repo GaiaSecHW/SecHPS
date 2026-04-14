@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 
 // GET /api/mcp-servers - 获取全局 MCP 服务器配置列表
 export async function GET(request: Request) {
@@ -26,6 +27,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '无权限' }, { status: 403 });
     }
 
+    // 解析分页参数
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1', 10);
+    const limit = parseInt(searchParams.get('limit') || '20', 10);
+
+    // 获取分页参数
+    const { skip, take } = getOffsetPagination({ page, limit });
+
+    // 获取总数
+    const total = await prisma.mcpServerConfig.count({
+      where: {
+        userId: null,
+        projectId: null,
+      },
+    });
+
     // 获取全局 MCP 配置（userId 和 projectId 都为 null）
     const mcpServers = await prisma.mcpServerConfig.findMany({
       where: {
@@ -33,9 +50,13 @@ export async function GET(request: Request) {
         projectId: null,
       },
       orderBy: { createdAt: 'desc' },
+      skip,
+      take,
     });
 
-    return NextResponse.json({ mcpServers });
+    // 返回分页响应
+    const response = createPaginatedResponse(mcpServers, total, page, limit);
+    return NextResponse.json({ servers: response.data, pagination: response.pagination });
   } catch (error) {
     console.error('Get MCP servers error:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

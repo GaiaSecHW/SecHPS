@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 
 // 获取所有用户
 export async function GET(request: Request) {
@@ -24,24 +25,36 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    // 获取所有用户
-    const users = await prisma.user.findMany({
-      include: {
-        userRoles: {
-          include: {
-            role: {
-              include: {
-                permissions: true,
+    // 解析分页参数
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
+
+    const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
+
+    // 获取用户总数和分页数据
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        include: {
+          userRoles: {
+            include: {
+              role: {
+                include: {
+                  permissions: true,
+                },
               },
             },
           },
+          opencodeConfig: true,
         },
-        opencodeConfig: true,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take,
+      }),
+      prisma.user.count(),
+    ]);
 
     // 格式化返回数据
     const formattedUsers = users.map(user => ({
@@ -67,7 +80,7 @@ export async function GET(request: Request) {
       })),
     }));
 
-    return NextResponse.json({ users: formattedUsers, total: users.length });
+    return NextResponse.json(createPaginatedResponse(formattedUsers, total, pageNum, pageLimit));
   } catch (error) {
     console.error('获取用户错误:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
