@@ -1061,7 +1061,7 @@ toast.error(data.error || '更新项目失败');
           </p>
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))' }}>
+        <div className="grid gap-6 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))' }}>
           {projects.map((project) => (
             <div
               key={project.id}
