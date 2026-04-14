@@ -877,7 +877,7 @@ export default function SessionsPage() {
   const downloadFile = async (projectId: string, fileId: string, fileName: string) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/projects/${projectId}/files/${fileId}/download`, {
+      const response = await fetch(`/api/projects/${projectId}/files/${fileId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
