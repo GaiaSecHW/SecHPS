@@ -62,6 +62,61 @@ export const PERMISSIONS = {
   PLUGIN_DELETE: 'plugin:delete',
   PLUGIN_TOGGLE: 'plugin:toggle',
   PLUGIN_EXECUTE: 'plugin:execute',
+
+  // Agent权限
+  AGENT_CHAT: 'agent:chat',
+  AGENT_EXECUTE: 'agent:execute',
+  AGENT_READ: 'agent:read',
+
+  // 自主进化权限
+  AUTONOMOUS_EVOLUTION_READ: 'autonomous_evolution:read',
+  AUTONOMOUS_EVOLUTION_CREATE: 'autonomous_evolution:create',
+  AUTONOMOUS_EVOLUTION_UPDATE: 'autonomous_evolution:update',
+  AUTONOMOUS_EVOLUTION_DELETE: 'autonomous_evolution:delete',
+  AUTONOMOUS_EVOLUTION_EXTRACT: 'autonomous_evolution:extract',
+  AUTONOMOUS_EVOLUTION_INJECT: 'autonomous_evolution:inject',
+
+  // 代码分析权限
+  CODE_ANALYZE: 'code:analyze',
+  CODE_READ: 'code:read',
+
+  // 模型管理权限
+  MODEL_CREATE: 'model:create',
+  MODEL_READ: 'model:read',
+  MODEL_UPDATE: 'model:update',
+  MODEL_DELETE: 'model:delete',
+  MODEL_TEST: 'model:test',
+
+  // 通知管理权限
+  NOTIFICATION_CREATE: 'notification:create',
+  NOTIFICATION_READ: 'notification:read',
+  NOTIFICATION_UPDATE: 'notification:update',
+  NOTIFICATION_DELETE: 'notification:delete',
+
+  // 技能权限
+  SKILL_CREATE: 'skill:create',
+  SKILL_READ: 'skill:read',
+  SKILL_UPDATE: 'skill:update',
+  SKILL_DELETE: 'skill:delete',
+  SKILL_EXECUTE: 'skill:execute',
+
+  // 漏洞权限
+  VULNERABILITY_CREATE: 'vulnerability:create',
+  VULNERABILITY_READ: 'vulnerability:read',
+  VULNERABILITY_UPDATE: 'vulnerability:update',
+  VULNERABILITY_DELETE: 'vulnerability:delete',
+
+  // 评估权限
+  EVALUATION_CREATE: 'evaluation:create',
+  EVALUATION_READ: 'evaluation:read',
+  EVALUATION_UPDATE: 'evaluation:update',
+  EVALUATION_DELETE: 'evaluation:delete',
+
+  // 项目权限
+  PROJECT_CREATE: 'project:create',
+  PROJECT_READ: 'project:read',
+  PROJECT_UPDATE: 'project:update',
+  PROJECT_DELETE: 'project:delete',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
