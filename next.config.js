@@ -7,6 +7,12 @@ const nextConfig = {
       bodySizeLimit: '2mb',
     },
   },
+  
+  // API 路由最大执行时间（秒）- Vercel/Node.js 环境
+  // 开发环境无限制，生产环境最长 60 秒（Vercel Hobby）
+  // 自托管环境可以更长
+  // maxDuration: 300, // 5分钟（需要 Vercel Pro 或自托管）
+  
   allowedDevOrigins: ['172.31.31.229'],
   
   // standalone 输出配置

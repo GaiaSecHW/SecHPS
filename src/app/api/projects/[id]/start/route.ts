@@ -272,6 +272,28 @@ export async function POST(
       }
     }
     
+    // 写入 CLAUDE.md 全局模板到项目 .claude 目录
+    if (project.projectPath && globalConfig?.claudemdTemplate) {
+      try {
+        const claudeDir = join(project.projectPath, '.claude');
+        const claudeMdPath = join(claudeDir, 'CLAUDE.md');
+        
+        // 确保 .claude 目录存在
+        try {
+          await access(claudeDir);
+        } catch {
+          await mkdir(claudeDir, { recursive: true });
+        }
+        
+        // 写入 CLAUDE.md 文件（覆盖已存在的文件）
+        await writeFile(claudeMdPath, globalConfig.claudemdTemplate, 'utf-8');
+        console.log(`[启动评估] 已写入 CLAUDE.md 模板到: ${claudeMdPath}`);
+      } catch (error) {
+        console.error('[启动评估] 写入 CLAUDE.md 失败:', error);
+        // 继续执行，不阻止评估启动
+      }
+    }
+    
     // 更新项目状态为 running
     await prisma.project.update({
       where: { id },

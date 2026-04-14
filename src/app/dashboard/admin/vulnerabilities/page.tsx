@@ -11,6 +11,8 @@ import {
   Shield,
   Clock,
   Trash2,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Vulnerability {
@@ -88,12 +90,36 @@ export default function VulnerabilitiesPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState<string>('');
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [projects, setProjects] = useState<{id: string, name: string}[]>([]);
   const [selectedVuln, setSelectedVuln] = useState<Vulnerability | null>(null);
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
+    fetchProjects();
     fetchVulnerabilities();
     fetchStats();
-  }, [selectedStatus]);
+  }, [selectedStatus, selectedProject, currentPage]);
+
+  const fetchProjects = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/projects', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        // API 返回 { projects: [...] }
+        setProjects(data.projects || []);
+      }
+    } catch (err) {
+      console.error('获取项目列表失败:', err);
+    }
+  };
 
   const fetchVulnerabilities = async () => {
     try {
@@ -101,6 +127,10 @@ export default function VulnerabilitiesPage() {
       const token = localStorage.getItem('token');
       const params = new URLSearchParams();
       if (selectedStatus) params.append('status', selectedStatus);
+      if (selectedProject) params.append('projectId', selectedProject);
+      if (searchTerm) params.append('search', searchTerm);
+      params.append('page', currentPage.toString());
+      params.append('limit', pageSize.toString());
 
       const response = await fetch(`/api/vulnerabilities?${params.toString()}`, {
         headers: {
@@ -115,6 +145,7 @@ export default function VulnerabilitiesPage() {
       const data = await response.json();
       // API 返回格式: { data: [...], pagination: {...} }
       setVulnerabilities(data.data || []);
+      setTotalCount(data.pagination?.total || 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
     } finally {
@@ -283,8 +314,18 @@ export default function VulnerabilitiesPage() {
           </div>
         </div>
         <select
+          value={selectedProject}
+          onChange={(e) => { setSelectedProject(e.target.value); setCurrentPage(1); }}
+          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+        >
+          <option value="">所有项目</option>
+          {projects.map(project => (
+            <option key={project.id} value={project.id}>{project.name}</option>
+          ))}
+</select>
+        <select
           value={selectedStatus}
-          onChange={(e) => setSelectedStatus(e.target.value)}
+          onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
           className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="">所有状态</option>
@@ -296,13 +337,6 @@ export default function VulnerabilitiesPage() {
         </select>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
-
       {/* Vulnerabilities List */}
       <div className="space-y-4">
         {filteredVulnerabilities.length === 0 ? (
@@ -311,7 +345,7 @@ export default function VulnerabilitiesPage() {
               <Shield className="mx-auto h-16 w-16 text-gray-400" />
               <h3 className="mt-4 text-lg font-medium text-gray-900">暂无漏洞</h3>
               <p className="mt-2 text-sm text-gray-600">
-                {searchTerm || selectedStatus
+                {searchTerm || selectedStatus || selectedProject
                   ? '没有找到匹配的漏洞'
                   : '系统运行良好，暂未发现安全漏洞'}
               </p>
@@ -334,6 +368,7 @@ export default function VulnerabilitiesPage() {
                   <h3 className="mt-2 font-semibold text-gray-900">{vuln.title}</h3>
                   <p className="mt-1 text-sm text-gray-600 line-clamp-2">{vuln.description}</p>
                   <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+                    {vuln.project && <span className="text-blue-600 font-medium">项目: {vuln.project.name}</span>}
                     <span>类型: {vuln.type}</span>
                     {vuln.cwe && <span>CWE: {vuln.cwe}</span>}
                     {vuln.filePath && <span>文件: {vuln.filePath}</span>}
@@ -356,6 +391,34 @@ export default function VulnerabilitiesPage() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {totalCount > 0 && (
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-gray-600">
+            共 {totalCount} 条记录，第 {currentPage}/{Math.ceil(totalCount / pageSize)} 页
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="text-sm text-gray-600">
+              第 {currentPage} 页
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => p + 1)}
+              disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Detail Modal */}
       {selectedVuln && (

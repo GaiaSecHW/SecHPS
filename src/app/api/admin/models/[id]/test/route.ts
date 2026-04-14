@@ -66,7 +66,7 @@ export async function POST(
 
     // 发送测试请求
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
 
     try {
       const response = await fetch(url, {
@@ -111,7 +111,7 @@ export async function POST(
 
       let errorMessage = '请求失败';
       if (fetchError.name === 'AbortError') {
-        errorMessage = '连接超时';
+        errorMessage = '大模型响应超时，请检查网络或使用更快的模型';
       }
 
       return NextResponse.json({

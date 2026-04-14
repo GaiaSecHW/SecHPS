@@ -29,7 +29,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate } = body;
 
     // Check if config exists and belongs to user
     const existingConfig = await prisma.opencodeConfig.findUnique({
@@ -78,6 +78,8 @@ export async function PATCH(
         ...(customSystemPrompt !== undefined && { customSystemPrompt }),
         // Skill 标准输出模板
         ...(skillOutputTemplate !== undefined && { skillOutputTemplate }),
+        // CLAUDE.md 全局模板
+        ...(claudemdTemplate !== undefined && { claudemdTemplate }),
       },
     });
 

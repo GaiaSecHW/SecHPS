@@ -82,6 +82,32 @@ export default function ToolsPage() {
 
   const isAdmin = user?.roles?.includes('admin');
 
+  const handleDelete = async (toolId: string, toolName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm(`确定要删除工具「${toolName}」吗？此操作不可恢复。`)) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/tools/${toolId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '删除失败');
+      }
+
+      fetchTools();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : '删除失败');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -109,6 +135,18 @@ export default function ToolsPage() {
             创建工具
           </button>
         )}
+      </div>
+
+      {/* 使用说明 */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-blue-800 mb-2">工具使用说明</h3>
+        <ul className="text-sm text-blue-700 space-y-1">
+          <li>• <strong>工具用途</strong>：工具是 Skills 可以调用的能力，如文件读取、代码分析、安全检测等</li>
+          <li>• <strong>创建工具</strong>：点击右上角"创建工具"按钮，定义工具名称、参数和执行方式</li>
+          <li>• <strong>编辑工具</strong>：点击工具卡片或编辑图标进入编辑页面</li>
+          <li>• <strong>删除工具</strong>：内置工具不可删除，自定义工具可删除</li>
+          <li>• <strong>禁用工具</strong>：在编辑页面可以禁用工具，禁用后 Skills 将无法调用</li>
+        </ul>
       </div>
 
       {/* Search */}
@@ -146,7 +184,8 @@ export default function ToolsPage() {
           filteredTools.map((tool) => (
             <div
               key={tool.id}
-              className="bg-white rounded-lg shadow border border-gray-200 p-4 hover:border-gray-300 transition-colors"
+              className="bg-white rounded-lg shadow border border-gray-200 p-4 hover:border-gray-300 transition-colors cursor-pointer"
+              onClick={() => router.push(`/dashboard/admin/tools/${tool.id}`)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
@@ -178,11 +217,29 @@ export default function ToolsPage() {
                     <span>超时: {tool.timeout}ms</span>
                   </div>
                 </div>
-                {!tool.isActive && (
-                  <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
-                    已禁用
-                  </span>
-                )}
+                <div className="flex items-center space-x-2">
+                  {!tool.isActive && (
+                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                      已禁用
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/admin/tools/${tool.id}`); }}
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="编辑工具"
+                  >
+                    <Edit size={18} />
+                  </button>
+                  {!tool.isBuiltin && isAdmin && (
+                    <button
+                      onClick={(e) => handleDelete(tool.id, tool.displayName, e)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="删除工具"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))

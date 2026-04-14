@@ -78,8 +78,23 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error('[test-runs] 测试运行失败:', error);
+    
+    // 友好的错误信息
+    let errorMessage = '测试运行失败';
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        errorMessage = '大模型响应超时，请稍后重试或使用更快的模型';
+      } else if (error.message === 'fetch failed' || error.cause instanceof Error && error.cause.name === 'AbortError') {
+        errorMessage = '大模型响应超时，请稍后重试或使用更快的模型';
+      } else if (error.message.includes('fetch failed')) {
+        errorMessage = '大模型连接失败，请检查网络或 API 配置';
+      } else {
+        errorMessage = `测试运行失败: ${error.message}`;
+      }
+    }
+    
     return NextResponse.json(
-      { error: `测试运行失败: ${error instanceof Error ? error.message : '未知错误'}` },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -160,9 +175,9 @@ async function callModelForTest(
   config: { providerType: string; apiKey: string; apiBaseUrl: string; defaultModel: string },
   prompt: string
 ): Promise<string> {
-  // 设置 2 分钟超时
+  // 设置 10 分钟超时
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  const timeoutId = setTimeout(() => controller.abort(), 600000);
 
   try {
     if (config.providerType === 'claude') {

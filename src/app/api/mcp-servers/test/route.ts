@@ -69,7 +69,7 @@ async function testRemoteServer(url: string, env?: any) {
 
     // 尝试连接到 SSE 端点
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000); // 10秒超时
+    const timeout = setTimeout(() => controller.abort(), 60000); // 1分钟超时
 
     const response = await fetch(url, {
       method: 'GET',

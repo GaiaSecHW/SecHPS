@@ -9,6 +9,8 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+  # 默认使用 prisma 目录下的 dev.db（当 DATABASE_URL 未设置时）
+  # url      = "file:./dev.db"
 }
 
 // 用户模型
@@ -115,6 +117,7 @@ model OpencodeConfig {
   // 评估配置
   progressQuestion  String?  // 询问进展消息模板，用于评估运行时发送进展询问
   skillOutputTemplate String?  // Skill标准输出模板（JSON格式），用于Skill测试用例的期望输出
+  claudemdTemplate  String?  // CLAUDE.md 全局模板，启动评估时写入项目 .claude 目录
   
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -1351,6 +1354,19 @@ model AutonomousEvolutionRunLog {
 
   @@index([startedAt])
   @@index([trigger])
+}
+
+// 经验引用记录（每次评估启动时注入了哪些经验）
+model ExperienceUsageLog {
+  id             String   @id @default(cuid())
+  experienceId   String                        // 关联的经验 ID
+  evaluationId   String                        // 关联的评估会话 ID
+  projectId      String?                       // 关联的项目 ID
+  usedAt         DateTime @default(now())
+
+  @@index([experienceId])
+  @@index([evaluationId])
+  @@index([usedAt])
 }
 
 // ============================================

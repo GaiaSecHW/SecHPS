@@ -54,6 +54,7 @@ export async function GET(request: Request) {
       settingSources: config.settingSources,
       progressQuestion: config.progressQuestion,
       skillOutputTemplate: config.skillOutputTemplate,
+      claudemdTemplate: config.claudemdTemplate,
       mcpServers: config.mcpServers,
       keybinds: config.keybinds,
       modelPreferences: config.modelPreferences,

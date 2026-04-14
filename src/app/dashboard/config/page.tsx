@@ -51,6 +51,9 @@ export default function ConfigPage() {
   // Skill标准输出模板
   const [skillOutputTemplate, setSkillOutputTemplate] = useState('');
 
+  // CLAUDE.md 全局模板
+  const [claudemdTemplate, setClaudemdTemplate] = useState('');
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
@@ -81,6 +84,7 @@ export default function ConfigPage() {
         setCustomSystemPrompt(activeConfig.customSystemPrompt || '');
         setCustomProgressQuestion(activeConfig.progressQuestion || '');
         setSkillOutputTemplate(activeConfig.skillOutputTemplate || '');
+        setClaudemdTemplate(activeConfig.claudemdTemplate || '');
         
         // 解析工作流配置
         if (activeConfig.workflowConfig) {
@@ -202,6 +206,7 @@ export default function ConfigPage() {
           customSystemPrompt,
           progressQuestion: customProgressQuestion,
           skillOutputTemplate,
+          claudemdTemplate,
         }),
       });
 
@@ -498,6 +503,29 @@ export default function ConfigPage() {
             />
             <p className="text-xs text-gray-500 mt-1">
               定义 Skill 的标准化输出格式模板。创建 Skill 时用户只能查看此模板，不能修改。支持任意文本格式（Markdown、JSON、纯文本等）。
+            </p>
+          </div>
+        </div>
+
+        {/* CLAUDE.md Global Template */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <FileText size={20} />
+            CLAUDE.md 全局模板
+          </h3>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              模板内容
+            </label>
+            <textarea
+              value={claudemdTemplate}
+              onChange={(e) => setClaudemdTemplate(e.target.value)}
+              rows={12}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              placeholder={'# 项目说明\n\n## 项目结构\n\n```\nsrc/\n├── controllers/\n├── models/\n├── routes/\n└── utils/\n```\n\n## 编码规范\n\n- 使用 TypeScript\n- 遵循 ESLint 规则\n- 函数必须有注释\n\n## 安全要求\n\n- 所有用户输入必须验证\n- 使用参数化查询防止 SQL 注入\n- 输出必须转义防止 XSS'}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              启动评估时，此模板内容将写入项目根目录的 <code className="bg-gray-100 px-1 rounded">.claude/CLAUDE.md</code> 文件。如果文件已存在将被覆盖。
             </p>
           </div>
         </div>

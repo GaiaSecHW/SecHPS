@@ -142,8 +142,23 @@ ${research ? `
     return NextResponse.json({ skill });
   } catch (error) {
     console.error('[generate] 生成 Skill 失败:', error);
+    
+    // 友好的错误信息
+    let errorMessage = '生成失败';
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        errorMessage = '大模型响应超时，请稍后重试或使用更快的模型';
+      } else if (error.message === 'fetch failed' || error.cause instanceof Error && error.cause.name === 'AbortError') {
+        errorMessage = '大模型响应超时，请稍后重试或使用更快的模型';
+      } else if (error.message.includes('fetch failed')) {
+        errorMessage = '大模型连接失败，请检查网络或 API 配置';
+      } else {
+        errorMessage = `生成失败: ${error.message}`;
+      }
+    }
+    
     return NextResponse.json(
-      { error: `生成失败: ${error instanceof Error ? error.message : '未知错误'}` },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -247,7 +262,7 @@ async function callModel(
   userPrompt: string
 ): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000);
+  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10分钟超时
 
   try {
     if (config.providerType === 'claude') {
