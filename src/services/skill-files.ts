@@ -115,18 +115,11 @@ export function generateSkillMarkdown(skill: DiskSkill): string {
 
 /**
  * 生成符合 Claude 官方格式的 SKILL.md 内容
- * 包含标准输出模板（如果配置了）
+ * 直接返回 content 字段，不拼接模板
  */
 export function generateSkillMarkdownWithTemplate(skill: DiskSkill, skillOutputTemplate?: string): string {
-  let content = skill.content || '';
-
-  // 如果有标准输出模板，合并到内容中
-  if (skillOutputTemplate && skillOutputTemplate.trim()) {
-    // 在内容开头添加标准输出模板章节
-    content = `## 标准输出格式\n\n${skillOutputTemplate}\n\n${content}`;
-  }
-
-  return content;
+  // 直接返回内容，不拼接模板
+  return skill.content || '';
 }
 
 /**
@@ -327,11 +320,11 @@ export async function copySkillsToProject(
           // 读取并合并标准输出模板
           let content = fs.readFileSync(versionedFile, 'utf-8');
           if (skillOutputTemplate && skillOutputTemplate.trim()) {
-            content = `## 标准输出格式\n\n${skillOutputTemplate}\n\n${content}`;
+            content = content + '\n\n' + skillOutputTemplate;
           }
           
           // 写入目标文件
-          const destFile = path.join(targetSkillDir, 'SKILL.md');
+          const destFile = path.join(targetDir, 'SKILL.md');
           fs.writeFileSync(destFile, content, 'utf-8');
           
           result.success++;
@@ -341,107 +334,17 @@ export async function copySkillsToProject(
           // 使用最新版本文件
           let content = fs.readFileSync(latestSkillFile, 'utf-8');
           if (skillOutputTemplate && skillOutputTemplate.trim()) {
-            content = `## 标准输出格式\n\n${skillOutputTemplate}\n\n${content}`;
+            content = content + '\n\n' + skillOutputTemplate;
           }
           
           // 写入目标文件
-          const destFile = path.join(targetSkillDir, 'SKILL.md');
+          const destFile = path.join(targetDir, 'SKILL.md');
           fs.writeFileSync(destFile, content, 'utf-8');
           
           result.success++;
           result.copiedSkills.push(metadata.name);
-          console.log(`[SkillFiles] 拷贝成功: ${metadata.name)（包含标准输出模板）`);
+          console.log(`[SkillFiles] 拷贝成功: ${metadata.name}（包含标准输出模板）`);
         }
-      } catch (error) {
-        result.failed++;
-++;
-        const errorMsg = error instanceof Error ? error.message : String(error);
-        result.errors.push(`Skill ${skillDirName}: ${errorMsg}`);
-        console.error(`[SkillFiles] 拷贝失败: ${skillDirName}`, error);
-      }
-    }
-    
-    console.log(`[SkillFiles] 拷贝完成: 成功 ${result.success}, 失败 ${result.failed}`);
-  } catch (error) {
-    console.error('[SkillFiles] 拷贝过程出错:', error);
-    result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  
-  return result;
-}
-    }
-    
-    // 检查源目录是否存在
-    if (!fs.existsSync(skillsDataDir)) {
-      console.log('[SkillFiles] Skills 数据目录不存在，跳过拷贝');
-      return result;
-    }
-    
-    // 读取公共 Skills
-    const publicSkillDirs = fs.readdirSync(skillsDataDir, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('user-'))
-      .map(dirent => dirent.name);
-    
-    // 读取私有 Skills（如果提供了 userId）
-    let privateSkillDirs: string[] = [];
-    if (userId) {
-      const userDir = path.join(skillsDataDir, `user-${userId}`);
-      if (fs.existsSync(userDir)) {
-        privateSkillDirs = fs.readdirSync(userDir, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory())
-          .map(dirent => `user-${userId}/${dirent.name}`);
-      }
-    }
-    
-    const allSkillDirs = [...publicSkillDirs, ...privateSkillDirs];
-    
-    for (const skillDirName of allSkillDirs) {
-      const skillDir = path.join(skillsDataDir, skillDirName);
-      const metadataPath = path.join(skillDir, 'metadata.json');
-      
-      try {
-        // 检查 metadata.json
-        if (!fs.existsSync(metadataPath)) {
-          result.failed++;
-          result.errors.push(`Skill ${skillDirName} 缺少 metadata.json`);
-          continue;
-        }
-        
-        // 读取元数据
-        const metadataContent = fs.readFileSync(metadataPath, 'utf-8');
-        const metadata: SkillMetadata = JSON.parse(metadataContent);
-        
-        // 只拷贝激活的 Skills
-        if (!metadata.isActive) {
-          continue;
-        }
-        
-        // 拷贝最新版本的 SKILL.md
-        const latestSkillFile = path.join(skillDir, 'SKILL.md');
-        if (!fs.existsSync(latestSkillFile)) {
-          // 尝试使用版本文件
-          const versionedFile = path.join(skillDir, `SKILL-v${metadata.latestVersion}.md`);
-          if (!fs.existsSync(versionedFile)) {
-            result.failed++;
-            result.errors.push(`Skill ${skillDirName} 缺少 SKILL.md 或 SKILL-v${metadata.latestVersion}.md`);
-            continue;
-          }
-        }
-        
-        // 创建目标目录（使用 skill name，不包含 user- 前缀）
-        const targetSkillDir = path.join(targetDir, metadata.name);
-        ensureDir(targetSkillDir);
-        
-        // 拷贝文件
-        const sourceFile = fs.existsSync(latestSkillFile) 
-          ? latestSkillFile 
-          : path.join(skillDir, `SKILL-v${metadata.latestVersion}.md`);
-        const destFile = path.join(targetSkillDir, 'SKILL.md');
-        fs.copyFileSync(sourceFile, destFile);
-        
-        result.success++;
-        result.copiedSkills.push(metadata.name);
-        console.log(`[SkillFiles] 拷贝成功: ${metadata.name} v${metadata.latestVersion}`);
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -580,16 +483,6 @@ export async function syncAllSkillsToDisk(skillOutputTemplate?: string): Promise
     result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
     return result;
   }
-}
-    }
-    
-    console.log(`[SkillFiles] 同步完成: 成功 ${result.success}, 失败 ${result.failed}`);
-  } catch (error) {
-    console.error('[SkillFiles] 同步失败:', error);
-    result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  
-  return result;
 }
 
 /**

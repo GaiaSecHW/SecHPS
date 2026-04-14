@@ -1,7 +1,6 @@
 import { Transformer, TransformerConstructor } from "../types/transformer";
 import { ConfigService, AppConfig } from "./config";
 import Transformers from "../transformer/index";
-import Module from "node:module";
 
 interface TransformerConfig {
   transformers: Array<{
@@ -85,9 +84,11 @@ export class TransformerService {
   }): Promise<boolean> {
     try {
       if (config.path) {
-        const module = require(require.resolve(config.path));
+        // 使用动态导入替代 require，避免 Turbopack 静态分析问题
+        const module = await import(/* webpackIgnore: true */ config.path);
         if (module) {
-          const instance = new module(config.options);
+          const TransformerClass = module.default || module;
+          const instance = new TransformerClass(config.options);
           // Set logger for transformer instance
           if (instance && typeof instance === "object") {
             (instance as any).logger = this.logger;

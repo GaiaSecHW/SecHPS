@@ -6,6 +6,15 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 
+// 获取 skillOutputTemplate 的辅助函数
+async function getSkillOutputTemplate(): Promise<string | undefined> {
+  const config = await prisma.opencodeConfig.findFirst({
+    where: { isActive: true },
+    select: { skillOutputTemplate: true },
+  });
+  return config?.skillOutputTemplate || undefined;
+}
+
 // GET /api/skills/:id - 获取 Skill 详情
 export async function GET(
   request: Request,
@@ -115,7 +124,7 @@ export async function PUT(
       return NextResponse.json({ error: '只能修改最新版本的 Skill' }, { status: 400 });
     }
 
-    let updatedSkill;
+    let updatedSkill: Awaited<ReturnType<typeof prisma.skill.create>> | Awaited<ReturnType<typeof prisma.skill.update>> | undefined;
 
     if (createVersion) {
       // 创建新版本模式
@@ -198,9 +207,13 @@ export async function PUT(
       });
 
       // 双写：同步保存新版本到磁盘
-      saveSkillToDisk(updatedSkill).catch(err => {
-        console.error('[Skills API] 保存新版本到磁盘失败:', err);
-      });
+      if (updatedSkill) {
+        getSkillOutputTemplate().then(template => {
+          saveSkillToDisk(updatedSkill!, template).catch(err => {
+            console.error('[Skills API] 保存新版本到磁盘失败:', err);
+          });
+        });
+      }
     } else {
       // 直接更新模式
       const updateData: Record<string, unknown> = {};
@@ -224,21 +237,25 @@ export async function PUT(
 
       // 双写：根据 isActive 状态同步磁盘文件
       if (updates.isActive !== undefined) {
-        if (updatedSkill.isActive) {
+        if (updatedSkill!.isActive) {
           // 启用：保存到磁盘
-          saveSkillToDisk(updatedSkill).catch(err => {
-            console.error('[Skills API] 更新磁盘文件失败:', err);
+          getSkillOutputTemplate().then(template => {
+            saveSkillToDisk(updatedSkill!, template).catch(err => {
+              console.error('[Skills API] 更新磁盘文件失败:', err);
+            });
           });
         } else {
           // 禁用：从磁盘删除
-          deleteSkillFromDisk(updatedSkill.name, updatedSkill.userId).catch(err => {
+          deleteSkillFromDisk(updatedSkill!.name, updatedSkill!.userId).catch(err => {
             console.error('[Skills API] 删除磁盘文件失败:', err);
           });
         }
       } else {
         // 其他更新：直接保存
-        saveSkillToDisk(updatedSkill).catch(err => {
-          console.error('[Skills API] 更新磁盘文件失败:', err);
+        getSkillOutputTemplate().then(template => {
+          saveSkillToDisk(updatedSkill!, template).catch(err => {
+            console.error('[Skills API] 更新磁盘文件失败:', err);
+          });
         });
       }
     }

@@ -8,6 +8,15 @@ import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { skillSelectMinimal } from '@/lib/query-optimizer';
 import { saveSkillToDisk } from '@/services/skill-files';
 
+// 获取 skillOutputTemplate 的辅助函数
+async function getSkillOutputTemplate(): Promise<string | undefined> {
+  const config = await prisma.opencodeConfig.findFirst({
+    where: { isActive: true },
+    select: { skillOutputTemplate: true },
+  });
+  return config?.skillOutputTemplate || undefined;
+}
+
 // GET /api/skills - 获取 Skills 列表
 // 支持作用域过滤：
 // - scope=public: 只返回公共 Skills
@@ -196,9 +205,11 @@ export async function POST(request: Request) {
     });
 
     // 双写：同步保存到磁盘
-    saveSkillToDisk(skill).catch(err => {
-      console.error('[Skills API] 保存到磁盘失败:', err);
-      // 不阻塞响应，仅记录错误
+    getSkillOutputTemplate().then(template => {
+      saveSkillToDisk(skill, template).catch(err => {
+        console.error('[Skills API] 保存到磁盘失败:', err);
+        // 不阻塞响应，仅记录错误
+      });
     });
 
     return NextResponse.json({ skill }, { status: 201 });

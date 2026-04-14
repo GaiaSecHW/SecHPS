@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import ReactMarkdown from 'react-markdown';
 import {
   ArrowLeft,
   Play,
@@ -69,6 +70,7 @@ export default function SkillDetailPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
 
   // AI 优化相关状态
   const [aiOptimizing, setAiOptimizing] = useState(false);
@@ -123,6 +125,25 @@ export default function SkillDetailPage() {
     getCategories().then((cats) => {
       setCategories(cats);
     });
+  }, []);
+
+  useEffect(() => {
+    // 加载 skillOutputTemplate
+    const fetchTemplate = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const templateRes = await fetch('/api/config/template', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (templateRes.ok) {
+          const templateData = await templateRes.json();
+          setSkillOutputTemplate(templateData.skillOutputTemplate || '');
+        }
+      } catch (e) {
+        console.warn('获取 skillOutputTemplate 失败:', e);
+      }
+    };
+    fetchTemplate();
   }, []);
 
   useEffect(() => {
@@ -274,6 +295,13 @@ export default function SkillDetailPage() {
     
     setExporting(true);
     try {
+      const skillOutputTemplate = await getSkillOutputTemplate();
+
+      let content = skill.content || '';
+      if (skillOutputTemplate && skillOutputTemplate.trim()) {
+        content = content + '\n\n' + skillOutputTemplate;
+      }
+
       await exportAsSkillFile({
         name: skill.name,
         displayName: skill.displayName,
@@ -281,7 +309,7 @@ export default function SkillDetailPage() {
         category: skill.category,
         cwe: skill.cwe,
         severity: skill.severity || 'medium',
-        content: skill.content,
+        content: content,
       });
     } catch (error) {
       console.error('导出失败:', error);
@@ -291,10 +319,40 @@ export default function SkillDetailPage() {
     }
   };
 
+  // 获取 skillOutputTemplate 的辅助函数
+  const getSkillOutputTemplate = async (): Promise<string> => {
+    try {
+      const token = localStorage.getItem('token');
+      const templateRes = await fetch('/api/config/template', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (templateRes.ok) {
+        const templateData = await templateRes.json();
+        return templateData.skillOutputTemplate || '';
+      }
+    } catch (e) {
+      console.warn('获取 skillOutputTemplate 失败:', e);
+    }
+    return '';
+  };
+
+  // 构建带模板的 content
+  const buildContentWithTemplate = (baseContent: string): string => {
+    // 这里返回原始内容，模板会在复制/导出时动态追加
+    return baseContent;
+  };
+
   const handleCopyMd = async () => {
     if (!skill) return;
 
     try {
+      const skillOutputTemplate = await getSkillOutputTemplate();
+
+      let content = skill.content || '';
+      if (skillOutputTemplate && skillOutputTemplate.trim()) {
+        content = content + '\n\n' + skillOutputTemplate;
+      }
+
       await copySkillMdToClipboard({
         name: skill.name,
         displayName: skill.displayName,
@@ -302,7 +360,7 @@ export default function SkillDetailPage() {
         category: skill.category,
         cwe: skill.cwe,
         severity: skill.severity || 'medium',
-        content: skill.content,
+        content: content,
       });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
@@ -845,9 +903,14 @@ export default function SkillDetailPage() {
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-lg font-medium text-gray-900">Skill 内容</h3>
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     if (skill.content) {
-                      copyToClipboard(skill.content);
+                      const skillOutputTemplate = await getSkillOutputTemplate();
+                      let content = skill.content || '';
+                      if (skillOutputTemplate && skillOutputTemplate.trim()) {
+                        content = content + '\n\n' + skillOutputTemplate;
+                      }
+                      copyToClipboard(content);
                     }
                   }}
                   className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
@@ -856,9 +919,118 @@ export default function SkillDetailPage() {
                   复制 Markdown
                 </button>
               </div>
-              <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm whitespace-pre-wrap font-mono">
-                {skill.content || '暂无内容'}
-              </pre>
+              <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
+                <ReactMarkdown
+                  components={{
+                    code: ({ node, inline, className, children, ...props }: any) => {
+                      if (inline) {
+                        return (
+                          <code className="px-1.5 py-0.5 rounded bg-gray-100 text-blue-600 font-mono text-sm" {...props}>
+                            {children}
+                          </code>
+                        );
+                      }
+                      return (
+                        <code className="block px-4 py-3 rounded-lg bg-gray-900 text-gray-100 font-mono text-sm overflow-x-auto" {...props}>
+                          {children}
+                        </code>
+                      );
+                    },
+                    pre: ({ node, children, ...props }: any) => (
+                      <pre className="px-4 py-3 rounded-lg bg-gray-900 text-gray-100 font-mono text-sm overflow-x-auto" {...props}>
+                        {children}
+                      </pre>
+                    ),
+                    h1: ({ children, ...props }: any) => (
+                      <h1 className="text-2xl font-bold text-gray-900 mt-6 mb-4 pb-2 border-b border-gray-200" {...props}>
+                        {children}
+                      </h1>
+                    ),
+                    h2: ({ children, ...props }: any) => (
+                      <h2 className="text-xl font-semibold text-gray-900 mt-5 mb-3 pb-2 border-b border-gray-200" {...props}>
+                        {children}
+                      </h2>
+                    ),
+                    h3: ({ children, ...props }: any) => (
+                      <h3 className="text-lg font-semibold text-gray-900 mt-4 mb-2" {...props}>
+                        {children}
+                      </h3>
+                    ),
+                    h4: ({ children, ...props }: any) => (
+                      <h4 className="text-base font-semibold text-gray-900 mt-3 mb-2" {...props}>
+                        {children}
+                      </h4>
+                    ),
+                    ul: ({ children, ...props }: any) => (
+                      <ul className="mt-4 space-y-2 list-disc list-inside marker:text-blue-600" {...props}>
+                        {children}
+                      </ul>
+                    ),
+                    ol: ({ children, ...props }: any) => (
+                      <ol className="mt-4 space-y-2 list-decimal list-inside" {...props}>
+                        {children}
+                      </ol>
+                    ),
+                    li: ({ children, ...props }: any) => (
+                      <li className="text-gray-700 ml-6" {...props}>
+                        {children}
+                      </li>
+                    ),
+                    blockquote: ({ children, ...props }: any) => (
+                      <blockquote className="border-l-4 border-blue-500 pl-4 italic my-4 text-gray-600" {...props}>
+                        {children}
+                      </blockquote>
+                    ),
+                    table: ({ children, ...props }: any) => (
+                      <div className="my-6 overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200 border border-gray-300" {...props}>
+                          {children}
+                        </table>
+                      </div>
+                    ),
+                    thead: ({ children, ...props }: any) => (
+                      <thead className="bg-gray-50" {...props}>{children}</thead>
+                    ),
+                    tbody: ({ children, ...props }: any) => (
+                      <tbody className="divide-y divide-gray-200" {...props}>{children}</tbody>
+                    ),
+                    tr: ({ children, ...props }: any) => (
+                      <tr className="hover:bg-gray-50" {...props}>{children}</tr>
+                    ),
+                    th: ({ children, ...props }: any) => (
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" {...props}>
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children, ...props }: any) => (
+                      <td className="px-4 py-2 text-sm text-gray-700" {...props}>
+                        {children}
+                      </td>
+                    ),
+                    a: ({ children, href, ...props }: any) => (
+                      <a href={href} className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer" {...props}>
+                        {children}
+                      </a>
+                    ),
+                    strong: ({ children, ...props }: any) => (
+                      <strong className="font-semibold text-gray-900" {...props}>{children}</strong>
+                    ),
+                    del: ({ children, ...props }: any) => (
+                      <del className="text-red-600 line-through" {...props}>{children}</del>
+                    ),
+                    p: ({ children, ...props }: any) => (
+                      <p className="text-gray-700 leading-relaxed mb-3" {...props}>{children}</p>
+                    ),
+                    hr: ({ ...props }: any) => (
+                      <hr className="my-4 border-gray-200" {...props} />
+                    ),
+                  }}
+                >
+                  {skillOutputTemplate && skillOutputTemplate.trim()
+                    ? (skill.content || '') + '\n\n' + skillOutputTemplate
+                    : (skill.content || '暂无内容')}
+                </ReactMarkdown>
+              </div>
             </div>
 
             {/* 元信息 */}

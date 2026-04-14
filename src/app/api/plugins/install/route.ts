@@ -6,7 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { PluginManifest, InstallPluginFromUrlRequest } from '@/types/plugin';
 
-const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
+// turbopackIgnore 防止 Turbopack 追踪整个项目
+const PLUGINS_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'plugins');
 
 /**
  * POST /api/plugins/install

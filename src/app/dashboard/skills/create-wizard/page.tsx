@@ -164,7 +164,6 @@ export default function SkillCreateWizardPage() {
   const [showDrafts, setShowDrafts] = useState(false);
   const [drafts, setDrafts] = useState<DraftMeta[]>([]);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(null);
-  const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>(''); // 标准输出模板
 
   // 加载草稿列表
   const loadDrafts = () => {
@@ -193,26 +192,6 @@ export default function SkillCreateWizardPage() {
         console.error('加载向导数据失败:', error);
       }
     }
-
-    // 加载标准输出模板
-    const fetchTemplate = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('/api/config', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.ok) {
-          const resData = await response.json();
-          const activeConfig = resData.configs?.find((c: any) => c.isActive);
-          if (activeConfig?.skillOutputTemplate) {
-            setSkillOutputTemplate(activeConfig.skillOutputTemplate);
-          }
-        }
-      } catch (error) {
-        console.error('加载标准输出模板失败:', error);
-      }
-    };
-    fetchTemplate();
   }, []);
 
   // 保存数据到 localStorage
@@ -575,7 +554,6 @@ export default function SkillCreateWizardPage() {
                 intentData={wizardData.intent}
                 researchData={wizardData.research}
                 skillData={wizardData.skill}
-                skillOutputTemplate={skillOutputTemplate}
                 onChange={(skill) => saveData({ skill })}
                 onNext={handleNext}
                 onPrevious={handlePrevious}

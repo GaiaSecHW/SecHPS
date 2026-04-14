@@ -8,8 +8,8 @@ import type { Plugin, PluginManifest, PluginResponse, PluginType, PluginStatus }
 import * as fs from 'fs';
 import * as path from 'path';
 
-// 插件目录路径
-const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
+// 插件目录路径 - turbopackIgnore 防止 Turbopack 追踪整个项目
+const PLUGINS_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'plugins');
 
 /**
  * 插件管理器类

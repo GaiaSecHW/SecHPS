@@ -62,7 +62,6 @@ export default function CreateSkillPage() {
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showFormatHint, setShowFormatHint] = useState(true); // 格式建议默认展开
-  const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>(''); // 标准输出模板
 
   const clearAiTimers = () => {
     if (aiTimeoutRef.current) { clearTimeout(aiTimeoutRef.current); aiTimeoutRef.current = null; }
@@ -101,43 +100,12 @@ export default function CreateSkillPage() {
         setCategory(cats[0].value);
       }
     });
-
-    // 加载标准输出模板
-    const fetchTemplate = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('/api/config', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (response.ok) {
-          const resData = await response.json();
-          console.log('[Quick Create] 配置响应:', resData);
-          const activeConfig = resData.configs?.find((c: any) => c.isActive);
-          console.log('[Quick Create] 活跃配置:', activeConfig);
-          if (activeConfig?.skillOutputTemplate) {
-            console.log('[Quick Create] 找到标准输出模板，长度:', activeConfig.skillOutputTemplate.length);
-            setSkillOutputTemplate(activeConfig.skillOutputTemplate);
-          } else {
-            console.log('[Quick Create] 未找到标准输出模板');
-          }
-        }
-      } catch (error) {
-        console.error('加载标准输出模板失败:', error);
-      }
-    };
-    fetchTemplate();
   }, [category]);
 
   // AI 生成 Skill 内容
   const handleAiGenerate = async () => {
     if (!name.trim()) {
       setAiGenerateError('请先填写 Skill 名称，AI 将根据名称和分类生成内容');
-      return;
-    }
-
-    if (!skillOutputTemplate || skillOutputTemplate.trim() === '') {
-      setAiGenerateError('标准输出模板尚未加载，请刷新页面或稍后重试');
-      console.error('[Quick Create] - 标准输出模板为空');
       return;
     }
 
@@ -165,8 +133,7 @@ export default function CreateSkillPage() {
 
 try {
         const token = localStorage.getItem('token');
-        console.log('[Quick Create] 发送 AI 生成请求，模板长度:', skillOutputTemplate?.length || 0);
-        console.log('[Quick Create] 模板前100字符:', skillOutputTemplate?.substring(0, 100) || '无');
+        console.log('[Quick Create] 发送 AI 生成请求');
         const response = await fetch('/api/skills/generate', {
           method: 'POST',
           headers: {
@@ -182,7 +149,6 @@ try {
               whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
               expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
             },
-            skillOutputTemplate, // 传递标准输出模板
           }),
         });
 

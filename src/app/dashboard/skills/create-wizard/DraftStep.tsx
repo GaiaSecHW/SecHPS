@@ -25,7 +25,7 @@ interface Props {
     needsTestCases: boolean;
   };
   
-researchData: {
+  researchData: {
     edgeCases: string[];
     inputOutputFormats: string;
     exampleFiles: string[];
@@ -34,7 +34,6 @@ researchData: {
   };
   
   skillData: SkillDraft;
-  skillOutputTemplate?: string; // 标准输出模板
   onChange: (data: SkillDraft) => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -42,7 +41,7 @@ researchData: {
 
 
 
-export default function DraftStep({ intentData, researchData, skillData, skillOutputTemplate, onChange, onNext, onPrevious }: Props) {
+export default function DraftStep({ intentData, researchData, skillData, onChange, onNext, onPrevious }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -65,7 +64,6 @@ export default function DraftStep({ intentData, researchData, skillData, skillOu
         body: JSON.stringify({
           intent: intentData,
           research: researchData,
-          skillOutputTemplate, // 传递标准输出模板
         }),
       });
 
