@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
 const body = await request.json();
     const { intent, research, skillOutputTemplate } = body;
 
+    console.log('[generate] 接收到的 skillOutputTemplate 长度:', skillOutputTemplate?.length || 0);
+    console.log('[generate] skillOutputTemplate 前100字符:', skillOutputTemplate?.substring(0, 100) || '无');
+
     if (!intent) {
       return NextResponse.json({ error: '缺少意图数据' }, { status: 400 });
     }
@@ -67,7 +70,10 @@ Skill 是一个可被 AI 代理调用的能力单元，需要包含：
 
     // 如果有标准输出模板，添加到系统提示词中
     if (skillOutputTemplate && skillOutputTemplate.trim()) {
+      console.log('[generate] 添加标准输出模板到系统提示词');
       systemPrompt += `\n\n## 重要：标准输出格式要求\n\n系统管理员定义了以下标准输出格式模板，生成的 Skill 必须严格遵循此格式：\n\n${skillOutputTemplate}\n\n请确保生成的 Skill 输出格式与上述模板保持一致。`;
+    } else {
+      console.log('[generate] 未提供标准输出模板');
     }
 
     const userPrompt = `请根据以下需求生成 Skill 定义：
@@ -111,19 +117,60 @@ ${research ? `
       textContent = content;
     }
 
-    // 解析 JSON
-    let jsonStr = textContent.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7);
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3);
-    }
-    if (jsonStr.endsWith('```')) {
-      jsonStr = jsonStr.slice(0, -3);
-    }
-    jsonStr = jsonStr.trim();
+    console.log('[generate] 原始内容类型:', typeof content, '长度:', textContent.length);
+    console.log('[generate] 原始内容前200字符:', textContent.substring(0, 200));
 
-    const parsedSkill = JSON.parse(jsonStr);
+    // 解析 JSON - 更健壮的处理
+    let jsonStr = textContent.trim();
+    console.log('[generate] 清理后内容前200字符:', jsonStr.substring(0, 200));
+    console.log('[generate] 清理后内容长度:', jsonStr.length);
+
+    // 尝试多种方式提取 JSON
+    let extractedJson = '';
+
+    // 方式1: 查找 { ... } 对象（最外层）
+    const objectMatch = jsonStr.match(/\{[\s\S]*\}/s);
+    if (objectMatch) {
+      extractedJson = objectMatch[0];
+      console.log('[generate] 方式1提取（对象）:', extractedJson.substring(0, 100));
+    }
+
+    // 方式2: 查找 ```json ... ``` 代码块
+    if (!extractedJson) {
+      const codeBlockMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/s);
+      if (codeBlockMatch) {
+        extractedJson = codeBlockMatch[1];
+        console.log('[generate] 方式2提取（代码块）:', extractedJson.substring(0, 100));
+      }
+    }
+
+    // 方式3: 查找 ``` ... ``` 代码块
+    if (!extractedJson) {
+      const genericBlockMatch = jsonStr.match(/```\s*([\s\S]*?)\s*```/s);
+      if (genericBlockMatch) {
+        extractedJson = genericBlockMatch[1];
+        console.log('[generate] 方式3提取（通用代码块）:', extractedJson.substring(0, 100));
+      }
+    }
+
+    // 如果都失败了，使用整个字符串
+    if (!extractedJson) {
+      extractedJson = jsonStr;
+      console.log('[generate] 方式4（使用整个字符串）');
+    }
+
+    jsonStr = extractedJson.trim();
+    console.log('[generate] 最终解析的 JSON 长度:', jsonStr.length);
+
+    let parsedSkill: any;
+    try {
+      parsedSkill = JSON.parse(jsonStr);
+      console.log('[generate] JSON 解析成功:', parsedSkill.name);
+    } catch (parseError) {
+      console.error('[generate] JSON 解析失败:', parseError);
+      console.error('[generate] 失败的 JSON:', jsonStr.substring(0, 500));
+      throw new Error('模型返回的格式不正确，请重试');
+    }
 
     // 验证必要字段
     if (!parsedSkill.name || !parsedSkill.systemPrompt) {

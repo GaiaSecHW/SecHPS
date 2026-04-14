@@ -111,9 +111,14 @@ export default function CreateSkillPage() {
         });
         if (response.ok) {
           const resData = await response.json();
+          console.log('[Quick Create] 配置响应:', resData);
           const activeConfig = resData.configs?.find((c: any) => c.isActive);
+          console.log('[Quick Create] 活跃配置:', activeConfig);
           if (activeConfig?.skillOutputTemplate) {
+            console.log('[Quick Create] 找到标准输出模板，长度:', activeConfig.skillOutputTemplate.length);
             setSkillOutputTemplate(activeConfig.skillOutputTemplate);
+          } else {
+            console.log('[Quick Create] 未找到标准输出模板');
           }
         }
       } catch (error) {
