@@ -277,42 +277,39 @@ export default function McpServersPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <Server className="h-8 w-8 text-purple-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  MCP 服务器配置
-                </h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  全局 MCP 服务器配置，所有项目评估都会使用
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                resetForm();
-                setEditingServer(null);
-                setShowForm(true);
-              }}
-              className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
-            >
-              <Plus size={20} />
-              <span>添加 MCP 服务器</span>
-            </button>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-3">
+          <Server className="h-8 w-8 text-purple-600" />
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              MCP 服务器配置
+            </h1>
+            <p className="text-sm text-gray-500 mt-1">
+              全局 MCP 服务器配置，所有项目评估都会使用
+            </p>
           </div>
         </div>
+        <button
+          onClick={() => {
+            resetForm();
+            setEditingServer(null);
+            setShowForm(true);
+          }}
+          className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+        >
+          <Plus size={20} />
+          <span>添加 MCP 服务器</span>
+        </button>
+      </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          {error}
+        </div>
+      )}
 
         {/* MCP Servers List */}
         {servers.length === 0 ? (
@@ -666,7 +663,6 @@ export default function McpServersPage() {
             </div>
           </div>
         )}
-      </div>
     </div>
   );
 }
