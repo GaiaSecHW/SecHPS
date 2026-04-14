@@ -62,6 +62,7 @@ export default function CreateSkillPage() {
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showFormatHint, setShowFormatHint] = useState(true); // 格式建议默认展开
+  const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>(''); // 标准输出模板
 
   const clearAiTimers = () => {
     if (aiTimeoutRef.current) { clearTimeout(aiTimeoutRef.current); aiTimeoutRef.current = null; }
@@ -100,6 +101,26 @@ export default function CreateSkillPage() {
         setCategory(cats[0].value);
       }
     });
+
+    // 加载标准输出模板
+    const fetchTemplate = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/config', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok) {
+          const resData = await response.json();
+          const activeConfig = resData.configs?.find((c: any) => c.isActive);
+          if (activeConfig?.skillOutputTemplate) {
+            setSkillOutputTemplate(activeConfig.skillOutputTemplate);
+          }
+        }
+      } catch (error) {
+        console.error('加载标准输出模板失败:', error);
+      }
+    };
+    fetchTemplate();
   }, [category]);
 
   // AI 生成 Skill 内容
@@ -130,25 +151,26 @@ export default function CreateSkillPage() {
       unlockAi('timeout');
     }, TIMEOUT_MS);
 
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/skills/generate', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          intent: {
-            name: name.trim(),
-            description: name.trim(),
-            category: category || 'code-audit',
-            whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
-            whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
-            expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
+try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/skills/generate', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
           },
-        }),
-      });
+          body: JSON.stringify({
+            intent: {
+              name: name.trim(),
+              description: name.trim(),
+              category: category || 'code-audit',
+              whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
+              whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
+              expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
+            },
+            skillOutputTemplate, // 传递标准输出模板
+          }),
+        });
 
       const data = await response.json();
 

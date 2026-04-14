@@ -22,8 +22,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '无效的 token' }, { status: 401 });
     }
 
-    const body = await request.json();
-    const { intent, research } = body;
+const body = await request.json();
+    const { intent, research, skillOutputTemplate } = body;
 
     if (!intent) {
       return NextResponse.json({ error: '缺少意图数据' }, { status: 400 });
@@ -38,10 +38,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[generate] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
+console.log('[generate] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
 
     // 构建提示词
-    const systemPrompt = `你是一个专业的 AI Skill 设计专家。你的任务是根据用户的需求生成一个完整的、高质量的 Skill 定义。
+    let systemPrompt = `你是一个专业的 AI Skill 设计专家。你的任务是根据用户的需求生成一个完整的、高质量的 Skill 定义。
 
 Skill 是一个可被 AI 代理调用的能力单元，需要包含：
 1. name: 技能标识符（kebab-case 格式，如 "java-cmd-injection-audit"）
@@ -64,6 +64,11 @@ Skill 是一个可被 AI 代理调用的能力单元，需要包含：
   "userPrompt": "用户提示词模板...",
   "tools": ["tool1", "tool2"]
 }`;
+
+    // 如果有标准输出模板，添加到系统提示词中
+    if (skillOutputTemplate && skillOutputTemplate.trim()) {
+      systemPrompt += `\n\n## 重要：标准输出格式要求\n\n系统管理员定义了以下标准输出格式模板，生成的 Skill 必须严格遵循此格式：\n\n${skillOutputTemplate}\n\n请确保生成的 Skill 输出格式与上述模板保持一致。`;
+    }
 
     const userPrompt = `请根据以下需求生成 Skill 定义：
 
