@@ -62,28 +62,6 @@ function getContentPreview(content: any): string {
   return JSON.stringify(content).substring(0, 50) + '...';
 }
 
-// 格式化漏洞描述 - 按语义分行
-function formatDescription(text: string): string {
-  if (!text) return '';
-  
-  // 如果已经有换行符，直接返回
-  if (text.includes('\n')) return text;
-  
-  // 按句号、问号、感叹号分行（中文和英文）
-  let formatted = text
-    // 处理中文标点
-    .replace(/([。！？])/g, '$1\n')
-    // 处理英文标点后跟空格的情况
-    .replace(/([.!?])\s+/g, '$1\n')
-    // 处理分号
-    .replace(/([；;])/g, '$1\n')
-    // 清理多余空行
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-    
-  return formatted;
-}
-
 export default function SessionDetailPage({
   params,
 }: {
@@ -1368,7 +1346,7 @@ export default function SessionDetailPage({
               {selectedSessionVuln.description && (
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                  <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedSessionVuln.description)}</div>
+                  <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedSessionVuln.description}</p>
                 </div>
               )}
               {selectedSessionVuln.location && (
