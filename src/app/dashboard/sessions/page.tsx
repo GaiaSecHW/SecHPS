@@ -2633,7 +2633,11 @@ toast.error(data.error || '更新项目失败');
                                 </span>
                               </div>
                               <h4 className="text-sm font-medium text-gray-900 truncate">{vuln.title}</h4>
-                              <p className="text-xs text-gray-500 mt-1 truncate">{vuln.type}</p>
+                              <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
+                                <span>类型: {vuln.type}</span>
+                                {vuln.cwe && <span>CWE: {vuln.cwe}</span>}
+                                {vuln.skill && <span>工具: {vuln.skill}</span>}
+                              </div>
                               {vuln.filePath && (
                                 <p className="text-xs text-gray-400 mt-1 truncate font-mono">
                                   {vuln.filePath}{vuln.lineStart ? `:${vuln.lineStart}` : ''}
