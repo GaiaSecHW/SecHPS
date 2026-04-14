@@ -919,18 +919,25 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-toast.error(data.error || '删除文件失败');
+        toast.error(data.error || '删除文件失败');
         return;
       }
 
-      // 刷新项目信息
+      toast.success('文件已删除');
+      
+      // 刷新项目列表
       await fetchProjects();
       
-      // 更新选中的项目
+      // 直接从 API 获取更新后的项目详情
       if (selectedProject) {
-        const updatedProject = projects.find(p => p.id === projectId);
-        if (updatedProject) {
-          setSelectedProject(updatedProject);
+        const detailResponse = await fetch(`/api/projects/${projectId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        if (detailResponse.ok) {
+          const detailData = await detailResponse.json();
+          setSelectedProject(detailData.project);
         }
       }
     } catch (err) {
