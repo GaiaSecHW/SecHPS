@@ -17,12 +17,14 @@ import {
 
 interface Session {
   id: string;
-  title: string;
+  name: string;
+  title?: string;
   createdAt: string;
   updatedAt: string;
   status?: string;
   config?: any;
   messages?: any[];
+  evaluations?: { id: string; status: string; startedAt: string; completedAt: string | null }[];
 }
 
 interface Stats {
@@ -457,6 +459,12 @@ function SessionRow({
   getProgressPercentage: (session: Session) => number;
 }) {
   const progress = getProgressPercentage(session);
+  
+  // 获取最新的评估记录
+  const latestEvaluation = session.evaluations?.[0];
+  const detailHref = latestEvaluation 
+    ? `/dashboard/sessions/${session.id}?evaluationId=${latestEvaluation.id}`
+    : `/dashboard/sessions`;
 
   return (
     <div className="border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:bg-primary-50/30 transition-all">
@@ -464,7 +472,7 @@ function SessionRow({
         <div className="flex-1">
           <div className="flex items-center space-x-3">
             <h3 className="text-base font-semibold text-gray-900">
-              {session.title || '未命名项目'}
+              {session.name || session.title || '未命名项目'}
             </h3>
             <span
               className={
@@ -485,7 +493,7 @@ function SessionRow({
           )}
         </div>
         <Link
-          href={`/dashboard/sessions/${session.id}`}
+          href={detailHref}
           className="flex items-center text-sm text-primary-600 hover:text-primary-800 transition-colors"
         >
           查看详情
