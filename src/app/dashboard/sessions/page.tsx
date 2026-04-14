@@ -2595,55 +2595,39 @@ toast.error(data.error || '更新项目失败');
                         <div
                           key={vuln.id}
                           onClick={() => setSelectedVulnerability(vuln)}
-                          className={`p-4 cursor-pointer transition-colors ${
+                          className={`px-4 py-3 cursor-pointer transition-colors ${
                             selectedVulnerability?.id === vuln.id
                               ? 'bg-blue-50 border-l-4 border-blue-500'
                               : 'hover:bg-gray-50'
                           }`}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                                  vuln.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                                  vuln.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                                  vuln.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                  vuln.severity === 'low' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {vuln.severity === 'critical' ? '严重' :
-                                   vuln.severity === 'high' ? '高危' :
-                                   vuln.severity === 'medium' ? '中危' :
-                                   vuln.severity === 'low' ? '低危' : '信息'}
-                                </span>
-                                <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                                  vuln.status === 'new' ? 'bg-blue-100 text-blue-700' :
-                                  vuln.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
-                                  vuln.status === 'fixed' ? 'bg-green-100 text-green-700' :
-                                  vuln.status === 'verified' ? 'bg-purple-100 text-purple-700' :
-                                  vuln.status === 'false-positive' ? 'bg-gray-100 text-gray-600' :
-                                  'bg-gray-100 text-gray-600'
-                                }`}>
-                                  {vuln.status === 'new' ? '新建' :
-                                   vuln.status === 'confirmed' ? '已确认' :
-                                   vuln.status === 'fixed' ? '已修复' :
-                                   vuln.status === 'verified' ? '已验证' :
-                                   vuln.status === 'false-positive' ? '误报' :
-                                   vuln.status === 'closed' ? '已关闭' : vuln.status}
-                                </span>
-                              </div>
-                              <h4 className="text-sm font-medium text-gray-900 truncate">{vuln.title}</h4>
-                              <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
-                                <span className="max-w-[120px] truncate" title={vuln.type}>类型: {vuln.type}</span>
-                                {vuln.cwe && <span className="max-w-[80px] truncate" title={vuln.cwe}>CWE: {vuln.cwe}</span>}
-                                {vuln.skill && <span className="max-w-[100px] truncate" title={vuln.skill}>工具: {vuln.skill}</span>}
-                              </div>
-                              {vuln.filePath && (
-                                <p className="text-xs text-gray-400 mt-1 truncate font-mono max-w-[200px]" title={`${vuln.filePath}${vuln.lineStart ? `:${vuln.lineStart}` : ''}`}>
-                                  {vuln.filePath}{vuln.lineStart ? `:${vuln.lineStart}` : ''}
-                                </p>
-                              )}
-                            </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0 ${
+                              vuln.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                              vuln.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                              vuln.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                              vuln.severity === 'low' ? 'bg-blue-100 text-blue-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {vuln.severity === 'critical' ? '严重' :
+                               vuln.severity === 'high' ? '高危' :
+                               vuln.severity === 'medium' ? '中危' :
+                               vuln.severity === 'low' ? '低危' : '信息'}
+                            </span>
+                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0 ${
+                              vuln.status === 'new' ? 'bg-blue-100 text-blue-700' :
+                              vuln.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
+                              vuln.status === 'fixed' ? 'bg-green-100 text-green-700' :
+                              vuln.status === 'verified' ? 'bg-purple-100 text-purple-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {vuln.status === 'new' ? '新建' :
+                               vuln.status === 'confirmed' ? '已确认' :
+                               vuln.status === 'fixed' ? '已修复' :
+                               vuln.status === 'verified' ? '已验证' :
+                               vuln.status === 'false-positive' ? '误报' : vuln.status}
+                            </span>
+                            <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
                           </div>
                         </div>
                       ))}
