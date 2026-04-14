@@ -3,8 +3,31 @@
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+
+// 格式化漏洞描述 - 按语义分行
+function formatDescription(text: string): string {
+  if (!text) return '';
+  
+  // 如果已经有换行符，直接返回
+  if (text.includes('\n')) return text;
+  
+  // 按句号、问号、感叹号分行（中文和英文）
+  let formatted = text
+    // 处理中文标点
+    .replace(/([。！？])/g, '$1\n')
+    // 处理英文标点后跟空格的情况
+    .replace(/([.!?])\s+/g, '$1\n')
+    // 处理分号
+    .replace(/([；;])/g, '$1\n')
+    // 清理多余空行
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+    
+  return formatted;
+}
 
 interface UploadedFile {
   id: string;
@@ -232,7 +255,7 @@ export default function SessionsPage() {
 
       // 检查文件大小
       if (file.size > maxSize) {
-        alert(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
         continue;
       }
 
@@ -247,7 +270,7 @@ export default function SessionsPage() {
       ];
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
       if (!allowedTypes.includes(ext)) {
-        alert(`文件 ${file.name} 格式不支持，仅支持 ZIP、JAR 等格式`);
+        toast.error(`文件 ${file.name} 格式不支持，仅支持 ZIP、JAR 等格式`);
         continue;
       }
 
@@ -278,7 +301,7 @@ export default function SessionsPage() {
 
       // 检查文件大小
       if (file.size > maxSize) {
-        alert(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
         continue;
       }
 
@@ -290,7 +313,7 @@ export default function SessionsPage() {
       ];
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
       if (!allowedTypes.includes(ext)) {
-        alert(`文件 ${file.name} 格式不支持，仅支持 ZIP、JAR 等格式`);
+        toast.error(`文件 ${file.name} 格式不支持，仅支持 ZIP、JAR 等格式`);
         continue;
       }
 
@@ -317,7 +340,7 @@ export default function SessionsPage() {
       const file = files[i];
 
       if (file.size > maxSize) {
-        alert(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
         continue;
       }
 
@@ -328,7 +351,7 @@ export default function SessionsPage() {
       ];
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
       if (!allowedTypes.includes(ext)) {
-        alert(`文件 ${file.name} 格式不支持`);
+        toast.error(`文件 ${file.name} 格式不支持`);
         continue;
       }
 
@@ -359,7 +382,7 @@ export default function SessionsPage() {
       const file = files[i];
 
       if (file.size > maxSize) {
-        alert(`文件 ${file.name} 超过 5GB 限制，无法上传`);
+        toast.error(`文件 ${file.name} 超过 5GB 限制，无法上传`);
         continue;
       }
 
@@ -370,7 +393,7 @@ export default function SessionsPage() {
       ];
       const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
       if (!allowedTypes.includes(ext)) {
-        alert(`文件 ${file.name} 格式不支持`);
+        toast.error(`文件 ${file.name} 格式不支持`);
         continue;
       }
 
@@ -419,7 +442,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '上传文件失败');
+        toast.error(data.error || '上传文件失败');
         setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: data.error })));
         setUploadingFiles(false);
         return;
@@ -451,7 +474,7 @@ export default function SessionsPage() {
       }, 1000);
 
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
       setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: '网络错误' })));
     } finally {
       setUploadingFiles(false);
@@ -480,12 +503,12 @@ export default function SessionsPage() {
 
   const createProject = async () => {
     if (!projectName.trim()) {
-      alert('请输入项目名称');
+      toast.error('请输入项目名称');
       return;
     }
 
     if (uploadedFiles.length === 0) {
-      alert('请至少上传一个文件');
+      toast.error('请至少上传一个文件');
       return;
     }
 
@@ -518,7 +541,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '创建项目失败');
+        toast.error(data.error || '创建项目失败');
         setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: data.error })));
         setUploading(false);
         return;
@@ -539,7 +562,7 @@ export default function SessionsPage() {
 
       await fetchProjects();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
       setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: '网络错误' })));
     } finally {
       setUploading(false);
@@ -565,7 +588,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '启动项目失败');
+        toast.error(data.error || '启动项目失败');
         setStartingProject(null);
         return;
       }
@@ -630,7 +653,7 @@ export default function SessionsPage() {
         }
       })();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
       setStartingProject(null);
     }
   };
@@ -651,13 +674,13 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '删除项目失败');
+        toast.error(data.error || '删除项目失败');
         return;
       }
 
       await fetchProjects();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -697,7 +720,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '获取评估历史失败');
+        toast.error(data.error || '获取评估历史失败');
         return;
       }
 
@@ -720,7 +743,7 @@ export default function SessionsPage() {
       setShowHistoryModal(true);
     } catch (err) {
       console.error('获取评估历史失败:', err);
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -760,7 +783,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '保存环境配置失败');
+        toast.error(data.error || '保存环境配置失败');
         setUploading(false);
         return;
       }
@@ -775,7 +798,7 @@ export default function SessionsPage() {
 
       await fetchProjects();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     } finally {
       setUploading(false);
     }
@@ -784,11 +807,11 @@ export default function SessionsPage() {
   const handleAIPenetration = (project: Project) => {
     // 检查是否配置了环境 URL
     if (!project.environmentUrl) {
-      alert('请先配置环境 URL（点击设置按钮进行配置）');
+      toast.error('请先配置环境 URL（点击设置按钮进行配置）');
       return;
     }
     // TODO: 调用 AI 渗透测试 API
-    alert(`环境 AI 渗透功能开发中\n\n目标环境: ${project.environmentUrl}`);
+    toast(`环境 AI 渗透功能开发中\n\n目标环境: ${project.environmentUrl}`, { icon: '🔧' });
   };
 
   const handleVulnerabilityManagement = async (project: Project) => {
@@ -832,7 +855,7 @@ export default function SessionsPage() {
       
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '操作失败');
+        toast.error(data.error || '操作失败');
         return;
       }
       
@@ -842,7 +865,7 @@ export default function SessionsPage() {
       }
       setSelectedVulnerability(null);
     } catch (err) {
-      alert('操作失败，请重试');
+      toast.error('操作失败，请重试');
     }
   };
 
@@ -857,7 +880,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '下载文件失败');
+        toast.error(data.error || '下载文件失败');
         return;
       }
 
@@ -871,7 +894,7 @@ export default function SessionsPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (err) {
-      alert('下载文件失败，请重试');
+      toast.error('下载文件失败，请重试');
     }
   };
 
@@ -891,7 +914,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '删除文件失败');
+toast.error(data.error || '删除文件失败');
         return;
       }
 
@@ -906,13 +929,13 @@ export default function SessionsPage() {
         }
       }
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
   const updateProject = async () => {
     if (!selectedProject || !projectName.trim()) {
-      alert('请输入项目名称');
+toast.error('请输入项目名称');
       return;
     }
 
@@ -936,7 +959,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '更新项目失败');
+toast.error(data.error || '更新项目失败');
         setUploading(false);
         return;
       }
@@ -950,7 +973,7 @@ export default function SessionsPage() {
 
       await fetchProjects();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     } finally {
       setUploading(false);
     }
@@ -1235,14 +1258,14 @@ export default function SessionsPage() {
                                       headers: { Authorization: `Bearer ${token}` },
                                     });
                                     if (res.ok) {
-                                      fetchProjects();
-                                    } else {
-                                      const data = await res.json();
-                                      alert(data.error || '停止失败');
-                                    }
-                                  } catch (err) {
-                                    alert('停止失败');
-                                  }
+                                       fetchProjects();
+                                     } else {
+                                       const data = await res.json();
+                                       toast.error(data.error || '停止失败');
+                                     }
+                                   } catch (err) {
+                                     toast.error('停止失败');
+                                   }
                                 }}
                                 className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-orange-600 hover:text-orange-800"
                               >
@@ -1990,13 +2013,13 @@ export default function SessionsPage() {
                                       const detailData = await detailResponse.json();
                                       setSelectedProject(detailData.project);
                                     }
-                                  } else {
-                                    const data = await res.json();
-                                    alert(data.error || '删除失败');
-                                  }
-                                } catch (err) {
-                                  alert('删除失败');
-                                }
+                                   } else {
+                                     const data = await res.json();
+                                     toast.error(data.error || '删除失败');
+                                   }
+                                 } catch (err) {
+                                   toast.error('删除失败');
+                                 }
                               }}
                               className="p-1 text-red-600 hover:text-red-800"
                               title="删除评估"
@@ -2682,7 +2705,7 @@ export default function SessionsPage() {
               </div>
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedVulnerability.description}</p>
+                <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVulnerability.description)}</div>
               </div>
               {selectedVulnerability.filePath && (
                 <div>
