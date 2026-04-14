@@ -35,10 +35,10 @@ const DIR_COPY_RULES = {
   'data': {
     mode: 'none',  // 不复制
   },
-  // prisma: 只复制必要文件
+  // prisma: 只复制必要文件（schema + 数据库）
   'prisma': {
     mode: 'selective',
-    include: ['schema.prisma', 'dev.db'],
+    include: ['schema.prisma', 'dev.db', 'prod.db'],
   },
   // plugins: 全部复制
   'plugins': {
