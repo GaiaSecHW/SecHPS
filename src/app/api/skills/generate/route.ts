@@ -161,24 +161,31 @@ ${research ? `
 
     jsonStr = extractedJson.trim();
     console.log('[generate] 最终解析的 JSON 长度:', jsonStr.length);
+    console.log('[generate] 最终 JSON 内容（前500字符）:', jsonStr.substring(0, 500));
 
+    // 验证 JSON 是否有效
+    if (!jsonStr || jsonStr.length < 2) {
+      throw new Error('提取的 JSON 内容为空');
+    }
+
+    // 尝试解析 JSON
     let parsedSkill: any;
     try {
       parsedSkill = JSON.parse(jsonStr);
       console.log('[generate] JSON 解析成功:', parsedSkill.name);
     } catch (parseError) {
       console.error('[generate] JSON 解析失败:', parseError);
-      console.error('[generate] 失败的 JSON:', jsonStr.substring(0, 500));
-      throw new Error('模型返回的格式不正确，请重试');
+      console.error('[generate] 失败的 JSON（完整）:', jsonStr);
+      throw new Error(`模型返回的格式不正确。错误: ${parseError.message}`);
     }
 
-    // 验证必要字段
+// 验证必要字段
     if (!parsedSkill.name || !parsedSkill.systemPrompt) {
       throw new Error('生成的 Skill 缺少必要字段');
     }
 
     // 构建完整的 Markdown 内容（包含所有详细信息）
-    const fullContent = buildFullContent(parsedSkill);
+    const fullContent = buildFullContent(parsedSkill, skillOutputTemplate);
 
     // 构建返回的 skill 对象
     const skill = {
@@ -219,7 +226,7 @@ ${research ? `
 /**
  * 构建完整的 Markdown 内容
  */
-function buildFullContent(skill: any): string {
+function buildFullContent(skill: any, skillOutputTemplate?: string): string {
   const lines: string[] = [];
   
   lines.push(`# ${skill.displayName || skill.name}`);
@@ -235,6 +242,13 @@ function buildFullContent(skill: any): string {
   if (skill.cwe) {
     lines.push('## CWE');
     lines.push(skill.cwe);
+    lines.push('');
+  }
+  
+  // 标准输出模板（作为独立章节）
+  if (skillOutputTemplate && skillOutputTemplate.trim()) {
+    lines.push('## 标准输出格式');
+    lines.push(skillOutputTemplate);
     lines.push('');
   }
   

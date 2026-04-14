@@ -134,6 +134,13 @@ export default function CreateSkillPage() {
       setAiGenerateError('请先填写 Skill 名称，AI 将根据名称和分类生成内容');
       return;
     }
+
+    if (!skillOutputTemplate || skillOutputTemplate.trim() === '') {
+      setAiGenerateError('标准输出模板尚未加载，请刷新页面或稍后重试');
+      console.error('[Quick Create] - 标准输出模板为空');
+      return;
+    }
+
     setAiGenerating(true);
     setAiGenerateError('');
     setAiGenerateSuccess(false);
@@ -158,6 +165,8 @@ export default function CreateSkillPage() {
 
 try {
         const token = localStorage.getItem('token');
+        console.log('[Quick Create] 发送 AI 生成请求，模板长度:', skillOutputTemplate?.length || 0);
+        console.log('[Quick Create] 模板前100字符:', skillOutputTemplate?.substring(0, 100) || '无');
         const response = await fetch('/api/skills/generate', {
           method: 'POST',
           headers: {
