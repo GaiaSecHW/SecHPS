@@ -8,11 +8,7 @@ const nextConfig = {
     },
   },
   
-  // API 路由最大执行时间（秒）- Vercel/Node.js 环境
-  // 开发环境无限制，生产环境最长 60 秒（Vercel Hobby）
-  // 自托管环境可以更长
-  // maxDuration: 300, // 5分钟（需要 Vercel Pro 或自托管）
-  
+  // API 路由最大执行时间（秒）
   allowedDevOrigins: ['172.31.31.229'],
   
   // standalone 输出配置
@@ -21,6 +17,8 @@ const nextConfig = {
   // 打包时排除这些目录和文件
   outputFileTracingExcludes: {
     '**/*': [
+      // 配置文件本身
+      'next.config.js',
       // 目录
       'docs/**',
       'scripts/**', 
@@ -33,6 +31,9 @@ const nextConfig = {
       'project/**',
       'test-results/**',
       'test-outputs/**',
+      '.omc/**',
+      // 源代码不需要打包（已编译到 .next/server）
+      'src/**',
       // 根目录测试相关
       '*.test.ts',
       '*.test.js',
@@ -63,6 +64,17 @@ const nextConfig = {
       'server-new.ts',
       'server-new1.ts',
     ],
+  },
+  
+  // 生产优化
+  productionBrowserSourceMaps: false, // 禁用 sourcemap 减小体积
+  
+  // 压缩配置
+  compress: true,
+  
+  // 优化图片处理
+  images: {
+    unoptimized: true, // 如果不需要图片优化可以启用
   },
 };
 
