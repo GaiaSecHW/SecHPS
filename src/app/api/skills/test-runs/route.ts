@@ -199,7 +199,7 @@ async function callModelForTest(
         },
         body: JSON.stringify({
           model: config.defaultModel,
-          max_tokens: 4096,
+          max_tokens: 32000,
           messages: [
             { role: 'user', content: prompt }
           ],
@@ -215,6 +215,13 @@ async function callModelForTest(
       console.log('[test-runs] 收到响应，开始解析...');
       const data = await response.json();
       console.log('[test-runs] 响应解析完成');
+      
+      // 检查是否因为 token 限制被截断
+      const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason;
+      if (stopReason === 'max_tokens' || stopReason === 'length') {
+        console.error('[test-runs] Claude 响应被截断，stop_reason:', stopReason);
+        throw new Error('模型输出达到 token 限制被截断');
+      }
       
       // 解析响应 - Claude 格式 content 数组
       if (data.content && Array.isArray(data.content)) {
@@ -243,7 +250,7 @@ async function callModelForTest(
         },
         body: JSON.stringify({
           model: config.defaultModel,
-          max_tokens: 4096,
+          max_tokens: 32000,
           messages: [
             { role: 'user', content: prompt }
           ],
@@ -259,6 +266,13 @@ async function callModelForTest(
       console.log('[test-runs] 收到响应，开始解析...');
       const data = await response.json();
       console.log('[test-runs] 响应解析完成');
+      
+      // 检查是否因为 token 限制被截断
+      const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason;
+      if (stopReason === 'max_tokens' || stopReason === 'length') {
+        console.error('[test-runs] OpenAI 响应被截断，stop_reason:', stopReason);
+        throw new Error('模型输出达到 token 限制被截断');
+      }
 
       const content = data.choices?.[0]?.message?.content || '';
       console.log('[test-runs] 输出长度:', content.length);

@@ -161,6 +161,13 @@ ${skillData.content || skillData.systemPrompt || '（空）'}
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
     console.log('[optimize-skill] 大模型响应完成');
 
+    // 检查是否因为 token 限制被截断
+    const stopReason = response.stop_reason || response.choices?.[0]?.finish_reason;
+    if (stopReason === 'max_tokens' || stopReason === 'length') {
+      console.error('[optimize-skill] 响应被截断，stop_reason:', stopReason);
+      throw new Error('模型输出达到 token 限制被截断，请尝试简化提示词或增加 max_tokens 配置');
+    }
+
     // 解析响应
     const content = response.content || response.choices?.[0]?.message?.content;
     
@@ -363,7 +370,7 @@ async function callModel(
         },
         body: JSON.stringify({
           model: config.defaultModel,
-          max_tokens: 8192,
+          max_tokens: 32000,
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -392,7 +399,7 @@ async function callModel(
         },
         body: JSON.stringify({
           model: config.defaultModel,
-          max_tokens: 8192,
+          max_tokens: 32000,
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },

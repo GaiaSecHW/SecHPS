@@ -100,72 +100,119 @@ ${research ? `
     console.log('[generate] 开始调用大模型...');
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
     console.log('[generate] 大模型响应完成');
+    console.log('[generate] 完整响应结构:', JSON.stringify(response, null, 2).substring(0, 1000));
 
-    // 解析响应
-    const content = response.content || response.choices?.[0]?.message?.content;
+    // 检查是否因为 token 限制被截断
+    const stopReason = response.stop_reason || response.choices?.[0]?.finish_reason;
+    if (stopReason === 'max_tokens' || stopReason === 'length') {
+      console.error('[generate] 响应被截断，stop_reason:', stopReason);
+      throw new Error('模型输出达到 token 限制被截断，请尝试简化提示词或增加 max_tokens 配置');
+    }
+
+    // 解析响应 - 支持多种响应格式
+    let content = null;
     
-    if (!content) {
-      throw new Error('模型响应为空');
+    // Claude API 格式: response.content (array)
+    if (response.content && Array.isArray(response.content)) {
+      const textBlock = response.content.find((block: any) => block.type === 'text');
+      content = textBlock?.text || '';
+      console.log('[generate] 使用 Claude API 格式解析');
+    }
+    // OpenAI API 格式: response.choices[0].message.content
+    else if (response.choices?.[0]?.message?.content) {
+      content = response.choices[0].message.content;
+      console.log('[generate] 使用 OpenAI API 格式解析');
+    }
+    // 直接返回文本
+    else if (typeof response === 'string') {
+      content = response;
+      console.log('[generate] 直接字符串响应');
+    }
+    // 其他格式尝试提取
+    else if (response.content) {
+      content = response.content;
+      console.log('[generate] 使用 response.content');
+    }
+    
+    if (!content || (typeof content === 'string' && content.trim() === '')) {
+      console.error('[generate] 模型响应为空，完整响应:', JSON.stringify(response));
+      throw new Error('模型响应为空，请检查模型配置或重试');
     }
 
-    // 提取文本内容
-    let textContent = '';
-    if (Array.isArray(content)) {
-      const textBlock = content.find((block: any) => block.type === 'text');
-      textContent = textBlock?.text || '';
-    } else {
-      textContent = content;
-    }
-
+    const textContent = typeof content === 'string' ? content : JSON.stringify(content);
     console.log('[generate] 原始内容类型:', typeof content, '长度:', textContent.length);
-    console.log('[generate] 原始内容前200字符:', textContent.substring(0, 200));
+    console.log('[generate] 原始内容前500字符:', textContent.substring(0, 500));
 
     // 解析 JSON - 更健壮的处理
     let jsonStr = textContent.trim();
-    console.log('[generate] 清理后内容前200字符:', jsonStr.substring(0, 200));
     console.log('[generate] 清理后内容长度:', jsonStr.length);
+    
+    if (jsonStr.length === 0) {
+      console.error('[generate] 清理后内容为空');
+      throw new Error('模型返回的内容为空');
+    }
 
     // 尝试多种方式提取 JSON
     let extractedJson = '';
 
-    // 方式1: 查找 { ... } 对象（最外层）
-    const objectMatch = jsonStr.match(/\{[\s\S]*\}/s);
-    if (objectMatch) {
-      extractedJson = objectMatch[0];
-      console.log('[generate] 方式1提取（对象）:', extractedJson.substring(0, 100));
+    // 方式1: 查找 ```json ... ``` 代码块（优先，最明确）
+    const jsonCodeBlockMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/s);
+    if (jsonCodeBlockMatch) {
+      extractedJson = jsonCodeBlockMatch[1].trim();
+      console.log('[generate] 方式1提取（json代码块）, 长度:', extractedJson.length);
     }
 
-    // 方式2: 查找 ```json ... ``` 代码块
+    // 方式2: 查找 ``` ... ``` 代码块
     if (!extractedJson) {
-      const codeBlockMatch = jsonStr.match(/```json\s*([\s\S]*?)\s*```/s);
+      const codeBlockMatch = jsonStr.match(/```\s*([\s\S]*?)\s*```/s);
       if (codeBlockMatch) {
-        extractedJson = codeBlockMatch[1];
-        console.log('[generate] 方式2提取（代码块）:', extractedJson.substring(0, 100));
+        extractedJson = codeBlockMatch[1].trim();
+        console.log('[generate] 方式2提取（通用代码块）, 长度:', extractedJson.length);
       }
     }
 
-    // 方式3: 查找 ``` ... ``` 代码块
+    // 方式3: 查找 { ... } 对象（最外层，贪婪匹配）
     if (!extractedJson) {
-      const genericBlockMatch = jsonStr.match(/```\s*([\s\S]*?)\s*```/s);
-      if (genericBlockMatch) {
-        extractedJson = genericBlockMatch[1];
-        console.log('[generate] 方式3提取（通用代码块）:', extractedJson.substring(0, 100));
+      const objectMatch = jsonStr.match(/\{[\s\S]*\}/s);
+      if (objectMatch) {
+        extractedJson = objectMatch[0];
+        console.log('[generate] 方式3提取（对象匹配）, 长度:', extractedJson.length);
       }
     }
 
-    // 如果都失败了，使用整个字符串
+    // 方式4: 如果都失败了，使用整个字符串（前提是看起来像 JSON）
     if (!extractedJson) {
-      extractedJson = jsonStr;
-      console.log('[generate] 方式4（使用整个字符串）');
+      // 检查是否以 { 开头
+      if (jsonStr.startsWith('{')) {
+        extractedJson = jsonStr;
+        console.log('[generate] 方式4（直接使用，以{开头）');
+      } else {
+        // 尝试找到第一个 { 开始的位置
+        const firstBrace = jsonStr.indexOf('{');
+        if (firstBrace !== -1) {
+          extractedJson = jsonStr.substring(firstBrace);
+          console.log('[generate] 方式5（从第一个{开始）');
+        }
+      }
     }
 
     jsonStr = extractedJson.trim();
     console.log('[generate] 最终解析的 JSON 长度:', jsonStr.length);
-    console.log('[generate] 最终 JSON 内容（前500字符）:', jsonStr.substring(0, 500));
+    
+    if (jsonStr.length > 50) {
+      console.log('[generate] 最终 JSON 内容（前500字符）:', jsonStr.substring(0, 500));
+    } else {
+      console.log('[generate] 最终 JSON 内容（完整）:', jsonStr);
+    }
 
     // 验证 JSON 是否有效
     if (!jsonStr || jsonStr.length < 2) {
-      throw new Error('提取的 JSON 内容为空');
+      console.error('[generate] ============ 提取失败 ============');
+      console.error('[generate] 原始响应对象:', JSON.stringify(response, null, 2));
+      console.error('[generate] 原始文本内容:', textContent);
+      console.error('[generate] 尝试提取的 JSON:', extractedJson || '(空)');
+      console.error('[generate] =================================');
+      throw new Error('无法从模型响应中提取有效的 JSON。请尝试重新生成或检查模型配置。');
     }
 
     // 尝试解析 JSON
@@ -174,9 +221,15 @@ ${research ? `
       parsedSkill = JSON.parse(jsonStr);
       console.log('[generate] JSON 解析成功:', parsedSkill.name);
     } catch (parseError) {
-      console.error('[generate] JSON 解析失败:', parseError);
-      console.error('[generate] 失败的 JSON（完整）:', jsonStr);
-      throw new Error(`模型返回的格式不正确。错误: ${parseError.message}`);
+      console.error('[generate] ============ JSON 解析失败 ============');
+      console.error('[generate] 解析错误:', parseError instanceof Error ? parseError.message : String(parseError));
+      console.error('[generate] 提取的 JSON 长度:', jsonStr.length);
+      console.error('[generate] 提取的 JSON:', jsonStr);
+      console.error('[generate] 原始文本内容:', textContent);
+      console.error('[generate] 完整响应对象:', JSON.stringify(response, null, 2));
+      console.error('[generate] ======================================');
+      const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+      throw new Error(`模型返回的格式不正确，无法解析 JSON。错误: ${errorMsg}。请尝试重新生成。`);
     }
 
 // 验证必要字段
@@ -348,7 +401,7 @@ async function callModel(
         },
         body: JSON.stringify({
           model: config.defaultModel,
-          max_tokens: 4096,
+          max_tokens: 32000,  // 足够大的 token 限制，确保完整输出
           system: systemPrompt,
           messages: [{ role: 'user', content: userPrompt }],
         }),
@@ -377,7 +430,7 @@ async function callModel(
         },
         body: JSON.stringify({
           model: config.defaultModel,
-          max_tokens: 4096,
+          max_tokens: 32000,  // 足够大的 token 限制，确保完整输出
           messages: [
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userPrompt },

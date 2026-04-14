@@ -307,7 +307,7 @@ async function callLLMForMatch(
       // Claude 请求格式：system 在 messages 中作为 role: "system"
       body = {
         model: modelName,
-        max_tokens: 2000,
+        max_tokens: 8192,
         system: prompt,
         messages: [{ role: 'user', content: '请从上面的 Skills 列表中选择最匹配的Skills并返回JSON格式结果' }],
       };
@@ -326,7 +326,7 @@ async function callLLMForMatch(
           },
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 8192,
       };
     }
 
