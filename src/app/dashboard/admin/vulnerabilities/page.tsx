@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import {
   Bug,
   Search,
@@ -190,7 +191,7 @@ export default function VulnerabilitiesPage() {
       fetchStats();
       setSelectedVuln(null);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '操作失败');
+      toast.error(err instanceof Error ? err.message : '操作失败');
     }
   };
 
@@ -211,7 +212,7 @@ export default function VulnerabilitiesPage() {
       fetchVulnerabilities();
       fetchStats();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '删除失败');
+      toast.error(err instanceof Error ? err.message : '删除失败');
     }
   };
 
@@ -366,12 +367,9 @@ export default function VulnerabilitiesPage() {
                     </span>
                   </div>
                   <h3 className="mt-2 font-semibold text-gray-900">{vuln.title}</h3>
-                  <p className="mt-1 text-sm text-gray-600 line-clamp-2">{vuln.description}</p>
-                  <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-                    {vuln.project && <span className="text-blue-600 font-medium">项目: {vuln.project.name}</span>}
+                  <div className="mt-2 flex items-center gap-3 text-sm text-gray-500">
+                    {vuln.project && <span className="text-blue-600">项目: {vuln.project.name}</span>}
                     <span>类型: {vuln.type}</span>
-                    {vuln.cwe && <span>CWE: {vuln.cwe}</span>}
-                    {vuln.filePath && <span>文件: {vuln.filePath}</span>}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
