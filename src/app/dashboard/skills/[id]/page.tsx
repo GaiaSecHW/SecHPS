@@ -24,7 +24,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
-import { hasPermission } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
