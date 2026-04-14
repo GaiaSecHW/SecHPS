@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Trash2, GripVertical, Save, Loader2, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
-import { hasPermission } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
 
 interface Category {
   value: string;
