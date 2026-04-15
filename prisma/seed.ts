@@ -122,6 +122,10 @@ const PERMISSIONS = {
   PROJECT_READ: 'project:read',
   PROJECT_UPDATE: 'project:update',
   PROJECT_DELETE: 'project:delete',
+
+  // Token 统计权限
+  TOKEN_READ: 'token:read',
+  TOKEN_DETAIL: 'token:detail',
 };
 
 // 角色常量
@@ -217,6 +221,9 @@ const DEFAULT_ROLE_PERMISSIONS = {
     PERMISSIONS.PROJECT_READ,
     PERMISSIONS.PROJECT_UPDATE,
     PERMISSIONS.PROJECT_DELETE,
+    // Token 权限
+    PERMISSIONS.TOKEN_READ,
+    PERMISSIONS.TOKEN_DETAIL,
   ],
 
   [ROLES.DEVELOPER]: [

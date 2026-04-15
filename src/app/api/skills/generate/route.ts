@@ -10,6 +10,7 @@ import {
   extractCwe,
   type SkillIntent,
 } from '@/lib/skill-builder';
+import { trackSystemTokenUsage, extractTokenUsageFromResponse, calculateSystemCost } from '@/lib/system-token-tracker';
 
 /**
  * 生成 Skill 定义 API
@@ -64,6 +65,21 @@ export async function POST(request: NextRequest) {
     console.log('[generate] 开始调用大模型...');
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
     console.log('[generate] 大模型响应完成');
+    
+    // 统计 Token 使用量
+    const tokenUsage = extractTokenUsageFromResponse(response);
+    if (tokenUsage) {
+      const estimatedCost = calculateSystemCost(tokenUsage.inputTokens, tokenUsage.outputTokens);
+      await trackSystemTokenUsage(
+        'skill-generate',
+        modelConfig.defaultModel,
+        tokenUsage.inputTokens,
+        tokenUsage.outputTokens,
+        estimatedCost,
+        `Skill生成: ${intent.name || '未命名'}`
+      );
+      console.log('[generate] Token 统计:', tokenUsage, '费用:', estimatedCost);
+    }
 
     // 检查是否被截断
     const stopReason = response.stop_reason || response.choices?.[0]?.finish_reason;
@@ -80,12 +96,12 @@ export async function POST(request: NextRequest) {
 
     console.log('[generate] 生成的 Markdown 长度:', generatedContent.length);
 
-    // 使用公共模块构建完整 Skill（自动补齐 YAML + 输出格式）
+    // 使用公共模块构建 Skill（不拼接输出格式，输出格式由前端动态拼接）
     const fullContent = buildFullSkill(
       intent as SkillIntent,
       generatedContent,
-      outputTemplate,
-      { addFrontmatter: true, addOutputFormat: true, addTitle: true }
+      null, // 不传输出模板
+      { addFrontmatter: true, addOutputFormat: false, addTitle: true }
     );
 
     // 构建返回对象

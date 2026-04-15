@@ -165,6 +165,19 @@ export default function TokenStatsPage() {
     return `¥${cost.toFixed(4)}`;
   };
 
+  // 费用显示组件（带计费规则提示）
+  const CostWithTooltip = ({ cost }: { cost: number }) => (
+    <span className="flex items-center">
+      {formatCost(cost)}
+      <span className="ml-1 cursor-help relative group">
+        <Info size={10} className="text-gray-400 hover:text-gray-600" />
+        <span className="absolute right-0 bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-1.5 whitespace-nowrap z-10 shadow-lg">
+          ¥6/百万输入 + ¥22/百万输出
+        </span>
+      </span>
+    </span>
+  );
+
   const formatTokensWithColor = (input: number, output: number) => {
     return (
       <div className="flex items-center space-x-2 text-xs">
@@ -339,7 +352,7 @@ export default function TokenStatsPage() {
                   <div className="text-right">
                     {formatTokensWithColor(stat.inputTokens, stat.outputTokens)}
                     <p className="text-xs text-gray-500 mt-1">
-                      {formatCost(stat.estimatedCost || 0)}
+                      <CostWithTooltip cost={stat.estimatedCost || 0} />
                     </p>
                   </div>
                 </div>
@@ -376,7 +389,7 @@ export default function TokenStatsPage() {
                     <div className="text-right">
                       {formatTokensWithColor(stat.totalInputTokens, stat.totalOutputTokens)}
                       <p className="text-xs text-gray-500 mt-1">
-                        {formatCost(stat.estimatedCost || 0)}
+                        <CostWithTooltip cost={stat.estimatedCost || 0} />
                       </p>
                     </div>
                     <ChevronRight className="text-gray-400" size={20} />

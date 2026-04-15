@@ -1404,7 +1404,7 @@ model SystemConfig {
 // Token 使用记录（每次 API 调用的详细信息）
 model TokenUsage {
   id                String   @id @default(cuid())
-  evaluationId      String   // 关联评估会话
+  evaluationId      String?  // 关联评估会话（系统调用时为 null）
   projectId         String?  // 关联项目（冗余存储，方便查询）
   
   // API 调用信息
@@ -1437,7 +1437,7 @@ model TokenUsage {
   createdAt         DateTime @default(now())
 
   // 关系
-  evaluation        EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  evaluation        EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
   @@index([evaluationId])
   @@index([projectId])

@@ -99,24 +99,43 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
     }
   };
 
-  // 生成 Markdown 内容（使用公共模块格式）
+  // 生成 Markdown 内容（使用新的缺陷发现 Skill 格式）
   const generateMarkdownContent = (intent: any, research: any) => {
-    // 构建基础内容（检测目标、检查要点）
+    // 构建基础内容（使用新的缺陷发现 Skill 格式）
     const lines: string[] = [];
     
-    // 检测目标
+    // 1. Role Framing（角色定位）- 新增
+    lines.push(`> 你是一个资深安全工程师，专注于 ${intent.name || '安全漏洞'} 分析。你擅长识别相关风险点，并对常见框架的潜在漏洞有深入理解。`);
+    lines.push('');
+    
+    // 2. 输入格式 - 新增
+    lines.push('## 输入格式');
+    lines.push('');
+    lines.push('你将接收：');
+    const techStacks = intent.techStack?.length > 0 
+      ? intent.techStack.join(', ') 
+      : 'Java, Python, PHP, Node.js';
+    lines.push(`- 源代码文件（${techStacks}）`);
+    lines.push('- 文件路径和函数上下文');
+    lines.push('- 可选：用户指定的重点审查区域');
+    lines.push('');
+    
+    // 3. 检测目标
     lines.push('## 检测目标');
     lines.push(intent.whatDoesItDo || `识别代码中 ${intent.name || '安全漏洞'} 相关的风险点。`);
+    lines.push('重点关注：');
     if (research.edgeCases && research.edgeCases.length > 0) {
-      lines.push('');
-      lines.push('重点关注：');
       research.edgeCases.forEach((ec: string) => {
         lines.push(`- ${ec}`);
       });
+    } else {
+      lines.push('- 输入验证缺失');
+      lines.push('- 危险函数调用');
+      lines.push('- 边界条件处理');
     }
     lines.push('');
     
-    // 检查要点
+    // 4. 检查要点
     lines.push('## 检查要点');
     if (research.successCriteria && research.successCriteria.length > 0) {
       research.successCriteria.forEach((sc: string, i: number) => {
@@ -126,13 +145,16 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
       lines.push('1. 查找危险模式/函数');
       lines.push('2. 检查安全措施的使用情况');
       lines.push('3. 分析输入来源的验证逻辑');
+      lines.push('4. 审查边界条件的处理方式');
     }
     lines.push('');
     
-    // 示例（基础模板）
+    // 5. 示例（至少 2 个）- 改进格式
     lines.push('## 示例（重要！）');
     lines.push('');
-    lines.push('**输入代码（存在漏洞）：**');
+    lines.push('### 示例 1：基础漏洞');
+    lines.push('');
+    lines.push('**输入代码：**');
     lines.push('```');
     lines.push('// 待补充具体漏洞代码示例');
     lines.push('```');
@@ -140,16 +162,42 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
     lines.push('**检测结果：**');
     lines.push(`❌ ${intent.name || '漏洞类型'} 风险：[具体描述]`);
     lines.push('位置：[文件名:行号]');
+    lines.push('风险等级：高危');
+    lines.push('');
+    lines.push('### 示例 2：隐蔽漏洞');
+    lines.push('');
+    lines.push('**输入代码：**');
+    lines.push('```');
+    lines.push('// 看似安全但实际危险的代码');
+    lines.push('```');
+    lines.push('');
+    lines.push('**检测结果：**');
+    lines.push(`❌ ${intent.name || '漏洞类型'} 风险：[隐蔽原因描述]`);
+    lines.push('位置：[文件名:行号]');
+    lines.push('风险等级：高危');
     lines.push('');
     
-    // CWE
+    // 6. 陷阱与边缘情况 - 新增
+    lines.push('## 陷阱与边缘情况');
+    if (research.edgeCases && research.edgeCases.length > 0) {
+      research.edgeCases.forEach((ec: string) => {
+        lines.push(`- ${ec}`);
+      });
+    } else {
+      lines.push('- 某些框架的方法仍可能存在风险');
+      lines.push('- 看似使用安全措施但实际无效的模式');
+      lines.push('- 常见误报场景需注意排除');
+    }
+    lines.push('');
+    
+    // 7. CWE
     if (intent.cwe) {
       lines.push('## CWE 编号');
       lines.push(intent.cwe);
       lines.push('');
     }
     
-    // 工具要求
+    // 8. 工具要求
     lines.push('## 工具要求');
     if (research.dependencies && research.dependencies.length > 0) {
       research.dependencies.forEach((dep: string) => {
@@ -161,7 +209,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
     }
     lines.push('');
     
-    // 使用公共模块构建完整 Skill（添加 YAML + 输出格式）
+    // 使用公共模块构建 Skill（不拼接输出格式，前端显示时动态拼接）
     const skillIntent: SkillIntent = {
       name: intent.name,
       displayName: intent.name,
@@ -172,7 +220,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
     
     return buildFullSkill(skillIntent, lines.join('\n'), null, {
       addFrontmatter: true,
-      addOutputFormat: true,
+      addOutputFormat: false, // 不拼接输出格式
       addTitle: true,
     });
   };
@@ -342,13 +390,22 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
           onChange={(e) => onChange({ ...skillData, content: e.target.value })}
           rows={20}
           className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-          placeholder="# Skill 名称
+          placeholder={`> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...
 
-## 描述
-简要描述这个 Skill 的作用...
+## 输入格式
+你将接收：
+- 源代码文件（[语言列表]）
+- 文件路径和函数上下文
 
-## 系统提示词
-你是一个专业的..."
+## 检测目标
+识别代码中 [具体漏洞类型] 的风险点...
+
+## 示例（重要！）
+### 示例 1：基础漏洞
+...
+
+## 陷阱与边缘情况
+...`}
         />
         <p className="mt-1 text-xs text-gray-500">
           完整的 Skill 定义，使用 Markdown 格式编写

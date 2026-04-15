@@ -28,7 +28,7 @@ import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
-import { buildFullSkill, type SkillIntent } from '@/lib/skill-builder';
+import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 
 interface Skill {
   id: string;
@@ -257,6 +257,7 @@ export default function SkillDetailPage() {
       setSaving(true);
       const token = localStorage.getItem('token');
       
+      // 直接保存用户编辑的内容，不清理输出格式
       const response = await fetch(`/api/skills/${skillId}`, {
         method: 'PUT',
         headers: {
@@ -857,18 +858,47 @@ export default function SkillDetailPage() {
                   onClick={() => setShowFormatHint(!showFormatHint)}
                   className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-gray-600"
                 >
-                  <span>格式建议</span>
+                  <span className="flex items-center gap-1.5">
+                    <FileText size={14} />
+                    缺陷发现 Skill 格式建议
+                  </span>
                   {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {showFormatHint && (
                   <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-                    <div className="text-xs text-gray-500 font-mono space-y-1">
-                      <p># Skill 名称</p>
-                      <p>## 描述</p>
-                      <p>## CWE 编号</p>
-                      <p>## 系统提示词</p>
-                      <p>## 用户提示词</p>
-                      <p>## 工具 (使用 - 列表)</p>
+                    {/* 新格式建议 */}
+                    <div className="space-y-4">
+                      {/* 禁止生成提醒 */}
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-red-700 mb-2">⛔ 禁止生成（系统会自动添加）</p>
+                        <ul className="text-xs text-red-600 space-y-1">
+                          <li>❌ YAML frontmatter（--- name: xxx ---）</li>
+                          <li>❌ 一级标题（# 漏洞名称）</li>
+                          <li>❌ ## 输出格式 章节</li>
+                        </ul>
+                      </div>
+                      
+                      {/* 推荐章节 */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-2">必须包含的章节：</p>
+                        <div className="text-xs text-gray-600 font-mono space-y-1">
+                          {getFormatGuideData().sections.map((section, idx) => (
+                            <p key={idx} className={section.highlight ? 'text-blue-600 font-medium' : ''}>
+                              {section.name}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* 关键原则 */}
+                      <div>
+                        <p className="text-xs font-semibold text-gray-700 mb-2">关键原则：</p>
+                        <ul className="text-xs text-gray-600 space-y-1">
+                          {getFormatGuideData().principles.slice(0, 4).map((p, idx) => (
+                            <li key={idx}>{p.title} — {p.description}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
                   </div>
                 )}

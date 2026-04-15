@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { createClaudeAgentService, ClaudeAgentService } from '@/services/ai';
+import { trackSystemTokenUsage, calculateSystemCost } from '@/lib/system-token-tracker';
 
 // 全局 AI Service 用于测试（懒加载）
 let globalTestService: ClaudeAgentService | null = null;
@@ -78,6 +79,10 @@ export async function POST(
         { status: 400 }
       );
     }
+    
+    // 获取模型名称
+    const modelConfig = await getModelConfig();
+    const modelName = modelConfig ? (JSON.parse(modelConfig.models)[0] as string || 'unknown') : 'unknown';
 
     // 准备测试上下文
     let projectName: string;
@@ -127,6 +132,7 @@ export async function POST(
 
     // 执行结果
     let fullResponse = '';
+    let tokenUsage = { inputTokens: 0, outputTokens: 0 };
     const startTime = Date.now();
 
     try {
@@ -135,6 +141,13 @@ export async function POST(
         service.sendPrompt(prompt, {
           onChunk: (text) => {
             fullResponse += text;
+          },
+          onUsage: (usage) => {
+            // 捕获 token 使用量
+            tokenUsage = {
+              inputTokens: usage.inputTokens || 0,
+              outputTokens: usage.outputTokens || 0,
+            };
           },
           onComplete: () => {
             resolve();
@@ -146,6 +159,19 @@ export async function POST(
       });
 
       const duration = Date.now() - startTime;
+      
+      // 记录系统 Token 使用量
+      if (tokenUsage.inputTokens > 0 || tokenUsage.outputTokens > 0) {
+        const estimatedCost = calculateSystemCost(tokenUsage.inputTokens, tokenUsage.outputTokens);
+        await trackSystemTokenUsage(
+          'skill-test',
+          modelName,
+          tokenUsage.inputTokens,
+          tokenUsage.outputTokens,
+          estimatedCost,
+          `Skill测试: ${skill.name || skill.id}`
+        );
+      }
 
       // 简单解析结果（查找潜在的漏洞描述）
       const vulnerabilities = parseVulnerabilities(fullResponse);

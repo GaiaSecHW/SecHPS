@@ -4,10 +4,13 @@ import { prisma } from '@/lib/prisma';
 import {
   extractModelResponse,
   buildFullSkill,
+  buildSystemPrompt,
   getStandardOutputTemplate,
   extractCwe,
+  cleanSkillContentForOptimization,
   type SkillIntent,
 } from '@/lib/skill-builder';
+import { trackSystemTokenUsage, extractTokenUsageFromResponse, calculateSystemCost } from '@/lib/system-token-tracker';
 
 /**
  * 优化完整 Skill 的 API
@@ -47,58 +50,28 @@ export async function POST(request: NextRequest) {
 
     console.log('[optimize-skill] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
 
-    // 使用公共模块的格式指导构建系统提示词
-    const systemPrompt = `你是一个专业的 AI Skill 优化专家。请在用户已有 Skill 内容的基础上进行优化和补充，而不是推翻重写。
+    // 使用公共模块的系统提示词（包含禁止生成输出格式的明确指令）
+    const systemPrompt = buildSystemPrompt();
 
-## 核心原则
-1. **保留用户意图**：用户已经写好的内容必须完整保留，不得删除或替换
-2. **补充遗漏**：如果用户内容有缺失的部分，在不改变现有内容的前提下补充完整
-3. **优化表达**：可以改善措辞、补充细节、使描述更清晰，但不改变原有语义
-4. **提升触发准确性**：在现有描述基础上补充触发关键词
-5. **禁止推翻重写**：不允许删掉用户内容重新写一套
+    // 清理用户 Skill 内容，移除系统自动添加的 "## 输出格式" 章节
+    // 这样大模型就不会看到这个章节，也不会误保留它
+    const cleanedUserContent = cleanSkillContentForOptimization(skillData.content || '');
 
-## 优秀 Skill 的关键原则
+    // 构建用户提示词（不包含输出格式内容）
+    let userPrompt = `请在以下用户已编写的 Skill 内容基础上进行优化补充：
 
-1. **Description 是触发机制（最重要）**
-   - 必须包含：做什么 + 何时触发 + 关键触发词
-   - 用第三人称写，明确列出触发场景
-
-2. **简洁至上（<500行）**
-   - 只添加 Agent 不知道的内容
-   - 用指令而非散文
-
-3. **提供示例（重要！）**
-   - 展示漏洞代码 + 检测结果范例
-
-4. **描述目标，不预设步骤**
-   - 让 Agent 决定执行路径
-
-## 输出要求
-
-直接返回 Markdown 格式的 Skill 正文内容（不要包含 YAML frontmatter，系统会自动添加）。
-
-必须包含以下章节：
-- ## 检测目标
-- ## 检查要点
-- ## 示例（重要！展示漏洞代码和检测结果）
-- ## CWE 编号（如有）
-- ## 工具要求
-
-注意：不要写"输出格式"章节，系统会自动添加标准输出格式。`;
-
-    // 构建用户提示词
-    let userPrompt = `请在以下用户已编写的 Skill 内容基础上进行优化补充，不得删除用户已有内容：
-
-## 用户当前 Skill 内容（必须保留核心内容，只可补充优化）
+## 用户当前 Skill 内容
 \`\`\`
-${skillData.content || '（空）'}
+${cleanedUserContent || '（空）'}
 \`\`\`
 
 ## Skill 基本信息
 - 名称: ${skillData.name || '未命名'}
 - 显示名称: ${skillData.displayName || '未命名'}
 - 分类: ${skillData.category || 'code-audit'}
-- CWE: ${skillData.cwe || '无'}`;
+- CWE: ${skillData.cwe || '无'}
+
+请优化 Skill 内容，保留用户已有内容，补充缺失部分。`;
 
     // 添加测试用例信息
     if (testCases && testCases.length > 0) {
@@ -147,6 +120,21 @@ ${skillData.content || '（空）'}
     console.log('[optimize-skill] 开始调用大模型...');
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
     console.log('[optimize-skill] 大模型响应完成');
+    
+    // 统计 Token 使用量
+    const tokenUsage = extractTokenUsageFromResponse(response);
+    if (tokenUsage) {
+      const estimatedCost = calculateSystemCost(tokenUsage.inputTokens, tokenUsage.outputTokens);
+      await trackSystemTokenUsage(
+        'skill-optimize',
+        modelConfig.defaultModel,
+        tokenUsage.inputTokens,
+        tokenUsage.outputTokens,
+        estimatedCost,
+        `Skill优化: ${skillData.name || '未命名'}`
+      );
+      console.log('[optimize-skill] Token 统计:', tokenUsage, '费用:', estimatedCost);
+    }
 
     // 检查截断
     const stopReason = response.stop_reason || response.choices?.[0]?.finish_reason;
@@ -163,10 +151,10 @@ ${skillData.content || '（空）'}
 
     console.log('[optimize-skill] 生成的 Markdown 长度:', generatedContent.length);
 
-    // 获取标准输出格式
-    const outputTemplate = await getStandardOutputTemplate();
+    // 清理大模型可能误生成的输出格式章节（防止重复）
+    const cleanedContent = cleanSkillContentForOptimization(generatedContent);
 
-    // 使用公共模块构建完整 Skill
+    // 使用公共模块构建 Skill（不拼接输出格式，输出格式由前端动态拼接）
     const intent: SkillIntent = {
       name: skillData.name,
       displayName: skillData.displayName,
@@ -174,9 +162,9 @@ ${skillData.content || '（空）'}
       category: skillData.category,
     };
 
-    const fullContent = buildFullSkill(intent, generatedContent, outputTemplate, {
+    const fullContent = buildFullSkill(intent, cleanedContent, null, {
       addFrontmatter: true,
-      addOutputFormat: true,
+      addOutputFormat: false, // 不拼接输出格式
       addTitle: true,
     });
 

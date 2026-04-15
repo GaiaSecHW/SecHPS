@@ -780,7 +780,7 @@ export async function POST(
                   totalTokens: usage.inputTokens + usage.outputTokens,
                 }, pricing);
                 
-                // 保存到 TokenUsage 表
+                // 保存到 TokenUsage 表（单次调用记录）
                 await prisma.tokenUsage.create({
                   data: {
                     evaluationId: evaluation.id,
@@ -800,16 +800,53 @@ export async function POST(
                     status: 'success',
                   },
                 });
-                console.log('[Ralph Loop] Token 使用记录已保存到数据库');
                 
-                // 发送 token 使用事件
+                // 实时更新 EvaluationSession 的累计 token 值
+                // 注意：inputTokens 包含历史上下文，不应累加（只保存最后一次的值）
+                // outputTokens 是新增的，可以累加
+                const currentSession = await prisma.evaluationSession.findUnique({
+                  where: { id: evaluation.id },
+                  select: { totalOutputTokens: true, estimatedCost: true },
+                });
+                
+                // inputTokens 用最后一次的值（包含整个历史上下文）
+                const newInputTokens = usage.inputTokens || 0;
+                // outputTokens 累加
+                const newOutputTokens = (currentSession?.totalOutputTokens || 0) + (usage.outputTokens || 0);
+                const newTotalTokens = newInputTokens + newOutputTokens;
+                // 费用累加（如果自部署模型，费用为 0）
+                const newEstimatedCost = (currentSession?.estimatedCost || 0) + callCost;
+                
+                await prisma.evaluationSession.update({
+                  where: { id: evaluation.id },
+                  data: {
+                    totalInputTokens: newInputTokens,
+                    totalOutputTokens: newOutputTokens,
+                    totalTokens: newTotalTokens,
+                    estimatedCost: newEstimatedCost,
+                  },
+                });
+                
+                console.log('[Ralph Loop] 实时更新 Token:', {
+                  本次: { input: usage.inputTokens, output: usage.outputTokens },
+                  当前累计: { input: newInputTokens, output: newOutputTokens },
+                  说明: 'input=最后一次值(含历史), output=累加值',
+                });
+                
+                // 发送 token 使用事件（包含累计值）
                 const tokenEvent = JSON.stringify({
                   type: 'token_usage',
                   usage: {
+                    // 本次调用
                     inputTokens: usage.inputTokens,
                     outputTokens: usage.outputTokens,
                     totalTokens: usage.inputTokens + usage.outputTokens,
                     estimatedCost: callCost,
+                    // 累计值
+                    accumulatedInputTokens: newInputTokens,
+                    accumulatedOutputTokens: newOutputTokens,
+                    accumulatedTotalTokens: newTotalTokens,
+                    accumulatedCost: newEstimatedCost,
                   },
                   timestamp: Date.now(),
                 });

@@ -15,6 +15,7 @@ import {
   Eye,
   Calendar,
   Filter,
+  Info,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -156,8 +157,24 @@ export default function ProjectTokenDetailPage({
   };
 
   const formatCost = (cost: number | null) => {
-    return cost ? `$${cost.toFixed(4)}` : '-';
+    if (cost === null || cost === 0) {
+      return '¥0';
+    }
+    return `¥${cost.toFixed(4)}`;
   };
+
+  // 费用显示组件（带计费规则提示）
+  const CostWithTooltip = ({ cost }: { cost: number | null }) => (
+    <span className="flex items-center">
+      {formatCost(cost)}
+      <span className="ml-1 cursor-help relative group">
+        <Info size={10} className="text-orange-400 hover:text-orange-600" />
+        <span className="absolute right-0 bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-1.5 whitespace-nowrap z-10 shadow-lg">
+          ¥6/百万输入 + ¥22/百万输出
+        </span>
+      </span>
+    </span>
+  );
 
   const formatDuration = (ms: number | null) => {
     if (!ms) return '-';
@@ -246,7 +263,18 @@ export default function ProjectTokenDetailPage({
             </p>
           </div>
           <div className="bg-orange-50 rounded-lg p-4">
-            <p className="text-xs text-orange-600">预估费用</p>
+            <p className="text-xs text-orange-600 flex items-center">
+              预估费用
+              <span 
+                className="ml-1 cursor-help relative group"
+              >
+                <Info size={12} className="text-orange-400 hover:text-orange-600" />
+                <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
+                  费用 = 输入Token × 单价 + 输出Token × 单价<br/>
+                  <span className="text-gray-400">单价：输入 ¥6/百万，输出 ¥22/百万</span>
+                </span>
+              </span>
+            </p>
             <p className="text-lg font-bold text-orange-700">
               {formatCost(summary?.estimatedCost)}
             </p>
@@ -301,8 +329,10 @@ export default function ProjectTokenDetailPage({
                       <span className="text-blue-600">↑{formatNumber(evaluation.totalInputTokens)}</span>
                       <span className="text-green-600">↓{formatNumber(evaluation.totalOutputTokens)}</span>
                     </div>
-                    <p className="text-xs text-gray-500">
-                      {formatCost(evaluation.estimatedCost)} · {evaluation.duration ? `${evaluation.duration}s` : '-'}
+                    <p className="text-xs text-gray-500 flex items-center">
+                      <CostWithTooltip cost={evaluation.estimatedCost} />
+                      <span className="mx-1">·</span>
+                      {evaluation.duration ? `${evaluation.duration}s` : '-'}
                     </p>
                   </div>
                   <ChevronRight
@@ -405,7 +435,9 @@ export default function ProjectTokenDetailPage({
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">预估费用</p>
-                        <p className="text-sm font-medium text-orange-600">{formatCost(record.estimatedCost)}</p>
+                        <p className="text-sm font-medium text-orange-600">
+                          <CostWithTooltip cost={record.estimatedCost} />
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">状态</p>

@@ -18,7 +18,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
-import { getSkillDefaultTemplate, getFormatGuideData } from '@/lib/skill-builder';
+import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 使用公共模块的默认模板
 const DEFAULT_TEMPLATE = getSkillDefaultTemplate();
@@ -180,6 +180,7 @@ try {
       setLoading(true);
       const token = localStorage.getItem('token');
       
+      // 直接保存用户输入的内容
       const response = await fetch('/api/skills', {
         method: 'POST',
         headers: {

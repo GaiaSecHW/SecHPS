@@ -14,7 +14,9 @@ import {
   Bug,
   Hourglass,
   Coins,
+  Info,
 } from 'lucide-react';
+import { formatBeijingTime } from '@/lib/beijing-time';
 
 interface Session {
   id: string;
@@ -393,12 +395,13 @@ export default function DashboardPage() {
           />
           <TokenStatCard
             title="预估费用"
-            value={`$${tokenStats.estimatedCost.toFixed(2)}`}
+            value={`¥${tokenStats.estimatedCost.toFixed(2)}`}
             subtitle="累计成本"
             icon={<Shield size={24} />}
             color="bg-orange-500"
             bgColor="bg-orange-50"
             textColor="text-orange-700"
+            tooltip="费用 = 输入Token × ¥6/百万 + 输出Token × ¥22/百万"
           />
           <TokenStatCard
             title="评估次数"
@@ -543,6 +546,7 @@ function TokenStatCard({
   color,
   bgColor,
   textColor,
+  tooltip,
 }: {
   title: string;
   value: string | number;
@@ -551,6 +555,7 @@ function TokenStatCard({
   color: string;
   bgColor: string;
   textColor: string;
+  tooltip?: string;  // 可选的提示信息
 }) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
@@ -560,7 +565,17 @@ function TokenStatCard({
         </div>
         <div className="text-right">
           <p className="text-2xl font-bold text-gray-900">{value}</p>
-          <p className="text-sm text-gray-600 mt-1">{title}</p>
+          <p className="text-sm text-gray-600 mt-1 flex items-center justify-end">
+            {title}
+            {tooltip && (
+              <span className="ml-1 cursor-help relative group">
+                <Info size={12} className="text-gray-400 hover:text-gray-600" />
+                <span className="absolute right-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
+                  {tooltip}
+                </span>
+              </span>
+            )}
+          </p>
           <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
         </div>
       </div>
@@ -636,7 +651,7 @@ function SessionRow({
             </span>
           </div>
           <p className="mt-2 text-sm text-gray-600">
-            创建于 {new Date(session.createdAt).toLocaleString('zh-CN')}
+            创建于 {formatBeijingTime(session.createdAt, 'short')}
           </p>
           {session.config && (
             <p className="mt-1 text-xs text-gray-500">

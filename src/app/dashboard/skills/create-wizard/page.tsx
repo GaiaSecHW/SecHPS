@@ -11,6 +11,7 @@ import TestCasesStep from './TestCasesStep';
 import EvaluationStep from './EvaluationStep';
 import IterationStep from './IterationStep';
 import OptimizationStep from './OptimizationStep';
+import { cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 步骤定义
 const WIZARD_STEPS = [

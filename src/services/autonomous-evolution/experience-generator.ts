@@ -5,6 +5,7 @@
 
 import { prisma } from '@/lib/prisma';
 import type { FailureSuccessSequence } from './log-parser';
+import { trackSystemTokenUsage, calculateSystemCost } from '@/lib/system-token-tracker';
 
 export interface GeneratedExperience {
   title: string;
@@ -90,7 +91,25 @@ async function callLLM(prompt: string): Promise<string> {
 
   const data = await res.json() as {
     choices: Array<{ message: { content: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
+  
+  // 统计 Token 使用量
+  if (data.usage) {
+    const inputTokens = data.usage.prompt_tokens || 0;
+    const outputTokens = data.usage.completion_tokens || 0;
+    const estimatedCost = calculateSystemCost(inputTokens, outputTokens);
+    await trackSystemTokenUsage(
+      'experience-gen',
+      cfg.model,
+      inputTokens,
+      outputTokens,
+      estimatedCost,
+      '自主进化经验生成'
+    );
+    console.log('[ExperienceGenerator] Token 统计:', { inputTokens, outputTokens, estimatedCost });
+  }
+  
   return data.choices[0]?.message?.content || '';
 }
 

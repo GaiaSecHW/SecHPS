@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { getBeijingPeriodStart, getBeijingNow } from '@/lib/beijing-time';
 
 // 获取 Token 统计汇总数据
 export async function GET(request: Request) {
@@ -30,26 +31,9 @@ export async function GET(request: Request) {
     const period = searchParams.get('period') || 'day'; // day, week, month, year
     const projectId = searchParams.get('projectId');
 
-    // 计算时间范围
-    const now = new Date();
-    let startDate: Date;
-    
-    switch (period) {
-      case 'day':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        break;
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    }
+    // 使用北京时间计算起始时间
+    const startDate = getBeijingPeriodStart(period as 'day' | 'week' | 'month' | 'year');
+    const now = getBeijingNow();
 
     // 构建查询条件（EvaluationSession 使用 startedAt）
     const evalWhereClause: any = {
@@ -70,17 +54,20 @@ export async function GET(request: Request) {
       evalWhereClause.projectId = projectId;
       tokenWhereClause.projectId = projectId;
     } else {
-      // 只查询用户有权限的项目
+      // 查询用户有权限的项目 + 系统项目（所有人可见）
+      const SYSTEM_PROJECT_ID = 'system-00000000-0000-0000-0000-000000000001';
+      
       const userProjects = await prisma.project.findMany({
         where: { userId: payload.userId },
         select: { id: true },
       });
-      const projectIds = userProjects.map(p => p.id);
+      const projectIds = [...userProjects.map(p => p.id), SYSTEM_PROJECT_ID];
+      
       evalWhereClause.projectId = { in: projectIds };
       tokenWhereClause.projectId = { in: projectIds };
     }
 
-    // 查询评估会话的 token 汇总
+    // 查询评估会话的 token 汇总（用于跨时段统计）
     const evaluationStats = await prisma.evaluationSession.aggregate({
       where: evalWhereClause,
       _sum: {
@@ -93,6 +80,47 @@ export async function GET(request: Request) {
         id: true,
       },
     });
+
+    // 对于"今日"统计，优先使用 TokenUsage（实时数据）
+    // 因为当天的评估可能还没完成，EvaluationSession 还没更新
+    let summaryInputTokens = evaluationStats._sum.totalInputTokens || 0;
+    let summaryOutputTokens = evaluationStats._sum.totalOutputTokens || 0;
+    let summaryTotalTokens = evaluationStats._sum.totalTokens || 0;
+    let summaryCost = evaluationStats._sum.estimatedCost || 0;
+    
+    // 如果是"今日"且 EvaluationSession 为空，从 TokenUsage 计算
+    if (period === 'day' && evaluationStats._count.id === 0) {
+      // 查询今日所有 TokenUsage
+      const todayTokens = await prisma.tokenUsage.findMany({
+        where: tokenWhereClause,
+        select: {
+          inputTokens: true,
+          outputTokens: true,
+          estimatedCost: true,
+          evaluationId: true,
+        },
+      });
+      
+      // 按 evaluationId 分组，每个评估取最后一次的 input + 累计 output
+      const evalMap = new Map<string, { lastInput: number; totalOutput: number; cost: number }>();
+      
+      for (const token of todayTokens) {
+        const evalId = token.evaluationId || 'system';
+        const existing = evalMap.get(evalId) || { lastInput: 0, totalOutput: 0, cost: 0 };
+        existing.lastInput = Math.max(existing.lastInput, token.inputTokens);
+        existing.totalOutput += token.outputTokens;
+        existing.cost += token.estimatedCost || 0;
+        evalMap.set(evalId, existing);
+      }
+      
+      // 累计所有评估的数据
+      for (const [, data] of evalMap) {
+        summaryInputTokens += data.lastInput;
+        summaryOutputTokens += data.totalOutput;
+        summaryCost += data.cost;
+      }
+      summaryTotalTokens = summaryInputTokens + summaryOutputTokens;
+    }
 
     // 查询详细的 token 使用记录
     const tokenUsageStats = await prisma.tokenUsage.aggregate({
@@ -108,19 +136,38 @@ export async function GET(request: Request) {
       },
     });
 
-    // 查询每个模型的统计
-    const modelStats = await prisma.tokenUsage.groupBy({
+    // 查询每个模型的统计（不累加 input，只累加 output）
+    // 注意：TokenUsage 的 input 包含历史上下文，累加会重复计算
+    // 正确做法：input 取最后一次调用的值，output 累加
+    // 这里简化处理：只显示 output 的累加值，input 用平均值估算
+    const modelStatsRaw = await prisma.tokenUsage.groupBy({
       by: ['modelName', 'apiProvider'],
       where: tokenWhereClause,
       _sum: {
-        inputTokens: true,
         outputTokens: true,
-        totalTokens: true,
         estimatedCost: true,
       },
       _count: {
         id: true,
       },
+      _max: {
+        inputTokens: true,  // 取最大的 input（最后一次调用的上下文大小）
+      },
+    });
+    
+    // 计算模型统计（input 用最大值代表上下文大小，output 累加）
+    const modelStats = modelStatsRaw.map(stat => {
+      const maxInput = stat._max.inputTokens || 0;
+      const totalOutput = stat._sum.outputTokens || 0;
+      return {
+        modelName: stat.modelName || '未知模型',
+        apiProvider: stat.apiProvider,
+        inputTokens: maxInput,  // 上下文大小（最大值）
+        outputTokens: totalOutput,  // 累计输出
+        totalTokens: maxInput + totalOutput,
+        estimatedCost: stat._sum.estimatedCost || 0,
+        callCount: stat._count.id || 0,
+      };
     });
 
     // 查询每个项目的统计（仅当没有指定项目时）
@@ -180,22 +227,14 @@ export async function GET(request: Request) {
       startDate,
       endDate: now,
       summary: {
-        totalInputTokens: evaluationStats._sum.totalInputTokens || 0,
-        totalOutputTokens: evaluationStats._sum.totalOutputTokens || 0,
-        totalTokens: evaluationStats._sum.totalTokens || 0,
-        estimatedCost: evaluationStats._sum.estimatedCost || 0,
+        totalInputTokens: summaryInputTokens,
+        totalOutputTokens: summaryOutputTokens,
+        totalTokens: summaryTotalTokens,
+        estimatedCost: summaryCost,
         evaluationCount: evaluationStats._count.id || 0,
         callCount: tokenUsageStats._count.id || 0,
       },
-      modelStats: modelStats.map(stat => ({
-        modelName: stat.modelName || '未知模型',
-        apiProvider: stat.apiProvider,
-        inputTokens: stat._sum.inputTokens || 0,
-        outputTokens: stat._sum.outputTokens || 0,
-        totalTokens: stat._sum.totalTokens || 0,
-        estimatedCost: stat._sum.estimatedCost || 0,
-        callCount: stat._count.id || 0,
-      })),
+      modelStats,
       projectStats,
       trendData,
     });

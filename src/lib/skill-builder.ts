@@ -74,56 +74,174 @@ const DEFAULT_OUTPUT_FORMAT = `### 检测结果
  * 构建 Skill 系统提示词（给大模型的指令）
  */
 export function buildSystemPrompt(): string {
-  return `你是一个专业的 AI Skill 专家。请根据用户意图生成优秀的 Skill 定义。
+  return `你是一个专业的 AI Skill 专家，专门为代码安全审计 Agent 编写高质量 Skill 定义。
 
-## 优秀 Skill 的关键原则
+## ⛔ 禁止生成的内容（系统会自动添加）
 
-1. **Description 是触发机制（最重要）**
-   - 决定 Agent 是否调用此 Skill
-   - 必须包含：做什么 + 何时触发 + 关键触发词
-   - 用第三人称写，可适当"pushy"明确列出触发场景
-   - ❌ 错误："Helps with security"
-   - ✅ 正确："检测 SQL 注入漏洞。当审计 SQL、数据库注入时触发，即使未明确提及漏洞名也应激活"
+**以下内容绝对不要生成，否则会导致重复：**
 
-2. **简洁至上（<500行）**
-   - 只添加 Agent 不知道的内容
-   - 用指令而非散文："Always use X" 不是 "The X API is recommended"
+1. ❌ **YAML frontmatter**（--- name: xxx description: xxx ---）
+   - 系统会自动添加
 
-3. **提供示例（重要！）**
-   - 展示输入（漏洞代码）+ 输出（检测结果）的范例
-   - Agent 从示例学习格式比长段落解释更有效
+2. ❌ **一级标题**（# 漏洞名称 / # Skill 名称）
+   - 系统会自动添加 Skill 标题
 
-4. **描述目标，不预设步骤**
-   - 让 Agent 决定执行路径
-   - ❌ 错误："Step 1: Read file. Step 2: Parse."
-   - ✅ 正确："Extract and validate user data"
+3. ❌ **## 输出格式** 或 **## 输出要求** 章节
+   - 系统会自动添加标准输出格式
 
-## 输出要求
+**你的输出应该直接从角色定位开始：**
+> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...
 
-直接返回 Markdown 格式的 Skill 正文内容（不要包含 YAML frontmatter，系统会自动添加）。
+---
 
-必须包含以下章节：
-- ## 检测目标
-- ## 检查要点
-- ## 示例（重要！展示漏洞代码和检测结果）
-- ## CWE 编号（如有）
-- ## 工具要求
+## 角色定位（Role Framing）
 
-注意：不要写"输出格式"章节，系统会自动添加标准输出格式。`;
+生成的 Skill 正文开头必须包含角色定位，让 Agent 知道自己是哪个领域的专家。
+
+格式：
+> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...
+
+示例：
+> 你是一个资深安全工程师，专注于 SQL 注入漏洞分析。你擅长识别用户输入与 SQL 语句拼接的风险点，并对 ORM 框架的潜在漏洞有深入理解。
+
+## 输入格式定义（Input Format）
+
+必须明确告诉 Agent 将接收什么输入，避免 Agent 不确定要处理什么。
+
+格式：
+## 输入格式
+你将接收：
+- 源代码文件（[语言列表]）
+- 文件路径和上下文
+- 可选：特定函数或端点
+
+示例：
+## 输入格式
+你将接收：
+- 源代码文件（Java, Python, PHP, Node.js）
+- 文件路径和函数名
+- 可选：用户指定的重点审查区域
+
+## 必须包含的章节
+
+生成的 Skill 必须包含以下章节：
+
+### 1. ## 检测目标
+明确列出要检测的具体风险类型（3-5条）。
+
+### 2. ## 检查要点
+按优先级列出检查步骤，用指令风格：
+- "查找..." 而非 "你应该查找..."
+- "检查..." 而非 "接下来检查..."
+
+### 3. ## 示例（最重要！）
+必须包含至少 **2 个示例**：
+- 示例 1：基础漏洞场景
+- 示例 2：复杂/隐蔽漏洞场景
+
+每个示例格式：
+**输入代码：**
+[漏洞代码片段]
+
+**检测结果：**
+❌ [漏洞类型] 风险：[具体描述]
+位置：[文件名:行号]
+风险等级：[高危/中危/低危]
+
+### 4. ## 陷阱与边缘情况（Gotchas）
+列出容易被忽略或误判的情况：
+- ORM 框架的隐藏漏洞
+- 看似安全但实际危险的代码模式
+- 常见的误报场景
+
+示例：
+## 陷阱与边缘情况
+- ORM 框架的 raw() 方法仍可能存在注入风险
+- 使用预处理语句但动态拼接列名仍然危险
+- 某些框架的 query builder 在特定用法下不安全
+
+### 5. ## CWE 编号
+列出相关 CWE，如有多个用逗号分隔。
+
+### 6. ## 工具要求
+列出 Agent 需要使用的工具名称。
+
+## 简洁原则
+
+- 总行数 < 500 行
+- 只添加 Agent 不知道的内容
+- 用指令而非散文："Always use X" 不是 "The X API is recommended"
+- 描述目标，不预设步骤
+
+## 输出格式示例
+
+正确输出示例（直接从角色定位开始，无 YAML、无一级标题、无输出格式章节）：
+
+> 你是一个资深安全工程师，专注于 SQL 注入漏洞分析...
+
+## 输入格式
+你将接收：
+- 源代码文件（Java, Python, PHP）
+
+## 检测目标
+识别用户输入拼接 SQL 语句的风险点...
+
+## 检查要点
+1. 查找字符串拼接 SQL 的模式
+...
+
+## 示例（重要！）
+### 示例 1：基础注入
+...
+
+### 示例 2：ORM 隐蔽注入
+...
+
+## 陷阱与边缘情况
+- ORM raw() 方法仍可能存在注入风险
+...
+
+## CWE 编号
+CWE-89
+
+## 工具要求
+- read_file
+- search_pattern`;
 }
 
 /**
  * 构建 Skill 用户提示词（用户意图）
+ * 针对缺陷发现 Skill 的意图描述
  */
 export function buildUserPrompt(intent: SkillIntent): string {
-  return `请生成一个完整的 Skill 定义：
+  return `请生成一个完整的缺陷检测 Skill 定义：
 
+## 用户意图
 - **名称**：${intent.name || '未提供'}
-- **分类**：${intent.category || 'code-audit'}
+- **分类**：${intent.category || 'vulnerability-detection'}
 - **功能**：${intent.whatDoesItDo || intent.description || '检测安全漏洞'}
 - **触发条件**：${intent.whenShouldItTrigger || '用户要求审计相关漏洞'}
 
-请生成包含检测目标、检查要点、示例、CWE编号、工具要求的完整 Skill Markdown 内容。`;
+## ⛔ 禁止生成（系统会自动添加）
+
+**以下内容绝对不要生成：**
+1. ❌ YAML frontmatter（--- name: xxx ---）
+2. ❌ 一级标题（# 漏洞名称）
+3. ❌ ## 输出格式 或 ## 输出要求 章节
+
+**直接从角色定位开始输出：**
+> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...
+
+## 必须包含的章节
+
+1. **> Role Framing**（开头角色定位）
+2. **## 输入格式**（Agent 接收什么）
+3. **## 检测目标**（具体风险类型）
+4. **## 检查要点**（按优先级的检查步骤）
+5. **## 示例**（至少 2 个：基础漏洞 + 隐蔽漏洞）
+6. **## 陷阱与边缘情况**（容易忽略/误判的情况）
+7. **## CWE 编号**（相关漏洞编号）
+8. **## 工具要求**（Agent 需要的工具）`;
 }
 
 /**
@@ -201,7 +319,16 @@ export function buildDescription(intent: SkillIntent): string {
 }
 
 /**
+ * 清理 Markdown 内容（导出版本）
+ * 移除系统自动添加的章节，用于传给大模型优化时去除重复内容
+ */
+export function cleanSkillContentForOptimization(content: string): string {
+  return cleanMarkdownContent(content);
+}
+
+/**
  * 清理 Markdown 内容
+ * 移除大模型可能误生成的章节（系统会自动添加）
  */
 function cleanMarkdownContent(content: string): string {
   content = content.trim();
@@ -209,12 +336,12 @@ function cleanMarkdownContent(content: string): string {
   // 移除代码块包装
   const markdownBlockMatch = content.match(/^```markdown\s*([\s\S]*?)\s*```$/s);
   if (markdownBlockMatch) {
-    return markdownBlockMatch[1].trim();
+    content = markdownBlockMatch[1].trim();
   }
   
   const codeBlockMatch = content.match(/^```\s*([\s\S]*?)\s*```$/s);
   if (codeBlockMatch) {
-    return codeBlockMatch[1].trim();
+    content = codeBlockMatch[1].trim();
   }
   
   // 移除可能存在的 YAML frontmatter（如果大模型误生成）
@@ -223,24 +350,28 @@ function cleanMarkdownContent(content: string): string {
     content = content.substring(yamlMatch[0].length);
   }
   
-  // 移除可能存在的标题（如果大模型误生成）
-  const titleMatch = content.match(/^#\s+.+\n/);
-  if (titleMatch && !content.includes('## 检测目标')) {
-    // 只移除开头的标题
+  // 移除开头的一级标题（# 标题）
+  const titleMatch = content.match(/^#\s+[^\n]+\n?/);
+  if (titleMatch) {
     content = content.substring(titleMatch[0].length);
   }
   
-  // 移除可能误生成的"## 输出格式"章节（系统会自动添加）
-  // 匹配 "## 输出格式" 或 "## 输出要求" 等类似章节
-  const outputFormatMatch = content.match(/\n##\s*输出格式[\s\S]*$/i);
-  if (outputFormatMatch) {
-    content = content.substring(0, content.length - outputFormatMatch[0].length);
-  }
+  // 使用正则移除所有 "## 输出格式" 或 "## 输出要求" 章节
+  // 正则说明：
+  // - ##\s*输出格式 - 匹配章节标题
+  // - [\s\S]*? - 非贪婪匹配任意内容（包括换行）
+  // - (?=\n##|$) - 向前断言：遇到下一个 ## 章节或文件结束
   
-  const outputRequirementMatch = content.match(/\n##\s*输出要求[\s\S]*$/i);
-  if (outputRequirementMatch) {
-    content = content.substring(0, content.length - outputRequirementMatch[0].length);
-  }
+  // 先处理开头的情况（前面没有换行）
+  content = content.replace(/^##\s*输出格式[\s\S]*?(?=\n##|$)/gi, '');
+  content = content.replace(/^##\s*输出要求[\s\S]*?(?=\n##|$)/gi, '');
+  
+  // 再处理中间的情况（前面有换行）
+  content = content.replace(/\n##\s*输出格式[\s\S]*?(?=\n##|$)/gi, '');
+  content = content.replace(/\n##\s*输出要求[\s\S]*?(?=\n##|$)/gi, '');
+  
+  // 清理多余的空行
+  content = content.replace(/\n{3,}/g, '\n\n');
   
   return content.trim();
 }
@@ -298,30 +429,45 @@ export function extractModelResponse(response: any): string {
 
 /**
  * 获取 Skill 默认模板（用于快速创建页面）
+ * 针对缺陷发现 Skill 的标准模板
  */
 export function getSkillDefaultTemplate(): string {
   return `---
 name: skill-name
-description: 检测 [漏洞类型] 相关的安全问题。当用户要求审计 [关键词1]、[关键词2] 时触发，
-  即使未明确提及漏洞名称也应激活。
+description: 检测 [漏洞类型] 相关的安全问题。Use when 用户要求审计 [关键词1]、[关键词2]，
+  当提及 '[隐式触发词1]'、'[隐式触发词2]' 等关键词时也应激活，即使未明确提及漏洞名称。
 ---
 
 # [漏洞名称] 检测
 
+> 你是一个资深安全工程师，专注于 [漏洞类型] 分析。你擅长识别 [核心风险点]，并对 [相关框架/技术] 的潜在漏洞有深入理解。
+
+## 输入格式
+
+你将接收：
+- 源代码文件（[语言列表]）
+- 文件路径和函数上下文
+- 可选：用户指定的重点审查区域
+
 ## 检测目标
+
 识别代码中 [具体漏洞类型] 的风险点，重点关注：
 - [风险点1]
 - [风险点2]
 - [风险点3]
 
 ## 检查要点
-1. 查找 [危险模式/函数]
+
+1. 查找 [危险模式/函数/方法]
 2. 检查 [安全措施] 的使用情况
 3. 分析 [输入来源] 的验证逻辑
+4. 审查 [边界条件] 的处理方式
 
 ## 示例（重要！）
 
-**输入代码（存在漏洞）：**
+### 示例 1：基础漏洞
+
+**输入代码：**
 \`\`\`
 // 危险代码示例
 \`\`\`
@@ -329,11 +475,32 @@ description: 检测 [漏洞类型] 相关的安全问题。当用户要求审计
 **检测结果：**
 ❌ [漏洞类型] 风险：[具体描述]
 位置：[文件名:行号]
+风险等级：[高危/中危/低危]
+
+### 示例 2：隐蔽漏洞
+
+**输入代码：**
+\`\`\`
+// 看似安全但实际危险的代码
+\`\`\`
+
+**检测结果：**
+❌ [漏洞类型] 风险：[隐蔽原因描述]
+位置：[文件名:行号]
+风险等级：[高危/中危/低危]
+
+## 陷阱与边缘情况
+
+- [ORM/框架] 的 [方法] 仍可能存在风险
+- 看似使用安全措施但实际无效的模式
+- [常见误报场景]
 
 ## CWE 编号
-CWE-XXX（可选）
+
+CWE-XXX
 
 ## 工具要求
+
 - read_file
 - search_pattern
 - [其他必要工具]`;
@@ -343,30 +510,37 @@ CWE-XXX（可选）
  * 获取 Skill 格式建议（用于快速创建页面提示）
  */
 export function getSkillFormatGuide(): string {
-  return `## 优秀 Skill 的关键原则
+  return `## 缺陷发现 Skill 的关键原则
 
-1. **Description 是触发机制（最重要）**
-   - 必须包含：做什么 + 何时触发 + 关键触发词
-   - 用第三人称写，明确列出触发场景
+1. **Role Framing（角色定位）** - 开头定义 Agent 是哪个领域的专家
+   - 格式：> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...
 
-2. **简洁至上（<500行）**
-   - 只添加 Agent 不知道的内容
-   - 用指令而非散文
+2. **Input Format（输入格式）** - 明确 Agent 接收什么输入
+   - 源代码语言、文件路径、可选参数
 
-3. **提供示例（重要！）**
-   - 展示漏洞代码 + 检测结果范例
+3. **Description Use when 模式** - 触发机制
+   - 做什么 + 何时触发 + 隐式触发词
+   - 即使未明确提及漏洞名也应激活
 
-4. **描述目标，不预设步骤**
-   - 让 Agent 决定执行路径
+4. **多示例（至少 2 个）** - 基础漏洞 + 隐蔽漏洞
+   - 展示输入代码 + 检测结果格式
+
+5. **Gotchas（陷阱与边缘情况）** - 容易忽略/误判的情况
+   - ORM 框架隐藏漏洞、看似安全的危险模式
+
+6. **简洁至上（<500行）** - 用指令而非散文
 
 ## 推荐章节
+- > Role Framing（角色定位） ⭐
+- ## 输入格式
 - ## 检测目标
 - ## 检查要点
-- ## 示例 ⭐重要
+- ## 示例（至少 2 个） ⭐重要
+- ## 陷阱与边缘情况 ⭐
 - ## CWE 编号
 - ## 工具要求
 
-注意：输出格式由系统自动添加，无需手动编写。`;
+注意：YAML frontmatter 和输出格式由系统自动添加，无需手动编写。`;
 }
 
 /**
@@ -395,79 +569,131 @@ export interface FormatGuideData {
 
 /**
  * 获取格式建议详细数据（用于 UI 渲染）
+ * 针对缺陷发现 Skill 的格式指导
  */
 export function getFormatGuideData(): FormatGuideData {
   return {
     example: {
       yaml: `---
 name: sql-injection-detection
-description: 检测 SQL 注入漏洞，分析用户输入拼接 SQL 语句的风险点。
-  当用户要求审计 SQL 注入、数据库注入、查询拼接时触发，
-  即使未明确提及 'SQL' 也应激活。
+description: 检测 SQL 注入漏洞。Use when 用户要求审计 SQL 注入、数据库注入、查询拼接风险。
+  当提及 'database query'、'user input'、'sanitize' 等关键词时也应激活，即使未明确提及 'SQL'。
 ---`,
       content: `# SQL 注入检测
 
+> 你是一个资深安全工程师，专注于 SQL 注入漏洞分析。你擅长识别用户输入与 SQL 语句拼接的风险点，并对 ORM 框架的潜在漏洞有深入理解。
+
+## 输入格式
+
+你将接收：
+- 源代码文件（Java, Python, PHP, Node.js）
+- 文件路径和函数上下文
+- 可选：用户指定的重点审查区域
+
 ## 检测目标
-识别代码中用户输入直接拼接 SQL 语句的漏洞点...
+
+识别代码中 SQL 注入的风险点...
 
 ## 检查要点
+
 1. 查找字符串拼接 SQL 的模式
 2. 检查参数化查询的使用情况
 3. 分析输入验证和过滤逻辑
 
 ## 示例（重要！）
 
+### 示例 1：基础注入
 **输入代码：**
 query = "SELECT * FROM users WHERE id = " + userId
 
 **检测结果：**
 ❌ SQL 注入风险：用户输入 userId 直接拼接
 位置：[文件名:行号]
+风险等级：高危
+
+### 示例 2：ORM 隐蔽注入
+**输入代码：**
+User.where("name = '" + name + "'")
+
+**检测结果：**
+❌ SQL 注入风险：ORM raw 条件拼接
+位置：[文件名:行号]
+风险等级：高危
+
+## 陷阱与边缘情况
+
+- ORM 的 raw() 方法仍可能存在注入风险
+- 使用预处理语句但动态拼接列名仍然危险
+- 某些 query builder 在特定用法下不安全
 
 ## CWE 编号
+
 CWE-89
 
 ## 工具要求
+
 - read_file
 - search_pattern`,
     },
     principles: [
       {
-        title: '✅ Description 是触发机制',
-        description: '必须包含"做什么 + 何时触发"，用第三人称写。Agent 根据此字段判断是否加载 Skill。',
+        title: '✅ Role Framing（角色定位）',
+        description: 'Skill 开头必须定义 Agent 是哪个领域的专家，增强专业性。格式：> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...',
+      },
+      {
+        title: '✅ Input Format（输入格式）',
+        description: '明确告诉 Agent 将接收什么输入（代码语言、文件路径、可选参数），避免不确定性。',
+      },
+      {
+        title: '✅ Description Use when 模式',
+        description: 'Description 必须包含"做什么 + 何时触发 + 隐式触发词"。即使未明确提及漏洞名也应激活。',
+      },
+      {
+        title: '✅ 多示例（至少 2 个）',
+        description: '基础漏洞 + 隐蔽/复杂漏洞两个示例，展示输入代码和检测结果格式。',
+      },
+      {
+        title: '✅ Gotchas（陷阱与边缘情况）',
+        description: '列出容易被忽略或误判的情况：框架隐藏漏洞、看似安全的危险模式、常见误报。',
       },
       {
         title: '✅ 简洁至上（<500行）',
         description: '只添加 Agent 不知道的内容。用指令而非散文："Always use X" 不是 "The X API is recommended."',
       },
-      {
-        title: '✅ 提供具体示例',
-        description: '展示输入/输出范例，Agent 能从示例中学习预期格式比长段落解释更有效。',
-      },
-      {
-        title: '✅ 描述目标，不预设步骤',
-        description: '易出错操作要具体步骤；多种方法有效时可给出目标而非路径。',
-      },
     ],
     mistakes: [
       {
-        wrong: 'Description 太模糊',
-        wrongCode: '"Helps with security"',
-        right: '具体明确，包含触发条件',
-        rightCode: '"检测 SQL 注入漏洞。当审计 SQL、数据库注入时触发"',
+        wrong: '缺少角色定位',
+        wrongCode: '直接开始 ## 检测目标',
+        right: '开头定义专家角色',
+        rightCode: '> 你是一个资深安全工程师，专注于 SQL 注入分析...',
       },
       {
-        wrong: '过度预设步骤',
-        wrongCode: '"Step 1: Read file. Step 2: Parse JSON."',
-        right: '描述目标，让 Agent 决定路径',
-        rightCode: '"Extract and validate user data from JSON"',
+        wrong: 'Description 太模糊',
+        wrongCode: '"Helps with security"',
+        right: 'Use when 模式 + 隐式触发',
+        rightCode: '"检测 SQL 注入。Use when 审计 SQL、数据库注入。提及 query、input 也激活"',
+      },
+      {
+        wrong: '只有一个示例',
+        wrongCode: '只展示基础拼接注入',
+        right: '基础 + 隐蔽两个示例',
+        rightCode: '示例 1：基础注入 + 示例 2：ORM raw 方法注入',
+      },
+      {
+        wrong: '缺少陷阱章节',
+        wrongCode: '不列出边缘情况',
+        right: 'Gotchas 章节',
+        rightCode: '## 陷阱与边缘情况：ORM raw 风险、预处理语句动态列名...',
       },
     ],
     sections: [
-      { name: '# Skill 名称' },
+      { name: '> Role Framing（角色定位）', highlight: true },
+      { name: '## 输入格式' },
       { name: '## 检测目标' },
       { name: '## 检查要点' },
-      { name: '## 示例', highlight: true },
+      { name: '## 示例（重要！）', highlight: true },
+      { name: '## 陷阱与边缘情况', highlight: true },
       { name: '## CWE 编号' },
       { name: '## 工具要求' },
     ],

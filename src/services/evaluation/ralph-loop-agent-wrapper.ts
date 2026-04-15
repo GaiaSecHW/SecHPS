@@ -282,13 +282,16 @@ export class RalphLoopAgent {
             onToolCall: callbacks.onToolCall,
             onToolResult: callbacks.onToolResult,
             onUsage: (usage) => {
-              // 捕获每次迭代的 token 使用量
+              // 累加每次 API 调用的 token 使用量（包括主任务和子任务）
               iterationUsage = {
-                inputTokens: usage.inputTokens || 0,
-                outputTokens: usage.outputTokens || 0,
-                totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
+                inputTokens: iterationUsage.inputTokens + (usage.inputTokens || 0),
+                outputTokens: iterationUsage.outputTokens + (usage.outputTokens || 0),
+                totalTokens: iterationUsage.totalTokens + (usage.inputTokens || 0) + (usage.outputTokens || 0),
               };
-              console.log(`[Ralph Loop] 迭代 ${iteration} Token 使用量:`, iterationUsage);
+              console.log(`[Ralph Loop] 迭代 ${iteration} 累计 Token:`, {
+                本次: { input: usage.inputTokens, output: usage.outputTokens },
+                累计: iterationUsage,
+              });
               
               // 传递给上层回调
               callbacks.onUsage?.(usage);

@@ -79,9 +79,27 @@ export type CostRates = {
 };
 
 /**
- * 常见模型定价
+ * 常见模型定价（人民币/百万Token）
  */
 const MODEL_PRICING: Record<string, CostRates> = {
+  // 公司自部署模型（人民币定价）
+  'zai-org/GLM-5': {
+    inputCostPerMillionTokens: 6,   // 输入：6元/百万Token
+    outputCostPerMillionTokens: 22, // 输出：22元/百万Token
+  },
+  'THUDM/GLM-4': {
+    inputCostPerMillionTokens: 6,
+    outputCostPerMillionTokens: 22,
+  },
+  'glm-5': {
+    inputCostPerMillionTokens: 6,
+    outputCostPerMillionTokens: 22,
+  },
+  'glm-4': {
+    inputCostPerMillionTokens: 6,
+    outputCostPerMillionTokens: 22,
+  },
+  // Anthropic Claude（美元定价，仅供参考）
   'anthropic/claude-3.5-sonnet': {
     inputCostPerMillionTokens: 3.0,
     outputCostPerMillionTokens: 15.0,
@@ -94,6 +112,7 @@ const MODEL_PRICING: Record<string, CostRates> = {
     inputCostPerMillionTokens: 5.0,
     outputCostPerMillionTokens: 25.0,
   },
+  // OpenAI GPT（美元定价，仅供参考）
   'openai/gpt-4o': {
     inputCostPerMillionTokens: 2.5,
     outputCostPerMillionTokens: 10.0,
@@ -102,16 +121,6 @@ const MODEL_PRICING: Record<string, CostRates> = {
     inputCostPerMillionTokens: 0.15,
     outputCostPerMillionTokens: 0.6,
   },
-  // GLM 系列
-  'zai-org/GLM-5': {
-    inputCostPerMillionTokens: 0.25,
-    outputCostPerMillionTokens: 1.0,
-  },
-  'THUDM/GLM-4': {
-    inputCostPerMillionTokens: 0.25,
-    outputCostPerMillionTokens: 1.0,
-  },
-  // OpenAI 兼容格式的模型
   'gpt-4o': {
     inputCostPerMillionTokens: 2.5,
     outputCostPerMillionTokens: 10.0,
@@ -134,18 +143,18 @@ export function getModelPricing(model: string): CostRates | undefined {
 }
 
 /**
- * 获取模型定价，如果不存在则返回默认值
+ * 获取模型定价，如果不存在则返回默认值（人民币定价）
  */
 export function getModelPricingOrDefault(model: string): CostRates {
   const pricing = MODEL_PRICING[model];
   if (pricing) {
     return pricing;
   }
-  // 对于未知模型，使用默认定价（GPT-4o 级别）
-  console.warn(`[CostRates] 未知模型 "${model}"，使用默认定价`);
+  // 对于未知模型，使用默认人民币定价
+  console.log(`[CostRates] 模型 "${model}" 未在定价表中，使用默认定价（人民币）`);
   return {
-    inputCostPerMillionTokens: 2.5,
-    outputCostPerMillionTokens: 10.0,
+    inputCostPerMillionTokens: 6,   // 输入：6元/百万Token
+    outputCostPerMillionTokens: 22, // 输出：22元/百万Token
   };
 }
 
