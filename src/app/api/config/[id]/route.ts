@@ -3,6 +3,26 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 
+// Validate JSON string field
+function validateJsonField(value: string | null | undefined, fieldName: string): { valid: boolean; error?: string } {
+  if (!value) return { valid: true }; // null/undefined allowed
+  try {
+    JSON.parse(value);
+    return { valid: true };
+  } catch {
+    return { valid: false, error: `${fieldName} 格式无效，必须是合法的 JSON` };
+  }
+}
+
+// Validate JSON object field (already parsed)
+function validateJsonObject(value: unknown, fieldName: string): { valid: boolean; error?: string } {
+  if (value === undefined || value === null) return { valid: true };
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return { valid: false, error: `${fieldName} 格式无效，必须是 JSON 对象` };
+  }
+  return { valid: true };
+}
+
 // PATCH /api/config/[id] - Update a config
 export async function PATCH(
   request: Request,
@@ -64,6 +84,34 @@ export async function PATCH(
           { error: '并发限制必须在 1-10 之间' },
           { status: 400 }
         );
+      }
+    }
+
+    // Validate JSON object fields
+    const jsonObjectFields = [
+      { value: mcpServers, name: 'mcpServers' },
+      { value: keybinds, name: 'keybinds' },
+    ];
+    for (const field of jsonObjectFields) {
+      if (field.value !== undefined) {
+        const validation = validateJsonObject(field.value, field.name);
+        if (!validation.valid) {
+          return NextResponse.json({ error: validation.error }, { status: 400 });
+        }
+      }
+    }
+
+    // Validate JSON string fields
+    const jsonStringFields = [
+      { value: workflowConfig, name: 'workflowConfig' },
+      { value: defaultToolPermissions, name: 'defaultToolPermissions' },
+    ];
+    for (const field of jsonStringFields) {
+      if (field.value !== undefined) {
+        const validation = validateJsonField(field.value, field.name);
+        if (!validation.valid) {
+          return NextResponse.json({ error: validation.error }, { status: 400 });
+        }
       }
     }
 

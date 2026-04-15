@@ -38,13 +38,21 @@ function getJwtSecret(): string {
 
 const JWT_SECRET = getJwtSecret();
 
-const JWT_EXPIRES_IN = '7d';
+// Token 配置
+const JWT_EXPIRES_IN = '7d'; // Access Token 有效期 7 天
+const REFRESH_TOKEN_EXPIRES_IN = '30d'; // Refresh Token 有效期 30 天
 
 export interface JWTPayload {
   userId: string;
   email: string;
   roles: string[];
   permissions: string[];
+}
+
+export interface RefreshTokenPayload {
+  userId: string;
+  tokenId: string; // 唯一标识，用于撤销
+  type: 'refresh';
 }
 
 // 密码哈希
@@ -85,6 +93,54 @@ export function verifyToken(token: string): JWTPayload | null {
       } else {
         console.warn('[Auth] Token验证失败:', error.message);
       }
+    }
+    return null;
+  }
+}
+
+// 生成 Refresh Token
+export function generateRefreshToken(userId: string): string {
+  const tokenId = require('crypto').randomUUID();
+  const payload: RefreshTokenPayload = {
+    userId,
+    tokenId,
+    type: 'refresh',
+  };
+
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: REFRESH_TOKEN_EXPIRES_IN,
+  });
+}
+
+// 验证 Refresh Token
+export function verifyRefreshToken(token: string): RefreshTokenPayload | null {
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as RefreshTokenPayload;
+    if (payload.type !== 'refresh') {
+      return null;
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof Error) {
+      if (error.name === 'TokenExpiredError') {
+        console.warn('[Auth] Refresh Token已过期');
+      } else if (error.name === 'JsonWebTokenError') {
+        console.warn('[Auth] Refresh Token签名无效:', error.message);
+      }
+    }
+    return null;
+  }
+}
+
+// 验证 Token（允许过期，用于刷新）
+export function verifyTokenAllowExpired(token: string): JWTPayload | null {
+  try {
+    return jwt.verify(token, JWT_SECRET) as JWTPayload;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'TokenExpiredError') {
+      // Token 过期但签名有效，解码返回 payload
+      const decoded = jwt.decode(token) as JWTPayload | null;
+      return decoded;
     }
     return null;
   }
@@ -152,3 +208,35 @@ export {
   hasRole,
   hasAnyRole,
 } from '@/lib/permissions';
+
+// Cookie 配置常量
+export const COOKIE_CONFIG = {
+  ACCESS_TOKEN: {
+    name: 'access_token',
+    maxAge: 7 * 24 * 60 * 60, // 7 天（秒）
+  },
+  REFRESH_TOKEN: {
+    name: 'refresh_token',
+    maxAge: 30 * 24 * 60 * 60, // 30 天（秒）
+  },
+};
+
+// 生成 HttpOnly Cookie 设置字符串
+export function generateCookieHeader(
+  name: string,
+  value: string,
+  maxAge: number
+): string {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? 'Secure;' : '';
+  
+  return `${name}=${value}; Path=/; HttpOnly; ${secureFlag} SameSite=Strict; Max-Age=${maxAge}`;
+}
+
+// 生成清除 Cookie 的设置字符串
+export function generateClearCookieHeader(name: string): string {
+  const isProduction = process.env.NODE_ENV === 'production';
+  const secureFlag = isProduction ? 'Secure;' : '';
+  
+  return `${name}=; Path=/; HttpOnly; ${secureFlag} SameSite=Strict; Max-Age=0`;
+}

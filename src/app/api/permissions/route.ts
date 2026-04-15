@@ -93,6 +93,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // 记录审计日志
+    prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'permission_create',
+        resource: permission.id,
+        details: JSON.stringify({ name: permission.name, module, action }),
+      },
+    }).catch(err => console.error('记录审计日志失败:', err));
+
     return NextResponse.json({ permission }, { status: 201 });
   } catch (error) {
     console.error('Create permission error:', error);

@@ -204,6 +204,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // 记录审计日志
+    prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'skill_create',
+        resource: skill.id,
+        details: JSON.stringify({ name: skill.name, displayName, category, isPublic }),
+      },
+    }).catch(err => console.error('记录审计日志失败:', err));
+
     // 双写：同步保存到磁盘
     getSkillOutputTemplate().then(template => {
       saveSkillToDisk(skill, template).catch(err => {

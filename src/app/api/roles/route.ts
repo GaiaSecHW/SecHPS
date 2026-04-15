@@ -131,6 +131,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // 记录审计日志
+    prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'role_create',
+        resource: role.id,
+        details: JSON.stringify({ name: role.name, description }),
+      },
+    }).catch(err => console.error('记录审计日志失败:', err));
+
     return NextResponse.json({ role }, { status: 201 });
   } catch (error) {
     console.error('Create role error:', error);

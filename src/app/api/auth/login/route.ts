@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyPassword, generateToken, getUserWithPermissions } from '@/lib/auth';
+import {
+  verifyPassword,
+  generateToken,
+  generateRefreshToken,
+  getUserWithPermissions,
+  generateCookieHeader,
+  COOKIE_CONFIG,
+} from '@/lib/auth';
 import { ROLES } from '@/types/permissions';
 import { auditLogAuth } from '@/lib/audit/logger';
 import { invalidateUserCaches } from '@/lib/cache';
@@ -65,16 +72,32 @@ export async function POST(request: Request) {
 
     // 生成 JWT Token
     const token = generateToken(user, roles, permissions);
+    
+    // 生成 Refresh Token
+    const refreshToken = generateRefreshToken(user.id);
 
     // 记录审计日志
     await auditLogAuth('login', user.id, request, {
       metadata: { method: 'username_password' },
     });
 
+    // 设置 HttpOnly Cookie
+    const accessTokenCookie = generateCookieHeader(
+      COOKIE_CONFIG.ACCESS_TOKEN.name,
+      token,
+      COOKIE_CONFIG.ACCESS_TOKEN.maxAge
+    );
+    const refreshTokenCookie = generateCookieHeader(
+      COOKIE_CONFIG.REFRESH_TOKEN.name,
+      refreshToken,
+      COOKIE_CONFIG.REFRESH_TOKEN.maxAge
+    );
+
     return NextResponse.json(
       {
         message: '登录成功',
         token,
+        refreshToken, // 可选：返回给前端用于 localStorage 备份
         user: {
           id: user.id,
           email: user.email,
@@ -85,7 +108,12 @@ export async function POST(request: Request) {
           permissions: permissions,
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          'Set-Cookie': `${accessTokenCookie}, ${refreshTokenCookie}`,
+        },
+      }
     );
   } catch (error) {
     console.error('Login error:', error);

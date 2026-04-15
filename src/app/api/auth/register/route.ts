@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { hashPassword } from '@/lib/auth';
+import {
+  hashPassword,
+  generateToken,
+  generateRefreshToken,
+  getUserWithPermissions,
+  generateCookieHeader,
+  COOKIE_CONFIG,
+} from '@/lib/auth';
 import { ROLES, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from '@/types/permissions';
 import type { Permission } from '@prisma/client';
 
@@ -79,17 +86,49 @@ export async function POST(request: Request) {
       },
     });
 
+    // 获取用户权限
+    const userWithPerms = await getUserWithPermissions(user.id);
+    const roles = userWithPerms?.roles || [];
+    const permissions = userWithPerms?.permissions || [];
+
+    // 生成 JWT Token（注册后自动登录）
+    const token = generateToken(user, roles, permissions);
+    
+    // 生成 Refresh Token
+    const refreshToken = generateRefreshToken(user.id);
+
+    // 设置 HttpOnly Cookie
+    const accessTokenCookie = generateCookieHeader(
+      COOKIE_CONFIG.ACCESS_TOKEN.name,
+      token,
+      COOKIE_CONFIG.ACCESS_TOKEN.maxAge
+    );
+    const refreshTokenCookie = generateCookieHeader(
+      COOKIE_CONFIG.REFRESH_TOKEN.name,
+      refreshToken,
+      COOKIE_CONFIG.REFRESH_TOKEN.maxAge
+    );
+
     return NextResponse.json(
       {
         message: '注册成功',
+        token,
+        refreshToken, // 可选：返回给前端用于 localStorage 备份
         user: {
           id: user.id,
           email: user.email,
           username: user.username,
           name: user.name,
+          roles: roles.map(r => r.name),
+          permissions: permissions,
         },
       },
-      { status: 201 }
+      {
+        status: 201,
+        headers: {
+          'Set-Cookie': `${accessTokenCookie}, ${refreshTokenCookie}`,
+        },
+      }
     );
   } catch (error) {
     console.error('Registration error:', error);

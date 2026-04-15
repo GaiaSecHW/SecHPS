@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { invalidateUserCaches } from '@/lib/cache';
 
 // 为用户分配角色
 export async function POST(
@@ -51,21 +52,27 @@ export async function POST(
       );
     }
 
-    // 删除现有角色分配
+    // 使用事务保证角色分配原子性
     const { id } = await params;
-    await prisma.userRole.deleteMany({
-      where: { userId: id },
+    await prisma.$transaction(async (tx) => {
+      // 删除现有角色分配
+      await tx.userRole.deleteMany({
+        where: { userId: id },
+      });
+
+      // 分配新角色
+      if (roleIds.length > 0) {
+        await tx.userRole.createMany({
+          data: roleIds.map((roleId) => ({
+            userId: id,
+            roleId,
+          })),
+        });
+      }
     });
 
-    // 分配新角色
-    for (const roleId of roleIds) {
-      await prisma.userRole.create({
-        data: {
-          userId: id,
-          roleId,
-        },
-      });
-    }
+    // 清除用户缓存，确保权限实时更新
+    invalidateUserCaches(id);
 
     // 记录审计日志
     await prisma.auditLog.create({

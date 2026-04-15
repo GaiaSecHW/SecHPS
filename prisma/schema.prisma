@@ -35,6 +35,7 @@ model User {
   skills         Skill[]  // 用户创建的 Skills
   skillPredictions SkillPrediction[] // Skill 预测记录
   skillPredictionTasks SkillPredictionTask[] // Skill 预测任务
+  modelConfigs   ModelConfig[] // 用户创建的模型配置
  
   @@index([email])
   @@index([username])
@@ -70,7 +71,7 @@ model Permission {
   // 关系
   roles       Role[]
 
-  @@unique([module, action, resource])
+  @@unique([module, action])  // resource 可为 null，SQLite 允许多个 NULL，故移除
   @@index([module])
 }
 
@@ -491,6 +492,7 @@ model WorkflowShare {
 // Claude Code Router - 模型配置
 model ModelConfig {
   id           String   @id @default(uuid())
+  userId       String?  // 创建者用户ID（null = 系统级模型，由管理员管理）
   name         String   // 提供商名称（如 "internal-model" 或 "claude"）
   providerType String   @default("openai") // 代理类型：claude 或 openai
   apiBaseUrl   String   // API 地址（Claude API 或内部大模型）
@@ -499,11 +501,17 @@ model ModelConfig {
   routeType    String?  // 路由类型：default, think, background, longContext, webSearch（仅 OpenAI 类型需要）
   isActive     Boolean  @default(true)
   isDefault    Boolean  @default(false)  // 是否为默认模型
+  isPublic     Boolean  @default(false)  // 是否公开（公开的模型其他用户可以选择使用）
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // 关系
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([isActive])
   @@index([isDefault])
+  @@index([isPublic])
   @@index([providerType])
   @@index([routeType])
 }

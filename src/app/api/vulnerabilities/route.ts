@@ -160,6 +160,16 @@ export async function POST(request: Request) {
       },
     });
 
+    // 记录审计日志
+    prisma.auditLog.create({
+      data: {
+        userId: payload.userId,
+        action: 'vulnerability_create',
+        resource: vulnerability.id,
+        details: JSON.stringify({ title: vulnerability.title, type, severity, projectId }),
+      },
+    }).catch(err => console.error('记录审计日志失败:', err));
+
     return NextResponse.json({ vulnerability }, { status: 201 });
   } catch (error) {
     console.error('创建漏洞错误:', error);

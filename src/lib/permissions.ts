@@ -40,9 +40,13 @@ export function hasAnyRole(userRoles: string[], requiredRoles: string[]): boolea
 }
 
 /**
- * 从 JWT token 解析用户权限
- * 注意：这只是一个简单的解码，不验证签名
- * 真正的权限验证应该在服务端进行
+ * 从 JWT token 解析用户权限（仅用于 UI 显示）
+ *
+ * ⚠️ 安全警告：
+ * - 此函数使用 atob 解码，不验证签名
+ * - 仅用于前端 UI 显示，不用于权限判断
+ * - 所有权限判断必须在服务端进行
+ * - 服务端 API 使用 verifyToken() 验证签名
  */
 export function parseTokenPermissions(token: string): string[] {
   try {
@@ -54,7 +58,13 @@ export function parseTokenPermissions(token: string): string[] {
 }
 
 /**
- * 从 JWT token 解析用户角色
+ * 从 JWT token 解析用户角色（仅用于 UI 显示）
+ *
+ * ⚠️ 安全警告：
+ * - 此函数使用 atob 解码，不验证签名
+ * - 仅用于前端 UI 显示，不用于权限判断
+ * - 所有权限判断必须在服务端进行
+ * - 服务端 API 使用 verifyToken() 验证签名
  */
 export function parseTokenRoles(token: string): string[] {
   try {

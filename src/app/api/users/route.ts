@@ -170,58 +170,62 @@ export async function POST(request: Request) {
     const { hashPassword } = await import('@/lib/auth');
     const passwordHash = await hashPassword(password);
 
-    // 创建用户
-    const user = await prisma.user.create({
-      data: {
-        email,
-        username,
-        passwordHash,
-        name: name || username,
-      },
-    });
+    // 使用事务创建用户、分配角色、创建配置（保证原子性）
+    const user = await prisma.$transaction(async (tx) => {
+      // 创建用户
+      const newUser = await tx.user.create({
+        data: {
+          email,
+          username,
+          passwordHash,
+          name: name || username,
+        },
+      });
 
-    // 分配角色
-    if (roles && roles.length > 0) {
-      for (const roleName of roles) {
-        const role = await prisma.role.findUnique({
-          where: { name: roleName },
+      // 分配角色
+      if (roles && roles.length > 0) {
+        // 获取所有角色
+        const roleRecords = await tx.role.findMany({
+          where: { name: { in: roles } },
         });
 
-        if (role) {
-          await prisma.userRole.create({
-            data: {
-              userId: user.id,
+        if (roleRecords.length > 0) {
+          await tx.userRole.createMany({
+            data: roleRecords.map((role) => ({
+              userId: newUser.id,
               roleId: role.id,
+            })),
+          });
+        }
+      } else {
+        // 分配默认角色
+        const defaultRole = await tx.role.findUnique({
+          where: { name: 'user' },
+        });
+
+        if (defaultRole) {
+          await tx.userRole.create({
+            data: {
+              userId: newUser.id,
+              roleId: defaultRole.id,
             },
           });
         }
       }
-    } else {
-      // 分配默认角色
-      const defaultRole = await prisma.role.findUnique({
-        where: { name: 'user' },
+
+      // 创建默认 AI4WEB 配置
+      await tx.opencodeConfig.create({
+        data: {
+          userId: newUser.id,
+          name: 'Default',
+          baseURL: 'http://localhost:54321',
+        },
       });
 
-      if (defaultRole) {
-        await prisma.userRole.create({
-          data: {
-            userId: user.id,
-            roleId: defaultRole.id,
-          },
-        });
-      }
-    }
-
-    // 创建默认 AI4WEB 配置
-    await prisma.opencodeConfig.create({
-      data: {
-        userId: user.id,
-        name: 'Default',
-        baseURL: 'http://localhost:54321',
-      },
+      return newUser;
     });
 
-    // 记录审计日志
+    // 记录审计日志（放在事务外，避免事务失败也记录审计）
     await prisma.auditLog.create({
       data: {
         userId: payload.userId,
