@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import { ArrowLeft, CheckCircle2, Save, FolderOpen, Trash2 } from 'lucide-react';
 import IntentStep from './IntentStep';
 import ResearchStep from './ResearchStep';
@@ -247,7 +248,7 @@ export default function SkillCreateWizardPage() {
       savedAt: new Date().toISOString(),
     }));
     
-    alert('草稿已保存！');
+    toast.success('草稿已保存！');
   };
 
   // 加载草稿
@@ -263,7 +264,7 @@ export default function SkillCreateWizardPage() {
       }
     } catch (error) {
       console.error('加载草稿失败:', error);
-      alert('加载草稿失败');
+      toast.error('加载草稿失败');
     }
   };
 
@@ -360,7 +361,7 @@ export default function SkillCreateWizardPage() {
       router.push(`/dashboard/skills/${data.skill.id}`);
     } catch (error) {
       console.error('保存 Skill 失败:', error);
-      alert(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      toast.error(`保存失败: ${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setIsSaving(false);
     }

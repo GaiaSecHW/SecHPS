@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 
 // 获取所有模型配置
 export async function GET(request: Request) {
@@ -16,6 +17,11 @@ export async function GET(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 检查权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.MODEL_READ)) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
     // 获取查询参数
@@ -72,6 +78,11 @@ export async function POST(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 检查权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.MODEL_CREATE)) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
     const body = await request.json();

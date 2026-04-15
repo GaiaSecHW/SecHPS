@@ -167,6 +167,30 @@ export async function POST(request: Request) {
       });
     }
 
+    // 继承全局默认工具权限配置
+    if (config?.defaultToolPermissions) {
+      try {
+        const defaultPermissions = JSON.parse(config.defaultToolPermissions);
+        if (Array.isArray(defaultPermissions) && defaultPermissions.length > 0) {
+          for (const perm of defaultPermissions) {
+            if (perm.toolPattern && perm.permission) {
+              await prisma.toolPermission.create({
+                data: {
+                  projectId: project.id,
+                  toolPattern: perm.toolPattern,
+                  permission: perm.permission,
+                  description: perm.description || `继承全局默认配置`,
+                },
+              });
+            }
+          }
+          console.log('[Project] 已继承默认工具权限:', defaultPermissions.length, '条');
+        }
+      } catch (err) {
+        console.warn('[Project] 继承默认工具权限失败:', err);
+      }
+    }
+
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
     console.error('创建项目错误:', error);

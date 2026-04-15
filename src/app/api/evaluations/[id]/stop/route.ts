@@ -44,16 +44,19 @@ export async function POST(
       console.log(`[Stop Evaluation] 成功中止 Agent: ${id}`);
     } else {
       console.log(`[Stop Evaluation] Agent 不在运行中或已结束: ${id}`);
+      // 即使 agent 不在注册表中，也需要检查数据库状态
     }
 
-    // 更新状态为已取消
+    // 更新状态为已取消（确保在任何情况下都更新）
     const updatedEvaluation = await prisma.evaluationSession.update({
       where: { id },
       data: {
         status: 'cancelled',
         completedAt: new Date(),
+        errorMessage: '用户手动中止',
       },
     });
+    console.log(`[Stop Evaluation] 评估状态已更新为 cancelled: ${id}`);
 
     // 更新项目状态（如果有正在运行的评估）
     await prisma.project.updateMany({
@@ -65,6 +68,33 @@ export async function POST(
         status: 'idle',
       },
     });
+
+    // 记录审计日志
+    try {
+      await prisma.auditLog.create({
+        data: {
+          userId: payload.userId,
+          action: 'evaluation_stop',
+          resource: id,
+          details: JSON.stringify({
+            projectId: evaluation.projectId,
+            reason: '用户手动中止',
+          }),
+        },
+      });
+      console.log(`[Stop Evaluation] 记录审计日志成功: ${id}`);
+    } catch (auditError) {
+      console.error('[Stop Evaluation] 记录审计日志失败:', auditError);
+    }
+
+    // 处理队列 - 中止后释放了并发名额，启动下一个排队评估
+    try {
+      const { processQueue } = await import('@/services/evaluation-queue');
+      processQueue().catch(err => console.error('[Stop Evaluation] 处理队列失败:', err));
+      console.log(`[Stop Evaluation] 触发队列处理`);
+    } catch (queueError) {
+      console.error('[Stop Evaluation] 导入队列服务失败:', queueError);
+    }
 
     return NextResponse.json({
       message: '评估会话已停止',

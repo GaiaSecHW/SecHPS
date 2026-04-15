@@ -136,6 +136,7 @@ export interface RalphLoopAgentResult {
 export class RalphLoopAgent {
   private caller: EnhancedEvaluationCaller;
   private config: RalphLoopAgentConfig;
+  private aborted: boolean = false;  // 中止标志
 
   constructor(config: RalphLoopAgentConfig) {
     this.config = config;
@@ -238,6 +239,14 @@ export class RalphLoopAgent {
 
     // 主循环
     while (true) {
+      // 检查是否已中止
+      if (this.isAborted()) {
+        console.log('[Ralph Loop] 检测到中止信号，停止循环');
+        completionReason = 'aborted';
+        reason = '用户中止';
+        break;
+      }
+
       iteration++;
       const startTime = Date.now();
 
@@ -259,6 +268,11 @@ export class RalphLoopAgent {
       const result = await new Promise<SimpleGenerateTextResult>(
         (resolve, reject) => {
           let fullText = '';
+          let iterationUsage: { inputTokens: number; outputTokens: number; totalTokens: number } = {
+            inputTokens: 0,
+            outputTokens: 0,
+            totalTokens: 0,
+          };
 
           const wrappedCallbacks: EnhancedEvaluationCallbacks = {
             onChunk: (text) => {
@@ -267,15 +281,23 @@ export class RalphLoopAgent {
             },
             onToolCall: callbacks.onToolCall,
             onToolResult: callbacks.onToolResult,
+            onUsage: (usage) => {
+              // 捕获每次迭代的 token 使用量
+              iterationUsage = {
+                inputTokens: usage.inputTokens || 0,
+                outputTokens: usage.outputTokens || 0,
+                totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
+              };
+              console.log(`[Ralph Loop] 迭代 ${iteration} Token 使用量:`, iterationUsage);
+              
+              // 传递给上层回调
+              callbacks.onUsage?.(usage);
+            },
             onComplete: async (fullResponse) => {
               resolve({
                 text: fullResponse,
                 steps: [],
-                usage: {
-                  inputTokens: 0,
-                  outputTokens: 0,
-                  totalTokens: 0,
-                },
+                usage: iterationUsage,  // 使用真实的 usage 数据
                 response: {
                   messages: [
                     {
@@ -332,6 +354,14 @@ export class RalphLoopAgent {
       );
 
       allResults.push(result);
+
+      // 迭代结束后再次检查中止状态
+      if (this.isAborted()) {
+        console.log('[Ralph Loop] 迭代结束后检测到中止信号');
+        completionReason = 'aborted';
+        reason = '用户中止';
+        break;
+      }
 
       // 更新总 token 使用量
       const iterationUsage = aggregateStepUsage(result);
@@ -428,7 +458,16 @@ export class RalphLoopAgent {
    * 中止评估
    */
   abort(): void {
+    console.log('[Ralph Loop] 收到中止请求，设置中止标志');
+    this.aborted = true;
     this.caller.abort();
+  }
+
+  /**
+   * 检查是否已中止
+   */
+  isAborted(): boolean {
+    return this.aborted || this.caller.isAborted();
   }
 }
 

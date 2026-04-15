@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import {
   Plus, MessageSquare, Trash2, X, RefreshCw, FolderOpen,
   ExternalLink, Terminal, Play, ChevronDown, ChevronRight, Search, Zap
@@ -108,7 +109,7 @@ export default function ClaudePage() {
   // 添加项目
   const addProject = async () => {
     if (!newProjectPath.trim()) {
-      alert('请输入项目路径');
+      toast.error('请输入项目路径');
       return;
     }
 
@@ -125,15 +126,13 @@ export default function ClaudePage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '添加失败');
+        toast.error(data.error || '添加失败');
         return;
       }
 
-      setShowCreateModal(false);
-      setNewProjectPath('');
       fetchProjects(false);
     } catch (err) {
-      alert('网络错误');
+      toast.error('添加出错');
     }
   };
 
@@ -149,7 +148,7 @@ export default function ClaudePage() {
       });
       fetchProjects(false);
     } catch (err) {
-      alert('删除失败');
+      toast.error('删除失败');
     }
   };
 

@@ -2,7 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { CodeAnalyzer } from '@/lib/code-analyzer';
 
 // POST /api/code/analyze - 分析项目代码
@@ -18,6 +19,10 @@ export async function POST(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    if (!hasPermission(payload.permissions, PERMISSIONS.CODE_ANALYZE)) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
     const body = await request.json();

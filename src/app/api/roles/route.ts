@@ -29,15 +29,25 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const search = searchParams.get('search') || undefined;
 
     // 获取分页参数
     const { skip, take, page: currentPage, limit: currentLimit } = getOffsetPagination({ page, limit });
 
+    // 构建 where 条件
+    const where = search ? {
+      OR: [
+        { name: { contains: search } },
+        { description: { contains: search } },
+      ],
+    } : {};
+
     // 获取总数
-    const total = await prisma.role.count();
+    const total = await prisma.role.count({ where });
 
     // 获取角色列表
     const roles = await prisma.role.findMany({
+      where,
       skip,
       take,
       include: {

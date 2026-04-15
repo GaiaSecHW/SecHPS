@@ -893,6 +893,26 @@ export default function SkillDetailPage() {
                 </p>
               </div>
               <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">所属技术栈</h3>
+                {skill.techStack ? (() => {
+                  try {
+                    const techStacks = JSON.parse(skill.techStack);
+                    if (techStacks.length > 0) {
+                      return (
+                        <div className="flex flex-wrap gap-1">
+                          {techStacks.map((ts: string) => (
+                            <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                              {ts}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    }
+                  } catch {}
+                  return <p className="text-gray-900">无</p>;
+                })() : <p className="text-gray-900">无</p>}
+              </div>
+              <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">CWE</h3>
                 <p className="text-gray-900">{skill.cwe || '无'}</p>
               </div>

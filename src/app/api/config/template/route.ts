@@ -3,7 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 
 export async function GET(request: Request) {
   try {
@@ -17,6 +18,10 @@ export async function GET(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
     // 获取当前用户的激活配置

@@ -15,6 +15,7 @@ import {
   TestTube,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 
 interface McpServer {
@@ -46,6 +47,7 @@ export default function McpServersPage() {
     message: string;
     tools?: string[];
   } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -64,7 +66,7 @@ export default function McpServersPage() {
 
   useEffect(() => {
     fetchServers();
-  }, [page]);
+  }, [page, searchQuery]);
 
   const fetchServers = async () => {
     setLoading(true);
@@ -72,7 +74,13 @@ export default function McpServersPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/mcp-servers?page=${page}&limit=${pageSize}`, {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(pageSize),
+      });
+      if (searchQuery) params.append('search', searchQuery);
+      
+      const response = await fetch(`/api/mcp-servers?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -312,6 +320,23 @@ export default function McpServersPage() {
           <Plus size={20} />
           <span>添加 MCP 服务器</span>
         </button>
+      </div>
+
+      {/* Search */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input
+            type="text"
+            placeholder="搜索 MCP 服务器名称..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+        </div>
       </div>
 
       {/* Error Message */}

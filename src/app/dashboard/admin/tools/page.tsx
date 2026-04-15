@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import toast from 'react-hot-toast';
 import {
   Cog,
   Plus,
@@ -104,7 +105,7 @@ export default function ToolsPage() {
 
       fetchTools();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '删除失败');
+      toast.error(err instanceof Error ? err.message : '删除失败');
     }
   };
 

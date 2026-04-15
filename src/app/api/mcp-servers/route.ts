@@ -31,24 +31,27 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const search = searchParams.get('search') || undefined;
 
     // 获取分页参数
     const { skip, take } = getOffsetPagination({ page, limit });
 
+    // 构建 where 条件
+    const baseWhere = {
+      userId: null,
+      projectId: null,
+    };
+    const where = search ? {
+      ...baseWhere,
+      name: { contains: search },
+    } : baseWhere;
+
     // 获取总数
-    const total = await prisma.mcpServerConfig.count({
-      where: {
-        userId: null,
-        projectId: null,
-      },
-    });
+    const total = await prisma.mcpServerConfig.count({ where });
 
     // 获取全局 MCP 配置（userId 和 projectId 都为 null）
     const mcpServers = await prisma.mcpServerConfig.findMany({
-      where: {
-        userId: null,
-        projectId: null,
-      },
+      where,
       orderBy: { createdAt: 'desc' },
       skip,
       take,

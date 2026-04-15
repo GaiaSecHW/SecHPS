@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, use } from 'react';
+import { Suspense, useEffect, useState, useRef, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Copy,
@@ -62,7 +62,38 @@ function getContentPreview(content: any): string {
   return JSON.stringify(content).substring(0, 50) + '...';
 }
 
+// 辅助函数：格式化 Token 数量
+function formatTokenNumber(num: number): string {
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(2)}M`;
+  }
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}K`;
+  }
+  return num.toString();
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+    </div>
+  );
+}
+
 export default function SessionDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <SessionDetailContent params={params} />
+    </Suspense>
+  );
+}
+
+function SessionDetailContent({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -91,7 +122,7 @@ export default function SessionDetailPage({
   const [isTodosExpanded, setIsTodosExpanded] = useState(true);
   const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
-  const [isChildrenExpanded, setIsChildrenExpanded] = useState(true);
+  const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
@@ -100,6 +131,9 @@ export default function SessionDetailPage({
   const [expandedChildMessages, setExpandedChildMessages] = useState<Set<string>>(new Set());
   const [injectedExperiences, setInjectedExperiences] = useState<{ id: string; title: string; errorCategory: string; hitCount: number }[]>([]);
   const [experienceInjectionChecked, setExperienceInjectionChecked] = useState(false);
+
+  // 用 ref 持久保存子任务的 startedAt，防止轮询覆盖
+  const childStartedAtRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
     if (evaluationId) {
@@ -436,7 +470,24 @@ export default function SessionDetailPage({
 
       const data = await response.json();
       console.log('[Children] Received children sessions:', data.children?.length || 0, data.children);
-      setChildrenSessions(data.children || []);
+      
+      // 合并新旧数据，保留已有的 startedAt（防止轮询覆盖）
+      setChildrenSessions(prev => {
+        const newChildren = data.children || [];
+        return newChildren.map((newChild: any) => {
+          // 优先使用 ref 中保存的 startedAt，然后是旧 state，最后是新数据
+          const savedStartedAt = childStartedAtRef.current[newChild.id];
+          const existingChild = prev.find(c => c.id === newChild.id);
+          
+          if (savedStartedAt) {
+            return { ...newChild, startedAt: savedStartedAt };
+          }
+          if (existingChild?.startedAt && !newChild.startedAt) {
+            return { ...newChild, startedAt: existingChild.startedAt };
+          }
+          return newChild;
+        });
+      });
     } catch (err) {
       console.error('[Children] Error fetching:', err);
     }
@@ -502,10 +553,23 @@ export default function SessionDetailPage({
         id: msg.uuid || msg.id || `child-msg-${index}`,
         role: msg.role || (msg.message?.role) || 'assistant',
         content: msg.content || msg.message?.content || '',
-        createdAt: msg.timestamp || msg.createdAt || new Date().toISOString(),
+        createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
       }));
       
       setChildSessionMessages(formattedMessages);
+      
+      // 如果第一条消息有时间，更新子任务的 startedAt
+      if (formattedMessages.length > 0 && formattedMessages[0].createdAt) {
+        const firstMsgTime = formattedMessages[0].createdAt;
+        // 保存到 ref，防止轮询覆盖
+        childStartedAtRef.current[childId] = firstMsgTime;
+        setChildrenSessions(prev => prev.map(child => 
+          child.id === childId && !child.startedAt 
+            ? { ...child, startedAt: firstMsgTime }
+            : child
+        ));
+        console.log('[Child Messages] Updated startedAt for child:', childId, firstMsgTime);
+      }
     } catch (err) {
       console.error('[Child Messages] Error fetching:', err);
       setChildSessionMessages([]);
@@ -809,6 +873,31 @@ export default function SessionDetailPage({
               {evaluation.providerType || '-'}
             </p>
           </div>
+          {/* Token 消耗信息 */}
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">输入 Token</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.totalInputTokens ? formatTokenNumber(evaluation.totalInputTokens) : '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">输出 Token</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.totalOutputTokens ? formatTokenNumber(evaluation.totalOutputTokens) : '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">总 Token</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.totalTokens ? formatTokenNumber(evaluation.totalTokens) : '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">预估费用</h3>
+            <p className="text-sm text-orange-600 font-medium">
+              {evaluation.estimatedCost ? `$${evaluation.estimatedCost.toFixed(4)}` : '-'}
+            </p>
+          </div>
         </div>
       </div>
       
@@ -987,7 +1076,17 @@ export default function SessionDetailPage({
                 </button>
                 {isChildrenExpanded && (
                   <div className="space-y-2">
-                    {childrenSessions.map((child) => (
+                    {/* 按启动时间排序，从小到大 */}
+                    {[...childrenSessions]
+                      .sort((a, b) => {
+                        if (a.startedAt && b.startedAt) {
+                          return new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
+                        }
+                        if (a.startedAt) return -1;
+                        if (b.startedAt) return 1;
+                        return 0;
+                      })
+                      .map((child) => (
                       <div key={child.id}>
                         <div
                           className={`p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -1031,43 +1130,42 @@ export default function SessionDetailPage({
                                   </span>
                                 )}
                               </div>
-                              <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-0.5">
-                                {child.startedAt && (
-                                  <span className="text-xs text-green-600 flex items-center">
-                                    <Clock size={10} className="mr-1" />
-                                    启动: {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                  </span>
-                                )}
-                                {child.completedAt && (
-                                  <span className="text-xs text-gray-500 flex items-center">
-                                    <CheckCircle2 size={10} className="mr-1" />
-                                    结束: {new Date(child.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                                  </span>
-                                )}
-                                {child.startedAt && child.completedAt && (
-                                  <span className="text-xs text-purple-600">
-                                    耗时: {Math.round((new Date(child.completedAt).getTime() - new Date(child.startedAt).getTime()) / 1000)}s
-                                  </span>
-                                )}
-                                {child.startedAt && !child.completedAt && (
-                                  <span className="text-xs text-orange-500 flex items-center">
-                                    <Loader2 size={10} className="mr-1 animate-spin" />
-                                    运行中
-                                  </span>
-                                )}
-                              </div>
                             </div>
-                            <div className="flex items-center space-x-2 ml-2">
-                              {child.status && (
-                                <span
-                                  className={`text-xs px-2 py-0.5 rounded ${
-                                    child.status === 'active'
-                                      ? 'bg-green-100 text-green-700'
-                                      : 'bg-gray-100 text-gray-600'
-                                  }`}
-                                >
-                                  {child.status}
+                            <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
+                              {child.startedAt && (
+                                <span className="text-xs text-gray-500 flex items-center">
+                                  <Clock size={10} className="mr-1" />
+                                  {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                                 </span>
+                              )}
+                              {child.completedAt && (
+                                <span className="text-xs text-gray-500 flex items-center">
+                                  <CheckCircle2 size={10} className="mr-1" />
+                                  {new Date(child.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {child.startedAt && child.completedAt && (
+                                <span className="text-xs text-purple-600">
+                                  {Math.round((new Date(child.completedAt).getTime() - new Date(child.startedAt).getTime()) / 1000)}s
+                                </span>
+                              )}
+                              {child.completedAt && (
+                                <>
+                                  {child.status === 'active' && (
+                                    <Loader2 size={12} className="text-orange-500 animate-spin" />
+                                  )}
+                                  {child.status && (
+                                    <span
+                                      className={`text-xs px-2 py-0.5 rounded ${
+                                        child.status === 'active'
+                                          ? 'bg-green-100 text-green-700'
+                                          : 'bg-gray-100 text-gray-600'
+                                      }`}
+                                    >
+                                      {child.status}
+                                    </span>
+                                  )}
+                                </>
                               )}
                               <ChevronRight
                                 size={16}
@@ -1431,6 +1529,7 @@ function MessageBubble({
   isSelected: boolean;
 }) {
   const isUser = message.role === 'user';
+  const [isCollapsed, setIsCollapsed] = useState(true); // 默认收缩
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState(false);
@@ -1458,13 +1557,16 @@ function MessageBubble({
   const subtaskParts = parts.filter((p: any) => p.type === 'subtask' || p.type === 'todo');
   const thinkingParts = parts.filter((p: any) => p.type === 'thinking');
 
-  // 合并文本内容用于复制
+  // 合并文本内容用于复制和预览
   const textContent = textParts.map((p: any) => p.text || '').join('\n');
+  
+  // 获取文本预览（前30字符）
+  const textPreview = textContent.substring(0, 30) + (textContent.length > 30 ? '...' : '');
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div
-        className={`max-w-[90%] rounded-lg px-4 py-3 transition-all duration-200 ${
+        className={`max-w-[90%] rounded-lg transition-all duration-200 ${
           isSelected
             ? isUser
               ? 'bg-blue-600 text-white ring-2 ring-blue-400'
@@ -1474,311 +1576,399 @@ function MessageBubble({
             : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
         }`}
       >
-        {/* Header - 根据内容类型动态显示 */}
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex items-center space-x-2 flex-wrap">
-            <span className="text-xs font-medium">{isUser ? '用户' : 'AI 助手'}</span>
-            {/* 工具调用标签 - 合并到标题栏 */}
+        {/* 可点击的标题行（摘要） - 点击展开/收缩 */}
+        <button
+          className={`w-full flex items-center justify-between px-4 py-2 text-left transition-colors ${
+            isCollapsed ? (isUser ? 'hover:bg-blue-600' : 'hover:bg-gray-50') : ''
+          } ${isUser && !isCollapsed ? 'rounded-t-lg' : ''} ${isUser && isCollapsed ? 'rounded-lg' : ''}`}
+          onClick={() => setIsCollapsed(!isCollapsed)}
+        >
+          <div className="flex items-center space-x-2 min-w-0 flex-1 flex-wrap">
+            {/* 角色图标 */}
+            <span className={`text-xs font-medium flex-shrink-0 ${
+              isUser ? 'text-white' : 'text-gray-700'
+            }`}>
+              {isUser ? '👤 用户' : '🤖 AI'}
+            </span>
+            
+            {/* 文本预览 - 仅收缩时显示 */}
+            {isCollapsed && textPreview && (
+              <span className={`text-xs truncate ${
+                isUser ? 'text-blue-100' : 'text-gray-500'
+              }`}>
+                {textPreview}
+              </span>
+            )}
+            
+            {/* 工具调用标签 */}
             {toolUseParts.length > 0 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpandedToolSection(!expandedToolSection);
-                }}
-                className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors cursor-pointer"
-              >
-                🔧 工具调用 ({toolUseParts.length}) {expandedToolSection ? '▲' : '▼'}
-              </button>
+              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+                isUser ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700'
+              }`}>
+                🔧 {toolUseParts.length}
+              </span>
             )}
-            {/* 工具结果标签 - 合并到标题栏 */}
+            
+            {/* 工具结果标签 */}
             {toolResultParts.length > 0 && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpandedResultSection(!expandedResultSection);
-                }}
-                className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors cursor-pointer"
-              >
-                📤 工具结果 ({toolResultParts.length}) {expandedResultSection ? '▲' : '▼'}
-              </button>
+              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+                isUser ? 'bg-blue-300 text-white' : 'bg-gray-200 text-gray-700'
+              }`}>
+                📤 {toolResultParts.length}
+              </span>
             )}
+            
+            {/* 推理标签 */}
             {reasoningParts.length > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-700">
+              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+                isUser ? 'bg-purple-400 text-white' : 'bg-purple-100 text-purple-700'
+              }`}>
                 推理
               </span>
             )}
+            
+            {/* 思考标签 */}
             {thinkingParts.length > 0 && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700">
+              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+                isUser ? 'bg-yellow-400 text-white' : 'bg-yellow-100 text-yellow-700'
+              }`}>
                 思考
               </span>
             )}
-          </div>
-          <div className="flex items-center space-x-2">
-            {message.createdAt && (
-              <span className="text-xs opacity-70">
-                {new Date(message.createdAt).toLocaleTimeString('zh-CN')}
+            
+            {/* 子任务标签 */}
+            {subtaskParts.length > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
+                isUser ? 'bg-green-400 text-white' : 'bg-green-100 text-green-700'
+              }`}>
+                📋 {subtaskParts.length}
               </span>
             )}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCopy();
-              }}
-              className={`text-xs flex items-center space-x-1 ${
-                isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
-              }`}
-              title="复制内容"
-            >
-              <Copy size={14} />
-            </button>
           </div>
-        </div>
-
-        {/* 文本内容 */}
-        {textParts.length > 0 && (
-          <div className="prose prose-sm max-w-none">
-            {textParts.map((part: any, idx: number) => (
-              <ReactMarkdown key={idx}>{part.text || ''}</ReactMarkdown>
-            ))}
+          
+          <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
+            {/* 时间戳 */}
+            {message.createdAt && (
+              <span className={`text-xs ${
+                isUser ? 'text-blue-200' : 'text-gray-400'
+              }`}>
+                {new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+            
+            {/* 展开/收缩指示器 */}
+            <span className={`text-xs ${
+              isUser ? 'text-blue-200' : 'text-gray-400'
+            }`}>
+              {isCollapsed ? '▼' : '▲'}
+            </span>
           </div>
-        )}
+        </button>
 
-        {/* 思考内容 */}
-        {thinkingParts.length > 0 && (
-          <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-            <div 
-              className="text-xs font-medium text-yellow-800 mb-2 flex items-center justify-between cursor-pointer"
-              onClick={() => setExpandedThinking(!expandedThinking)}
-            >
-              <div className="flex items-center">
-                <Info size={14} className="mr-1" />
-                思考过程 ({thinkingParts.length})
-              </div>
-              {expandedThinking ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        {/* 展开的详细内容 */}
+        {!isCollapsed && (
+          <div className="px-4 pb-3 border-t border-gray-100">
+            {/* 工具栏：复制 + 查看详情 */}
+            <div className="flex items-center justify-end space-x-2 mt-2 mb-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCopy();
+                }}
+                className={`text-xs flex items-center space-x-1 ${
+                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
+                }`}
+                title="复制内容"
+              >
+                <Copy size={14} />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClick();
+                }}
+                className={`text-xs flex items-center space-x-1 ${
+                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
+                }`}
+                title="查看详情"
+              >
+                <Info size={14} />
+              </button>
             </div>
-            {expandedThinking && (
-              <div className="text-sm text-yellow-900 whitespace-pre-wrap">
-                {thinkingParts.map((p: any, idx: number) => (
-                  <div key={idx}>{p.thinking || p.text || ''}</div>
+
+            {/* 文本内容 */}
+            {textParts.length > 0 && (
+              <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert text-white' : ''}`}>
+                {textParts.map((part: any, idx: number) => (
+                  <ReactMarkdown key={idx}>{part.text || ''}</ReactMarkdown>
                 ))}
               </div>
             )}
-          </div>
-        )}
 
-        {/* 推理内容 */}
-        {reasoningParts.length > 0 && (
-          <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <div 
-              className="text-xs font-medium text-purple-800 mb-2 flex items-center justify-between cursor-pointer"
-              onClick={() => setExpandedReasoning(!expandedReasoning)}
-            >
-              <div className="flex items-center">
-                <GitBranch size={14} className="mr-1" />
-                推理过程 ({reasoningParts.length})
-              </div>
-              {expandedReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </div>
-            {expandedReasoning && (
-              <div className="text-sm text-purple-900 whitespace-pre-wrap">
-                {reasoningParts.map((p: any, idx: number) => (
-                  <div key={idx}>{p.reasoning || p.text || ''}</div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 子任务 */}
-        {subtaskParts.length > 0 && (
-          <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
-            <div className="text-xs font-medium text-green-800 mb-2 flex items-center">
-              <ListTodo size={14} className="mr-1" />
-              子任务 ({subtaskParts.length})
-            </div>
-            <div className="space-y-2">
-              {subtaskParts.map((subtask: any, idx: number) => (
-                <div key={subtask.id || idx} className="bg-white p-2 rounded border border-green-200">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-gray-900">
-                        {subtask.title || subtask.text || '无标题'}
-                      </p>
-                      {subtask.description && (
-                        <p className="text-xs text-gray-600 mt-1">{subtask.description}</p>
-                      )}
-                      {subtask.content && (
-                        <p className="text-xs text-gray-600 mt-1">{subtask.content}</p>
-                      )}
-                      {/* 时间信息 */}
-                      <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-0.5">
-                        {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && (
-                          <span className="text-xs text-green-600 flex items-center">
-                            <Clock size={10} className="mr-1" />
-                            启动: {new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </span>
-                        )}
-                        {subtask.completedAt && (
-                          <span className="text-xs text-gray-500 flex items-center">
-                            <CheckCircle2 size={10} className="mr-1" />
-                            结束: {new Date(subtask.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                          </span>
-                        )}
-                        {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && subtask.completedAt && (
-                          <span className="text-xs text-purple-600">
-                            耗时: {Math.round((new Date(subtask.completedAt).getTime() - new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).getTime()) / 1000)}s
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2 ml-2">
-                      {subtask.status && (
-                        <span className={`text-xs px-2 py-0.5 rounded ${
-                          subtask.status === 'completed' || subtask.status === 'done'
-                            ? 'bg-green-100 text-green-700'
-                            : subtask.status === 'in_progress'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}>
-                          {subtask.status}
-                        </span>
-                      )}
-                      {subtask.completed && (
-                        <CheckCircle2 size={16} className="text-green-600" />
-                      )}
-                    </div>
+            {/* 思考内容 */}
+            {thinkingParts.length > 0 && (
+              <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
+                <div
+                  className="text-xs font-medium text-yellow-800 mb-2 flex items-center justify-between cursor-pointer"
+                  onClick={() => setExpandedThinking(!expandedThinking)}
+                >
+                  <div className="flex items-center">
+                    <Info size={14} className="mr-1" />
+                    思考过程 ({thinkingParts.length})
                   </div>
-                  {/* 子任务的子任务 */}
-                  {subtask.subtasks && subtask.subtasks.length > 0 && (
-                    <div className="mt-2 pl-4 border-l-2 border-green-300 space-y-1">
-                      {subtask.subtasks.map((child: any, childIdx: number) => (
-                        <div key={child.id || childIdx} className="flex items-center space-x-2 text-xs">
-                          {child.completed ? (
-                            <CheckCircle2 size={12} className="text-green-600" />
-                          ) : (
-                            <Circle size={12} className="text-gray-400" />
+                  {expandedThinking ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </div>
+                {expandedThinking && (
+                  <div className="text-sm text-yellow-900 whitespace-pre-wrap">
+                    {thinkingParts.map((p: any, idx: number) => (
+                      <div key={idx}>{p.thinking || p.text || ''}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 推理内容 */}
+            {reasoningParts.length > 0 && (
+              <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                <div
+                  className="text-xs font-medium text-purple-800 mb-2 flex items-center justify-between cursor-pointer"
+                  onClick={() => setExpandedReasoning(!expandedReasoning)}
+                >
+                  <div className="flex items-center">
+                    <GitBranch size={14} className="mr-1" />
+                    推理过程 ({reasoningParts.length})
+                  </div>
+                  {expandedReasoning ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </div>
+                {expandedReasoning && (
+                  <div className="text-sm text-purple-900 whitespace-pre-wrap">
+                    {reasoningParts.map((p: any, idx: number) => (
+                      <div key={idx}>{p.reasoning || p.text || ''}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 子任务 */}
+            {subtaskParts.length > 0 && (
+              <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
+                <div className="text-xs font-medium text-green-800 mb-2 flex items-center">
+                  <ListTodo size={14} className="mr-1" />
+                  子任务 ({subtaskParts.length})
+                </div>
+                <div className="space-y-2">
+                  {subtaskParts.map((subtask: any, idx: number) => (
+                    <div key={subtask.id || idx} className="bg-white p-2 rounded border border-green-200">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {subtask.title || subtask.text || '无标题'}
+                          </p>
+                          {subtask.description && (
+                            <p className="text-xs text-gray-600 mt-1">{subtask.description}</p>
                           )}
-                          <span className={child.completed ? 'text-gray-500 line-through' : 'text-gray-700'}>
-                            {child.title || child.content || child.text || '未命名'}
-                          </span>
+                          {subtask.content && (
+                            <p className="text-xs text-gray-600 mt-1">{subtask.content}</p>
+                          )}
+                          {/* 时间信息 */}
+                          <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-0.5">
+                            {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && (
+                              <span className="text-xs text-green-600 flex items-center">
+                                <Clock size={10} className="mr-1" />
+                                启动: {new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                            )}
+                            {subtask.completedAt && (
+                              <span className="text-xs text-gray-500 flex items-center">
+                                <CheckCircle2 size={10} className="mr-1" />
+                                结束: {new Date(subtask.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                            )}
+                            {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && subtask.completedAt && (
+                              <span className="text-xs text-purple-600">
+                                耗时: {Math.round((new Date(subtask.completedAt).getTime() - new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).getTime()) / 1000)}s
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* 工具调用展开内容 */}
-        {toolUseParts.length > 0 && expandedToolSection && (
-          <div className="mt-2 space-y-1">
-            {toolUseParts.map((tool: any, idx: number) => {
-              const isExpanded = expandedTools[`tool-${idx}`];
-              return (
-                <div key={idx} className="bg-blue-50 rounded border border-blue-200 overflow-hidden">
-                  <button
-                    className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-blue-100 transition-colors"
-                    onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
-                  >
-                    <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
-                      🔧 {tool.name || 'unknown'}
-                      {tool.input && (
-                        <span className="text-gray-400 font-normal">
-                          ({Object.keys(tool.input).length} 个参数)
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
-                  </button>
-                  {isExpanded && tool.input && (
-                    <div className="px-2 pb-2 border-t border-blue-100">
-                      <pre className="text-xs overflow-auto max-h-40 text-gray-800 bg-white p-2 rounded mt-1">
-                        {JSON.stringify(tool.input, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 工具结果展开内容 */}
-        {toolResultParts.length > 0 && expandedResultSection && (
-          <div className="mt-2 space-y-1">
-            {toolResultParts.map((result: any, idx: number) => {
-              const isExpanded = expandedTools[`result-${idx}`];
-              const isError = result.is_error || result.error;
-
-              const raw = result.content ?? result.output ?? result.result;
-              let content = '';
-              if (raw === null || raw === undefined) {
-                content = '';
-              } else if (typeof raw === 'string') {
-                content = raw;
-              } else if (Array.isArray(raw)) {
-                content = raw.map((item: any) =>
-                  typeof item === 'string' ? item :
-                  item.text ?? item.content ?? JSON.stringify(item)
-                ).join('\n');
-              } else {
-                content = JSON.stringify(raw, null, 2);
-              }
-
-              const toolName = result.toolName || result.name ||
-                toolUseParts.find((t: any) => t.id === result.tool_use_id)?.name ||
-                (result.tool_use_id ? `#${idx + 1}` : '工具结果');
-              
-              return (
-                <div key={idx} className={`bg-gray-50 rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-200'}`}>
-                  <button
-                    className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-100 transition-colors"
-                    onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
-                  >
-                    <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-700' : 'text-gray-700'}`}>
-                      📤 {toolName}
-                      {content.length > 0 && (
-                        <span className="text-gray-400 font-normal">
-                          ({content.length} 字符)
-                        </span>
-                      )}
-                      {isError && <span>⚠️</span>}
-                    </span>
-                    <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
-                  </button>
-                  {isExpanded && (
-                    <div className="px-2 pb-2 border-t border-gray-100">
-                      <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-white text-gray-800'}`}>
-                        {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
-                      </pre>
-                      {result.error && (
-                        <div className="text-xs text-red-600 mt-1">错误: {result.error}</div>
+                        <div className="flex items-center space-x-2 ml-2">
+                          {subtask.status && (
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              subtask.status === 'completed' || subtask.status === 'done'
+                                ? 'bg-green-100 text-green-700'
+                                : subtask.status === 'in_progress'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-gray-100 text-gray-600'
+                            }`}>
+                              {subtask.status}
+                            </span>
+                          )}
+                          {subtask.completed && (
+                            <CheckCircle2 size={16} className="text-green-600" />
+                          )}
+                        </div>
+                      </div>
+                      {/* 子任务的子任务 */}
+                      {subtask.subtasks && subtask.subtasks.length > 0 && (
+                        <div className="mt-2 pl-4 border-l-2 border-green-300 space-y-1">
+                          {subtask.subtasks.map((child: any, childIdx: number) => (
+                            <div key={child.id || childIdx} className="flex items-center space-x-2 text-xs">
+                              {child.completed ? (
+                                <CheckCircle2 size={12} className="text-green-600" />
+                              ) : (
+                                <Circle size={12} className="text-gray-400" />
+                              )}
+                              <span className={child.completed ? 'text-gray-500 line-through' : 'text-gray-700'}>
+                                {child.title || child.content || child.text || '未命名'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        )}
+              </div>
+            )}
 
-        {/* 其他未知类型 */}
-        {parts.filter((p: any) => 
-          !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
-        ).length > 0 && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <div className="text-xs font-medium text-gray-600 mb-2">其他内容</div>
-            <pre className="text-xs overflow-auto max-h-32 text-gray-700">
-              {JSON.stringify(
-                parts.filter((p: any) => 
-                  !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
-                ),
-                null,
-                2
-              )}
-            </pre>
+            {/* 工具调用 */}
+            {toolUseParts.length > 0 && (
+              <div className="mt-2">
+                <button
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-blue-50 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                  onClick={() => setExpandedToolSection(!expandedToolSection)}
+                >
+                  <span className="text-xs font-medium text-blue-700">
+                    🔧 工具调用 ({toolUseParts.length})
+                  </span>
+                  <span className="text-xs text-gray-400">{expandedToolSection ? '▲' : '▼'}</span>
+                </button>
+                {expandedToolSection && (
+                  <div className="mt-1 space-y-1">
+                    {toolUseParts.map((tool: any, idx: number) => {
+                      const isExpanded = expandedTools[`tool-${idx}`];
+                      return (
+                        <div key={idx} className="bg-blue-50 rounded border border-blue-200 overflow-hidden">
+                          <button
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-blue-100 transition-colors"
+                            onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
+                          >
+                            <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
+                              🔧 {tool.name || 'unknown'}
+                              {tool.input && (
+                                <span className="text-gray-400 font-normal">
+                                  ({Object.keys(tool.input).length} 个参数)
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                          </button>
+                          {isExpanded && tool.input && (
+                            <div className="px-2 pb-2 border-t border-blue-100">
+                              <pre className="text-xs overflow-auto max-h-40 text-gray-800 bg-white p-2 rounded mt-1">
+                                {JSON.stringify(tool.input, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 工具结果 */}
+            {toolResultParts.length > 0 && (
+              <div className="mt-2">
+                <button
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
+                  onClick={() => setExpandedResultSection(!expandedResultSection)}
+                >
+                  <span className="text-xs font-medium text-gray-700">
+                    📤 工具结果 ({toolResultParts.length})
+                  </span>
+                  <span className="text-xs text-gray-400">{expandedResultSection ? '▲' : '▼'}</span>
+                </button>
+                {expandedResultSection && (
+                  <div className="mt-1 space-y-1">
+                    {toolResultParts.map((result: any, idx: number) => {
+                      const isExpanded = expandedTools[`result-${idx}`];
+                      const isError = result.is_error || result.error;
+
+                      const raw = result.content ?? result.output ?? result.result;
+                      let content = '';
+                      if (raw === null || raw === undefined) {
+                        content = '';
+                      } else if (typeof raw === 'string') {
+                        content = raw;
+                      } else if (Array.isArray(raw)) {
+                        content = raw.map((item: any) =>
+                          typeof item === 'string' ? item :
+                          item.text ?? item.content ?? JSON.stringify(item)
+                        ).join('\n');
+                      } else {
+                        content = JSON.stringify(raw, null, 2);
+                      }
+
+                      const toolName = result.toolName || result.name ||
+                        toolUseParts.find((t: any) => t.id === result.tool_use_id)?.name ||
+                        (result.tool_use_id ? `#${idx + 1}` : '工具结果');
+
+                      return (
+                        <div key={idx} className={`bg-gray-50 rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-200'}`}>
+                          <button
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-100 transition-colors"
+                            onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
+                          >
+                            <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-700' : 'text-gray-700'}`}>
+                              📤 {toolName}
+                              {content.length > 0 && (
+                                <span className="text-gray-400 font-normal">
+                                  ({content.length} 字符)
+                                </span>
+                              )}
+                              {isError && <span>⚠️</span>}
+                            </span>
+                            <span className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</span>
+                          </button>
+                          {isExpanded && (
+                            <div className="px-2 pb-2 border-t border-gray-100">
+                              <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-white text-gray-800'}`}>
+                                {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
+                              </pre>
+                              {result.error && (
+                                <div className="text-xs text-red-600 mt-1">错误: {result.error}</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 其他未知类型 */}
+            {parts.filter((p: any) =>
+              !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
+            ).length > 0 && (
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-xs font-medium text-gray-600 mb-2">其他内容</div>
+                <pre className="text-xs overflow-auto max-h-32 text-gray-700">
+                  {JSON.stringify(
+                    parts.filter((p: any) =>
+                      !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
+                    ),
+                    null,
+                    2
+                  )}
+                </pre>
+              </div>
+            )}
           </div>
         )}
       </div>

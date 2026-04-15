@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { ExternalLink } from 'lucide-react';
@@ -62,7 +62,23 @@ const categoryLabels: Record<string, string> = {
   'cloud': '云与容器安全',
 };
 
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+    </div>
+  );
+}
+
 export default function SkillsPage() {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <SkillsPageContent />
+    </Suspense>
+  );
+}
+
+function SkillsPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

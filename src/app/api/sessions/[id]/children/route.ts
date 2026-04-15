@@ -153,6 +153,9 @@ export async function GET(
           completedAt: call.completedAt,
         }));
 
+        // 不在此处获取第一条消息时间，避免阻塞 API 响应
+        // 前端在点击展开子任务时会调用 fetchChildSessionMessages 获取消息并更新 startedAt
+
         return NextResponse.json({
           children,
           total: children.length,

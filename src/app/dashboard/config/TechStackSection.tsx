@@ -308,6 +308,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                 onClick={() => {
                   setShowAddModal(false);
                   resetForm();
+                  setError(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -316,6 +317,13 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
             </div>
 
             <div className="p-6 space-y-4">
+              {/* 错误提示放在模态框内 */}
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+                  {error}
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   名称 <span className="text-red-500">*</span>
@@ -323,7 +331,10 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, name: e.target.value });
+                    setError(null); // 输入时清除错误
+                  }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="例如：Java、Spring、MySQL"
                 />

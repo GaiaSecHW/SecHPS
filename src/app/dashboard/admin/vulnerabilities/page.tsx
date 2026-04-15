@@ -366,7 +366,7 @@ export default function VulnerabilitiesPage() {
                 <h3 className="font-semibold text-gray-900 truncate flex-1 min-w-0">{vuln.title}</h3>
                 {vuln.project && <span className="text-sm text-blue-600 flex-shrink-0">项目: {vuln.project.name}</span>}
                 <span className="text-sm text-gray-500 flex-shrink-0">类型: {vuln.type}</span>
-                <span className="text-sm text-gray-400 flex-shrink-0">{new Date(vuln.createdAt).toLocaleDateString()}</span>
+                <span className="text-sm text-gray-400 flex-shrink-0">{new Date(vuln.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                 <button
                   onClick={(e) => handleDelete(vuln.id, vuln.title, e)}
                   className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { Sparkles, CheckCircle, TrendingUp, AlertCircle, Copy, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Props {
@@ -67,7 +68,7 @@ export default function OptimizationStep({
       });
     } catch (error) {
       console.error('优化失败:', error);
-      alert(error instanceof Error ? error.message : '优化失败，请重试');
+      toast.error(error instanceof Error ? error.message : '优化失败，请重试');
     } finally {
       setIsOptimizing(false);
     }
@@ -84,7 +85,7 @@ export default function OptimizationStep({
       onChange({
         skill: optimizationData.optimizedSkill,
       });
-      alert('已应用优化后的 Skill 定义！');
+      toast.success('已应用优化后的 Skill 定义！');
     }
   };
 

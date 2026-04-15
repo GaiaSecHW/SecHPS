@@ -2,7 +2,8 @@
 // POST 触发提取（SSE 流式进度）
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { extractSequences } from '@/services/autonomous-evolution/log-parser';
 import { isAlreadyProcessed, markProcessed, clearAllRecords } from '@/services/autonomous-evolution/log-hash-tracker';
 import { generateExperience, saveExperience } from '@/services/autonomous-evolution/experience-generator';
@@ -18,7 +19,9 @@ async function* findAllJsonlFiles(dir: string): AsyncGenerator<string> {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
-  } catch {
+  } catch (e) {
+    // 目录不存在或无法读取，静默返回
+    console.debug('[Extract] Cannot read directory:', dir, e);
     return;
   }
   for (const entry of entries) {
@@ -40,6 +43,11 @@ export async function POST(request: Request) {
   if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
   const payload = verifyToken(authHeader.replace('Bearer ', ''));
   if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+
+  // 检查权限
+  if (!hasPermission(payload.permissions, PERMISSIONS.AUTONOMOUS_EVOLUTION_EXTRACT)) {
+    return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+  }
 
   const body = await request.json() as { mode?: 'incremental' | 'full'; maxSequences?: number };
   const mode = body.mode || 'incremental';

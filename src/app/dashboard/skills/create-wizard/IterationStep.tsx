@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { CheckCircle, XCircle, RefreshCw, ArrowRight, FileText, BarChart2 } from 'lucide-react';
 
 interface TestRun {
@@ -100,10 +101,10 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
       onChange({ iterations: [...iterations, newIteration] });
       setFeedback('');
 
-      alert('改进已应用！建议重新运行测试以验证效果。');
+      toast.success('改进已应用，请运行新测试用例验证效果！');
     } catch (error) {
       console.error('应用反馈失败:', error);
-      alert('应用失败，请重试');
+      toast.error('应用失败，请重试');
     } finally {
       setIsApplyingChanges(false);
     }

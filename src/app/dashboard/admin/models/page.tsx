@@ -345,7 +345,9 @@ export default function ModelsPage() {
     if (Array.isArray(modelsData)) return modelsData;
     try {
       return JSON.parse(modelsData);
-    } catch {
+    } catch (e) {
+      // JSON解析失败，返回空数组
+      console.warn('[Models] Failed to parse models data:', modelsData, e);
       return [];
     }
   };

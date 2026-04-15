@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
@@ -28,9 +28,30 @@ import {
   Tags,
   ChevronLeft,
   ChevronRight,
+  Coins,
 } from 'lucide-react';
 
 export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </Suspense>
+  );
+}
+
+function LoadingSpinner() {
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+    </div>
+  );
+}
+
+function DashboardLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -152,6 +173,9 @@ export default function DashboardLayout({
           <NavLink href="/dashboard/profile" icon={<User size={20} />} collapsed={collapsed}>
             个人中心
           </NavLink>
+          <NavLink href="/dashboard/token-stats" icon={<Coins size={20} />} collapsed={collapsed}>
+            Token 统计
+          </NavLink>
 
           {/* 管理功能 - 根据权限显示 */}
           {user?.roles?.includes('admin') && (
@@ -194,6 +218,9 @@ export default function DashboardLayout({
               </NavLink>
               <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
                 工具管理
+              </NavLink>
+              <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={20} />} collapsed={collapsed}>
+                默认工具权限
               </NavLink>
             </>
           )}

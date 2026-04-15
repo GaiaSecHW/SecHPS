@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -134,6 +134,9 @@ export default function SessionsPage() {
   const [vulnPage, setVulnPage] = useState(1);
   const [vulnTotalCount, setVulnTotalCount] = useState(0);
   const vulnPageSize = 10;
+  // 漏洞过滤状态
+  const [vulnSearchTerm, setVulnSearchTerm] = useState('');
+  const [vulnStatusFilter, setVulnStatusFilter] = useState('');
 
   // 检查是否有运行中的评估
   const hasRunningEvaluation = projects.some(p => 
@@ -642,6 +645,12 @@ export default function SessionsPage() {
                     await fetchProjects();
                     setStartingProject(null);
                     return;
+                  } else if (event.type === 'aborted') {
+                    console.log('[评估已中止]', event.message);
+                    toast.error(`评估已中止: ${event.message || '用户手动中止'}`);
+                    await fetchProjects();
+                    setStartingProject(null);
+                    return;
                   }
                 } catch {
                   // 忽略解析错误
@@ -827,7 +836,16 @@ export default function SessionsPage() {
     
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/vulnerabilities?projectId=${project.id}&page=${page}&limit=${vulnPageSize}`, {
+      // 构建查询参数
+      const params = new URLSearchParams({
+        projectId: project.id,
+        page: String(page),
+        limit: String(vulnPageSize),
+      });
+      if (vulnSearchTerm) params.append('search', vulnSearchTerm);
+      if (vulnStatusFilter) params.append('status', vulnStatusFilter);
+      
+      const response = await fetch(`/api/vulnerabilities?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -2547,10 +2565,51 @@ toast.error(data.error || '更新项目失败');
                   setVulnerabilityProject(null);
                   setVulnerabilities([]);
                   setSelectedVulnerability(null);
+                  setVulnSearchTerm('');
+                  setVulnStatusFilter('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
                 <X size={24} />
+              </button>
+            </div>
+
+            {/* 搜索和过滤 */}
+            <div className="px-6 py-3 border-b border-gray-100 bg-gray-50 flex gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="搜索漏洞标题、类型..."
+                  value={vulnSearchTerm}
+                  onChange={(e) => {
+                    setVulnSearchTerm(e.target.value);
+                    setVulnPage(1);
+                  }}
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <select
+                value={vulnStatusFilter}
+                onChange={(e) => {
+                  setVulnStatusFilter(e.target.value);
+                  setVulnPage(1);
+                }}
+                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">全部状态</option>
+                <option value="new">新建</option>
+                <option value="confirmed">已确认</option>
+                <option value="fixed">已修复</option>
+                <option value="verified">已验证</option>
+                <option value="false-positive">误报</option>
+              </select>
+              <button
+                onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, 1)}
+                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1"
+              >
+                <RefreshCw size={14} />
+                查询
               </button>
             </div>
 
@@ -2575,7 +2634,7 @@ toast.error(data.error || '更新项目失败');
                     <div className="p-4 border-b border-gray-100 bg-gray-50">
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-700">
-                          共 {vulnerabilities.length} 个漏洞
+                          共 {vulnTotalCount} 个漏洞
                         </span>
                         <div className="flex gap-2">
                           {['critical', 'high', 'medium', 'low'].map(severity => {
@@ -2629,6 +2688,11 @@ toast.error(data.error || '更新项目失败');
                             </span>
                             <span className="text-xs text-gray-500 flex-shrink-0">{vuln.type}</span>
                             <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
+                            {vuln.createdAt && (
+                              <span className="text-xs text-gray-400 flex-shrink-0">
+                                {new Date(vuln.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                              </span>
+                            )}
                           </div>
                         </div>
                       ))}

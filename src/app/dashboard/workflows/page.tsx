@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import toast from 'react-hot-toast';
 import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2 } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
@@ -13,6 +14,7 @@ interface Workflow {
   description?: string;
   status: WorkflowStatus;
   thumbnail?: string;
+  techStack?: string[];
   nodeCount: number;
   edgeCount: number;
   createdAt: string;
@@ -25,6 +27,8 @@ export default function WorkflowsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<WorkflowStatus | 'all'>('all');
   const [workflowName, setWorkflowName] = useState('');
@@ -33,6 +37,7 @@ export default function WorkflowsPage() {
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
   
   // 使用 Hook 获取技术栈选项
   const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
@@ -64,6 +69,7 @@ export default function WorkflowsPage() {
         ...w,
         nodeCount: w._count?.nodes || 0,
         edgeCount: 0, // 暂时设置为 0，因为 API 没有返回 edgeCount
+        techStack: w.techStack ? JSON.parse(w.techStack) : [],
       }));
       setWorkflows(mappedWorkflows);
       setLoading(false);
@@ -77,17 +83,17 @@ export default function WorkflowsPage() {
     const trimmedName = workflowName.trim();
 
     if (!trimmedName) {
-      alert('请输入编排名称');
+      toast.error('请输入编排名称');
       return;
     }
 
     if (trimmedName.length < 2) {
-      alert('编排名称至少需要2个字符');
+      toast.error('编排名称至少需要2个字符');
       return;
     }
 
     if (trimmedName.length > 100) {
-      alert('编排名称不能超过100个字符');
+      toast.error('编排名称不能超过100个字符');
       return;
     }
 
@@ -110,7 +116,7 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '创建编排失败');
+        toast.error(data.error || '创建编排失败');
         setCreating(false);
         return;
       }
@@ -121,7 +127,7 @@ export default function WorkflowsPage() {
       setWorkflowTechStack([]);
       await fetchWorkflows();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     } finally {
       setCreating(false);
     }
@@ -143,13 +149,13 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '删除编排失败');
+        toast.error(data.error || '删除编排失败');
         return;
       }
 
       await fetchWorkflows();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -167,13 +173,13 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '发布编排失败');
+        toast.error(data.error || '发布编排失败');
         return;
       }
 
       await fetchWorkflows();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -195,13 +201,13 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '下线编排失败');
+        toast.error(data.error || '下线编排失败');
         return;
       }
 
       await fetchWorkflows();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
     }
   };
 
@@ -219,13 +225,80 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        alert(data.error || '恢复发布失败');
+        toast.error(data.error || '恢复发布失败');
         return;
       }
 
       await fetchWorkflows();
     } catch (err) {
-      alert('网络错误，请重试');
+      toast.error('网络错误，请重试');
+    }
+  };
+
+  const openEditModal = (workflow: Workflow) => {
+    setEditingWorkflow(workflow);
+    setWorkflowName(workflow.name);
+    setWorkflowDescription(workflow.description || '');
+    // 从 workflow 中获取 techStack
+    setWorkflowTechStack(workflow.techStack || []);
+    setShowEditModal(true);
+  };
+
+  const updateWorkflowInfo = async () => {
+    if (!editingWorkflow) return;
+
+    const trimmedName = workflowName.trim();
+
+    if (!trimmedName) {
+      toast.error('请输入编排名称');
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      toast.error('编排名称至少需要2个字符');
+      return;
+    }
+
+    if (trimmedName.length > 100) {
+      toast.error('编排名称不能超过100个字符');
+      return;
+    }
+
+    setUpdating(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/workflows/${editingWorkflow.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: trimmedName,
+          description: workflowDescription,
+          techStack: workflowTechStack,
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || '更新编排信息失败');
+        setUpdating(false);
+        return;
+      }
+
+      toast.success('编排信息已更新');
+      setShowEditModal(false);
+      setEditingWorkflow(null);
+      setWorkflowName('');
+      setWorkflowDescription('');
+      setWorkflowTechStack([]);
+      await fetchWorkflows();
+    } catch (err) {
+      toast.error('网络错误，请重试');
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -473,7 +546,7 @@ export default function WorkflowsPage() {
                       className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
                     >
                       <Edit2 size={16} />
-                      <span>编辑</span>
+                      <span>编辑流程</span>
                     </Link>
                     {workflow.status === 'draft' && (
                       <button
@@ -508,6 +581,13 @@ export default function WorkflowsPage() {
                   </div>
 
                   <div className="flex space-x-1">
+                    <button
+                      onClick={() => openEditModal(workflow)}
+                      className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                      title="编辑信息"
+                    >
+                      <FileText size={16} />
+                    </button>
                     <button
                       className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                       title="分享"
@@ -681,6 +761,167 @@ export default function WorkflowsPage() {
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? '创建中...' : '创建编排'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 编辑编排信息对话框 */}
+      {showEditModal && editingWorkflow && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">编辑编排信息</h3>
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingWorkflow(null);
+                  setWorkflowName('');
+                  setWorkflowDescription('');
+                  setWorkflowTechStack([]);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label htmlFor="editWorkflowName" className="block text-sm font-medium text-gray-700">
+                  编排名称 *
+                </label>
+                <input
+                  id="editWorkflowName"
+                  type="text"
+                  required
+                  maxLength={100}
+                  minLength={2}
+                  value={workflowName}
+                  onChange={(e) => setWorkflowName(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="请输入编排名称（2-100个字符）"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="editWorkflowDescription" className="block text-sm font-medium text-gray-700">
+                  编排描述
+                </label>
+                <textarea
+                  id="editWorkflowDescription"
+                  rows={3}
+                  value={workflowDescription}
+                  onChange={(e) => setWorkflowDescription(e.target.value)}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="请输入编排描述（可选）"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  适合的技术栈
+                </label>
+                <div className="relative">
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {workflowTechStack.map((ts) => (
+                      <span
+                        key={ts}
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
+                      >
+                        {ts}
+                        <button
+                          type="button"
+                          onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== ts))}
+                          className="ml-2 text-blue-600 hover:text-blue-800"
+                        >
+                          <X size={14} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={techStackSearch}
+                      onChange={(e) => {
+                        setTechStackSearch(e.target.value);
+                        setShowTechStackDropdown(true);
+                      }}
+                      onFocus={() => setShowTechStackDropdown(true)}
+                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      disabled={loadingTechStack}
+                    />
+                    {showTechStackDropdown && !loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                        {techStackOptions
+                          .filter((option) => 
+                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !workflowTechStack.includes(option)
+                          )
+                          .slice(0, 20)
+                          .map((option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() => {
+                                setWorkflowTechStack([...workflowTechStack, option]);
+                                setTechStackSearch('');
+                                setShowTechStackDropdown(false);
+                              }}
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                            >
+                              {option}
+                            </button>
+                          ))}
+                        {techStackOptions.filter((option) => 
+                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !workflowTechStack.includes(option)
+                        ).length === 0 && (
+                          <div className="px-4 py-2 text-sm text-gray-500">
+                            无匹配选项
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {loadingTechStack && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
+                        <div className="flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          <span className="text-sm text-gray-500">加载技术栈选项...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    可选择多个技术栈，表示此编排适用于这些技术
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowEditModal(false);
+                  setEditingWorkflow(null);
+                  setWorkflowName('');
+                  setWorkflowDescription('');
+                  setWorkflowTechStack([]);
+                }}
+                disabled={updating}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={updateWorkflowInfo}
+                disabled={updating || !workflowName.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updating ? '保存中...' : '保存'}
               </button>
             </div>
           </div>

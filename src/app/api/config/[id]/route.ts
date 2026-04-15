@@ -29,7 +29,7 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate, maxConcurrentEvaluations, defaultToolPermissions } = body;
 
     // Check if config exists and belongs to user
     const existingConfig = await prisma.opencodeConfig.findUnique({
@@ -51,6 +51,17 @@ export async function PATCH(
       } catch {
         return NextResponse.json(
           { error: '无效的 baseURL 格式' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Validate maxConcurrentEvaluations if provided
+    if (maxConcurrentEvaluations !== undefined) {
+      const concurrentLimit = parseInt(maxConcurrentEvaluations);
+      if (concurrentLimit < 1 || concurrentLimit > 10) {
+        return NextResponse.json(
+          { error: '并发限制必须在 1-10 之间' },
           { status: 400 }
         );
       }
@@ -80,6 +91,10 @@ export async function PATCH(
         ...(skillOutputTemplate !== undefined && { skillOutputTemplate }),
         // CLAUDE.md 全局模板
         ...(claudemdTemplate !== undefined && { claudemdTemplate }),
+        // 并发限制
+        ...(maxConcurrentEvaluations !== undefined && { maxConcurrentEvaluations: parseInt(maxConcurrentEvaluations) }),
+        // 全局工具权限配置
+        ...(defaultToolPermissions !== undefined && { defaultToolPermissions }),
       },
     });
 

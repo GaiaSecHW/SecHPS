@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, progressQuestion, customSystemPrompt } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, progressQuestion, customSystemPrompt, maxConcurrentEvaluations, defaultToolPermissions } = body;
 
     if (!name) {
       return NextResponse.json({ error: '配置名称是必需的' }, { status: 400 });
@@ -79,6 +79,15 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
+    }
+
+    // Validate maxConcurrentEvaluations
+    const concurrentLimit = maxConcurrentEvaluations ? parseInt(maxConcurrentEvaluations) : 3;
+    if (concurrentLimit < 1 || concurrentLimit > 10) {
+      return NextResponse.json(
+        { error: '并发限制必须在 1-10 之间' },
+        { status: 400 }
+      );
     }
 
     // Create config
@@ -97,6 +106,8 @@ export async function POST(request: Request) {
         modelPreferences: modelPreferences || null,
         customSystemPrompt: customSystemPrompt || null,
         progressQuestion: progressQuestion || null,
+        maxConcurrentEvaluations: concurrentLimit,
+        defaultToolPermissions: defaultToolPermissions || null,
       },
     });
 

@@ -16,6 +16,7 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import type { PluginResponse, PluginType } from '@/types/plugin';
@@ -29,6 +30,7 @@ export default function PluginsPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [executingPlugin, setExecutingPlugin] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -39,7 +41,7 @@ export default function PluginsPage() {
       setUser(JSON.parse(userData));
     }
     fetchPlugins();
-  }, [page]);
+  }, [page, searchQuery]);
 
   const fetchPlugins = async () => {
     try {
@@ -52,7 +54,13 @@ export default function PluginsPage() {
         return;
       }
       
-      const response = await fetch(`/api/plugins?page=${page}&limit=${pageSize}`, {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(pageSize),
+      });
+      if (searchQuery) params.append('search', searchQuery);
+      
+      const response = await fetch(`/api/plugins?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -260,6 +268,23 @@ export default function PluginsPage() {
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             刷新
           </button>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="mb-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input
+            type="text"
+            placeholder="搜索插件名称..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
       </div>
 

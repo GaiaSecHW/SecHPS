@@ -57,6 +57,20 @@ export interface EnhancedEvaluationCallbacks {
   onComplete: (fullResponse: string) => void;
   onError: (error: Error) => void;
   onNodeStatusChange?: (nodeId: string, status: string, nodeLabel?: string, nodeType?: string) => void;
+  onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens?: number;
+    cacheCreationInputTokens?: number;
+    totalCostUsd?: number;
+    modelUsage?: Record<string, {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+      costUSD: number;
+    }>;
+  }) => void;  // Token 使用量回调
 }
 
 export interface WorkflowNode {
@@ -79,6 +93,7 @@ export class EnhancedEvaluationCaller {
   private agentService: ClaudeAgentService;
   private currentEvaluationId: string | null = null;
   private currentProjectId: string | null = null;
+  private aborted: boolean = false;  // 中止标志
 
   constructor(config: EnhancedEvaluationConfig) {
     // 日志：记录从路由/配置加载的系统提示词配置
@@ -184,6 +199,15 @@ export class EnhancedEvaluationCaller {
         };
         callbacks.onToolResult(name, toolResult);
       },
+      onUsage: (usage) => {
+        // Token 使用量回调
+        console.log('='.repeat(60));
+        console.log('[EnhancedCaller] 📊 收到 Token 使用量');
+        console.log('[EnhancedCaller] usage:', JSON.stringify(usage));
+        console.log('='.repeat(60));
+        logInfo('Token 使用量:', usage);
+        callbacks.onUsage?.(usage);
+      },
       onComplete: async (fullResponse) => {
         // 日志：单次迭代完成
         logInfo('========================================');
@@ -259,7 +283,15 @@ export class EnhancedEvaluationCaller {
    * 中止评估
    */
   abort(): void {
+    this.aborted = true;
     this.agentService.abort();
+  }
+
+  /**
+   * 检查是否已中止
+   */
+  isAborted(): boolean {
+    return this.aborted;
   }
 }
 

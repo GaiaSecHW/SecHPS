@@ -38,15 +38,21 @@ export async function POST(
     let modelId: string | null = null;
     let enableMcp = true;
     let enableToolPermissions = true;
+    let queuedEvaluationId: string | null = null; // 队列启动时复用的评估ID
     try {
       const body = await request.json();
       workflowId = body.workflowId || null;
       modelId = body.modelId || null;
       enableMcp = body.enableMcp !== false;
       enableToolPermissions = body.enableToolPermissions !== false;
+      queuedEvaluationId = body.queuedEvaluationId || null;
     } catch {
       // 如果没有请求体，继续执行
     }
+
+    // 检查是否为队列启动（内部调用）
+    const isQueuedStart = request.headers.get('X-Internal-Queued-Start') === 'true';
+    console.log('[启动评估] 是否队列启动:', isQueuedStart, 'queuedEvaluationId:', queuedEvaluationId);
 
     // 获取项目信息（包括运行中的评估）
     const project = await prisma.project.findUnique({
@@ -63,10 +69,58 @@ export async function POST(
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
-    // 获取全局激活的配置（customSystemPrompt 等全局配置，所有项目都使用）
-    const globalConfig = await prisma.opencodeConfig.findFirst({
+    // 获取全局配置（优先激活配置，如果没有激活配置则使用第一个）
+    let globalConfig = await prisma.opencodeConfig.findFirst({
       where: { isActive: true },
     });
+    
+    // 如果没有激活配置，尝试获取第一个配置并自动激活
+    if (!globalConfig) {
+      const firstConfig = await prisma.opencodeConfig.findFirst({
+        orderBy: { createdAt: 'desc' },
+      });
+      
+      if (firstConfig) {
+        console.log('[启动评估] 没有激活配置，自动激活第一个:', firstConfig.id);
+        await prisma.opencodeConfig.update({
+          where: { id: firstConfig.id },
+          data: { isActive: true },
+        });
+        globalConfig = { ...firstConfig, isActive: true };
+      }
+    }
+
+    // 检查并发限制（队列启动时跳过）
+    const maxConcurrent = globalConfig?.maxConcurrentEvaluations || 3;
+    const runningCount = await prisma.evaluationSession.count({
+      where: { status: 'running' },
+    });
+    
+    console.log('[启动评估] 并发限制检查: 当前运行', runningCount, ', 最大允许', maxConcurrent);
+    
+    // 如果超出并发限制且不是队列启动，创建排队状态的评估
+    if (!isQueuedStart && runningCount >= maxConcurrent) {
+      console.log('[启动评估] 超出并发限制，创建排队评估');
+      
+      // 创建排队状态的评估会话
+      const queuedEvaluation = await prisma.evaluationSession.create({
+        data: {
+          projectId: id,
+          workflowId: workflowId,
+          status: 'queued',
+          modelName: modelId, // 保存请求的模型ID
+          providerType: 'queued', // 标记为排队状态
+        },
+      });
+      
+      return NextResponse.json({
+        message: '评估已加入排队队列',
+        evaluationId: queuedEvaluation.id,
+        status: 'queued',
+        queuePosition: runningCount - maxConcurrent + 1,
+        maxConcurrent,
+      }, { status: 202 }); // 202 Accepted 表示请求已接受但未处理
+    }
 
     // 日志：检查全局配置
     console.log('[启动评估] 项目信息:');
@@ -198,12 +252,19 @@ export async function POST(
     }
 
     // 加载系统提示词配置（使用全局配置中的 customSystemPrompt）
+    console.log('[启动评估] 检查全局配置:');
+    console.log('[启动评估] - globalConfig 存在:', !!globalConfig);
+    console.log('[启动评估] - globalConfig.id:', globalConfig?.id);
+    console.log('[启动评估] - globalConfig.isActive:', globalConfig?.isActive);
+    console.log('[启动评估] - customSystemPrompt 存在:', !!globalConfig?.customSystemPrompt);
+    console.log('[启动评估] - customSystemPrompt 长度:', globalConfig?.customSystemPrompt?.length || 0);
+    
     if (globalConfig?.customSystemPrompt) {
       sdkOptions.systemPrompt = globalConfig.customSystemPrompt;
       console.log('[启动评估] 使用全局配置中的自定义系统提示词');
       console.log('[启动评估] 系统提示词内容:', globalConfig.customSystemPrompt.substring(0, 200) + '...');
     } else {
-      console.log('[启动评估] ⚠️  未配置系统提示词');
+      console.log('[启动评估] ⚠️  未配置系统提示词 - globalConfig:', globalConfig ? '存在但customSystemPrompt为空' : '不存在');
     }
 
     // 注入自主进化经验到 System Prompt
@@ -320,16 +381,33 @@ export async function POST(
       data: { status: 'running' },
     });
 
-    // 创建评估会话
-    const evaluation = await prisma.evaluationSession.create({
-      data: {
-        projectId: id,
-        workflowId: workflowId, // 关联工作流
-        status: 'running',
-        modelName: modelConfig.name, // 保存模型名称
-        providerType: modelConfig.providerType, // 保存提供商类型
-      },
-    });
+    // 创建或复用评估会话
+    let evaluation;
+    if (isQueuedStart && queuedEvaluationId) {
+      // 队列启动：复用现有的排队评估记录
+      evaluation = await prisma.evaluationSession.update({
+        where: { id: queuedEvaluationId },
+        data: {
+          status: 'running',
+          startedAt: new Date(),
+          modelName: modelConfig.name,
+          providerType: modelConfig.providerType,
+        },
+      });
+      console.log('[启动评估] 复用排队评估记录:', evaluation.id);
+    } else {
+      // 正常启动：创建新的评估记录
+      evaluation = await prisma.evaluationSession.create({
+        data: {
+          projectId: id,
+          workflowId: workflowId, // 关联工作流
+          status: 'running',
+          modelName: modelConfig.name, // 保存模型名称
+          providerType: modelConfig.providerType, // 保存提供商类型
+        },
+      });
+      console.log('[启动评估] 创建新评估记录:', evaluation.id);
+    }
 
     // 记录经验引用（哪些经验被注入到本次评估）
     if (injectedExperiences.length > 0) {
@@ -687,17 +765,91 @@ export async function POST(
               });
               safeEnqueue(`data: ${data}\n\n`);
             },
+            onUsage: async (usage) => {
+              // 记录每次 API 调用的 token 使用量到数据库
+              console.log('[Ralph Loop] 收到 Token 使用量:', usage);
+              
+              try {
+                // 计算本次调用费用
+                const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
+                const modelId = modelConfig?.models || 'claude-sonnet-4-20250514';
+                const pricing = getModelPricingOrDefault(modelId);
+                const callCost = calculateCost({
+                  inputTokens: usage.inputTokens,
+                  outputTokens: usage.outputTokens,
+                  totalTokens: usage.inputTokens + usage.outputTokens,
+                }, pricing);
+                
+                // 保存到 TokenUsage 表
+                await prisma.tokenUsage.create({
+                  data: {
+                    evaluationId: evaluation.id,
+                    projectId: id,
+                    apiProvider: modelConfig?.providerType || 'claude',
+                    modelName: modelConfig?.models ? 
+                      (Array.isArray(JSON.parse(modelConfig.models)) ? JSON.parse(modelConfig.models)[0] : modelConfig.models) :
+                      'claude-sonnet-4',
+                    callType: 'chat',
+                    inputTokens: usage.inputTokens || 0,
+                    outputTokens: usage.outputTokens || 0,
+                    totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
+                    cachedTokens: usage.cacheReadInputTokens || 0,
+                    requestStartedAt: new Date(),
+                    requestCompletedAt: new Date(),
+                    estimatedCost: callCost,
+                    status: 'success',
+                  },
+                });
+                console.log('[Ralph Loop] Token 使用记录已保存到数据库');
+                
+                // 发送 token 使用事件
+                const tokenEvent = JSON.stringify({
+                  type: 'token_usage',
+                  usage: {
+                    inputTokens: usage.inputTokens,
+                    outputTokens: usage.outputTokens,
+                    totalTokens: usage.inputTokens + usage.outputTokens,
+                    estimatedCost: callCost,
+                  },
+                  timestamp: Date.now(),
+                });
+                safeEnqueue(`data: ${tokenEvent}\n\n`);
+              } catch (err) {
+                console.error('[Ralph Loop] 保存 Token 使用记录失败:', err);
+              }
+            },
             onComplete: (fullResponseText) => {
               console.log('[Ralph Loop] 单次迭代完成，文本长度:', fullResponseText.length);
             },
             onError: async (error) => {
+              // 检查是否为中止错误
+              const isAborted = error.name === 'AbortError' || 
+                error.message.includes('abort') || 
+                error.message.includes('cancelled') ||
+                error.message.includes('中止');
+
+              if (isAborted) {
+                console.log('[Ralph Loop] 检测到中止信号:', error.message);
+                // 检查数据库状态确认是否已被中止
+                const currentEval = await prisma.evaluationSession.findUnique({
+                  where: { id: evaluation.id },
+                  select: { status: true },
+                });
+                if (currentEval?.status === 'cancelled') {
+                  console.log('[Ralph Loop] 评估已被外部中止，停止工作流');
+                  // 不触发后续的队列处理
+                  safeClose();
+                  return;
+                }
+              }
+
               // 判断是否为致命错误（需要终止评估）
               const isFatal =
                 error.message.includes('error_max_turns') ||
                 error.message.includes('error_max_budget_usd') ||
                 error.message.includes('error_max_structured_output_retries');
 
-              if (!isFatal) {
+              if (!isFatal && !isAborted) {
                 // 非致命错误（如 error_during_execution）：记录日志，不终止评估
                 console.warn('[Ralph Loop] 非致命错误，评估继续:', error.message);
                 const data = JSON.stringify({
@@ -744,6 +896,10 @@ export async function POST(
                 data: { status: 'failed' },
               });
 
+              // 处理队列 - 启动下一个排队评估
+              const { processQueue } = await import('@/services/evaluation-queue');
+              processQueue().catch(err => console.error('[Queue] 处理队列失败:', err));
+
               // 发送错误事件
               try {
                 const data = JSON.stringify({
@@ -766,6 +922,57 @@ export async function POST(
               console.log('[Ralph Loop] - 原因:', result.reason || '无');
               console.log('[Ralph Loop] - Token 使用:', result.totalUsage);
               console.log('[Ralph Loop] ========================================');
+
+              // 检查是否为中止完成，如果是则不触发队列
+              if (result.completionReason === 'aborted') {
+                console.log('[Ralph Loop] 任务被中止，不触发队列处理');
+                
+                // 计算 token 费用（中止时也有 token 使用）
+                const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
+                const modelId = modelConfig?.models || 'claude-sonnet-4-20250514';
+                const pricing = getModelPricingOrDefault(modelId);
+                const estimatedCost = calculateCost(result.totalUsage, pricing);
+                
+                console.log('[Ralph Loop] 中止时的 Token 统计:');
+                console.log('  - 输入 Token:', result.totalUsage.inputTokens);
+                console.log('  - 输出 Token:', result.totalUsage.outputTokens);
+                console.log('  - 总 Token:', result.totalUsage.totalTokens);
+                
+                // 更新状态为 cancelled（同时保存 token 统计）
+                await prisma.evaluationSession.update({
+                  where: { id: evaluation.id },
+                  data: {
+                    status: 'cancelled',
+                    completedAt: new Date(),
+                    errorMessage: result.reason || '用户手动中止',
+                    // Token 统计（中止时也记录）
+                    totalInputTokens: result.totalUsage.inputTokens || 0,
+                    totalOutputTokens: result.totalUsage.outputTokens || 0,
+                    totalTokens: result.totalUsage.totalTokens || 0,
+                    estimatedCost,
+                  },
+                });
+                
+                await prisma.project.update({
+                  where: { id },
+                  data: { status: 'idle' },
+                });
+
+                // 从注册表移除 agent
+                const { removeAgent } = await import('@/lib/agent-registry');
+                removeAgent(evaluation.id);
+
+                // 发送中止事件
+                const data = JSON.stringify({
+                  type: 'aborted',
+                  evaluationId: evaluation.id,
+                  message: '评估已被中止',
+                  timestamp: Date.now(),
+                });
+                safeEnqueue(`data: ${data}\n\n`);
+                safeClose();
+                return;
+              }
 
               // 从项目目录读取 vulnerabilities.json 文件
               if (project.projectPath) {
@@ -863,17 +1070,33 @@ export async function POST(
               }
 
               // 更新评估状态
-              // verified = 检测到完成信号；max-iterations = 跑完所有迭代（视为完成）；aborted = 主动中止（失败）
-              const finalStatus = result.completionReason === 'aborted' ? 'failed' : 'completed';
+              // verified = 检测到完成信号；max-iterations = 跑完所有迭代（视为完成）
               const summaryLabel =
-                result.completionReason === 'verified' ? '验证完成' :
-                result.completionReason === 'max-iterations' ? '迭代完成' : '已中止';
+                result.completionReason === 'verified' ? '验证完成' : '迭代完成';
+              
+              // 计算 token 费用
+              const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
+              const modelId = modelConfig?.models || 'claude-sonnet-4-20250514';
+              const pricing = getModelPricingOrDefault(modelId);
+              const estimatedCost = calculateCost(result.totalUsage, pricing);
+              
+              console.log('[Ralph Loop] Token 统计:');
+              console.log('  - 输入 Token:', result.totalUsage.inputTokens);
+              console.log('  - 输出 Token:', result.totalUsage.outputTokens);
+              console.log('  - 总 Token:', result.totalUsage.totalTokens);
+              console.log('  - 预估费用:', `$${estimatedCost.toFixed(4)}`);
+              
               await prisma.evaluationSession.update({
                 where: { id: evaluation.id },
                 data: {
-                  status: finalStatus,
+                  status: 'completed',
                   completedAt: new Date(),
                   summary: `[Ralph Loop] ${summaryLabel}。共迭代 ${result.iterations} 次。${result.reason || ''}`,
+                  // Token 统计
+                  totalInputTokens: result.totalUsage.inputTokens || 0,
+                  totalOutputTokens: result.totalUsage.outputTokens || 0,
+                  totalTokens: result.totalUsage.totalTokens || 0,
+                  estimatedCost,
                 },
               });
 
@@ -886,6 +1109,10 @@ export async function POST(
               const { removeAgent } = await import('@/lib/agent-registry');
               removeAgent(evaluation.id);
               console.log(`[Ralph Loop] Agent 完成，已从注册表移除: ${evaluation.id}`);
+
+              // 处理队列 - 启动下一个排队评估
+              const { processQueue } = await import('@/services/evaluation-queue');
+              processQueue().catch(err => console.error('[Queue] 处理队列失败:', err));
 
               // 发送审计完成事件
               const { emitEvaluationComplete } = require('@/lib/event-bus');
@@ -910,6 +1137,13 @@ export async function POST(
           };
 
           // 启动 Ralph Loop
+          console.log('='.repeat(60));
+          console.log('[Evaluation] 🚀 启动 Ralph Loop 评估');
+          console.log('[Evaluation] 评估ID:', evaluation.id);
+          console.log('[Evaluation] 项目ID:', id);
+          console.log('[Evaluation] 工作目录:', project.projectPath || '未设置');
+          console.log('='.repeat(60));
+          
           await agent.loop({
             evaluationId: evaluation.id,
             projectId: id,
@@ -924,6 +1158,10 @@ export async function POST(
             },
             callbacks,
           });
+          
+          console.log('='.repeat(60));
+          console.log('[Evaluation] ✅ Ralph Loop 完成');
+          console.log('='.repeat(60));
           
         } catch (error) {
           console.error('[Evaluation] 启动失败:', error);

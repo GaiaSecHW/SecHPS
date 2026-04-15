@@ -1,7 +1,8 @@
 // src/app/api/autonomous-evolution/run-logs/route.ts
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request: Request) {
@@ -9,6 +10,10 @@ export async function GET(request: Request) {
   if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
   const payload = verifyToken(authHeader.replace('Bearer ', ''));
   if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+
+  if (!hasPermission(payload.permissions, PERMISSIONS.AUTONOMOUS_EVOLUTION_READ)) {
+    return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') || '1');

@@ -117,6 +117,10 @@ export const PERMISSIONS = {
   PROJECT_READ: 'project:read',
   PROJECT_UPDATE: 'project:update',
   PROJECT_DELETE: 'project:delete',
+
+  // Token 统计权限
+  TOKEN_READ: 'token:read',
+  TOKEN_DETAIL: 'token:detail',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -169,6 +173,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.PLUGIN_UPDATE,
     PERMISSIONS.PLUGIN_DELETE,
     PERMISSIONS.PLUGIN_TOGGLE,
+    // Token 权限
+    PERMISSIONS.TOKEN_READ,
+    PERMISSIONS.TOKEN_DETAIL,
   ],
 
   [ROLES.DEVELOPER]: [
@@ -188,6 +195,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.WORKFLOW_EXECUTE,
     PERMISSIONS.WORKFLOW_EXPORT,
     PERMISSIONS.WORKFLOW_IMPORT,
+    // Token 权限
+    PERMISSIONS.TOKEN_READ,
   ],
 
   [ROLES.USER]: [
@@ -203,6 +212,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.WORKFLOW_CREATE,
     PERMISSIONS.WORKFLOW_READ,
     PERMISSIONS.WORKFLOW_EXECUTE,
+    // Token 权限
+    PERMISSIONS.TOKEN_READ,
   ],
 
   [ROLES.VIEWER]: [
@@ -214,5 +225,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.CONFIG_READ,
     // 工作流权限
     PERMISSIONS.WORKFLOW_READ,
+    // Token 权限
+    PERMISSIONS.TOKEN_READ,
   ],
 };

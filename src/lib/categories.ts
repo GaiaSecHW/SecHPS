@@ -23,6 +23,12 @@ export interface Category {
 }
 
 export async function getCategories(): Promise<Category[]> {
+  // 检查是否在浏览器环境中
+  if (typeof window === 'undefined') {
+    // 服务端直接返回默认值
+    return DEFAULT_CATEGORIES;
+  }
+
   try {
     const token = localStorage.getItem('token');
     if (!token) {

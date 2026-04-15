@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import { 
   Play, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, 
@@ -53,7 +54,7 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
 
   const startEvaluation = async () => {
     if (testCases.length === 0) {
-      alert('请先添加测试用例');
+      toast.error('请先添加测试用例');
       return;
     }
 

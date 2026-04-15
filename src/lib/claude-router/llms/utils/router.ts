@@ -109,13 +109,19 @@ const getProjectSpecificRouter = async (
         if (sessionConfig && sessionConfig.Router) {
           return sessionConfig.Router;
         }
-      } catch {}
+      } catch (e) {
+        // sessionConfig文件不存在或解析失败，继续尝试projectConfig
+        console.debug('[Router] sessionConfig not found or invalid, trying projectConfig');
+      }
       try {
         const projectConfig = JSON.parse(await readFile(projectConfigPath, "utf8"));
         if (projectConfig && projectConfig.Router) {
           return projectConfig.Router;
         }
-      } catch {}
+      } catch (e) {
+        // projectConfig文件不存在或解析失败，使用默认配置
+        console.debug('[Router] projectConfig not found or invalid, using default config');
+      }
     }
   }
   return undefined; // Return undefined to use original configuration

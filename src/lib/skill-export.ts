@@ -2,6 +2,8 @@
  * Skill 导出工具
  * 将 Skill 数据打包为 .skill 文件格式
  * Skill 现在存储为完整的 Markdown 内容
+ *
+ * 注意：exportAsSkillFile 和 copySkillMdToClipboard 仅在浏览器环境中可用
  */
 
 export interface SkillExportData {
@@ -23,9 +25,15 @@ export function generateSkillMd(skill: SkillExportData): string {
 }
 
 /**
- * 导出为 .md 文件
+ * 导出为 .md 文件（仅浏览器环境）
  */
 export async function exportAsSkillFile(skill: SkillExportData): Promise<void> {
+  // 检查是否在浏览器环境中
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    console.warn('[SkillExport] exportAsSkillFile 仅在浏览器环境中可用');
+    return;
+  }
+
   // 生成 SKILL.md
   const skillMd = generateSkillMd(skill);
 
@@ -42,9 +50,15 @@ export async function exportAsSkillFile(skill: SkillExportData): Promise<void> {
 }
 
 /**
- * 复制 SKILL.md 到剪贴板
+ * 复制 SKILL.md 到剪贴板（仅浏览器环境）
  */
 export async function copySkillMdToClipboard(skill: SkillExportData): Promise<void> {
+  // 检查是否在浏览器环境中
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    console.warn('[SkillExport] copySkillMdToClipboard 仅在浏览器环境中可用');
+    return;
+  }
+
   const skillMd = generateSkillMd(skill);
   await navigator.clipboard.writeText(skillMd);
 }

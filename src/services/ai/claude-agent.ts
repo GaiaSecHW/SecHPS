@@ -62,6 +62,20 @@ export interface ClaudeAgentCallbacks {
   onError?: (error: Error) => void;
   onMessage?: (message: SDKMessage) => void;
   onSessionId?: (sessionId: string) => void;  // 捕获 SDK 返回的会话 ID
+  onUsage?: (usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheReadInputTokens?: number;
+    cacheCreationInputTokens?: number;
+    totalCostUsd?: number;
+    modelUsage?: Record<string, {
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadInputTokens: number;
+      cacheCreationInputTokens: number;
+      costUSD: number;
+    }>;
+  }) => void;  // 捕获 SDK 返回的 token 使用量
 }
 
 /**
@@ -109,6 +123,8 @@ export class ClaudeAgentService {
     // 构建环境变量
     const env: Record<string, string | undefined> = {
       ...process.env,
+      // MCP 工具调用超时设置为 10 分钟（默认 60 秒）
+      CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: '600000',
     };
 
     // 如果配置了 baseUrl（CCR 代理），设置环境变量
@@ -230,15 +246,37 @@ export class ClaudeAgentService {
       });
 
       let capturedSessionId = false;
+      
+      // 累计 token 使用量（从 assistant 消息中提取）
+      const seenMessageIds = new Set<string>();
+      let accumulatedInputTokens = 0;
+      let accumulatedOutputTokens = 0;
+      let accumulatedCacheReadTokens = 0;
+      let accumulatedCacheCreationTokens = 0;
 
       // 遍历消息流
       for await (const message of q) {
+        // 调试：打印每条消息的完整结构
+        const msg = message as any;
+        console.log('[ClaudeAgent] 📨 消息类型:', msg.type, '| subtype:', msg.subtype);
+        
+        // 检查是否有 usage 相关字段
+        if (msg.usage || msg.apiUsage || msg.total_cost_usd !== undefined || msg.num_turns !== undefined) {
+          console.log('[ClaudeAgent] 📊 发现 usage 相关数据:', {
+            usage: msg.usage,
+            apiUsage: msg.apiUsage,
+            total_cost_usd: msg.total_cost_usd,
+            num_turns: msg.num_turns,
+            modelUsage: msg.modelUsage,
+          });
+        }
+        
         callbacks.onMessage?.(message);
 
         // 捕获 SDK 返回的会话 ID（参考 CloudCLI 实现）
-        const msg = message as any;
         if (msg.session_id && !capturedSessionId) {
           capturedSessionId = true;
+          console.log('[ClaudeAgent] 🆔 会话ID:', msg.session_id);
           callbacks.onSessionId?.(msg.session_id);
         }
 
@@ -249,6 +287,33 @@ export class ClaudeAgentService {
           if (message.result) {
             callbacks.onChunk?.(message.result);
           }
+          
+          // SDKResultSuccess 包含 total_cost_usd 和 modelUsage
+          const msg = message as any;
+          const totalCostUsd = msg.total_cost_usd || 0;
+          
+          console.log('[ClaudeAgent] Result Success - total_cost_usd:', totalCostUsd);
+          console.log('[ClaudeAgent] Result Success - modelUsage:', JSON.stringify(msg.modelUsage));
+          console.log('[ClaudeAgent] 📊 累计 token:', {
+            inputTokens: accumulatedInputTokens,
+            outputTokens: accumulatedOutputTokens,
+            cacheReadTokens: accumulatedCacheReadTokens,
+            cacheCreationTokens: accumulatedCacheCreationTokens,
+            totalCostUsd,
+            steps: seenMessageIds.size,
+          });
+          
+          // 回调最终累计的 token 使用量
+          const usageData = {
+            inputTokens: accumulatedInputTokens,
+            outputTokens: accumulatedOutputTokens,
+            cacheReadInputTokens: accumulatedCacheReadTokens,
+            cacheCreationInputTokens: accumulatedCacheCreationTokens,
+            totalCostUsd,
+            modelUsage: msg.modelUsage || {},
+          };
+          console.log('[ClaudeAgent] ✅ 最终 Token 使用量:', usageData);
+          callbacks.onUsage?.(usageData);
         } else if (this.isResultError(message)) {
           // 错误结果消息
           const errorMsg = message.errors?.join('\n') || 'Unknown error';
@@ -269,6 +334,71 @@ export class ClaudeAgentService {
         } else if (this.isAssistantMessage(message)) {
           // 助手消息（流式文本）
           const assistantMsg = message as any;
+          
+          // 调试：打印完整的 assistant 消息结构
+          console.log('[ClaudeAgent] 📨 Assistant 消息完整结构:', {
+            type: assistantMsg.type,
+            hasMessage: !!assistantMsg.message,
+            hasUsage: !!assistantMsg.usage,
+            messageKeys: assistantMsg.message ? Object.keys(assistantMsg.message) : [],
+            topKeys: Object.keys(assistantMsg),
+          });
+          
+          // 根据 SDK 文档，token 使用量可能在以下位置：
+          // 1. message.message.usage（嵌套结构）
+          // 2. message.usage（直接字段）
+          let usageData = null;
+          let msgId = null;
+          
+          if (assistantMsg.message?.usage) {
+            // 方式1：嵌套在 message.message 中
+            msgId = assistantMsg.message.id;
+            usageData = assistantMsg.message.usage;
+            console.log('[ClaudeAgent] 📊 从 message.message.usage 提取');
+          } else if (assistantMsg.usage) {
+            // 方式2：直接在消息上
+            msgId = assistantMsg.id || assistantMsg.message_id;
+            usageData = assistantMsg.usage;
+            console.log('[ClaudeAgent] 📊 从 message.usage 提取');
+          }
+          
+          if (usageData) {
+            // 使用 message ID 去重（并行工具调用可能共享相同 ID）
+            if (msgId && !seenMessageIds.has(msgId)) {
+              seenMessageIds.add(msgId);
+              
+              const inputTokens = usageData.input_tokens || 0;
+              const outputTokens = usageData.output_tokens || 0;
+              const cacheReadTokens = usageData.cache_read_input_tokens || 0;
+              const cacheCreationTokens = usageData.cache_creation_input_tokens || 0;
+              
+              accumulatedInputTokens += inputTokens;
+              accumulatedOutputTokens += outputTokens;
+              accumulatedCacheReadTokens += cacheReadTokens;
+              accumulatedCacheCreationTokens += cacheCreationTokens;
+              
+              console.log('[ClaudeAgent] 📊 Assistant 消息 usage:', {
+                msgId,
+                inputTokens,
+                outputTokens,
+                cacheReadTokens,
+                cacheCreationTokens,
+              });
+              
+              // 实时回调每次的 token 使用量
+              callbacks.onUsage?.({
+                inputTokens,
+                outputTokens,
+                cacheReadInputTokens: cacheReadTokens,
+                cacheCreationInputTokens: cacheCreationTokens,
+                totalCostUsd: 0, // 单条消息没有费用，费用在 result 消息中
+                modelUsage: {},
+              });
+            }
+          } else {
+            console.log('[ClaudeAgent] ⚠️ Assistant 消息中没有找到 usage 数据');
+          }
+          
           if (assistantMsg.content) {
             for (const block of assistantMsg.content) {
               if (block.type === 'text' && block.text) {

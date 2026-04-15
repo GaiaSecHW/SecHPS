@@ -13,6 +13,7 @@ import {
   Shield,
   Bug,
   Hourglass,
+  Coins,
 } from 'lucide-react';
 
 interface Session {
@@ -44,6 +45,15 @@ interface VulnerabilityStats {
   falsePositive: number;
 }
 
+interface TokenStats {
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalTokens: number;
+  estimatedCost: number;
+  evaluationCount: number;
+  callCount: number;
+}
+
 export default function DashboardPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,10 +73,19 @@ export default function DashboardPage() {
     verified: 0,
     falsePositive: 0,
   });
+  const [tokenStats, setTokenStats] = useState<TokenStats>({
+    totalInputTokens: 0,
+    totalOutputTokens: 0,
+    totalTokens: 0,
+    estimatedCost: 0,
+    evaluationCount: 0,
+    callCount: 0,
+  });
 
   useEffect(() => {
     fetchData();
     fetchVulnStats();
+    fetchTokenStats();
   }, []);
 
   const fetchData = async () => {
@@ -135,6 +154,31 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error('获取漏洞统计失败:', err);
+    }
+  };
+
+  const fetchTokenStats = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/token-stats?period=year', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setTokenStats({
+          totalInputTokens: data.summary?.totalInputTokens || 0,
+          totalOutputTokens: data.summary?.totalOutputTokens || 0,
+          totalTokens: data.summary?.totalTokens || 0,
+          estimatedCost: data.summary?.estimatedCost || 0,
+          evaluationCount: data.summary?.evaluationCount || 0,
+          callCount: data.summary?.callCount || 0,
+        });
+      }
+    } catch (err) {
+      console.error('获取Token统计失败:', err);
     }
   };
 
@@ -304,6 +348,70 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* 统计卡片 - Token 消耗 */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Coins size={20} className="mr-2 text-primary-500" />
+            Token 消耗统计
+          </h2>
+          <Link
+            href="/dashboard/token-stats"
+            className="flex items-center text-sm text-primary-600 hover:text-primary-800 transition-colors"
+          >
+            查看详情
+            <ArrowRight size={16} className="ml-1" />
+          </Link>
+        </div>
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
+          <TokenStatCard
+            title="总输入 Token"
+            value={formatTokenNumber(tokenStats.totalInputTokens)}
+            subtitle="发送给模型"
+            icon={<TrendingUp size={24} />}
+            color="bg-blue-500"
+            bgColor="bg-blue-50"
+            textColor="text-blue-700"
+          />
+          <TokenStatCard
+            title="总输出 Token"
+            value={formatTokenNumber(tokenStats.totalOutputTokens)}
+            subtitle="模型返回"
+            icon={<Activity size={24} />}
+            color="bg-green-500"
+            bgColor="bg-green-50"
+            textColor="text-green-700"
+          />
+          <TokenStatCard
+            title="总 Token"
+            value={formatTokenNumber(tokenStats.totalTokens)}
+            subtitle="累计消耗"
+            icon={<Coins size={24} />}
+            color="bg-purple-500"
+            bgColor="bg-purple-50"
+            textColor="text-purple-700"
+          />
+          <TokenStatCard
+            title="预估费用"
+            value={`$${tokenStats.estimatedCost.toFixed(2)}`}
+            subtitle="累计成本"
+            icon={<Shield size={24} />}
+            color="bg-orange-500"
+            bgColor="bg-orange-50"
+            textColor="text-orange-700"
+          />
+          <TokenStatCard
+            title="评估次数"
+            value={tokenStats.evaluationCount}
+            subtitle="累计执行"
+            icon={<CheckCircle2 size={24} />}
+            color="bg-indigo-500"
+            bgColor="bg-indigo-50"
+            textColor="text-indigo-700"
+          />
+        </div>
+      </div>
+
       {/* 项目状态分布 */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
@@ -386,6 +494,17 @@ export default function DashboardPage() {
   );
 }
 
+// 格式化 Token 数量
+function formatTokenNumber(num: number): string {
+  if (num >= 1000000) {
+    return `${(num / 1000000).toFixed(2)}M`;
+  }
+  if (num >= 1000) {
+    return `${(num / 1000).toFixed(1)}K`;
+  }
+  return num.toString();
+}
+
 function StatCard({
   title,
   value,
@@ -410,6 +529,39 @@ function StatCard({
         <div className="text-right">
           <p className="text-3xl font-bold text-gray-900">{value}</p>
           <p className="text-sm text-gray-600 mt-1">{title}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TokenStatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+  color,
+  bgColor,
+  textColor,
+}: {
+  title: string;
+  value: string | number;
+  subtitle: string;
+  icon: React.ReactNode;
+  color: string;
+  bgColor: string;
+  textColor: string;
+}) {
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+      <div className="flex items-center justify-between">
+        <div className={color + ' p-3 rounded-lg'}>
+          <div className={textColor}>{icon}</div>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-bold text-gray-900">{value}</p>
+          <p className="text-sm text-gray-600 mt-1">{title}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>
         </div>
       </div>
     </div>

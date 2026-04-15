@@ -2,7 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { createEvaluationCaller } from '@/services/evaluation';
 
 // POST /api/agent/chat - 与 Agent 对话
@@ -18,6 +19,11 @@ export async function POST(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 检查权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.AGENT_CHAT)) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
     const body = await request.json();

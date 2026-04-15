@@ -9,8 +9,6 @@ generator client {
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
-  # 默认使用 prisma 目录下的 dev.db（当 DATABASE_URL 未设置时）
-  # url      = "file:./dev.db"
 }
 
 // 用户模型
@@ -119,6 +117,12 @@ model OpencodeConfig {
   skillOutputTemplate String?  // Skill标准输出模板（JSON格式），用于Skill测试用例的期望输出
   claudemdTemplate  String?  // CLAUDE.md 全局模板，启动评估时写入项目 .claude 目录
   
+  // 并发控制
+  maxConcurrentEvaluations Int @default(3)  // 最大并发评估数量，超出限制的评估将排队等候
+  
+  // 全局工具权限配置（新建项目时继承）
+  defaultToolPermissions String?  // JSON: [{ toolPattern: "Bash", permission: "ask" }, ...]
+  
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
@@ -208,7 +212,7 @@ model EvaluationSession {
     lastActivity     DateTime? @default(now()) // 最近活动时间?
     
     port             Int?     // OpenCode 服务器运行端口?
-    status           String   @default("running") // running, completed, failed, cancelled
+    status           String   @default("running") // queued, running, completed, failed, cancelled
     startedAt        DateTime  @default(now())
     completedAt      DateTime?
     errorMessage     String?
@@ -218,6 +222,12 @@ model EvaluationSession {
     providerType     String?  // 模型提供商类型
     todoList         String?  // JSON: 最新任务列表快照
 
+    // Token 使用统计（汇总）
+    totalInputTokens   Int      @default(0) // 总输入 token 数
+    totalOutputTokens  Int      @default(0) // 总输出 token 数
+    totalTokens        Int      @default(0) // 总 token 数
+    estimatedCost      Float?   // 预估费用（美元）
+
   // 关系
   project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
   workflow         Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
@@ -226,6 +236,7 @@ model EvaluationSession {
   vulnerabilities  Vulnerability[]
   result           EvaluationResult?
   iterations       EvaluationIteration[]
+  tokenUsages      TokenUsage[]
 
   @@index([projectId])
   @@index([workflowId])
@@ -976,7 +987,7 @@ model Tool {
   // 安全配置
   requiresPermission Boolean @default(false)
   allowedInSandbox   Boolean @default(true)
-  timeout            Int     @default(30000) // 超时时间（毫秒）
+  timeout            Int     @default(600000) // 超时时间（毫秒），默认10分钟
 
   // 状态
   isActive    Boolean  @default(true)
@@ -1384,4 +1395,55 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt
 
   @@index([key])
+}
+
+// ============================================
+// Token 使用记录
+// ============================================
+
+// Token 使用记录（每次 API 调用的详细信息）
+model TokenUsage {
+  id                String   @id @default(cuid())
+  evaluationId      String   // 关联评估会话
+  projectId         String?  // 关联项目（冗余存储，方便查询）
+  
+  // API 调用信息
+  apiProvider       String   // claude | openai | cursor | gemini
+  modelName         String?  // 使用的模型名称
+  callType          String   // chat | completion | embedding | tool_call
+  
+  // Token 使用详情
+  inputTokens       Int      @default(0)  // 输入 token 数（发送给模型）
+  outputTokens      Int      @default(0)  // 输出 token 数（模型返回）
+  totalTokens       Int      @default(0)  // 总 token 数
+  cachedTokens      Int?     // 缓存 token 数（如果有）
+  
+  // 请求/响应内容（可选，用于调试）
+  requestPreview    String?  // 请求内容预览（前500字符）
+  responsePreview   String?  // 响应内容预览（前500字符）
+  
+  // 时间信息
+  requestStartedAt  DateTime @default(now())  // 请求开始时间
+  requestCompletedAt DateTime?                // 请求完成时间
+  durationMs        Int?     // 请求耗时（毫秒）
+  
+  // 费用估算
+  estimatedCost     Float?   // 预估费用（美元）
+  
+  // 状态
+  status            String   @default("success") // success | error | timeout
+  errorMessage      String?  // 错误信息
+  
+  createdAt         DateTime @default(now())
+
+  // 关系
+  evaluation        EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@index([projectId])
+  @@index([apiProvider])
+  @@index([modelName])
+  @@index([createdAt])
+  @@index([evaluationId, createdAt])
+  @@index([projectId, createdAt])
 }

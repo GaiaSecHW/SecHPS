@@ -51,12 +51,24 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
+    const search = searchParams.get('search') || undefined;
 
     // 获取分页配置
     const { skip, take } = getOffsetPagination({ page, limit });
 
     // 获取插件列表
-    const allPlugins = await PluginManager.getPlugins();
+    let allPlugins = await PluginManager.getPlugins();
+    
+    // 搜索过滤
+    if (search) {
+      const searchLower = search.toLowerCase();
+      allPlugins = allPlugins.filter(plugin => 
+        plugin.name.toLowerCase().includes(searchLower) ||
+        plugin.displayName?.toLowerCase().includes(searchLower) ||
+        plugin.description?.toLowerCase().includes(searchLower)
+      );
+    }
+    
     const total = allPlugins.length;
     const plugins = allPlugins.slice(skip, skip + take);
     const totalPages = Math.ceil(total / take);

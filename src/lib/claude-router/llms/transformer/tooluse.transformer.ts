@@ -143,7 +143,10 @@ Examples:
                         data
                       )}\n\n`;
                       controller.enqueue(encoder.encode(modifiedLine));
-                    } catch (e) {}
+                    } catch (e) {
+                      // JSON序列化失败，跳过此数据块
+                      console.warn('[ToolUseTransformer] Failed to serialize modified data:', e);
+                    }
                     return;
                   }
                 }

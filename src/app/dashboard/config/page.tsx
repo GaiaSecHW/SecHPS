@@ -23,6 +23,7 @@ interface Config {
   projectUploadDir: string | null;
   workflowConfig: string | null;
   isActive: boolean;
+  maxConcurrentEvaluations?: number;
 }
 
 export default function ConfigPage() {
@@ -54,6 +55,9 @@ export default function ConfigPage() {
   // CLAUDE.md 全局模板
   const [claudemdTemplate, setClaudemdTemplate] = useState('');
 
+  // 并发限制设置
+  const [maxConcurrentEvaluations, setMaxConcurrentEvaluations] = useState(3);
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
@@ -76,7 +80,33 @@ export default function ConfigPage() {
       }
 
       const data = await response.json();
-      const activeConfig = data.configs.find((c: any) => c.isActive);
+      
+      // 查找激活配置，如果没有激活配置则使用第一个并自动激活
+      let activeConfig = data.configs.find((c: any) => c.isActive);
+      
+      if (!activeConfig && data.configs.length > 0) {
+        // 没有激活配置，自动激活第一个
+        const firstConfig = data.configs[0];
+        console.log('[Config] 没有激活配置，自动激活第一个:', firstConfig.id);
+        
+        // 调用 API 激活这个配置
+        const activateResponse = await fetch(`/api/config/${firstConfig.id}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ isActive: true }),
+        });
+        
+        if (activateResponse.ok) {
+          activeConfig = { ...firstConfig, isActive: true };
+          console.log('[Config] 已自动激活配置:', activeConfig.id);
+        } else {
+          // 激活失败，直接使用第一个配置
+          activeConfig = firstConfig;
+        }
+      }
       
       if (activeConfig) {
         setConfig(activeConfig);
@@ -85,6 +115,7 @@ export default function ConfigPage() {
         setCustomProgressQuestion(activeConfig.progressQuestion || '');
         setSkillOutputTemplate(activeConfig.skillOutputTemplate || '');
         setClaudemdTemplate(activeConfig.claudemdTemplate || '');
+        setMaxConcurrentEvaluations(activeConfig.maxConcurrentEvaluations || 3);
         
         // 解析工作流配置
         if (activeConfig.workflowConfig) {
@@ -207,6 +238,7 @@ export default function ConfigPage() {
           progressQuestion: customProgressQuestion,
           skillOutputTemplate,
           claudemdTemplate,
+          maxConcurrentEvaluations,
         }),
       });
 
@@ -436,6 +468,55 @@ export default function ConfigPage() {
           <p className="text-xs text-gray-500">
             这些配置将作为工作流中开始和结束节点的默认名称和描述
           </p>
+        </div>
+
+        {/* Concurrent Evaluation Limit */}
+        <div className="space-y-4 border-t border-gray-200 pt-6">
+          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+            <Server size={20} />
+            并发评估限制
+          </h3>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                最大同时运行评估数量
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={maxConcurrentEvaluations}
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value);
+                    if (value >= 1 && value <= 10) {
+                      setMaxConcurrentEvaluations(value);
+                    }
+                  }}
+                  className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                />
+                <span className="text-sm text-gray-600">个评估</span>
+                <div className="flex gap-1">
+                  {[1, 3, 5, 10].map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setMaxConcurrentEvaluations(n)}
+                      className={`px-3 py-1 text-sm rounded-md border ${
+                        maxConcurrentEvaluations === n
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-gray-500 mt-2">
+                超出限制的评估请求将加入排队队列，等待当前评估完成后自动启动
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* System Prompt Config */}

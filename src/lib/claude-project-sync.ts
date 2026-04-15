@@ -55,7 +55,12 @@ export class ClaudeProjectManager {
       const data = await readFile(this.configPath, 'utf-8');
       return JSON.parse(data);
     } catch (error) {
-      // 配置文件不存在，返回默认配置
+      // 配置文件不存在或解析失败，返回默认配置
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.log('[ClaudeProjectManager] 项目配置文件不存在，将使用默认配置');
+      } else {
+        console.warn('[ClaudeProjectManager] 读取项目配置失败，使用默认配置:', error);
+      }
       return { projects: {} };
     }
   }

@@ -13,6 +13,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Search,
 } from 'lucide-react';
 
 export default function RolesPage() {
@@ -20,6 +21,7 @@ export default function RolesPage() {
   const [permissions, setPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
   const [showCreatePermissionModal, setShowCreatePermissionModal] = useState(false);
   const [showEditRoleModal, setShowEditRoleModal] = useState(false);
@@ -31,12 +33,18 @@ export default function RolesPage() {
   useEffect(() => {
     fetchRoles();
     fetchPermissions();
-  }, [page]);
+  }, [page, searchQuery]);
 
   const fetchRoles = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/roles?page=${page}&limit=${pageSize}`, {
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(pageSize),
+      });
+      if (searchQuery) params.append('search', searchQuery);
+      
+      const response = await fetch(`/api/roles?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -157,8 +165,23 @@ export default function RolesPage() {
 
       {/* 角色列表 */}
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
           <h2 className="text-lg font-semibold text-gray-900">角色</h2>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="搜索角色..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+                className="pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent w-48"
+              />
+            </div>
+          </div>
         </div>
 
         {roles.length === 0 ? (
