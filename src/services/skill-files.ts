@@ -20,6 +20,7 @@ export interface SkillMetadata {
   userId: string | null;  // null = 公共，有值 = 私有
   latestVersion: number;
   isActive: boolean;
+  techStack?: string[];  // 技术栈列表，空数组或 undefined 表示通用（适合所有项目）
   updatedAt: string;
 }
 
@@ -166,6 +167,16 @@ export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string
     
     // 更新 metadata.json（只保存最新版本的元数据）
     if (skill.isLatest) {
+      // 解析 techStack JSON 字符串
+      let techStackArray: string[] | undefined;
+      if (skill.techStack) {
+        try {
+          techStackArray = JSON.parse(skill.techStack);
+        } catch {
+          techStackArray = undefined;
+        }
+      }
+      
       const metadata: SkillMetadata = {
         id: skill.id,
         name: skill.name,
@@ -173,6 +184,7 @@ export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string
         userId: skill.userId,
         latestVersion: skill.version,
         isActive: skill.isActive,
+        techStack: techStackArray,  // 技术栈列表
         updatedAt: new Date().toISOString(),
       };
       
@@ -228,12 +240,18 @@ export async function deleteSkillFromDisk(skillName: string, userId: string | nu
 /**
  * 拷贝 Skills 到项目目录
  * 直接从 data/skills/ 拷贝到项目的 .claude/skills/
- * 支持标准输出模板
+ * 支持标准输出模板和技术栈过滤
+ * 
+ * 技术栈匹配规则：
+ * - 项目无技术栈 → 拷贝所有启用的 Skill
+ * - Skill 无技术栈 → 适合所有项目（通用 Skill）
+ * - 有技术栈 → 只拷贝与项目技术栈匹配的 Skill
  */
 export async function copySkillsToProject(
   projectPath: string,
   userId?: string | null,
-  skillOutputTemplate?: string
+  skillOutputTemplate?: string,
+  projectTechStack?: string[] | null  // 项目技术栈，null 或空数组表示拷贝所有
 ): Promise<CopyResult> {
   const skillsDataDir = getSkillsDataDir();
   const targetDir = path.join(projectPath, '.claude', 'skills');
@@ -304,6 +322,34 @@ export async function copySkillsToProject(
         // 只拷贝激活的 Skills
         if (!metadata.isActive) {
           continue;
+        }
+        
+        // 技术栈匹配过滤
+        // 规则：
+        // 1. 项目无技术栈（null 或空数组） → 拷贝所有 Skill
+        // 2. Skill 无技术栈（undefined 或空数组） → 适合所有项目，拷贝
+        // 3. 有技术栈 → 需要匹配才拷贝
+        if (projectTechStack && projectTechStack.length > 0) {
+          const skillTechStack = metadata.techStack || [];
+          
+          // Skill 无技术栈 = 通用 Skill，适合所有项目
+          if (skillTechStack.length === 0) {
+            // 通用 Skill，继续拷贝
+          } else {
+            // 检查是否有匹配
+            const hasMatch = skillTechStack.some(skillTech =>
+              projectTechStack.some(projectTech =>
+                skillTech.toLowerCase() === projectTech.toLowerCase() ||
+                skillTech.toLowerCase().includes(projectTech.toLowerCase()) ||
+                projectTech.toLowerCase().includes(skillTech.toLowerCase())
+              )
+            );
+            
+            if (!hasMatch) {
+              console.log(`[SkillFiles] 技术栈不匹配，跳过: ${metadata.name} (Skill技术栈: ${skillTechStack.join(', ')}, 项目技术栈: ${projectTechStack.join(', ')})`);
+              continue;
+            }
+          }
         }
         
         // 拷贝最新版本的 SKILL.md

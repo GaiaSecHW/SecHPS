@@ -70,15 +70,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '项目路径未配置' }, { status: 400 });
     }
 
+    // 解析项目技术栈
+    let projectTechStack: string[] | null = null;
+    if (project.techStack) {
+      try {
+        projectTechStack = JSON.parse(project.techStack);
+        console.log('[SyncSkills] 项目技术栈:', projectTechStack?.join(', ') || '无');
+      } catch {
+        console.warn('[SyncSkills] 项目技术栈解析失败，将拷贝所有 Skills');
+        projectTechStack = null;
+      }
+    }
+
     // 获取系统配置中的标准输出模板
     const config = await prisma.opencodeConfig.findFirst({
       where: { isActive: true },
     });
 
-    // 直接从磁盘拷贝 Skills
-    const result = await copySkillsToProject(project.projectPath, payload.userId, config?.skillOutputTemplate || undefined);
+    // 直接从磁盘拷贝 Skills（带技术栈过滤）
+    const result = await copySkillsToProject(
+      project.projectPath,
+      payload.userId,
+      config?.skillOutputTemplate || undefined,
+      projectTechStack
+    );
 
     console.log(`[SyncSkills] 同步完成: 成功 ${result.success}, 失败 ${result.failed}`);
+    console.log(`[SyncSkills] 拷贝的 Skills: ${result.copiedSkills.join(', ')}`);
 
     return NextResponse.json({
       message: 'Skills 同步成功',
@@ -86,6 +104,7 @@ export async function POST(request: NextRequest) {
       failed: result.failed,
       errors: result.errors,
       copiedSkills: result.copiedSkills,
+      projectTechStack: projectTechStack,
     });
   } catch (error) {
     console.error('[SyncSkills] 同步失败:', error);

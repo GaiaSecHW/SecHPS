@@ -254,12 +254,32 @@ export async function POST(
       try {
         console.log('[启动评估] 开始同步 Skills 到项目目录');
         
-        // 直接从磁盘拷贝 Skills
-        const copyResult = await copySkillsToProject(project.projectPath, payload.userId);
+        // 解析项目技术栈
+        let projectTechStack: string[] | null = null;
+        if (project.techStack) {
+          try {
+            projectTechStack = JSON.parse(project.techStack);
+            console.log('[启动评估] 项目技术栈:', projectTechStack?.join(', ') || '无');
+          } catch {
+            console.warn('[启动评估] 项目技术栈解析失败，将拷贝所有 Skills');
+            projectTechStack = null;
+          }
+        } else {
+          console.log('[启动评估] 项目未设置技术栈，将拷贝所有启用的 Skills');
+        }
+        
+        // 直接从磁盘拷贝 Skills（带技术栈过滤）
+        const copyResult = await copySkillsToProject(
+          project.projectPath,
+          payload.userId,
+          undefined,  // skillOutputTemplate（可选，后续可从 globalConfig 获取）
+          projectTechStack  // 项目技术栈
+        );
         
         console.log(`[启动评估] Skills 同步完成:`);
         console.log(`  - 成功: ${copyResult.success}`);
         console.log(`  - 失败: ${copyResult.failed}`);
+        console.log(`  - 拷贝的 Skills: ${copyResult.copiedSkills.join(', ')}`);
         
         if (copyResult.failed > 0) {
           copyResult.errors.forEach(err => {
