@@ -197,12 +197,12 @@ export default function SessionsPage() {
     }
   };
 
-  // 获取模型列表
+  // 获取模型列表（评估时使用：用户自己的模型 + 公开的模型）
   const fetchModels = async () => {
     try {
       setLoadingModels(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/admin/models?isActive=true', {
+      const response = await fetch('/api/models?forEvaluation=true&isActive=true', {
         headers: {
           Authorization: `Bearer ${token}`,
         },

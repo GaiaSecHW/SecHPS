@@ -169,6 +169,9 @@ function DashboardLayoutContent({
           <NavLink href="/dashboard/profile" icon={<User size={20} />} collapsed={collapsed}>
             个人中心
           </NavLink>
+          <NavLink href="/dashboard/models" icon={<Brain size={20} />} collapsed={collapsed}>
+            我的模型
+          </NavLink>
           <NavLink href="/dashboard/token-stats" icon={<Coins size={20} />} collapsed={collapsed}>
             Token 统计
           </NavLink>
