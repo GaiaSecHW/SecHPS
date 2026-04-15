@@ -4,6 +4,23 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 
+// 密码复杂度验证函数
+function validatePassword(password: string): { valid: boolean; error?: string } {
+  if (password.length < 8) {
+    return { valid: false, error: '密码至少需要8个字符' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, error: '密码需要包含小写字母' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, error: '密码需要包含大写字母' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, error: '密码需要包含数字' };
+  }
+  return { valid: true };
+}
+
 // 获取所有用户
 export async function GET(request: Request) {
   try {
@@ -117,6 +134,12 @@ export async function POST(request: Request) {
         { error: '缺少必填字段' },
         { status: 400 }
       );
+    }
+
+    // 验证密码复杂度
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return NextResponse.json({ error: passwordValidation.error }, { status: 400 });
     }
 
     // 检查邮箱是否已存在

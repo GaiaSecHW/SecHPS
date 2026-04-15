@@ -69,9 +69,6 @@ function DashboardLayoutContent({
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
 
-    console.log('Dashboard layout - token:', token ? 'exists' : 'not found');
-    console.log('Dashboard layout - userData:', userData ? 'exists' : 'not found');
-
     if (!token || !userData) {
       console.log('Redirecting to login - missing token or userData');
       router.push('/login');
@@ -80,7 +77,6 @@ function DashboardLayoutContent({
 
     try {
       const parsedUser = JSON.parse(userData);
-      console.log('Dashboard layout - parsed user:', parsedUser);
       setUser(parsedUser);
     } catch (e) {
       // userData 损坏，清除并跳转登录

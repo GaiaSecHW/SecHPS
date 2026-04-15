@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, createCombinedVerifier, createWorkflowNodeVerifier } from '@/services/evaluation';
 import { NODE_TYPE_MAP } from '@/types/workflow';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
@@ -31,6 +33,11 @@ export async function POST(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_CREATE)) {
+      return NextResponse.json({ error: '无权限启动评估' }, { status: 403 });
+    }
+
     const { id } = await params;
 
     // 解析请求体获取 workflowId 和其他选项
@@ -50,8 +57,9 @@ export async function POST(
       // 如果没有请求体，继续执行
     }
 
-    // 检查是否为队列启动（内部调用）
-    const isQueuedStart = request.headers.get('X-Internal-Queued-Start') === 'true';
+    // 检查是否为队列启动（内部调用）- 使用内部密钥验证防止伪造
+    const internalCallToken = request.headers.get('X-Internal-Token');
+    const isQueuedStart = internalCallToken === process.env.INTERNAL_API_SECRET;
     console.log('[启动评估] 是否队列启动:', isQueuedStart, 'queuedEvaluationId:', queuedEvaluationId);
 
     // 获取项目信息（包括运行中的评估）
@@ -67,6 +75,11 @@ export async function POST(
 
     if (!project) {
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+    }
+
+    // 项目归属校验
+    if (project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权操作此项目' }, { status: 403 });
     }
 
     // 获取全局配置（优先激活配置，如果没有激活配置则使用第一个）

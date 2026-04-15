@@ -22,6 +22,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 检查 VULNERABILITY_READ 权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.VULNERABILITY_READ)) {
+      return NextResponse.json({ error: '权限不足' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId') || undefined;
     const status = searchParams.get('status')?.split(',') || undefined;
@@ -103,6 +108,11 @@ export async function POST(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 检查 VULNERABILITY_CREATE 权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.VULNERABILITY_CREATE)) {
+      return NextResponse.json({ error: '权限不足' }, { status: 403 });
     }
 
     const body = await request.json();

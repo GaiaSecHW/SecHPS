@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 import { abortAgent } from '@/lib/agent-registry';
 
 // POST /api/evaluations/[id]/stop - 停止评估会话
@@ -23,15 +25,26 @@ export async function POST(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_DELETE)) {
+      return NextResponse.json({ error: '无权限停止评估' }, { status: 403 });
+    }
+
     const { id } = await params;
 
     // 检查评估会话是否存在
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
+      include: { project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验
+    if (evaluation.project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权操作此评估' }, { status: 403 });
     }
 
     if (evaluation.status !== 'running') {

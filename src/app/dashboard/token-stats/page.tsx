@@ -13,6 +13,7 @@ import {
   BarChart3,
   PieChart,
   Info,
+  Users,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -58,6 +59,7 @@ export default function TokenStatsPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // 各时间段统计
   const [dailyStats, setDailyStats] = useState<TokenSummary | null>(null);
@@ -74,6 +76,13 @@ export default function TokenStatsPage() {
   const [trendData, setTrendData] = useState<TrendData[]>([]);
 
   useEffect(() => {
+    // 检查是否是管理员
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setIsAdmin(user.roles?.includes('admin') || false);
+    }
+    
     fetchAllStats();
   }, []);
 
@@ -228,25 +237,39 @@ export default function TokenStatsPage() {
         </div>
       </div>
 
-      {/* 时间段选择 */}
-      <div className="flex items-center space-x-2 bg-white rounded-lg shadow border border-gray-200 p-4">
-        <Calendar className="text-gray-400" size={20} />
-        <span className="text-sm font-medium text-gray-700">时间范围：</span>
-        <div className="flex space-x-2">
-          {(['day', 'week', 'month', 'year'] as const).map((period) => (
-            <button
-              key={period}
-              onClick={() => fetchPeriodStats(period)}
-              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                selectedPeriod === period
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {period === 'day' ? '今日' : period === 'week' ? '本周' : period === 'month' ? '本月' : '本年'}
-            </button>
-          ))}
+      {/* 时间段选择 + 管理员按钮 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2 bg-white rounded-lg shadow border border-gray-200 p-4">
+          <Calendar className="text-gray-400" size={20} />
+          <span className="text-sm font-medium text-gray-700">时间范围：</span>
+          <div className="flex space-x-2">
+            {(['day', 'week', 'month', 'year'] as const).map((period) => (
+              <button
+                key={period}
+                onClick={() => fetchPeriodStats(period)}
+                className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                  selectedPeriod === period
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {period === 'day' ? '今日' : period === 'week' ? '本周' : period === 'month' ? '本月' : '本年'}
+              </button>
+            ))}
+          </div>
         </div>
+        
+        {/* 管理员专属：查看用户统计 */}
+        {isAdmin && (
+          <Link
+            href="/dashboard/token-stats/users"
+            className="flex items-center px-4 py-3 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition-colors"
+          >
+            <Users size={18} className="mr-2" />
+            查看用户统计
+            <ChevronRight size={16} className="ml-1" />
+          </Link>
+        )}
       </div>
 
       {/* 汇总统计卡片 */}

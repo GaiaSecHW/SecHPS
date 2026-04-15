@@ -893,9 +893,17 @@ function SessionDetailContent({
             </p>
           </div>
           <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">预估费用</h3>
+            <h3 className="text-xs font-medium text-gray-500 mb-1 flex items-center">
+              预估费用
+              <span className="ml-1 cursor-help relative group">
+                <Info size={12} className="text-orange-400 hover:text-orange-600" />
+                <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
+                  ¥6/百万输入 + ¥22/百万输出
+                </span>
+              </span>
+            </h3>
             <p className="text-sm text-orange-600 font-medium">
-              {evaluation.estimatedCost ? `$${evaluation.estimatedCost.toFixed(4)}` : '-'}
+              {evaluation.estimatedCost ? `¥${evaluation.estimatedCost.toFixed(4)}` : '-'}
             </p>
           </div>
         </div>

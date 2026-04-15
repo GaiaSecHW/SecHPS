@@ -54,17 +54,29 @@ export async function GET(request: Request) {
       evalWhereClause.projectId = projectId;
       tokenWhereClause.projectId = projectId;
     } else {
-      // 查询用户有权限的项目 + 系统项目（所有人可见）
+      // 系统项目（所有人可见）
       const SYSTEM_PROJECT_ID = 'system-00000000-0000-0000-0000-000000000001';
       
-      const userProjects = await prisma.project.findMany({
-        where: { userId: payload.userId },
-        select: { id: true },
-      });
-      const projectIds = [...userProjects.map(p => p.id), SYSTEM_PROJECT_ID];
-      
-      evalWhereClause.projectId = { in: projectIds };
-      tokenWhereClause.projectId = { in: projectIds };
+      if (isAdmin) {
+        // 管理员：查询所有项目（包括所有用户的）
+        const allProjects = await prisma.project.findMany({
+          select: { id: true },
+        });
+        const projectIds = [...allProjects.map(p => p.id), SYSTEM_PROJECT_ID];
+        
+        evalWhereClause.projectId = { in: projectIds };
+        tokenWhereClause.projectId = { in: projectIds };
+      } else {
+        // 普通用户：只查询自己的项目 + 系统项目
+        const userProjects = await prisma.project.findMany({
+          where: { userId: payload.userId },
+          select: { id: true },
+        });
+        const projectIds = [...userProjects.map(p => p.id), SYSTEM_PROJECT_ID];
+        
+        evalWhereClause.projectId = { in: projectIds };
+        tokenWhereClause.projectId = { in: projectIds };
+      }
     }
 
     // 查询评估会话的 token 汇总（用于跨时段统计）
@@ -222,6 +234,69 @@ export async function GET(request: Request) {
     // 查询趋势数据（按日期分组）
     const trendData = await getTrendData(tokenWhereClause, period);
 
+    // 用户统计（仅管理员可见）
+    let userStats: any[] = [];
+    if (isAdmin) {
+      // 查询每个用户的 token 使用量
+      const userProjects = await prisma.project.findMany({
+        select: {
+          id: true,
+          userId: true,
+          name: true,
+        },
+      });
+      
+      // 获取用户信息
+      const userIds = [...new Set(userProjects.map(p => p.userId))];
+      const users = await prisma.user.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, username: true, name: true },
+      });
+      
+      // 查询每个项目的 token 使用量
+      const projectTokenStats = await prisma.evaluationSession.groupBy({
+        where: evalWhereClause,
+        by: ['projectId'],
+        _sum: {
+          totalInputTokens: true,
+          totalOutputTokens: true,
+          estimatedCost: true,
+        },
+        _count: {
+          id: true,
+        },
+      });
+      
+      // 汇总每个用户的 token 使用量
+      const userTokenMap = new Map<string, { inputTokens: number; outputTokens: number; cost: number; count: number }>();
+      
+      for (const stat of projectTokenStats) {
+        const project = userProjects.find(p => p.id === stat.projectId);
+        if (project) {
+          const existing = userTokenMap.get(project.userId) || { inputTokens: 0, outputTokens: 0, cost: 0, count: 0 };
+          existing.inputTokens += stat._sum.totalInputTokens || 0;
+          existing.outputTokens += stat._sum.totalOutputTokens || 0;
+          existing.cost += stat._sum.estimatedCost || 0;
+          existing.count += stat._count.id || 0;
+          userTokenMap.set(project.userId, existing);
+        }
+      }
+      
+      // 构建用户统计数组
+      userStats = Array.from(userTokenMap.entries()).map(([userId, data]) => {
+        const user = users.find(u => u.id === userId);
+        return {
+          userId,
+          username: user?.username || user?.name || '未知用户',
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          totalTokens: data.inputTokens + data.outputTokens,
+          estimatedCost: data.cost,
+          evaluationCount: data.count,
+        };
+      }).sort((a, b) => b.totalTokens - a.totalTokens);
+    }
+
     return NextResponse.json({
       period,
       startDate,
@@ -237,6 +312,7 @@ export async function GET(request: Request) {
       modelStats,
       projectStats,
       trendData,
+      userStats, // 仅管理员可见
     });
   } catch (error) {
     console.error('Get token stats error:', error);

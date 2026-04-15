@@ -6,6 +6,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 
 /**
  * GET /api/evaluations/[id]/iterations
@@ -35,26 +37,36 @@ export async function GET(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 2. 获取评估会话 ID
+    // 2. 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_READ)) {
+      return NextResponse.json({ error: '无权限查看迭代记录' }, { status: 403 });
+    }
+
+    // 3. 获取评估会话 ID
     const { id } = await params;
 
-    // 3. 解析查询参数
+    // 4. 解析查询参数
     const { searchParams } = new URL(request.url);
     const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10)));
     const statusFilter = searchParams.get('status') || undefined;
 
-    // 4. 验证评估会话存在
+    // 5. 验证评估会话存在并检查归属
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      select: { id: true, projectId: true, status: true },
+      select: { id: true, projectId: true, status: true, project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 5. 构建查询条件
+    // 6. 归属校验
+    if (evaluation.project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
+    }
+
+    // 7. 构建查询条件
     const where: { evaluationSessionId: string; status?: string } = {
       evaluationSessionId: id,
     };
@@ -62,7 +74,7 @@ export async function GET(
       where.status = statusFilter;
     }
 
-    // 6. 查询迭代记录（分页）
+    // 8. 查询迭代记录（分页）
     const [iterations, total] = await Promise.all([
       prisma.evaluationIteration.findMany({
         where,
@@ -89,7 +101,7 @@ export async function GET(
       prisma.evaluationIteration.count({ where }),
     ]);
 
-    // 7. 计算汇总统计
+    // 9. 计算汇总统计
     const allIterations = await prisma.evaluationIteration.findMany({
       where: { evaluationSessionId: id },
       select: {

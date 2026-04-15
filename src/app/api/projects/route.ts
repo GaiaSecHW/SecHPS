@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 import { mkdir, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
 
@@ -19,10 +21,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 检查 PROJECT_READ 权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.PROJECT_READ)) {
+      return NextResponse.json({ error: '无权限查看项目' }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const where: any = {};
+    const where: any = { userId: payload.userId };
     if (status) {
       where.status = status;
     }
@@ -82,6 +89,11 @@ export async function POST(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 检查 PROJECT_CREATE 权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.PROJECT_CREATE)) {
+      return NextResponse.json({ error: '无权限创建项目' }, { status: 403 });
     }
 
     const formData = await request.formData();

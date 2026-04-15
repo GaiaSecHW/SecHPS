@@ -15,6 +15,7 @@ import {
   Hourglass,
   Coins,
   Info,
+  Users,
 } from 'lucide-react';
 import { formatBeijingTime } from '@/lib/beijing-time';
 
@@ -83,8 +84,16 @@ export default function DashboardPage() {
     evaluationCount: 0,
     callCount: 0,
   });
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // 检查是否是管理员
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const user = JSON.parse(userStr);
+      setIsAdmin(user.roles?.includes('admin') || false);
+    }
+    
     fetchData();
     fetchVulnStats();
     fetchTokenStats();
@@ -350,21 +359,39 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* 统计卡片 - Token 消耗 */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Coins size={20} className="mr-2 text-primary-500" />
-            Token 消耗统计
-          </h2>
-          <Link
-            href="/dashboard/token-stats"
-            className="flex items-center text-sm text-primary-600 hover:text-primary-800 transition-colors"
-          >
-            查看详情
-            <ArrowRight size={16} className="ml-1" />
-          </Link>
-        </div>
+{/* 统计卡片 - Token 消耗 */}
+       <div className="mb-6">
+         <div className="flex items-center justify-between mb-4">
+           <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+             <Coins size={20} className="mr-2 text-primary-500" />
+             Token 消耗统计
+             {/* 管理员视图标识 */}
+             {isAdmin && (
+               <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                 管理员视图（全部用户）
+               </span>
+             )}
+           </h2>
+           <div className="flex items-center space-x-3">
+             {/* 管理员专属：查看用户统计按钮 */}
+             {isAdmin && (
+               <Link
+                 href="/dashboard/token-stats/users"
+                 className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors"
+               >
+                 <Users size={16} className="mr-1" />
+                 查看用户统计
+               </Link>
+             )}
+             <Link
+               href="/dashboard/token-stats"
+               className="flex items-center text-sm text-primary-600 hover:text-primary-800 transition-colors"
+             >
+               查看详情
+               <ArrowRight size={16} className="ml-1" />
+             </Link>
+           </div>
+         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
           <TokenStatCard
             title="总输入 Token"

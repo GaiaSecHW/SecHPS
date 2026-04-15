@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 
 export async function GET(
   request: Request,
@@ -19,9 +21,29 @@ export async function GET(
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
- 
+
+    // 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_READ)) {
+      return NextResponse.json({ error: '无权限查看评估结果' }, { status: 403 });
+    }
+
     const { id } = await params;
- 
+
+    // 先查询评估会话以验证归属
+    const evaluation = await prisma.evaluationSession.findUnique({
+      where: { id },
+      include: { project: { select: { userId: true } } },
+    });
+
+    if (!evaluation) {
+      return NextResponse.json({ result: null });
+    }
+
+    // 归属校验
+    if (evaluation.project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权查看此评估结果' }, { status: 403 });
+    }
+
     const result = await prisma.evaluationResult.findUnique({
       where: { evaluationId: id },
     });

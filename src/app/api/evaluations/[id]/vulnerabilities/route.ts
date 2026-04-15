@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 
 export async function GET(
   request: Request,
@@ -20,7 +22,26 @@ export async function GET(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_READ)) {
+      return NextResponse.json({ error: '无权限查看漏洞' }, { status: 403 });
+    }
+
     const { id } = await params;
+
+    // 评估归属校验
+    const evaluation = await prisma.evaluationSession.findUnique({
+      where: { id },
+      include: { project: { select: { userId: true } } },
+    });
+
+    if (!evaluation) {
+      return NextResponse.json({ vulnerabilities: [] });
+    }
+
+    if (evaluation.project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权查看此评估漏洞' }, { status: 403 });
+    }
 
     const { searchParams } = new URL(request.url);
     const severity = searchParams.get('severity');

@@ -5,6 +5,8 @@
 
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 import { ProjectDiscovery } from '@/services/session-manager';
 
 // 获取所有 Claude SDK 项目的会话列表
@@ -20,6 +22,11 @@ export async function GET(request: Request) {
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 检查 SESSION_READ 权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_READ)) {
+      return NextResponse.json({ error: '无权限查看会话' }, { status: 403 });
     }
 
     // 从 Claude SDK 发现所有项目

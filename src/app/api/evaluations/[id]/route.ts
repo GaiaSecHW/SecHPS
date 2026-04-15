@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
 
 // GET /api/evaluations/[id] - 获取评估会话详情
 export async function GET(
@@ -22,6 +24,11 @@ export async function GET(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_READ)) {
+      return NextResponse.json({ error: '无权限查看评估' }, { status: 403 });
+    }
+
     const { id } = await params;
 
     const evaluation = await prisma.evaluationSession.findUnique({
@@ -33,6 +40,7 @@ export async function GET(
             name: true,
             description: true,
             environmentUrl: true,
+            userId: true,
           },
         },
       },
@@ -40,6 +48,11 @@ export async function GET(
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验
+    if (evaluation.project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
     }
 
     return NextResponse.json({ evaluation });
@@ -67,26 +80,38 @@ export async function DELETE(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 权限检查
+    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_DELETE)) {
+      return NextResponse.json({ error: '无权限删除评估' }, { status: 403 });
+    }
+
     const { id } = await params;
 
-    // 检查评估会话是否存在
+    // 检查评估会话是否存在并获取项目归属
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
+      include: { project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 删除相关的消息
-    await prisma.sessionMessage.deleteMany({
-      where: { evaluationSessionId: id },
-    });
+    // 归属校验
+    if (evaluation.project.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权删除此评估' }, { status: 403 });
+    }
 
-    // 删除评估会话
-    await prisma.evaluationSession.delete({
-      where: { id },
-    });
+    // 级联删除所有关联数据（使用事务）
+    await prisma.$transaction([
+      prisma.sessionMessage.deleteMany({ where: { evaluationSessionId: id } }),
+      prisma.nodeExecution.deleteMany({ where: { evaluationSessionId: id } }),
+      prisma.evaluationIteration.deleteMany({ where: { evaluationSessionId: id } }),
+      prisma.tokenUsage.deleteMany({ where: { evaluationId: id } }),
+      prisma.vulnerability.deleteMany({ where: { evaluationId: id } }),
+      prisma.evaluationResult.deleteMany({ where: { evaluationId: id } }),
+      prisma.evaluationSession.delete({ where: { id } }),
+    ]);
 
     return NextResponse.json({ message: '评估会话已删除' });
   } catch (error) {
