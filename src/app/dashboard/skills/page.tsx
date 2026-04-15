@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import toast from 'react-hot-toast';
+import { ExternalLink } from 'lucide-react';
 import {
   Award,
   Plus,
@@ -31,6 +33,7 @@ interface Skill {
   displayName: string;
   description: string;
   category: string;
+  techStack: string | null;  // JSON: ["Java", "Python"] - 适合的技术栈
   cwe: string | null;
   content: string;
   isActive: boolean;
@@ -61,13 +64,20 @@ const categoryLabels: Record<string, string> = {
 
 export default function SkillsPage() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  
   const [skills, setSkills] = useState<Skill[]>([]);
   const [totalSkills, setTotalSkills] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('');
-  const [selectedTechStack, setSelectedTechStack] = useState<string>('');
+  
+  // 从 URL 参数初始化状态
+  const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
+  const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
+  const [selectedTechStack, setSelectedTechStack] = useState(searchParams.get('techStack') || '');
+  const [selectedActiveStatus, setSelectedActiveStatus] = useState(searchParams.get('isActive') || '');
+  
   const [categories, setCategories] = useState<{ name: string; label: string; count: number }[]>([]);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
   const [user, setUser] = useState<{ roles?: string[] } | null>(null);
@@ -80,9 +90,9 @@ export default function SkillsPage() {
   const [importing, setImporting] = useState(false);
   const importInputRef = useState<HTMLInputElement | null>(null);
   
-  // 分页状态
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  // 分页状态 - 从 URL 参数初始化
+  const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page') || '1'));
+  const [pageSize, setPageSize] = useState(Number(searchParams.get('limit') || '20'));
   const [totalPages, setTotalPages] = useState(1);
   const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(null);
   
@@ -102,6 +112,31 @@ export default function SkillsPage() {
     { name: 'C++', label: 'C++' },
   ];
 
+  // 启用/禁用状态选项
+  const activeStatusOptions = [
+    { value: 'true', label: '已启用' },
+    { value: 'false', label: '已禁用' },
+  ];
+
+  // 更新 URL 参数（保持分页和过滤状态）
+  const updateUrlParams = (updates: Record<string, string | number | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === '') {
+        params.delete(key);
+      } else if (key === 'page' && value === 1) {
+        // 页码为 1 时不需要显示在 URL 中
+        params.delete(key);
+      } else {
+        params.set(key, String(value));
+      }
+    });
+    
+    const newUrl = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(newUrl, { scroll: false });
+  };
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
@@ -112,15 +147,18 @@ export default function SkillsPage() {
   useEffect(() => {
     fetchSkills();
     fetchCategories();
-  }, [selectedCategory, selectedTechStack, currentPage, pageSize]);
+  }, [selectedCategory, selectedTechStack, selectedActiveStatus, currentPage, pageSize]);
   
-  // 搜索防抖
+  // 搜索防抖 - 搜索时重置到第一页并更新 URL
   useEffect(() => {
     if (searchDebounce) {
       clearTimeout(searchDebounce);
     }
     const timer = setTimeout(() => {
-      setCurrentPage(1); // 搜索时重置到第一页
+      if (searchTerm !== (searchParams.get('search') || '')) {
+        setCurrentPage(1);
+        updateUrlParams({ search: searchTerm || null, page: null });
+      }
       fetchSkills();
     }, 300);
     setSearchDebounce(timer);
@@ -138,6 +176,7 @@ export default function SkillsPage() {
       const params = new URLSearchParams();
       if (selectedCategory) params.append('category', selectedCategory);
       if (selectedTechStack) params.append('techStack', selectedTechStack);
+      if (selectedActiveStatus) params.append('isActive', selectedActiveStatus);
       if (searchTerm) params.append('search', searchTerm);
       params.append('page', currentPage.toString());
       params.append('limit', pageSize.toString());
@@ -207,12 +246,12 @@ export default function SkillsPage() {
       }
 
       const data = await response.json();
-      alert(`同步成功！\n\n总计: ${data.total}\n成功: ${data.success}\n失败: ${data.failed}`);
+toast.success(`同步成功！\n\n总计: ${data.total}\n成功: ${data.success}\n失败: ${data.failed}`);
       
       // 刷新列表
       fetchSkills();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '同步失败');
+toast.error(err instanceof Error ? err.message : '同步失败');
     } finally {
       setSyncing(false);
     }
@@ -239,7 +278,7 @@ export default function SkillsPage() {
 
       fetchSkills();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '删除失败');
+toast.error(err instanceof Error ? err.message : '删除失败');
     }
   };
 
@@ -262,7 +301,7 @@ export default function SkillsPage() {
 
       fetchSkills();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '更新失败');
+      toast.error(err instanceof Error ? err.message : '导出失败');
     }
   };
 
@@ -287,7 +326,7 @@ export default function SkillsPage() {
 
   const handleBatchOperation = async (action: 'enable' | 'disable' | 'delete') => {
     if (selectedSkills.size === 0) {
-      alert('请先选择要操作的 Skill');
+      toast.error('请先选择要操作的 Skill');
       return;
     }
 
@@ -318,9 +357,9 @@ export default function SkillsPage() {
 
       setSelectedSkills(new Set());
       fetchSkills();
-      alert(`成功${actionText} ${selectedSkills.size} 个 Skill`);
+      toast.success(`成功${actionText} ${selectedSkills.size} 个 Skill`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '操作失败');
+      toast.error(err instanceof Error ? err.message : '操作失败');
     } finally {
       setBatchOperating(false);
     }
@@ -359,9 +398,9 @@ export default function SkillsPage() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
 
-      alert(`导出成功！共 ${data.totalCount} 个 Skills`);
+      toast.success(`导出成功！共 ${data.totalCount} 个 Skills`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : '导出失败');
+      toast.error(err instanceof Error ? err.message : '导出失败');
     } finally {
       setExporting(false);
     }
@@ -410,13 +449,13 @@ export default function SkillsPage() {
         }
       }
 
-      alert(message);
+      toast(message, { icon: '📋', duration: 6000 });
       
       // 刷新列表
       fetchSkills();
       fetchCategories();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '导入失败');
+      toast.error(err instanceof Error ? err.message : '导入失败');
     } finally {
       setImporting(false);
       // 清空 input
@@ -601,7 +640,11 @@ export default function SkillsPage() {
             <Filter size={20} className="text-gray-400" />
             <select
               value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value);
+                setCurrentPage(1);
+                updateUrlParams({ category: e.target.value || null, page: null });
+              }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">所有分类</option>
@@ -616,13 +659,37 @@ export default function SkillsPage() {
             <Code size={20} className="text-gray-400" />
             <select
               value={selectedTechStack}
-              onChange={(e) => setSelectedTechStack(e.target.value)}
+              onChange={(e) => {
+                setSelectedTechStack(e.target.value);
+                setCurrentPage(1);
+                updateUrlParams({ techStack: e.target.value || null, page: null });
+              }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">所有技术栈</option>
               {techStackOptions.map((tech) => (
                 <option key={tech.name} value={tech.name}>
                   {tech.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* 启用/禁用状态过滤 */}
+          <div className="flex items-center gap-2">
+            <CheckCircle size={20} className="text-gray-400" />
+            <select
+              value={selectedActiveStatus}
+              onChange={(e) => {
+                setSelectedActiveStatus(e.target.value);
+                setCurrentPage(1);
+                updateUrlParams({ isActive: e.target.value || null, page: null });
+              }}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">所有状态</option>
+              {activeStatusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>
@@ -652,8 +719,8 @@ export default function SkillsPage() {
               {!searchTerm && !selectedCategory && isAdmin && (
                 <button
                   onClick={() => {
-                    // 运行种子数据脚本提示
-                    alert('请在服务器上运行: npx tsx prisma/seed-skills.ts');
+                    // 运行数据库脚本提示
+                    toast('运行数据库脚本: npx tsx prisma/seed-skills.ts', { icon: '🔧' });
                   }}
                   className="mt-4 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
@@ -708,9 +775,34 @@ export default function SkillsPage() {
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">
-                    <span className="text-sm text-gray-500">
-                      {categoryLabels[skill.category] || skill.category}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-500">
+                        {categoryLabels[skill.category] || skill.category}
+                      </span>
+                      {/* 技术栈标签 */}
+                      {skill.techStack && (() => {
+                        try {
+                          const techStacks = JSON.parse(skill.techStack);
+                          if (techStacks.length > 0) {
+                            return (
+                              <span className="flex items-center gap-1">
+                                {techStacks.slice(0, 3).map((ts: string) => (
+                                  <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                                    {ts}
+                                  </span>
+                                ))}
+                                {techStacks.length > 3 && (
+                                  <span className="text-xs text-gray-500">
+                                    +{techStacks.length - 3}
+                                  </span>
+                                )}
+                              </span>
+                            );
+                          }
+                        } catch {}
+                        return null;
+                      })()}
+                    </div>
                     {expandedSkill === skill.id ? (
                       <ChevronUp size={20} className="text-gray-400" />
                     ) : (
@@ -726,6 +818,26 @@ export default function SkillsPage() {
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">描述</h4>
                       <p className="text-sm text-gray-600">{skill.description}</p>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">所属技术栈</h4>
+                      {skill.techStack ? (() => {
+                        try {
+                          const techStacks = JSON.parse(skill.techStack);
+                          if (techStacks.length > 0) {
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {techStacks.map((ts: string) => (
+                                  <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                                    {ts}
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          }
+                        } catch {}
+                        return <p className="text-sm text-gray-600">无</p>;
+                      })() : <p className="text-sm text-gray-600">无</p>}
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">CWE</h4>
@@ -780,6 +892,14 @@ export default function SkillsPage() {
                         查看详情
                       </button>
                       <button
+                        onClick={() => window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank')}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                        title="在新窗口中打开详情页"
+                      >
+                        <ExternalLink size={16} className="mr-1" />
+                        新窗口查看
+                      </button>
+                      <button
                         onClick={() => handleToggleActive(skill.id, skill.isActive)}
                         className={`inline-flex items-center px-3 py-1.5 text-sm rounded ${
                           skill.isActive
@@ -819,6 +939,14 @@ export default function SkillsPage() {
                         <Edit size={16} className="mr-1" />
                         查看详情
                       </button>
+                      <button
+                        onClick={() => window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank')}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                        title="在新窗口中打开详情页"
+                      >
+                        <ExternalLink size={16} className="mr-1" />
+                        新窗口查看
+                      </button>
                     </div>
                   )}
                 </div>
@@ -840,6 +968,7 @@ export default function SkillsPage() {
               onChange={(e) => {
                 setPageSize(Number(e.target.value));
                 setCurrentPage(1);
+                updateUrlParams({ limit: Number(e.target.value), page: null });
               }}
               className="px-2 py-1 border border-gray-300 rounded text-sm"
             >
@@ -851,7 +980,10 @@ export default function SkillsPage() {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(1)}
+              onClick={() => {
+                setCurrentPage(1);
+                updateUrlParams({ page: null });
+              }}
               disabled={currentPage === 1}
               className="flex items-center p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="首页"
@@ -860,7 +992,11 @@ export default function SkillsPage() {
               <ChevronLeft size={16} className="-ml-2" />
             </button>
             <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              onClick={() => {
+                const newPage = Math.max(1, currentPage - 1);
+                setCurrentPage(newPage);
+                updateUrlParams({ page: newPage === 1 ? null : newPage });
+              }}
               disabled={currentPage === 1}
               className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="上一页"
@@ -871,7 +1007,11 @@ export default function SkillsPage() {
               {currentPage} / {totalPages}
             </span>
             <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              onClick={() => {
+                const newPage = Math.min(totalPages, currentPage + 1);
+                setCurrentPage(newPage);
+                updateUrlParams({ page: newPage === 1 ? null : newPage });
+              }}
               disabled={currentPage === totalPages}
               className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="下一页"
@@ -879,7 +1019,10 @@ export default function SkillsPage() {
               <ChevronRight size={20} />
             </button>
             <button
-              onClick={() => setCurrentPage(totalPages)}
+              onClick={() => {
+                setCurrentPage(totalPages);
+                updateUrlParams({ page: totalPages === 1 ? null : totalPages });
+              }}
               disabled={currentPage === totalPages}
               className="flex items-center p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="末页"

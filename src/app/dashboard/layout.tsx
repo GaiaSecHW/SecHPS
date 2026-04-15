@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
 import {
@@ -36,9 +36,12 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
+  
+  // 从 URL 参数判断是否需要收起侧边栏（新窗口打开详情页时）
+  const [collapsed, setCollapsed] = useState(searchParams.get('sidebar') === 'collapsed');
 
   useEffect(() => {
     // 检查认证状态
