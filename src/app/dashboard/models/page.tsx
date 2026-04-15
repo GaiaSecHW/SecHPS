@@ -64,6 +64,8 @@ interface ModelFormData {
   routeType: string;
   isActive: boolean;
   isPublic: boolean;
+  isSystemModel: boolean;  // 系统模型（仅管理员可设置）
+  isDefault: boolean;      // 默认模型（仅系统模型可设置）
 }
 
 export default function ModelsPage() {
@@ -98,6 +100,8 @@ export default function ModelsPage() {
     routeType: '',
     isActive: true,
     isPublic: false,
+    isSystemModel: false,
+    isDefault: false,
   });
 
   // 过滤状态
@@ -146,12 +150,14 @@ export default function ModelsPage() {
       routeType: '',
       isActive: true,
       isPublic: false,
+      isSystemModel: false,
+      isDefault: false,
     });
     setShowModal(true);
   };
 
   const handleOpenEditModal = (model: ModelConfig) => {
-    // 只能编辑自己创建的模型
+    // 只能编辑自己创建的模型，管理员可编辑所有
     if (!user?.roles?.includes('admin') && model.userId !== user?.id && model.userId !== null) {
       setError('只能编辑自己创建的模型');
       setTimeout(() => setError(null), 3000);
@@ -168,6 +174,8 @@ export default function ModelsPage() {
       routeType: model.routeType || '',
       isActive: model.isActive,
       isPublic: model.isPublic,
+      isSystemModel: model.userId === null,  // userId为null表示系统模型
+      isDefault: model.isDefault,
     });
     setShowModal(true);
   };
@@ -184,6 +192,8 @@ export default function ModelsPage() {
       routeType: '',
       isActive: true,
       isPublic: false,
+      isSystemModel: false,
+      isDefault: false,
     });
   };
 
@@ -214,6 +224,9 @@ export default function ModelsPage() {
         routeType: formData.providerType === 'openai' ? formData.routeType || undefined : undefined,
         isActive: formData.isActive,
         isPublic: formData.isPublic,
+        // 管理员专属字段
+        isSystemModel: user?.roles?.includes('admin') ? formData.isSystemModel : undefined,
+        isDefault: user?.roles?.includes('admin') && formData.isSystemModel ? formData.isDefault : undefined,
       };
 
       const response = await fetch(url, {
@@ -762,26 +775,55 @@ export default function ModelsPage() {
               </div>
 
               {/* 开关 */}
-              <div className="flex items-center gap-6">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isActive}
-                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">启用</span>
-                </label>
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">启用</span>
+                  </label>
 
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.isPublic}
-                    onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">公开（其他用户可使用）</span>
-                </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isPublic}
+                      onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">公开（其他用户可使用）</span>
+                  </label>
+                </div>
+
+                {/* 管理员专属选项 */}
+                {user?.roles?.includes('admin') && (
+                  <div className="flex items-center gap-6 pt-2 border-t border-gray-200">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.isSystemModel}
+                        onChange={(e) => setFormData({ ...formData, isSystemModel: e.target.checked, isDefault: e.target.checked ? formData.isDefault : false })}
+                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                      />
+                      <span className="text-sm text-purple-700 font-medium">系统模型（所有用户可见）</span>
+                    </label>
+
+                    {formData.isSystemModel && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.isDefault}
+                          onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
+                          className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-orange-700 font-medium">默认模型</span>
+                      </label>
+                    )}
+                  </div>
+                )}
               </div>
 
               {formData.isPublic && (

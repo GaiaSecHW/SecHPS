@@ -194,9 +194,6 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/config" icon={<Cog size={20} />} collapsed={collapsed}>
                 系统配置
               </NavLink>
-              <NavLink href="/dashboard/admin/models" icon={<Brain size={20} />} collapsed={collapsed}>
-                模型管理
-              </NavLink>
               <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
                 插件管理
               </NavLink>

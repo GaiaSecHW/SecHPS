@@ -110,7 +110,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isPublic } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isPublic, isSystemModel, isDefault } = body;
 
     // 验证 providerType
     const validProviderTypes = ['claude', 'openai'];
@@ -138,6 +138,14 @@ export async function PUT(
       );
     }
 
+    // 验证管理员专属字段
+    if (isSystemModel !== undefined && !isAdmin) {
+      return NextResponse.json(
+        { error: '只有管理员可以修改系统模型属性' },
+        { status: 403 }
+      );
+    }
+
     // 构建更新数据
     const updateData: any = {};
     if (name !== undefined) updateData.name = name;
@@ -148,7 +156,37 @@ export async function PUT(
     if (routeType !== undefined) updateData.routeType = providerType === 'openai' ? routeType : null;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isPublic !== undefined) updateData.isPublic = isPublic;
-    // 个人模型不能设为默认，只有管理员可以管理isDefault
+
+    // 管理员专属字段
+    if (isAdmin) {
+      // 系统模型属性
+      if (isSystemModel !== undefined) {
+        updateData.userId = isSystemModel ? null : payload.userId;
+        if (isSystemModel) {
+          updateData.isPublic = true;  // 系统模型默认公开
+        }
+      }
+      
+      // 默认模型（只有系统模型可设置）
+      if (isDefault !== undefined) {
+        const isActuallySystemModel = isSystemModel !== undefined ? isSystemModel : existingModel.userId === null;
+        if (isDefault && !isActuallySystemModel) {
+          return NextResponse.json(
+            { error: '只有系统模型可以设置为默认' },
+            { status: 400 }
+          );
+        }
+        
+        // 如果设置为默认模型，先取消其他默认模型
+        if (isDefault) {
+          await prisma.modelConfig.updateMany({
+            where: { isDefault: true, id: { not: id } },
+            data: { isDefault: false },
+          });
+        }
+        updateData.isDefault = isDefault;
+      }
+    }
 
     // 更新模型
     const model = await prisma.modelConfig.update({

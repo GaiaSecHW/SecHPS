@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isPublic } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isPublic, isSystemModel, isDefault } = body;
 
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
@@ -154,10 +154,36 @@ export async function POST(request: Request) {
       );
     }
 
-    // 创建模型配置（属于当前用户）
+    // 检查是否是管理员
+    const isAdmin = payload.roles?.includes('admin');
+
+    // 验证管理员专属字段
+    if (isSystemModel && !isAdmin) {
+      return NextResponse.json(
+        { error: '只有管理员可以创建系统模型' },
+        { status: 403 }
+      );
+    }
+
+    if (isDefault && !isSystemModel) {
+      return NextResponse.json(
+        { error: '只有系统模型可以设置为默认' },
+        { status: 400 }
+      );
+    }
+
+    // 如果设置为默认模型，先取消其他默认模型
+    if (isDefault && isAdmin) {
+      await prisma.modelConfig.updateMany({
+        where: { isDefault: true },
+        data: { isDefault: false },
+      });
+    }
+
+    // 创建模型配置
     const model = await prisma.modelConfig.create({
       data: {
-        userId: payload.userId,  // 关联到当前用户
+        userId: isSystemModel ? null : payload.userId,  // 系统模型 userId 为 null
         name,
         providerType: providerType || 'openai',
         apiBaseUrl,
@@ -165,8 +191,8 @@ export async function POST(request: Request) {
         models: JSON.stringify(models),
         routeType: providerType === 'openai' ? routeType || 'default' : null,
         isActive: isActive !== undefined ? isActive : true,
-        isDefault: false,  // 个人模型不能设为默认
-        isPublic: isPublic || false,
+        isDefault: isSystemModel && isDefault ? isDefault : false,  // 只有系统模型可设默认
+        isPublic: isSystemModel ? true : (isPublic || false),  // 系统模型默认公开
       },
     });
 
