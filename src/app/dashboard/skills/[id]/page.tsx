@@ -28,6 +28,7 @@ import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { buildFullSkill, type SkillIntent } from '@/lib/skill-builder';
 
 interface Skill {
   id: string;
@@ -295,12 +296,21 @@ export default function SkillDetailPage() {
     
     setExporting(true);
     try {
-      const skillOutputTemplate = await getSkillOutputTemplate();
+      const outputTemplate = await getSkillOutputTemplate();
 
-      let content = skill.content || '';
-      if (skillOutputTemplate && skillOutputTemplate.trim()) {
-        content = content + '\n\n' + skillOutputTemplate;
-      }
+      // 使用公共模块构建完整 Skill（自动添加输出格式）
+      const intent: SkillIntent = {
+        name: skill.name,
+        displayName: skill.displayName,
+        description: skill.description,
+        category: skill.category,
+      };
+      
+      const fullContent = buildFullSkill(intent, skill.content || '', outputTemplate, {
+        addFrontmatter: true,
+        addOutputFormat: !!outputTemplate,
+        addTitle: true,
+      });
 
       await exportAsSkillFile({
         name: skill.name,
@@ -309,7 +319,7 @@ export default function SkillDetailPage() {
         category: skill.category,
         cwe: skill.cwe,
         severity: skill.severity || 'medium',
-        content: content,
+        content: fullContent,
       });
     } catch (error) {
       console.error('导出失败:', error);
@@ -319,7 +329,7 @@ export default function SkillDetailPage() {
     }
   };
 
-  // 获取 skillOutputTemplate 的辅助函数
+  // 获取 skillOutputTemplate 的辅助函数（客户端通过 API 获取）
   const getSkillOutputTemplate = async (): Promise<string> => {
     try {
       const token = localStorage.getItem('token');
@@ -336,22 +346,25 @@ export default function SkillDetailPage() {
     return '';
   };
 
-  // 构建带模板的 content
-  const buildContentWithTemplate = (baseContent: string): string => {
-    // 这里返回原始内容，模板会在复制/导出时动态追加
-    return baseContent;
-  };
-
   const handleCopyMd = async () => {
     if (!skill) return;
 
     try {
-      const skillOutputTemplate = await getSkillOutputTemplate();
+      const outputTemplate = await getSkillOutputTemplate();
 
-      let content = skill.content || '';
-      if (skillOutputTemplate && skillOutputTemplate.trim()) {
-        content = content + '\n\n' + skillOutputTemplate;
-      }
+      // 使用公共模块构建完整 Skill（自动添加输出格式）
+      const intent: SkillIntent = {
+        name: skill.name,
+        displayName: skill.displayName,
+        description: skill.description,
+        category: skill.category,
+      };
+      
+      const fullContent = buildFullSkill(intent, skill.content || '', outputTemplate, {
+        addFrontmatter: true,
+        addOutputFormat: !!outputTemplate,
+        addTitle: true,
+      });
 
       await copySkillMdToClipboard({
         name: skill.name,
@@ -360,7 +373,7 @@ export default function SkillDetailPage() {
         category: skill.category,
         cwe: skill.cwe,
         severity: skill.severity || 'medium',
-        content: content,
+        content: fullContent,
       });
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

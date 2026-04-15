@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import {
+  extractModelResponse,
+  buildFullSkill,
+  getStandardOutputTemplate,
+  extractCwe,
+  type SkillIntent,
+} from '@/lib/skill-builder';
 
 /**
  * 优化完整 Skill 的 API
  * POST /api/skills/optimize-skill
  * 
- * 让大模型优化整个 Skill 定义，包括：
- * - 名称、描述
- * - 系统提示词
- * - 用户提示词
- * - 工具列表
- * - 触发关键词
+ * 让大模型优化 Skill 内容，使用公共模块构建最终格式
  */
 export async function POST(request: NextRequest) {
   try {
@@ -45,49 +47,56 @@ export async function POST(request: NextRequest) {
 
     console.log('[optimize-skill] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
 
-    // 构建提示词
-    const systemPrompt = `你是一个专业的 AI Skill 优化专家。你的任务是在用户已有 Skill 内容的基础上进行优化和补充，而不是推翻重写。
+    // 使用公共模块的格式指导构建系统提示词
+    const systemPrompt = `你是一个专业的 AI Skill 优化专家。请在用户已有 Skill 内容的基础上进行优化和补充，而不是推翻重写。
 
 ## 核心原则
-1. **保留用户意图**：用户已经写好的内容代表他的意图，必须完整保留，不得删除或替换
-2. **补充遗漏**：如果用户内容有缺失的部分（如缺少系统提示词、工具列表等），在不改变现有内容的前提下补充完整
+1. **保留用户意图**：用户已经写好的内容必须完整保留，不得删除或替换
+2. **补充遗漏**：如果用户内容有缺失的部分，在不改变现有内容的前提下补充完整
 3. **优化表达**：可以改善措辞、补充细节、使描述更清晰，但不改变原有语义
-4. **提升触发准确性**：在现有描述基础上补充触发关键词，使 Skill 更容易被正确识别
-5. **禁止推翻重写**：不允许因为"觉得自己写得更好"就删掉用户内容重新写一套
+4. **提升触发准确性**：在现有描述基础上补充触发关键词
+5. **禁止推翻重写**：不允许删掉用户内容重新写一套
 
-## 优化优先级
-- 高优先级：补充明显缺失的字段、修复明显错误
-- 中优先级：丰富系统提示词的检测细节、补充边缘案例
-- 低优先级：润色描述文字
+## 优秀 Skill 的关键原则
 
-请按照以下 JSON 格式返回优化后的 Skill 定义（只返回 JSON）：
-{
-  "name": "skill-name",
-  "displayName": "显示名称",
-  "description": "优化后的描述（保留用户原意）",
-  "category": "code-audit",
-  "cwe": "CWE-78",
-  "systemPrompt": "在用户原有系统提示词基础上优化补充...",
-  "userPrompt": "在用户原有用户提示词基础上优化补充...",
-  "tools": ["tool1", "tool2"],
-  "triggerKeywords": ["关键词1", "关键词2"],
-  "triggerAccuracy": 0.92,
-  "suggestions": ["补充了哪些内容", "优化了哪些表达"],
-  "changes": ["本次主要改动说明，明确哪些是新增，哪些是保留"]
-}`;
+1. **Description 是触发机制（最重要）**
+   - 必须包含：做什么 + 何时触发 + 关键触发词
+   - 用第三人称写，明确列出触发场景
 
-    // 构建用户提示词，包含当前 Skill 的完整信息
+2. **简洁至上（<500行）**
+   - 只添加 Agent 不知道的内容
+   - 用指令而非散文
+
+3. **提供示例（重要！）**
+   - 展示漏洞代码 + 检测结果范例
+
+4. **描述目标，不预设步骤**
+   - 让 Agent 决定执行路径
+
+## 输出要求
+
+直接返回 Markdown 格式的 Skill 正文内容（不要包含 YAML frontmatter，系统会自动添加）。
+
+必须包含以下章节：
+- ## 检测目标
+- ## 检查要点
+- ## 示例（重要！展示漏洞代码和检测结果）
+- ## CWE 编号（如有）
+- ## 工具要求
+
+注意：不要写"输出格式"章节，系统会自动添加标准输出格式。`;
+
+    // 构建用户提示词
     let userPrompt = `请在以下用户已编写的 Skill 内容基础上进行优化补充，不得删除用户已有内容：
 
-## 用户当前编写的完整 Skill 内容（必须保留，只可补充优化）
+## 用户当前 Skill 内容（必须保留核心内容，只可补充优化）
 \`\`\`
-${skillData.content || skillData.systemPrompt || '（空）'}
+${skillData.content || '（空）'}
 \`\`\`
 
 ## Skill 基本信息
 - 名称: ${skillData.name || '未命名'}
 - 显示名称: ${skillData.displayName || '未命名'}
-- 描述: ${skillData.description || '无'}
 - 分类: ${skillData.category || 'code-audit'}
 - CWE: ${skillData.cwe || '无'}`;
 
@@ -100,38 +109,16 @@ ${skillData.content || skillData.systemPrompt || '（空）'}
       });
     }
 
-    // 添加评估结果（关键数据）
+    // 添加评估结果
     if (evaluationData && evaluationData.runs && evaluationData.runs.length > 0) {
       userPrompt += `\n\n## 评估结果分析`;
       
       const completedRuns = evaluationData.runs.filter((r: any) => r.status === 'completed');
       const failedRuns = evaluationData.runs.filter((r: any) => r.status === 'failed');
-      const withSkillRuns = completedRuns.filter((r: any) => r.type === 'with_skill');
-      const withoutSkillRuns = completedRuns.filter((r: any) => r.type === 'without_skill');
       
       userPrompt += `\n- 完成的测试: ${completedRuns.length} 个`;
       userPrompt += `\n- 失败的测试: ${failedRuns.length} 个`;
-      userPrompt += `\n- 使用 Skill 的测试: ${withSkillRuns.length} 个`;
-      userPrompt += `\n- 不使用 Skill 的测试: ${withoutSkillRuns.length} 个`;
       
-      // 添加具体的输出对比
-      if (withSkillRuns.length > 0 && withoutSkillRuns.length > 0) {
-        userPrompt += `\n\n### 输出对比示例`;
-        withSkillRuns.slice(0, 2).forEach((run: any) => {
-          const correspondingWithout = withoutSkillRuns.find((r: any) => r.testCaseId === run.testCaseId);
-          if (run.output || correspondingWithout?.output) {
-            userPrompt += `\n\n**测试: ${testCases?.find((tc: any) => tc.id === run.testCaseId)?.name || '未知'}**`;
-            if (run.output) {
-              userPrompt += `\n使用 Skill 输出: ${run.output.substring(0, 500)}${run.output.length > 500 ? '...' : ''}`;
-            }
-            if (correspondingWithout?.output) {
-              userPrompt += `\n不使用 Skill 输出: ${correspondingWithout.output.substring(0, 300)}${correspondingWithout.output.length > 300 ? '...' : ''}`;
-            }
-          }
-        });
-      }
-      
-      // 添加失败原因分析
       if (failedRuns.length > 0) {
         userPrompt += `\n\n### 失败原因`;
         failedRuns.slice(0, 3).forEach((run: any) => {
@@ -140,7 +127,7 @@ ${skillData.content || skillData.systemPrompt || '（空）'}
       }
     }
 
-    // 添加迭代历史（用户反馈）
+    // 添加迭代历史
     if (iterations && iterations.length > 0) {
       userPrompt += `\n\n## 迭代历史与反馈`;
       iterations.forEach((iter: any, index: number) => {
@@ -154,86 +141,68 @@ ${skillData.content || skillData.systemPrompt || '（空）'}
       });
     }
 
-    userPrompt += `\n\n请根据以上所有信息，特别是评估结果和用户反馈，优化整个 Skill 定义，解决发现的问题，提高触发准确性和执行效果。`;
+    userPrompt += `\n\n请根据以上信息，优化 Skill 内容。保留用户已有内容，补充缺失部分（如示例、检查要点等），使 Skill 更完整、更专业。`;
 
     // 调用大模型
     console.log('[optimize-skill] 开始调用大模型...');
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
     console.log('[optimize-skill] 大模型响应完成');
 
-    // 检查是否因为 token 限制被截断
+    // 检查截断
     const stopReason = response.stop_reason || response.choices?.[0]?.finish_reason;
     if (stopReason === 'max_tokens' || stopReason === 'length') {
-      console.error('[optimize-skill] 响应被截断，stop_reason:', stopReason);
-      throw new Error('模型输出达到 token 限制被截断，请尝试简化提示词或增加 max_tokens 配置');
+      throw new Error('模型输出达到 token 限制被截断');
     }
 
-    // 解析响应
-    const content = response.content || response.choices?.[0]?.message?.content;
+    // 使用公共模块提取响应
+    const generatedContent = extractModelResponse(response);
     
-    if (!content) {
+    if (!generatedContent || generatedContent.trim() === '') {
       throw new Error('模型响应为空');
     }
 
-    // 提取文本内容
-    let textContent = '';
-    if (Array.isArray(content)) {
-      const textBlock = content.find((block: any) => block.type === 'text');
-      textContent = textBlock?.text || '';
-    } else {
-      textContent = content;
-    }
+    console.log('[optimize-skill] 生成的 Markdown 长度:', generatedContent.length);
 
-    // 解析 JSON
-    let jsonStr = textContent.trim();
-    if (jsonStr.startsWith('```json')) {
-      jsonStr = jsonStr.slice(7);
-    } else if (jsonStr.startsWith('```')) {
-      jsonStr = jsonStr.slice(3);
-    }
-    if (jsonStr.endsWith('```')) {
-      jsonStr = jsonStr.slice(0, -3);
-    }
-    jsonStr = jsonStr.trim();
+    // 获取标准输出格式
+    const outputTemplate = await getStandardOutputTemplate();
 
-    const result = JSON.parse(jsonStr);
+    // 使用公共模块构建完整 Skill
+    const intent: SkillIntent = {
+      name: skillData.name,
+      displayName: skillData.displayName,
+      description: skillData.description,
+      category: skillData.category,
+    };
 
-    // 验证必要字段
-    if (!result.systemPrompt) {
-      throw new Error('优化结果缺少系统提示词');
-    }
+    const fullContent = buildFullSkill(intent, generatedContent, outputTemplate, {
+      addFrontmatter: true,
+      addOutputFormat: true,
+      addTitle: true,
+    });
+
+    const optimizedSkill = {
+      name: skillData.name,
+      displayName: skillData.displayName || skillData.name,
+      description: skillData.description || '',
+      category: skillData.category || 'code-audit',
+      cwe: extractCwe(generatedContent) || skillData.cwe,
+      content: fullContent,
+    };
 
     console.log('[optimize-skill] Skill 优化成功');
     
-    // 构建完整的 content 字段
-    const optimizedContent = buildOptimizedContent(result);
-    
     return NextResponse.json({
-      optimizedSkill: {
-        name: result.name || skillData.name,
-        displayName: result.displayName || skillData.displayName,
-        description: result.description || skillData.description,
-        category: result.category || skillData.category,
-        cwe: result.cwe || skillData.cwe,
-        content: optimizedContent, // 添加完整的 content
-        systemPrompt: result.systemPrompt,
-        userPrompt: result.userPrompt || skillData.userPrompt,
-        tools: result.tools || skillData.tools || [],
-        triggerKeywords: result.triggerKeywords || [],
-      },
-      triggerAccuracy: result.triggerAccuracy || 0.85,
-      suggestions: result.suggestions || [],
+      optimizedSkill,
+      triggerAccuracy: 0.85,
+      suggestions: ['已补充缺失内容', '已优化表达', '已添加示例'],
     });
   } catch (error) {
     console.error('[optimize-skill] 优化失败:', error);
     
-    // 友好的错误信息
     let errorMessage = '优化失败';
     if (error instanceof Error) {
       if (error.name === 'AbortError') {
-        errorMessage = '大模型响应超时，请稍后重试或使用更快的模型';
-      } else if (error.message === 'fetch failed' || error.cause instanceof Error && error.cause.name === 'AbortError') {
-        errorMessage = '大模型响应超时，请稍后重试或使用更快的模型';
+        errorMessage = '大模型响应超时，请稍后重试';
       } else if (error.message.includes('fetch failed')) {
         errorMessage = '大模型连接失败，请检查网络或 API 配置';
       } else {
@@ -241,67 +210,8 @@ ${skillData.content || skillData.systemPrompt || '（空）'}
       }
     }
     
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
-}
-
-/**
- * 构建优化后的完整 content
- */
-function buildOptimizedContent(result: any): string {
-  const lines: string[] = [];
-  
-  lines.push(`# ${result.displayName || result.name}`);
-  lines.push('');
-  
-  if (result.description) {
-    lines.push('## 描述');
-    lines.push(result.description);
-    lines.push('');
-  }
-  
-  if (result.cwe) {
-    lines.push('## CWE');
-    lines.push(result.cwe);
-    lines.push('');
-  }
-  
-  if (result.systemPrompt) {
-    lines.push('## 系统提示词');
-    lines.push('```');
-    lines.push(result.systemPrompt);
-    lines.push('```');
-    lines.push('');
-  }
-  
-  if (result.userPrompt) {
-    lines.push('## 用户提示词模板');
-    lines.push('```');
-    lines.push(result.userPrompt);
-    lines.push('```');
-    lines.push('');
-  }
-  
-  if (result.tools && result.tools.length > 0) {
-    lines.push('## 所需工具');
-    result.tools.forEach((tool: string) => {
-      lines.push(`- ${tool}`);
-    });
-    lines.push('');
-  }
-  
-  if (result.triggerKeywords && result.triggerKeywords.length > 0) {
-    lines.push('## 触发关键词');
-    result.triggerKeywords.forEach((keyword: string) => {
-      lines.push(`- ${keyword}`);
-    });
-    lines.push('');
-  }
-  
-  return lines.join('\n');
 }
 
 /**
@@ -350,7 +260,7 @@ async function callModel(
   userPrompt: string
 ): Promise<any> {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10分钟超时
+  const timeoutId = setTimeout(() => controller.abort(), 600000);
 
   try {
     if (config.providerType === 'claude') {
@@ -358,8 +268,6 @@ async function callModel(
       if (!apiUrl.includes('/v1/messages') && !apiUrl.endsWith('/messages')) {
         apiUrl = apiUrl.replace(/\/$/, '') + '/v1/messages';
       }
-
-      console.log('[optimize-skill] Claude API URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -388,8 +296,6 @@ async function callModel(
       if (!apiUrl.endsWith('/chat/completions')) {
         apiUrl = apiUrl.replace(/\/$/, '') + '/v1/chat/completions';
       }
-
-      console.log('[optimize-skill] OpenAI API URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'POST',

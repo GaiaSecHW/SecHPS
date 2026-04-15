@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { Sparkles, FileText, Copy, Check, AlertCircle, RefreshCw } from 'lucide-react';
+import { buildFullSkill, type SkillIntent } from '@/lib/skill-builder';
 
 interface SkillDraft {
   name: string;
@@ -98,65 +99,82 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
     }
   };
 
-  // 生成 Markdown 内容
-  const generateMarkdownContent = (intent: any, research: any): string => {
+  // 生成 Markdown 内容（使用公共模块格式）
+  const generateMarkdownContent = (intent: any, research: any) => {
+    // 构建基础内容（检测目标、检查要点）
     const lines: string[] = [];
     
-    lines.push(`# ${intent.name || 'Skill 名称'}`);
-    lines.push('');
-    lines.push('## 描述');
-    lines.push(intent.description || '简要描述这个 Skill 的作用...');
-    lines.push('');
-    
-    if (intent.whatDoesItDo) {
-      lines.push('## 功能说明');
-      lines.push(intent.whatDoesItDo);
-      lines.push('');
-    }
-    
-    if (intent.whenShouldItTrigger) {
-      lines.push('## 触发条件');
-      lines.push(intent.whenShouldItTrigger);
-      lines.push('');
-    }
-    
-    if (intent.expectedOutput) {
-      lines.push('## 期望输出');
-      lines.push(intent.expectedOutput);
-      lines.push('');
-    }
-    
+    // 检测目标
+    lines.push('## 检测目标');
+    lines.push(intent.whatDoesItDo || `识别代码中 ${intent.name || '安全漏洞'} 相关的风险点。`);
     if (research.edgeCases && research.edgeCases.length > 0) {
-      lines.push('## 边缘情况');
+      lines.push('');
+      lines.push('重点关注：');
       research.edgeCases.forEach((ec: string) => {
         lines.push(`- ${ec}`);
       });
-      lines.push('');
     }
+    lines.push('');
     
-    if (research.inputOutputFormats) {
-      lines.push('## 输入输出格式');
-      lines.push(research.inputOutputFormats);
-      lines.push('');
-    }
-    
+    // 检查要点
+    lines.push('## 检查要点');
     if (research.successCriteria && research.successCriteria.length > 0) {
-      lines.push('## 成功标准');
-      research.successCriteria.forEach((sc: string) => {
-        lines.push(`- ${sc}`);
+      research.successCriteria.forEach((sc: string, i: number) => {
+        lines.push(`${i + 1}. ${sc}`);
       });
+    } else {
+      lines.push('1. 查找危险模式/函数');
+      lines.push('2. 检查安全措施的使用情况');
+      lines.push('3. 分析输入来源的验证逻辑');
+    }
+    lines.push('');
+    
+    // 示例（基础模板）
+    lines.push('## 示例（重要！）');
+    lines.push('');
+    lines.push('**输入代码（存在漏洞）：**');
+    lines.push('```');
+    lines.push('// 待补充具体漏洞代码示例');
+    lines.push('```');
+    lines.push('');
+    lines.push('**检测结果：**');
+    lines.push(`❌ ${intent.name || '漏洞类型'} 风险：[具体描述]`);
+    lines.push('位置：[文件名:行号]');
+    lines.push('');
+    
+    // CWE
+    if (intent.cwe) {
+      lines.push('## CWE 编号');
+      lines.push(intent.cwe);
       lines.push('');
     }
     
+    // 工具要求
+    lines.push('## 工具要求');
     if (research.dependencies && research.dependencies.length > 0) {
-      lines.push('## 依赖项');
       research.dependencies.forEach((dep: string) => {
         lines.push(`- ${dep}`);
       });
-      lines.push('');
+    } else {
+      lines.push('- read_file');
+      lines.push('- search_pattern');
     }
+    lines.push('');
     
-    return lines.join('\n');
+    // 使用公共模块构建完整 Skill（添加 YAML + 输出格式）
+    const skillIntent: SkillIntent = {
+      name: intent.name,
+      displayName: intent.name,
+      description: intent.description || intent.whenShouldItTrigger,
+      category: intent.category,
+      whenShouldItTrigger: intent.whenShouldItTrigger,
+    };
+    
+    return buildFullSkill(skillIntent, lines.join('\n'), null, {
+      addFrontmatter: true,
+      addOutputFormat: true,
+      addTitle: true,
+    });
   };
 
   // 组件挂载时自动生成一次

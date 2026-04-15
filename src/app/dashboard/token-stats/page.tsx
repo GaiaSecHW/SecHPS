@@ -12,6 +12,7 @@ import {
   AlertCircle,
   BarChart3,
   PieChart,
+  Info,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -158,7 +159,10 @@ export default function TokenStatsPage() {
   };
 
   const formatCost = (cost: number) => {
-    return `$${cost.toFixed(4)}`;
+    if (cost === 0) {
+      return '¥0';
+    }
+    return `¥${cost.toFixed(4)}`;
   };
 
   const formatTokensWithColor = (input: number, output: number) => {
@@ -288,7 +292,19 @@ export default function TokenStatsPage() {
             </p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">预估费用</p>
+            <p className="text-xs text-gray-500 flex items-center">
+              预估费用
+              <span 
+                className="ml-1 cursor-help relative group"
+                title="费用计算公式"
+              >
+                <Info size={12} className="text-gray-400 hover:text-gray-600" />
+                <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
+                  费用 = 输入Token × 单价 + 输出Token × 单价<br/>
+                  <span className="text-gray-400">单价：输入 ¥6/百万，输出 ¥22/百万</span>
+                </span>
+              </span>
+            </p>
             <p className="text-lg font-semibold text-orange-600">
               {formatCost(dailyStats?.estimatedCost || 0)}
             </p>
@@ -414,6 +430,13 @@ function SummaryCard({
     return num.toString();
   };
 
+  const formatCost = (cost: number) => {
+    if (cost === 0) {
+      return '¥0';
+    }
+    return `¥${cost.toFixed(4)}`;
+  };
+
   return (
     <div className={`bg-white rounded-lg shadow border p-6`}>
       <div className="flex items-center justify-between mb-4">
@@ -446,9 +469,20 @@ function SummaryCard({
           </span>
         </div>
         <div className="flex items-center justify-between border-t border-gray-100 pt-2">
-          <span className="text-xs text-gray-500">预估费用</span>
+          <span className="text-xs text-gray-500 flex items-center">
+            预估费用
+            <span 
+              className="ml-1 cursor-help relative group"
+            >
+              <Info size={12} className="text-gray-400 hover:text-gray-600" />
+              <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
+                费用 = 输入Token × 单价 + 输出Token × 单价<br/>
+                <span className="text-gray-400">单价：输入 ¥6/百万，输出 ¥22/百万</span>
+              </span>
+            </span>
+          </span>
           <span className="text-sm font-bold text-orange-600">
-            ${(stats?.estimatedCost || 0).toFixed(4)}
+            {formatCost(stats?.estimatedCost || 0)}
           </span>
         </div>
       </div>

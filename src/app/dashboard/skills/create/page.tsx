@@ -18,25 +18,13 @@ import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { getSkillDefaultTemplate, getFormatGuideData } from '@/lib/skill-builder';
 
-const DEFAULT_TEMPLATE = `# Skill 名称
+// 使用公共模块的默认模板
+const DEFAULT_TEMPLATE = getSkillDefaultTemplate();
 
-## 描述
-简要描述这个 Skill 的作用和检测目标...
-
-## CWE 编号
-（可选，如 CWE-89）
-
-## 系统提示词
-你是一个专业的安全代码审计专家...
-
-## 用户提示词
-请分析以下代码...
-
-## 工具
-- read_file
-- search_pattern
-`;
+// 使用公共模块的格式建议数据
+const FORMAT_GUIDE = getFormatGuideData();
 
 export default function CreateSkillPage() {
   const router = useRouter();
@@ -492,14 +480,87 @@ try {
                 {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
               {showFormatHint && (
-                <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-                  <div className="text-xs text-gray-500 font-mono space-y-1">
-                    <p># Skill 名称</p>
-                    <p>## 描述</p>
-                    <p>## CWE 编号</p>
-                    <p>## 系统提示词</p>
-                    <p>## 用户提示词</p>
-                    <p>## 工具 (使用 - 列表)</p>
+                <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600 space-y-4">
+                  {/* 核心结构 */}
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">1</span>
+                      核心结构（YAML Frontmatter + Markdown 正文）
+                    </h4>
+                    <div className="bg-white rounded border border-gray-200 p-3 font-mono text-xs leading-relaxed overflow-auto max-h-64">
+                      <pre className="text-gray-700">{FORMAT_GUIDE.example.yaml}
+
+{FORMAT_GUIDE.example.content}</pre>
+                    </div>
+                  </div>
+
+                  {/* 关键原则 */}
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">2</span>
+                      优秀 Skill 的关键原则
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {FORMAT_GUIDE.principles.map((p, i) => (
+                        <div key={i} className="bg-white rounded border p-3">
+                          <p className="font-medium text-gray-800 mb-1">{p.title}</p>
+                          <p className="text-xs text-gray-500">{p.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 常见错误 */}
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">3</span>
+                      常见错误 vs 正确做法
+                    </h4>
+                    <div className="space-y-2">
+                      {FORMAT_GUIDE.mistakes.map((m, i) => (
+                        <div key={i}>
+                          <div className="flex items-start gap-3 bg-red-50 rounded border border-red-100 p-2">
+                            <span className="text-red-500 font-bold text-xs">❌</span>
+                            <div className="text-xs">
+                              <p className="font-medium text-red-700">{m.wrong}</p>
+                              <code className="text-red-600 bg-red-100 px-1 rounded">{m.wrongCode}</code>
+                            </div>
+                          </div>
+                          <div className="flex items-start gap-3 bg-green-50 rounded border border-green-100 p-2">
+                            <span className="text-green-500 font-bold text-xs">✅</span>
+                            <div className="text-xs">
+                              <p className="font-medium text-green-700">{m.right}</p>
+                              <code className="text-green-600 bg-green-100 px-1 rounded">{m.rightCode}</code>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 推荐章节 */}
+                  <div>
+                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">4</span>
+                      推荐章节结构
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {FORMAT_GUIDE.sections.map((s, i) => (
+                        <span
+                          key={i}
+                          className={`px-2 py-1 rounded text-xs font-mono ${
+                            s.highlight
+                              ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                              : 'bg-purple-50 text-purple-700'
+                          }`}
+                        >
+                          {s.name}{s.highlight ? ' ⭐重要' : ''}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      ⭐ <strong>示例章节</strong>是提升 Skill 效果的关键 - 展示具体的漏洞代码和检测输出格式。输出格式由系统自动添加。
+                    </p>
                   </div>
                 </div>
               )}
