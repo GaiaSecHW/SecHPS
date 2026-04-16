@@ -16,7 +16,19 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Share2,
+  Lock,
+  User,
+  Filter,
 } from 'lucide-react';
+import { hasPermission } from '@/lib/permissions';
+import { PERMISSIONS } from '@/types/permissions';
+
+interface McpServerUser {
+  id: string;
+  username?: string;
+  name?: string;
+}
 
 interface McpServer {
   id: string;
@@ -28,6 +40,9 @@ interface McpServer {
   env?: string;
   isEnabled: boolean;
   autoStart: boolean;
+  isShared: boolean;
+  userId: string;
+  user?: McpServerUser;
   createdAt: string;
   updatedAt: string;
 }
@@ -51,6 +66,9 @@ export default function McpServersPage() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string>('');
+  const [filter, setFilter] = useState<'all' | 'mine' | 'shared'>('all');
 
   // 表单状态
   const [formData, setFormData] = useState({
@@ -62,11 +80,26 @@ export default function McpServersPage() {
     env: '{}',
     isEnabled: true,
     autoStart: false,
+    isShared: false,
   });
+
+  // 初始化：检查用户权限
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setIsAdmin(payload.roles?.includes('admin') || false);
+        setCurrentUserId(payload.userId || '');
+      } catch (e) {
+        console.error('解析 token 失败:', e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     fetchServers();
-  }, [page, searchQuery]);
+  }, [page, searchQuery, filter]);
 
   const fetchServers = async () => {
     setLoading(true);
@@ -77,6 +110,7 @@ export default function McpServersPage() {
       const params = new URLSearchParams({
         page: String(page),
         limit: String(pageSize),
+        filter: filter,  // 添加过滤参数
       });
       if (searchQuery) params.append('search', searchQuery);
       
@@ -180,6 +214,7 @@ export default function McpServersPage() {
       env: server.env || '{}',
       isEnabled: server.isEnabled,
       autoStart: server.autoStart,
+      isShared: server.isShared || false,
     });
     setShowForm(true);
   };
@@ -230,6 +265,40 @@ export default function McpServersPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : '切换状态失败');
     }
+  };
+
+  // 切换共享状态（仅管理员可用）
+  const handleToggleShared = async (server: McpServer) => {
+    if (!isAdmin) {
+      setError('只有管理员可以设置共享状态');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/mcp-servers/${server.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isShared: !server.isShared }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '切换共享状态失败');
+      }
+
+      fetchServers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '切换共享状态失败');
+    }
+  };
+
+  // 检查是否可以编辑/删除（管理员可管理所有，普通用户只能管理自己的）
+  const canManage = (server: McpServer) => {
+    return isAdmin || server.userId === currentUserId;
   };
 
   const handleTest = async (server: McpServer) => {
@@ -283,6 +352,7 @@ export default function McpServersPage() {
       env: '{}',
       isEnabled: true,
       autoStart: false,
+      isShared: false,
     });
   };
 
@@ -305,7 +375,7 @@ export default function McpServersPage() {
               MCP 服务器配置
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              全局 MCP 服务器配置，所有项目评估都会使用
+              管理 MCP 服务器，普通用户可创建私有 MCP，管理员可创建共享 MCP
             </p>
           </div>
         </div>
@@ -322,9 +392,9 @@ export default function McpServersPage() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="mb-4">
-        <div className="relative">
+      {/* Search and Filter */}
+      <div className="mb-4 flex gap-4">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
           <input
             type="text"
@@ -336,6 +406,35 @@ export default function McpServersPage() {
             }}
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
+        </div>
+        {/* 过滤按钮 */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setFilter('all'); setPage(1); }}
+            className={`px-3 py-2 text-sm rounded-md transition-colors ${
+              filter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            全部
+          </button>
+          <button
+            onClick={() => { setFilter('mine'); setPage(1); }}
+            className={`px-3 py-2 text-sm rounded-md transition-colors ${
+              filter === 'mine' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <User size={14} className="inline mr-1" />
+            我的
+          </button>
+          <button
+            onClick={() => { setFilter('shared'); setPage(1); }}
+            className={`px-3 py-2 text-sm rounded-md transition-colors ${
+              filter === 'shared' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <Share2 size={14} className="inline mr-1" />
+            共享
+          </button>
         </div>
       </div>
 
@@ -373,6 +472,9 @@ export default function McpServersPage() {
                     配置
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    共享
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     状态
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -389,9 +491,16 @@ export default function McpServersPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <Server className="h-5 w-5 text-gray-400 mr-2" />
-                        <span className="text-sm font-medium text-gray-900">
-                          {server.name}
-                        </span>
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">
+                            {server.name}
+                          </span>
+                          {server.user && server.userId !== currentUserId && (
+                            <span className="text-xs text-gray-400 ml-2">
+                              ({server.user.username || server.user.name || '其他用户'})
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -419,6 +528,21 @@ export default function McpServersPage() {
                         <div className="max-w-xs truncate">{server.url}</div>
                       )}
                     </td>
+                    {/* 共享状态 */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {server.isShared ? (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                          <Share2 size={12} className="mr-1" />
+                          共享
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                          <Lock size={12} className="mr-1" />
+                          私有
+                        </span>
+                      )}
+                    </td>
+                    {/* 启用状态 */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => handleToggle(server)}
@@ -444,7 +568,22 @@ export default function McpServersPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {server.autoStart ? '是' : '否'}
                     </td>
+                    {/* 操作按钮 */}
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      {/* 共享按钮 - 仅管理员可操作 */}
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleToggleShared(server)}
+                          className={`mr-3 ${
+                            server.isShared
+                              ? 'text-purple-600 hover:text-purple-700'
+                              : 'text-gray-400 hover:text-purple-600'
+                          }`}
+                          title={server.isShared ? '取消共享' : '设置为共享'}
+                        >
+                          <Share2 size={16} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleTest(server)}
                         disabled={testingServer === server.id}
@@ -457,18 +596,25 @@ export default function McpServersPage() {
                           <TestTube size={16} />
                         )}
                       </button>
-                      <button
-                        onClick={() => handleEdit(server)}
-                        className="text-blue-600 hover:text-blue-700 mr-3"
-                      >
-                        <Edit size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(server.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      {/* 编辑/删除按钮 - 仅可管理的 MCP */}
+                      {canManage(server) && (
+                        <>
+                          <button
+                            onClick={() => handleEdit(server)}
+                            className="text-blue-600 hover:text-blue-700 mr-3"
+                            title="编辑"
+                          >
+                            <Edit size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(server.id)}
+                            className="text-red-600 hover:text-red-700"
+                            title="删除"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}

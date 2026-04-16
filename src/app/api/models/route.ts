@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 
-// 格式化模型数据
-function formatModel(model: any) {
+// 格式化模型数据 - 不返回 apiKey 以保护安全
+function formatModel(model: any, includeApiKey: boolean = false) {
   return {
     id: model.id,
     userId: model.userId,
@@ -13,7 +13,8 @@ function formatModel(model: any) {
     name: model.name,
     providerType: model.providerType,
     apiBaseUrl: model.apiBaseUrl,
-    apiKey: model.apiKey,
+    apiKey: includeApiKey ? model.apiKey : undefined,  // 默认不返回
+    hasApiKey: !!model.apiKey,  // 仅返回是否有 API Key 的标识
     models: JSON.parse(model.models),
     routeType: model.routeType,
     isActive: model.isActive,
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     });
 
     // 格式化返回数据
-    const formattedModels = models.map(formatModel);
+    const formattedModels = models.map((model) => formatModel(model, false));
 
     return NextResponse.json({ models: formattedModels });
   } catch (error) {

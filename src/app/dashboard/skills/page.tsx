@@ -509,104 +509,109 @@ toast.error(err instanceof Error ? err.message : '删除失败');
             管理 AI 漏洞检测技能，共 {totalSkills} 个 Skills
           </p>
         </div>
-        {isAdmin && (
-          <div className="flex items-center gap-3">
-            {/* 批量操作按钮 */}
-            {selectedSkills.size > 0 && (
+        <div className="flex items-center gap-3">
+            {/* 管理员专用按钮 */}
+            {isAdmin && (
               <>
-                <span className="text-sm text-gray-600">
-                  已选择 {selectedSkills.size} 项
-                </span>
+                {/* 批量操作按钮 */}
+                {selectedSkills.size > 0 && (
+                  <>
+                    <span className="text-sm text-gray-600">
+                      已选择 {selectedSkills.size} 项
+                    </span>
+                    <button
+                      onClick={() => handleBatchOperation('enable')}
+                      disabled={batchOperating}
+                      className="inline-flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                      title="批量启用选中的 Skills"
+                    >
+                      <CheckCircle size={16} className="mr-1" />
+                      批量启用
+                    </button>
+                    <button
+                      onClick={() => handleBatchOperation('disable')}
+                      disabled={batchOperating}
+                      className="inline-flex items-center px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors disabled:opacity-50"
+                      title="批量禁用选中的 Skills"
+                    >
+                      <XCircle size={16} className="mr-1" />
+                      批量禁用
+                    </button>
+                    <button
+                      onClick={() => handleBatchOperation('delete')}
+                      disabled={batchOperating}
+                      className="inline-flex items-center px-3 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+                      title="批量删除选中的 Skills"
+                    >
+                      <Trash2 size={16} className="mr-1" />
+                      批量删除
+                    </button>
+                  </>
+                )}
                 <button
-                  onClick={() => handleBatchOperation('enable')}
-                  disabled={batchOperating}
-                  className="inline-flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
-                  title="批量启用选中的 Skills"
+                  onClick={handleSyncToDisk}
+                  disabled={syncing}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="将所有 Skills 同步到磁盘存储"
                 >
-                  <CheckCircle size={16} className="mr-1" />
-                  批量启用
+                  {syncing ? (
+                    <>
+                      <RefreshCw size={20} className="mr-2 animate-spin" />
+                      同步中...
+                    </>
+                  ) : (
+                    <>
+                      <Save size={20} className="mr-2" />
+                      同步到磁盘
+                    </>
+                  )}
                 </button>
+                {/* 导出按钮 */}
                 <button
-                  onClick={() => handleBatchOperation('disable')}
-                  disabled={batchOperating}
-                  className="inline-flex items-center px-3 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors disabled:opacity-50"
-                  title="批量禁用选中的 Skills"
+                  onClick={handleExportSkills}
+                  disabled={exporting}
+                  className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="导出所有 Skills 为 JSON 文件"
                 >
-                  <XCircle size={16} className="mr-1" />
-                  批量禁用
+                  {exporting ? (
+                    <>
+                      <RefreshCw size={20} className="mr-2 animate-spin" />
+                      导出中...
+                    </>
+                  ) : (
+                    <>
+                      <Download size={20} className="mr-2" />
+                      导出
+                    </>
+                  )}
                 </button>
-                <button
-                  onClick={() => handleBatchOperation('delete')}
-                  disabled={batchOperating}
-                  className="inline-flex items-center px-3 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
-                  title="批量删除选中的 Skills"
+                {/* 导入按钮 */}
+                <label
+                  className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50"
+                  title="从 JSON 文件导入 Skills"
                 >
-                  <Trash2 size={16} className="mr-1" />
-                  批量删除
-                </button>
+                  {importing ? (
+                    <>
+                      <RefreshCw size={20} className="mr-2 animate-spin" />
+                      导入中...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={20} className="mr-2" />
+                      导入
+                    </>
+                  )}
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportSkills}
+                    disabled={importing}
+                    className="sr-only"
+                  />
+                </label>
               </>
             )}
-            <button
-              onClick={handleSyncToDisk}
-              disabled={syncing}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="将所有 Skills 同步到磁盘存储"
-            >
-              {syncing ? (
-                <>
-                  <RefreshCw size={20} className="mr-2 animate-spin" />
-                  同步中...
-                </>
-              ) : (
-                <>
-                  <Save size={20} className="mr-2" />
-                  同步到磁盘
-                </>
-              )}
-            </button>
-            {/* 导出按钮 */}
-            <button
-              onClick={handleExportSkills}
-              disabled={exporting}
-              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              title="导出所有 Skills 为 JSON 文件"
-            >
-              {exporting ? (
-                <>
-                  <RefreshCw size={20} className="mr-2 animate-spin" />
-                  导出中...
-                </>
-              ) : (
-                <>
-                  <Download size={20} className="mr-2" />
-                  导出
-                </>
-              )}
-            </button>
-            {/* 导入按钮 */}
-            <label
-              className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors cursor-pointer disabled:opacity-50"
-              title="从 JSON 文件导入 Skills"
-            >
-              {importing ? (
-                <>
-                  <RefreshCw size={20} className="mr-2 animate-spin" />
-                  导入中...
-                </>
-              ) : (
-                <>
-                  <Upload size={20} className="mr-2" />
-                  导入
-                </>
-              )}
-              <input
-                type="file"
-                accept=".json"
-                onChange={handleImportSkills}
-                disabled={importing}
-                className="sr-only"
-              />
-            </label>
+            {/* 创建按钮 - 所有用户都可以创建私有 Skill */}
             <button
               onClick={() => router.push('/dashboard/skills/create-wizard')}
               className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
@@ -622,8 +627,7 @@ toast.error(err instanceof Error ? err.message : '删除失败');
               快速创建
             </button>
           </div>
-        )}
-      </div>
+        </div>
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
