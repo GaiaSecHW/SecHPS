@@ -42,6 +42,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Skill 未启用' }, { status: 400 });
     }
 
+    // 更新 Skill 引用次数
+    await prisma.skill.update({
+      where: { id: skillId },
+      data: { referenceCount: { increment: 1 } },
+    });
+
     // 获取项目
     const project = await prisma.project.findUnique({
       where: { id: projectId },

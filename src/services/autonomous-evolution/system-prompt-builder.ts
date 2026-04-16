@@ -5,6 +5,9 @@
 
 import { prisma } from '@/lib/prisma';
 
+/** 预注入经验的最大数量 */
+export const MAX_PRE_INJECTED = 3;
+
 export interface InjectedExperienceSummary {
   id: string;
   title: string;
@@ -33,6 +36,7 @@ export async function buildExperiencePromptWithMeta(): Promise<BuildExperienceRe
   const experiences = await prisma.autonomousEvolutionExperience.findMany({
     where: { isInjected: true },
     orderBy: { hitCount: 'desc' },
+    take: MAX_PRE_INJECTED,
   });
 
   if (experiences.length === 0) {

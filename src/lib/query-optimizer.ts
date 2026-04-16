@@ -84,6 +84,8 @@ export const skillSelectMinimal = {
   successRate: true,
   avgDuration: true,
   execCount: true,
+  referenceCount: true,     // 引用次数
+  vulnerabilityCount: true, // 发现漏洞次数
   createdAt: true,
   updatedAt: true,
   userId: true,  // 创建者ID

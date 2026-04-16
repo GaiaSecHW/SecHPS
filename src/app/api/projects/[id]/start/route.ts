@@ -326,14 +326,16 @@ export async function POST(
       console.log('[启动评估] ⚠️  未配置系统提示词 - globalConfig:', globalConfig ? '存在但customSystemPrompt为空' : '不存在');
     }
 
-    // 注入自主进化经验到 System Prompt
+    // 注入自主进化经验到 System Prompt（预注入在开头，高关注度位置）
     let injectedExperiences: { id: string; title: string; errorCategory: string; hitCount: number }[] = [];
     try {
       const expResult = await buildExperiencePromptWithMeta();
       if (expResult.prompt) {
-        sdkOptions.systemPrompt = (sdkOptions.systemPrompt || '') + '\n\n' + expResult.prompt;
+        // 预注入放在 System Prompt 开头（高关注度位置）
+        const originalPrompt = sdkOptions.systemPrompt || '';
+        sdkOptions.systemPrompt = expResult.prompt + '\n\n' + originalPrompt;
         injectedExperiences = expResult.experiences;
-        console.log(`[启动评估] 已注入自主进化经验到 System Prompt，共 ${expResult.count} 条:`);
+        console.log(`[启动评估] 已预注入自主进化经验到 System Prompt 开头，共 ${expResult.count} 条（Top 3 限制）:`);
         expResult.experiences.forEach((e, i) => {
           console.log(`[启动评估]   ${i + 1}. [${e.errorCategory}] ${e.title} (命中${e.hitCount}次)`);
         });

@@ -635,6 +635,8 @@ model Skill {
   successRate Float?   // 成功率
   avgDuration Int?     // 平均执行时间（毫秒）
   execCount   Int      @default(0)     // 执行次数
+  referenceCount Int   @default(0)     // 引用次数（被扫描任务、工作流引用的次数）
+  vulnerabilityCount Int @default(0)   // 发现漏洞次数（累计发现的漏洞数量）
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -1567,11 +1569,13 @@ model ExperienceUsageLog {
   experienceId   String                        // 关联的经验 ID
   evaluationId   String                        // 关联的评估会话 ID
   projectId      String?                       // 关联的项目 ID
+  source         String   @default("pre_injected") // 来源：pre_injected | dynamic_query
   usedAt         DateTime @default(now())
 
   @@index([experienceId])
   @@index([evaluationId])
   @@index([usedAt])
+  @@index([source])
 }
 
 // ============================================

@@ -53,6 +53,7 @@ export class AgentExecutor {
   private toolCallCount: number = 0;
   private iterationCount: number = 0;
   private executionId: string = '';
+  private skillName: string = '';  // 当前执行的 Skill 名称
 
   constructor(context: AgentExecutionContext, callbacks: AgentExecutionCallbacks) {
     this.context = context;
@@ -99,6 +100,9 @@ export class AgentExecutor {
       if (!skill) {
         throw new Error('Skill 不存在');
       }
+
+      // 设置 Skill 名称，用于漏洞记录
+      this.skillName = skill.name;
 
       // 获取项目信息
       const project = await prisma.project.findUnique({
@@ -310,12 +314,15 @@ export class AgentExecutor {
 
   /**
    * 保存漏洞到数据库
+   * 同时更新 Skill.vulnerabilityCount 计数
    */
   private async saveVulnerabilities(vulnerabilities: ParsedVulnerability[]): Promise<void> {
     for (const vuln of vulnerabilities) {
       await prisma.vulnerability.create({
         data: {
           projectId: this.context.projectId,
+          skillExecutionId: this.executionId,  // 关联到执行记录
+          skill: this.skillName,               // 记录来源 Skill 名称
           title: vuln.title,
           description: vuln.description,
           type: vuln.type || 'unknown',
@@ -328,6 +335,14 @@ export class AgentExecutor {
           recommendation: vuln.recommendation,
           cwe: vuln.cwe,
         },
+      });
+    }
+
+    // 更新 Skill.vulnerabilityCount 计数
+    if (vulnerabilities.length > 0) {
+      await prisma.skill.update({
+        where: { id: this.context.skillId },
+        data: { vulnerabilityCount: { increment: vulnerabilities.length } },
       });
     }
   }

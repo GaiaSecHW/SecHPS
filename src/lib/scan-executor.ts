@@ -243,20 +243,7 @@ export class ScanExecutor {
 
     const findingsCount = Math.floor(Math.random() * 3);
 
-    if (findingsCount > 0) {
-      for (let i = 0; i < findingsCount; i++) {
-        await prisma.vulnerability.create({
-          data: {
-            projectId: project.id,
-            title: `[${skill.displayName}] 发现潜在漏洞 #${i + 1}`,
-            description: `由 Skill "${skill.displayName}" 发现的潜在安全问题`,
-            type: skill.category,
-            severity: skill.severity,
-            status: 'new',
-          },
-        });
-      }
-    }
+    // 注意：模拟执行不创建实际漏洞记录，仅返回模拟结果
 
     return {
       skillId: skill.id,

@@ -35,7 +35,7 @@ export async function getInjectionEnabled(): Promise<boolean> {
 export async function setInjectionEnabled(enabled: boolean): Promise<void> {
   await prisma.systemConfig.upsert({
     where: { key: INJECTION_KEY },
-    create: { key: INJECTION_KEY, value: String(enabled), description: '执行自主进化 - 评估时注入经验开关' },
+    create: { key: INJECTION_KEY, value: String(enabled), description: '执行进化管理 - 评估时注入经验开关' },
     update: { value: String(enabled) },
   });
 }
@@ -55,7 +55,7 @@ export async function saveIdleTriggerConfig(config: Partial<IdleTriggerConfig>):
   const merged = { ...current, ...config };
   await prisma.systemConfig.upsert({
     where: { key: CONFIG_KEY },
-    create: { key: CONFIG_KEY, value: JSON.stringify(merged), description: '执行自主进化 - 闲时触发配置' },
+    create: { key: CONFIG_KEY, value: JSON.stringify(merged), description: '执行进化管理 - 闲时触发配置' },
     update: { value: JSON.stringify(merged) },
   });
 }
@@ -110,7 +110,7 @@ export async function recordLastAutoExtract(): Promise<void> {
     create: {
       key: 'autonomous_evolution_last_auto_extract',
       value: new Date().toISOString(),
-      description: '执行自主进化 - 最后自动提取时间',
+      description: '执行进化管理 - 最后自动提取时间',
     },
     update: { value: new Date().toISOString() },
   });

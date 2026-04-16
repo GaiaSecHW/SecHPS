@@ -17,6 +17,12 @@ import {
   isRalphStopConditionMet,
 } from './ralph-loop-agent';
 import type { RalphStopCondition, RalphStopConditionContext } from './ralph-loop-agent';
+import {
+  queryRelevantExperiences,
+  buildDynamicExperiencePrompt,
+  type ErrorContext,
+  type ExperienceMatch,
+} from '@/services/autonomous-evolution/experience-query-service';
 
 /**
  * Ralph Loop Agent 配置
@@ -80,6 +86,16 @@ export interface RalphLoopAgentCallbacks extends EnhancedEvaluationCallbacks {
       outputTokens: number;
       totalTokens: number;
     };
+  }) => void | Promise<void>;
+
+  /**
+   * 经验查询回调 - 当错误发生时查询到相关经验
+   */
+  onExperienceQueried?: (data: {
+    errorContext: ErrorContext;
+    matches: ExperienceMatch[];
+    guidancePrompt: string;
+    iteration: number;
   }) => void | Promise<void>;
 }
 
@@ -233,6 +249,7 @@ export class RalphLoopAgent {
     let totalUsage = this.createEmptyUsage();
     let completionReason: RalphLoopAgentResult['completionReason'] = 'max-iterations';
     let reason: string | undefined;
+    let lastExperienceGuidance: string | undefined;  // 存储上一轮错误查询到的经验指导
 
     const stopConditions = this.getStopConditions();
     const modelId = this.getModelId();
@@ -255,16 +272,29 @@ export class RalphLoopAgent {
         await this.config.onIterationStart(iteration);
       }
 
-      // 构建本次迭代的 context（后续迭代追加反馈提示）
+      // 构建本次迭代的 context（后续迭代追加反馈提示和经验指导）
+      let iterationInitialMessage: string;
+      if (iteration === 1) {
+        iterationInitialMessage = context.initialMessage || context.taskDescription || '';
+      } else {
+        // 后续迭代：包含上一轮的经验指导（如果有）
+        const experienceSection = lastExperienceGuidance
+          ? `\n\n${lastExperienceGuidance}\n`
+          : '';
+        iterationInitialMessage = `继续工作。第 ${iteration - 1} 次尝试没有完成，请继续完成任务。如果任务已经完成，请明确说明。${experienceSection}\n\n原始任务：${context.taskDescription || context.initialMessage || ''}`;
+        // 清除已使用的经验指导
+        lastExperienceGuidance = undefined;
+      }
+
       const iterationContext = {
         ...context,
-        initialMessage:
-          iteration === 1
-            ? (context.initialMessage || context.taskDescription || '')
-            : `继续工作。第 ${iteration - 1} 次尝试没有完成，请继续完成任务。如果任务已经完成，请明确说明。\n\n原始任务：${context.taskDescription || context.initialMessage || ''}`,
+        initialMessage: iterationInitialMessage,
       };
 
       // 执行一次评估
+      // 用于存储错误时启动的经验查询 Promise
+      let experienceQueryPromise: Promise<{ prompt: string; matches: ExperienceMatch[] }> | null = null;
+
       const result = await new Promise<SimpleGenerateTextResult>(
         (resolve, reject) => {
           let fullText = '';
@@ -335,6 +365,14 @@ export class RalphLoopAgent {
               } else {
                 // error_during_execution 等可恢复错误：记录日志，用空结果继续
                 console.warn(`[Ralph Loop] 迭代 ${iteration} 遇到可恢复错误，继续下一轮:`, error.message);
+
+                // 启动经验查询（异步，不阻塞 resolve）
+                const errorContext: ErrorContext = {
+                  errorMessage: error.message,
+                };
+                experienceQueryPromise = buildDynamicExperiencePrompt(errorContext);
+                console.log(`[Ralph Loop] 已启动经验查询，错误: ${error.message.substring(0, 100)}...`);
+
                 resolve({
                   text: `[迭代错误] ${error.message}`,
                   steps: [],
@@ -357,6 +395,32 @@ export class RalphLoopAgent {
       );
 
       allResults.push(result);
+
+// 如果有经验查询 Promise，等待结果并处理
+      if (experienceQueryPromise) {
+        try {
+          const expData = await experienceQueryPromise as { prompt: string; matches: ExperienceMatch[] };
+          const prompt = expData.prompt;
+          const matches = expData.matches;
+          if (prompt && matches && matches.length > 0) {
+            lastExperienceGuidance = prompt;
+            console.log(`[Ralph Loop] 查询到 ${matches.length} 条相关经验，已注入下一轮指导`);
+
+            // 调用经验查询回调（发送 SSE 事件）
+            if (callbacks.onExperienceQueried) {
+              await callbacks.onExperienceQueried({
+                errorContext: { errorMessage: allResults[allResults.length - 1]?.text?.replace('[迭代错误] ', '') || '' },
+                matches,
+                guidancePrompt: prompt,
+                iteration,
+              });
+            }
+          }
+        } catch (queryError) {
+          console.error('[Ralph Loop] 经验查询失败:', queryError);
+        }
+        experienceQueryPromise = null;
+      }
 
       // 迭代结束后再次检查中止状态
       if (this.isAborted()) {

@@ -98,6 +98,8 @@ export interface SkillResponse {
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
+  referenceCount: number;     // 引用次数
+  vulnerabilityCount: number; // 发现漏洞次数
   createdAt: Date;
   updatedAt: Date;
 }

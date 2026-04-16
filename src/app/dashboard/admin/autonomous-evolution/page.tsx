@@ -314,7 +314,7 @@ export default function AutonomousEvolutionPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">执行自主进化</h1>
+          <h1 className="text-2xl font-bold text-gray-900">执行进化管理</h1>
           <p className="mt-1 text-sm text-gray-600">从评估日志中提取失败→成功经验，注入 System Prompt 跳过重复失败</p>
         </div>
         <div className="flex items-center gap-2">

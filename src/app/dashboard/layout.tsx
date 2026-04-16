@@ -210,7 +210,7 @@ function DashboardLayoutContent({
                 Skills 进化
               </NavLink>
               <NavLink href="/dashboard/admin/autonomous-evolution" icon={<Brain size={20} />} collapsed={collapsed}>
-                执行自主进化
+                执行进化管理
               </NavLink>
               <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
                 工具管理
