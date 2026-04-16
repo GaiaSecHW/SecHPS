@@ -100,6 +100,12 @@ export const PERMISSIONS = {
   SKILL_DELETE: 'skill:delete',
   SKILL_EXECUTE: 'skill:execute',
 
+  // Skills Governance 权限
+  SKILL_GOVERNANCE_READ: 'skill-governance:read',
+  SKILL_GOVERNANCE_UPDATE: 'skill-governance:update',
+  SKILL_MERGE: 'skill:merge',
+  SKILL_APPROVE: 'skill:approve',
+
   // 漏洞权限
   VULNERABILITY_CREATE: 'vulnerability:create',
   VULNERABILITY_READ: 'vulnerability:read',

@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Skill } from '@prisma/client';
+import { prisma } from '@/lib/prisma';
 
 /**
  * Skill 元数据（存储在 metadata.json）
@@ -49,6 +50,16 @@ export interface DiskSkill {
 }
 
 /**
+ * 治理过滤结果
+ */
+export interface FilteredSkillInfo {
+  skillId: string;
+  skillName: string;
+  reason: 'deprecated' | 'merged' | 'pending_merge';
+  mergedInto?: string;  // 合并目标 Skill 名称（仅 merged 时）
+}
+
+/**
  * 拷贝结果
  */
 export interface CopyResult {
@@ -56,6 +67,7 @@ export interface CopyResult {
   failed: number;
   errors: string[];
   copiedSkills: string[];
+  filteredSkills?: FilteredSkillInfo[];  // 治理过滤的 Skills
 }
 
 /**
@@ -350,6 +362,85 @@ export async function copySkillsToProject(
               continue;
             }
           }
+        }
+        
+        // 治理过滤：检查 Skill 是否被废弃或合并
+        // 规则：
+        // 1. isLatest = false → Skill 已废弃，跳过
+        // 2. 有 completed SkillMergeRecord → Skill 已合并到其他 Skill，跳过
+        // 3. 有 pending SkillMergeRecord → Skill 正在合并流程中，跳过
+        try {
+          // 查询数据库中的 Skill 记录
+          const dbSkill = await prisma.skill.findUnique({
+            where: { id: metadata.id },
+            select: { id: true, name: true, displayName: true, isLatest: true },
+          });
+          
+          if (dbSkill) {
+            // 检查是否废弃
+            if (!dbSkill.isLatest) {
+              if (!result.filteredSkills) result.filteredSkills = [];
+              result.filteredSkills.push({
+                skillId: metadata.id,
+                skillName: metadata.name,
+                reason: 'deprecated',
+              });
+              console.log(`[SkillFiles] 治理过滤: ${metadata.name} 已废弃 (isLatest=false)`);
+              continue;
+            }
+            
+            // 检查是否已合并
+            const completedMergeRecords = await prisma.skillMergeRecord.findMany({
+              where: {
+                sourceSkillId: metadata.id,
+                status: 'completed',
+              },
+            });
+            
+            if (completedMergeRecords.length > 0) {
+              const mergeRecord = completedMergeRecords[0];
+              // 手动查询目标 Skill 名称
+              const targetSkill = await prisma.skill.findUnique({
+                where: { id: mergeRecord.targetSkillId },
+                select: { name: true, displayName: true },
+              });
+              const targetSkillName = targetSkill?.displayName || targetSkill?.name || '未知';
+              
+              if (!result.filteredSkills) result.filteredSkills = [];
+              result.filteredSkills.push({
+                skillId: metadata.id,
+                skillName: metadata.name,
+                reason: 'merged',
+                mergedInto: targetSkillName,
+              });
+              console.log(`[SkillFiles] 治理过滤: ${metadata.name} 已合并到 ${targetSkillName}`);
+              continue;
+            }
+            
+            // 检查是否有待处理的合并请求
+            const pendingMergeRecords = await prisma.skillMergeRecord.findMany({
+              where: {
+                OR: [
+                  { sourceSkillId: metadata.id, status: 'pending' },
+                  { targetSkillId: metadata.id, status: 'pending' },
+                ],
+              },
+            });
+            
+            if (pendingMergeRecords.length > 0) {
+              if (!result.filteredSkills) result.filteredSkills = [];
+              result.filteredSkills.push({
+                skillId: metadata.id,
+                skillName: metadata.name,
+                reason: 'pending_merge',
+              });
+              console.log(`[SkillFiles] 治理过滤: ${metadata.name} 正在合并流程中 (${pendingMergeRecords.length} 个待处理请求)`);
+              continue;
+            }
+          }
+        } catch (governanceError) {
+          // 治理过滤失败不阻断拷贝流程，仅记录日志
+          console.warn(`[SkillFiles] 治理过滤查询失败: ${metadata.name}`, governanceError);
         }
         
         // 拷贝最新版本的 SKILL.md

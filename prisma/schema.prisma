@@ -652,6 +652,10 @@ model Skill {
   observationLogs SkillObservationLog[]
   observationStats SkillObservationStats?
   impactAnalyses SkillNewImpactAnalysis[]
+  
+  // 合并记录关系
+  mergeRecordsAsSource SkillMergeRecord[] @relation("SkillMergeSource")
+  mergeRecordsAsTarget SkillMergeRecord[] @relation("SkillMergeTarget")
 
   @@unique([userId, name])  // 同一用户下名称唯一（公共 Skills 的 userId 为 null）
   @@index([userId])
@@ -849,6 +853,10 @@ model SkillMergeRecord {
   // 合并信息
   sourceSkillId String  // 被合并的源 Skill ID
   targetSkillId String  // 合并到的目标 Skill ID
+  
+  // 关联关系
+  sourceSkill Skill?  @relation("SkillMergeSource", fields: [sourceSkillId], references: [id])
+  targetSkill Skill?  @relation("SkillMergeTarget", fields: [targetSkillId], references: [id])
 
   // 合并原因
   mergeReason String   // similarity | duplicate | consolidation | user_request
