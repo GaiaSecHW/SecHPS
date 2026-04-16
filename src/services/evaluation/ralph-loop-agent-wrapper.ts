@@ -404,7 +404,17 @@ export class RalphLoopAgent {
           const matches = expData.matches;
           if (prompt && matches && matches.length > 0) {
             lastExperienceGuidance = prompt;
+            console.log(`[Ralph Loop] ========== 动态查询结果注入 ==========`);
             console.log(`[Ralph Loop] 查询到 ${matches.length} 条相关经验，已注入下一轮指导`);
+            console.log(`[Ralph Loop] 注入位置: iteration.feedback.experienceGuidance`);
+            
+            for (let i = 0; i < matches.length; i++) {
+              const match = matches[i];
+              console.log(`[Ralph Loop] 经验 ${i + 1}: "${match.experience.title}"`);
+              console.log(`[Ralph Loop]   - 评分: ${match.relevanceScore.toFixed(1)}`);
+              console.log(`[Ralph Loop]   - 匹配特征: ${match.matchedPatterns.join(', ')}`);
+            }
+            console.log(`[Ralph Loop] ========== 动态查询注入完成 ==========`);
 
             // 调用经验查询回调（发送 SSE 事件）
             if (callbacks.onExperienceQueried) {
@@ -415,6 +425,8 @@ export class RalphLoopAgent {
                 iteration,
               });
             }
+          } else {
+            console.log(`[Ralph Loop] 经验查询无结果，跳过注入`);
           }
         } catch (queryError) {
           console.error('[Ralph Loop] 经验查询失败:', queryError);

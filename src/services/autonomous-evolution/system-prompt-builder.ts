@@ -40,15 +40,19 @@ export async function buildExperiencePromptWithMeta(): Promise<BuildExperienceRe
   });
 
   if (experiences.length === 0) {
+    console.log('[经验预注入] 无已标记注入的经验，跳过预注入');
     return { prompt: '', count: 0, experiences: [] };
   }
 
+  console.log(`[经验预注入] ========== 预注入 Top ${experiences.length} 高频经验 ==========`);
+  
   const lines: string[] = [
     '## ⚠️ 已知执行经验（直接使用，跳过失败尝试）',
     '',
   ];
 
-  for (const exp of experiences) {
+  for (let i = 0; i < experiences.length; i++) {
+    const exp = experiences[i];
     let patterns: string[] = [];
     try { patterns = JSON.parse(exp.errorPatterns) as string[]; } catch { /* ignore */ }
 
@@ -59,14 +63,16 @@ export async function buildExperiencePromptWithMeta(): Promise<BuildExperienceRe
     lines.push(`直达方案: ${exp.directSolution}`);
     lines.push('');
 
-    console.log(
-      `[经验注入] 注入经验: [${exp.errorCategory}] ${exp.title}` +
-      (patterns.length > 0 ? ` | 触发特征: ${patterns.join(' / ')}` : '') +
-      ` | 命中次数: ${exp.hitCount}`
-    );
+    console.log(`[经验预注入] Top ${i + 1}: "${exp.title}"`);
+    console.log(`[经验预注入]   - ID: ${exp.id}`);
+    console.log(`[经验预注入]   - 分类: ${exp.errorCategory}`);
+    console.log(`[经验预注入]   - 命中次数: ${exp.hitCount}`);
+    console.log(`[经验预注入]   - 触发特征: ${patterns.join(', ') || '无'}`);
+    console.log(`[经验预注入]   - 直达方案: ${exp.directSolution.substring(0, 50)}...`);
   }
 
-  console.log(`[经验注入] 共注入 ${experiences.length} 条经验到 System Prompt`);
+  console.log(`[经验预注入] ========== 共预注入 ${experiences.length} 条经验 ==========`);
+  console.log(`[经验预注入] 注入位置: System Prompt 开头（高关注度）`);
 
   return {
     prompt: lines.join('\n'),

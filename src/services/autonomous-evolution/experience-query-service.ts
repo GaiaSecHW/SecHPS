@@ -184,16 +184,25 @@ export async function buildDynamicExperiencePrompt(
   const matches = await queryRelevantExperiences(context);
 
   if (matches.length === 0) {
+    console.log('[动态经验查询] ========== 无匹配经验 ==========');
+    console.log(`[动态经验查询] 错误分类: ${context.errorCategory || classifyError(context.errorMessage)}`);
+    console.log(`[动态经验查询] 错误消息: ${context.errorMessage.substring(0, 100)}...`);
     return { prompt: '', matches: [] };
   }
+
+  console.log(`[动态经验查询] ========== 动态查询 Top ${matches.length} 相关经验 ==========`);
+  console.log(`[动态经验查询] 错误分类: ${context.errorCategory || classifyError(context.errorMessage)}`);
+  console.log(`[动态经验查询] 错误消息: ${context.errorMessage.substring(0, 100)}...`);
 
   const lines: string[] = [
     '## ⚠️ 相关执行经验（遇到类似错误时的解决方案）',
     '',
   ];
 
-  for (const match of matches) {
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i];
     const exp = match.experience;
+    
     lines.push(`### ${exp.title}`);
     if (match.matchedPatterns.length > 0) {
       lines.push(`匹配特征: ${match.matchedPatterns.join(' / ')}`);
@@ -201,13 +210,19 @@ export async function buildDynamicExperiencePrompt(
     lines.push(`直达方案: ${exp.directSolution}`);
     lines.push(`教训: ${exp.lesson}`);
     lines.push('');
+
+    console.log(`[动态经验查询] Top ${i + 1}: "${exp.title}"`);
+    console.log(`[动态经验查询]   - ID: ${exp.id}`);
+    console.log(`[动态经验查询]   - 分类: ${exp.errorCategory}`);
+    console.log(`[动态经验查询]   - 相关性评分: ${match.relevanceScore.toFixed(1)}`);
+    console.log(`[动态经验查询]   - 匹配特征: ${match.matchedPatterns.join(', ') || '无'}`);
+    console.log(`[动态经验查询]   - 命中次数: ${exp.hitCount}`);
+    console.log(`[动态经验查询]   - 直达方案: ${exp.directSolution.substring(0, 50)}...`);
   }
 
-  const prompt = lines.join('\n');
-  console.log(
-    `[动态经验查询] 查询到 ${matches.length} 条相关经验，` +
-    `最高评分: ${matches[0]?.relevanceScore.toFixed(1)}`
-  );
+  console.log(`[动态经验查询] ========== 共查询 ${matches.length} 条经验 ==========`);
+  console.log(`[动态经验查询] 最高评分: ${matches[0]?.relevanceScore.toFixed(1)}`);
 
+  const prompt = lines.join('\n');
   return { prompt, matches };
 }
