@@ -45,6 +45,8 @@ export interface LoadedSkill {
   successRate?: number | null;
   avgDuration?: number | null;
   execCount: number;
+  referenceCount: number;     // 引用次数
+  vulnerabilityCount: number; // 发现漏洞次数
   isActive: boolean;
   isBuiltin: boolean;
 }
@@ -568,6 +570,8 @@ function parseSkill(skill: Skill): LoadedSkill {
     successRate: skill.successRate,
     avgDuration: skill.avgDuration,
     execCount: skill.execCount,
+    referenceCount: skill.referenceCount,
+    vulnerabilityCount: skill.vulnerabilityCount,
     isActive: skill.isActive,
     isBuiltin: skill.isBuiltin,
   };
@@ -809,6 +813,8 @@ export async function importSkillFromMarkdown(
     successRate: null,
     avgDuration: null,
     execCount: 0,
+    referenceCount: 0,
+    vulnerabilityCount: 0,
   };
 }
 
