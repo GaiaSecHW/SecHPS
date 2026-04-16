@@ -1,20 +1,24 @@
 'use client';
-
+ 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 interface Workflow {
   id: string;
+  userId: string;
+  userName?: string;
+  userUsername?: string;
   name: string;
   description?: string;
   status: WorkflowStatus;
   thumbnail?: string;
   techStack?: string[];
+  isPublic: boolean;
   nodeCount: number;
   edgeCount: number;
   createdAt: string;
@@ -23,6 +27,8 @@ interface Workflow {
 
 export default function WorkflowsPage() {
   const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -34,6 +40,7 @@ export default function WorkflowsPage() {
   const [workflowName, setWorkflowName] = useState('');
   const [workflowDescription, setWorkflowDescription] = useState('');
   const [workflowTechStack, setWorkflowTechStack] = useState<string[]>([]);
+  const [workflowIsPublic, setWorkflowIsPublic] = useState(false);
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -43,6 +50,14 @@ export default function WorkflowsPage() {
   const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
 
   useEffect(() => {
+    // 检查是否是管理员
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const userData = JSON.parse(userStr);
+      setUser(userData);
+      setIsAdmin(userData.roles?.includes('admin') || false);
+    }
+    
     fetchWorkflows();
   }, []);
 
@@ -67,9 +82,13 @@ export default function WorkflowsPage() {
       // 映射 _count.nodes 到 nodeCount
       const mappedWorkflows = (data.data || []).map((w: any) => ({
         ...w,
+        userId: w.userId,
+        userName: w.userName || w.userUsername,
+        userUsername: w.userUsername,
         nodeCount: w._count?.nodes || 0,
         edgeCount: 0, // 暂时设置为 0，因为 API 没有返回 edgeCount
         techStack: w.techStack ? JSON.parse(w.techStack) : [],
+        isPublic: w.isPublic || false,
       }));
       setWorkflows(mappedWorkflows);
       setLoading(false);
@@ -111,6 +130,7 @@ export default function WorkflowsPage() {
           name: trimmedName,
           description: workflowDescription,
           techStack: workflowTechStack,
+          isPublic: workflowIsPublic,
         }),
       });
 
@@ -125,6 +145,7 @@ export default function WorkflowsPage() {
       setWorkflowName('');
       setWorkflowDescription('');
       setWorkflowTechStack([]);
+      setWorkflowIsPublic(false);
       await fetchWorkflows();
     } catch (err) {
       toast.error('网络错误，请重试');
@@ -508,9 +529,31 @@ export default function WorkflowsPage() {
               {/* 内容区域 */}
               <div className="p-6">
                 <div className="flex items-start justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900 truncate flex-1">
-                    {workflow.name}
-                  </h3>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate">
+                        {workflow.name}
+                      </h3>
+                      {/* 公开/私有标签 */}
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          workflow.isPublic
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {workflow.isPublic ? <Globe size={12} /> : <Lock size={12} />}
+                        {workflow.isPublic ? '公开' : '私有'}
+                      </span>
+                    </div>
+                    {/* 管理员视角显示创建者 */}
+                    {isAdmin && workflow.userName && (
+                      <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
+                        <User size={12} />
+                        {workflow.userName || workflow.userUsername}
+                      </p>
+                    )}
+                  </div>
                   <span
                     className={`inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ml-2 ${getStatusColor(workflow.status)}`}
                   >
@@ -726,21 +769,42 @@ export default function WorkflowsPage() {
                         )}
                       </div>
                     )}
-                    {loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
-                        <div className="flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          <span className="text-sm text-gray-500">加载技术栈选项...</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    可选择多个技术栈，表示此编排适用于这些技术
-                  </p>
+{loadingTechStack && (
+                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
+                         <div className="flex items-center justify-center">
+                           <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                           <span className="text-sm text-gray-500">加载技术栈选项...</span>
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                   <p className="text-xs text-gray-500 mt-1">
+                     可选择多个技术栈，表示此编排适用于这些技术
+                   </p>
+                 </div>
+
+                {/* 公开选项 */}
+                <div className="pt-4 border-t border-gray-200">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={workflowIsPublic}
+                      onChange={(e) => setWorkflowIsPublic(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 flex items-center gap-1">
+                      {workflowIsPublic ? <Globe size={14} className="text-blue-600" /> : <Lock size={14} />}
+                      公开（其他用户可在评估中使用）
+                    </span>
+                  </label>
+                  {workflowIsPublic && (
+                    <p className="text-xs text-blue-600 mt-2 ml-6">
+                      公开的编排将出现在所有用户的评估编排选择列表中
+                    </p>
+                  )}
                 </div>
-              </div>
-            </div>
+               </div>
+             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
               <button
@@ -749,6 +813,7 @@ export default function WorkflowsPage() {
                   setWorkflowName('');
                   setWorkflowDescription('');
                   setWorkflowTechStack([]);
+                  setWorkflowIsPublic(false);
                 }}
                 disabled={creating}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"

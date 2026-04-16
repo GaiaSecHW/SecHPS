@@ -3,7 +3,19 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 
+// 格式化工作流数据
+function formatWorkflow(workflow: any) {
+  return {
+    ...workflow,
+    techStack: workflow.techStack ? JSON.parse(workflow.techStack) : null,
+    userName: workflow.user?.name || workflow.user?.username || null,
+    userUsername: workflow.user?.username || null,
+  };
+}
+
 // 获取单个工作流详情
+// 普通用户：可以查看自己的 + 公开的 + 被分享的
+// 管理员：可以查看所有
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -29,21 +41,30 @@ export async function GET(
 
     const { id } = await params;
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件
+    let where: any = { id };
+    
+    if (!isAdmin) {
+      // 普通用户：可以查看自己的 + 公开的 + 被分享的
+      where.OR = [
+        { userId: payload.userId },
+        { isPublic: true },
+        {
+          shares: {
+            some: {
+              sharedWith: payload.userId,
+            },
+          },
+        },
+      ];
+    }
+
     // 获取工作流详情
     const workflow = await prisma.workflow.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId: payload.userId }, // 自己创建的工作流
-          {
-            shares: {
-              some: {
-                sharedWith: payload.userId,
-              },
-            },
-          }, // 被分享的工作流
-        ],
-      },
+      where,
       include: {
         nodes: {
           orderBy: {
@@ -59,6 +80,7 @@ export async function GET(
           select: {
             id: true,
             name: true,
+            username: true,
             email: true,
             avatar: true,
           },
@@ -76,7 +98,7 @@ export async function GET(
       return NextResponse.json({ error: '工作流不存在' }, { status: 404 });
     }
 
-    return NextResponse.json({ workflow });
+    return NextResponse.json({ workflow: formatWorkflow(workflow) });
   } catch (error) {
     console.error('Get workflow error:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
@@ -84,6 +106,7 @@ export async function GET(
 }
 
 // 更新工作流基本信息
+// 只能更新自己创建的，管理员可以更新所有
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -109,21 +132,26 @@ export async function PATCH(
 
     const { id } = await params;
 
-    // 检查工作流是否存在且属于当前用户
-    const existingWorkflow = await prisma.workflow.findFirst({
-      where: {
-        id,
-        userId: payload.userId,
-      },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查工作流是否存在
+    const existingWorkflow = await prisma.workflow.findUnique({
+      where: { id },
     });
 
     if (!existingWorkflow) {
-      return NextResponse.json({ error: '工作流不存在或无权访问' }, { status: 404 });
+      return NextResponse.json({ error: '工作流不存在' }, { status: 404 });
+    }
+
+    // 检查权限：只能更新自己的，管理员可以更新所有
+    if (!isAdmin && existingWorkflow.userId !== payload.userId) {
+      return NextResponse.json({ error: '禁止访问：只能更新自己创建的工作流' }, { status: 403 });
     }
 
     // 解析请求体
     const body = await request.json();
-    const { name, description, status, thumbnail, techStack } = body;
+    const { name, description, status, thumbnail, techStack, isActive, isPublic } = body;
 
     // 构建更新数据
     const updateData: any = {};
@@ -139,6 +167,8 @@ export async function PATCH(
         updateData.techStack = null;
       }
     }
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (isPublic !== undefined) updateData.isPublic = isPublic;
 
     // 更新工作流
     const workflow = await prisma.workflow.update({
@@ -147,6 +177,13 @@ export async function PATCH(
       include: {
         nodes: true,
         edges: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
       },
     });
 
@@ -162,7 +199,7 @@ export async function PATCH(
 
     return NextResponse.json({
       message: '工作流更新成功',
-      workflow,
+      workflow: formatWorkflow(workflow),
     });
   } catch (error) {
     console.error('Update workflow error:', error);
@@ -171,6 +208,7 @@ export async function PATCH(
 }
 
 // 删除工作流
+// 只能删除自己的，管理员可以删除所有
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -196,16 +234,21 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // 检查工作流是否存在且属于当前用户
-    const existingWorkflow = await prisma.workflow.findFirst({
-      where: {
-        id,
-        userId: payload.userId,
-      },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查工作流是否存在
+    const existingWorkflow = await prisma.workflow.findUnique({
+      where: { id },
     });
 
     if (!existingWorkflow) {
-      return NextResponse.json({ error: '工作流不存在或无权访问' }, { status: 404 });
+      return NextResponse.json({ error: '工作流不存在' }, { status: 404 });
+    }
+
+    // 检查权限：只能删除自己的，管理员可以删除所有
+    if (!isAdmin && existingWorkflow.userId !== payload.userId) {
+      return NextResponse.json({ error: '禁止访问：只能删除自己创建的工作流' }, { status: 403 });
     }
 
     // 删除工作流（级联删除 nodes 和 edges）

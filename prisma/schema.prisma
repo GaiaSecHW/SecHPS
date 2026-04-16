@@ -358,6 +358,7 @@ model Workflow {
   version     Int      @default(1)
   status      String   @default("draft") // draft, published, archived
   isActive    Boolean  @default(false) // 是否启用（可用于执行）
+  isPublic    Boolean  @default(false) // 是否公开（公开的编排其他用户可以在评估中使用）
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -374,6 +375,7 @@ model Workflow {
   @@index([userId])
   @@index([status])
   @@index([isActive])
+  @@index([isPublic])
   @@index([userId, status])
   @@index([status, isActive])
 }
