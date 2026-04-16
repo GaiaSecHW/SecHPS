@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { ClaudeCodeReader } from '@/services/claude-code-reader';
 import { providerRegistry } from '@/services/providers';
+import { logger } from '@/lib/logger';
 import type { ClaudeCodeProject, ClaudeCodeSession } from '@/types/claude-code';
 
 export async function GET() {
@@ -43,7 +44,7 @@ export async function GET() {
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('Error discovering Claude projects:', error);
-    return NextResponse.json({ error: 'Failed to discover Claude projects', detail: message }, { status: 500 });
+    logger.errorNoUser('CLAUDE', '发现 Claude 项目失败', { details: { error: message } });
+    return NextResponse.json({ details: { error: 'Failed to discover Claude projects', detail: message } }, { status: 500 });
   }
 }

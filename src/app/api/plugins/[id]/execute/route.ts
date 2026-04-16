@@ -4,6 +4,7 @@ import { PluginManager } from '@/services/plugin-manager';
 import { PluginRunner } from '@/services/plugin-runner';
 import { PERMISSIONS } from '@/types/permissions';
 import type { PluginExecutionContext } from '@/types/plugin';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface RouteParams {
   params: Promise<{
@@ -75,12 +76,13 @@ export async function POST(request: Request, { params }: RouteParams) {
     // 执行插件
     const result = await PluginRunner.executePlugin(plugin, context);
 
+    logger.access(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}:execute`, { name: plugin.name, success: result.success });
     return NextResponse.json({
       message: result.success ? '插件执行成功' : '插件执行失败',
       result,
     });
   } catch (error) {
-    console.error('执行插件失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '执行插件失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(

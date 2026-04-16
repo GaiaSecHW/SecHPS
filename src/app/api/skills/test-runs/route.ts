@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Skill 测试运行 API
@@ -12,21 +13,21 @@ export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的 token' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
     }
 
     const body = await request.json();
     const { testCase, skillData, runType } = body;
 
     if (!testCase || !skillData) {
-      return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少必要参数' } }, { status: 400 });
     }
 
     const startTime = Date.now();
@@ -36,12 +37,12 @@ export async function POST(request: NextRequest) {
     
     if (!modelConfig) {
       return NextResponse.json(
-        { error: '模型配置不存在，请先在系统设置中配置 AI 模型' },
+        { details: { error: '模型配置不存在，请先在系统设置中配置 AI 模型' } },
         { status: 500 }
       );
     }
 
-    console.log('[test-runs] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel, '提供商:', modelConfig.providerType);
+    logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelConfig.defaultModel, provider: modelConfig.providerType } });
     
     // 构建提示词
     let prompt = '';
@@ -64,8 +65,7 @@ export async function POST(request: NextRequest) {
       prompt += `\n\n期望输出格式:\n${testCase.expectedOutput}`;
     }
 
-    console.log('[test-runs] 发送的提示词长度:', prompt.length);
-    console.log('[test-runs] 提示词内容:', prompt.substring(0, 500) + '...');
+    logger.debug(LOG_MODULES.SKILL, '发送的提示词', { details: { promptLength: prompt.length, promptPreview: prompt.substring(0, 200) } });
 
     // 调用大模型
     const output = await callModelForTest(modelConfig, prompt);
@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       tokens: 0,
     });
   } catch (error) {
-    console.error('[test-runs] 测试运行失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '测试运行失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     
     // 友好的错误信息
     let errorMessage = '测试运行失败';
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json(
-      { error: errorMessage },
+      { details: { error: errorMessage } },
       { status: 500 }
     );
   }
@@ -107,14 +107,14 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的 token' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
     }
 
     // TODO: 未来可从数据库读取用户的历史评估记录
@@ -123,9 +123,9 @@ export async function GET(request: NextRequest) {
       notes: '评估数据由大模型实时生成',
     });
   } catch (error) {
-    console.error('[test-runs] 获取评估列表失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '获取评估列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '获取评估列表失败' },
+      { details: { error: '获取评估列表失败' } },
       { status: 500 }
     );
   }
@@ -161,12 +161,12 @@ async function getModelConfig(): Promise<{
         defaultModel: models[0] || 'default',
       };
     }
-  } catch (error) {
-    console.error('[test-runs] 获取模型配置失败:', error);
-  }
+} catch (error) {
+      logger.errorNoUser(LOG_MODULES.SKILL, '获取模型配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    }
 
-  return null;
-}
+    return null;
+  }
 
 /**
  * 调用大模型进行测试（无状态，支持并发）
@@ -187,8 +187,8 @@ async function callModelForTest(
         apiUrl = apiUrl.replace(/\/$/, '') + '/v1/messages';
       }
 
-      console.log('[test-runs] Claude API URL:', apiUrl);
-      console.log('[test-runs] 开始调用模型...');
+      logger.debug(LOG_MODULES.SKILL, 'Claude API URL', { details: { apiUrl } });
+      logger.debug(LOG_MODULES.SKILL, '开始调用模型');
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -212,14 +212,14 @@ async function callModelForTest(
         throw new Error(`Claude API 错误 (${response.status}): ${errorText}`);
       }
 
-      console.log('[test-runs] 收到响应，开始解析...');
+      logger.debug(LOG_MODULES.SKILL, '收到响应，开始解析');
       const data = await response.json();
-      console.log('[test-runs] 响应解析完成');
+      logger.debug(LOG_MODULES.SKILL, '响应解析完成');
       
       // 检查是否因为 token 限制被截断
       const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason;
       if (stopReason === 'max_tokens' || stopReason === 'length') {
-        console.error('[test-runs] Claude 响应被截断，stop_reason:', stopReason);
+        logger.errorNoUser(LOG_MODULES.SKILL, 'Claude 响应被截断', { details: { stopReason } });
         throw new Error('模型输出达到 token 限制被截断');
       }
       
@@ -227,7 +227,7 @@ async function callModelForTest(
       if (data.content && Array.isArray(data.content)) {
         const textBlock = data.content.find((block: any) => block.type === 'text');
         if (textBlock?.text) {
-          console.log('[test-runs] 输出长度:', textBlock.text.length);
+          logger.debug(LOG_MODULES.SKILL, '输出长度', { details: { length: textBlock.text.length } });
           return textBlock.text;
         }
       }
@@ -239,8 +239,8 @@ async function callModelForTest(
         apiUrl = apiUrl.replace(/\/$/, '') + '/v1/chat/completions';
       }
 
-      console.log('[test-runs] OpenAI API URL:', apiUrl);
-      console.log('[test-runs] 开始调用模型...');
+      logger.debug(LOG_MODULES.SKILL, 'OpenAI API URL', { details: { apiUrl } });
+      logger.debug(LOG_MODULES.SKILL, '开始调用模型');
 
       const response = await fetch(apiUrl, {
         method: 'POST',
@@ -263,19 +263,19 @@ async function callModelForTest(
         throw new Error(`API 错误 (${response.status}): ${errorText}`);
       }
 
-      console.log('[test-runs] 收到响应，开始解析...');
+      logger.debug(LOG_MODULES.SKILL, '收到响应，开始解析');
       const data = await response.json();
-      console.log('[test-runs] 响应解析完成');
+      logger.debug(LOG_MODULES.SKILL, '响应解析完成');
       
       // 检查是否因为 token 限制被截断
       const stopReason = data.stop_reason || data.choices?.[0]?.finish_reason;
       if (stopReason === 'max_tokens' || stopReason === 'length') {
-        console.error('[test-runs] OpenAI 响应被截断，stop_reason:', stopReason);
+        logger.errorNoUser(LOG_MODULES.SKILL, 'OpenAI 响应被截断', { details: { stopReason } });
         throw new Error('模型输出达到 token 限制被截断');
       }
 
       const content = data.choices?.[0]?.message?.content || '';
-      console.log('[test-runs] 输出长度:', content.length);
+      logger.debug(LOG_MODULES.SKILL, '输出长度', { details: { length: content.length } });
       return content;
     }
   } finally {

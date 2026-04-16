@@ -1,23 +1,24 @@
-// src/app/api/tools/route.ts
+﻿// src/app/api/tools/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/tools - 获取工具列表
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -41,8 +42,8 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
-    console.error('获取工具列表错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取工具列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -51,18 +52,18 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const body = await request.json();
@@ -81,7 +82,7 @@ export async function POST(request: Request) {
 
     if (!name || !displayName || !description || !category || !parameters || !executor) {
       return NextResponse.json(
-        { error: '缺少必填字段' },
+        { details: { error: '缺少必填字段' } },
         { status: 400 }
       );
     }
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
     const existing = await prisma.tool.findUnique({ where: { name } });
     if (existing) {
       return NextResponse.json(
-        { error: '工具名称已存在' },
+        { details: { error: '工具名称已存在' } },
         { status: 400 }
       );
     }
@@ -110,6 +111,8 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.create(LOG_MODULES.CONFIG, payload, `tool:${tool.id}`, { name, displayName, category });
+
     return NextResponse.json(
       {
         tool: {
@@ -121,7 +124,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('创建工具错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.CONFIG, '创建工具失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

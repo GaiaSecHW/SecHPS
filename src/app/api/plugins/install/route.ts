@@ -5,6 +5,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { PluginManifest, InstallPluginFromUrlRequest } from '@/types/plugin';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // turbopackIgnore 防止 Turbopack 追踪整个项目
 const PLUGINS_DIR = path.join(/*turbopackIgnore: true*/ process.cwd(), 'plugins');
@@ -94,12 +95,13 @@ export async function POST(request: Request) {
     // 安装插件到数据库
     const plugin = await PluginManager.installPlugin(manifest, pluginDir);
 
+    logger.create(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}`, { name: manifest.name, url: body.url });
     return NextResponse.json({
       message: '插件安装成功',
       plugin,
     });
   } catch (error) {
-    console.error('从 URL 安装插件失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '从 URL 安装插件失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(

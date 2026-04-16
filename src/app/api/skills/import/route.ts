@@ -1,8 +1,9 @@
-// 导入 Skills 从 JSON 文件
+﻿// 导入 Skills 从 JSON 文件
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface SkillImport {
   name: string;
@@ -37,27 +38,27 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查是否是管理员
     const isAdmin = payload.roles?.includes('admin');
     if (!isAdmin) {
-      return NextResponse.json({ error: '需要管理员权限' }, { status: 403 });
+      return NextResponse.json({ details: { error: '需要管理员权限' } }, { status: 403 });
     }
 
     const body: ImportData = await request.json();
 
     // 验证数据格式
     if (!body.version || !Array.isArray(body.skills)) {
-      return NextResponse.json({ error: '无效的导入数据格式' }, { status: 400 });
+      return NextResponse.json({ details: { error: '无效的导入数据格式' } }, { status: 400 });
     }
 
     const results = {
@@ -128,7 +129,7 @@ export async function POST(request: Request) {
       results,
     });
   } catch (error) {
-    console.error('导入 Skills 错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SKILL, '导入 Skills 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

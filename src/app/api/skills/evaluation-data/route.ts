@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * GET /api/skills/evaluation-data
@@ -11,14 +12,14 @@ export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的 token' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
     }
 
     // 返回空数据，评估结果由 test-runs API 实时生成
@@ -30,9 +31,9 @@ export async function GET(request: NextRequest) {
       notes: ['评估数据现在由大模型实时生成，请点击"开始评估"按钮运行测试'],
     });
   } catch (error) {
-    console.error('Error loading evaluation data:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '加载评估数据错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: 'Failed to load evaluation data' },
+      { details: { error: 'Failed to load evaluation data' } },
       { status: 500 }
     );
   }

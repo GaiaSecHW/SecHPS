@@ -1,8 +1,9 @@
-// src/app/api/admin/audit-logs/report/route.ts
+﻿// src/app/api/admin/audit-logs/report/route.ts
 
 import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateSecurityReport } from '@/lib/audit/reporter';
 import { auditLog } from '@/lib/audit/logger';
 
@@ -11,19 +12,19 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 报告需要更高权限
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -38,14 +39,14 @@ export async function GET(request: Request) {
 
     // 验证日期范围
     if (startDate >= endDate) {
-      return NextResponse.json({ error: '开始日期必须早于结束日期' }, { status: 400 });
+      return NextResponse.json({ details: { error: '开始日期必须早于结束日期' } }, { status: 400 });
     }
 
     // 限制日期范围（最多90天）
     const maxDays = 90;
     const daysDiff = (endDate.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000);
     if (daysDiff > maxDays) {
-      return NextResponse.json({ error: '日期范围不能超过90天' }, { status: 400 });
+      return NextResponse.json({ details: { error: '日期范围不能超过90天' } }, { status: 400 });
     }
 
     const report = await generateSecurityReport({ startDate, endDate });
@@ -62,9 +63,10 @@ export async function GET(request: Request) {
       },
     });
 
+    logger.access(LOG_MODULES.AUDIT, payload, 'security_audit_report', { startDate, endDate, totalEvents: report.summary.totalEvents });
     return NextResponse.json({ report });
   } catch (error) {
-    console.error('Generate security report error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '生成安全审计报告失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

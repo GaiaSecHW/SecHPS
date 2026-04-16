@@ -1,4 +1,4 @@
-// src/app/api/skills/route.ts
+﻿// src/app/api/skills/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -7,6 +7,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { skillSelectMinimal } from '@/lib/query-optimizer';
 import { saveSkillToDisk } from '@/services/skill-files';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取 skillOutputTemplate 的辅助函数
 async function getSkillOutputTemplate(): Promise<string | undefined> {
@@ -26,14 +27,14 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -110,8 +111,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(createPaginatedResponse(skills, total, pageNum, pageLimit));
   } catch (error) {
-    console.error('获取 Skills 列表错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SKILL, '获取 Skills 列表错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -121,14 +122,14 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     const body = await request.json();
@@ -146,7 +147,7 @@ export async function POST(request: Request) {
     // 验证必填字段
     if (!name || !displayName || !description || !category || !content) {
       return NextResponse.json(
-        { error: '缺少必填字段：名称、显示名称、描述、分类、内容' },
+        { details: { error: '缺少必填字段：名称、显示名称、描述、分类、内容' } },
         { status: 400 }
       );
     }
@@ -164,7 +165,7 @@ export async function POST(request: Request) {
     if (isPublic) {
       // 创建公共 Skill 需要管理员权限
       if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-        return NextResponse.json({ error: '禁止访问 - 创建公共 Skill 需要管理员权限' }, { status: 403 });
+        return NextResponse.json({ details: { error: '禁止访问 - 创建公共 Skill 需要管理员权限' } }, { status: 403 });
       }
       userId = null;  // 公共 Skill
       isBuiltin = false;
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
     });
     if (existing) {
       return NextResponse.json(
-        { error: isPublic ? '公共 Skill 名称已存在' : '您的私有 Skill 名称已存在' },
+        { details: { error: isPublic ? '公共 Skill 名称已存在' : '您的私有 Skill 名称已存在' } },
         { status: 400 }
       );
     }
@@ -212,19 +213,19 @@ export async function POST(request: Request) {
         resource: skill.id,
         details: JSON.stringify({ name: skill.name, displayName, category, isPublic }),
       },
-    }).catch(err => console.error('记录审计日志失败:', err));
+    }).catch(err => logger.errorWithUser(LOG_MODULES.SKILL, payload, '记录审计日志失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } }));
 
     // 双写：同步保存到磁盘
     getSkillOutputTemplate().then(template => {
       saveSkillToDisk(skill, template).catch(err => {
-        console.error('[Skills API] 保存到磁盘失败:', err);
+        logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存到磁盘失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
         // 不阻塞响应，仅记录错误
       });
     });
 
     return NextResponse.json({ skill }, { status: 201 });
   } catch (error) {
-    console.error('创建 Skill 错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SKILL, '创建 Skill 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

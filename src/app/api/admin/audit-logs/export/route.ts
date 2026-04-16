@@ -1,8 +1,9 @@
-// src/app/api/admin/audit-logs/export/route.ts
+﻿// src/app/api/admin/audit-logs/export/route.ts
 
 import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { exportToJson, exportToCsv, generateExportFilename } from '@/lib/audit/exporter';
 import { auditLogDataExport } from '@/lib/audit/logger';
 import type { AuditAction } from '@/types/audit';
@@ -12,19 +13,19 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 导出需要更高权限
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
 
     // 验证格式
     if (format !== 'json' && format !== 'csv') {
-      return NextResponse.json({ error: '无效的导出格式' }, { status: 400 });
+      return NextResponse.json({ details: { error: '无效的导出格式' } }, { status: 400 });
     }
 
     // 导出数据
@@ -59,6 +60,7 @@ export async function GET(request: Request) {
       ? 'application/json'
       : 'text/csv';
 
+    logger.access(LOG_MODULES.AUDIT, payload, 'audit_logs_export', { format, recordCount: format === 'json' ? JSON.parse(data).length : data.split('\n').length - 1 });
     return new NextResponse(data, {
       headers: {
         'Content-Type': contentType,
@@ -66,7 +68,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Export audit logs error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '导出审计日志失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

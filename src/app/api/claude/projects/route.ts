@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 新建项目 API
  * 
  * POST: 添加现有项目到 Claude 会话管理
@@ -13,6 +13,7 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { logger } from '@/lib/logger';
 import type { ClaudeCodeProject } from '@/types/claude-code';
 
 // 禁止使用的系统关键路径
@@ -161,7 +162,7 @@ export async function POST(request: Request) {
     // 验证必需参数
     if (!projectPath || typeof projectPath !== 'string') {
       return NextResponse.json(
-        { error: '项目路径是必需的' },
+        { details: { error: '项目路径是必需的' } },
         { status: 400 }
       );
     }
@@ -170,7 +171,7 @@ export async function POST(request: Request) {
     const validation = await validateWorkspacePath(projectPath);
     if (!validation.valid) {
       return NextResponse.json(
-        { error: validation.error },
+        { details: { error: validation.error } },
         { status: 400 }
       );
     }
@@ -186,7 +187,7 @@ export async function POST(request: Request) {
     // 检查是否已存在
     if (config[projectName]) {
       return NextResponse.json(
-        { error: '该项目路径已配置' },
+        { details: { error: '该项目路径已配置' } },
         { status: 409 }
       );
     }
@@ -223,9 +224,9 @@ export async function POST(request: Request) {
       project,
     });
   } catch (error) {
-    console.error('添加项目错误:', error);
+    logger.errorNoUser('CLAUDE', '添加项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误' },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }

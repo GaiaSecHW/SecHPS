@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { ProjectDiscovery } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -30,9 +31,10 @@ export async function POST(request: Request) {
     const projectDiscovery = new ProjectDiscovery();
     const project = await projectDiscovery.addProjectManually(path);
 
+    logger.create(LOG_MODULES.PROJECT, payload, path, { details: { project } });
     return NextResponse.json({ project });
   } catch (error) {
-    console.error('添加项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '添加项目错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

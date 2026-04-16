@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取项目 Token 使用明细
 export async function GET(request: Request) {
@@ -10,20 +11,20 @@ export async function GET(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查权限 - 管理员直接允许，或检查 TOKEN_DETAIL 权限
     const isAdmin = payload.roles?.includes('admin');
     if (!isAdmin && !hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     // 获取查询参数
@@ -36,7 +37,7 @@ export async function GET(request: Request) {
     const endDate = searchParams.get('endDate');
 
     if (!projectId) {
-      return NextResponse.json({ error: '缺少项目ID' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少项目ID' } }, { status: 400 });
     }
 
     // 检查用户是否有权限访问该项目（管理员可以访问任何项目）
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
     });
 
     if (!project) {
-      return NextResponse.json({ error: '项目不存在或无权访问' }, { status: 404 });
+      return NextResponse.json({ details: { error: '项目不存在或无权访问' } }, { status: 404 });
     }
 
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
@@ -170,7 +171,7 @@ export async function GET(request: Request) {
       tokenUsages: createPaginatedResponse(tokenUsages, total, pageNum, pageLimit),
     });
   } catch (error) {
-    console.error('Get project token stats error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.TOKEN, '获取项目 Token 统计失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

@@ -9,6 +9,7 @@ import { verifyToken } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { PERMISSIONS } from '@/types/permissions';
 import { getSessionInfo, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取会话详情
 export async function GET(
@@ -35,7 +36,7 @@ export async function GET(
 
     const { id: sessionId } = await params;
 
-    console.log('[Session API] Fetching session info for:', sessionId);
+    logger.access(LOG_MODULES.SESSION, payload, sessionId, { action: 'fetch_info' });
 
     // 查找关联的项目
     const evaluation = await prisma.evaluationSession.findFirst({
@@ -58,7 +59,7 @@ export async function GET(
     const sessionInfo = await getSessionInfo(sessionId, projectPath ? { dir: projectPath } : undefined);
 
     if (!sessionInfo) {
-      console.log('[Session API] Session not found:', sessionId);
+      logger.logNoUser(LOG_MODULES.SESSION, 'Session not found', { details: { sessionId } });
       return NextResponse.json({
         session: {
           id: sessionId,
@@ -71,7 +72,7 @@ export async function GET(
       });
     }
 
-    console.log('[Session API] SDK returned session info:', sessionInfo);
+    logger.logNoUser(LOG_MODULES.SESSION, 'SDK returned session info', { details: { sessionId, summary: sessionInfo.summary } });
 
     // 获取消息数量
     const messages = await getSessionMessages(sessionId, projectPath ? { dir: projectPath } : undefined);
@@ -92,7 +93,7 @@ export async function GET(
       messages: messages.slice(0, 10), // 返回前10条消息作为预览
     });
   } catch (error) {
-    console.error('获取会话详情错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取会话详情错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -142,11 +143,12 @@ export async function DELETE(
       await prisma.evaluationSession.delete({
         where: { id: evaluation.id },
       });
+      logger.delete(LOG_MODULES.SESSION, payload, sessionId, { evaluationId: evaluation.id });
     }
 
     return NextResponse.json({ success: true, message: '会话已删除' });
   } catch (error) {
-    console.error('删除会话错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '删除会话错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

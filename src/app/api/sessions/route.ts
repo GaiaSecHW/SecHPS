@@ -1,32 +1,32 @@
-/**
+﻿/**
  * 会话列表 API
  * 以 Claude SDK 项目为中心，返回所有发现的项目和会话
  */
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { ProjectDiscovery } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取所有 Claude SDK 项目的会话列表
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查 SESSION_READ 权限
     if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_READ)) {
-      return NextResponse.json({ error: '无权限查看会话' }, { status: 403 });
+      return NextResponse.json({ details: { error: '无权限查看会话' } }, { status: 403 });
     }
 
     // 从 Claude SDK 发现所有项目
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
       count: projects.length,
     });
   } catch (error) {
-    console.error('获取会话列表错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取会话列表错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

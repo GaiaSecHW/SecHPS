@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/workflows/config - Get workflow default configuration
 export async function GET(request: Request) {
@@ -9,14 +10,14 @@ export async function GET(request: Request) {
     // Verify Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // Get user's active config
@@ -48,7 +49,7 @@ export async function GET(request: Request) {
           endNodeDescription: workflowConfig.endNodeDescription || '工作流的结束点',
         });
       } catch (e) {
-        console.error('Failed to parse workflow config:', e);
+        logger.errorWithUser(LOG_MODULES.WORKFLOW, payload, 'Failed to parse workflow config', undefined, { details: { error: String(e) } });
       }
     }
 
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
       endNodeDescription: '工作流的结束点',
     });
   } catch (error) {
-    console.error('Get workflow config error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Get workflow config error', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

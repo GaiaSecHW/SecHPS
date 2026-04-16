@@ -1,9 +1,10 @@
-// src/app/api/vulnerabilities/route.ts
+﻿// src/app/api/vulnerabilities/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { combineWhereClauses, buildDateRangeFilter, buildStatusFilter } from '@/lib/query-optimizer';
 
@@ -12,19 +13,19 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查 VULNERABILITY_READ 权限
     if (!hasPermission(payload.permissions, PERMISSIONS.VULNERABILITY_READ)) {
-      return NextResponse.json({ error: '权限不足' }, { status: 403 });
+      return NextResponse.json({ details: { error: '权限不足' } }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -90,8 +91,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(createPaginatedResponse(vulnerabilities, total, pageNum, pageLimit));
   } catch (error) {
-    console.error('获取漏洞列表错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞列表错误', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -100,19 +101,19 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查 VULNERABILITY_CREATE 权限
     if (!hasPermission(payload.permissions, PERMISSIONS.VULNERABILITY_CREATE)) {
-      return NextResponse.json({ error: '权限不足' }, { status: 403 });
+      return NextResponse.json({ details: { error: '权限不足' } }, { status: 403 });
     }
 
     const body = await request.json();
@@ -135,7 +136,7 @@ export async function POST(request: Request) {
 
     if (!projectId || !title || !description || !type || !severity) {
       return NextResponse.json(
-        { error: '缺少必填字段' },
+        { details: { error: '缺少必填字段' } },
         { status: 400 }
       );
     }
@@ -168,11 +169,13 @@ export async function POST(request: Request) {
         resource: vulnerability.id,
         details: JSON.stringify({ title: vulnerability.title, type, severity, projectId }),
       },
-    }).catch(err => console.error('记录审计日志失败:', err));
+    }).catch(err => logger.errorWithUser(LOG_MODULES.VULNERABILITY, payload, '记录审计日志失败', vulnerability.id, { details: { error: String(err) } }));
+
+    logger.create(LOG_MODULES.VULNERABILITY, payload, vulnerability.id, { title: vulnerability.title, type, severity, projectId });
 
     return NextResponse.json({ vulnerability }, { status: 201 });
   } catch (error) {
-    console.error('创建漏洞错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '创建漏洞错误', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

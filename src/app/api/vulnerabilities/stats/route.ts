@@ -1,8 +1,9 @@
-// src/app/api/vulnerabilities/stats/route.ts
+﻿// src/app/api/vulnerabilities/stats/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/vulnerabilities/stats - 获取漏洞统计
 // 普通用户：只统计自己项目的漏洞
@@ -11,14 +12,14 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
           select: { userId: true },
         });
         if (!project || project.userId !== payload.userId) {
-          return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+          return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
         }
         where.projectId = projectId;
       } else {
@@ -120,7 +121,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ stats });
   } catch (error) {
-    console.error('获取漏洞统计错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞统计错误', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

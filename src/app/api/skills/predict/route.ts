@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * POST /api/skills/predict
@@ -11,14 +12,14 @@ export async function POST(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     const body = await request.json();
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     // 验证必填字段
     if (!taskName || !taskDescription || !matches) {
       return NextResponse.json(
-        { error: '缺少必填字段：taskName, taskDescription, matches' },
+        { details: { error: '缺少必填字段：taskName, taskDescription, matches' } },
         { status: 400 }
       );
     }
@@ -48,9 +49,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ prediction }, { status: 201 });
   } catch (error) {
-    console.error('保存 Skill 预测失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '保存 Skill 预测失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误' },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }
@@ -65,14 +66,14 @@ export async function GET(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 获取查询参数
@@ -121,9 +122,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ predictions: formattedPredictions });
   } catch (error) {
-    console.error('查询 Skill 预测失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '查询 Skill 预测失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误' },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }

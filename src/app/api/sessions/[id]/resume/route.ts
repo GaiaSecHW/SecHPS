@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { SessionManager } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 续订会话
 export async function POST(
@@ -46,6 +47,8 @@ export async function POST(
       model,
     });
 
+    logger.create(LOG_MODULES.SESSION, payload, result.newSession.id || 'resumed-session', { details: { originalSessionId: result.originalSessionId, contextMessageCount: result.contextMessages.length } });
+
     return NextResponse.json({
       success: true,
       newSession: result.newSession,
@@ -53,7 +56,7 @@ export async function POST(
       contextMessageCount: result.contextMessages.length,
     }, { status: 201 });
   } catch (error) {
-    console.error('续订会话错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '续订会话错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     const errorMessage = error instanceof Error ? error.message : '服务器内部错误';
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   }

@@ -1,35 +1,36 @@
-// src/app/api/code/analyze/route.ts
+﻿// src/app/api/code/analyze/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { CodeAnalyzer } from '@/lib/code-analyzer';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/code/analyze - 分析项目代码
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CODE_ANALYZE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const body = await request.json();
     const { projectId } = body;
 
     if (!projectId) {
-      return NextResponse.json({ error: '缺少项目ID' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少项目ID' } }, { status: 400 });
     }
 
     const project = await prisma.project.findUnique({
@@ -38,12 +39,12 @@ export async function POST(request: Request) {
     });
 
     if (!project) {
-      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+      return NextResponse.json({ details: { error: '项目不存在' } }, { status: 404 });
     }
 
     // 检查项目路径
     if (!project.projectPath) {
-      return NextResponse.json({ error: '项目路径未配置' }, { status: 400 });
+      return NextResponse.json({ details: { error: '项目路径未配置' } }, { status: 400 });
     }
 
     // 创建 SSE 流用于进度更新
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('分析项目错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.CODE, '分析项目失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

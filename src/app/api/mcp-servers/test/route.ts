@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/mcp-servers/test - 测试 MCP 服务器连接
 export async function POST(request: Request) {
@@ -28,7 +29,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { type, command, args, url, env } = body;
 
-    console.log('[MCP Test] 测试 MCP 服务器:', { type, command, url });
+    logger.access(LOG_MODULES.MCP, payload, 'mcp:test', { type, command, url });
 
     // 根据类型测试连接
     if (type === 'remote') {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
       );
     }
   } catch (error) {
-    console.error('[MCP Test] 测试失败:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, 'MCP 测试失败', error instanceof Error ? error.message : error);
     return NextResponse.json(
       { 
         error: '测试失败', 
@@ -65,7 +66,7 @@ async function testRemoteServer(url: string, env?: any) {
   try {
     // 验证 URL 格式
     const parsedUrl = new URL(url);
-    console.log('[MCP Test] 测试远程服务器:', parsedUrl.href);
+    logger.logNoUser(LOG_MODULES.MCP, '测试远程服务器连接', { url: parsedUrl.href });
 
     // 尝试连接到 SSE 端点
     const controller = new AbortController();
@@ -103,7 +104,7 @@ async function testRemoteServer(url: string, env?: any) {
       note: '连接成功。获取工具列表需要完整的 MCP 客户端实现。',
     });
   } catch (error) {
-    console.error('[MCP Test] 远程服务器测试失败:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '远程服务器测试失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       if (error.name === 'AbortError') {

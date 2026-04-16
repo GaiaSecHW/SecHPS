@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/mcp-servers - 获取用户可访问的 MCP 服务器列表
 // 普通用户：自己的 MCP + 共享的 MCP
@@ -92,7 +93,7 @@ export async function GET(request: Request) {
     const response = createPaginatedResponse(mcpServers, total, page, limit);
     return NextResponse.json({ servers: response.data, pagination: response.pagination });
   } catch (error) {
-    console.error('Get MCP servers error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '获取 MCP 服务器列表失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -200,9 +201,10 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.create(LOG_MODULES.MCP, payload, `mcp:${mcpServer.id}`, { name, type });
     return NextResponse.json({ mcpServer }, { status: 201 });
   } catch (error) {
-    console.error('Create MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '创建 MCP 服务器配置失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

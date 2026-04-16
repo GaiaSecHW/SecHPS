@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
@@ -11,19 +11,19 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查 PROJECT_READ 权限
     if (!hasPermission(payload.permissions, PERMISSIONS.PROJECT_READ)) {
-      return NextResponse.json({ error: '无权限查看项目' }, { status: 403 });
+      return NextResponse.json({ details: { error: '无权限查看项目' } }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -71,8 +71,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ projects: projectsWithVulnCount });
   } catch (error) {
-    console.error('获取项目列表错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.PROJECT, '获取项目列表错误', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -81,19 +81,19 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查 PROJECT_CREATE 权限
     if (!hasPermission(payload.permissions, PERMISSIONS.PROJECT_CREATE)) {
-      return NextResponse.json({ error: '无权限创建项目' }, { status: 403 });
+      return NextResponse.json({ details: { error: '无权限创建项目' } }, { status: 403 });
     }
 
     const formData = await request.formData();
@@ -113,11 +113,11 @@ export async function POST(request: Request) {
     }
 
     if (!name || !name.trim()) {
-      return NextResponse.json({ error: '项目名称是必需的' }, { status: 400 });
+      return NextResponse.json({ details: { error: '项目名称是必需的' } }, { status: 400 });
     }
 
     if (!files || files.length === 0) {
-      return NextResponse.json({ error: '请至少上传一个文件' }, { status: 400 });
+      return NextResponse.json({ details: { error: '请至少上传一个文件' } }, { status: 400 });
     }
 
     // 获取系统配置中的项目上传目录
@@ -209,6 +209,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.PROJECT, `创建项目错误: ${error}`);
-    return NextResponse.json({ error: '服务器内部错误', details: String(error) }, { status: 500 });
+    return NextResponse.json({ details: { error: '服务器内部错误', details: String(error) } }, { status: 500 });
   }
 }

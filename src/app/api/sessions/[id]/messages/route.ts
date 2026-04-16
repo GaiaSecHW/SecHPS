@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { SessionManager } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取会话消息
 export async function GET(
@@ -53,7 +54,7 @@ export async function GET(
       limit: messagesResult.limit,
     });
   } catch (error) {
-    console.error('获取会话消息错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取会话消息错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

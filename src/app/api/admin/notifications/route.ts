@@ -1,9 +1,10 @@
-// src/app/api/admin/notifications/route.ts
+﻿// src/app/api/admin/notifications/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { NotificationChannelType } from '@/types/monitoring';
 
 // GET /api/admin/notifications - 获取通知渠道列表
@@ -11,18 +12,18 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const channels = await prisma.notificationChannel.findMany({
@@ -35,10 +36,11 @@ export async function GET(request: Request) {
       config: maskSensitiveConfig(channel.type, channel.config),
     }));
 
+    logger.access(LOG_MODULES.AUDIT, payload, 'notification_channels', {});
     return NextResponse.json({ channels: sanitizedChannels });
   } catch (error) {
-    console.error('Get notification channels error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '获取通知渠道失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -47,31 +49,31 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const body = await request.json();
     const { name, type, config, enabled } = body;
 
     if (!name || !type || !config) {
-      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少必填字段' } }, { status: 400 });
     }
 
     // 验证渠道类型
     const validTypes: NotificationChannelType[] = ['email', 'webhook', 'slack', 'dingtalk', 'wechat'];
     if (!validTypes.includes(type)) {
-      return NextResponse.json({ error: '无效的渠道类型' }, { status: 400 });
+      return NextResponse.json({ details: { error: '无效的渠道类型' } }, { status: 400 });
     }
 
     const channel = await prisma.notificationChannel.create({
@@ -92,6 +94,7 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.create(LOG_MODULES.AUDIT, payload, channel.id, { name, type });
     return NextResponse.json({
       message: '通知渠道已创建',
       channel: {
@@ -100,8 +103,8 @@ export async function POST(request: Request) {
       },
     }, { status: 201 });
   } catch (error) {
-    console.error('Create notification channel error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '创建通知渠道失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 

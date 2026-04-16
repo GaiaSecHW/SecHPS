@@ -3,6 +3,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import type { TogglePluginRequest } from '@/types/plugin';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * POST /api/plugins/[id]/toggle
@@ -52,12 +53,13 @@ export async function POST(
       body.enabled
     );
 
+    logger.update(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}:toggle`, { name: plugin.name, enabled: body.enabled });
     return NextResponse.json({
       message: body.enabled ? '插件已启用' : '插件已禁用',
       plugin,
     });
   } catch (error) {
-    console.error('切换插件状态失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '切换插件状态失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(

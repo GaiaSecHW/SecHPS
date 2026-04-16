@@ -1,7 +1,8 @@
-// src/app/api/admin/health/route.ts
+﻿// src/app/api/admin/health/route.ts
 
 import { NextResponse } from 'next/server';
 import { runHealthChecks } from '@/lib/monitoring/health-check';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET() {
   try {
@@ -13,7 +14,7 @@ export async function GET() {
 
     return NextResponse.json(healthReport, { status: statusCode });
   } catch (error) {
-    console.error('Health check error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '健康检查失败', { details: { error: String(error) } });
     return NextResponse.json(
       {
         status: 'unhealthy',

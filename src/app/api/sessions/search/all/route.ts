@@ -6,6 +6,7 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { SessionManager, ProjectDiscovery } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 搜索结果类型定义
 interface SessionMatch {
@@ -107,7 +108,7 @@ export async function GET(request: Request) {
         }
       } catch (error) {
         // 单个项目搜索失败，继续搜索其他项目
-        console.error(`搜索项目 ${project.name} 时出错:`, error);
+        logger.errorNoUser(LOG_MODULES.SESSION, `搜索项目 ${project.name} 时出错`, { details: { projectPath: project.path, error: error instanceof Error ? error.message : String(error) } });
       }
     }
 
@@ -121,7 +122,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(response);
   } catch (error) {
-    console.error('跨项目搜索会话消息错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '跨项目搜索会话消息错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import {
   hashPassword,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth';
 import { ROLES, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from '@/types/permissions';
 import type { Permission } from '@prisma/client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     // 验证输入（用户名和密码为必填项）
     if (!username || !password) {
       return NextResponse.json(
-        { error: '请输入用户名和密码' },
+        { details: { error: '请输入用户名和密码' } },
         { status: 400 }
       );
     }
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
 
     if (existingUsername) {
       return NextResponse.json(
-        { error: '用户名已存在' },
+        { details: { error: '用户名已存在' } },
         { status: 400 }
       );
     }
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
 
       if (existingEmail) {
         return NextResponse.json(
-          { error: '邮箱已被使用' },
+          { details: { error: '邮箱已被使用' } },
           { status: 400 }
         );
       }
@@ -131,9 +132,9 @@ export async function POST(request: Request) {
       }
     );
   } catch (error) {
-    console.error('Registration error:', error);
+    logger.errorNoUser(LOG_MODULES.AUTH, '注册失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误' },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }

@@ -3,6 +3,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import type { UpdatePluginConfigRequest } from '@/types/plugin';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface RouteParams {
   params: Promise<{
@@ -55,9 +56,10 @@ export async function GET(request: Request, { params }: RouteParams) {
       );
     }
 
+    logger.access(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}`, { name: plugin.name });
     return NextResponse.json({ plugin });
   } catch (error) {
-    console.error('获取插件详情失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '获取插件详情失败', error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: '获取插件详情失败' },
       { status: 500 }
@@ -109,12 +111,13 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       body.config
     );
 
+    logger.update(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}`, { name: plugin.name });
     return NextResponse.json({
       message: '插件配置更新成功',
       plugin,
     });
   } catch (error) {
-    console.error('更新插件配置失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '更新插件配置失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(
@@ -168,11 +171,12 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     // 卸载插件
     await PluginManager.uninstallPlugin(id);
 
+    logger.delete(LOG_MODULES.PLUGIN, payload, `plugin:${id}`);
     return NextResponse.json({
       message: '插件卸载成功',
     });
   } catch (error) {
-    console.error('卸载插件失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '卸载插件失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(

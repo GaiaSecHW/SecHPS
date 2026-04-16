@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/vulnerabilities/:id/false-positive - 标记误报
 export async function POST(
@@ -46,9 +47,11 @@ export async function POST(
       });
     }
 
+    logger.update(LOG_MODULES.VULNERABILITY, payload, id, { action: 'false-positive' });
+
     return NextResponse.json({ vulnerability: updated });
   } catch (error) {
-    console.error('标记误报错误:', error);
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '标记误报错误', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

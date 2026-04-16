@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * Skill 匹配请求
@@ -158,7 +159,7 @@ export async function POST(request: Request) {
           },
         });
       } catch (saveError) {
-        console.error('保存预测结果失败:', saveError);
+logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', undefined, { details: { error: saveError instanceof Error ? saveError.message : String(saveError) } });
       }
       
       return NextResponse.json({
@@ -186,7 +187,7 @@ export async function POST(request: Request) {
         },
       });
     } catch (saveError) {
-      console.error('保存预测结果失败:', saveError);
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', undefined, { details: { error: saveError instanceof Error ? saveError.message : String(saveError) } });
       // 不影响主流程，只记录错误
     }
  
@@ -197,7 +198,7 @@ export async function POST(request: Request) {
       method: 'llm',
     });
   } catch (error) {
-    console.error('Skill match error:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, 'Skill match 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -330,10 +331,7 @@ async function callLLMForMatch(
       };
     }
 
-    console.log('[match] 调用 LLM API:', apiUrl);
-    console.log('[match] Provider:', modelConfig.providerType);
-    console.log('[match] Model:', modelName);
-    console.log('[match] Request body:', JSON.stringify(body).substring(0, 500));
+    logger.debug(LOG_MODULES.SKILL, '调用 LLM API', { details: { apiUrl, provider: modelConfig.providerType, model: modelName } });
     
     const response = await fetch(apiUrl, {
       method: 'POST',
@@ -343,18 +341,18 @@ async function callLLMForMatch(
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('LLM API error:', response.status, errorText);
+      logger.errorNoUser(LOG_MODULES.SKILL, 'LLM API 错误', { details: { status: response.status, error: errorText.substring(0, 200) } });
       return simpleKeywordMatch('', '', [], skills, topK);
     }
 
     const llmResponse = await response.json();
-    console.log('[match] LLM response:', JSON.stringify(llmResponse).substring(0, 500));
+    logger.debug(LOG_MODULES.SKILL, 'LLM 响应接收', { details: { responsePreview: JSON.stringify(llmResponse).substring(0, 200) } });
     
     // 解析响应
     let content = '';
     if (modelConfig.providerType === 'claude') {
       // Claude 响应格式
-      console.log('[match] Claude response content:', llmResponse.content);
+      logger.debug(LOG_MODULES.SKILL, 'Claude 响应内容解析');
       if (Array.isArray(llmResponse.content)) {
         const textBlock = llmResponse.content.find((block: any) => block.type === 'text');
         content = textBlock?.text || '';
@@ -366,14 +364,12 @@ async function callLLMForMatch(
       content = llmResponse.choices?.[0]?.message?.content || '';
     }
     
-    console.log('[match] Extracted content type:', typeof content);
-    console.log('[match] Extracted content:', content.substring(0, 200));
+    logger.debug(LOG_MODULES.SKILL, '提取的内容', { details: { contentType: typeof content, contentPreview: content.substring(0, 100) } });
 
     // 解析 LLM 返回的 JSON
-    console.log('[match] Parsing content, type:', typeof content);
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
-      console.log('[match] No JSON array found in content, using fallback');
+      logger.debug(LOG_MODULES.SKILL, '未找到 JSON 数组，使用降级方案');
       return simpleKeywordMatch('', '', [], skills, topK);
     }
 
@@ -398,7 +394,7 @@ async function callLLMForMatch(
 
     return matches.slice(0, topK);
   } catch (error) {
-    console.error('LLM match error:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, 'LLM 匹配错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return simpleKeywordMatch('', '', [], skills, topK);
   }
 }

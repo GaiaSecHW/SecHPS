@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取单个用户
 export async function GET(
@@ -74,9 +75,15 @@ export async function GET(
       })),
     };
 
+    // 记录访问日志 - 区分自己与他人
+    if (payload.userId === user.id) {
+      logger.access(LOG_MODULES.USER, payload, id);
+    } else {
+      logger.accessOther(LOG_MODULES.USER, payload, user.id, id, user.email);
+    }
     return NextResponse.json({ user: formattedUser });
   } catch (error) {
-    console.error('Get user error:', error);
+    logger.errorNoUser(LOG_MODULES.USER, '获取用户详情失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -132,6 +139,13 @@ export async function PATCH(
       },
     });
 
+    // 记录更新日志 - 区分自己与他人
+    if (isSelf) {
+      logger.update(LOG_MODULES.USER, payload, id, { name, avatar, isActive });
+    } else {
+      logger.updateOther(LOG_MODULES.USER, payload, user.id, id, user.email, { name, avatar, isActive });
+    }
+
     return NextResponse.json({
       message: '用户更新成功',
       user: {
@@ -144,7 +158,7 @@ export async function PATCH(
       },
     });
   } catch (error) {
-    console.error('Update user error:', error);
+    logger.errorNoUser(LOG_MODULES.USER, '更新用户失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -179,6 +193,12 @@ export async function DELETE(
       return NextResponse.json({ error: '无法删除自己' }, { status: 400 });
     }
 
+    // 获取被删除用户信息（用于日志）
+    const targetUser = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true },
+    });
+
     // 删除用户
     await prisma.user.delete({
       where: { id },
@@ -193,9 +213,12 @@ export async function DELETE(
       },
     });
 
+    // 删除他人用户 - 使用跨用户日志
+    logger.deleteOther(LOG_MODULES.USER, payload, id, id, targetUser?.email);
+
     return NextResponse.json({ message: '用户删除成功' });
   } catch (error) {
-    console.error('Delete user error:', error);
+    logger.errorNoUser(LOG_MODULES.USER, '删除用户失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

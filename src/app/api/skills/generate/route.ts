@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+﻿import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import {
@@ -11,6 +11,7 @@ import {
   type SkillIntent,
 } from '@/lib/skill-builder';
 import { trackSystemTokenUsage, extractTokenUsageFromResponse, calculateSystemCost } from '@/lib/system-token-tracker';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 生成 Skill 定义 API
@@ -23,33 +24,33 @@ export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
     
     if (!payload) {
-      return NextResponse.json({ error: '无效的 token' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
     }
 
     const body = await request.json();
     const { intent, skillOutputTemplate: customOutputTemplate } = body;
 
     if (!intent) {
-      return NextResponse.json({ error: '缺少意图数据' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少意图数据' } }, { status: 400 });
     }
 
     // 获取模型配置
     const modelConfig = await getModelConfig();
     if (!modelConfig) {
       return NextResponse.json(
-        { error: '模型配置不存在，请先在系统设置中配置 AI 模型' },
+        { details: { error: '模型配置不存在，请先在系统设置中配置 AI 模型' } },
         { status: 500 }
       );
     }
 
-    console.log('[generate] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
+    logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelConfig.defaultModel } });
 
     // 使用公共模块构建提示词
     const systemPrompt = buildSystemPrompt();
@@ -62,9 +63,9 @@ export async function POST(request: NextRequest) {
     }
 
     // 调用大模型
-    console.log('[generate] 开始调用大模型...');
+    logger.debug(LOG_MODULES.SKILL, '开始调用大模型');
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
-    console.log('[generate] 大模型响应完成');
+    logger.debug(LOG_MODULES.SKILL, '大模型响应完成');
     
     // 统计 Token 使用量
     const tokenUsage = extractTokenUsageFromResponse(response);
@@ -78,7 +79,7 @@ export async function POST(request: NextRequest) {
         estimatedCost,
         `Skill生成: ${intent.name || '未命名'}`
       );
-      console.log('[generate] Token 统计:', tokenUsage, '费用:', estimatedCost);
+      logger.debug(LOG_MODULES.SKILL, 'Token 统计', { details: { inputTokens: tokenUsage.inputTokens, outputTokens: tokenUsage.outputTokens, cost: estimatedCost } });
     }
 
     // 检查是否被截断
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
       throw new Error('模型响应为空，请检查模型配置或重试');
     }
 
-    console.log('[generate] 生成的 Markdown 长度:', generatedContent.length);
+    logger.debug(LOG_MODULES.SKILL, '生成的 Markdown 长度', { details: { length: generatedContent.length } });
 
     // 使用公共模块构建 Skill（不拼接输出格式，输出格式由前端动态拼接）
     const fullContent = buildFullSkill(
@@ -115,10 +116,10 @@ export async function POST(request: NextRequest) {
       content: fullContent,
     };
 
-    console.log('[generate] Skill 生成成功:', skill.name);
+    logger.logNoUser(LOG_MODULES.SKILL, 'Skill 生成成功', { details: { name: skill.name } });
     return NextResponse.json({ skill });
   } catch (error) {
-    console.error('[generate] 生成 Skill 失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '生成 Skill 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     
     let errorMessage = '生成失败';
     if (error instanceof Error) {
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ details: { error: errorMessage } }, { status: 500 });
   }
 }
 
@@ -165,12 +166,12 @@ async function getModelConfig(): Promise<{
         defaultModel: models[0] || 'default',
       };
     }
-  } catch (error) {
-    console.error('[generate] 获取模型配置失败:', error);
-  }
+} catch (error) {
+      logger.errorNoUser(LOG_MODULES.SKILL, '获取模型配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    }
 
-  return null;
-}
+    return null;
+  }
 
 /**
  * 调用大模型

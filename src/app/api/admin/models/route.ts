@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取所有模型配置
 export async function GET(request: Request) {
@@ -9,19 +10,19 @@ export async function GET(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查权限
     if (!hasPermission(payload.permissions, PERMISSIONS.MODEL_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     // 获取查询参数
@@ -57,10 +58,11 @@ export async function GET(request: Request) {
       updatedAt: model.updatedAt,
     }));
 
+    logger.access(LOG_MODULES.MODEL, payload, 'model_configs', { isActive: isActiveParam });
     return NextResponse.json({ models: formattedModels });
   } catch (error) {
-    console.error('获取模型配置错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.MODEL, '获取模型配置失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -70,19 +72,19 @@ export async function POST(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查权限
     if (!hasPermission(payload.permissions, PERMISSIONS.MODEL_CREATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const body = await request.json();
@@ -91,7 +93,7 @@ export async function POST(request: Request) {
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
       return NextResponse.json(
-        { error: '缺少必填字段：name, apiBaseUrl, apiKey, models' },
+        { details: { error: '缺少必填字段：name, apiBaseUrl, apiKey, models' } },
         { status: 400 }
       );
     }
@@ -100,7 +102,7 @@ export async function POST(request: Request) {
     const validProviderTypes = ['claude', 'openai'];
     if (providerType && !validProviderTypes.includes(providerType)) {
       return NextResponse.json(
-        { error: '无效的代理类型，必须是 claude 或 openai' },
+        { details: { error: '无效的代理类型，必须是 claude 或 openai' } },
         { status: 400 }
       );
     }
@@ -109,7 +111,7 @@ export async function POST(request: Request) {
     const validRouteTypes = ['default', 'think', 'background', 'longContext', 'webSearch'];
     if (providerType === 'openai' && routeType && !validRouteTypes.includes(routeType)) {
       return NextResponse.json(
-        { error: '无效的路由类型' },
+        { details: { error: '无效的路由类型' } },
         { status: 400 }
       );
     }
@@ -117,7 +119,7 @@ export async function POST(request: Request) {
     // 验证 models 是否为数组
     if (!Array.isArray(models)) {
       return NextResponse.json(
-        { error: 'models 必须是数组' },
+        { details: { error: 'models 必须是数组' } },
         { status: 400 }
       );
     }
@@ -159,14 +161,15 @@ export async function POST(request: Request) {
       updatedAt: model.updatedAt,
     };
 
+    logger.create(LOG_MODULES.MODEL, payload, model.id, { name, providerType, modelsCount: models.length });
     return NextResponse.json(
       { model: formattedModel },
       { status: 201 }
     );
   } catch (error) {
-    console.error('创建模型配置错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, '创建模型配置失败', { details: { error: String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误', details: String(error) },
+      { details: { error: '服务器内部错误', details: String(error) } },
       { status: 500 }
     );
   }

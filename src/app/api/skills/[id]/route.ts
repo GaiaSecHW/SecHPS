@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取 skillOutputTemplate 的辅助函数
 async function getSkillOutputTemplate(): Promise<string | undefined> {
@@ -65,7 +66,7 @@ export async function GET(
 
     return NextResponse.json({ skill });
   } catch (error) {
-    console.error('获取 Skill 详情错误:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '获取 Skill 详情错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -210,7 +211,7 @@ export async function PUT(
       if (updatedSkill) {
         getSkillOutputTemplate().then(template => {
           saveSkillToDisk(updatedSkill!, template).catch(err => {
-            console.error('[Skills API] 保存新版本到磁盘失败:', err);
+            logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存新版本到磁盘失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
           });
         });
       }
@@ -241,20 +242,20 @@ export async function PUT(
           // 启用：保存到磁盘
           getSkillOutputTemplate().then(template => {
             saveSkillToDisk(updatedSkill!, template).catch(err => {
-              console.error('[Skills API] 更新磁盘文件失败:', err);
+logger.errorWithUser(LOG_MODULES.SKILL, payload, '更新磁盘文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
             });
           });
         } else {
           // 禁用：从磁盘删除
           deleteSkillFromDisk(updatedSkill!.name, updatedSkill!.userId).catch(err => {
-            console.error('[Skills API] 删除磁盘文件失败:', err);
+            logger.errorWithUser(LOG_MODULES.SKILL, payload, '删除磁盘文件失败', updatedSkill!.id, { details: { skillName: updatedSkill!.name, error: err instanceof Error ? err.message : String(err) } });
           });
         }
       } else {
         // 其他更新：直接保存
         getSkillOutputTemplate().then(template => {
           saveSkillToDisk(updatedSkill!, template).catch(err => {
-            console.error('[Skills API] 更新磁盘文件失败:', err);
+            logger.errorWithUser(LOG_MODULES.SKILL, payload, '更新磁盘文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
           });
         });
       }
@@ -262,7 +263,7 @@ export async function PUT(
 
     return NextResponse.json({ skill: updatedSkill });
   } catch (error) {
-    console.error('更新 Skill 错误:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '更新 Skill 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -334,12 +335,12 @@ export async function DELETE(
 
     // 双写：同步删除磁盘文件
     deleteSkillFromDisk(skill.name, skill.userId).catch(err => {
-      console.error('[Skills API] 删除磁盘文件失败:', err);
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, '删除磁盘文件失败', skill.id, { details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } });
     });
 
     return NextResponse.json({ message: '删除成功' });
   } catch (error) {
-    console.error('删除 Skill 错误:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '删除 Skill 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

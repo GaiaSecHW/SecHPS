@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import {
   verifyRefreshToken,
   verifyTokenAllowExpired,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import type { User } from '@prisma/client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -31,8 +32,9 @@ export async function POST(request: Request) {
     }
 
     if (!refreshToken) {
+      logger.tokenRefreshFailed('缺少 refresh token');
       return NextResponse.json(
-        { error: '缺少 refresh token' },
+        { details: { error: '缺少 refresh token' } },
         { status: 401 }
       );
     }
@@ -40,8 +42,9 @@ export async function POST(request: Request) {
     // 3. 验证 refresh token
     const refreshPayload = verifyRefreshToken(refreshToken);
     if (!refreshPayload) {
+      logger.tokenRefreshFailed('无效或过期的 refresh token');
       return NextResponse.json(
-        { error: '无效或过期的 refresh token' },
+        { details: { error: '无效或过期的 refresh token' } },
         { status: 401 }
       );
     }
@@ -50,7 +53,7 @@ export async function POST(request: Request) {
     const userWithPerms = await getUserWithPermissions(refreshPayload.userId);
     if (!userWithPerms) {
       return NextResponse.json(
-        { error: '用户不存在' },
+        { details: { error: '用户不存在' } },
         { status: 401 }
       );
     }
@@ -60,7 +63,7 @@ export async function POST(request: Request) {
     // 5. 检查用户是否激活
     if (!user.isActive) {
       return NextResponse.json(
-        { error: '账户已被禁用' },
+        { details: { error: '账户已被禁用' } },
         { status: 403 }
       );
     }
@@ -70,6 +73,15 @@ export async function POST(request: Request) {
 
     // 7. 生成新的 refresh token（轮换机制）
     const newRefreshToken = generateRefreshToken(user.id);
+
+    // Token刷新成功日志
+    const tokenPayload = {
+      userId: user.id,
+      email: user.email,
+      roles: roles.map(r => r.name),
+      permissions: permissions,
+    };
+    logger.tokenRefresh(tokenPayload as any, { username: user.username });
 
     // 8. 设置 Cookie 并返回
     const accessTokenCookie = generateCookieHeader(
@@ -106,9 +118,9 @@ export async function POST(request: Request) {
       }
     );
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.errorNoUser(LOG_MODULES.AUTH, 'Token刷新失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误' },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }

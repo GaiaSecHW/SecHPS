@@ -1,8 +1,9 @@
-// src/app/api/admin/metrics/route.ts
+﻿// src/app/api/admin/metrics/route.ts
 
 import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { metricsCollector } from '@/lib/metrics/collector';
 import { getAllCacheStats } from '@/lib/cache';
 import { prisma } from '@/lib/prisma';
@@ -11,18 +12,18 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
       prisma.vulnerability.count({ where: { status: 'new' } }),
     ]);
 
+    logger.access(LOG_MODULES.CONFIG, payload, 'metrics', { type, since });
     return NextResponse.json({
       metrics: metrics.slice(0, 100), // 限制返回数量
       stats,
@@ -62,7 +64,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Get metrics error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取指标数据失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

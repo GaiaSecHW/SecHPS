@@ -1,6 +1,7 @@
-// src/app/api/techstack-options/route.ts
+﻿// src/app/api/techstack-options/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { 
   ALL_TECHSTACK_OPTIONS, 
   TECHSTACK_BY_CATEGORY 
@@ -51,7 +52,7 @@ export async function GET() {
       source: 'default',
     });
   } catch (error) {
-    console.error('Get techstack options error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取技术栈选项失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     // 出错时返回默认值
     return NextResponse.json({
       options: ALL_TECHSTACK_OPTIONS,

@@ -11,6 +11,7 @@ import {
   type SkillIntent,
 } from '@/lib/skill-builder';
 import { trackSystemTokenUsage, extractTokenUsageFromResponse, calculateSystemCost } from '@/lib/system-token-tracker';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 优化完整 Skill 的 API
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[optimize-skill] 用户:', payload.userId, '使用模型:', modelConfig.defaultModel);
+    logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelConfig.defaultModel } });
 
     // 使用公共模块的系统提示词（包含禁止生成输出格式的明确指令）
     const systemPrompt = buildSystemPrompt();
@@ -117,9 +118,9 @@ ${cleanedUserContent || '（空）'}
     userPrompt += `\n\n请根据以上信息，优化 Skill 内容。保留用户已有内容，补充缺失部分（如示例、检查要点等），使 Skill 更完整、更专业。`;
 
     // 调用大模型
-    console.log('[optimize-skill] 开始调用大模型...');
+    logger.debug(LOG_MODULES.SKILL, '开始调用大模型');
     const response = await callModel(modelConfig, systemPrompt, userPrompt);
-    console.log('[optimize-skill] 大模型响应完成');
+    logger.debug(LOG_MODULES.SKILL, '大模型响应完成');
     
     // 统计 Token 使用量
     const tokenUsage = extractTokenUsageFromResponse(response);
@@ -133,7 +134,7 @@ ${cleanedUserContent || '（空）'}
         estimatedCost,
         `Skill优化: ${skillData.name || '未命名'}`
       );
-      console.log('[optimize-skill] Token 统计:', tokenUsage, '费用:', estimatedCost);
+      logger.debug(LOG_MODULES.SKILL, 'Token 统计', { details: { inputTokens: tokenUsage.inputTokens, outputTokens: tokenUsage.outputTokens, cost: estimatedCost } });
     }
 
     // 检查截断
@@ -149,7 +150,7 @@ ${cleanedUserContent || '（空）'}
       throw new Error('模型响应为空');
     }
 
-    console.log('[optimize-skill] 生成的 Markdown 长度:', generatedContent.length);
+    logger.debug(LOG_MODULES.SKILL, '生成的 Markdown 长度', { details: { length: generatedContent.length } });
 
     // 清理大模型可能误生成的输出格式章节（防止重复）
     const cleanedContent = cleanSkillContentForOptimization(generatedContent);
@@ -177,7 +178,7 @@ ${cleanedUserContent || '（空）'}
       content: fullContent,
     };
 
-    console.log('[optimize-skill] Skill 优化成功');
+    logger.logNoUser(LOG_MODULES.SKILL, 'Skill 优化成功', { details: { name: skillData.name } });
     
     return NextResponse.json({
       optimizedSkill,
@@ -185,7 +186,7 @@ ${cleanedUserContent || '（空）'}
       suggestions: ['已补充缺失内容', '已优化表达', '已添加示例'],
     });
   } catch (error) {
-    console.error('[optimize-skill] 优化失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '优化失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     
     let errorMessage = '优化失败';
     if (error instanceof Error) {
@@ -232,12 +233,12 @@ async function getModelConfig(): Promise<{
         defaultModel: models[0] || 'default',
       };
     }
-  } catch (error) {
-    console.error('[optimize-skill] 获取模型配置失败:', error);
-  }
+} catch (error) {
+      logger.errorNoUser(LOG_MODULES.SKILL, '获取模型配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    }
 
-  return null;
-}
+    return null;
+  }
 
 /**
  * 调用大模型

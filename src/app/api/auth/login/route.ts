@@ -11,6 +11,7 @@ import {
 import { ROLES } from '@/types/permissions';
 import { auditLogAuth } from '@/lib/audit/logger';
 import { invalidateUserCaches } from '@/lib/cache';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +32,8 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
+      // 登录失败：用户不存在
+      logger.loginFailedNoUser(username, '用户不存在');
       return NextResponse.json(
         { error: '用户名或密码错误' },
         { status: 401 }
@@ -41,6 +44,8 @@ export async function POST(request: Request) {
     const isValidPassword = await verifyPassword(password, user.passwordHash);
 
     if (!isValidPassword) {
+      // 登录失败：密码错误
+      logger.loginFailedNoUser(username, '密码错误', { details: { userId: user.id, email: user.email } });
       return NextResponse.json(
         { error: '用户名或密码错误' },
         { status: 401 }
@@ -49,6 +54,8 @@ export async function POST(request: Request) {
 
     // 检查用户是否激活
     if (!user.isActive) {
+      // 登录失败：账户被禁用
+      logger.loginFailedNoUser(username, '账户被禁用', { details: { userId: user.id, email: user.email } });
       return NextResponse.json(
         { error: '账户已被禁用' },
         { status: 403 }
@@ -80,6 +87,9 @@ export async function POST(request: Request) {
     await auditLogAuth('login', user.id, request, {
       metadata: { method: 'username_password' },
     });
+    
+    // 登录成功日志
+    logger.loginSuccess(user.id, user.email, { username: user.username, roles: roles.map(r => r.name) });
 
     // 设置 HttpOnly Cookie
     const accessTokenCookie = generateCookieHeader(
@@ -116,7 +126,7 @@ export async function POST(request: Request) {
       }
     );
   } catch (error) {
-    console.error('Login error:', error);
+    logger.errorNoUser(LOG_MODULES.AUTH, '登录失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }

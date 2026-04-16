@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * POST /api/skills/predict-tasks
@@ -47,12 +48,12 @@ export async function POST(request: Request) {
 
     // 触发后台执行（不等待）
     executePredictionTask(task.id).catch(err => {
-      console.error('[predict-tasks] 执行预测任务失败:', err);
+      logger.errorNoUser(LOG_MODULES.SKILL, '执行预测任务失败', { details: { taskId: task.id, error: err instanceof Error ? err.message : String(err) } });
     });
 
     return NextResponse.json({ task }, { status: 201 });
   } catch (error) {
-    console.error('创建预测任务失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '创建预测任务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }
@@ -115,7 +116,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ tasks: parsedTasks });
   } catch (error) {
-    console.error('查询预测任务失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '查询预测任务失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }
@@ -128,7 +129,7 @@ export async function GET(request: Request) {
  */
 async function executePredictionTask(taskId: string) {
   try {
-    console.log(`[predict-tasks] 开始执行任务: ${taskId}`);
+    logger.debug(LOG_MODULES.SKILL, '开始执行预测任务', { details: { taskId } });
 
     // 更新任务状态为运行中
     await prisma.skillPredictionTask.update({
@@ -269,7 +270,7 @@ async function executePredictionTask(taskId: string) {
         matches = await callLLMForMatch(modelConfig, prompt, skillSummaries, task.topK);
         method = 'llm';
       } catch (error) {
-        console.error('[predict-tasks] LLM 匹配失败，降级到关键词匹配:', error);
+        logger.errorNoUser(LOG_MODULES.SKILL, 'LLM 匹配失败，降级到关键词匹配', { details: { taskId, error: error instanceof Error ? error.message : String(error) } });
         matches = simpleKeywordMatch(task.taskName, task.taskDescription, workflowTechStack, skillSummaries, task.topK);
         method = 'keyword';
       }
@@ -312,9 +313,9 @@ async function executePredictionTask(taskId: string) {
       },
     });
 
-    console.log(`[predict-tasks] 任务完成: ${taskId}`);
+    logger.debug(LOG_MODULES.SKILL, '预测任务完成', { details: { taskId } });
   } catch (error) {
-    console.error(`[predict-tasks] 任务失败: ${taskId}`, error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '预测任务失败', { details: { taskId, error: error instanceof Error ? error.message : String(error) } });
 
     // 更新任务状态为失败
     await prisma.skillPredictionTask.update({

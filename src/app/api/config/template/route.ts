@@ -1,9 +1,10 @@
-// src/app/api/config/template/route.ts
+﻿// src/app/api/config/template/route.ts
 // 获取 skillOutputTemplate（全局共享，所有登录用户可访问）
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 全局配置的特殊 userId（用于存储系统级配置）
 const SYSTEM_USER_ID = 'system';
@@ -12,14 +13,14 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // skillOutputTemplate 是全局共享的模板，所有登录用户都可以获取
@@ -75,7 +76,7 @@ export async function GET(request: Request) {
       skillOutputTemplate: anyConfig?.skillOutputTemplate || null 
     });
   } catch (error) {
-    console.error('Get template error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取模板失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

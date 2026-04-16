@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 密码复杂度验证函数
 function validatePassword(password: string): { valid: boolean; error?: string } {
@@ -27,19 +28,19 @@ export async function GET(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查权限
     if (!hasPermission(payload.permissions, PERMISSIONS.USER_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     // 解析分页参数
@@ -97,10 +98,13 @@ export async function GET(request: Request) {
       })),
     }));
 
+    // 记录访问日志 - 管理员访问用户列表
+    logger.access(LOG_MODULES.USER, payload, 'user_list', { total, page: pageNum, limit: pageLimit });
+
     return NextResponse.json(createPaginatedResponse(formattedUsers, total, pageNum, pageLimit));
   } catch (error) {
-    console.error('获取用户错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.USER, '获取用户列表失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -110,19 +114,19 @@ export async function POST(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查权限
     if (!hasPermission(payload.permissions, PERMISSIONS.USER_CREATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const body = await request.json();
@@ -131,7 +135,7 @@ export async function POST(request: Request) {
     // 验证输入
     if (!email || !username || !password) {
       return NextResponse.json(
-        { error: '缺少必填字段' },
+        { details: { error: '缺少必填字段' } },
         { status: 400 }
       );
     }
@@ -139,7 +143,7 @@ export async function POST(request: Request) {
     // 验证密码复杂度
     const passwordValidation = validatePassword(password);
     if (!passwordValidation.valid) {
-      return NextResponse.json({ error: passwordValidation.error }, { status: 400 });
+      return NextResponse.json({ details: { error: passwordValidation.error } }, { status: 400 });
     }
 
     // 检查邮箱是否已存在
@@ -149,7 +153,7 @@ export async function POST(request: Request) {
 
     if (existingUser) {
       return NextResponse.json(
-        { error: '邮箱已存在' },
+        { details: { error: '邮箱已存在' } },
         { status: 400 }
       );
     }
@@ -161,7 +165,7 @@ export async function POST(request: Request) {
 
     if (existingUsername) {
       return NextResponse.json(
-        { error: '用户名已存在' },
+        { details: { error: '用户名已存在' } },
         { status: 400 }
       );
     }
@@ -235,6 +239,9 @@ export async function POST(request: Request) {
       },
     });
 
+    // 记录创建日志 - 管理员创建新用户（跨用户操作）
+    logger.create(LOG_MODULES.USER, payload, user.id, { targetEmail: email, targetUsername: username, roles });
+
     return NextResponse.json(
       {
         message: '用户创建成功',
@@ -248,9 +255,9 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('创建用户错误:', error);
+    logger.errorNoUser(LOG_MODULES.USER, '创建用户失败', { details: { error: String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误', details: String(error) },
+      { details: { error: '服务器内部错误', details: String(error) } },
       { status: 500 }
     );
   }

@@ -1,29 +1,30 @@
-// 导出所有 Skills 为 JSON 文件
+﻿// 导出所有 Skills 为 JSON 文件
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/skills/export - 导出所有 Skills
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查是否是管理员
     const isAdmin = payload.roles?.includes('admin');
     if (!isAdmin) {
-      return NextResponse.json({ error: '需要管理员权限' }, { status: 403 });
+      return NextResponse.json({ details: { error: '需要管理员权限' } }, { status: 403 });
     }
 
     // 获取所有 Skills（包括所有版本）
@@ -60,7 +61,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(exportData);
   } catch (error) {
-    console.error('导出 Skills 错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SKILL, '导出 Skills 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

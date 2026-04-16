@@ -1,9 +1,10 @@
-// src/app/api/admin/alerts/route.ts
+﻿// src/app/api/admin/alerts/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type { AlertCondition } from '@/types/monitoring';
 
 // GET /api/admin/alerts - 获取告警规则列表
@@ -11,18 +12,18 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const rules = await prisma.alertRule.findMany({
@@ -44,8 +45,8 @@ export async function GET(request: Request) {
       })),
     });
   } catch (error) {
-    console.error('Get alert rules error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '获取告警规则失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 
@@ -54,25 +55,25 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const body = await request.json();
     const { name, description, metricType, condition, severity, cooldownPeriod, notificationChannels, tags } = body;
 
     if (!name || !metricType || !condition || !notificationChannels) {
-      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少必填字段' } }, { status: 400 });
     }
 
     const rule = await prisma.alertRule.create({
@@ -97,12 +98,13 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.create(LOG_MODULES.AUDIT, payload, rule.id, { name, metricType });
     return NextResponse.json({
       message: '告警规则已创建',
       rule,
     }, { status: 201 });
   } catch (error) {
-    console.error('Create alert rule error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '创建告警规则失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

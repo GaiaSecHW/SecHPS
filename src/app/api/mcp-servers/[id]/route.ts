@@ -4,6 +4,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 检查用户是否有权限操作此 MCP
 // - 管理员：可以操作所有 MCP
@@ -62,9 +63,10 @@ export async function GET(
       return NextResponse.json({ error: '无权限访问此 MCP' }, { status: 403 });
     }
 
+    logger.access(LOG_MODULES.MCP, payload, `mcp:${mcpServer.id}`, { name: mcpServer.name });
     return NextResponse.json({ mcpServer });
   } catch (error) {
-    console.error('Get MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '获取 MCP 服务器详情失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -161,9 +163,10 @@ export async function PATCH(
       data: updateData,
     });
 
+    logger.update(LOG_MODULES.MCP, payload, `mcp:${mcpServer.id}`, { name: mcpServer.name });
     return NextResponse.json({ mcpServer });
   } catch (error) {
-    console.error('Update MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '更新 MCP 服务器配置失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -211,9 +214,10 @@ export async function DELETE(
       where: { id },
     });
 
+    logger.delete(LOG_MODULES.MCP, payload, `mcp:${id}`, { name: existing.name });
     return NextResponse.json({ message: 'MCP 服务器配置已删除' });
   } catch (error) {
-    console.error('Delete MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '删除 MCP 服务器配置失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

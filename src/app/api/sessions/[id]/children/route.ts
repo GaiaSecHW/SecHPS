@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { getSessionMessages, listSubagents, getSubagentMessages } from '@anthropic-ai/claude-agent-sdk';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 获取会话的子代理列表
@@ -30,7 +31,7 @@ export async function GET(
     const url = new URL(request.url);
     const childId = url.searchParams.get('childId'); // 获取子会话ID
 
-    console.log('[Children API] Fetching subagents for session:', sessionId, 'childId:', childId);
+    logger.access(LOG_MODULES.SESSION, payload, sessionId, { action: 'fetch_children', childId });
 
     // 查找关联的项目
     const evaluation = await prisma.evaluationSession.findFirst({
@@ -46,7 +47,7 @@ export async function GET(
 
     // 如果请求子会话消息
     if (childId) {
-      console.log('[Children API] Fetching messages for child:', childId);
+      logger.logNoUser(LOG_MODULES.SESSION, 'Fetching messages for child', { details: { sessionId, childId } });
       
       try {
         let messages: any[] = [];
@@ -54,7 +55,7 @@ export async function GET(
         if (projectPath) {
           // 使用 SDK 获取子会话消息
           messages = await getSubagentMessages(sessionId, childId, { dir: projectPath });
-          console.log('[Children API] SDK returned', messages.length, 'messages for child');
+          logger.logNoUser(LOG_MODULES.SESSION, 'SDK returned messages for child', { details: { sessionId, childId, count: messages.length } });
         }
         
         return NextResponse.json({
@@ -62,7 +63,7 @@ export async function GET(
           total: messages.length,
         });
       } catch (error) {
-        console.error('[Children API] Failed to get child messages:', error);
+        logger.errorWithUser(LOG_MODULES.SESSION, payload, 'Failed to get child messages', childId, { details: { sessionId, error: error instanceof Error ? error.message : String(error) } });
         return NextResponse.json({ 
           messages: [], 
           total: 0,
@@ -75,14 +76,14 @@ export async function GET(
     let subagentIds: string[] = [];
     try {
       subagentIds = await listSubagents(sessionId, projectPath ? { dir: projectPath } : undefined);
-      console.log('[Children API] SDK returned', subagentIds.length, 'subagents');
+      logger.logNoUser(LOG_MODULES.SESSION, 'SDK returned subagents', { details: { sessionId, count: subagentIds.length } });
     } catch (error) {
-      console.warn('[Children API] SDK listSubagents failed:', error);
+      logger.warn(LOG_MODULES.SESSION, 'SDK listSubagents failed', { details: { sessionId, error: error instanceof Error ? error.message : String(error) } });
     }
 
     // 方法2: 如果 SDK 没有返回，从消息中提取 Agent/task 工具调用
     if (subagentIds.length === 0 && projectPath) {
-      console.log('[Children API] Trying to extract subagents from messages...');
+      logger.logNoUser(LOG_MODULES.SESSION, 'Trying to extract subagents from messages', { details: { sessionId } });
       try {
         const messages = await getSessionMessages(sessionId, { dir: projectPath });
         
@@ -139,7 +140,7 @@ export async function GET(
           }
         });
 
-        console.log('[Children API] Found', agentCalls.length, 'agent calls from messages');
+        logger.logNoUser(LOG_MODULES.SESSION, 'Found agent calls from messages', { details: { sessionId, count: agentCalls.length } });
 
         // 转换为前端期望的格式
         const children = agentCalls.map(call => ({
@@ -162,7 +163,7 @@ export async function GET(
           source: 'messages',
         });
       } catch (error) {
-        console.error('[Children API] Failed to extract from messages:', error);
+        logger.errorWithUser(LOG_MODULES.SESSION, payload, 'Failed to extract from messages', sessionId, { details: { error: error instanceof Error ? error.message : String(error) } });
       }
     }
 
@@ -180,7 +181,7 @@ export async function GET(
       source: 'sdk',
     });
   } catch (error) {
-    console.error('[Children API] Error:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, 'Children API error', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

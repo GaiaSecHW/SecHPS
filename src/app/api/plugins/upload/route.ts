@@ -9,6 +9,7 @@ import { pipeline } from 'stream/promises';
 import { createReadStream, createWriteStream } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const execAsync = promisify(exec);
 const PLUGINS_DIR = path.join(process.cwd(), 'plugins');
@@ -170,6 +171,7 @@ export async function POST(request: Request) {
       // 安装插件到数据库
       const plugin = await PluginManager.installPlugin(manifest, pluginTargetDir);
 
+      logger.create(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}`, { name: manifest.name, fileName: file.name });
       return NextResponse.json({
         message: '插件安装成功',
         plugin,
@@ -179,11 +181,11 @@ export async function POST(request: Request) {
       try {
         fs.rmSync(tempDir, { recursive: true, force: true });
       } catch (cleanupError) {
-        console.error('清理临时目录失败:', cleanupError);
+        logger.errorNoUser(LOG_MODULES.PLUGIN, '清理临时目录失败', cleanupError instanceof Error ? cleanupError.message : cleanupError);
       }
     }
   } catch (error) {
-    console.error('上传插件失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '上传插件失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(

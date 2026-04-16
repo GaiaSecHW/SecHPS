@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 格式化工作流数据
 function formatWorkflow(workflow: any) {
@@ -100,7 +101,7 @@ export async function GET(
 
     return NextResponse.json({ workflow: formatWorkflow(workflow) });
   } catch (error) {
-    console.error('Get workflow error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Get workflow error', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -202,7 +203,7 @@ export async function PATCH(
       workflow: formatWorkflow(workflow),
     });
   } catch (error) {
-    console.error('Update workflow error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Update workflow error', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -272,7 +273,7 @@ export async function DELETE(
       message: '工作流删除成功',
     });
   } catch (error) {
-    console.error('Delete workflow error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Delete workflow error', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

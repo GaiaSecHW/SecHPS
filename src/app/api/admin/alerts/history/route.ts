@@ -1,9 +1,10 @@
-// src/app/api/admin/alerts/history/route.ts
+﻿// src/app/api/admin/alerts/history/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 
 // GET /api/admin/alerts/history - 获取告警历史
@@ -11,18 +12,18 @@ export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -50,9 +51,10 @@ export async function GET(request: Request) {
       }),
     ]);
 
+    logger.access(LOG_MODULES.AUDIT, payload, 'alert_history', { page, limit, status, severity, ruleId });
     return NextResponse.json(createPaginatedResponse(alerts, total, pageNum, pageLimit));
   } catch (error) {
-    console.error('Get alert history error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUDIT, '获取告警历史失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

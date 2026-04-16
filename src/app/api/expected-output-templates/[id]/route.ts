@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * GET /api/expected-output-templates/[id]
@@ -36,7 +37,7 @@ export async function GET(
 
     return NextResponse.json({ template });
   } catch (error) {
-    console.error('获取期望输出模板失败:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取期望输出模板失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -83,9 +84,10 @@ export async function PUT(
       },
     });
 
+    logger.update(LOG_MODULES.CONFIG, payload, `template:${id}`, { displayName });
     return NextResponse.json({ template: updated });
   } catch (error) {
-    console.error('更新期望输出模板失败:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '更新期望输出模板失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -134,9 +136,10 @@ export async function DELETE(
       where: { id },
     });
 
+    logger.delete(LOG_MODULES.CONFIG, payload, `template:${id}`, { name: template.name });
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('删除期望输出模板失败:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '删除期望输出模板失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/vulnerabilities/:id - 获取漏洞详情
 export async function GET(
@@ -51,7 +52,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('获取漏洞详情错误:', error);
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞详情错误', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -102,6 +103,8 @@ export async function PUT(
       data: updateData,
     });
 
+    logger.update(LOG_MODULES.VULNERABILITY, payload, id, { fields: Object.keys(updateData) });
+
     return NextResponse.json({
       vulnerability: {
         ...updated,
@@ -109,7 +112,7 @@ export async function PUT(
       },
     });
   } catch (error) {
-    console.error('更新漏洞错误:', error);
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '更新漏洞错误', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -141,9 +144,11 @@ export async function DELETE(
 
     await prisma.vulnerability.delete({ where: { id } });
 
+    logger.delete(LOG_MODULES.VULNERABILITY, payload, id);
+
     return NextResponse.json({ message: '删除成功' });
   } catch (error) {
-    console.error('删除漏洞错误:', error);
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '删除漏洞错误', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

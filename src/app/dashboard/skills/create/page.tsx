@@ -201,7 +201,7 @@ try {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || '创建失败');
+        throw new Error(data.error || data.details?.error || '创建失败');
       }
 
       router.push('/dashboard/skills');

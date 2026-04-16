@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getBeijingPeriodStart, getBeijingNow } from '@/lib/beijing-time';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取 Token 统计汇总数据
 export async function GET(request: Request) {
@@ -10,14 +11,14 @@ export async function GET(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 检查权限 - 所有登录用户都可以访问，但只能查看自己的数据
@@ -334,8 +335,8 @@ export async function GET(request: Request) {
       userStats, // 仅管理员可见
     });
   } catch (error) {
-    console.error('Get token stats error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.TOKEN, '获取 Token 统计失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
 

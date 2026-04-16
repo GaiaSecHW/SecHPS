@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/admin/notifications/[id] - 获取单个通知渠道
 export async function GET(
@@ -37,9 +38,10 @@ export async function GET(
       return NextResponse.json({ error: '通知渠道不存在' }, { status: 404 });
     }
 
+    logger.access(LOG_MODULES.AUDIT, payload, `notification_channel:${id}`, {});
     return NextResponse.json({ channel });
   } catch (error) {
-    console.error('Get notification channel error:', error);
+    logger.errorNoUser(LOG_MODULES.AUDIT, '获取通知渠道详情失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -88,12 +90,13 @@ export async function PUT(
       },
     });
 
+    logger.update(LOG_MODULES.AUDIT, payload, id, { name });
     return NextResponse.json({
       message: '通知渠道已更新',
       channel,
     });
   } catch (error) {
-    console.error('Update notification channel error:', error);
+    logger.errorNoUser(LOG_MODULES.AUDIT, '更新通知渠道失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -134,9 +137,10 @@ export async function DELETE(
       },
     });
 
+    logger.delete(LOG_MODULES.AUDIT, payload, id, {});
     return NextResponse.json({ message: '通知渠道已删除' });
   } catch (error) {
-    console.error('Delete notification channel error:', error);
+    logger.errorNoUser(LOG_MODULES.AUDIT, '删除通知渠道失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

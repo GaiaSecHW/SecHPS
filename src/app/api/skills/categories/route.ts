@@ -1,23 +1,24 @@
-// src/app/api/skills/categories/route.ts
+﻿// src/app/api/skills/categories/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { getOffsetPagination } from '@/lib/pagination';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/skills/categories - 获取 Skills 分类列表
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     // 解析 URL 参数
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('获取 Skills 分类错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SKILL, '获取 Skills 分类错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

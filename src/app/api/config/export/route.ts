@@ -1,24 +1,25 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/config/export — 导出当前用户的活跃配置为 JSON 文件
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
     // 获取用户的活跃配置 + 技术栈选项（并行）
@@ -32,7 +33,7 @@ export async function GET(request: Request) {
     ]);
 
     if (!config) {
-      return NextResponse.json({ error: '未找到活跃配置' }, { status: 404 });
+      return NextResponse.json({ details: { error: '未找到活跃配置' } }, { status: 404 });
     }
 
     // 构建导出数据（不含敏感字段：id, userId, createdAt, updatedAt）
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Export config error:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.CONFIG, '导出配置失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }

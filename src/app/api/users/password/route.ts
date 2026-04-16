@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, verifyPassword, hashPassword } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 修改密码
 export async function POST(request: Request) {
@@ -8,14 +9,14 @@ export async function POST(request: Request) {
     // 验证 Token
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
     }
 
     const token = authHeader.replace('Bearer ', '');
     const payload = verifyToken(token);
 
     if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
     const body = await request.json();
@@ -24,14 +25,14 @@ export async function POST(request: Request) {
     // 验证输入
     if (!currentPassword || !newPassword) {
       return NextResponse.json(
-        { error: '请提供当前密码和新密码' },
+        { details: { error: '请提供当前密码和新密码' } },
         { status: 400 }
       );
     }
 
     if (newPassword.length < 6) {
       return NextResponse.json(
-        { error: '新密码长度至少为 6 位' },
+        { details: { error: '新密码长度至少为 6 位' } },
         { status: 400 }
       );
     }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: '用户不存在' }, { status: 404 });
+      return NextResponse.json({ details: { error: '用户不存在' } }, { status: 404 });
     }
 
     // 验证当前密码
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
 
     if (!isValidPassword) {
       return NextResponse.json(
-        { error: '当前密码错误' },
+        { details: { error: '当前密码错误' } },
         { status: 400 }
       );
     }
@@ -72,9 +73,11 @@ export async function POST(request: Request) {
       },
     });
 
+    logger.update(LOG_MODULES.AUTH, payload, payload.userId, { action: 'password_change' });
+
     return NextResponse.json({ message: '密码修改成功' });
   } catch (error) {
-    console.error('修改密码错误:', error);
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.AUTH, '修改密码失败', { details: { error: String(error) } });
+    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
   }
 }
