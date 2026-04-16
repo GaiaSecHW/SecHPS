@@ -58,7 +58,7 @@ async function main() {
           await prisma.role.update({
             where: { id: role.id },
             data: {
-              permissions: {
+              Permission: {
                 connect: { id: permission.id },
               },
             },
@@ -78,9 +78,9 @@ async function main() {
     // 验证权限分配
     const roleWithPermissions = await prisma.role.findUnique({
       where: { id: role.id },
-      include: { permissions: true },
+      include: { Permission: true },
     });
-    console.log(`  ✅ 角色 ${roleName} 已分配 ${roleWithPermissions?.permissions.length || 0} 个权限`);
+    console.log(`  ✅ 角色 ${roleName} 已分配 ${roleWithPermissions?.Permission?.length || 0} 个权限`);
   }
   console.log('✅ 权限分配完成');
 
