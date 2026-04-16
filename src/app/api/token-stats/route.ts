@@ -20,11 +20,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限 - 管理员直接允许，或检查 TOKEN_READ 权限
+    // 检查权限 - 所有登录用户都可以访问，但只能查看自己的数据
+    // 管理员可以查看所有数据
     const isAdmin = payload.roles?.includes('admin');
-    if (!isAdmin && !hasPermission(payload.permissions, PERMISSIONS.TOKEN_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    // TOKEN_DETAIL 权限可以查看用户级别的统计（仅管理员可见部分）
+    const hasTokenDetail = hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL);
 
     // 获取查询参数
     const { searchParams } = new URL(request.url);
