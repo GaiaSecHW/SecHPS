@@ -30,15 +30,23 @@ export async function GET(
 
     const { id } = await params;
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件：管理员可访问所有，普通用户可访问自己的 + 公开的 + 被分享的
+    let where: any = { id };
+    
+    if (!isAdmin) {
+      where.OR = [
+        { userId: payload.userId },
+        { isPublic: true },
+        { shares: { some: { sharedWith: payload.userId } } },
+      ];
+    }
+
     // 查询工作流及其节点和边
     const workflow = await prisma.workflow.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId: payload.userId },
-          { shares: { some: { sharedWith: payload.userId } } },
-        ],
-      },
+      where,
       include: {
         nodes: true,
         edges: true,
