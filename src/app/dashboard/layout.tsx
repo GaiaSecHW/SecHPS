@@ -12,7 +12,6 @@ import {
   LogOut,
   Cog,
   User,
-  GitBranch,
   Clock,
   Award,
   Bug,
@@ -149,8 +148,12 @@ function DashboardLayoutContent({
             </div>
           )}
           {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
-          <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />} collapsed={collapsed}>
-            Agent编排管理
+          
+          <NavLink href="/dashboard/agent-teams" icon={<Users size={20} />} collapsed={collapsed}>
+            Agent 团队
+          </NavLink>
+          <NavLink href="/dashboard/agent-definitions" icon={<Brain size={20} />} collapsed={collapsed}>
+            Agent 定义
           </NavLink>
           <NavLink href="/dashboard/skills" icon={<Award size={20} />} collapsed={collapsed}>
             Skills 管理
@@ -208,6 +211,9 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={20} />} collapsed={collapsed}>
                 Skills 进化
+              </NavLink>
+              <NavLink href="/dashboard/admin/skills-governance" icon={<Shield size={20} />} collapsed={collapsed}>
+                Skills 治理
               </NavLink>
               <NavLink href="/dashboard/admin/autonomous-evolution" icon={<Brain size={20} />} collapsed={collapsed}>
                 执行进化管理
