@@ -2,15 +2,16 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
-// 格式化模型数据
-function formatModel(model: any) {
+// 格式化模型数据 - 不返回 apiKey 以保护安全
+function formatModel(model: any, includeApiKey: boolean = false) {
   return {
     id: model.id,
     userId: model.userId,
     name: model.name,
     providerType: model.providerType,
     apiBaseUrl: model.apiBaseUrl,
-    apiKey: model.apiKey,
+    apiKey: includeApiKey ? model.apiKey : undefined,
+    hasApiKey: !!model.apiKey,
     models: JSON.parse(model.models),
     routeType: model.routeType,
     isActive: model.isActive,

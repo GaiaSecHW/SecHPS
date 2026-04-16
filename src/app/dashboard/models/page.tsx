@@ -18,6 +18,7 @@ import {
   Eye,
   EyeOff,
   User,
+  Key,
 } from 'lucide-react';
 
 // ModelConfig 数据结构
@@ -29,7 +30,8 @@ interface ModelConfig {
   name: string;
   providerType: 'claude' | 'openai';
   apiBaseUrl: string;
-  apiKey: string;
+  apiKey?: string;  // 可选，仅在确认修改时使用
+  hasApiKey: boolean;  // 是否有 API Key
   models: string[];
   routeType: string | null;
   isActive: boolean;
@@ -66,6 +68,7 @@ interface ModelFormData {
   isPublic: boolean;
   isSystemModel: boolean;  // 系统模型（仅管理员可设置）
   isDefault: boolean;      // 默认模型（仅系统模型可设置）
+  changeApiKey: boolean;   // 确认修改 API Key
 }
 
 export default function ModelsPage() {
@@ -102,6 +105,7 @@ export default function ModelsPage() {
     isPublic: false,
     isSystemModel: false,
     isDefault: false,
+    changeApiKey: false,
   });
 
   // 过滤状态
@@ -130,7 +134,11 @@ export default function ModelsPage() {
       }
 
       const data = await response.json();
-      setModels(data.models || []);
+      // 处理 hasApiKey 字段
+      setModels((data.models || []).map((m: any) => ({
+        ...m,
+        hasApiKey: m.hasApiKey ?? !!m.apiKey,
+      })));
     } catch (err) {
       setError('加载模型列表失败');
       setTimeout(() => setError(null), 3000);
@@ -152,6 +160,7 @@ export default function ModelsPage() {
       isPublic: false,
       isSystemModel: false,
       isDefault: false,
+      changeApiKey: true,  // 新建时默认需要输入 API Key
     });
     setShowModal(true);
   };
@@ -169,13 +178,14 @@ export default function ModelsPage() {
       name: model.name,
       providerType: model.providerType,
       apiBaseUrl: model.apiBaseUrl,
-      apiKey: model.apiKey,
+      apiKey: '',  // 编辑时不显示原有 API Key，需要确认才能修改
       models: Array.isArray(model.models) ? (model.models[0] || '') : model.models,
       routeType: model.routeType || '',
       isActive: model.isActive,
       isPublic: model.isPublic,
       isSystemModel: model.userId === null,  // userId为null表示系统模型
       isDefault: model.isDefault,
+      changeApiKey: false,  // 编辑时默认不修改 API Key
     });
     setShowModal(true);
   };
@@ -194,13 +204,28 @@ export default function ModelsPage() {
       isPublic: false,
       isSystemModel: false,
       isDefault: false,
+      changeApiKey: false,
     });
   };
 
   const handleSaveModel = async () => {
     // 表单验证
-    if (!formData.name || !formData.apiBaseUrl || !formData.apiKey || !formData.models) {
+    if (!formData.name || !formData.apiBaseUrl || !formData.models) {
       setError('请填写必填字段');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // 新建时必须填写 API Key
+    if (!editingModel && !formData.apiKey) {
+      setError('请填写 API Key');
+      setTimeout(() => setError(null), 3000);
+      return;
+    }
+
+    // 编辑时如果确认修改 API Key，必须填写
+    if (editingModel && formData.changeApiKey && !formData.apiKey) {
+      setError('请填写新的 API Key');
       setTimeout(() => setError(null), 3000);
       return;
     }
@@ -219,7 +244,8 @@ export default function ModelsPage() {
         name: formData.name,
         providerType: formData.providerType,
         apiBaseUrl: formData.apiBaseUrl,
-        apiKey: formData.apiKey,
+        // 只有新建或确认修改时才发送 apiKey
+        apiKey: !editingModel || formData.changeApiKey ? formData.apiKey : undefined,
         models: [formData.models],
         routeType: formData.providerType === 'openai' ? formData.routeType || undefined : undefined,
         isActive: formData.isActive,
@@ -745,16 +771,61 @@ export default function ModelsPage() {
 
               {/* API Key */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  API Key <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="password"
-                  value={formData.apiKey}
-                  onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  placeholder="输入 API Key"
-                />
+                {/* 新建时直接显示输入框 */}
+                {!editingModel ? (
+                  <>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      API Key <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={formData.apiKey}
+                      onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                      placeholder="输入 API Key"
+                    />
+                  </>
+                ) : (
+                  <>
+                    {/* 编辑时需要确认才能修改 */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Key size={16} className="text-gray-400" />
+                      <span className="text-sm text-gray-700">
+                        API Key: {editingModel.hasApiKey ? (
+                          <span className="text-green-600 font-medium">已设置</span>
+                        ) : (
+                          <span className="text-red-600 font-medium">未设置</span>
+                        )}
+                      </span>
+                    </div>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer mb-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.changeApiKey}
+                        onChange={(e) => setFormData({ ...formData, changeApiKey: e.target.checked })}
+                        className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                      />
+                      <span className="text-sm text-orange-700 font-medium">修改 API Key</span>
+                    </label>
+
+                    {formData.changeApiKey && (
+                      <input
+                        type="password"
+                        value={formData.apiKey}
+                        onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                        className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-sm"
+                        placeholder="输入新的 API Key"
+                      />
+                    )}
+                    
+                    {formData.changeApiKey && (
+                      <p className="text-xs text-orange-600 mt-1">
+                        请输入新的 API Key，原有 Key 将被替换
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
 
               {/* 模型名称 */}
