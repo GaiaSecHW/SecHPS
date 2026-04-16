@@ -1107,8 +1107,8 @@ model NotificationChannel {
 // MCP 服务器配置
 model McpServerConfig {
   id          String   @id @default(cuid())
-  userId      String?
-  projectId   String?
+  userId      String   // 创建者 ID（必填）
+  projectId   String?  // 关联项目 ID（可选，项目级 MCP）
   
   // MCP 服务器信息
   name        String   // 服务器名称
@@ -1121,16 +1121,18 @@ model McpServerConfig {
   // 配置
   isEnabled   Boolean  @default(true)
   autoStart   Boolean  @default(false)
+  isShared    Boolean  @default(false)  // 是否共享给所有用户使用（仅管理员可设置）
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   
   @@index([userId])
   @@index([projectId])
   @@index([name])
+  @@index([isShared])
 }
 
 // 工具权限规则

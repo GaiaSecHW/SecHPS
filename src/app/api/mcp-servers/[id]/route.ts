@@ -1,12 +1,26 @@
 // src/app/api/mcp-servers/[id]/route.ts
-// 单个全局 MCP 服务器配置 API
+// 单个 MCP 服务器配置 API（支持所有权检查）
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS } from '@/types/permissions';
+import { verifyToken } from '@/lib/auth';
 
-// GET /api/mcp-servers/[id] - 获取单个全局 MCP 配置
+// 检查用户是否有权限操作此 MCP
+// - 管理员：可以操作所有 MCP
+// - 普通用户：只能操作自己的 MCP（isShared=false 的只能查看）
+function canManageMcp(userId: string, isAdmin: boolean, mcp: { userId: string; isShared: boolean }): boolean {
+  if (isAdmin) return true;
+  return mcp.userId === userId;
+}
+
+function canViewMcp(userId: string, isAdmin: boolean, mcp: { userId: string; isShared: boolean }): boolean {
+  if (isAdmin) return true;
+  if (mcp.userId === userId) return true;
+  if (mcp.isShared) return true;
+  return false;
+}
+
+// GET /api/mcp-servers/[id] - 获取单个 MCP 配置
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -24,23 +38,28 @@ export async function GET(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
-
+    const isAdmin = payload.roles?.includes('admin');
     const { id } = await params;
 
     const mcpServer = await prisma.mcpServerConfig.findFirst({
       where: {
         id,
-        userId: null,
         projectId: null,
+      },
+      include: {
+        user: {
+          select: { id: true, username: true, name: true },
+        },
       },
     });
 
     if (!mcpServer) {
       return NextResponse.json({ error: 'MCP 服务器配置不存在' }, { status: 404 });
+    }
+
+    // 检查查看权限
+    if (!canViewMcp(payload.userId, isAdmin, mcpServer)) {
+      return NextResponse.json({ error: '无权限访问此 MCP' }, { status: 403 });
     }
 
     return NextResponse.json({ mcpServer });
@@ -50,7 +69,7 @@ export async function GET(
   }
 }
 
-// PATCH /api/mcp-servers/[id] - 更新全局 MCP 配置
+// PATCH /api/mcp-servers/[id] - 更新 MCP 配置
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -68,11 +87,7 @@ export async function PATCH(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
-
+    const isAdmin = payload.roles?.includes('admin');
     const { id } = await params;
     const body = await request.json();
 
@@ -80,7 +95,6 @@ export async function PATCH(
     const existing = await prisma.mcpServerConfig.findFirst({
       where: {
         id,
-        userId: null,
         projectId: null,
       },
     });
@@ -89,15 +103,25 @@ export async function PATCH(
       return NextResponse.json({ error: 'MCP 服务器配置不存在' }, { status: 404 });
     }
 
+    // 检查管理权限
+    if (!canManageMcp(payload.userId, isAdmin, existing)) {
+      return NextResponse.json({ error: '无权限修改此 MCP' }, { status: 403 });
+    }
+
+    // 非管理员不能修改 isShared
+    if (body.isShared !== undefined && !isAdmin) {
+      return NextResponse.json({ error: '只有管理员可以设置共享状态' }, { status: 403 });
+    }
+
     // 准备更新数据
     const updateData: any = {};
 
     if (body.name !== undefined) {
-      // 检查名称是否与其他配置冲突
+      // 检查名称是否与其他配置冲突（同用户范围内）
       const nameConflict = await prisma.mcpServerConfig.findFirst({
         where: {
           name: body.name,
-          userId: null,
+          userId: existing.userId,
           projectId: null,
           id: { not: id },
         },
@@ -129,6 +153,7 @@ export async function PATCH(
     if (body.env !== undefined) updateData.env = body.env ? JSON.stringify(body.env) : null;
     if (body.isEnabled !== undefined) updateData.isEnabled = body.isEnabled;
     if (body.autoStart !== undefined) updateData.autoStart = body.autoStart;
+    if (body.isShared !== undefined && isAdmin) updateData.isShared = body.isShared;
 
     // 更新
     const mcpServer = await prisma.mcpServerConfig.update({
@@ -143,7 +168,7 @@ export async function PATCH(
   }
 }
 
-// DELETE /api/mcp-servers/[id] - 删除全局 MCP 配置
+// DELETE /api/mcp-servers/[id] - 删除 MCP 配置
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -161,24 +186,24 @@ export async function DELETE(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE)) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
-
+    const isAdmin = payload.roles?.includes('admin');
     const { id } = await params;
 
     // 检查是否存在
     const existing = await prisma.mcpServerConfig.findFirst({
       where: {
         id,
-        userId: null,
         projectId: null,
       },
     });
 
     if (!existing) {
       return NextResponse.json({ error: 'MCP 服务器配置不存在' }, { status: 404 });
+    }
+
+    // 检查删除权限
+    if (!canManageMcp(payload.userId, isAdmin, existing)) {
+      return NextResponse.json({ error: '无权限删除此 MCP' }, { status: 403 });
     }
 
     // 删除

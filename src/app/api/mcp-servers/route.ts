@@ -1,13 +1,14 @@
 // src/app/api/mcp-servers/route.ts
-// 全局 MCP 服务器配置 API
+// MCP 服务器配置 API（支持用户私有 + 共享 MCP）
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS } from '@/types/permissions';
+import { verifyToken } from '@/lib/auth';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 
-// GET /api/mcp-servers - 获取全局 MCP 服务器配置列表
+// GET /api/mcp-servers - 获取用户可访问的 MCP 服务器列表
+// 普通用户：自己的 MCP + 共享的 MCP
+// 管理员：所有 MCP
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -22,39 +23,69 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
+    const isAdmin = payload.roles?.includes('admin');
 
     // 解析分页参数
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const search = searchParams.get('search') || undefined;
+    const filter = searchParams.get('filter') || 'all'; // all | mine | shared
 
     // 获取分页参数
     const { skip, take } = getOffsetPagination({ page, limit });
 
     // 构建 where 条件
-    const baseWhere = {
-      userId: null,
-      projectId: null,
-    };
-    const where = search ? {
-      ...baseWhere,
-      name: { contains: search },
-    } : baseWhere;
+    let where: any = { projectId: null }; // 排除项目级 MCP
+
+    if (isAdmin) {
+      // 管理员：查看所有全局 MCP
+      if (search) {
+        where.name = { contains: search };
+      }
+      if (filter === 'mine') {
+        where.userId = payload.userId;
+      } else if (filter === 'shared') {
+        where.isShared = true;
+      }
+    } else {
+      // 普通用户：自己的 MCP + 共享的 MCP
+      if (filter === 'mine') {
+        where.userId = payload.userId;
+      } else if (filter === 'shared') {
+        where.isShared = true;
+      } else {
+        // all: 自己的 + 共享的
+        where.OR = [
+          { userId: payload.userId },
+          { isShared: true },
+        ];
+      }
+      if (search) {
+        // 合并搜索条件
+        const searchCondition = { name: { contains: search } };
+        if (where.OR) {
+          where.OR = where.OR.map((cond: any) => ({ ...cond, ...searchCondition }));
+        } else {
+          where.name = { contains: search };
+        }
+      }
+    }
 
     // 获取总数
     const total = await prisma.mcpServerConfig.count({ where });
 
-    // 获取全局 MCP 配置（userId 和 projectId 都为 null）
+    // 获取 MCP 配置列表
     const mcpServers = await prisma.mcpServerConfig.findMany({
       where,
       orderBy: { createdAt: 'desc' },
       skip,
       take,
+      include: {
+        user: {
+          select: { id: true, username: true, name: true },
+        },
+      },
     });
 
     // 返回分页响应
@@ -66,7 +97,8 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/mcp-servers - 创建全局 MCP 服务器配置
+// POST /api/mcp-servers - 创建 MCP 服务器配置
+// 所有用户都可以创建自己的 MCP
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -81,10 +113,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
+    const isAdmin = payload.roles?.includes('admin');
 
     const body = await request.json();
     const {
@@ -96,6 +125,7 @@ export async function POST(request: Request) {
       env,
       isEnabled = true,
       autoStart = false,
+      isShared = false, // 只有管理员可以设置为共享
     } = body;
 
     // 验证必填字段
@@ -129,23 +159,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // 检查名称是否已存在
+    // 非管理员不能创建共享 MCP
+    if (isShared && !isAdmin) {
+      return NextResponse.json(
+        { error: '只有管理员可以创建共享 MCP' },
+        { status: 403 }
+      );
+    }
+
+    // 检查名称是否已存在（用户自己的 MCP 名称不能重复）
     const existing = await prisma.mcpServerConfig.findFirst({
       where: {
         name,
-        userId: null,
+        userId: payload.userId,
         projectId: null,
       },
     });
 
     if (existing) {
       return NextResponse.json(
-        { error: 'MCP 服务器名称已存在' },
+        { error: '你已经有一个同名 MCP 服务器' },
         { status: 400 }
       );
     }
 
-    // 创建全局 MCP 配置
+    // 创建 MCP 配置（绑定到当前用户）
     const mcpServer = await prisma.mcpServerConfig.create({
       data: {
         name,
@@ -156,7 +194,8 @@ export async function POST(request: Request) {
         env: env ? JSON.stringify(env) : null,
         isEnabled,
         autoStart,
-        userId: null,
+        isShared: isAdmin ? isShared : false, // 非管理员强制为 false
+        userId: payload.userId,
         projectId: null,
       },
     });

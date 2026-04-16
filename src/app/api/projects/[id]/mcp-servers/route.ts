@@ -116,10 +116,11 @@ export async function POST(
       );
     }
 
-    // 创建 MCP 服务器配置
+    // 创建 MCP 服务器配置（绑定到项目所属用户）
     const mcpServer = await prisma.mcpServerConfig.create({
       data: {
         projectId,
+        userId: payload.userId,  // 绑定到创建者
         name,
         type,
         command: command || null,
@@ -128,6 +129,7 @@ export async function POST(
         env: env ? JSON.stringify(env) : null,
         isEnabled: isEnabled ?? true,
         autoStart: autoStart ?? false,
+        isShared: false,  // 项目级 MCP 不共享
       },
     });
 
