@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
 // GET /api/vulnerabilities/stats - 获取漏洞统计
+// 普通用户：只统计自己项目的漏洞
+// 管理员：统计所有漏洞
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -22,8 +24,49 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
 
+    // 检查是否是管理员
+    const isAdmin = payload.roles?.includes('admin');
+
+    // 构建查询条件
     const where: Record<string, unknown> = {};
-    if (projectId) where.projectId = projectId;
+    if (projectId) {
+      // 指定了项目ID，需要验证用户是否有权限访问该项目
+      if (!isAdmin) {
+        // 普通用户只能查看自己项目的统计
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { userId: true },
+        });
+        if (!project || project.userId !== payload.userId) {
+          return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+        }
+      }
+      where.projectId = projectId;
+    } else if (!isAdmin) {
+      // 普通用户没有指定项目：只统计自己项目的漏洞
+      // 通过子查询获取用户的所有项目ID
+      const userProjects = await prisma.project.findMany({
+        where: { userId: payload.userId },
+        select: { id: true },
+      });
+      const projectIds = userProjects.map(p => p.id);
+      
+      if (projectIds.length === 0) {
+        // 用户没有项目，返回空统计
+        return NextResponse.json({
+          stats: {
+            total: 0,
+            byStatus: {},
+            bySeverity: {},
+            byType: {},
+            trend: [],
+          },
+        });
+      }
+      
+      where.projectId = { in: projectIds };
+    }
+    // 管理员不添加用户过滤条件，可以看到所有漏洞
 
     // 总数和按状态统计
     const [total, byStatus, bySeverity, byType, recentVulnerabilities] = await Promise.all([

@@ -303,10 +303,18 @@ export default function DashboardPage() {
 
       {/* 统计卡片 - 漏洞统计 */}
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Shield size={20} className="mr-2 text-primary-500" />
-          漏洞统计
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+            <Shield size={20} className="mr-2 text-primary-500" />
+            漏洞统计
+            {/* 管理员视图标识 */}
+            {isAdmin && (
+              <span className="ml-2 px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-full">
+                管理员视图（全部用户）
+              </span>
+            )}
+          </h2>
+        </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-6">
           <StatCard
             title="总漏洞数"
