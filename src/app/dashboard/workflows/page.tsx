@@ -87,7 +87,7 @@ export default function WorkflowsPage() {
         userUsername: w.userUsername,
         nodeCount: w._count?.nodes || 0,
         edgeCount: 0, // 暂时设置为 0，因为 API 没有返回 edgeCount
-        techStack: w.techStack ? JSON.parse(w.techStack) : [],
+        techStack: Array.isArray(w.techStack) ? w.techStack : (w.techStack ? JSON.parse(w.techStack) : []),
         isPublic: w.isPublic || false,
       }));
       setWorkflows(mappedWorkflows);
