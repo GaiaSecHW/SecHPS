@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -890,6 +890,52 @@ export default function SessionsPage() {
     } catch (err) {
       toast.error('操作失败，请重试');
     }
+  };
+
+  // 复制漏洞详情为 Markdown 格式
+  const handleCopyVulnerabilityAsMarkdown = (vuln: any) => {
+    const statusLabels: Record<string, string> = {
+      'new': '新建',
+      'confirmed': '已确认',
+      'false-positive': '误报',
+      'fixed': '已修复',
+      'verified': '已验证',
+    };
+
+    const markdown = `# 漏洞报告：${vuln.title}
+
+## 基本信息
+
+| 字段 | 内容 |
+|------|------|
+| 漏洞类型 | ${vuln.type || '未知'} |
+| CWE 编号 | ${vuln.cwe || '无'} |
+| 状态 | ${statusLabels[vuln.status] || vuln.status} |
+| 发现工具 | ${vuln.skill || '未知'} |
+| 发现时间 | ${new Date(vuln.createdAt).toLocaleString('zh-CN')} |
+| 所属项目 | ${vulnerabilityProject?.name || '无'} |
+
+## 漏洞描述
+
+${vuln.description || '无描述'}
+
+## 问题代码位置
+
+${vuln.filePath || '无'}
+
+## POC / 代码片段
+
+${vuln.codeSnippet ? '```\n' + vuln.codeSnippet + '\n```' : '无'}
+
+---
+*报告生成时间：${new Date().toLocaleString('zh-CN')}*
+`;
+
+    navigator.clipboard.writeText(markdown).then(() => {
+      toast.success('已复制为 Markdown 格式');
+    }).catch(() => {
+      toast.error('复制失败');
+    });
   };
 
   const downloadFile = async (projectId: string, fileId: string, fileName: string) => {
@@ -2768,15 +2814,28 @@ toast.error(data.error || '更新项目失败');
             <div className="flex items-center gap-2">
               {selectedVulnerability.status === 'new' && (
                 <>
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                    <Copy size={14} className="mr-1" />复制MD
+                  </button>
                   <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'confirm')} className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">确认漏洞</button>
                   <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'false-positive')} className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm">标记误报</button>
                 </>
               )}
               {selectedVulnerability.status === 'confirmed' && (
-                <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')} className="px-3 py-1.5 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm">标记已修复</button>
+                <>
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                    <Copy size={14} className="mr-1" />复制MD
+                  </button>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')} className="px-3 py-1.5 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm">标记已修复</button>
+                </>
               )}
               {selectedVulnerability.status === 'fixed' && (
-                <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')} className="px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm">验证修复</button>
+                <>
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                    <Copy size={14} className="mr-1" />复制MD
+                  </button>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')} className="px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm">验证修复</button>
+                </>
               )}
             </div>
           </div>

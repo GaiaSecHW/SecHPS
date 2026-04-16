@@ -864,13 +864,23 @@ function SessionDetailContent({
           <div>
             <h3 className="text-xs font-medium text-gray-500 mb-1">使用的模型</h3>
             <p className="text-sm text-gray-900">
-              {evaluation.modelName || '-'}
+              {evaluation.modelName || evaluation.modelConfigName || '-'}
             </p>
           </div>
           <div>
             <h3 className="text-xs font-medium text-gray-500 mb-1">模型提供商</h3>
             <p className="text-sm text-gray-900">
-              {evaluation.providerType || '-'}
+              {evaluation.providerType || evaluation.modelConfigProviderType || '-'}
+            </p>
+          </div>
+          <div>
+            <h3 className="text-xs font-medium text-gray-500 mb-1">模型提供者</h3>
+            <p className="text-sm text-gray-900">
+              {evaluation.modelCreatorId === null ? (
+                <span className="text-purple-600">系统模型</span>
+              ) : (
+                evaluation.modelCreatorName || evaluation.modelCreatorUsername || '未知用户'
+              )}
             </p>
           </div>
           {/* Token 消耗信息 */}

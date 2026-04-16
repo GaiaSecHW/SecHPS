@@ -21,21 +21,61 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
+    // 检查是否为内部调用（队列启动）
+    const internalCallToken = request.headers.get('X-Internal-Token');
+    const isQueuedStart = internalCallToken === process.env.INTERNAL_API_SECRET;
+    
+    let payload: { userId: string; permissions: string[] } | null = null;
+    
+    if (isQueuedStart) {
+      // 内部调用：从请求体获取用户信息或使用项目所有者
+      const { id } = await params;
+      const project = await prisma.project.findUnique({
+        where: { id },
+        select: { userId: true },
+      });
+      if (project) {
+        // 获取用户权限
+        const user = await prisma.user.findUnique({
+          where: { id: project.userId },
+          include: {
+            userRoles: {
+              include: {
+                role: {
+                  include: {
+                    permissions: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        if (user) {
+          const permissions = user.userRoles.flatMap(ur => ur.role.permissions.map(p => `${p.module}:${p.action}`));
+          payload = { userId: user.id, permissions };
+        }
+      }
+      if (!payload) {
+        return NextResponse.json({ error: '无法获取项目用户信息' }, { status: 500 });
+      }
+    } else {
+      // 正常用户调用：验证 token
+      const authHeader = request.headers.get('authorization');
+      if (!authHeader) {
+        return NextResponse.json({ error: '未授权' }, { status: 401 });
+      }
 
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
+      const token = authHeader.replace('Bearer ', '');
+      payload = verifyToken(token);
 
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+      if (!payload) {
+        return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+      }
 
-    // 权限检查
-    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_CREATE)) {
-      return NextResponse.json({ error: '无权限启动评估' }, { status: 403 });
+      // 权限检查
+      if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_CREATE)) {
+        return NextResponse.json({ error: '无权限启动评估' }, { status: 403 });
+      }
     }
 
     const { id } = await params;
@@ -57,9 +97,6 @@ export async function POST(
       // 如果没有请求体，继续执行
     }
 
-    // 检查是否为队列启动（内部调用）- 使用内部密钥验证防止伪造
-    const internalCallToken = request.headers.get('X-Internal-Token');
-    const isQueuedStart = internalCallToken === process.env.INTERNAL_API_SECRET;
     console.log('[启动评估] 是否队列启动:', isQueuedStart, 'queuedEvaluationId:', queuedEvaluationId);
 
     // 获取项目信息（包括运行中的评估）
@@ -120,8 +157,8 @@ export async function POST(
         data: {
           projectId: id,
           workflowId: workflowId,
+          modelConfigId: modelId, // 保存请求的模型配置ID
           status: 'queued',
-          modelName: modelId, // 保存请求的模型ID
           providerType: 'queued', // 标记为排队状态
         },
       });
@@ -206,8 +243,8 @@ export async function POST(
       }, { status: 400 });
     }
 
-    // 获取模型配置
-    const modelConfig = await getModelConfig(modelId);
+    // 获取模型配置（传入用户ID用于权限过滤）
+    const modelConfig = await getModelConfig(modelId, payload.userId);
     if (!modelConfig) {
       return NextResponse.json(
         { error: '请先在模型管理中配置模型' },
@@ -423,6 +460,7 @@ export async function POST(
         data: {
           projectId: id,
           workflowId: workflowId, // 关联工作流
+          modelConfigId: modelConfig.id, // 关联模型配置
           status: 'running',
           modelName: modelConfig.name, // 保存模型名称
           providerType: modelConfig.providerType, // 保存提供商类型
@@ -1328,35 +1366,58 @@ function getCodeBlockLang(filename: string): string {
 /**
  * 获取模型配置
  * @param modelId 可选的模型ID，如果提供则使用该模型，否则使用默认模型
+ * @param userId 可选的用户ID，用于权限过滤
  */
-async function getModelConfig(modelId?: string | null) {
-  // 如果提供了 modelId，直接使用该模型
+async function getModelConfig(modelId?: string | null, userId?: string | null) {
+  // 如果提供了 modelId，直接使用该模型（需要检查权限）
   if (modelId) {
     const selectedModel = await prisma.modelConfig.findUnique({
       where: { id: modelId },
     });
     if (selectedModel && selectedModel.isActive) {
-      return selectedModel;
+      // 检查用户是否有权限使用该模型
+      const hasAccess = 
+        selectedModel.userId === null ||  // 系统模型
+        selectedModel.isPublic ||          // 公开模型
+        selectedModel.userId === userId;  // 用户自己的模型
+      
+      if (hasAccess) {
+        return selectedModel;
+      }
+      console.warn(`[getModelConfig] 用户 ${userId} 无权使用模型 ${modelId}`);
     }
     console.warn(`[getModelConfig] 指定的模型 ${modelId} 不存在或未激活，将使用默认模型`);
   }
   
-  // 使用数据库配置
+  // 使用数据库配置（优先默认模型）
   const defaultModel = await prisma.modelConfig.findFirst({
     where: {
       isActive: true,
       isDefault: true,
+      OR: [
+        { userId: null },    // 系统模型
+        { isPublic: true },  // 公开模型
+        userId ? { userId } : {},  // 用户自己的模型
+      ],
     },
   });
 
-  if (!defaultModel) {
-    const firstModel = await prisma.modelConfig.findFirst({
-      where: { isActive: true },
-    });
-    return firstModel;
+  if (defaultModel) {
+    return defaultModel;
   }
 
-  return defaultModel;
+  // 如果没有默认模型，查找第一个可用的模型
+  const firstModel = await prisma.modelConfig.findFirst({
+    where: {
+      isActive: true,
+      OR: [
+        { userId: null },    // 系统模型
+        { isPublic: true },  // 公开模型
+        userId ? { userId } : {},  // 用户自己的模型
+      ],
+    },
+  });
+  return firstModel;
 }
 
 /**
@@ -1392,13 +1453,14 @@ async function getWorkflowPreview(workflowId: string, userId: string): Promise<{
       console.log('[WorkflowPreview] 使用默认工作流配置');
     }
 
-    // 查询工作流及其节点和边
+    // 查询工作流及其节点和边（用户自己的 + 公开的 + 分享给用户的）
     const workflow = await prisma.workflow.findFirst({
       where: {
         id: workflowId,
         OR: [
-          { userId },
-          { shares: { some: { sharedWith: userId } } },
+          { userId },                                    // 用户自己的
+          { isPublic: true },                            // 公开的
+          { shares: { some: { sharedWith: userId } } },  // 分享给用户的
         ],
       },
       include: {

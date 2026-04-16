@@ -31,6 +31,7 @@ export async function GET(
 
     const { id } = await params;
 
+    // 基础查询
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
@@ -55,7 +56,56 @@ export async function GET(
       return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
     }
 
-    return NextResponse.json({ evaluation });
+    // 尝试获取模型配置信息（如果 modelConfigId 存在）
+    let modelConfigInfo = null;
+    if (evaluation.modelConfigId) {
+      try {
+        const modelConfig = await prisma.modelConfig.findUnique({
+          where: { id: evaluation.modelConfigId },
+          select: {
+            id: true,
+            name: true,
+            providerType: true,
+            userId: true,
+          },
+        });
+        
+        if (modelConfig) {
+          // 获取模型创建者信息
+          let userInfo = null;
+          if (modelConfig.userId) {
+            userInfo = await prisma.user.findUnique({
+              where: { id: modelConfig.userId },
+              select: { id: true, name: true, username: true },
+            });
+          }
+          
+          modelConfigInfo = {
+            id: modelConfig.id,
+            name: modelConfig.name,
+            providerType: modelConfig.providerType,
+            userId: modelConfig.userId,
+            userName: userInfo?.name || null,
+            userUsername: userInfo?.username || null,
+          };
+        }
+      } catch (err) {
+        console.warn('获取模型配置信息失败:', err);
+      }
+    }
+
+    // 格式化返回数据
+    const response = {
+      ...evaluation,
+      modelConfigId: evaluation.modelConfigId || null,
+      modelConfigName: modelConfigInfo?.name || evaluation.modelName || null,
+      modelConfigProviderType: modelConfigInfo?.providerType || evaluation.providerType || null,
+      modelCreatorId: modelConfigInfo?.userId || null,
+      modelCreatorName: modelConfigInfo?.userName || null,
+      modelCreatorUsername: modelConfigInfo?.userUsername || null,
+    };
+
+    return NextResponse.json({ evaluation: response });
   } catch (error) {
     console.error('Get evaluation error:', error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

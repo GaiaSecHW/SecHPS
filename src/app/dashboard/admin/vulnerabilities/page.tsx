@@ -14,6 +14,7 @@ import {
   Trash2,
   ChevronLeft,
   ChevronRight,
+  Copy,
 } from 'lucide-react';
 
 interface Vulnerability {
@@ -214,6 +215,44 @@ export default function VulnerabilitiesPage() {
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '删除失败');
     }
+  };
+
+  // 复制漏洞详情为 Markdown 格式
+  const handleCopyAsMarkdown = (vuln: Vulnerability) => {
+    const markdown = `# 漏洞报告：${vuln.title}
+
+## 基本信息
+
+| 字段 | 内容 |
+|------|------|
+| 漏洞类型 | ${vuln.type} |
+| CWE 编号 | ${vuln.cwe || '无'} |
+| 状态 | ${statusLabels[vuln.status] || vuln.status} |
+| 发现工具 | ${vuln.skill || '未知'} |
+| 发现时间 | ${new Date(vuln.createdAt).toLocaleString('zh-CN')} |
+| 所属项目 | ${vuln.project?.name || '无'} |
+
+## 漏洞描述
+
+${vuln.description || '无描述'}
+
+## 问题代码位置
+
+${vuln.filePath || '无'}
+
+## POC / 代码片段
+
+${vuln.codeSnippet ? '```\n' + vuln.codeSnippet + '\n```' : '无'}
+
+---
+*报告生成时间：${new Date().toLocaleString('zh-CN')}*
+`;
+
+    navigator.clipboard.writeText(markdown).then(() => {
+      toast.success('已复制为 Markdown 格式');
+    }).catch(() => {
+      toast.error('复制失败');
+    });
   };
 
   const filteredVulnerabilities = vulnerabilities.filter(
@@ -429,6 +468,9 @@ export default function VulnerabilitiesPage() {
             </div>
             {/* 操作按钮 */}
             <div className="flex items-center space-x-2">
+              <button onClick={() => handleCopyAsMarkdown(selectedVuln)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                <Copy size={14} className="mr-1" />复制MD
+              </button>
               {selectedVuln.status === 'new' && (
                 <>
                   <button onClick={() => handleStatusChange(selectedVuln.id, 'confirm')} className="inline-flex items-center px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">
