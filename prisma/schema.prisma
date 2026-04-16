@@ -36,6 +36,8 @@ model User {
   skillPredictions SkillPrediction[] // Skill 预测记录
   skillPredictionTasks SkillPredictionTask[] // Skill 预测任务
   modelConfigs   ModelConfig[] // 用户创建的模型配置
+  agentDefinitions AgentDefinition[] // 用户创建的 Agent 定义
+  agentTeams      AgentTeam[] // 用户创建的 Agent 团队
  
   @@index([email])
   @@index([username])
@@ -240,6 +242,7 @@ model EvaluationSession {
   result           EvaluationResult?
   iterations       EvaluationIteration[]
   tokenUsages      TokenUsage[]
+  teamExecutions   AgentTeamExecution[]
 
   @@index([projectId])
   @@index([workflowId])
@@ -513,6 +516,7 @@ model ModelConfig {
   // 关系
   user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
   evaluations  EvaluationSession[]  // 使用此模型的评估会话
+  agentDefinitions AgentDefinition[] // 使用此模型配置的 Agent 定义
 
   @@index([userId])
   @@index([isActive])
@@ -520,6 +524,156 @@ model ModelConfig {
   @@index([isPublic])
   @@index([providerType])
   @@index([routeType])
+}
+
+// Agent 定义 - 存储不同能力的 Agent 配置
+model AgentDefinition {
+  id            String   @id @default(cuid())
+  userId        String?  // 创建者用户ID（null = 内置 Agent）
+  name          String   @unique // Agent 名称（唯一标识）
+  displayName   String   // 显示名称
+  description   String?  // 描述
+  category      String   // 分类：reviewer, coder, tester, architect, security
+  
+  // 模型绑定
+  modelConfigId String?  // 可选：关联的模型配置 ID
+  model         String   // 模型名称：opus, sonnet, haiku
+  
+  // Agent 定义
+  systemPrompt   String?  // 系统提示词
+  allowedTools   String?  // JSON 数组：允许的工具 ["Read", "Glob", "Grep"]
+  skills         String?  // JSON 数组：关联的 Skill ID
+  mcpServers     String?  // JSON 数组：MCP 服务器配置
+  
+  // 状态
+  isActive      Boolean  @default(true) // 是否启用
+  isBuiltin     Boolean  @default(false) // 是否内置（不可删除）
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // 关系
+  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  modelConfig   ModelConfig? @relation(fields: [modelConfigId], references: [id], onDelete: SetNull)
+  
+  // 团队关系
+  leadTeams    AgentTeam[]      @relation("LeadAgent")  // 作为 lead 的团队
+  teamMembers  AgentTeamMember[] @relation("TeamMember") // 作为团队成员
+
+  // 索引
+  @@index([name])
+  @@index([category])
+  @@index([isActive])
+}
+
+// Agent 团队 - 多 Agent 协作配置
+model AgentTeam {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  description   String?
+  
+  // Lead agent
+  leadAgentId   String
+  
+  // Configuration
+  taskStrategy  String?  @default("parallel")  // parallel, sequential, debate
+  maxTeammates  Int      @default(5)
+  
+  // Status
+  status        String   @default("idle")  // idle, running, completed
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  // Relations
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leadAgent     AgentDefinition @relation("LeadAgent", fields: [leadAgentId], references: [id], onDelete: Cascade)
+  members       AgentTeamMember[]
+  teamExecutions AgentTeamExecution[]
+  
+  // Indexes
+  @@index([userId])
+  @@index([status])
+  @@index([leadAgentId])
+}
+
+// Agent 团队成员
+model AgentTeamMember {
+  id            String   @id @default(cuid())
+  teamId        String
+  agentId       String
+  role          String   // teammate-1, teammate-2, reviewer, tester
+  
+  // Overrides (optional)
+  overrideModel String?
+  overrideTools String?  // JSON array
+  
+  createdAt     DateTime @default(now())
+  
+  // Relations
+  team          AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  agent         AgentDefinition @relation("TeamMember", fields: [agentId], references: [id], onDelete: Cascade)
+  memberExecutions AgentMemberExecution[]
+  
+  // Indexes
+  @@index([teamId])
+  @@index([agentId])
+}
+
+// Agent 团队执行记录（追踪团队执行状态和 Token 使用）
+model AgentTeamExecution {
+  id              String   @id @default(cuid())
+  teamId          String
+  evaluationId    String?
+  
+  // Status
+  status          String   @default("pending")  // pending, running, completed, cancelled
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  // Token tracking
+  totalInputTokens  Int     @default(0)
+  totalOutputTokens Int     @default(0)
+  
+  createdAt       DateTime @default(now())
+  
+  // Relations
+  team            AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  evaluation      EvaluationSession? @relation(fields: [evaluationId], references: [id])
+  memberExecutions AgentMemberExecution[]
+  
+  // Indexes
+  @@index([teamId])
+  @@index([evaluationId])
+  @@index([status])
+}
+
+// Agent 成员执行记录（追踪每个成员的执行状态和 Token 使用）
+model AgentMemberExecution {
+  id              String   @id @default(cuid())
+  teamExecutionId String
+  memberId        String
+  
+  // Status
+  status          String   @default("pending")  // pending, running, completed
+  startedAt       DateTime?
+  completedAt     DateTime?
+  
+  // Token tracking per agent
+  inputTokens     Int      @default(0)
+  outputTokens    Int      @default(0)
+  
+  createdAt       DateTime @default(now())
+  
+  // Relations
+  teamExecution   AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
+  member          AgentTeamMember @relation(fields: [memberId], references: [id])
+  
+  // Indexes
+  @@index([teamExecutionId])
+  @@index([memberId])
+  @@index([status])
 }
 
 // ============================================
