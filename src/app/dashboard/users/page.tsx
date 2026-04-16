@@ -13,6 +13,7 @@ import {
   UserPlus,
   ChevronLeft,
   ChevronRight,
+  Key,
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -25,6 +26,7 @@ export default function UsersPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showRoleModal, setShowRoleModal] = useState(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState(false);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
@@ -112,6 +114,11 @@ export default function UsersPage() {
   const handleOpenRoleModal = (user: any) => {
     setSelectedUser(user);
     setShowRoleModal(true);
+  };
+
+  const handleOpenResetPasswordModal = (user: any) => {
+    setSelectedUser(user);
+    setShowResetPasswordModal(true);
   };
 
   const filteredUsers = users.filter(
@@ -210,6 +217,7 @@ export default function UsersPage() {
                   onEdit={() => handleOpenEditModal(user)}
                   onDelete={() => handleDeleteUser(user.id, user.username)}
                   onAssignRoles={() => handleOpenRoleModal(user)}
+                  onResetPassword={() => handleOpenResetPasswordModal(user)}
                 />
               ))
             )}
@@ -287,6 +295,21 @@ export default function UsersPage() {
           roles={roles}
         />
       )}
+
+      {/* 重置密码模态框 */}
+      {showResetPasswordModal && selectedUser && (
+        <ResetPasswordModal
+          user={selectedUser}
+          onClose={() => {
+            setShowResetPasswordModal(false);
+            setSelectedUser(null);
+          }}
+          onSuccess={() => {
+            setShowResetPasswordModal(false);
+            setSelectedUser(null);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -296,11 +319,13 @@ function UserRow({
   onEdit,
   onDelete,
   onAssignRoles,
+  onResetPassword,
 }: {
   user: any;
   onEdit: () => void;
   onDelete: () => void;
   onAssignRoles: () => void;
+  onResetPassword: () => void;
 }) {
   return (
     <tr className="hover:bg-gray-50">
@@ -371,6 +396,13 @@ function UserRow({
             title="分配角色"
           >
             <UserPlus size={16} />
+          </button>
+          <button
+            onClick={onResetPassword}
+            className="text-orange-600 hover:text-orange-900"
+            title="重置密码"
+          >
+            <Key size={16} />
           </button>
           <button
             onClick={onEdit}
