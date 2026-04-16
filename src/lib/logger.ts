@@ -11,15 +11,14 @@ type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 // 日志上下文
 interface LogContext {
   userId?: string;
-  userEmail?: string;
-  username?: string;
+  username?: string;  // 用户名（注册名）
   roles?: string[];
   resource?: string;
   action?: string;
   details?: any;
   // 目标用户 - 用于记录谁在使用谁的资源
   targetUserId?: string;
-  targetUserEmail?: string;
+  targetUsername?: string;  // 目标用户名
 }
 
 // 常用模块名称常量
@@ -62,10 +61,10 @@ function formatTimestamp(): string {
 function log(level: LogLevel, module: string, message: string, context?: LogContext) {
   const timestamp = formatTimestamp();
   const userInfo = context?.userId 
-    ? `[操作人:${context.userEmail || context.userId}]`
+    ? `[操作人:${context.username || context.userId}]`
     : '';
-  const targetUser = context?.targetUserId || context?.targetUserEmail
-    ? `[目标用户:${context.targetUserEmail || context.targetUserId}]`
+  const targetUser = context?.targetUserId || context?.targetUsername
+    ? `[目标用户:${context.targetUsername || context.targetUserId}]`
     : '';
   const resource = context?.resource ? `[资源:${context.resource}]` : '';
   const details = context?.details ? JSON.stringify(context.details) : '';

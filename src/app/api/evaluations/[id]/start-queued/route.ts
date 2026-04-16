@@ -18,9 +18,12 @@ export async function POST(
   
   console.log('[StartQueued] 收到启动请求, evaluationId:', id);
   
-  // 检查是否为内部调用
+  // 检查是否为内部调用（支持两种方式：X-Internal-Token 或 X-Internal-Call）
+  const internalToken = request.headers.get('X-Internal-Token');
   const internalCall = request.headers.get('X-Internal-Call') === 'true';
-  if (!internalCall) {
+  const isValidInternal = internalToken === process.env.INTERNAL_API_SECRET || internalCall;
+  
+  if (!isValidInternal) {
     console.log('[StartQueued] 拒绝非内部调用');
     return NextResponse.json({ error: '仅允许内部调用' }, { status: 403 });
   }

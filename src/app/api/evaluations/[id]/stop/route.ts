@@ -25,11 +25,6 @@ export async function POST(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 权限检查
-    if (!hasPermission(payload.permissions, PERMISSIONS.EVALUATION_DELETE)) {
-      return NextResponse.json({ error: '无权限停止评估' }, { status: 403 });
-    }
-
     const { id } = await params;
 
     // 检查评估会话是否存在
@@ -42,8 +37,11 @@ export async function POST(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 归属校验
-    if (evaluation.project.userId !== payload.userId) {
+    // 权限检查：管理员 或 项目所有者 可以停止评估
+    const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
+    const isProjectOwner = evaluation.project.userId === payload.userId;
+    
+    if (!isAdmin && !isProjectOwner) {
       return NextResponse.json({ error: '无权操作此评估' }, { status: 403 });
     }
 

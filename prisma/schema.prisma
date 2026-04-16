@@ -617,6 +617,7 @@ model Skill {
   // 状态
   isActive    Boolean  @default(true)
   isBuiltin   Boolean  @default(false)  // 是否内置（不可删除）
+  isPublic    Boolean  @default(false)  // 是否公开分享（私有 Skill 可以分享给其他用户使用）
 
   // 版本管理
   version     Int      @default(1)
@@ -645,6 +646,7 @@ model Skill {
   @@index([version])
   @@index([category])
   @@index([isActive])
+  @@index([isPublic])
 }
 
 // Skill 执行记录
