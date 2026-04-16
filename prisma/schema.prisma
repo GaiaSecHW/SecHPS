@@ -642,6 +642,11 @@ model Skill {
   evolutions  SkillEvolution[]
   versions    Skill[]  @relation("SkillVersions")  // 子版本
   parent      Skill?   @relation("SkillVersions", fields: [parentId], references: [id], onDelete: SetNull)
+  
+  // 治理系统关系
+  observationLogs SkillObservationLog[]
+  observationStats SkillObservationStats?
+  impactAnalyses SkillNewImpactAnalysis[]
 
   @@unique([userId, name])  // 同一用户下名称唯一（公共 Skills 的 userId 为 null）
   @@index([userId])
@@ -724,6 +729,174 @@ model SkillEvolution {
 
   @@index([skillId])
   @@index([createdAt])
+}
+
+// ============================================
+// Skills 治理系统
+// ============================================
+
+// Skill 观测日志（每次预警触发记录）
+model SkillObservationLog {
+  id          String   @id @default(cuid())
+  skillId     String
+
+  // 触发信息
+  triggerType String   // similarity_warning | overlap_detected | merge_suggested | deprecated_warning
+  triggerContext String? // JSON: 触发上下文（如匹配的任务描述、技术栈等）
+
+  // 观测数据
+  matches     String?  // JSON: 匹配的相似 Skills 列表
+  issues      String?  // JSON: 发现的问题列表
+  severity    String   @default("info") // critical, high, medium, low, info
+
+  // 处理状态
+  status      String   @default("pending") // pending, acknowledged, resolved, dismissed
+  resolvedAt  DateTime?
+  resolvedBy  String?  // 处理人用户 ID
+  resolution  String?  // 处理说明
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@index([triggerType])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+  @@index([skillId, createdAt])
+}
+
+// Skill 观测统计（聚合分析）
+model SkillObservationStats {
+  id          String   @id @default(cuid())
+  skillId     String   @unique
+
+  // 统计数据
+  totalObservations Int @default(0) // 总观测次数
+  warningCount      Int @default(0) // 预警次数
+  matchCount        Int @default(0) // 匹配次数
+  overlapCount      Int @default(0) // 重叠检测次数
+
+  // 比率统计
+  matchRate         Float?  // 匹配率（匹配次数/总观测次数）
+  warningRate       Float?  // 预警率（预警次数/总观测次数）
+
+  // 性能统计
+  avgResponseTime   Int?    // 平均响应时间（毫秒）
+  avgMatchScore     Float?  // 平均匹配分数
+
+  // 时间信息
+  firstObservedAt   DateTime? // 首次观测时间
+  lastObservedAt    DateTime? // 最近观测时间
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@index([warningCount])
+  @@index([matchRate])
+}
+
+// Skill 新增影响分析（新 Skill 创建时的影响评估）
+model SkillNewImpactAnalysis {
+  id          String   @id @default(cuid())
+  skillId     String
+
+  // 影响分析
+  similarSkills String? // JSON: 相似 Skills 列表 [{ id, name, similarityScore }]
+  overlapScore  Float?  // 与现有 Skills 的重叠分数（0-1）
+  affectedWorkflows String? // JSON: 可能受影响的工作流列表
+
+  // 推荐信息
+  recommendation String? // merge | keep_separate | deprecate_old
+  recommendationReason String? // 推荐原因说明
+
+  // 分析状态
+  status      String   @default("pending") // pending, analyzed, actioned, dismissed
+  analyzedAt  DateTime?
+  actionedAt  DateTime?
+
+  // 创建信息
+  createdBy   String?  // 创建者用户 ID（触发分析的用户）
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关系
+  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId])
+  @@index([overlapScore])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Skill 合并记录（追溯合并历史）
+model SkillMergeRecord {
+  id          String   @id @default(cuid())
+
+  // 合并信息
+  sourceSkillId String  // 被合并的源 Skill ID
+  targetSkillId String  // 合并到的目标 Skill ID
+
+  // 合并原因
+  mergeReason String   // similarity | duplicate | consolidation | user_request
+  mergeDetails String? // JSON: 合并详情（如合并前的内容差异）
+
+  // 合并状态
+  status      String   @default("pending") // pending, approved, completed, rejected, reverted
+  approvedBy  String?  // 审批人用户 ID
+  approvedAt  DateTime?
+  completedAt DateTime?
+  revertedAt  DateTime?
+
+  // 用户同意（跨用户合并需要）
+  sourceOwnerConsent Boolean @default(false) // 源 Skill 所有者同意
+  targetOwnerConsent Boolean @default(false) // 目标 Skill 所有者同意
+
+  // 执行信息
+  mergedBy    String?  // 执行合并的用户 ID
+  mergedAt    DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sourceSkillId])
+  @@index([targetSkillId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([sourceSkillId, targetSkillId])
+}
+
+// Skill 治理配置（阈值设置）
+model SkillGovernanceConfig {
+  id          String   @id @default(cuid())
+
+  // 配置键名
+  configKey   String   @unique // 如 similarity_threshold, overlap_warning_threshold
+
+  // 配置值
+  thresholdValue Float  // 阈值值（0-1 或其他数值）
+  configValue    String? // JSON: 其他配置值（如启用/禁用特定检查）
+
+  // 配置描述
+  description String?  // 配置说明
+
+  // 状态
+  isActive    Boolean  @default(true)
+  isBuiltin   Boolean  @default(false) // 是否内置配置（不可删除）
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([configKey])
+  @@index([isActive])
 }
 
 // ============================================
