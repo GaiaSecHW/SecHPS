@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, AlertCircle, Loader2, Eye, Edit2 } from 'lucide-react';
 import WorkflowEditor from '@/components/workflow/WorkflowEditor';
 import { WorkflowData } from '@/types/workflow';
 import '@xyflow/react/dist/style.css';
@@ -37,6 +37,10 @@ interface Workflow {
   description?: string;
   status: string;
   thumbnail?: string;
+  userId?: string;
+  userName?: string;
+  userUsername?: string;
+  isPublic?: boolean;
 }
 
 export default function WorkflowEditPage() {
@@ -50,10 +54,21 @@ export default function WorkflowEditPage() {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [canEdit, setCanEdit] = useState(false);  // 是否可以编辑
+  const [currentUser, setCurrentUser] = useState<{ id: string; roles?: string[] } | null>(null);
+
+  // 初始化用户信息
+  useEffect(() => {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      const userData = JSON.parse(userStr);
+      setCurrentUser(userData);
+    }
+  }, []);
 
   useEffect(() => {
     fetchWorkflowData();
-  }, [workflowId]);
+  }, [workflowId, currentUser]);
 
   const fetchWorkflowData = async () => {
     try {
@@ -76,6 +91,13 @@ export default function WorkflowEditPage() {
 
       const workflowData = await workflowResponse.json();
       setWorkflow(workflowData.workflow);
+
+      // 检查编辑权限：管理员或作者可以编辑
+      if (currentUser) {
+        const isAdmin = currentUser.roles?.includes('admin') || false;
+        const isOwner = workflowData.workflow?.userId === currentUser.id;
+        setCanEdit(isAdmin || isOwner);
+      }
 
       // 获取Agent编排节点和边数据
       const dataResponse = await fetch(`/api/workflows/${workflowId}/data`, {
@@ -218,11 +240,29 @@ export default function WorkflowEditPage() {
             <h1 className="text-lg font-semibold text-gray-900">
               {workflow.name}
             </h1>
-            {workflow.description && (
-              <p className="text-xs text-gray-500 truncate max-w-md">
-                {workflow.description}
-              </p>
-            )}
+            <div className="flex items-center gap-2 mt-0.5">
+              {workflow.description && (
+                <p className="text-xs text-gray-500 truncate max-w-md">
+                  {workflow.description}
+                </p>
+              )}
+              {/* 显示创建者（非自己的编排） */}
+              {workflow.userName && workflow.userId !== currentUser?.id && (
+                <span className="text-xs text-gray-400 flex items-center gap-1">
+                  <Eye size={12} />
+                  创建者: {workflow.userName || workflow.userUsername}
+                </span>
+              )}
+              {/* 显示查看/编辑模式 */}
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${
+                canEdit 
+                  ? 'bg-blue-100 text-blue-700' 
+                  : 'bg-gray-100 text-gray-600'
+              }`}>
+                {canEdit ? <Edit2 size={12} /> : <Eye size={12} />}
+                {canEdit ? '编辑模式' : '查看模式'}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -240,8 +280,8 @@ export default function WorkflowEditPage() {
         <WorkflowEditor
           workflowId={workflowId}
           initialData={initialData}
-          onSave={handleSave}
-          readOnly={false}
+          onSave={canEdit ? handleSave : undefined}
+          readOnly={!canEdit}
         />
       </div>
     </div>

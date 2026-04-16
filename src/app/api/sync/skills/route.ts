@@ -1,9 +1,10 @@
-// src/app/api/sync/skills/route.ts
+﻿// src/app/api/sync/skills/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { copySkillsToProject, syncAllSkillsToDisk, ensureSkillsDataDir } from '@/services/skill-files';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface SyncRequest {
   projectId?: string;
@@ -29,7 +30,7 @@ export async function POST(request: NextRequest) {
 
     // 同步数据库到磁盘
     if (action === 'sync') {
-      console.log('[SyncSkills] 开始从数据库同步 Skills 到磁盘');
+      logger.debug(LOG_MODULES.SKILL, '开始从数据库同步 Skills 到磁盘');
       
       // 获取系统配置中的标准输出模板
       const config = await prisma.opencodeConfig.findFirst({
@@ -41,7 +42,7 @@ export async function POST(request: NextRequest) {
       
       const total = result.success + result.failed;
       
-      console.log(`[SyncSkills] 同步完成: 总计 ${total}, 成功 ${result.success}, 失败 ${result.failed}`);
+      logger.logNoUser(LOG_MODULES.SKILL, '同步完成', { details: { total, success: result.success, failed: result.failed } });
       
       return NextResponse.json({
         message: 'Skills 同步成功',
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // 拷贝到项目
     if (!projectId) {
-      return NextResponse.json({ error: '缺少项目 ID' }, { status: 400 });
+      return NextResponse.json({ details: { error: '缺少项目 ID' } }, { status: 400 });
     }
 
     // 获取项目
@@ -63,11 +64,11 @@ export async function POST(request: NextRequest) {
     });
 
     if (!project) {
-      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+      return NextResponse.json({ details: { error: '项目不存在' } }, { status: 404 });
     }
 
     if (!project.projectPath) {
-      return NextResponse.json({ error: '项目路径未配置' }, { status: 400 });
+      return NextResponse.json({ details: { error: '项目路径未配置' } }, { status: 400 });
     }
 
     // 解析项目技术栈
@@ -75,9 +76,9 @@ export async function POST(request: NextRequest) {
     if (project.techStack) {
       try {
         projectTechStack = JSON.parse(project.techStack);
-        console.log('[SyncSkills] 项目技术栈:', projectTechStack?.join(', ') || '无');
+        logger.debug(LOG_MODULES.SKILL, '项目技术栈', { details: projectTechStack?.join(', ') || '无' });
       } catch {
-        console.warn('[SyncSkills] 项目技术栈解析失败，将拷贝所有 Skills');
+        logger.warn(LOG_MODULES.SKILL, '项目技术栈解析失败，将拷贝所有 Skills', { details: projectId });
         projectTechStack = null;
       }
     }
@@ -95,8 +96,7 @@ export async function POST(request: NextRequest) {
       projectTechStack
     );
 
-    console.log(`[SyncSkills] 同步完成: 成功 ${result.success}, 失败 ${result.failed}`);
-    console.log(`[SyncSkills] 拷贝的 Skills: ${result.copiedSkills.join(', ')}`);
+    logger.logNoUser(LOG_MODULES.SKILL, '同步完成', { success: result.success, failed: result.failed, copiedSkills: result.copiedSkills.join(', ') });
 
     return NextResponse.json({
       message: 'Skills 同步成功',
@@ -107,9 +107,9 @@ export async function POST(request: NextRequest) {
       projectTechStack: projectTechStack,
     });
   } catch (error) {
-    console.error('[SyncSkills] 同步失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '同步失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { error: '服务器内部错误' },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }
