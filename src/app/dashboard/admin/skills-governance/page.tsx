@@ -14,6 +14,9 @@ import {
   BarChart3,
   ChevronRight,
   RefreshCw,
+  Brain,
+  Play,
+  Loader2,
 } from 'lucide-react';
 
 // Types based on API response
@@ -92,9 +95,20 @@ export default function SkillsGovernancePage() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('high-frequency');
   const [refreshing, setRefreshing] = useState(false);
+  
+  // LLM 全量分析状态
+  const [analysisPreview, setAnalysisPreview] = useState<{
+    totalSkills: number;
+    filteredPairs: number;
+    estimatedTime: string;
+    estimatedCost: string;
+  } | null>(null);
+  const [analysisRunning, setAnalysisRunning] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{ current: number; total: number } | null>(null);
 
   useEffect(() => {
     fetchOverview();
+    fetchAnalysisPreview();
   }, []);
 
   const fetchOverview = async () => {
@@ -129,6 +143,66 @@ export default function SkillsGovernancePage() {
       toast.error('刷新失败');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const fetchAnalysisPreview = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/skills-governance/full-analysis', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAnalysisPreview(data.data);
+      }
+    } catch (err) {
+      // 静默失败
+    }
+  };
+
+  const handleStartFullAnalysis = async () => {
+    if (!confirm(`即将进行全量 LLM 分析，预计分析 ${analysisPreview?.filteredPairs || 0} 对技能。\n\n预估时间: ${analysisPreview?.estimatedTime}\n预估成本: ${analysisPreview?.estimatedCost}\n\n是否继续？`)) {
+      return;
+    }
+
+    try {
+      setAnalysisRunning(true);
+      setAnalysisProgress({ current: 0, total: analysisPreview?.filteredPairs || 0 });
+
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/skills-governance/full-analysis', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          mode: 'execute',
+          limit: 100, // 限制一次最多分析 100 对
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('分析失败');
+      }
+
+      const data = await response.json();
+      
+      toast.success(`分析完成！发现 ${data.data.summary.duplicates} 个重复，${data.data.summary.related} 个相关，${data.data.summary.distinct} 个独立`);
+      
+      // 刷新数据
+      await fetchOverview();
+      await fetchAnalysisPreview();
+      
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '分析失败');
+    } finally {
+      setAnalysisRunning(false);
+      setAnalysisProgress(null);
     }
   };
 
@@ -170,23 +244,92 @@ export default function SkillsGovernancePage() {
             监控 Skills 重复检测、重叠预警和治理建议
           </p>
         </div>
-        <button
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
-        >
-          {refreshing ? (
-            <>
-              <RefreshCw size={20} className="mr-2 animate-spin" />
-              刷新中...
-            </>
-          ) : (
-            <>
-              <RefreshCw size={20} className="mr-2" />
-              刷新数据
-            </>
-          )}
-        </button>
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+          >
+            {refreshing ? (
+              <>
+                <RefreshCw size={20} className="mr-2 animate-spin" />
+                刷新中...
+              </>
+            ) : (
+              <>
+                <RefreshCw size={20} className="mr-2" />
+                刷新数据
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* LLM 全量分析卡片 */}
+      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-200 p-6">
+        <div className="flex items-start justify-between">
+          <div className="flex items-start space-x-4">
+            <div className="p-3 bg-purple-100 rounded-lg">
+              <Brain className="text-purple-600" size={24} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">LLM 深度分析</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                使用 AI 模型智能判断 Skills 是否真正功能重复，减少误报
+              </p>
+              {analysisPreview && (
+                <div className="flex items-center space-x-4 mt-3 text-sm">
+                  <span className="text-gray-600">
+                    待分析: <span className="font-semibold text-gray-900">{analysisPreview.filteredPairs}</span> 对
+                  </span>
+                  <span className="text-gray-600">
+                    预计时间: <span className="font-semibold text-gray-900">{analysisPreview.estimatedTime}</span>
+                  </span>
+                  <span className="text-gray-600">
+                    预估成本: <span className="font-semibold text-gray-900">{analysisPreview.estimatedCost}</span>
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={handleStartFullAnalysis}
+            disabled={analysisRunning || analysisPreview?.filteredPairs === 0}
+            className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {analysisRunning ? (
+              <>
+                <Loader2 size={20} className="mr-2 animate-spin" />
+                分析中...
+              </>
+            ) : !analysisPreview ? (
+              <>
+                <Loader2 size={20} className="mr-2 animate-spin" />
+                加载中...
+              </>
+            ) : (
+              <>
+                <Play size={20} className="mr-2" />
+                开始分析
+              </>
+            )}
+          </button>
+        </div>
+        
+        {analysisRunning && analysisProgress && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
+              <span>分析进度</span>
+              <span>{analysisProgress.current} / {analysisProgress.total}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}

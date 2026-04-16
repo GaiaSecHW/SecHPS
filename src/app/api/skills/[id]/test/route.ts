@@ -93,7 +93,7 @@ export async function POST(
       // 从项目获取上下文
       const project = await prisma.project.findUnique({
         where: { id: projectId },
-        include: { files: true },
+        include: { ProjectFile: true },
       });
 
       if (!project) {
@@ -102,7 +102,7 @@ export async function POST(
 
       projectName = project.name;
       projectDescription = project.description || '';
-      files = project.files.map(f => ({
+      files = project.ProjectFile.map(f => ({
         name: f.fileName,
         type: f.fileType,
         size: f.fileSize,

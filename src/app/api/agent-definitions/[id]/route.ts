@@ -29,14 +29,14 @@ export async function GET(
     const agentDefinition = await prisma.agentDefinition.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             name: true,
             username: true,
           },
         },
-        modelConfig: true,
+        ModelConfig: true,
       },
     });
 

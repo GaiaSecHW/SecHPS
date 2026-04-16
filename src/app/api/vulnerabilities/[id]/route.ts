@@ -28,14 +28,14 @@ export async function GET(
     const vulnerability = await prisma.vulnerability.findUnique({
       where: { id },
       include: {
-        project: {
+        Project: {
           select: { id: true, name: true },
         },
-        execution: {
+        SkillExecution: {
           select: {
             id: true,
             skillId: true,
-            skill: { select: { id: true, name: true, displayName: true } },
+            Skill: { select: { id: true, name: true, displayName: true } },
           },
         },
       },

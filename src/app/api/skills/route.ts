@@ -113,9 +113,9 @@ export async function GET(request: Request) {
     // 转换数据格式，添加创建者信息
     const skillsWithCreator = skills.map(skill => ({
       ...skill,
-      userName: skill.user?.name || null,
-      userUsername: skill.user?.username || null,
-      user: undefined, // 移除嵌套的 user 对象
+      userName: skill.User?.name || null,
+      userUsername: skill.User?.username || null,
+      User: undefined, // 移除嵌套的 User 对象
     }));
 
     return NextResponse.json(createPaginatedResponse(skillsWithCreator, total, pageNum, pageLimit));
@@ -194,6 +194,7 @@ export async function POST(request: Request) {
 
     const skill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         displayName,
         description,
@@ -205,6 +206,7 @@ export async function POST(request: Request) {
         isBuiltin,
         version: 1,
         isLatest: true,
+        updatedAt: new Date(),
       },
     });
 

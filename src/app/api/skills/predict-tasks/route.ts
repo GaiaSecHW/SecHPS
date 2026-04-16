@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { taskName, taskDescription, workflowId, nodeId, topK = 5 } = body;
+    const { taskName, taskDescription, nodeId, topK = 5 } = body;
 
     // 验证必填字段
     if (!taskName || !taskDescription) {
@@ -38,13 +38,14 @@ export async function POST(request: Request) {
     // 创建任务
     const task = await prisma.skillPredictionTask.create({
       data: {
+        id: `predtask-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
-        workflowId,
         nodeId,
         taskName,
         taskDescription,
         topK,
         status: 'pending',
+        updatedAt: new Date(),
       },
     });
 
@@ -84,7 +85,6 @@ export async function GET(request: Request) {
 
     // 获取查询参数
     const { searchParams } = new URL(request.url);
-    const workflowId = searchParams.get('workflowId');
     const nodeId = searchParams.get('nodeId');
     const status = searchParams.get('status');
     const limit = parseInt(searchParams.get('limit') || '20', 10);
@@ -92,9 +92,6 @@ export async function GET(request: Request) {
 
     // 构建查询条件
     const where: any = { userId: payload.userId };
-    if (workflowId) {
-      where.workflowId = workflowId;
-    }
     if (nodeId) {
       where.nodeId = nodeId;
     }
@@ -148,25 +145,10 @@ async function executePredictionTask(taskId: string) {
     // 获取任务详情
     const task = await prisma.skillPredictionTask.findUnique({
       where: { id: taskId },
-      include: {
-        workflow: {
-          select: { techStack: true },
-        },
-      },
     });
 
     if (!task) {
       throw new Error('任务不存在');
-    }
-
-    // 解析工作流技术栈
-    let workflowTechStack: string[] = [];
-    if (task.workflow?.techStack) {
-      try {
-        workflowTechStack = JSON.parse(task.workflow.techStack);
-      } catch {
-        // 忽略解析错误
-      }
     }
 
     // 更新进度
@@ -249,7 +231,6 @@ async function executePredictionTask(taskId: string) {
     const prompt = buildMatchPrompt(
       task.taskName,
       task.taskDescription,
-      workflowTechStack,
       skillSummaries,
       task.topK
     );
@@ -266,7 +247,7 @@ async function executePredictionTask(taskId: string) {
 
     if (!modelConfig) {
       // 使用关键词匹配
-      matches = simpleKeywordMatch(task.taskName, task.taskDescription, workflowTechStack, skillSummaries, task.topK);
+      matches = simpleKeywordMatch(task.taskName, task.taskDescription, skillSummaries, task.topK);
       method = 'keyword';
     } else {
       // 调用 LLM 匹配
@@ -275,7 +256,7 @@ async function executePredictionTask(taskId: string) {
         method = 'llm';
       } catch (error) {
         logger.errorNoUser(LOG_MODULES.SKILL, 'LLM 匹配失败，降级到关键词匹配', { details: { taskId, error: error instanceof Error ? error.message : String(error) } });
-        matches = simpleKeywordMatch(task.taskName, task.taskDescription, workflowTechStack, skillSummaries, task.topK);
+        matches = simpleKeywordMatch(task.taskName, task.taskDescription, skillSummaries, task.topK);
         method = 'keyword';
       }
     }
@@ -299,7 +280,7 @@ async function executePredictionTask(taskId: string) {
       techStack: match.techStack || [],
       cwe: match.cwe || null,
       similarity: match.relevance || 0.5,
-      overlapType: determineOverlapType(match, workflowTechStack),
+      overlapType: determineOverlapType(match),
       overlapScore: match.relevance || 0.5,
       keywordScore: match.relevance || 0.5,
       reason: match.reason || '匹配成功',
@@ -351,13 +332,12 @@ async function executePredictionTask(taskId: string) {
     // 同时保存到 SkillPrediction 表
     await prisma.skillPrediction.create({
       data: {
+        id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: task.userId,
-        workflowId: task.workflowId,
         taskName: task.taskName,
         taskDescription: task.taskDescription,
         matches: JSON.stringify(matches),
         method,
-        workflowTechStack: workflowTechStack.length > 0 ? JSON.stringify(workflowTechStack) : null,
         matchCount: matches.length,
       },
     });
@@ -384,7 +364,6 @@ async function executePredictionTask(taskId: string) {
 function buildMatchPrompt(
   taskName: string,
   taskDescription: string,
-  workflowTechStack: string[],
   skills: Array<{
     id: string;
     name: string;
@@ -396,10 +375,6 @@ function buildMatchPrompt(
   }>,
   topK: number
 ): string {
-  const techStackStr = workflowTechStack.length > 0
-    ? workflowTechStack.join(', ')
-    : '未指定';
-
   const skillsTable = skills.map(s =>
     `| ${s.id} | ${s.displayName} | ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''} | ${s.category} | ${s.techStack.join(', ') || '通用'} | ${s.cwe || '-'} |`
   ).join('\n');
@@ -410,20 +385,16 @@ function buildMatchPrompt(
 - 名称: ${taskName}
 - 描述: ${taskDescription}
 
-## 编排信息
-- 适合的技术栈: ${techStackStr}
-
 ## 可用Skills列表
 | ID | 名称 | 描述 | 类别 | 技术栈 | CWE |
 |----|------|------|------|--------|-----|
 ${skillsTable}
 
 ## 匹配要求
-1. 优先匹配技术栈一致的Skills
-2. 技术栈为空的Skills视为通用Skill，也应当考虑
-3. 根据任务描述判断核心需求（安全检测？代码审计？认证相关？）
-4. 考虑Skill的类别和CWE编号的关联性
-5. 返回最相关的Top-${topK} Skills
+1. 技术栈为空的Skills视为通用Skill，也应当考虑
+2. 根据任务描述判断核心需求（安全检测？代码审计？认证相关？）
+3. 考虑Skill的类别和CWE编号的关联性
+4. 返回最相关的Top-${topK} Skills
 
 ## 输出格式
 严格返回JSON数组，不要包含任何其他文字:
@@ -566,7 +537,6 @@ async function callLLMForMatch(
 function simpleKeywordMatch(
   taskName: string,
   taskDescription: string,
-  workflowTechStack: string[],
   skills: Array<{
     id: string;
     name: string;
@@ -607,21 +577,7 @@ function simpleKeywordMatch(
       }
     }
 
-    // 2. 技术栈匹配得分
-    if (workflowTechStack.length > 0 && skill.techStack.length > 0) {
-      const matchCount = skill.techStack.filter(ts =>
-        workflowTechStack.some(wts =>
-          ts.toLowerCase() === wts.toLowerCase() ||
-          ts.toLowerCase().includes(wts.toLowerCase()) ||
-          wts.toLowerCase().includes(ts.toLowerCase())
-        )
-      ).length;
-      if (matchCount > 0) {
-        score += 0.4 * (matchCount / skill.techStack.length);
-      }
-    }
-
-    // 3. 名称/描述相似度
+    // 2. 名称/描述相似度
     const skillWords = skillText.split(/\s+/);
     const taskWords = searchText.split(/\s+/);
     const commonWords = skillWords.filter(w => taskWords.includes(w));
@@ -658,23 +614,8 @@ function simpleKeywordMatch(
  * 根据匹配结果确定重叠类型
  */
 function determineOverlapType(
-  match: { category: string; techStack: string[]; relevance: number },
-  workflowTechStack: string[]
+  match: { category: string; techStack: string[]; relevance: number }
 ): OverlapType {
-  // 技术栈匹配优先
-  if (match.techStack && match.techStack.length > 0 && workflowTechStack.length > 0) {
-    const techStackOverlap = match.techStack.some(ts =>
-      workflowTechStack.some(wts =>
-        ts.toLowerCase() === wts.toLowerCase() ||
-        ts.toLowerCase().includes(wts.toLowerCase()) ||
-        wts.toLowerCase().includes(ts.toLowerCase())
-      )
-    );
-    if (techStackOverlap) {
-      return 'techStack-overlap';
-    }
-  }
-  
   // 高相关性视为语义重叠
   if (match.relevance >= 0.85) {
     return 'semantic-overlap';
@@ -837,6 +778,7 @@ async function triggerObservationLog(params: {
       for (const skill of group.skills) {
         await prisma.skillObservationLog.create({
           data: {
+            id: `obslog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             skillId: skill.skillId,
             triggerType: 'overlap_detected',
             triggerContext: JSON.stringify({
@@ -858,6 +800,7 @@ async function triggerObservationLog(params: {
             }),
             severity: mapSeverityToLogLevel(params.governanceWarning.severity),
             status: 'pending',
+            updatedAt: new Date(),
           },
         });
       }
@@ -871,6 +814,7 @@ async function triggerObservationLog(params: {
         for (const skill of group.skills) {
           await prisma.skillObservationLog.create({
             data: {
+              id: `obslog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               skillId: skill.skillId,
               triggerType: 'similarity_warning',
               triggerContext: JSON.stringify({
@@ -889,6 +833,7 @@ async function triggerObservationLog(params: {
               }),
               severity: 'high',
               status: 'pending',
+              updatedAt: new Date(),
             },
           });
         }

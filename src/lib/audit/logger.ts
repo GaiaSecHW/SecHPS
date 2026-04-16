@@ -51,6 +51,7 @@ export class AuditLogger {
 
       await prisma.auditLog.create({
         data: {
+          id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           userId: params.userId || null,
           action: params.action,
           resource: params.resource || null,
@@ -115,28 +116,6 @@ export class AuditLogger {
       resource: targetUserId,
       details: {
         targetUserId,
-        before: options?.before,
-        after: options?.after,
-      },
-    });
-  }
-
-  /**
-   * 记录工作流事件
-   */
-  static async logWorkflow(
-    action: 'workflow_create' | 'workflow_update' | 'workflow_delete' | 'workflow_execute' | 'workflow_share' | 'workflow_unshare' | 'workflow_data_update',
-    userId: string,
-    workflowId: string,
-    request: Request,
-    options?: { before?: Record<string, unknown>; after?: Record<string, unknown> }
-  ): Promise<void> {
-    await AuditLogger.logFromRequest(request, {
-      userId,
-      action,
-      resource: workflowId,
-      details: {
-        workflowId,
         before: options?.before,
         after: options?.after,
       },
@@ -237,7 +216,6 @@ export const auditLog = AuditLogger.log;
 export const auditLogFromRequest = AuditLogger.logFromRequest;
 export const auditLogAuth = AuditLogger.logAuth;
 export const auditLogUserManagement = AuditLogger.logUserManagement;
-export const auditLogWorkflow = AuditLogger.logWorkflow;
 export const auditLogConfig = AuditLogger.logConfig;
 export const auditLogPermissionDenied = AuditLogger.logPermissionDenied;
 export const auditLogDataExport = AuditLogger.logDataExport;

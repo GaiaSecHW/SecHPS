@@ -212,6 +212,7 @@ export async function saveExperience(
 
   const created = await prisma.autonomousEvolutionExperience.create({
     data: {
+      id: `exp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       title: exp.title,
       errorCategory: exp.errorCategory,
       errorPatterns: JSON.stringify(exp.errorPatterns),
@@ -225,6 +226,7 @@ export async function saveExperience(
       lesson: exp.lesson,
       isInjected: defaultEnabled,
       injectedAt: defaultEnabled ? new Date() : null,
+      updatedAt: new Date(),
     },
   });
   return { action: 'created', id: created.id };

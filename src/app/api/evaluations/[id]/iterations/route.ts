@@ -54,7 +54,7 @@ export async function GET(
     // 5. 验证评估会话存在并检查归属
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      select: { id: true, projectId: true, status: true, project: { select: { userId: true } } },
+      select: { id: true, projectId: true, status: true, Project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
@@ -62,7 +62,7 @@ export async function GET(
     }
 
     // 6. 归属校验
-    if (evaluation.project.userId !== payload.userId) {
+    if (evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
     }
 

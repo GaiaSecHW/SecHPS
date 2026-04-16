@@ -51,7 +51,7 @@ export async function GET(request: Request) {
         take,
         orderBy: { createdAt: 'desc' },
         include: {
-          skill: {
+          Skill: {
             select: {
               id: true,
               name: true,
@@ -67,9 +67,9 @@ export async function GET(request: Request) {
     const analysesWithSkill = analyses.map(a => ({
       id: a.id,
       skillId: a.skillId,
-      skillName: a.skill?.name || 'Unknown',
-      skillDisplayName: a.skill?.displayName || 'Unknown',
-      skillCategory: a.skill?.category || 'Unknown',
+      skillName: a.Skill?.name || 'Unknown',
+      skillDisplayName: a.Skill?.displayName || 'Unknown',
+      skillCategory: a.Skill?.category || 'Unknown',
       similarSkills: a.similarSkills ? JSON.parse(a.similarSkills) : null,
       overlapScore: a.overlapScore,
       affectedWorkflows: a.affectedWorkflows ? JSON.parse(a.affectedWorkflows) : null,

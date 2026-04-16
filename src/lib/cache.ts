@@ -100,7 +100,6 @@ class LRUCache<T> {
 // Global cache instances
 export const userCache = new LRUCache<any>(200, 5 * 60 * 1000); // 5 minutes
 export const permissionCache = new LRUCache<any>(500, 10 * 60 * 1000); // 10 minutes
-export const workflowCache = new LRUCache<any>(100, 2 * 60 * 1000); // 2 minutes
 export const configCache = new LRUCache<any>(50, 30 * 60 * 1000); // 30 minutes
 export const skillCache = new LRUCache<any>(100, 15 * 60 * 1000); // 15 minutes
 export const patternCache = new LRUCache<any>(100, 15 * 60 * 1000); // 15 minutes
@@ -109,8 +108,6 @@ export const patternCache = new LRUCache<any>(100, 15 * 60 * 1000); // 15 minute
 export const cacheKeys = {
   user: (userId: string) => `user:${userId}`,
   userPermissions: (userId: string) => `user:perms:${userId}`,
-  workflow: (workflowId: string) => `workflow:${workflowId}`,
-  workflowList: (userId: string, page: number) => `workflows:${userId}:${page}`,
   config: (configId: string) => `config:${configId}`,
   skill: (skillId: string) => `skill:${skillId}`,
   skillList: (category?: string) => `skills:${category || 'all'}`,
@@ -141,20 +138,9 @@ export function invalidateUserCaches(userId: string): void {
   userCache.delete(cacheKeys.userPermissions(userId));
 }
 
-export function invalidateWorkflowCaches(workflowId: string, userId?: string): void {
-  workflowCache.delete(cacheKeys.workflow(workflowId));
-  if (userId) {
-    // Invalidate all workflow list pages for this user (approximation)
-    for (let i = 1; i <= 10; i++) {
-      workflowCache.delete(cacheKeys.workflowList(userId, i));
-    }
-  }
-}
-
 export function clearAllCaches(): void {
   userCache.clear();
   permissionCache.clear();
-  workflowCache.clear();
   configCache.clear();
   skillCache.clear();
   patternCache.clear();
@@ -164,7 +150,6 @@ export function getAllCacheStats(): Record<string, ReturnType<LRUCache<unknown>[
   return {
     user: userCache.getStats(),
     permission: permissionCache.getStats(),
-    workflow: workflowCache.getStats(),
     config: configCache.getStats(),
     skill: skillCache.getStats(),
     pattern: patternCache.getStats(),

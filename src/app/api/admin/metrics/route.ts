@@ -38,15 +38,9 @@ export async function GET(request: Request) {
     // 获取数据库统计
     const [
       userCount,
-      workflowCount,
-      executionCount,
-      activeExecutions,
       vulnerabilityCount,
     ] = await Promise.all([
       prisma.user.count(),
-      prisma.workflow.count(),
-      prisma.workflowExecution.count(),
-      prisma.workflowExecution.count({ where: { status: 'running' } }),
       prisma.vulnerability.count({ where: { status: 'new' } }),
     ]);
 
@@ -57,9 +51,6 @@ export async function GET(request: Request) {
       cache: cacheStats,
       database: {
         users: userCount,
-        workflows: workflowCount,
-        executions: executionCount,
-        activeExecutions,
         newVulnerabilities: vulnerabilityCount,
       },
     });

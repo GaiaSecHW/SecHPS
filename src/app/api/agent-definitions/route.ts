@@ -120,6 +120,7 @@ export async function POST(request: Request) {
     // 创建 Agent 定义
     const agentDefinition = await prisma.agentDefinition.create({
       data: {
+        id: `agent-def-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         displayName,
         description,
@@ -133,6 +134,7 @@ export async function POST(request: Request) {
         userId: payload.userId,
         isBuiltin: false,
         isActive: isActive !== undefined ? isActive : true,
+        updatedAt: new Date(),
       },
     });
 

@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     // 获取所有权限
     const permissions = await prisma.permission.findMany({
       include: {
-        roles: true,
+        Role: true,
       },
     });
 
@@ -87,17 +87,20 @@ export async function POST(request: Request) {
     // 创建权限
     const permission = await prisma.permission.create({
       data: {
+        id: `perm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         module,
         action,
         resource,
         description,
+        updatedAt: new Date(),
       },
     });
 
     // 记录审计日志
     prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'permission_create',
         resource: permission.id,

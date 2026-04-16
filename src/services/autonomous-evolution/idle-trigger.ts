@@ -35,8 +35,14 @@ export async function getInjectionEnabled(): Promise<boolean> {
 export async function setInjectionEnabled(enabled: boolean): Promise<void> {
   await prisma.systemConfig.upsert({
     where: { key: INJECTION_KEY },
-    create: { key: INJECTION_KEY, value: String(enabled), description: '执行进化管理 - 评估时注入经验开关' },
-    update: { value: String(enabled) },
+    create: { 
+      id: `config-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      key: INJECTION_KEY, 
+      value: String(enabled), 
+      description: '执行进化管理 - 评估时注入经验开关',
+      updatedAt: new Date(),
+    },
+    update: { value: String(enabled), updatedAt: new Date() },
   });
 }
 
@@ -55,8 +61,14 @@ export async function saveIdleTriggerConfig(config: Partial<IdleTriggerConfig>):
   const merged = { ...current, ...config };
   await prisma.systemConfig.upsert({
     where: { key: CONFIG_KEY },
-    create: { key: CONFIG_KEY, value: JSON.stringify(merged), description: '执行进化管理 - 闲时触发配置' },
-    update: { value: JSON.stringify(merged) },
+    create: { 
+      id: `config-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      key: CONFIG_KEY, 
+      value: JSON.stringify(merged), 
+      description: '执行进化管理 - 闲时触发配置',
+      updatedAt: new Date(),
+    },
+    update: { value: JSON.stringify(merged), updatedAt: new Date() },
   });
 }
 
@@ -105,14 +117,16 @@ export async function shouldTriggerIdle(): Promise<boolean> {
  * 记录最后一次自动提取时间
  */
 export async function recordLastAutoExtract(): Promise<void> {
-  await prisma.systemConfig.upsert({
+await prisma.systemConfig.upsert({
     where: { key: 'autonomous_evolution_last_auto_extract' },
     create: {
+      id: `config-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       key: 'autonomous_evolution_last_auto_extract',
       value: new Date().toISOString(),
       description: '执行进化管理 - 最后自动提取时间',
+      updatedAt: new Date(),
     },
-    update: { value: new Date().toISOString() },
+    update: { value: new Date().toISOString(), updatedAt: new Date() },
   });
 }
 

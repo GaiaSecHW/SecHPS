@@ -115,10 +115,10 @@ export async function POST(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        project: {
+        Project: {
           include: {
-            config: true,
-            files: true,
+            OpencodeConfig: true,
+            ProjectFile: true,
           },
         },
       },
@@ -139,7 +139,7 @@ export async function POST(
     }
 
     // 4. 获取项目的 OpencodeConfig（任务描述等）
-    const opencodeConfig = evaluation.project.config;
+    const opencodeConfig = evaluation.Project.OpencodeConfig;
 
     // 5. 解析请求体
     const body = await request.json();
@@ -190,7 +190,7 @@ export async function POST(
         apiBaseUrl: modelConfig.apiBaseUrl,
         models: modelConfig.models,
       },
-      evaluation.project.projectPath || undefined,
+      evaluation.Project.projectPath || undefined,
       {
         maxIterations,
         maxTokens,
@@ -205,11 +205,13 @@ export async function POST(
           try {
             await prisma.evaluationIteration.create({
               data: {
+                id: `iter-${Date.now()}-${iteration}-${Math.random().toString(36).substr(2, 9)}`,
                 evaluationSessionId: id,
                 iterationNumber: iteration,
                 status: 'completed',
                 duration,
                 completedAt: new Date(),
+                updatedAt: new Date(),
               },
             });
           } catch {
@@ -237,8 +239,8 @@ export async function POST(
     logSeparator('评估开始');
     logInfo(`评估会话ID: ${id}`);
     logInfo(`项目ID: ${evaluation.projectId}`);
-    logInfo(`项目名称: ${evaluation.project.name}`);
-    logInfo(`项目路径: ${evaluation.project.projectPath || '未设置'}`);
+    logInfo(`项目名称: ${evaluation.Project.name}`);
+    logInfo(`项目路径: ${evaluation.Project.projectPath || '未设置'}`);
     logInfo(`模型: ${modelConfig.model}`);
     logInfo(`最大迭代次数: ${maxIterations}`);
     logInfo(`最大Token数: ${maxTokens}`);
@@ -248,10 +250,10 @@ export async function POST(
 
     // 9. 构建 context
     const context = {
-      projectName: evaluation.project.name,
-      projectDescription: evaluation.project.description || undefined,
-      environmentUrl: evaluation.project.environmentUrl || undefined,
-      files: evaluation.project.files.map((f) => ({
+      projectName: evaluation.Project.name,
+      projectDescription: evaluation.Project.description || undefined,
+      environmentUrl: evaluation.Project.environmentUrl || undefined,
+      files: evaluation.Project.ProjectFile.map((f) => ({
         name: f.fileName,
         type: f.fileType,
         size: f.fileSize,

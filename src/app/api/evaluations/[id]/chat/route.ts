@@ -38,10 +38,10 @@ export async function POST(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        project: {
+        Project: {
           include: {
-            files: true,
-            config: true,
+            ProjectFile: true,
+            OpencodeConfig: true,
           },
         },
       },
@@ -56,8 +56,8 @@ export async function POST(
     }
 
     // 构建上下文
-    const project = evaluation.project;
-    const files = project.files.map(f => ({
+    const project = evaluation.Project;
+    const files = project.ProjectFile.map(f => ({
       name: f.fileName,
       type: f.fileType,
       size: f.fileSize,
@@ -89,7 +89,7 @@ export async function POST(
             projectDescription: project.description || undefined,
             environmentUrl: project.environmentUrl || undefined,
             files,
-            taskDescription: project.config?.taskDescription || undefined,
+            taskDescription: project.OpencodeConfig?.taskDescription || undefined,
             // 添加 Skills
             skills,
             skillsContext: {

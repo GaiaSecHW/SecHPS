@@ -56,7 +56,6 @@ export async function GET(
       duration: task.duration,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
-      workflowId: task.workflowId,
     };
 
     return NextResponse.json({ task: formattedTask });

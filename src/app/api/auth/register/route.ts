@@ -57,10 +57,12 @@ export async function POST(request: Request) {
     // 创建用户
     const user = await prisma.user.create({
       data: {
+        id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         username,
         passwordHash,
         name: name || username,
         email: email || `${username}@local`, // 如果没有提供邮箱，使用默认邮箱
+        updatedAt: new Date(),
       },
     });
 
@@ -72,6 +74,7 @@ export async function POST(request: Request) {
     if (defaultRole) {
       await prisma.userRole.create({
         data: {
+          id: `ur-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           userId: user.id,
           roleId: defaultRole.id,
         },
@@ -81,9 +84,11 @@ export async function POST(request: Request) {
     // 创建默认 AI4WEB 配置
     await prisma.opencodeConfig.create({
       data: {
+        id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: user.id,
         name: 'Default',
         baseURL: 'http://localhost:54321',
+        updatedAt: new Date(),
       },
     });
 

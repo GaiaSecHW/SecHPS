@@ -37,6 +37,7 @@ export class ConversationHistory {
   async addUserMessage(evaluationId: string, content: string): Promise<ConversationMessage> {
     const message = await prisma.sessionMessage.create({
       data: {
+        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         evaluationSessionId: evaluationId,
         role: 'user',
         content,
@@ -60,6 +61,7 @@ export class ConversationHistory {
   async addAssistantMessage(evaluationId: string, content: string): Promise<ConversationMessage> {
     const message = await prisma.sessionMessage.create({
       data: {
+        id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         evaluationSessionId: evaluationId,
         role: 'assistant',
         content,

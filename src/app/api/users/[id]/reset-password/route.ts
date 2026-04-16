@@ -80,16 +80,17 @@ export async function POST(
 
     // 记录审计日志
     await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'admin_reset_password',
-        resource: id,
-        details: JSON.stringify({
-          targetUsername: targetUser.username,
-          targetEmail: targetUser.email,
-        }),
-      },
-    });
+          data: {
+            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            userId: payload.userId,
+            action: 'admin_reset_password',
+            resource: id,
+            details: JSON.stringify({
+              targetUsername: targetUser.username,
+              targetEmail: targetUser.email,
+            }),
+          },
+        });
 
     // 记录跨用户操作日志
     logger.info(LOG_MODULES.USER, '管理员重置用户密码', {

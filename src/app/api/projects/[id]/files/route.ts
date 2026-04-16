@@ -73,6 +73,7 @@ export async function POST(
         // 创建文件记录
         const projectFile = await prisma.projectFile.create({
           data: {
+            id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             projectId: project.id,
             fileName: file.name,
             filePath: filePath,

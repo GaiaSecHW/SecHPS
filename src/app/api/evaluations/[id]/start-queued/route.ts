@@ -33,9 +33,9 @@ export async function POST(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        project: {
+        Project: {
           include: {
-            user: { select: { id: true } },
+            User: { select: { id: true } },
           },
         },
       },
@@ -104,7 +104,7 @@ export async function POST(
         'X-Internal-Queued-Start': 'true', // 标记为队列启动，绕过并发检查
       },
       body: JSON.stringify({
-        workflowId: evaluation.workflowId,
+        agentTeamId: evaluation.agentTeamId,
         modelId: modelConfig.id,
         queuedEvaluationId: id, // 传递排队评估ID，用于复用而不是创建新的
       }),

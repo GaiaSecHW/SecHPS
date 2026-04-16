@@ -192,11 +192,11 @@ export async function getUserWithPermissions(userId: string): Promise<{
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
-          userRoles: {
+          UserRole: {
             include: {
-              role: {
+              Role: {
                 include: {
-                  permissions: true,
+                  Permission: true,
                 },
               },
             },
@@ -210,15 +210,15 @@ export async function getUserWithPermissions(userId: string): Promise<{
 
       // 提取所有权限（去重）
       const permissions = new Set<string>();
-      user.userRoles.forEach(userRole => {
-        userRole.role.permissions.forEach(permission => {
+      user.UserRole.forEach(userRole => {
+        userRole.Role.Permission.forEach(permission => {
           permissions.add(permission.name);
         });
       });
 
       return {
         user,
-        roles: user.userRoles.map(ur => ur.role),
+        roles: user.UserRole.map(ur => ur.Role),
         permissions: Array.from(permissions),
       };
     },

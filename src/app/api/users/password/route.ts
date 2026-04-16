@@ -65,13 +65,14 @@ export async function POST(request: Request) {
 
     // 记录审计日志
     await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'password_change',
-        resource: payload.userId,
-        details: JSON.stringify({ timestamp: new Date().toISOString() }),
-      },
-    });
+          data: {
+            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            userId: payload.userId,
+            action: 'password_change',
+            resource: payload.userId,
+            details: JSON.stringify({ timestamp: new Date().toISOString() }),
+          },
+        });
 
     logger.update(LOG_MODULES.AUTH, payload, payload.userId, { action: 'password_change' });
 

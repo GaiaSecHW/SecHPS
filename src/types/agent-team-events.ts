@@ -1,12 +1,15 @@
 /**
  * Agent Team Event Types for WebSocket/SSE streaming
  * 
- * Defines 5 core event types for real-time execution monitoring:
+ * Defines 8 core event types for real-time execution monitoring:
  * - execution_started: Execution begins
  * - agent_invoked: An agent is invoked (Lead or member)
  * - message_delta: Streaming text content from agent
  * - agent_completed: Agent finishes with result
  * - execution_completed: Full execution finishes
+ * - iteration_started: Ralph Loop iteration begins (NEW)
+ * - iteration_completed: Ralph Loop iteration finishes (NEW)
+ * - experience_queried: Experience learning triggered (NEW)
  */
 
 // ============ Event Type Constants ============
@@ -17,6 +20,9 @@ export const AGENT_TEAM_EVENT_TYPES = {
   MESSAGE_DELTA: 'message_delta',
   AGENT_COMPLETED: 'agent_completed',
   EXECUTION_COMPLETED: 'execution_completed',
+  ITERATION_STARTED: 'iteration_started',
+  ITERATION_COMPLETED: 'iteration_completed',
+  EXPERIENCE_QUERIED: 'experience_queried',
 } as const;
 
 export type AgentTeamEventType = typeof AGENT_TEAM_EVENT_TYPES[keyof typeof AGENT_TEAM_EVENT_TYPES];
@@ -84,6 +90,45 @@ export interface ExecutionCompletedData {
   status: 'completed' | 'failed' | 'cancelled';
 }
 
+/**
+ * Iteration started event data (Ralph Loop)
+ */
+export interface IterationStartedData {
+  executionId: string;
+  iteration: number;
+  maxIterations: number;
+  previousFeedback?: string;
+  totalCostUsdSoFar?: number;
+}
+
+/**
+ * Iteration completed event data (Ralph Loop)
+ */
+export interface IterationCompletedData {
+  executionId: string;
+  iteration: number;
+  result: string;
+  verified: boolean;
+  feedback?: string;
+  tokensUsed: {
+    input: number;
+    output: number;
+  };
+  costUsd: number;
+  totalCostUsdSoFar: number;
+}
+
+/**
+ * Experience queried event data (Ralph Loop)
+ */
+export interface ExperienceQueriedData {
+  executionId: string;
+  iteration: number;
+  experiencesFound: number;
+  experienceTitles?: string[];
+  guidanceInjected: string;
+}
+
 // ============ Union Event Data Type ============
 
 export type AgentTeamEventData = 
@@ -91,7 +136,10 @@ export type AgentTeamEventData =
   | AgentInvokedData
   | MessageDeltaData
   | AgentCompletedData
-  | ExecutionCompletedData;
+  | ExecutionCompletedData
+  | IterationStartedData
+  | IterationCompletedData
+  | ExperienceQueriedData;
 
 // ============ Main Event Interface ============
 
@@ -126,6 +174,18 @@ export function isAgentCompletedEvent(event: AgentTeamEvent): event is AgentTeam
 
 export function isExecutionCompletedEvent(event: AgentTeamEvent): event is AgentTeamEvent & { data: ExecutionCompletedData } {
   return event.type === AGENT_TEAM_EVENT_TYPES.EXECUTION_COMPLETED;
+}
+
+export function isIterationStartedEvent(event: AgentTeamEvent): event is AgentTeamEvent & { data: IterationStartedData } {
+  return event.type === AGENT_TEAM_EVENT_TYPES.ITERATION_STARTED;
+}
+
+export function isIterationCompletedEvent(event: AgentTeamEvent): event is AgentTeamEvent & { data: IterationCompletedData } {
+  return event.type === AGENT_TEAM_EVENT_TYPES.ITERATION_COMPLETED;
+}
+
+export function isExperienceQueriedEvent(event: AgentTeamEvent): event is AgentTeamEvent & { data: ExperienceQueriedData } {
+  return event.type === AGENT_TEAM_EVENT_TYPES.EXPERIENCE_QUERIED;
 }
 
 // ============ Event Factory Functions ============
@@ -193,6 +253,48 @@ export function createExecutionCompletedEvent(
 ): AgentTeamEvent {
   return {
     type: AGENT_TEAM_EVENT_TYPES.EXECUTION_COMPLETED,
+    executionId,
+    teamId,
+    timestamp: new Date(),
+    data,
+  };
+}
+
+export function createIterationStartedEvent(
+  executionId: string,
+  teamId: string,
+  data: IterationStartedData
+): AgentTeamEvent {
+  return {
+    type: AGENT_TEAM_EVENT_TYPES.ITERATION_STARTED,
+    executionId,
+    teamId,
+    timestamp: new Date(),
+    data,
+  };
+}
+
+export function createIterationCompletedEvent(
+  executionId: string,
+  teamId: string,
+  data: IterationCompletedData
+): AgentTeamEvent {
+  return {
+    type: AGENT_TEAM_EVENT_TYPES.ITERATION_COMPLETED,
+    executionId,
+    teamId,
+    timestamp: new Date(),
+    data,
+  };
+}
+
+export function createExperienceQueriedEvent(
+  executionId: string,
+  teamId: string,
+  data: ExperienceQueriedData
+): AgentTeamEvent {
+  return {
+    type: AGENT_TEAM_EVENT_TYPES.EXPERIENCE_QUERIED,
     executionId,
     teamId,
     timestamp: new Date(),

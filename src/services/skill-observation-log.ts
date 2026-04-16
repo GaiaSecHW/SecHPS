@@ -87,6 +87,7 @@ export class SkillObservationLogService {
 
         const log = await prisma.skillObservationLog.create({
           data: {
+            id: `obs-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             skillId: match.skillId,
             triggerType,
             triggerContext: JSON.stringify({
@@ -115,6 +116,7 @@ export class SkillObservationLogService {
             }),
             severity,
             status: 'pending',
+            updatedAt: new Date(),
           },
         });
 
@@ -206,6 +208,7 @@ export class SkillObservationLogService {
       await prisma.skillObservationStats.upsert({
         where: { skillId },
         create: {
+          id: `stats-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           skillId,
           totalObservations: 1,
           warningCount: params.warningCount || 0,
@@ -217,6 +220,7 @@ export class SkillObservationLogService {
           avgMatchScore: params.matchScore,
           firstObservedAt: new Date(),
           lastObservedAt: new Date(),
+          updatedAt: new Date(),
         },
         update: {
           totalObservations: newTotalObservations,
@@ -228,6 +232,7 @@ export class SkillObservationLogService {
           avgResponseTime: newAvgResponseTime,
           avgMatchScore: newAvgMatchScore,
           lastObservedAt: new Date(),
+          updatedAt: new Date(),
         },
       });
     } catch (error) {
@@ -315,7 +320,7 @@ export class SkillObservationLogService {
         ],
         take: limit,
         include: {
-          skill: {
+          Skill: {
             select: {
               id: true,
               name: true,

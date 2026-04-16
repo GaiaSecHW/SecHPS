@@ -83,6 +83,7 @@ export async function PUT(
 
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         action: 'notification_channel_update',
         resource: id,
@@ -131,6 +132,7 @@ export async function DELETE(
 
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         action: 'notification_channel_delete',
         resource: id,

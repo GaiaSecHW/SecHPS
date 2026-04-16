@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-04-16T15:16:45.068Z",
+  "placeholderAgentId": "migrated-workflow-placeholder-agent",
+  "workflows": [],
+  "stats": {
+    "workflowsProcessed": 0,
+    "teamsCreated": 0,
+    "membersCreated": 0,
+    "edgesMapped": 0,
+    "sessionsUpdated": 0,
+    "errors": [
+      "Migration failed: PrismaClientValidationError: \nInvalid `prisma.user.findFirst()` invocation in\nD:\\claude-web-platform\\scripts\\migrate-workflow-to-agent-team.ts:75:33\n\n  72 }\n  73 \n  74 // Get first admin user for the placeholder\n→ 75 let admin = await prisma.user.findFirst({\n       where: {\n         userRoles: {\n         ~~~~~~~~~\n           some: {\n             role: {\n               name: \"admin\"\n             }\n           }\n         },\n     ?   AND?: UserWhereInput | UserWhereInput[],\n     ?   OR?: UserWhereInput[],\n     ?   NOT?: UserWhereInput | UserWhereInput[],\n     ?   id?: StringFilter | String,\n     ?   email?: StringFilter | String,\n     ?   username?: StringFilter | String,\n     ?   passwordHash?: StringFilter | String,\n     ?   name?: StringNullableFilter | String | Null,\n     ?   avatar?: StringNullableFilter | String | Null,\n     ?   isActive?: BoolFilter | Boolean,\n     ?   createdAt?: DateTimeFilter | DateTime,\n     ?   updatedAt?: DateTimeFilter | DateTime,\n     ?   AgentDefinition?: AgentDefinitionListRelationFilter,\n     ?   AgentTeam?: AgentTeamListRelationFilter,\n     ?   McpServerConfig?: McpServerConfigListRelationFilter,\n     ?   ModelConfig?: ModelConfigListRelationFilter,\n     ?   OpencodeConfig?: OpencodeConfigListRelationFilter,\n     ?   Project?: ProjectListRelationFilter,\n     ?   Skill?: SkillListRelationFilter,\n     ?   SkillPrediction?: SkillPredictionListRelationFilter,\n     ?   SkillPredictionTask?: SkillPredictionTaskListRelationFilter,\n     ?   UserRole?: UserRoleListRelationFilter\n       }\n     })\n\nUnknown argument `userRoles`. Did you mean `UserRole`? Available options are marked with ?."
+    ]
+  }
+}

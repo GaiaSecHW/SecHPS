@@ -59,12 +59,12 @@ export async function GET(
         totalInputTokens: true,
         totalOutputTokens: true,
         createdAt: true,
-        evaluation: {
+        EvaluationSession: {
           select: {
             id: true,
             title: true,
             status: true,
-            project: {
+            Project: {
               select: {
                 id: true,
                 name: true,
@@ -73,7 +73,7 @@ export async function GET(
             },
           },
         },
-        memberExecutions: {
+        AgentMemberExecution: {
           select: {
             id: true,
             memberId: true,
@@ -82,13 +82,13 @@ export async function GET(
             completedAt: true,
             inputTokens: true,
             outputTokens: true,
-            member: {
+            AgentTeamMember: {
               select: {
                 id: true,
                 role: true,
                 overrideModel: true,
                 overrideTools: true,
-                agent: {
+                AgentDefinition: {
                   select: {
                     id: true,
                     name: true,
@@ -118,11 +118,11 @@ export async function GET(
       id: execution.id,
       teamId: execution.teamId,
       evaluationId: execution.evaluationId,
-      evaluation: execution.evaluation ? {
-        id: execution.evaluation.id,
-        title: execution.evaluation.title,
-        status: execution.evaluation.status,
-        project: execution.evaluation.project,
+      evaluation: execution.EvaluationSession ? {
+        id: execution.EvaluationSession.id,
+        title: execution.EvaluationSession.title,
+        status: execution.EvaluationSession.status,
+        project: execution.EvaluationSession.Project,
       } : null,
       status: execution.status,
       startedAt: execution.startedAt,
@@ -130,18 +130,18 @@ export async function GET(
       totalInputTokens: execution.totalInputTokens,
       totalOutputTokens: execution.totalOutputTokens,
       createdAt: execution.createdAt,
-      memberExecutions: execution.memberExecutions.map(me => ({
+      memberExecutions: execution.AgentMemberExecution.map(me => ({
         id: me.id,
         memberId: me.memberId,
-        role: me.member.role,
-        overrideModel: me.member.overrideModel,
-        overrideTools: me.member.overrideTools,
+        role: me.AgentTeamMember.role,
+        overrideModel: me.AgentTeamMember.overrideModel,
+        overrideTools: me.AgentTeamMember.overrideTools,
         agent: {
-          id: me.member.agent.id,
-          name: me.member.agent.name,
-          displayName: me.member.agent.displayName,
-          category: me.member.agent.category,
-          model: me.member.agent.model,
+          id: me.AgentTeamMember.AgentDefinition.id,
+          name: me.AgentTeamMember.AgentDefinition.name,
+          displayName: me.AgentTeamMember.AgentDefinition.displayName,
+          category: me.AgentTeamMember.AgentDefinition.category,
+          model: me.AgentTeamMember.AgentDefinition.model,
         },
         status: me.status,
         startedAt: me.startedAt,
@@ -150,11 +150,11 @@ export async function GET(
         outputTokens: me.outputTokens,
       })),
       summary: {
-        totalMembers: execution.memberExecutions.length,
-        completed: execution.memberExecutions.filter(m => m.status === 'completed').length,
-        running: execution.memberExecutions.filter(m => m.status === 'running').length,
-        pending: execution.memberExecutions.filter(m => m.status === 'pending').length,
-        failed: execution.memberExecutions.filter(m => m.status === 'failed').length,
+        totalMembers: execution.AgentMemberExecution.length,
+        completed: execution.AgentMemberExecution.filter(m => m.status === 'completed').length,
+        running: execution.AgentMemberExecution.filter(m => m.status === 'running').length,
+        pending: execution.AgentMemberExecution.filter(m => m.status === 'pending').length,
+        failed: execution.AgentMemberExecution.filter(m => m.status === 'failed').length,
       },
     };
 

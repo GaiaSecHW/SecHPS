@@ -35,7 +35,6 @@ export async function POST(request: Request) {
 
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      include: { files: true },
     });
 
     if (!project) {

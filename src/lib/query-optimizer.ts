@@ -89,7 +89,7 @@ export const skillSelectMinimal = {
   createdAt: true,
   updatedAt: true,
   userId: true,  // 创建者ID
-  user: {
+  User: {
     select: {
       id: true,
       name: true,

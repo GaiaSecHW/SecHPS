@@ -43,13 +43,14 @@ export async function GET(
         messageCount: true,
         lastActivity: true,
         opencodeSessionId: true,
-        workflowId: true,
-        workflow: {
+        agentTeamId: true,
+        AgentTeam: {
           select: {
+            id: true,
             name: true,
           },
         },
-        project: {
+        Project: {
           select: {
             userId: true,
           },
@@ -62,7 +63,7 @@ export async function GET(
     }
 
     // 归属校验
-    if (evaluation.project.userId !== payload.userId) {
+    if (evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估状态' }, { status: 403 });
     }
 

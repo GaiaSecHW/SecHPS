@@ -21,10 +21,10 @@ export async function GET(
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        files: {
+        ProjectFile: {
           orderBy: { uploadedAt: 'desc' },
         },
-        evaluations: {
+        EvaluationSession: {
           orderBy: { startedAt: 'desc' },
         },
       },
@@ -129,8 +129,8 @@ export async function DELETE(
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        files: true,
-        evaluations: true,
+        ProjectFile: true,
+        EvaluationSession: true,
       },
     });
 
@@ -154,14 +154,14 @@ export async function DELETE(
     // 删除数据库记录（使用事务确保一致性）
     await prisma.$transaction(async (tx) => {
       // 删除文件记录
-      if (project.files.length > 0) {
+      if (project.ProjectFile.length > 0) {
         await tx.projectFile.deleteMany({
           where: { projectId: id },
         });
       }
 
       // 删除评估会话（会级联删除 SessionMessage）
-      if (project.evaluations.length > 0) {
+      if (project.EvaluationSession.length > 0) {
         await tx.evaluationSession.deleteMany({
           where: { projectId: id },
         });

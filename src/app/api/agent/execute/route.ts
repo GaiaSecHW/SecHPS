@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     // 获取项目
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      include: { files: true },
+      include: { ProjectFile: true },
     });
 
     if (!project) {

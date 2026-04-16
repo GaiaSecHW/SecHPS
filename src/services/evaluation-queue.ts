@@ -54,14 +54,14 @@ export async function processQueue(): Promise<void> {
         where: { status: 'queued' },
         orderBy: { startedAt: 'asc' },
         include: {
-          project: {
+          Project: {
             select: { id: true, name: true, projectPath: true },
           },
         },
       });
       
       if (queuedEvaluation) {
-        console.log(`${LOG_PREFIX} 发现排队评估: ${queuedEvaluation.id}, 项目: ${queuedEvaluation.project?.name}`);
+        console.log(`${LOG_PREFIX} 发现排队评估: ${queuedEvaluation.id}, 项目: ${queuedEvaluation.Project?.name}`);
         
         // 触发排队评估的启动
         // 通过内部 API 调用启动评估
@@ -126,7 +126,7 @@ export async function getQueueStatus(): Promise<{
     where: { status: 'queued' },
     orderBy: { startedAt: 'asc' },
     include: {
-      project: {
+      Project: {
         select: { id: true, name: true },
       },
     },
@@ -136,7 +136,7 @@ export async function getQueueStatus(): Promise<{
   const queueList = queuedEvaluations.map((evaluation, index) => ({
     id: evaluation.id,
     projectId: evaluation.projectId,
-    projectName: evaluation.project?.name || '未知项目',
+    projectName: evaluation.Project?.name || '未知项目',
     createdAt: evaluation.startedAt,
     queuePosition: index + 1,
   }));

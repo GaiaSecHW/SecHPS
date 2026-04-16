@@ -12,7 +12,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { createAgentTeamEventStream } from '@/lib/agent-team-events';
 import { prisma } from '@/lib/prisma';
@@ -24,12 +24,36 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate and check permission
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AGENT_TEAM_READ });
-    if (!auth.success) {
-      return authErrorResponse(auth);
+    // Authenticate - support both Authorization header and query param token
+    // EventSource doesn't support custom headers, so we need query param support
+    const { searchParams } = new URL(request.url);
+    const authHeader = request.headers.get('authorization');
+    const queryToken = searchParams.get('token');
+    
+    const token = authHeader?.replace('Bearer ', '') || queryToken;
+    
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
-    const payload = auth.payload;
+    
+    const payload = verifyToken(token);
+    if (!payload) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    
+    // Check permission
+    if (!hasPermission(payload.permissions, PERMISSIONS.AGENT_TEAM_READ)) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const { id: teamId } = await params;
 
@@ -60,8 +84,7 @@ export async function GET(
       });
     }
 
-    // Get optional executionId filter from query params
-    const { searchParams } = new URL(request.url);
+    // Get optional executionId filter from query params (searchParams already defined above)
     const executionId = searchParams.get('executionId') || undefined;
 
     // If executionId provided, verify it belongs to this team

@@ -48,7 +48,7 @@ export async function GET(
     const model = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: { id: true, email: true, username: true },
         },
       },
@@ -78,7 +78,7 @@ export async function GET(
     // 记录读取日志 - 区分是否跨用户
     if (model.userId && model.userId !== payload.userId) {
       // 管理员访问他人模型
-      logger.readOther(LOG_MODULES.MODEL, payload, model.userId, model.user?.email, 'model', id, { name: model.name });
+      logger.readOther(LOG_MODULES.MODEL, payload, model.userId, model.User?.email, 'model', id, { name: model.name });
     } else if (!model.userId) {
       // 系统模型访问
       logger.read(LOG_MODULES.MODEL, payload, 'system_model', id, { name: model.name, isSystem: true });
@@ -119,7 +119,7 @@ export async function PUT(
     const existingModel = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: { id: true, email: true, username: true },
         },
       },
@@ -226,7 +226,7 @@ export async function PUT(
     if (existingModel.userId && existingModel.userId !== payload.userId) {
       // 管理员更新他人模型
       const targetUserId = existingModel.userId;
-      logger.updateOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.user?.email, { name: model.name });
+      logger.updateOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.User?.email, { name: model.name });
     } else {
       // 自己的模型或系统模型
       logger.update(LOG_MODULES.MODEL, payload, id, { name: model.name });
@@ -267,7 +267,7 @@ export async function DELETE(
     const existingModel = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
-        user: {
+        User: {
           select: { id: true, email: true, username: true },
         },
       },
@@ -294,7 +294,7 @@ export async function DELETE(
     if (existingModel.userId && existingModel.userId !== payload.userId) {
       // 管理员删除他人模型
       const targetUserId = existingModel.userId;
-      logger.deleteOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.user?.email, { name: existingModel.name });
+      logger.deleteOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.User?.email, { name: existingModel.name });
     } else {
       // 自己的模型或系统模型
       logger.delete(LOG_MODULES.MODEL, payload, id, { name: existingModel.name });

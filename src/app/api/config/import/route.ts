@@ -83,12 +83,14 @@ export async function POST(request: Request) {
             sortOrder: opt.sortOrder !== undefined ? Number(opt.sortOrder) : 0,
           },
           create: {
+            id: `techstack-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             name: String(opt.name),
             category: String(opt.category),
             description: opt.description ? String(opt.description) : null,
             isActive: opt.isActive !== undefined ? Boolean(opt.isActive) : true,
             isBuiltin: false, // 导入的不算内置
             sortOrder: opt.sortOrder !== undefined ? Number(opt.sortOrder) : 0,
+            updatedAt: new Date(),
           },
         });
         techStackImported++;
@@ -98,6 +100,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'config_import',
         resource: updated.id,

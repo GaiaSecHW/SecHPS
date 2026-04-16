@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -111,11 +111,7 @@ export default function SessionsPage() {
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const filesModalInputRef = useRef<HTMLInputElement>(null);
   
-  // 工作流相关状态
-  const [workflows, setWorkflows] = useState<any[]>([]);
-  const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>(null);
-  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
-  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
+  
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
   
@@ -145,7 +141,6 @@ export default function SessionsPage() {
 
   useEffect(() => {
     fetchProjects();
-    fetchWorkflows();
   }, []); // 只在组件挂载时执行一次
 
   // 单独的 effect 处理自动刷新
@@ -165,37 +160,6 @@ export default function SessionsPage() {
       clearInterval(interval);
     };
   }, [hasRunningEvaluation]); // 只在 hasRunningEvaluation 变化时重新运行
-
-  const fetchWorkflows = async () => {
-    try {
-      setLoadingWorkflows(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/workflows', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        console.error('获取工作流列表失败');
-        return;
-      }
-
-      const data = await response.json();
-      // 只显示已发布的工作流，并映射 nodeCount
-      const publishedWorkflows = (data.data || [])
-        .filter((w: any) => w.status === 'published')
-        .map((w: any) => ({
-          ...w,
-          nodeCount: w._count?.nodes || 0,
-        }));
-      setWorkflows(publishedWorkflows);
-    } catch (err) {
-      console.error('获取工作流列表错误:', err);
-    } finally {
-      setLoadingWorkflows(false);
-    }
-  };
 
   // 获取模型列表（评估时使用：用户自己的模型 + 公开的模型）
   const fetchModels = async () => {
@@ -575,7 +539,7 @@ export default function SessionsPage() {
     }
   };
 
-  const startProject = async (projectId: string, workflowId?: string | null, modelId?: string | null) => {
+  const startProject = async (projectId: string, modelId?: string | null) => {
     setStartingProject(projectId);
 
     try {
@@ -587,7 +551,6 @@ export default function SessionsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          workflowId: workflowId || undefined,
           modelId: modelId || undefined,
         }),
       });
@@ -1354,19 +1317,19 @@ toast.error(data.error || '更新项目失败');
                       </>
                      ) : (
                       <>
-                        {/* 无运行中的会话：显示启动评估 */}
-                        <button
-                          onClick={() => {
-                            setSelectedProject(project);
-                            setSelectedWorkflow(null);
-                            setShowWorkflowModal(true);
-                          }}
-                          disabled={startingProject === project.id}
-                          className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Play size={16} />
-                          <span>启动评估</span>
-                        </button>
+{/* 无运行中的会话：显示启动评估 */}
+                         <button
+                           onClick={async () => {
+                             setSelectedProject(project);
+                             await fetchModels();
+                             setShowModelModal(true);
+                           }}
+                           disabled={startingProject === project.id}
+                           className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                         >
+                           <Play size={16} />
+                           <span>启动评估</span>
+                         </button>
                       </>
                     )}
                     <button
@@ -2278,160 +2241,6 @@ toast.error(data.error || '更新项目失败');
         </div>
       )}
 
-      {/* 工作流选择模态框 */}
-      {showWorkflowModal && selectedProject && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900">选择Agent编排流程</h3>
-                <p className="text-sm text-gray-500 mt-1">项目: {selectedProject.name}</p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowWorkflowModal(false);
-                  setSelectedProject(null);
-                  setSelectedWorkflow(null);
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {loadingWorkflows ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                  <span className="ml-2 text-gray-500">加载工作流中...</span>
-                </div>
-              ) : workflows.length === 0 ? (
-                <div className="text-center py-12">
-                  <Workflow className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">
-                    暂无可用的工作流
-                  </h3>
-                  <p className="mt-2 text-sm text-gray-600">
-                    请先创建并发布Agent编排流程
-                  </p>
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  {workflows.map((workflow) => (
-                    <div
-                      key={workflow.id}
-                      onClick={() => setSelectedWorkflow(workflow.id)}
-                      className={`relative p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedWorkflow === workflow.id
-                          ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-300 ring-offset-2'
-                          : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
-                      }`}
-                    >
-                      {/* 选中指示器 - 左上角 */}
-                      <div className={`absolute top-3 left-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
-                        selectedWorkflow === workflow.id
-                          ? 'bg-blue-600 border-blue-600'
-                          : 'bg-white border-gray-300'
-                      }`}>
-                        {selectedWorkflow === workflow.id && (
-                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-start justify-between mb-2 pl-7">
-                        <div className="flex-1">
-                          <h4 className={`text-sm font-semibold ${
-                            selectedWorkflow === workflow.id ? 'text-blue-900' : 'text-gray-900'
-                          }`}>
-                            {workflow.name}
-                          </h4>
-                          {workflow.description && (
-                            <p className={`text-xs mt-1 line-clamp-2 ${
-                              selectedWorkflow === workflow.id ? 'text-blue-700' : 'text-gray-600'
-                            }`}>
-                              {workflow.description}
-                            </p>
-                          )}
-                        </div>
-                        {selectedWorkflow === workflow.id && (
-                          <CheckCircle size={20} className="text-blue-600 flex-shrink-0 ml-2" />
-                        )}
-                      </div>
-                      
-                      {/* 工作流缩略图 */}
-                      {workflow.thumbnail && (
-                        <div 
-                          className="mt-3 rounded-md overflow-hidden bg-gray-100 cursor-pointer hover:opacity-90 transition-opacity relative group"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewImage({
-                              src: `data:image/png;base64,${workflow.thumbnail}`,
-                              alt: workflow.name
-                            });
-                            setShowImagePreview(true);
-                          }}
-                        >
-                          <img
-                            src={`data:image/png;base64,${workflow.thumbnail}`}
-                            alt={workflow.name}
-                            className="w-full h-32 object-cover"
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black bg-opacity-30">
-                            <span className="text-white text-sm font-medium flex items-center">
-                              <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
-                              </svg>
-                              点击放大
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                      
-                      <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                        <span>节点: {workflow.nodeCount || 0}</span>
-                        <span>版本: {workflow.version || 1}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
-              <button
-                onClick={() => {
-                  setShowWorkflowModal(false);
-                  setSelectedProject(null);
-                  setSelectedWorkflow(null);
-                }}
-                disabled={!!startingProject}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-              >
-                取消
-              </button>
-              <div className="flex items-center space-x-3">
-                <button
-                   onClick={async () => {
-                    if (!selectedProject || !selectedWorkflow) return;
-                    // 关闭工作流选择模态框，打开模型选择模态框
-                    setShowWorkflowModal(false);
-                    // 获取模型列表
-                    await fetchModels();
-                    setShowModelModal(true);
-                  }}
-                  disabled={!selectedWorkflow || !!startingProject}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {startingProject ? '启动中...' : '下一步：选择模型'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 图片预览模态框 */}
       {showImagePreview && previewImage && (
         <div 
@@ -2477,7 +2286,6 @@ toast.error(data.error || '更新项目失败');
                 onClick={() => {
                   setShowModelModal(false);
                   setSelectedProject(null);
-                  setSelectedWorkflow(null);
                   setSelectedModel(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
@@ -2572,8 +2380,7 @@ toast.error(data.error || '更新项目失败');
               <button
                 onClick={() => {
                   setShowModelModal(false);
-                  // 返回工作流选择
-                  setShowWorkflowModal(true);
+                  setSelectedProject(null);
                 }}
                 disabled={!!startingProject}
                 className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
@@ -2583,14 +2390,13 @@ toast.error(data.error || '更新项目失败');
               <div className="flex items-center space-x-3">
                 <button
                   onClick={async () => {
-                    if (!selectedProject || !selectedWorkflow || !selectedModel) return;
+                    if (!selectedProject || !selectedModel) return;
                     // 关闭模态框
                     setShowModelModal(false);
                     setSelectedProject(null);
-                    setSelectedWorkflow(null);
                     setSelectedModel(null);
                     // 启动评估
-                    await startProject(selectedProject.id, selectedWorkflow, selectedModel);
+                    await startProject(selectedProject.id, selectedModel);
                   }}
                   disabled={!selectedModel || !!startingProject}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"

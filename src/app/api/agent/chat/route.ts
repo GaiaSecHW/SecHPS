@@ -38,8 +38,8 @@ export async function POST(request: Request) {
     const execution = await prisma.skillExecution.findUnique({
       where: { id: executionId },
       include: {
-        project: {
-          include: { files: true, config: true },
+        Project: {
+          include: { ProjectFile: true, OpencodeConfig: true },
         },
       },
     });
@@ -62,15 +62,15 @@ export async function POST(request: Request) {
     const stream = new ReadableStream({
       async start(controller) {
         // 创建评估调用器，传递项目目录作为工作目录
-        const caller = createEvaluationCaller(modelConfig, execution.project?.projectPath || undefined);
-        const project = execution.project;
+        const caller = createEvaluationCaller(modelConfig, execution.Project?.projectPath || undefined);
+        const project = execution.Project;
 
         try {
           await caller.continueConversation(executionId, message, {
             projectName: project.name,
             projectDescription: project.description || undefined,
             environmentUrl: project.environmentUrl || undefined,
-            files: project.files.map(f => ({
+            files: project.ProjectFile.map(f => ({
               name: f.fileName,
               type: f.fileType,
               size: f.fileSize,

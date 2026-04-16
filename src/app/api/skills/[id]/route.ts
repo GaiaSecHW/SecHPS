@@ -34,16 +34,16 @@ export async function GET(
     const skill = await prisma.skill.findUnique({
       where: { id },
       include: {
-        executions: {
+        SkillExecution: {
           take: 10,
           orderBy: { createdAt: 'desc' },
         },
-        evolutions: {
+        SkillEvolution: {
           take: 10,
           orderBy: { createdAt: 'desc' },
         },
-        parent: true,  // 父版本
-        versions: {    // 子版本
+        Skill: true,  // 父版本
+        other_Skill: {    // 子版本
           take: 5,
           orderBy: { version: 'desc' },
         },
@@ -149,6 +149,7 @@ export async function PUT(
       // 创建新版本
       updatedSkill = await prisma.skill.create({
         data: {
+          id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           name: skill.name,
           displayName: (updateData.displayName as string) ?? skill.displayName,
           description: (updateData.description as string) ?? skill.description,
@@ -165,6 +166,7 @@ export async function PUT(
           successRate: skill.successRate,
           avgDuration: skill.avgDuration,
           execCount: skill.execCount,
+          updatedAt: new Date(),
         },
       });
 
@@ -183,6 +185,7 @@ export async function PUT(
 
       await prisma.skillEvolution.create({
         data: {
+          id: `evol-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           skillId: updatedSkill.id,
           fromVersion: skill.version,
           toVersion: updatedSkill.version,

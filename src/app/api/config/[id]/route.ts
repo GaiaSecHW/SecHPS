@@ -119,6 +119,7 @@ export async function PATCH(
     // Record audit log
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'config_update',
         resource: config.id,
@@ -181,6 +182,7 @@ export async function DELETE(
     // Record audit log
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'config_delete',
         resource: id,

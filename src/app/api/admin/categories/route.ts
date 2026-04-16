@@ -51,9 +51,11 @@ export async function GET(request: Request) {
       try {
         config = await prisma.systemConfig.create({
           data: {
+            id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             key: 'skill_categories',
             value: JSON.stringify(DEFAULT_CATEGORIES),
             description: '漏洞分类配置',
+            updatedAt: new Date(),
           },
         });
       } catch (createError) {
@@ -110,11 +112,14 @@ export async function PUT(request: Request) {
       where: { key: 'skill_categories' },
       update: {
         value: JSON.stringify(categories),
+        updatedAt: new Date(),
       },
       create: {
+        id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         key: 'skill_categories',
         value: JSON.stringify(categories),
         description: '漏洞分类配置',
+        updatedAt: new Date(),
       },
     });
 

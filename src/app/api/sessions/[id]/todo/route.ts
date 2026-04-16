@@ -33,13 +33,13 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
       include: {
-        project: {
+        Project: {
           select: { projectPath: true }
         }
       }
     });
 
-    const projectPath = evaluation?.project?.projectPath;
+    const projectPath = evaluation?.Project?.projectPath;
 
     // 使用 SDK 获取消息
     const messages = await getSessionMessages(sessionId, projectPath ? { dir: projectPath } : undefined);

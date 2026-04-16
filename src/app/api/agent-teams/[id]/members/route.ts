@@ -74,6 +74,7 @@ export async function POST(
     // Create member
     const member = await prisma.agentTeamMember.create({
       data: {
+        id: `member-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         teamId: id,
         agentId,
         role: role || 'teammate',
@@ -81,7 +82,7 @@ export async function POST(
         overrideTools: overrideTools ? JSON.stringify(overrideTools) : undefined,
       },
       include: {
-        agent: {
+        AgentDefinition: {
           select: {
             id: true,
             name: true,
@@ -113,7 +114,7 @@ export async function POST(
         member: {
           id: member.id,
           agentId: member.agentId,
-          agentName: member.agent?.displayName || member.agent?.name || null,
+          agentName: member.AgentDefinition?.displayName || member.AgentDefinition?.name || null,
           role: member.role,
           overrideModel: member.overrideModel,
           overrideTools: member.overrideTools ? JSON.parse(member.overrideTools) : null,
@@ -168,7 +169,7 @@ export async function DELETE(
     // Check member exists and belongs to this team
     const existingMember = await prisma.agentTeamMember.findUnique({
       where: { id: memberId },
-      select: { teamId: true, agentId: true, agent: { select: { displayName: true, name: true } } },
+      select: { teamId: true, agentId: true, AgentDefinition: { select: { displayName: true, name: true } } },
     });
 
     if (!existingMember) {
@@ -190,7 +191,7 @@ export async function DELETE(
       resource: id,
       details: {
         operation: 'agent_team_member_remove',
-        before: { memberId, agentId: existingMember.agentId, agentName: existingMember.agent?.displayName || existingMember.agent?.name },
+        before: { memberId, agentId: existingMember.agentId, agentName: existingMember.AgentDefinition?.displayName || existingMember.AgentDefinition?.name },
       },
       ipAddress: request.headers.get('x-forwarded-for')?.split(',')[0].trim() || request.headers.get('x-real-ip') || undefined,
       userAgent: request.headers.get('user-agent') || undefined,

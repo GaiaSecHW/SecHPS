@@ -28,13 +28,7 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        workflow: {
-          include: {
-            nodes: true,
-            edges: true,
-          },
-        },
-        nodeExecutions: {
+        NodeExecution: {
           orderBy: { order: 'asc' },
         },
       },
@@ -44,55 +38,20 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 如果没有关联工作流，返回空数据
-    if (!evaluation.workflow) {
-      return NextResponse.json({
-        workflow: null,
-        nodes: [],
-        executions: [],
-      });
-    }
-
-    // 构建节点执行状态映射
-    const executionMap = new Map(
-      evaluation.nodeExecutions.map(exec => [exec.workflowNodeId, exec])
-    );
-
-    // 合并节点数据和执行状态
-    const nodesWithStatus = evaluation.workflow.nodes.map(node => {
-      const execution = executionMap.get(node.id);
-      return {
-        id: node.id,
-        type: node.type,
-        position: { x: node.positionX, y: node.positionY },
-        data: node.data ? JSON.parse(node.data) : {},
-        status: execution?.status || 'pending',
-        startedAt: execution?.startedAt,
-        completedAt: execution?.completedAt,
-        order: execution?.order || 0,
-      };
-    });
-
-    // 获取边
-    const edges = evaluation.workflow.edges.map(edge => ({
-      id: edge.id,
-      source: edge.sourceId,
-      target: edge.targetId,
-      sourceHandle: edge.sourceHandle,
-      targetHandle: edge.targetHandle,
-      label: edge.label,
-      data: edge.data ? JSON.parse(edge.data) : undefined,
+    // 返回节点执行状态
+    const nodesWithStatus = evaluation.NodeExecution.map(exec => ({
+      id: exec.workflowNodeId || exec.id,
+      label: exec.nodeLabel,
+      type: exec.nodeType,
+      status: exec.status,
+      startedAt: exec.startedAt,
+      completedAt: exec.completedAt,
+      order: exec.order,
     }));
 
     return NextResponse.json({
-      workflow: {
-        id: evaluation.workflow.id,
-        name: evaluation.workflow.name,
-        description: evaluation.workflow.description,
-      },
       nodes: nodesWithStatus,
-      edges,
-      executions: evaluation.nodeExecutions,
+      executions: evaluation.NodeExecution,
     });
   } catch (error) {
     console.error('Get evaluation nodes error:', error);
@@ -136,33 +95,42 @@ export async function POST(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 更新或创建节点执行记录
-    const execution = await prisma.nodeExecution.upsert({
+    // 查找现有节点执行记录
+    const existingExecution = await prisma.nodeExecution.findFirst({
       where: {
-        evaluationSessionId_workflowNodeId: {
-          evaluationSessionId: id,
-          workflowNodeId: nodeId,
-        },
-      },
-      update: {
-        status,
-        startedAt: status === 'running' ? new Date() : undefined,
-        completedAt: status === 'completed' || status === 'failed' ? new Date() : undefined,
-        nodeLabel: nodeLabel || undefined,
-        nodeType: nodeType || undefined,
-        order: order ?? undefined,
-      },
-      create: {
         evaluationSessionId: id,
-        workflowNodeId: nodeId,
-        nodeLabel: nodeLabel || '',
-        nodeType: nodeType || 'task',
-        status,
-        order: order ?? 0,
-        startedAt: status === 'running' ? new Date() : null,
-        completedAt: status === 'completed' || status === 'failed' ? new Date() : null,
+        nodeId: nodeId,
       },
     });
+
+    // 更新或创建节点执行记录
+    const execution = existingExecution
+      ? await prisma.nodeExecution.update({
+          where: { id: existingExecution.id },
+          data: {
+            status,
+            startedAt: status === 'running' ? new Date() : undefined,
+            completedAt: status === 'completed' || status === 'failed' ? new Date() : undefined,
+            nodeLabel: nodeLabel || undefined,
+            nodeType: nodeType || undefined,
+            order: order ?? undefined,
+            updatedAt: new Date(),
+          },
+        })
+      : await prisma.nodeExecution.create({
+          data: {
+            id: `nodeexec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            evaluationSessionId: id,
+            workflowNodeId: nodeId,
+            nodeLabel: nodeLabel || '',
+            nodeType: nodeType || 'task',
+            status,
+            order: order ?? 0,
+            startedAt: status === 'running' ? new Date() : null,
+            completedAt: status === 'completed' || status === 'failed' ? new Date() : null,
+            updatedAt: new Date(),
+          },
+        });
 
     return NextResponse.json({ success: true, execution });
   } catch (error) {
@@ -212,12 +180,14 @@ export async function PUT(
       nodes.map((node, index) =>
         prisma.nodeExecution.create({
           data: {
+            id: `nodeexec-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
             evaluationSessionId: id,
             workflowNodeId: node.nodeId,
             nodeLabel: node.nodeLabel,
             nodeType: node.nodeType,
             status: 'pending',
             order: node.order ?? index,
+            updatedAt: new Date(),
           },
         })
       )

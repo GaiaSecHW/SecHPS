@@ -571,3 +571,570 @@
 ### Files Created
 
 - `src/app/dashboard/agent-teams/page.tsx` - AgentTeam list page (450+ lines)
+## Task 18: useAgentTeamWebSocket Hook
+
+### Implementation Patterns
+
+1. **SSE Connection with EventSource**:
+   - EventSource doesn't support custom headers (no Authorization header)
+   - Pass token as query param: url?token=encodeURIComponent(token)
+   - Server route must accept token from both header and query param
+
+2. **Ref-based Callback Pattern (Avoid Circular Dependencies)**:
+   - Use useRef for internal callbacks to avoid circular dependency issues
+   - handleMessageRef, handleErrorRef, connectInternalRef, disconnectRef
+   - Update refs in useEffect when dependencies change
+   - This pattern avoids \"Cannot access X before initialization\" errors
+
+3. **Retry Logic with Refs**:
+   - Use etryCountRef for internal retry tracking (avoids stale closure)
+   - Sync to state with setRetryCount(retryCountRef.current) for UI display
+   - Reset ref in: disconnect(), connect(), onopen, handleMessage
+
+4. **State Management**:
+   - execution: ExecutionStatus (execution_started, execution_completed)
+   - gents: AgentStatus[] (agent_invoked, agent_completed)
+   - messages: MessageDelta[] (message_delta - accumulates)
+   - isConnected, isConnecting, error, etryCount
+
+5. **Auto-disconnect on Completion**:
+   - Call disconnectRef.current() in execution_completed handler
+   - Mark all agents as completed/failed based on execution status
+   - Use ref to avoid circular dependency with disconnect function
+
+6. **Event Parsing**:
+   - Validate required fields: 	ype, executionId, 	eamId
+   - Parse timestamp: 
+ew Date(event.timestamp) if string
+   - Use type guards from @/types/agent-team-events
+
+7. **URL Building**:
+   - Base: /api/agent-teams//stream
+   - With executionId: ${baseUrl}?executionId=
+   - With token: ${url}&token=
+
+### Testing Patterns
+
+1. **Mock EventSource Class**:
+   `	ypescript
+   class MockEventSource {
+     url: string;
+     onopen: ((this: EventSource, ev: Event) => any) | null = null;
+     onmessage: ((this: EventSource, ev: MessageEvent) => any) | null = null;
+     onerror: ((this: EventSource, ev: Event) => any) | null = null;
+     static instances: MockEventSource[] = [];
+     
+     simulateOpen() { this.readyState = 1; this.onopen?.(new Event('open')); }
+     simulateMessage(data: string) { this.onmessage?.(new MessageEvent('message', { data })); }
+     simulateError() { this.onerror?.(new Event('error')); }
+   }
+   vi.stubGlobal('EventSource', MockEventSource);
+   `
+
+2. **JSDOM Environment for React Hooks**:
+   - Add /** @vitest-environment jsdom */ at top of test file
+   - Install @testing-library/react and jsdom
+
+3. **Testing Retry Logic**:
+   - Use i.useFakeTimers() for setTimeout-based retry
+   - i.advanceTimersByTime(retryDelay) to trigger retry
+   - Check MockEventSource.instances.length for new connections
+
+4. **Testing Event Parsing**:
+   - simulateMessage(JSON.stringify({ type, executionId, teamId, timestamp, data }))
+   - Check state updates: esult.current.execution, esult.current.agents, esult.current.messages
+
+5. **Testing Callbacks**:
+   - Pass mock functions: onExecutionStarted: vi.fn()
+   - Verify called with correct data: expect(onExecutionStarted).toHaveBeenCalledWith(expect.objectContaining({ ... }))
+
+### Gotchas
+
+1. **EventSource No Custom Headers**: Must pass token in URL query param
+2. **Circular Dependencies**: Use refs for callbacks that reference each other
+3. **Stale Closure in Retry**: Use ref for retry count, not state
+4. **Auto-connect in useEffect**: Hook connects on mount if enabled=true
+5. **Cleanup on Unmount**: useEffect return calls disconnect()
+
+### Files Created
+
+- src/hooks/useAgentTeamWebSocket.ts - SSE hook (380+ lines)
+- __tests__/hooks/useAgentTeamWebSocket.test.ts - Hook tests (27 tests, all passing)
+
+### Files Modified
+
+- src/app/api/agent-teams/[id]/stream/route.ts - Accept token in query param
+## Task 16: AgentTeamBuilder Page (Visual Editor)
+
+### Implementation Patterns
+
+1. **Page Structure**:
+   - 'use client' directive for client-side rendering
+   - Suspense wrapper with LoadingSpinner fallback
+   - Separate content component from Suspense wrapper
+   - Form sections: Basic Info, Lead Agent, Teammates, Dependencies
+
+2. **Permission Check Pattern**:
+   - Import hasPermission from @/lib/permissions (client-safe)
+   - Import PERMISSIONS from @/types/permissions
+   - Parse token payload with tob(token.split('.')[1]) for permissions
+   - Check AGENT_TEAM_CREATE, AGENT_TEAM_UPDATE, AGENT_TEAM_EXECUTE permissions
+
+3. **Form State Management**:
+   - Use useState for form data with typed interfaces
+   - TeamFormData: name, description, leadAgentId, taskStrategy, maxTeammates, members
+   - TeamMember: id (temp or real), agentId, agent, role, overrideModel, overrideTools, dependsOn
+   - Generate temp IDs for new members: 	emp--
+
+4. **Circular Dependency Detection**:
+   - DFS-based algorithm with recursion stack
+   - Build graph from member IDs and their dependsOn arrays
+   - Check on every member change via useEffect
+   - Show warning UI when circular dependency detected
+
+5. **API Integration**:
+   - GET /api/agent-definitions - Fetch available agents
+   - POST /api/agent-teams - Create new team
+   - PATCH /api/agent-teams/[id] - Update team
+   - GET /api/agent-teams/[id] - Fetch team for edit
+   - POST /api/agent-teams/[id]/members - Add member
+   - DELETE /api/agent-teams/[id]/members?memberId=xxx - Remove member
+   - POST /api/agent-teams/[id]/execute - Execute team
+
+6. **Edit Page Pattern**:
+   - Fetch existing team data on mount
+   - Initialize form from team data
+   - Handle both existing members (real IDs) and new members (temp IDs)
+   - Delete existing members via API, remove new members from local state
+   - Add new members via API after team update
+
+7. **Validation Pattern**:
+   - Inline validation before API call
+   - Check: name required/length, leadAgentId required, maxTeammates range
+   - Check: duplicate agents in members, empty agent selections
+   - Check: circular dependency
+   - Show errors inline with red border and error message
+
+8. **UI Components**:
+   - Lead Agent dropdown with agent details display
+   - Teammate cards with agent selection, model override, dependency buttons
+   - Dependency buttons: toggle to add/remove dependency
+   - Circular dependency warning: red alert box with AlertTriangle icon
+   - Execute button: only show when status === 'idle' and has permission
+
+9. **Ownership Check**:
+   - Admin can edit any team
+   - Regular users can only edit their own teams (team.userId === userId)
+   - Show permission denied UI if not owner/admin
+
+### Gotchas
+
+1. **Edit Page URL**: Use searchParams for teamId, not dynamic route segment (Next.js App Router pattern)
+2. **Temp ID Pattern**: Use 	emp- prefix to distinguish new vs existing members
+3. **Dependency Not Stored**: Current schema doesn't store dependencies, initialize as empty array
+4. **Member Removal**: Delete via API for existing members, just remove from state for new members
+5. **Execute Button**: Only show after save (for new) or when status === 'idle' (for edit)
+
+### Files Created
+
+- src/app/dashboard/agent-teams/new/page.tsx - New team builder page (775 lines)
+- src/app/dashboard/agent-teams/[id]/edit/page.tsx - Edit team page (969 lines)
+
+## Task 17: AgentTeamExecutionMonitor Component
+
+### Implementation Patterns
+
+1. **Component Structure**:
+   - 'use client' directive for client-side rendering
+   - Main component with sub-components: AgentCard, MessageFlowItem, ResultsPanel
+   - Props: teamId, executionId, token, onCompleted, onCancelled
+
+2. **WebSocket Integration**:
+   - Import useAgentTeamWebSocket hook from '@/hooks/useAgentTeamWebSocket'
+   - Import types: AgentStatus, ExecutionStatus, MessageDelta
+   - Hook provides: execution, agents, messages, isConnected, isConnecting, error, retryCount, disconnect
+   - Use onExecutionCompleted callback to notify parent when execution finishes
+
+3. **Status Config Pattern**:
+   - Separate config objects for agent status and execution status
+   - Each config: icon, text, color, bgColor, borderColor, badgeColor
+   - Agent status: pending (gray), running (green), completed (blue), failed (red)
+   - Execution status: pending, running, completed, failed, cancelled
+
+4. **Progress Calculation**:
+   - totalAgents = execution?.memberCount || agents.length || 1
+   - completedAgents = agents.filter(a => a.status === 'completed' || a.status === 'failed').length
+   - progress = Math.round((completedAgents / totalAgents) * 100)
+
+5. **Agent Card Design**:
+   - Status icon with animation (animate-spin for running)
+   - Role badge: Lead Agent (purple) or Teammate (gray)
+   - Token usage display with Zap icon
+   - Latest message preview (truncated to 100 chars)
+   - Timestamps: startedAt, completedAt
+
+6. **Message Flow Panel**:
+   - Scrollable container with max-height: 400px
+   - Auto-scroll to bottom with messagesEndRef
+   - Each message: agent avatar, agent name, timestamp, content (truncated to 200 chars)
+   - Show message count in header
+
+7. **Cancel Button Implementation**:
+   - PATCH to /api/agent-teams/[teamId]/executions/[executionId]
+   - Body: { status: 'cancelled' }
+   - Confirmation dialog before cancel
+   - Call disconnect() after successful cancel
+   - Show loading state during cancel request
+
+8. **Results Panel**:
+   - Show when execution status is completed/failed/cancelled
+   - Summary stats grid: total input tokens, output tokens, estimated cost, status
+   - Result content in scrollable pre block with max-height: 400px
+
+9. **Connection Status Indicator**:
+   - Wifi icon (green) for connected, WifiOff (red) for disconnected
+   - Loader2 (yellow, spinning) for connecting
+   - Show retry count when reconnecting
+
+10. **Helper Functions**:
+    - formatTokens: Format input/output tokens with locale string
+    - formatCost: Format USD cost with 4 decimal places
+    - formatTimestamp: Format Date to locale time string
+    - truncateContent: Truncate string with ellipsis
+
+### UI Components Used
+
+- lucide-react: Activity, AlertCircle, CheckCircle, Clock, Loader2, MessageSquare, PauseCircle, RefreshCw, Wifi, WifiOff, XCircle, Zap, TrendingUp
+- Tailwind CSS: Status colors (gray/green/blue/red/yellow), progress bar, grid layouts
+
+### Gotchas
+
+1. **Import Types from Hook**: Import AgentStatus, ExecutionStatus, MessageDelta from the hook file, not from event types
+2. **onCompleted Callback**: Pass execution object, not the data from event
+3. **Auto-scroll**: Use useRef with scrollIntoView for message auto-scroll
+4. **Cancel API**: Use PATCH method with status: 'cancelled' in body
+5. **Progress Color**: Use different colors based on execution status (red for failed, green for completed, blue for running)
+
+### Files Created
+
+- src/components/agent-team/ExecutionMonitor.tsx - Execution monitor component (573 lines)
+
+## Task 19: AgentDefinitionEditor Page
+
+### Implementation Patterns
+
+1. **Page Structure**:
+   - 'use client' directive for client-side rendering
+   - Suspense wrapper with LoadingSpinner fallback
+   - Separate content component from Suspense wrapper
+   - Form sections: Basic Info, Model Configuration, Tools, Skills, System Prompt
+
+2. **Permission Check Pattern**:
+   - Import hasPermission from '@/lib/permissions' (client-safe)
+   - Import PERMISSIONS from '@/types/permissions'
+   - Parse token payload with atob(token.split('.')[1]) for permissions
+   - Check AGENT_DEFINITION_CREATE, AGENT_DEFINITION_UPDATE, AGENT_DEFINITION_DELETE permissions
+
+3. **Form State Management**:
+   - Use useState for form data with typed interfaces
+   - FormData: name, displayName, description, category, model, systemPrompt, allowedTools, skills, isActive
+   - Toggle functions for multi-select: toggleTool(), toggleSkill()
+
+4. **Built-in Agent Handling**:
+   - Check agent.isBuiltin to determine edit vs clone behavior
+   - Built-in agents: Show read-only view with Clone button
+   - Custom agents: Show editable form with Save/Delete buttons
+   - Lock icon and yellow warning box for built-in agents
+
+5. **Clone Feature**:
+   - POST to /api/agent-definitions with copy-of-{name} as name
+   - Copy all fields from original agent
+   - Set isBuiltin=false, userId=current user
+   - Redirect to edit page for cloned agent
+
+6. **API Integration**:
+   - GET /api/agent-definitions/[id] - Fetch agent for edit/view
+   - POST /api/agent-definitions - Create new agent or clone
+   - PATCH /api/agent-definitions/[id] - Update existing agent
+   - DELETE /api/agent-definitions/[id] - Delete agent
+
+7. **Validation Pattern**:
+   - Inline validation before API call
+   - Check: name required/length/format (lowercase, alphanumeric, hyphens)
+   - Check: displayName required/length
+   - Check: description required/length
+   - Check: model required
+   - Check: at least one tool selected
+   - Show errors inline with red border and error message
+
+8. **Tools Configuration**:
+   - AVAILABLE_TOOLS constant: Read, Glob, Grep, Write, Edit, Bash, LspDiagnostics, LS
+   - NO "Agent" tool (SDK limitation - prevents nested subagents)
+   - Multi-select with toggle buttons (blue when selected)
+
+9. **Skills Configuration**:
+   - Fetch from /api/skills?scope=all&limit=100
+   - Multi-select with toggle buttons (green when selected)
+   - Optional field - can be empty
+
+10. **Model Selection**:
+    - AVAILABLE_MODELS constant: claude-opus-4-20250514, claude-sonnet-4-20250514, claude-3-5-haiku-20241022
+    - Dropdown with model name and description
+
+11. **Ownership Check**:
+    - Admin can edit/delete any agent
+    - Regular users can only edit/delete their own agents (agent.userId === userId)
+    - Show permission denied UI if not owner/admin
+
+12. **View Page Pattern**:
+    - Dynamic route: [id]/page.tsx with params Promise
+    - Resolve params with useEffect: params.then(p => setAgentId(p.id))
+    - Show agent details in read-only format
+    - Action buttons based on permissions and ownership
+
+### UI Components Used
+
+- lucide-react: Bot, ArrowLeft, Save, Settings, Wrench, FileText, AlertTriangle, Loader2, Copy, Lock, Edit2, Trash2, Calendar, User, Activity
+- react-hot-toast: toast.success(), toast.error()
+- next/navigation: useRouter, useSearchParams
+- next/link: Link component for navigation
+
+### Gotchas
+
+1. **Name Format**: Agent name must be lowercase alphanumeric with hyphens only
+2. **Name Immutable**: Name cannot be changed after creation (read-only in edit form)
+3. **No Agent Tool**: Custom agents cannot have "Agent" tool (SDK limitation)
+4. **Built-in Check**: Always check isBuiltin before allowing edit/delete
+5. **Clone Name**: Use copy-of-{originalName} pattern for cloned agents
+6. **Params Promise**: Next.js 16 params are Promise, must resolve with useEffect
+7. **Delete Confirmation**: Use confirm() dialog before delete
+
+### Files Created
+
+- src/app/dashboard/agent-definitions/new/page.tsx - New agent form (540 lines)
+- src/app/dashboard/agent-definitions/[id]/edit/page.tsx - Edit agent form (857 lines)
+- src/app/dashboard/agent-definitions/[id]/page.tsx - View agent details (577 lines)
+
+## Task 26: AgentTeam Ralph Loop Integration
+
+### Implementation Patterns
+
+1. **executeWithRalphLoop() Method Structure**:
+   - Parse ralphConfig from team.ralphConfig using parseRalphConfig()
+   - If not enabled, fall back to regular execute() method
+   - Create execution record before starting iteration loop
+   - Track: iteration, totalCostUsd, completionReason, lastFeedback, currentTask
+   - Return: { executionId, iterations, completionReason, totalCostUsd }
+
+2. **Iteration Loop Logic**:
+   ```typescript
+   while (iteration < ralphConfig.maxIterations && totalCostUsd < ralphConfig.maxCostUsd) {
+     // 1. Check abort signal
+     // 2. Broadcast iteration_started event
+     // 3. Execute single iteration (runSingleIteration)
+     // 4. Build VerificationContext
+     // 5. Run verification (runVerification)
+     // 6. Record iteration
+     // 7. Broadcast iteration_completed event
+     // 8. If verification fails and experienceTrigger='on_failure', query experiences
+     // 9. Check cost limit
+   }
+   ```
+
+3. **runSingleIteration() Helper Method**:
+   - Similar to runExecution() but returns iteration result instead of void
+   - Returns: { text, inputTokens, outputTokens, costUsd, subagentCalls }
+   - Tracks subagent calls via Agent tool_use/tool_result messages
+   - Uses calculateCost() for cost attribution
+
+4. **runVerification() Helper Method**:
+   - Keyword-based verification (completion/failure keywords)
+   - Returns: { verified, feedback, stopReason, suggestedAction }
+   - Completion keywords: '任务完成', 'completed', 'done', etc.
+   - Failure keywords: '任务失败', 'failed', 'error', etc.
+
+5. **Experience Query Integration**:
+   - Only query when experienceTrigger === 'on_failure' AND verification fails
+   - Use buildDynamicExperiencePrompt() from experience-query-service
+   - Inject guidance into next iteration's task: `${task}\n\n[经验指导]\n${guidanceData.prompt}`
+   - Broadcast experience_queried event with found experiences
+
+6. **Event Broadcasting**:
+   - emitIterationStarted(executionId, teamId, { iteration, maxIterations, previousFeedback, totalCostUsdSoFar })
+   - emitIterationCompleted(executionId, teamId, { iteration, result, verified, feedback, tokensUsed, costUsd, totalCostUsdSoFar })
+   - emitExperienceQueried(executionId, teamId, { iteration, experiencesFound, experienceTitles, guidanceInjected })
+
+7. **Completion Reasons**:
+   - 'verified': Verification passed
+   - 'max_iterations': Reached maxIterations limit
+   - 'max_cost': Reached maxCostUsd limit
+   - 'aborted': AbortController.signal.aborted
+
+8. **Iteration Record Tracking**:
+   - IterationRecord: { iteration, startedAt, completedAt, result, verification, tokensUsed, costUsd, experienceQueried, experiencesFound }
+   - Store in iterationRecords array for potential future use
+
+### Imports Required
+
+```typescript
+import { parseRalphConfig } from '@/types/ralph-loop-config';
+import type {
+  AgentTeamVerificationContext,
+  AgentTeamVerificationResult,
+  SubagentCallRecord,
+  IterationRecord,
+} from '@/types/ralph-loop-config';
+import { emitIterationStarted, emitIterationCompleted, emitExperienceQueried } from '@/lib/agent-team-events';
+import { buildDynamicExperiencePrompt } from '@/services/autonomous-evolution/experience-query-service';
+```
+
+### Gotchas
+
+1. **Unused Imports**: Remove RalphLoopConfig, RalphLoopExecutionResult, queryRelevantExperiences (not directly used)
+2. **Experience Query Only on Failure**: Don't query experiences on every iteration, only when verification fails
+3. **Task Injection**: Inject experience guidance into currentTask for next iteration, not original task
+4. **Cost Check**: Check cost limit AFTER adding iteration cost, not before
+5. **Abort Check**: Check abort signal at start of each iteration AND after iteration completes
+6. **Fallback to execute()**: If ralphConfig.enabled=false, call regular execute() and return with iterations=1
+
+### Files Modified
+
+- src/services/agent-team/execution-service.ts - Added executeWithRalphLoop(), runSingleIteration(), runVerification() (1385+ lines)
+
+## Task 28: Ralph Loop Tests and Documentation
+
+### Test Coverage (34 Tests)
+
+1. **Iteration Termination Tests** (4 tests):
+   - stops when maxIterations reached
+   - stops when maxCostUsd reached
+   - stops when verified=true
+   - falls back to regular execute when Ralph Loop disabled
+
+2. **Experience Learning Trigger Tests** (4 tests):
+   - queries experiences on verification failure (experienceTrigger=on_failure)
+   - does not query experiences on verification success
+   - injects guidance into next iteration task
+   - experienceTrigger=disabled does not query experiences
+
+3. **WebSocket Event Tests** (3 tests):
+   - broadcasts iteration_started event
+   - broadcasts iteration_completed event
+   - broadcasts experience_queried event when experiences found
+
+4. **parseRalphConfig Tests** (6 tests):
+   - returns default config for null input
+   - returns default config for undefined input
+   - returns default config for empty string
+   - parses valid JSON config
+   - merges with defaults for partial config
+   - returns default config for invalid JSON
+
+5. **Abort Handling Tests** (1 test):
+   - returns aborted completion reason when abort signal triggered
+
+6. **Cost Calculation Tests** (1 test):
+   - totalCostUsd accumulates across iterations
+
+7. **WebSocket Hook Tests** (14 tests):
+   - iteration_started event updates iteration state
+   - iteration_completed event updates iteration state with verification
+   - iteration_completed event with verified=false updates status to failed
+   - iteration history accumulates across multiple iterations
+   - experience_queried event updates experience state
+   - experience_queried event updates iteration history
+   - multiple experience_queried events for different iterations
+   - all Ralph Loop callbacks are invoked correctly
+   - callbacks are not invoked when hook is disabled
+   - disconnect clears iteration and experience state
+   - reconnect resets iteration state
+   - handles malformed iteration event gracefully
+   - handles iteration event with missing fields
+   - handles rapid iteration events
+
+### Testing Patterns
+
+1. **Mock Ralph Loop Config**:
+   ```typescript
+   const createMockTeamWithRalphConfig = (ralphConfig: object) => ({
+     ...mockTeam,
+     ralphConfig: JSON.stringify(ralphConfig),
+   });
+   ```
+
+2. **Mock Query for Multiple Iterations**:
+   ```typescript
+   let queryCallCount = 0;
+   (query as any).mockImplementation(() => {
+     queryCallCount++;
+     const mockIterator = {
+       async *[Symbol.asyncIterator]() {
+         if (queryCallCount === 1) {
+           // First iteration - not verified
+           yield { type: 'assistant', content: [{ type: 'text', text: 'Working...' }], message: { usage: { input_tokens: 100, output_tokens: 50 } } };
+           yield { type: 'result', subtype: 'success', result: 'Still working' };
+         } else {
+           // Second iteration - verified
+           yield { type: 'assistant', content: [{ type: 'text', text: 'Task completed' }], message: { usage: { input_tokens: 100, output_tokens: 50 } } };
+           yield { type: 'result', subtype: 'success', result: '任务完成' };
+         }
+       },
+     };
+     return mockIterator;
+   });
+   ```
+
+3. **Mock Experience Query Service**:
+   ```typescript
+   (buildDynamicExperiencePrompt as any).mockResolvedValue({
+     prompt: '## Experience Guidance\nTry checking file permissions first.',
+     matches: [{ experience: { title: 'Permission fix' }, relevanceScore: 10, matchedPatterns: ['permission'] }],
+   });
+   ```
+
+4. **JSDOM Environment for React Hook Tests**:
+   ```typescript
+   /**
+    * @vitest-environment jsdom
+    */
+   ```
+   - Required for @testing-library/react renderHook
+   - Add at top of test file before imports
+
+5. **Mock EventSource for SSE Tests**:
+   ```typescript
+   class MockEventSource {
+     url: string;
+     onopen: ((event: Event) => void) | null = null;
+     onmessage: ((event: MessageEvent) => void) | null = null;
+     simulateMessage(data: string) {
+       if (!this.closed && this.onmessage) {
+         this.onmessage(new MessageEvent('message', { data }));
+       }
+     }
+   }
+   vi.stubGlobal('EventSource', MockEventSource);
+   ```
+
+6. **Test Event Broadcasting**:
+   ```typescript
+   expect(emitIterationStarted).toHaveBeenCalled();
+   const callArgs = (emitIterationStarted as any).mock.calls[0];
+   expect(callArgs[0]).toBe('exec-ralph-1');
+   expect(callArgs[1]).toBe('team-ralph-1');
+   expect(callArgs[2].iteration).toBe(1);
+   expect(callArgs[2].maxIterations).toBe(3);
+   ```
+
+### Gotchas
+
+1. **Completion Keywords in Mock Results**: Mock result text must NOT contain completion keywords ('任务完成', 'completed', 'done') when testing max_iterations or max_cost termination
+2. **JSDOM Environment**: React hook tests require jsdom environment - add `@vitest-environment jsdom` comment at top
+3. **EventSource Mock**: Capture EventSource instances in array for testing: `MockEventSource.instances.push(this)`
+4. **Cost Calculation**: Use `toBeCloseTo(value, 2)` for cost assertions due to floating point precision
+5. **Experience Query Only on Failure**: buildDynamicExperiencePrompt is only called when verification fails AND experienceTrigger='on_failure'
+
+### Files Created
+
+- __tests__/services/agent-team-ralph-loop.test.ts - Ralph Loop integration tests (20 tests)
+- __tests__/hooks/useAgentTeamWebSocket-ralph.test.ts - WebSocket hook iteration tests (14 tests)

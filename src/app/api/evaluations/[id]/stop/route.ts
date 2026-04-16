@@ -30,7 +30,7 @@ export async function POST(
     // 检查评估会话是否存在
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: { project: { select: { userId: true } } },
+      include: { Project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
@@ -39,7 +39,7 @@ export async function POST(
 
     // 权限检查：管理员 或 项目所有者 可以停止评估
     const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
-    const isProjectOwner = evaluation.project.userId === payload.userId;
+    const isProjectOwner = evaluation.Project.userId === payload.userId;
     
     if (!isAdmin && !isProjectOwner) {
       return NextResponse.json({ error: '无权操作此评估' }, { status: 403 });
@@ -83,16 +83,17 @@ export async function POST(
     // 记录审计日志
     try {
       await prisma.auditLog.create({
-        data: {
-          userId: payload.userId,
-          action: 'evaluation_stop',
-          resource: id,
-          details: JSON.stringify({
-            projectId: evaluation.projectId,
-            reason: '用户手动中止',
-          }),
-        },
-      });
+            data: {
+              id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              userId: payload.userId,
+              action: 'evaluation_stop',
+              resource: id,
+              details: JSON.stringify({
+                projectId: evaluation.projectId,
+                reason: '用户手动中止',
+              }),
+            },
+          });
       console.log(`[Stop Evaluation] 记录审计日志成功: ${id}`);
     } catch (auditError) {
       console.error('[Stop Evaluation] 记录审计日志失败:', auditError);

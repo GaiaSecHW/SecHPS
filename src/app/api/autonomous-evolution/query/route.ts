@@ -77,7 +77,8 @@ export async function POST(request: Request) {
     if (experiences.length > 0) {
       const experienceIds = experiences.map((e) => e.id);
       await prisma.experienceUsageLog.createMany({
-        data: experienceIds.map((expId) => ({
+        data: experienceIds.map((expId, index) => ({
+          id: `explog-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
           experienceId: expId,
           evaluationId: `tool_call_${Date.now()}`, // 使用特殊标识区分 tool_call 来源
           projectId: null,

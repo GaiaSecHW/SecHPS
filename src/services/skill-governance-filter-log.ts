@@ -105,6 +105,7 @@ export class SkillGovernanceFilterLogService {
 
       const auditLog = await prisma.auditLog.create({
         data: {
+          id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           userId: userId || null,
           action: 'governance_filter',
           resource: `evaluation:${evaluationId}`,

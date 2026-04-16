@@ -73,6 +73,7 @@ export class PluginManager {
         // 创建新插件记录
         await prisma.plugin.create({
           data: {
+            id: `plugin-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: manifest.name,
             displayName: manifest.displayName,
             description: manifest.description,
@@ -86,6 +87,7 @@ export class PluginManager {
             icon: manifest.icon,
             homepage: manifest.homepage,
             repository: manifest.repository,
+            updatedAt: new Date(),
           },
         });
       } else {
@@ -166,6 +168,7 @@ export class PluginManager {
     // 创建插件记录
     const plugin = await prisma.plugin.create({
       data: {
+        id: `plugin-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         name: manifest.name,
         displayName: manifest.displayName,
         description: manifest.description,
@@ -180,6 +183,7 @@ export class PluginManager {
         homepage: manifest.homepage,
         repository: manifest.repository,
         config: manifest.configSchema ? JSON.stringify(manifest.configSchema) : null,
+        updatedAt: new Date(),
       },
     });
     

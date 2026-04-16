@@ -213,6 +213,7 @@ async function executeContentMerge(
     // 4. 创建合并后的 Skill
     const mergedSkill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         name: mergedName,
         displayName: mergedDisplayName,
         description: mergedDescription,
@@ -233,6 +234,7 @@ async function executeContentMerge(
         execCount: targetSkill.execCount,
         referenceCount: targetSkill.referenceCount,
         vulnerabilityCount: targetSkill.vulnerabilityCount,
+        updatedAt: new Date(),
       },
     });
     
@@ -284,6 +286,7 @@ async function executeContentMerge(
     for (const sourceSkill of sourceSkills) {
       const mergeRecord = await prisma.skillMergeRecord.create({
         data: {
+          id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           sourceSkillId: sourceSkill.id,
           targetSkillId: mergedSkill.id,
           mergeReason: options.mergeReason,
@@ -294,6 +297,7 @@ async function executeContentMerge(
           completedAt: new Date(),
           sourceOwnerConsent: true,  // 同一用户合并默认同意
           targetOwnerConsent: true,
+          updatedAt: new Date(),
         },
       });
       mergeRecords.push(mergeRecord);
@@ -302,6 +306,7 @@ async function executeContentMerge(
     // 为目标 Skill 也创建合并记录
     const targetMergeRecord = await prisma.skillMergeRecord.create({
       data: {
+        id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         sourceSkillId: targetSkill.id,
         targetSkillId: mergedSkill.id,
         mergeReason: options.mergeReason,
@@ -312,6 +317,7 @@ async function executeContentMerge(
         completedAt: new Date(),
         sourceOwnerConsent: true,
         targetOwnerConsent: true,
+        updatedAt: new Date(),
       },
     });
     mergeRecords.push(targetMergeRecord);
@@ -368,6 +374,7 @@ async function executeReplaceMerge(
     // 创建新版本
     const mergedSkill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         name: targetSkill.name,
         displayName: `${targetSkill.displayName} (合并版)`,
         description: targetSkill.description,
@@ -387,6 +394,7 @@ async function executeReplaceMerge(
         execCount: targetSkill.execCount,
         referenceCount: targetSkill.referenceCount,
         vulnerabilityCount: targetSkill.vulnerabilityCount,
+        updatedAt: new Date(),
       },
     });
     
@@ -429,6 +437,7 @@ async function executeReplaceMerge(
     for (const sourceSkill of sourceSkills) {
       const mergeRecord = await prisma.skillMergeRecord.create({
         data: {
+          id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           sourceSkillId: sourceSkill.id,
           targetSkillId: mergedSkill.id,
           mergeReason: options.mergeReason,
@@ -439,6 +448,7 @@ async function executeReplaceMerge(
           completedAt: new Date(),
           sourceOwnerConsent: true,
           targetOwnerConsent: true,
+          updatedAt: new Date(),
         },
       });
       mergeRecords.push(mergeRecord);
@@ -533,6 +543,7 @@ async function executeTechStackSplit(
       // 创建新版本
       const updatedSkill = await prisma.skill.create({
         data: {
+          id: `skill-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           name: skill.name,
           displayName: skill.displayName,
           description: skill.description,
@@ -552,6 +563,7 @@ async function executeTechStackSplit(
           execCount: skill.execCount,
           referenceCount: skill.referenceCount,
           vulnerabilityCount: skill.vulnerabilityCount,
+          updatedAt: new Date(),
         },
       });
       
@@ -588,6 +600,7 @@ async function executeTechStackSplit(
     // 创建合并记录（记录整个拆分操作）
     const mergeRecord = await prisma.skillMergeRecord.create({
       data: {
+        id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         sourceSkillId: targetSkill.id,  // 使用目标 Skill 作为主记录
         targetSkillId: targetSkill.id,  // 目标和源相同，表示拆分操作
         mergeReason: options.mergeReason,
@@ -598,6 +611,7 @@ async function executeTechStackSplit(
         completedAt: new Date(),
         sourceOwnerConsent: true,
         targetOwnerConsent: true,
+        updatedAt: new Date(),
       },
     });
     
@@ -715,6 +729,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
     for (const sourceSkill of sourceSkills) {
       const mergeRecord = await prisma.skillMergeRecord.create({
         data: {
+          id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           sourceSkillId: sourceSkill.id,
           targetSkillId: targetSkill.id,
           mergeReason: options.mergeReason,
@@ -722,6 +737,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
           status: 'pending',
           sourceOwnerConsent: sourceSkill.userId === options.userId,
           targetOwnerConsent: targetSkill.userId === options.userId,
+          updatedAt: new Date(),
         },
       });
       mergeRecords.push(mergeRecord);

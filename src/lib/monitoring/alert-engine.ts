@@ -186,6 +186,7 @@ export class AlertEngine {
     // 创建告警实例
     const alert = await prisma.alertInstance.create({
       data: {
+        id: `alert-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         ruleId: rule.id,
         ruleName: rule.name,
         severity: rule.severity,
@@ -194,6 +195,7 @@ export class AlertEngine {
         value,
         threshold,
         triggeredAt: new Date(),
+        updatedAt: new Date(),
       },
     });
 

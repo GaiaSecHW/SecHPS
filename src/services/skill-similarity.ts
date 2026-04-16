@@ -1,7 +1,13 @@
 /**
  * Skill Similarity Service
- * 三层相似度检测服务：关键词匹配、类别+CWE匹配、内容深度分析
+ * 三层相似度检测服务：关键词匹配、类别+CWE匹配、内容深度分析（可选LLM）
  */
+
+import { 
+  analyzeSkillDuplication, 
+  type SkillForLLMAnalysis, 
+  type LLMAnalysisResult 
+} from './skill-llm-analysis';
 
 // ============================================================================
 // Types
@@ -32,6 +38,7 @@ export interface SimilarSkill {
   keywordScore: number;         // 关键词得分 0-1
   contentScore?: number;        // 内容得分（可选，LLM分析时）
   reason: string;
+  llmAnalysis?: LLMAnalysisResult;  // LLM 深度分析结果（可选）
 }
 
 /**

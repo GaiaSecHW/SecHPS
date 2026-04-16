@@ -29,8 +29,8 @@ export async function POST(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        project: {
-          include: { files: true, config: true, user: true },
+        Project: {
+          include: { ProjectFile: true, OpencodeConfig: true, User: true },
         },
       },
     });
@@ -47,8 +47,8 @@ export async function POST(
     let progressQuestion = '';
     
     // 方法1: 从项目的关联配置中获取 progressQuestion
-    if (evaluation.project?.config?.progressQuestion) {
-      progressQuestion = evaluation.project.config.progressQuestion;
+    if (evaluation.Project?.OpencodeConfig?.progressQuestion) {
+      progressQuestion = evaluation.Project.OpencodeConfig.progressQuestion;
       console.log('[AskProgress] 使用项目关联配置的进展询问消息');
     }
     
@@ -58,7 +58,7 @@ export async function POST(
         // 获取用户的默认配置（isActive: true）
         const userDefaultConfig = await prisma.opencodeConfig.findFirst({
           where: {
-            userId: evaluation.project.user.id,
+            userId: evaluation.Project.User.id,
             isActive: true,
           },
           select: { progressQuestion: true },
@@ -92,7 +92,7 @@ export async function POST(
       model: modelConfig.model,
       baseUrl: modelConfig.baseUrl,
       maxTokens: 4096,
-      cwd: evaluation.project?.projectPath || undefined,
+      cwd: evaluation.Project?.projectPath || undefined,
       allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
       resumeSession: evaluation.opencodeSessionId || undefined,
     });

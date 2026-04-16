@@ -95,6 +95,7 @@ export async function POST(request: Request) {
         // 创建新 Skill
         await prisma.skill.create({
           data: {
+            id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             name: skill.name,
             displayName: skill.displayName,
             description: skill.description,
@@ -112,6 +113,7 @@ export async function POST(request: Request) {
             avgDuration: skill.avgDuration || null,
             execCount: skill.execCount || 0,
             userId: null, // 导入的 Skills 为公共资源
+            updatedAt: new Date(),
           },
         });
 

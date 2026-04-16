@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   AlertTriangle,
+  ArrowLeft,
   Search,
   GitMerge,
   ArrowRightLeft,
@@ -212,6 +214,15 @@ export default function NewImpactPage() {
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <Link 
+        href="/dashboard/admin/skills-governance"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        返回治理总览
+      </Link>
+
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900">新增 Skill 影响分析</h1>

@@ -66,7 +66,12 @@ export async function POST(request: Request) {
 
       // 创建运行记录
       const runLog = await prisma.autonomousEvolutionRunLog.create({
-        data: { mode, trigger: 'manual', status: 'running' },
+        data: {
+          id: `runlog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          mode,
+          trigger: 'manual',
+          status: 'running',
+        },
       });
 
       try {

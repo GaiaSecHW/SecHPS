@@ -135,6 +135,7 @@ export async function POST(request: Request) {
     // 创建模型配置
     const model = await prisma.modelConfig.create({
       data: {
+        id: `model-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         providerType: providerType || 'openai',
         apiBaseUrl,
@@ -143,6 +144,7 @@ export async function POST(request: Request) {
         routeType: providerType === 'openai' ? routeType || 'default' : null,
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isDefault || false,
+        updatedAt: new Date(),
       },
     });
 

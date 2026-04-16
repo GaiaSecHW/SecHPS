@@ -51,14 +51,14 @@ export async function GET(
         skip: offset,
         take: limit,
         include: {
-          workflow: {
+          AgentTeam: {
             select: {
               id: true,
               name: true,
             },
           },
           _count: {
-            select: { messages: true },
+            select: { SessionMessage: true },
           },
         },
       }),
@@ -74,10 +74,10 @@ export async function GET(
       completedAt: session.completedAt?.toISOString() || null,
       title: session.title || `评估会话`,
       summary: session.summary,
-      messageCount: session.messageCount || session._count.messages,
+      messageCount: session.messageCount || session._count.SessionMessage,
       provider: session.provider,
-      workflowId: session.workflowId,
-      workflowName: session.workflow?.name,
+      agentTeamId: session.agentTeamId,
+      agentTeamName: session.AgentTeam?.name,
       errorMessage: session.errorMessage,
       lastActivity: session.lastActivity?.toISOString() || session.startedAt.toISOString(),
     }));

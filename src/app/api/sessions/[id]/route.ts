@@ -31,18 +31,18 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
       include: {
-        project: {
+        Project: {
           select: { projectPath: true, userId: true }
         }
       }
     });
 
     // 用户归属校验：检查项目是否属于当前用户
-    if (evaluation?.project && evaluation.project.userId !== payload.userId) {
+    if (evaluation?.Project && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权限访问此会话' }, { status: 403 });
     }
 
-    const projectPath = evaluation?.project?.projectPath;
+    const projectPath = evaluation?.Project?.projectPath;
 
     // 使用 SDK 获取会话信息
     const sessionInfo = await getSessionInfo(sessionId, projectPath ? { dir: projectPath } : undefined);
@@ -106,14 +106,14 @@ export async function DELETE(
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
       include: {
-        project: {
+        Project: {
           select: { userId: true }
         }
       }
     });
 
     // 用户归属校验：检查项目是否属于当前用户
-    if (evaluation?.project && evaluation.project.userId !== payload.userId) {
+    if (evaluation?.Project && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权限删除此会话' }, { status: 403 });
     }
 

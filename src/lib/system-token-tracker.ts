@@ -42,6 +42,7 @@ export async function ensureSystemProject(): Promise<void> {
           passwordHash: '', // 系统用户不需要密码
           name: '系统',
           isActive: true,
+          updatedAt: new Date(),
         },
       });
       console.log('[SystemTokenTracker] 创建系统用户');
@@ -62,6 +63,7 @@ export async function ensureSystemProject(): Promise<void> {
           displayName: '系统 Token 消耗统计',
           description: '用于统计系统自身消耗的 Token（如 Skill 创建、优化、自动进化等）',
           status: 'idle',
+          updatedAt: new Date(),
         },
       });
       console.log('[SystemTokenTracker] 创建系统项目');
@@ -96,6 +98,7 @@ export async function trackSystemTokenUsage(
     // 记录到 TokenUsage 表
     await prisma.tokenUsage.create({
       data: {
+        id: `token-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         evaluationId: null, // 系统调用没有评估 ID
         projectId: SYSTEM_PROJECT_ID,
         apiProvider: 'system',

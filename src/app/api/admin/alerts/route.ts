@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     const rules = await prisma.alertRule.findMany({
       include: {
         _count: {
-          select: { alerts: true },
+          select: { AlertInstance: true },
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
         condition: JSON.parse(rule.condition),
         notificationChannels: JSON.parse(rule.notificationChannels),
         tags: rule.tags ? JSON.parse(rule.tags) : null,
-        alertCount: rule._count.alerts,
+        alertCount: rule._count.AlertInstance,
       })),
     });
   } catch (error) {
@@ -78,6 +78,7 @@ export async function POST(request: Request) {
 
     const rule = await prisma.alertRule.create({
       data: {
+        id: `alert-rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         description,
         metricType,
@@ -86,11 +87,13 @@ export async function POST(request: Request) {
         cooldownPeriod: cooldownPeriod || 300,
         notificationChannels: JSON.stringify(notificationChannels),
         tags: tags ? JSON.stringify(tags) : null,
+        updatedAt: new Date(),
       },
     });
 
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         action: 'alert_rule_create',
         resource: rule.id,

@@ -143,8 +143,8 @@ export async function GET(
         },
         _count: {
           select: {
-            members: true,
-            teamExecutions: true,
+            AgentTeamMember: true,
+            AgentTeamExecution: true,
           },
         },
       },
@@ -263,7 +263,7 @@ export async function PATCH(
       where: { id },
       data: updateData,
       include: {
-        leadAgent: {
+        AgentDefinition: {
           select: {
             id: true,
             name: true,
@@ -272,9 +272,9 @@ export async function PATCH(
             model: true,
           },
         },
-        members: {
+        AgentTeamMember: {
           include: {
-            agent: {
+            AgentDefinition: {
               select: {
                 id: true,
                 name: true,

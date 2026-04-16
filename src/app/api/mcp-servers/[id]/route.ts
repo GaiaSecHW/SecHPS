@@ -48,7 +48,7 @@ export async function GET(
         projectId: null,
       },
       include: {
-        user: {
+        User: {
           select: { id: true, username: true, name: true },
         },
       },

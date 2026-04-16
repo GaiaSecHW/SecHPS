@@ -224,6 +224,8 @@ describe('AgentDefinition API', () => {
           userId: 'user-1',
           isBuiltin: false,
           isActive: true,
+          updatedAt: expect.any(Date),
+          id: expect.any(String),
         },
       });
     });

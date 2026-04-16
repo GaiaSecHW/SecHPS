@@ -71,11 +71,11 @@ export async function GET(
           totalInputTokens: true,
           totalOutputTokens: true,
           createdAt: true,
-          evaluation: {
+          EvaluationSession: {
             select: {
               id: true,
               title: true,
-              project: {
+              Project: {
                 select: {
                   id: true,
                   name: true,
@@ -83,7 +83,7 @@ export async function GET(
               },
             },
           },
-          memberExecutions: {
+          AgentMemberExecution: {
             select: {
               id: true,
               memberId: true,
@@ -92,11 +92,11 @@ export async function GET(
               completedAt: true,
               inputTokens: true,
               outputTokens: true,
-              member: {
+              AgentTeamMember: {
                 select: {
                   id: true,
                   role: true,
-                  agent: {
+                  AgentDefinition: {
                     select: {
                       id: true,
                       name: true,
@@ -119,26 +119,26 @@ export async function GET(
       id: execution.id,
       teamId: execution.teamId,
       evaluationId: execution.evaluationId,
-      evaluationTitle: execution.evaluation?.title || null,
-      projectId: execution.evaluation?.project?.id || null,
-      projectName: execution.evaluation?.project?.name || null,
+      evaluationTitle: execution.EvaluationSession?.title || null,
+      projectId: execution.EvaluationSession?.Project?.id || null,
+      projectName: execution.EvaluationSession?.Project?.name || null,
       status: execution.status,
       startedAt: execution.startedAt,
       completedAt: execution.completedAt,
       totalInputTokens: execution.totalInputTokens,
       totalOutputTokens: execution.totalOutputTokens,
       createdAt: execution.createdAt,
-      memberCount: execution.memberExecutions.length,
-      completedMembers: execution.memberExecutions.filter(m => m.status === 'completed').length,
-      runningMembers: execution.memberExecutions.filter(m => m.status === 'running').length,
-      pendingMembers: execution.memberExecutions.filter(m => m.status === 'pending').length,
-      memberExecutions: execution.memberExecutions.map(me => ({
+      memberCount: execution.AgentMemberExecution.length,
+      completedMembers: execution.AgentMemberExecution.filter(m => m.status === 'completed').length,
+      runningMembers: execution.AgentMemberExecution.filter(m => m.status === 'running').length,
+      pendingMembers: execution.AgentMemberExecution.filter(m => m.status === 'pending').length,
+      memberExecutions: execution.AgentMemberExecution.map(me => ({
         id: me.id,
         memberId: me.memberId,
-        role: me.member.role,
-        agentId: me.member.agent.id,
-        agentName: me.member.agent.name,
-        agentDisplayName: me.member.agent.displayName,
+        role: me.AgentTeamMember.role,
+        agentId: me.AgentTeamMember.AgentDefinition.id,
+        agentName: me.AgentTeamMember.AgentDefinition.name,
+        agentDisplayName: me.AgentTeamMember.AgentDefinition.displayName,
         status: me.status,
         startedAt: me.startedAt,
         completedAt: me.completedAt,

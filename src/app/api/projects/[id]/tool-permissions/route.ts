@@ -119,10 +119,12 @@ export async function POST(
     // 创建工具权限规则
     const toolPermission = await prisma.toolPermission.create({
       data: {
+        id: `toolperm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         projectId,
         toolPattern,
         permission,
         description: description || null,
+        updatedAt: new Date(),
       },
     });
 

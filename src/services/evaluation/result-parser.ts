@@ -455,6 +455,7 @@ export async function parseAndSaveResults(
       try {
         await prisma.evaluationResult.create({
           data: {
+            id: `result-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             evaluationId,
             totalVulns: 0,
             criticalCount: 0,
@@ -519,6 +520,7 @@ export async function parseAndSaveResults(
       } else {
         await prisma.evaluationResult.create({
           data: {
+            id: `result-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             evaluationId,
             totalVulns: stats.total,
             criticalCount: stats.critical,
@@ -548,6 +550,7 @@ export async function parseAndSaveResults(
       try {
         await prisma.vulnerability.create({
           data: {
+            id: `vuln-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             projectId,
             evaluationId,
             type: vuln.type || '未知类型',
@@ -559,6 +562,7 @@ export async function parseAndSaveResults(
             fixSuggestion: vuln.recommendation || null,
             aiAnalysis: vuln.description || null,
             skill: vuln.skill || null,
+            updatedAt: new Date(),
           },
         });
         savedCount++;

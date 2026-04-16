@@ -81,6 +81,7 @@ export async function POST(
     // 创建新版本（基于目标版本）
     const newSkill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: targetSkill.name,
         displayName: targetSkill.displayName,
         description: targetSkill.description,
@@ -97,12 +98,14 @@ export async function POST(
         successRate: targetSkill.successRate,
         avgDuration: targetSkill.avgDuration,
         execCount: targetSkill.execCount,
+        updatedAt: new Date(),
       },
     });
 
     // 记录进化历史
     await prisma.skillEvolution.create({
       data: {
+        id: `evol-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         skillId: newSkill.id,
         fromVersion: currentLatest.version,
         toVersion: newSkill.version,

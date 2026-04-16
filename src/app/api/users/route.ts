@@ -43,16 +43,16 @@ export async function GET(request: Request) {
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         include: {
-          userRoles: {
+          UserRole: {
             include: {
-              role: {
+              Role: {
                 include: {
-                  permissions: true,
+                  Permission: true,
                 },
               },
             },
           },
-          opencodeConfig: true,
+          OpencodeConfig: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -72,13 +72,13 @@ export async function GET(request: Request) {
       avatar: user.avatar,
       isActive: user.isActive,
       createdAt: user.createdAt,
-      roles: user.userRoles.map(ur => ({
-        id: ur.role.id,
-        name: ur.role.name,
-        description: ur.role.description,
-        permissions: ur.role.permissions.map(p => p.name),
+      roles: user.UserRole.map(ur => ({
+        id: ur.Role.id,
+        name: ur.Role.name,
+        description: ur.Role.description,
+        permissions: ur.Role.Permission.map(p => p.name),
       })),
-      opencodeConfigs: user.opencodeConfig.map(config => ({
+      opencodeConfigs: user.OpencodeConfig.map(config => ({
         id: config.id,
         name: config.name,
         baseURL: config.baseURL,
@@ -165,10 +165,12 @@ export async function POST(request: Request) {
       // 创建用户
       const newUser = await tx.user.create({
         data: {
+          id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           email,
           username,
           passwordHash,
           name: name || username,
+          updatedAt: new Date(),
         },
       });
 
@@ -181,7 +183,8 @@ export async function POST(request: Request) {
 
         if (roleRecords.length > 0) {
           await tx.userRole.createMany({
-            data: roleRecords.map((role) => ({
+            data: roleRecords.map((role, index) => ({
+              id: `userrole-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
               userId: newUser.id,
               roleId: role.id,
             })),
@@ -196,6 +199,7 @@ export async function POST(request: Request) {
         if (defaultRole) {
           await tx.userRole.create({
             data: {
+              id: `userrole-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
               userId: newUser.id,
               roleId: defaultRole.id,
             },
@@ -206,9 +210,11 @@ export async function POST(request: Request) {
       // 创建默认 AI4WEB 配置
       await tx.opencodeConfig.create({
         data: {
+          id: `config-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           userId: newUser.id,
           name: 'Default',
           baseURL: 'http://localhost:54321',
+          updatedAt: new Date(),
         },
       });
 
@@ -217,13 +223,14 @@ export async function POST(request: Request) {
 
     // 记录审计日志（放在事务外，避免事务失败也记录审计）
     await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'user_create',
-        resource: user.id,
-        details: JSON.stringify({ email, username, roles }),
-      },
-    });
+          data: {
+            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            userId: payload.userId,
+            action: 'user_create',
+            resource: user.id,
+            details: JSON.stringify({ email, username, roles }),
+          },
+        });
 
     // 记录创建日志 - 管理员创建新用户（跨用户操作）
     logger.create(LOG_MODULES.USER, payload, user.id, { targetEmail: email, targetUsername: username, roles });

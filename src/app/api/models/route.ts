@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     const models = await prisma.modelConfig.findMany({
       where,
       include: {
-        user: {
+        User: {
           select: {
             id: true,
             name: true,
@@ -188,6 +188,7 @@ export async function POST(request: Request) {
     // 创建模型配置
     const model = await prisma.modelConfig.create({
       data: {
+        id: `model-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: isSystemModel ? null : payload.userId,  // 系统模型 userId 为 null
         name,
         providerType: providerType || 'openai',
@@ -198,6 +199,7 @@ export async function POST(request: Request) {
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isSystemModel && isDefault ? isDefault : false,  // 只有系统模型可设默认
         isPublic: isSystemModel ? true : (isPublic || false),  // 系统模型默认公开
+        updatedAt: new Date(),
       },
     });
 

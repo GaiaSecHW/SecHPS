@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { taskName, taskDescription, workflowId, matches, method, workflowTechStack } = body;
+    const { taskName, taskDescription, matches, method } = body;
 
     // 验证必填字段
     if (!taskName || !taskDescription || !matches) {
@@ -36,13 +36,12 @@ export async function POST(request: Request) {
     // 保存预测结果
     const prediction = await prisma.skillPrediction.create({
       data: {
+        id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
-        workflowId,
         taskName,
         taskDescription,
         matches: JSON.stringify(matches),
         method: method || 'keyword',
-        workflowTechStack: workflowTechStack ? JSON.stringify(workflowTechStack) : null,
         matchCount: Array.isArray(matches) ? matches.length : 0,
       },
     });
@@ -78,15 +77,11 @@ export async function GET(request: Request) {
 
     // 获取查询参数
     const { searchParams } = new URL(request.url);
-    const workflowId = searchParams.get('workflowId');
     const limit = parseInt(searchParams.get('limit') || '20', 10);
     const offset = parseInt(searchParams.get('offset') || '0', 10);
 
     // 构建查询条件
     const where: any = { userId: payload.userId };
-    if (workflowId) {
-      where.workflowId = workflowId;
-    }
 
     // 查询预测记录
     const predictions = await prisma.skillPrediction.findMany({
@@ -100,10 +95,8 @@ export async function GET(request: Request) {
         taskDescription: true,
         matches: true,
         method: true,
-        workflowTechStack: true,
         matchCount: true,
         createdAt: true,
-        workflowId: true,
       },
     });
 
@@ -114,10 +107,8 @@ export async function GET(request: Request) {
       taskDescription: p.taskDescription,
       matches: JSON.parse(p.matches),
       method: p.method,
-      workflowTechStack: p.workflowTechStack ? JSON.parse(p.workflowTechStack) : null,
       matchCount: p.matchCount,
       createdAt: p.createdAt,
-      workflowId: p.workflowId,
     }));
 
     return NextResponse.json({ predictions: formattedPredictions });

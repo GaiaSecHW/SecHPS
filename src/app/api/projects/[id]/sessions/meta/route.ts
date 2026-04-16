@@ -51,6 +51,7 @@ export async function GET(
 
       sessionMeta = await prisma.sessionMeta.create({
         data: {
+          id: `meta-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           projectId: id,
           total: sessions.length,
           hasMore: false,
@@ -61,6 +62,7 @@ export async function GET(
           runningCount,
           completedCount,
           failedCount,
+          updatedAt: new Date(),
         },
       });
     }
@@ -120,6 +122,7 @@ export async function PUT(
         failedCount,
       },
       create: {
+        id: `meta-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         projectId: id,
         total: sessions.length,
         hasMore: false,
@@ -130,6 +133,7 @@ export async function PUT(
         runningCount,
         completedCount,
         failedCount,
+        updatedAt: new Date(),
       },
     });
 

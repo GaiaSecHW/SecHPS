@@ -36,8 +36,14 @@ export async function markProcessed(filePath: string, sequenceCount: number): Pr
   const hash = computeFileHash(filePath, s.mtimeMs);
   await prisma.logFileRecord.upsert({
     where: { filePath },
-    create: { filePath, fileHash: hash, sequenceCount },
-    update: { fileHash: hash, sequenceCount, processedAt: new Date() },
+    create: { 
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+      filePath, 
+      fileHash: hash, 
+      sequenceCount,
+      updatedAt: new Date(),
+    },
+    update: { fileHash: hash, sequenceCount, processedAt: new Date(), updatedAt: new Date() },
   });
 }
 

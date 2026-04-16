@@ -35,7 +35,7 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        project: {
+        Project: {
           select: {
             id: true,
             name: true,
@@ -52,7 +52,7 @@ export async function GET(
     }
 
     // 归属校验
-    if (evaluation.project.userId !== payload.userId) {
+    if (evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
     }
 
@@ -140,7 +140,7 @@ export async function DELETE(
     // 检查评估会话是否存在并获取项目归属
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: { project: { select: { userId: true } } },
+      include: { Project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
@@ -148,7 +148,7 @@ export async function DELETE(
     }
 
     // 归属校验
-    if (evaluation.project.userId !== payload.userId) {
+    if (evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权删除此评估' }, { status: 403 });
     }
 

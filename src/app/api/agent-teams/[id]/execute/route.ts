@@ -55,12 +55,12 @@ export async function POST(
     const team = await prisma.agentTeam.findUnique({
       where: { id: teamId },
       include: {
-        user: { select: { id: true } },
-        leadAgent: { select: { id: true, name: true, displayName: true } },
-        members: {
+        User: { select: { id: true } },
+        AgentDefinition: { select: { id: true, name: true, displayName: true } },
+        AgentTeamMember: {
           select: { id: true, agentId: true, role: true },
           include: {
-            agent: { select: { id: true, name: true, displayName: true } },
+            AgentDefinition: { select: { id: true, name: true, displayName: true } },
           },
         },
       },
@@ -153,8 +153,8 @@ export async function POST(
     emitExecutionStarted(executionId, teamId, {
       teamName: team.name,
       leadAgentId: team.leadAgentId,
-      leadAgentName: team.leadAgent.displayName || team.leadAgent.name,
-      memberCount: team.members.length,
+      leadAgentName: team.AgentDefinition.displayName || team.AgentDefinition.name,
+      memberCount: team.AgentTeamMember.length,
     });
 
     // Generate SSE URL for streaming events
@@ -174,8 +174,8 @@ export async function POST(
       team: {
         id: team.id,
         name: team.name,
-        leadAgent: team.leadAgent,
-        memberCount: team.members.length,
+        leadAgent: team.AgentDefinition,
+        memberCount: team.AgentTeamMember.length,
       },
     }, { status: 201 });
   } catch (error) {

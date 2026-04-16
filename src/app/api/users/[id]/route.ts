@@ -23,16 +23,16 @@ export async function GET(
     const user = await prisma.user.findUnique({
       where: { id },
       include: {
-        userRoles: {
+        UserRole: {
           include: {
-            role: {
+            Role: {
               include: {
-                permissions: true,
+                Permission: true,
               },
             },
           },
         },
-        opencodeConfig: true,
+        OpencodeConfig: true,
       },
     });
 
@@ -50,13 +50,13 @@ export async function GET(
       isActive: user.isActive,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
-      roles: user.userRoles.map(ur => ({
-        id: ur.role.id,
-        name: ur.role.name,
-        description: ur.role.description,
-        permissions: ur.role.permissions.map(p => p.name),
+      roles: user.UserRole.map(ur => ({
+        id: ur.Role.id,
+        name: ur.Role.name,
+        description: ur.Role.description,
+        permissions: ur.Role.Permission.map(p => p.name),
       })),
-      opencodeConfigs: user.opencodeConfig.map(config => ({
+      opencodeConfigs: user.OpencodeConfig.map(config => ({
         id: config.id,
         name: config.name,
         baseURL: config.baseURL,
@@ -117,13 +117,14 @@ export async function PATCH(
 
     // 记录审计日志
     await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'user_update',
-        resource: id,
-        details: JSON.stringify({ name, avatar, isActive }),
-      },
-    });
+          data: {
+            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            userId: payload.userId,
+            action: 'user_update',
+            resource: id,
+            details: JSON.stringify({ name, avatar, isActive }),
+          },
+        });
 
     // 记录更新日志 - 区分自己与他人
     if (isSelf) {
@@ -182,6 +183,7 @@ export async function DELETE(
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'user_delete',
         resource: id,

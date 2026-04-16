@@ -96,6 +96,7 @@ export async function POST(request: Request) {
     // Create config
     const config = await prisma.opencodeConfig.create({
       data: {
+        id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         name,
         baseURL: baseURL || 'http://localhost:54321',
@@ -111,18 +112,20 @@ export async function POST(request: Request) {
         progressQuestion: progressQuestion || null,
         maxConcurrentEvaluations: concurrentLimit,
         defaultToolPermissions: defaultToolPermissions || null,
+        updatedAt: new Date(),
       },
     });
 
     // Record audit log
     await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'config_create',
-        resource: config.id,
-        details: JSON.stringify({ name, baseURL }),
-      },
-    });
+          data: {
+            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            userId: payload.userId,
+            action: 'config_create',
+            resource: config.id,
+            details: JSON.stringify({ name, baseURL }),
+          },
+        });
 
     return NextResponse.json({ config }, { status: 201 });
   } catch (error) {

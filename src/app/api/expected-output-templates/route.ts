@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
 
     const newTemplate = await prisma.expectedOutputTemplate.create({
       data: {
+        id: `template-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         displayName,
         description: description || '',
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
         template,
         example,
         sortOrder: sortOrder || 0,
+        updatedAt: new Date(),
       },
     });
 

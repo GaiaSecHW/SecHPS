@@ -489,6 +489,7 @@ export class RalphLoopAgent {
           try {
             await prisma.sessionMessage.create({
               data: {
+                id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
                 evaluationSessionId: evaluationId,
                 role: 'system',
                 content: `[Ralph 反馈]\n${verification.reason}`,

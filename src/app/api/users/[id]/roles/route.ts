@@ -63,7 +63,8 @@ export async function POST(
       // 分配新角色
       if (roleIds.length > 0) {
         await tx.userRole.createMany({
-          data: roleIds.map((roleId) => ({
+          data: roleIds.map((roleId, index) => ({
+            id: `userrole-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
             userId: id,
             roleId,
           })),
@@ -76,13 +77,14 @@ export async function POST(
 
     // 记录审计日志
     await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'user_assign_role',
-        resource: id,
-        details: JSON.stringify({ roleIds }),
-      },
-    });
+          data: {
+            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            userId: payload.userId,
+            action: 'user_assign_role',
+            resource: id,
+            details: JSON.stringify({ roleIds }),
+          },
+        });
 
     return NextResponse.json({
       message: '角色分配成功',

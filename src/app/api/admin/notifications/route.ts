@@ -78,15 +78,18 @@ export async function POST(request: Request) {
 
     const channel = await prisma.notificationChannel.create({
       data: {
+        id: `notif-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         type,
         config: JSON.stringify(config),
         enabled: enabled ?? true,
+        updatedAt: new Date(),
       },
     });
 
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         action: 'notification_channel_create',
         resource: channel.id,

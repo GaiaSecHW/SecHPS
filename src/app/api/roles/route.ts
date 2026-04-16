@@ -52,10 +52,10 @@ export async function GET(request: Request) {
       skip,
       take,
       include: {
-        permissions: true,
-        userRoles: {
+        Permission: true,
+        UserRole: {
           include: {
-            user: {
+            User: {
               select: {
                 id: true,
                 email: true,
@@ -126,15 +126,18 @@ export async function POST(request: Request) {
     // 创建角色
     const role = await prisma.role.create({
       data: {
+        id: `role-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         description,
         isSystem: false,
+        updatedAt: new Date(),
       },
     });
 
     // 记录审计日志
     prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'role_create',
         resource: role.id,

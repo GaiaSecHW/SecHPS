@@ -29,7 +29,7 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
-        project: {
+        Project: {
           select: {
             id: true,
             projectPath: true,
@@ -61,7 +61,7 @@ export async function GET(
     const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
 
     const sessionId = evaluation.opencodeSessionId;
-    const projectPath = evaluation.project?.projectPath;
+    const projectPath = evaluation.Project?.projectPath;
 
     console.log(`[API Messages] Using SDK getSessionMessages for session:`, sessionId);
 

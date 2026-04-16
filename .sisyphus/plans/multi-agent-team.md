@@ -1028,7 +1028,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add AgentTeamList page`
   - Files: src/app/dashboard/agent-teams/page.tsx
 
-- [ ] 16. **Create AgentTeamBuilder page (visual editor)**
+- [x] 16. **Create AgentTeamBuilder page (visual editor)**
 
   **What to do**:
   - Create `src/app/dashboard/agent-teams/[id]/edit/page.tsx` or `/new/page.tsx`
@@ -1087,7 +1087,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add AgentTeamBuilder page`
   - Files: src/app/dashboard/agent-teams/[id]/edit/page.tsx, src/app/dashboard/agent-teams/new/page.tsx
 
-- [ ] 17. **Create AgentTeamExecutionMonitor component**
+- [x] 17. **Create AgentTeamExecutionMonitor component**
 
   **What to do**:
   - Create `src/components/agent-team/ExecutionMonitor.tsx`
@@ -1141,7 +1141,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add ExecutionMonitor component`
   - Files: src/components/agent-team/ExecutionMonitor.tsx
 
-- [ ] 18. **Create useAgentTeamWebSocket hook**
+- [x] 18. **Create useAgentTeamWebSocket hook**
 
   **What to do**:
   - Create `src/hooks/useAgentTeamWebSocket.ts`
@@ -1194,7 +1194,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add useAgentTeamWebSocket hook`
   - Files: src/hooks/useAgentTeamWebSocket.ts
 
-- [ ] 19. **Create AgentDefinitionEditor page**
+- [x] 19. **Create AgentDefinitionEditor page**
 
   **What to do**:
   - Create `src/app/dashboard/agent-definitions/[id]/edit/page.tsx` and `/new/page.tsx`
@@ -1249,7 +1249,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add AgentDefinitionEditor page`
   - Files: src/app/dashboard/agent-definitions/[id]/edit/page.tsx
 
-- [ ] 20. **Create migration script (Workflow → AgentTeam)**
+- [x] 20. **Create migration script (Workflow → AgentTeam)**
 
   **What to do**:
   - Create `scripts/migrate-workflow-to-agent-team.ts`
@@ -1311,7 +1311,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add migration script`
   - Files: scripts/migrate-workflow-to-agent-team.ts, scripts/rollback-agent-team-migration.ts, package.json
 
-- [ ] 21. **Update EvaluationSession model (workflowId → agentTeamId)**
+- [x] 21. **Update EvaluationSession model (workflowId → agentTeamId)**
 
   **What to do**:
   - Add `agentTeamId` field to EvaluationSession model (nullable)
@@ -1359,7 +1359,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add agentTeamId to EvaluationSession`
   - Files: prisma/schema.prisma, src/app/api/evaluations/route.ts
 
-- [ ] 22. **Remove Workflow API routes**
+- [x] 22. **Remove Workflow API routes**
 
   **What to do**:
   - Delete `src/app/api/workflows/` directory and all subdirectories:
@@ -1412,7 +1412,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): remove Workflow API routes`
   - Files: src/app/api/workflows/* (deleted)
 
-- [ ] 23. **Remove Workflow UI components**
+- [x] 23. **Remove Workflow UI components**
 
   **What to do**:
   - Delete `src/app/dashboard/workflows/` pages:
@@ -1465,7 +1465,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): remove Workflow UI components`
   - Files: src/app/dashboard/workflows/* (deleted), src/components/workflow/* (deleted)
 
-- [ ] 24. **Remove Workflow Prisma models**
+- [x] 24. **Remove Workflow Prisma models**
 
   **What to do**:
   - Delete Workflow-related Prisma models:
@@ -1518,6 +1518,451 @@ Wave FINAL (Verification - 4 parallel reviews):
   **Commit**: YES
   - Message: `feat(agent-team): remove Workflow Prisma models`
   - Files: prisma/schema.prisma, prisma/seed.ts, src/types/permissions.ts
+
+---
+
+## Wave 5: Ralph Loop Integration (NEW)
+
+> 将 Ralph Loop 迭代验证能力与 AgentTeam 多 Agent 协作系统集成
+
+- [x] 25. **Design Ralph Loop + AgentTeam Integration**
+
+  **What to do**:
+  - 更新 AgentTeam 模型，添加 `ralphConfig` 字段 (JSON)
+  - 定义 `VerificationContext` 和 `VerificationResult` 接口
+  - 定义 `RalphLoopConfig` 接口
+  - 运行 `npx prisma db push`
+
+  **Confirmed Design**:
+  - **方案**: B (Lead迭代) - Lead Agent 内部迭代，Subagents 按需调用
+  - **经验触发**: 仅验证失败时触发
+  - **配置存储**: AgentTeam.ralphConfig JSON 字段
+  - **WebSocket事件**: iteration_started, iteration_completed, experience_queried
+
+  **Interfaces to Define**:
+  ```typescript
+  // Ralph Loop 配置 (存储在 AgentTeam.ralphConfig)
+  interface RalphLoopConfig {
+    maxIterations: number;       // 默认 10
+    maxCostUsd: number;          // 默认 5.00
+    verifyCompletion?: string;   // 验证脚本路径或内联代码
+    experienceTrigger: 'on_failure' | 'always' | 'disabled';
+  }
+
+  // 验证上下文 (传递给 verifyCompletion)
+  interface VerificationContext {
+    finalText: string;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    estimatedCostUsd: number;
+    subagentCalls: Array<{
+      agentName: string;
+      result: string;
+      tokensUsed: number;
+    }>;
+    iteration: number;
+    maxIterations: number;
+    relevantExperiences?: ExperienceMatch[];
+  }
+
+  // 验证结果
+  interface VerificationResult {
+    verified: boolean;
+    feedback?: string;           // 注入到下一轮 prompt
+    stopReason?: 'verified' | 'max_iterations' | 'max_cost' | 'error';
+  }
+  ```
+
+  **Prisma Schema Update**:
+  ```prisma
+  model AgentTeam {
+    // ...existing fields
+    ralphConfig String?  // JSON: RalphLoopConfig
+  }
+  ```
+
+  **Recommended Agent Profile**:
+  - **Category**: `quick`
+    - Reason: Schema 更新和接口定义
+  - **Skills**: []
+
+  **Acceptance Criteria**:
+  - [ ] AgentTeam.ralphConfig 字段添加到 schema
+  - [ ] VerificationContext 接口定义
+  - [ ] RalphLoopConfig 接口定义
+  - [ ] `npx prisma db push` 成功
+
+- [x] 26. **Implement AgentTeam Ralph Loop Integration**
+
+  **What to do**:
+  - 扩展 AgentTeamExecutionService，添加 `executeWithRalphLoop()` 方法
+  - 实现迭代执行循环 (Lead Agent 迭代)
+  - 集成经验查询服务 (仅验证失败时触发)
+  - 扩展 WebSocket 事件广播器支持迭代事件
+
+  **Implementation Details**:
+
+  1. **executeWithRalphLoop() 方法**:
+  ```typescript
+  async executeWithRalphLoop(params: ExecuteParams): Promise<{ executionId: string }> {
+    const ralphConfig = parseRalphConfig(team.ralphConfig);
+    
+    for (let iteration = 1; iteration <= ralphConfig.maxIterations; iteration++) {
+      // 广播 iteration_started 事件
+      broadcastIterationStarted(executionId, iteration, ralphConfig.maxIterations);
+      
+      // 执行 Lead Agent (可能调用 Subagents)
+      const result = await this.executeLeadAgentIteration(executionId, task, iteration);
+      
+      // 构建验证上下文
+      const context: VerificationContext = {
+        finalText: result.text,
+        totalInputTokens: result.inputTokens,
+        totalOutputTokens: result.outputTokens,
+        estimatedCostUsd: calculateCost(...),
+        subagentCalls: result.subagentCalls,
+        iteration,
+        maxIterations: ralphConfig.maxIterations,
+      };
+      
+      // 调用验证函数
+      const verification = await this.verifyCompletion(context, ralphConfig);
+      
+      // 广播 iteration_completed 事件
+      broadcastIterationCompleted(executionId, iteration, verification);
+      
+      if (verification.verified) {
+        break; // 任务完成，退出循环
+      }
+      
+      // 验证失败时查询经验
+      if (ralphConfig.experienceTrigger === 'on_failure') {
+        const experiences = await queryRelevantExperiences({
+          errorMessage: verification.feedback || 'Verification failed',
+          iteration,
+        });
+        
+        if (experiences.length > 0) {
+          // 广播 experience_queried 事件
+          broadcastExperienceQueried(executionId, iteration, experiences);
+          
+          // 注入经验到下一轮 prompt
+          task = injectExperienceGuidance(task, experiences);
+        }
+      }
+      
+      // 检查成本限制
+      if (context.estimatedCostUsd >= ralphConfig.maxCostUsd) {
+        break;
+      }
+    }
+  }
+  ```
+
+  2. **WebSocket 迭代事件**:
+  ```typescript
+  // 新增事件类型 (扩展 src/types/agent-team-events.ts)
+  interface IterationStartedEvent {
+    type: 'iteration_started';
+    executionId: string;
+    iteration: number;
+    maxIterations: number;
+    previousFeedback?: string;
+  }
+
+  interface IterationCompletedEvent {
+    type: 'iteration_completed';
+    executionId: string;
+    iteration: number;
+    result: string;
+    verified: boolean;
+    feedback?: string;
+    tokensUsed: { input: number; output: number };
+    costUsd: number;
+  }
+
+  interface ExperienceQueriedEvent {
+    type: 'experience_queried';
+    executionId: string;
+    iteration: number;
+    experiencesFound: number;
+    guidanceInjected: string;
+  }
+  ```
+
+  3. **经验查询集成**:
+  ```typescript
+  // 使用现有 experience-query-service.ts
+  import { queryRelevantExperiences, buildDynamicExperiencePrompt } from '@/services/autonomous-evolution/experience-query-service';
+  
+  // 验证失败时调用
+  const experiences = await queryRelevantExperiences(errorContext);
+  const guidancePrompt = buildDynamicExperiencePrompt(experiences);
+  ```
+
+  **Files to Modify**:
+  - `src/services/agent-team/execution-service.ts` - 添加 executeWithRalphLoop()
+  - `src/types/agent-team-events.ts` - 添加迭代事件类型
+  - `src/lib/agent-team-events.ts` - 扩展广播器支持迭代事件
+  - `src/app/api/agent-teams/[id]/execute/route.ts` - 支持 ralphConfig 参数
+
+  **Recommended Agent Profile**:
+  - **Category**: `deep`
+    - Reason: 核心执行引擎改造，多文件协调
+  - **Skills**: []
+
+  **Acceptance Criteria**:
+  - [ ] executeWithRalphLoop() 方法实现
+  - [ ] 迭代事件类型定义
+  - [ ] 经验查询集成 (仅失败时)
+  - [ ] WebSocket 迭代事件广播
+
+- [x] 27. **Update AgentTeam UI for Ralph Loop**
+
+  **What to do**:
+  - AgentTeamBuilder 添加 Ralph Loop 配置面板
+  - ExecutionMonitor 显示迭代进度条和迭代详情
+  - 添加迭代历史折叠面板
+  - 显示经验学习提示
+
+  **UI Components to Add**:
+
+  1. **RalphLoopConfigPanel** (在 AgentTeamBuilder 中):
+  ```tsx
+  // src/components/agent-team/RalphLoopConfigPanel.tsx
+  interface Props {
+    config: RalphLoopConfig;
+    onChange: (config: RalphLoopConfig) => void;
+  }
+  
+  // 功能:
+  // - maxIterations slider (1-20, default 10)
+  // - maxCostUsd slider (0.5-10, default 5.0)
+  // - verifyCompletion textarea (可选脚本)
+  // - experienceTrigger dropdown: on_failure | always | disabled
+  // - 启用/禁用 Ralph Loop toggle
+  ```
+
+  2. **IterationProgress** (在 ExecutionMonitor 中):
+  ```tsx
+  // src/components/agent-team/IterationProgress.tsx
+  interface Props {
+    currentIteration: number;
+    maxIterations: number;
+    verified: boolean;
+    costUsd: number;
+    maxCostUsd: number;
+  }
+  
+  // 功能:
+  // - 迭代进度条 (Iteration 3/10)
+  // - 成本累积显示 ($2.50 / $5.00)
+  // - 状态指示器 (pending/running/verified)
+  ```
+
+  3. **IterationHistory** (折叠面板):
+  ```tsx
+  // src/components/agent-team/IterationHistory.tsx
+  interface Props {
+    iterations: IterationRecord[];
+  }
+  
+  // 功能:
+  // - 每次迭代摘要 (结果、tokens、cost)
+  // - 验证状态和反馈
+  // - 经验学习标记
+  ```
+
+  4. **ExperienceNotification**:
+  ```tsx
+  // src/components/agent-team/ExperienceNotification.tsx
+  interface Props {
+    experienceQueriedEvent: ExperienceQueriedEvent;
+  }
+  
+  // 功能:
+  // - 显示 "查询到 N 条相关经验"
+  // - 经验标题列表
+  // - 注入提示动画
+  ```
+
+  **WebSocket Hook Update**:
+  ```typescript
+  // 扩展 useAgentTeamWebSocket 支持新事件
+  interface UseAgentTeamWebSocketReturn {
+    // ...existing
+    iteration: {
+      current: number;
+      max: number;
+      history: IterationRecord[];
+    };
+    experiences: ExperienceMatch[];
+  }
+  ```
+
+  **Files to Create/Modify**:
+  - `src/components/agent-team/RalphLoopConfigPanel.tsx` - 新建
+  - `src/components/agent-team/IterationProgress.tsx` - 新建
+  - `src/components/agent-team/IterationHistory.tsx` - 新建
+  - `src/components/agent-team/ExecutionMonitor.tsx` - 扩展
+  - `src/app/dashboard/agent-teams/new/page.tsx` - 集成配置面板
+  - `src/hooks/useAgentTeamWebSocket.ts` - 扩展返回值
+
+  **Recommended Agent Profile**:
+  - **Category**: `visual-engineering`
+    - Reason: UI 组件开发，React 状态管理
+  - **Skills**: ['frontend-ui-ux']
+
+  **Acceptance Criteria**:
+  - [ ] Ralph Loop 配置面板可配置
+  - [ ] 迭代进度条显示
+  - [ ] 迭代历史可查看
+  - [ ] 经验学习提示显示
+
+- [x] 28. **Add Ralph Loop Tests and Documentation**
+
+  **What to do**:
+  - 编写 AgentTeam + Ralph Loop 集成测试
+  - 测试迭代终止条件
+  - 测试经验学习触发
+  - 测试 WebSocket 迭代事件
+  - 更新 API 文档和使用示例
+
+  **Test Cases**:
+
+  1. **迭代终止条件测试**:
+  ```typescript
+  // __tests__/services/agent-team-ralph-loop.test.ts
+  
+  describe('AgentTeam Ralph Loop', () => {
+    test('stops when maxIterations reached', async () => {
+      const config = { maxIterations: 3, maxCostUsd: 10 };
+      // Mock verifyCompletion always returns false
+      // Expect execution to stop after 3 iterations
+    });
+    
+    test('stops when maxCostUsd reached', async () => {
+      const config = { maxIterations: 10, maxCostUsd: 1.0 };
+      // Mock high token usage
+      // Expect execution to stop when cost >= 1.0
+    });
+    
+    test('stops when verifyCompletion returns true', async () => {
+      // Mock verifyCompletion returns true on iteration 2
+      // Expect execution to stop at iteration 2
+    });
+  });
+  ```
+
+  2. **经验学习触发测试**:
+  ```typescript
+  describe('Experience Learning Trigger', () => {
+    test('queries experiences on verification failure', async () => {
+      const config = { experienceTrigger: 'on_failure' };
+      // Mock verifyCompletion returns false
+      // Expect queryRelevantExperiences to be called
+    });
+    
+    test('does not query experiences on success', async () => {
+      const config = { experienceTrigger: 'on_failure' };
+      // Mock verifyCompletion returns true
+      // Expect queryRelevantExperiences NOT called
+    });
+    
+    test('injects experience guidance into next iteration', async () => {
+      // Mock experiences returned
+      // Expect next iteration prompt includes guidance
+    });
+  });
+  ```
+
+  3. **WebSocket 事件测试**:
+  ```typescript
+  describe('Iteration WebSocket Events', () => {
+    test('broadcasts iteration_started event', async () => {
+      // Expect event with { iteration, maxIterations }
+    });
+    
+    test('broadcasts iteration_completed event', async () => {
+      // Expect event with { iteration, verified, tokensUsed, costUsd }
+    });
+    
+    test('broadcasts experience_queried event', async () => {
+      // Expect event when experiences found
+    });
+  });
+  ```
+
+  4. **UI Hook 测试**:
+  ```typescript
+  // __tests__/hooks/useAgentTeamWebSocket-ralph.test.ts
+  
+  describe('useAgentTeamWebSocket Ralph Loop', () => {
+    test('updates iteration state on events', async () => {
+      // Simulate iteration_started event
+      // Expect iteration.current to update
+    });
+    
+    test('accumulates iteration history', async () => {
+      // Simulate multiple iteration_completed events
+      // Expect iteration.history to accumulate
+    });
+  });
+  ```
+
+  **API Documentation**:
+  ```markdown
+  # AgentTeam Ralph Loop Integration
+
+  ## Configuration
+  
+  Add `ralphConfig` to AgentTeam:
+  ```json
+  {
+    "ralphConfig": {
+      "maxIterations": 10,
+      "maxCostUsd": 5.0,
+      "experienceTrigger": "on_failure"
+    }
+  }
+  ```
+
+  ## Execute with Ralph Loop
+  
+  ```bash
+  curl -X POST /api/agent-teams/:id/execute \
+    -d '{"task": "...", "useRalphLoop": true}'
+  ```
+
+  ## WebSocket Events
+  
+  | Event | Description |
+  |-------|-------------|
+  | iteration_started | 开始新一轮迭代 |
+  | iteration_completed | 迭代完成并验证 |
+  | experience_queried | 查询到相关经验 |
+  ```
+
+  **Files to Create**:
+  - `__tests__/services/agent-team-ralph-loop.test.ts`
+  - `__tests__/hooks/useAgentTeamWebSocket-ralph.test.ts`
+  - `docs/agent-team-ralph-loop.md` (可选)
+
+  **Recommended Agent Profile**:
+  - **Category**: `quick`
+    - Reason: 测试编写和文档
+  - **Skills**: []
+
+  **Acceptance Criteria**:
+  - [ ] 迭代终止测试通过
+  - [ ] 经验学习触发测试通过
+  - [ ] WebSocket 事件测试通过
+  - [ ] API 文档更新
+
+  **Acceptance Criteria**:
+  - [ ] 集成测试通过
+  - [ ] API 文档更新
+  - [ ] 使用示例文档
 
 ---
 

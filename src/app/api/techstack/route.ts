@@ -85,10 +85,12 @@ export async function POST(request: Request) {
 
     const option = await prisma.techStackOption.create({
       data: {
+        id: `techstack-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         category,
         description: description || null,
         sortOrder: sortOrder || 0,
+        updatedAt: new Date(),
       },
     });
 

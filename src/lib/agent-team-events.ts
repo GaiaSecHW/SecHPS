@@ -438,3 +438,84 @@ export function emitExecutionCompleted(
   };
   agentTeamEventBroadcaster.broadcast(event as any);
 }
+
+/**
+ * Emit iteration started event (Ralph Loop)
+ */
+export function emitIterationStarted(
+  executionId: string,
+  teamId: string,
+  data: {
+    iteration: number;
+    maxIterations: number;
+    previousFeedback?: string;
+    totalCostUsdSoFar?: number;
+  }
+): void {
+  const event = {
+    type: 'iteration_started',
+    executionId,
+    teamId,
+    timestamp: new Date(),
+    data: {
+      executionId,
+      ...data,
+    },
+  };
+  agentTeamEventBroadcaster.broadcast(event as any);
+}
+
+/**
+ * Emit iteration completed event (Ralph Loop)
+ */
+export function emitIterationCompleted(
+  executionId: string,
+  teamId: string,
+  data: {
+    iteration: number;
+    result: string;
+    verified: boolean;
+    feedback?: string;
+    tokensUsed: { input: number; output: number };
+    costUsd: number;
+    totalCostUsdSoFar: number;
+  }
+): void {
+  const event = {
+    type: 'iteration_completed',
+    executionId,
+    teamId,
+    timestamp: new Date(),
+    data: {
+      executionId,
+      ...data,
+    },
+  };
+  agentTeamEventBroadcaster.broadcast(event as any);
+}
+
+/**
+ * Emit experience queried event (Ralph Loop)
+ */
+export function emitExperienceQueried(
+  executionId: string,
+  teamId: string,
+  data: {
+    iteration: number;
+    experiencesFound: number;
+    experienceTitles?: string[];
+    guidanceInjected: string;
+  }
+): void {
+  const event = {
+    type: 'experience_queried',
+    executionId,
+    teamId,
+    timestamp: new Date(),
+    data: {
+      executionId,
+      ...data,
+    },
+  };
+  agentTeamEventBroadcaster.broadcast(event as any);
+}

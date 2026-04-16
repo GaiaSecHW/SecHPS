@@ -14,7 +14,6 @@ import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
 interface MatchRequest {
   taskName: string;
   taskDescription: string;
-  workflowId: string;
   topK?: number;
 }
 
@@ -165,7 +164,7 @@ export async function POST(request: Request) {
 
     // 解析请求体
     const body: MatchRequest = await request.json();
-    const { taskName, taskDescription, workflowId, topK = 5 } = body;
+    const { taskName, taskDescription, topK = 5 } = body;
 
     // 验证必填字段
     if (!taskName || !taskDescription) {
@@ -173,22 +172,6 @@ export async function POST(request: Request) {
         { error: '缺少必填字段：任务名称和任务描述' },
         { status: 400 }
       );
-    }
-
-    // 获取工作流信息（包含技术栈）
-    let workflowTechStack: string[] = [];
-    if (workflowId) {
-      const workflow = await prisma.workflow.findUnique({
-        where: { id: workflowId },
-        select: { techStack: true },
-      });
-      if (workflow?.techStack) {
-        try {
-          workflowTechStack = JSON.parse(workflow.techStack);
-        } catch {
-          // 忽略解析错误
-        }
-      }
     }
 
     // 获取所有可用的 Skills（公共 + 当前用户私有）
@@ -245,7 +228,6 @@ export async function POST(request: Request) {
     const prompt = buildMatchPrompt(
       taskName,
       taskDescription,
-      workflowTechStack,
       skillSummaries,
       topK
     );
@@ -260,24 +242,23 @@ export async function POST(request: Request) {
 
     if (!modelConfig) {
       // 如果没有配置模型，使用简单的关键词匹配
-      const matches = simpleKeywordMatch(taskName, taskDescription, workflowTechStack, skillSummaries, topK);
+      const matches = simpleKeywordMatch(taskName, taskDescription, skillSummaries, topK);
       
-      // 保存预测结果
+// 保存预测结果
       try {
         await prisma.skillPrediction.create({
           data: {
+            id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
             userId: payload.userId,
-            workflowId,
             taskName,
             taskDescription,
             matches: JSON.stringify(matches),
             method: 'keyword',
-            workflowTechStack: workflowTechStack.length > 0 ? JSON.stringify(workflowTechStack) : null,
             matchCount: matches.length,
           },
         });
       } catch (saveError) {
-logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', undefined, { details: { error: saveError instanceof Error ? saveError.message : String(saveError) } });
+ logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', undefined, { details: { error: saveError instanceof Error ? saveError.message : String(saveError) } });
       }
       
       // 生成治理预警
@@ -292,19 +273,18 @@ logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', und
     }
 
 // 调用 LLM 进行匹配
-    const matches = await callLLMForMatch(modelConfig, prompt, skillSummaries, topK);
+    const matches = await callLLMForMatch(modelConfig, prompt, taskName, taskDescription, skillSummaries, topK);
     
-    // 保存预测结果到数据库
+// 保存预测结果到数据库
     try {
       await prisma.skillPrediction.create({
         data: {
+          id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           userId: payload.userId,
-          workflowId,
           taskName,
           taskDescription,
           matches: JSON.stringify(matches),
           method: 'llm',
-          workflowTechStack: workflowTechStack.length > 0 ? JSON.stringify(workflowTechStack) : null,
           matchCount: matches.length,
         },
       });
@@ -312,13 +292,12 @@ logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', und
       logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', undefined, { details: { error: saveError instanceof Error ? saveError.message : String(saveError) } });
       // 不影响主流程，只记录错误
     }
- 
+  
     // 生成治理预警
     const governanceWarning = generateGovernanceWarning(matches);
     
     return NextResponse.json({
       matches,
-      workflowTechStack,
       analyzedAt: new Date().toISOString(),
       method: 'llm',
       governanceWarning,
@@ -335,7 +314,6 @@ logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', und
 function buildMatchPrompt(
   taskName: string,
   taskDescription: string,
-  workflowTechStack: string[],
   skills: Array<{
     id: string;
     name: string;
@@ -347,10 +325,6 @@ function buildMatchPrompt(
   }>,
   topK: number
 ): string {
-  const techStackStr = workflowTechStack.length > 0
-    ? workflowTechStack.join(', ')
-    : '未指定';
-
   const skillsTable = skills.map(s => 
     `| ${s.id} | ${s.displayName} | ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''} | ${s.category} | ${s.techStack.join(', ') || '通用'} | ${s.cwe || '-'} |`
   ).join('\n');
@@ -361,20 +335,16 @@ function buildMatchPrompt(
 - 名称: ${taskName}
 - 描述: ${taskDescription}
 
-## 编排信息
-- 适合的技术栈: ${techStackStr}
-
 ## 可用Skills列表
 | ID | 名称 | 描述 | 类别 | 技术栈 | CWE |
 |----|------|------|------|--------|-----|
 ${skillsTable}
 
 ## 匹配要求
-1. 优先匹配技术栈一致的Skills
-2. 技术栈为空的Skills视为通用Skill，也应当考虑
-3. 根据任务描述判断核心需求（安全检测？代码审计？认证相关？）
-4. 考虑Skill的类别和CWE编号的关联性
-5. 返回最相关的Top-${topK} Skills
+1. 技术栈为空的Skills视为通用Skill，也应当考虑
+2. 根据任务描述判断核心需求（安全检测？代码审计？认证相关？）
+3. 考虑Skill的类别和CWE编号的关联性
+4. 返回最相关的Top-${topK} Skills
 
 ## 输出格式
 严格返回JSON数组，不要包含任何其他文字:
@@ -398,6 +368,8 @@ async function callLLMForMatch(
     providerType: string;
   },
   prompt: string,
+  taskName: string,
+  taskDescription: string,
   skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[] }>,
   topK: number
 ): Promise<SkillMatch[]> {
@@ -468,7 +440,7 @@ async function callLLMForMatch(
     if (!response.ok) {
       const errorText = await response.text();
       logger.errorNoUser(LOG_MODULES.SKILL, 'LLM API 错误', { details: { status: response.status, error: errorText.substring(0, 200) } });
-      return simpleKeywordMatch('', '', [], skills, topK);
+      return simpleKeywordMatch(taskName, taskDescription, skills, topK);
     }
 
     const llmResponse = await response.json();
@@ -496,7 +468,7 @@ async function callLLMForMatch(
     const jsonMatch = content.match(/\[[\s\S]*\]/);
     if (!jsonMatch) {
       logger.debug(LOG_MODULES.SKILL, '未找到 JSON 数组，使用降级方案');
-      return simpleKeywordMatch('', '', [], skills, topK);
+      return simpleKeywordMatch(taskName, taskDescription, skills, topK);
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
@@ -521,7 +493,7 @@ async function callLLMForMatch(
     return matches.slice(0, topK);
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, 'LLM 匹配错误', { details: { error: error instanceof Error ? error.message : String(error) } });
-    return simpleKeywordMatch('', '', [], skills, topK);
+    return simpleKeywordMatch(taskName, taskDescription, skills, topK);
   }
 }
 
@@ -531,7 +503,6 @@ async function callLLMForMatch(
 function simpleKeywordMatch(
   taskName: string,
   taskDescription: string,
-  workflowTechStack: string[],
   skills: Array<{
     id: string;
     name: string;
@@ -572,21 +543,7 @@ function simpleKeywordMatch(
       }
     }
 
-    // 2. 技术栈匹配得分
-    if (workflowTechStack.length > 0 && skill.techStack.length > 0) {
-      const matchCount = skill.techStack.filter(ts => 
-        workflowTechStack.some(wts => 
-          ts.toLowerCase() === wts.toLowerCase() ||
-          ts.toLowerCase().includes(wts.toLowerCase()) ||
-          wts.toLowerCase().includes(ts.toLowerCase())
-        )
-      ).length;
-      if (matchCount > 0) {
-        score += 0.4 * (matchCount / skill.techStack.length);
-      }
-    }
-
-    // 3. 名称/描述相似度
+    // 2. 名称/描述相似度
     const skillWords = skillText.split(/\s+/);
     const taskWords = searchText.split(/\s+/);
     const commonWords = skillWords.filter(w => taskWords.includes(w));

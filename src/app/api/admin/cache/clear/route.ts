@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { clearAllCaches, invalidateUserCaches, invalidateWorkflowCaches } from '@/lib/cache';
+import { clearAllCaches, invalidateUserCaches } from '@/lib/cache';
 import { prisma } from '@/lib/prisma';
 
 export async function POST(request: Request) {
@@ -26,16 +26,11 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const { cacheType, userId, workflowId } = body;
+    const { cacheType, userId } = body;
 
     if (cacheType === 'user' && userId) {
       invalidateUserCaches(userId);
       return NextResponse.json({ message: '用户缓存已清除', cacheType: 'user', userId });
-    }
-
-    if (cacheType === 'workflow' && workflowId) {
-      invalidateWorkflowCaches(workflowId, userId);
-      return NextResponse.json({ message: '工作流缓存已清除', cacheType: 'workflow', workflowId });
     }
 
     // Clear all caches
@@ -44,6 +39,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         action: 'cache_clear',
         details: JSON.stringify({ cacheType: cacheType || 'all' }),

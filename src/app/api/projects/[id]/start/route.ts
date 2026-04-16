@@ -5,8 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { PERMISSIONS } from '@/types/permissions';
-import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, createCombinedVerifier, createWorkflowNodeVerifier } from '@/services/evaluation';
-import { NODE_TYPE_MAP } from '@/types/workflow';
+import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, createCombinedVerifier } from '@/services/evaluation';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
 import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
@@ -39,11 +38,11 @@ export async function POST(
         const user = await prisma.user.findUnique({
           where: { id: project.userId },
           include: {
-            userRoles: {
+            UserRole: {
               include: {
-                role: {
+                Role: {
                   include: {
-                    permissions: true,
+                    Permission: true,
                   },
                 },
               },
@@ -51,7 +50,7 @@ export async function POST(
           },
         });
         if (user) {
-          const permissions = user.userRoles.flatMap(ur => ur.role.permissions.map(p => `${p.module}:${p.action}`));
+          const permissions = user.UserRole.flatMap(ur => ur.Role.Permission.map(p => `${p.module}:${p.action}`));
           payload = { userId: user.id, permissions };
         }
       }
@@ -80,15 +79,15 @@ export async function POST(
 
     const { id } = await params;
 
-    // 解析请求体获取 workflowId 和其他选项
-    let workflowId: string | null = null;
+    // 解析请求体获取 agentTeamId 和其他选项
+    let agentTeamId: string | null = null;
     let modelId: string | null = null;
     let enableMcp = true;
     let enableToolPermissions = true;
     let queuedEvaluationId: string | null = null; // 队列启动时复用的评估ID
     try {
       const body = await request.json();
-      workflowId = body.workflowId || null;
+      agentTeamId = body.agentTeamId || null;
       modelId = body.modelId || null;
       enableMcp = body.enableMcp !== false;
       enableToolPermissions = body.enableToolPermissions !== false;
@@ -103,8 +102,8 @@ export async function POST(
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        files: true,
-        evaluations: {
+        ProjectFile: true,
+        EvaluationSession: {
           where: { status: 'running' },
         },
       },
@@ -155,8 +154,9 @@ export async function POST(
       // 创建排队状态的评估会话
       const queuedEvaluation = await prisma.evaluationSession.create({
         data: {
+          id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           projectId: id,
-          workflowId: workflowId,
+          agentTeamId: agentTeamId,
           modelConfigId: modelId, // 保存请求的模型配置ID
           status: 'queued',
           providerType: 'queued', // 标记为排队状态
@@ -235,7 +235,7 @@ export async function POST(
     }
 
     // 检查是否有运行中的评估会话
-    const runningEvaluations = project.evaluations || [];
+    const runningEvaluations = project.EvaluationSession || [];
     if (runningEvaluations.length > 0) {
       return NextResponse.json({ 
         error: '项目已在运行中', 
@@ -254,23 +254,9 @@ export async function POST(
 
     // workflowId 是可选的，如果未提供则不使用工作流
 
-    // 获取工作流预览（如果提供了 workflowId）
-    let workflowPreview: string | null = null;
-    let workflowName: string | null = null;
-    if (workflowId) {
-      console.log('[启动评估] 获取工作流预览, workflowId:', workflowId, 'userId:', payload.userId);
-      const workflowPreviewResult = await getWorkflowPreview(workflowId, payload.userId);
-      if (workflowPreviewResult) {
-        workflowPreview = workflowPreviewResult.markdown;
-        workflowName = workflowPreviewResult.name;
-        console.log('[启动评估] 工作流预览生成成功, 名称:', workflowName);
-        console.log('[启动评估] 预览内容长度:', workflowPreview.length);
-      } else {
-        console.warn('[启动评估] 未找到工作流或无权限访问');
-      }
-    } else {
-      console.log('[启动评估] 未提供 workflowId，使用默认消息');
-    }
+    // 构建初始消息（使用任务描述）
+    const taskDescription = globalConfig?.taskDescription || null;
+    const initialMessage = taskDescription || undefined;
 
     // 构建 SDK 高级配置
     const sdkOptions: {
@@ -460,8 +446,9 @@ export async function POST(
       // 正常启动：创建新的评估记录
       evaluation = await prisma.evaluationSession.create({
         data: {
+          id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           projectId: id,
-          workflowId: workflowId, // 关联工作流
+          agentTeamId: agentTeamId, // 关联 Agent Team
           modelConfigId: modelConfig.id, // 关联模型配置
           status: 'running',
           modelName: modelConfig.name, // 保存模型名称
@@ -474,40 +461,14 @@ export async function POST(
     // 记录经验引用（哪些经验被注入到本次评估）
     if (injectedExperiences.length > 0) {
       await prisma.experienceUsageLog.createMany({
-        data: injectedExperiences.map(e => ({
+        data: injectedExperiences.map((e, index) => ({
+          id: `explog-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
           experienceId: e.id,
           evaluationId: evaluation.id,
           projectId: id,
         })),
       });
       console.log(`[启动评估] 已记录 ${injectedExperiences.length} 条经验引用`);
-    }
-
-    // 初始化工作流节点执行记录
-    if (workflowId) {
-      try {
-        const workflow = await prisma.workflow.findUnique({
-          where: { id: workflowId },
-          include: { nodes: { orderBy: { positionX: 'asc' } } },
-        });
-
-        if (workflow && workflow.nodes.length > 0) {
-          await prisma.nodeExecution.createMany({
-            data: workflow.nodes.map((node, index) => ({
-              evaluationSessionId: evaluation.id,
-              workflowNodeId: node.id,
-              nodeLabel: node.data ? JSON.parse(node.data).label || node.id : node.id,
-              nodeType: node.type,
-              status: node.type === 'start' ? 'completed' : 'pending',
-              order: index,
-              startedAt: node.type === 'start' ? new Date() : null,
-            })),
-          });
-          console.log(`[Evaluation] 初始化了 ${workflow.nodes.length} 个工作流节点`);
-        }
-      } catch (e) {
-        console.error('[Evaluation] 初始化工作流节点失败:', e);
-      }
     }
 
     // 创建 Ralph Loop Agent，传递项目目录作为工作目录
@@ -532,7 +493,6 @@ export async function POST(
 
     const verifier = createCombinedVerifier([
       vulnFileVerifier,
-      createWorkflowNodeVerifier(workflowId ? undefined : undefined),
     ], 'any'); // 任一验证器通过即完成
     
     const agent = createRalphLoopAgent(
@@ -553,11 +513,13 @@ export async function POST(
           try {
             await prisma.evaluationIteration.create({
               data: {
+                id: `iter-${Date.now()}-${iteration}-${Math.random().toString(36).substr(2, 9)}`,
                 evaluationSessionId: evaluation.id,
                 iterationNumber: iteration,
                 status: 'completed',
                 duration,
                 completedAt: new Date(),
+                updatedAt: new Date(),
               },
             });
             console.log(`[Ralph Loop] 迭代记录已保存到数据库`);
@@ -577,11 +539,8 @@ export async function POST(
     registerAgent(evaluation.id, agent);
     console.log(`[Evaluation] Agent 已注册: ${evaluation.id}`);
 
-    // 获取任务描述（来自全局配置的 taskDescription）
-    const taskDescription = globalConfig?.taskDescription || null;
-
     // 构建文件列表
-    const files = project.files.map(f => ({
+    const files = project.ProjectFile.map(f => ({
       name: f.fileName,
       type: f.fileType,
       size: f.fileSize,
@@ -589,21 +548,12 @@ export async function POST(
 
     // 系统提示词已设置（customSystemPrompt），评估指令由用户在 customSystemPrompt 中自行维护
 
-    // 构建用户初始消息（只包含工作流预览，不添加硬编码提示词）
-    const initialMessage = workflowPreview
-      ? workflowPreview
-      : taskDescription
-        ? taskDescription
-        : undefined;
-
     // 日志：启动评估前的完整信息
     console.log('[启动评估] ========================================');
     console.log('[启动评估] 启动评估前检查:');
     console.log('[启动评估] - 项目ID:', id);
     console.log('[启动评估] - 项目名称:', project.name);
     console.log('[启动评估] - 项目路径:', project.projectPath || '未设置');
-    console.log('[启动评估] - 工作流ID:', workflowId || '无');
-    console.log('[启动评估] - 工作流名称:', workflowName || '无');
     console.log('[启动评估] ----------------------------------------');
     console.log('[启动评估] - SDK 配置:');
     console.log('[启动评估]   - permissionMode:', sdkOptions.permissionMode);
@@ -670,27 +620,38 @@ export async function POST(
         // 更新节点状态
         const updateNodeStatus = async (nodeId: string, status: 'completed' | 'failed') => {
           try {
-            await prisma.nodeExecution.upsert({
+            // Find existing node execution
+            const existingExecution = await prisma.nodeExecution.findFirst({
               where: {
-                evaluationSessionId_workflowNodeId: {
-                  evaluationSessionId: evaluation.id,
-                  workflowNodeId: nodeId,
-                },
-              },
-              update: {
-                status,
-                completedAt: new Date(),
-              },
-              create: {
                 evaluationSessionId: evaluation.id,
-                workflowNodeId: nodeId,
-                nodeLabel: nodeId,
-                nodeType: 'task',
-                status,
-                order: 0,
-                completedAt: new Date(),
+                nodeId: nodeId,
               },
             });
+            
+            if (existingExecution) {
+              await prisma.nodeExecution.update({
+                where: { id: existingExecution.id },
+                data: {
+                  status,
+                  completedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              });
+            } else {
+              await prisma.nodeExecution.create({
+                data: {
+                  id: `nodeexec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  evaluationSessionId: evaluation.id,
+                  workflowNodeId: nodeId,
+                  nodeLabel: nodeId,
+                  nodeType: 'task',
+                  status,
+                  order: 0,
+                  completedAt: new Date(),
+                  updatedAt: new Date(),
+                },
+              });
+            }
             console.log(`[Evaluation] Node ${nodeId} status updated to ${status}`);
           } catch (e) {
             console.error(`[Evaluation] Failed to update node ${nodeId} status:`, e);
@@ -845,6 +806,7 @@ export async function POST(
                 // 保存到 TokenUsage 表（单次调用记录）
                 await prisma.tokenUsage.create({
                   data: {
+                    id: `token-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                     evaluationId: evaluation.id,
                     projectId: id,
                     apiProvider: modelConfig?.providerType || 'claude',
@@ -974,6 +936,7 @@ export async function POST(
               // 保存错误消息
               await prisma.sessionMessage.create({
                 data: {
+                  id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                   evaluationSessionId: evaluation.id,
                   role: 'assistant',
                   content: `评估失败: ${error.message}`,
@@ -1123,6 +1086,7 @@ export async function POST(
                       rawReport: JSON.stringify(evaluationResult),
                     },
                     create: {
+                      id: `result-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                       evaluationId: evaluation.id,
                       totalVulns: evaluationResult.total || 0,
                       criticalCount: evaluationResult.critical || 0,
@@ -1144,6 +1108,7 @@ export async function POST(
                   for (const vuln of vulnsToSave) {
                     await prisma.vulnerability.create({
                       data: {
+                        id: `vuln-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                         projectId: id,
                         evaluationId: evaluation.id,
                         title: vuln.title || '未命名漏洞',
@@ -1157,6 +1122,7 @@ export async function POST(
                         cwe: vuln.cwe_id || null,
                         skill: vuln.skill || null,          // 发现工具/skill字段
                         status: 'new',
+                        updatedAt: new Date(),
                       },
                     });
                   }
@@ -1253,7 +1219,6 @@ export async function POST(
               files,
               taskDescription: taskDescription || undefined,
               initialMessage,
-              workflowName,
             },
             callbacks,
           });
@@ -1420,242 +1385,4 @@ async function getModelConfig(modelId?: string | null, userId?: string | null) {
     },
   });
   return firstModel;
-}
-
-/**
- * 获取工作流预览
- */
-async function getWorkflowPreview(workflowId: string, userId: string): Promise<{ markdown: string; name: string } | null> {
-  try {
-    // 获取用户的活跃配置（包含工作流配置）
-    const userConfig = await prisma.opencodeConfig.findFirst({
-      where: {
-        userId: userId,
-        isActive: true,
-      },
-    });
-
-    let workflowConfig = {
-      startNodeLabel: '开始',
-      startNodeDescription: 'Agent编排的起始点',
-      endNodeLabel: '结束',
-      endNodeDescription: 'Agent编排的结束点',
-    };
-
-    // 从用户的 OpencodeConfig 中读取工作流配置
-    if (userConfig?.workflowConfig) {
-      try {
-        const parsed = JSON.parse(userConfig.workflowConfig);
-        workflowConfig = { ...workflowConfig, ...parsed };
-        console.log('[WorkflowPreview] 加载工作流配置:', workflowConfig);
-      } catch (e) {
-        console.error('[WorkflowPreview] 解析工作流配置失败:', e);
-      }
-    } else {
-      console.log('[WorkflowPreview] 使用默认工作流配置');
-    }
-
-    // 查询工作流及其节点和边（用户自己的 + 公开的 + 分享给用户的）
-    const workflow = await prisma.workflow.findFirst({
-      where: {
-        id: workflowId,
-        OR: [
-          { userId },                                    // 用户自己的
-          { isPublic: true },                            // 公开的
-          { shares: { some: { sharedWith: userId } } },  // 分享给用户的
-        ],
-      },
-      include: {
-        nodes: true,
-        edges: true,
-      },
-    });
-
-    if (!workflow) {
-      return null;
-    }
-
-    // 转换节点数据
-    const nodes = workflow.nodes.map((node) => ({
-      id: node.id,
-      type: node.type,
-      position: {
-        x: node.positionX,
-        y: node.positionY,
-      },
-      data: node.data ? JSON.parse(node.data) : {},
-    }));
-
-    // 转换边数据
-    const edges = workflow.edges.map((edge) => ({
-      id: edge.id,
-      source: edge.sourceId,
-      target: edge.targetId,
-      sourceHandle: edge.sourceHandle,
-      targetHandle: edge.targetHandle,
-      label: edge.label,
-      data: edge.data ? JSON.parse(edge.data) : undefined,
-    }));
-
-    // 生成 Markdown 预览
-    const markdown = generatePreviewMarkdown(nodes, edges, workflowConfig, workflow.name);
-
-    return { markdown, name: workflow.name };
-  } catch (error) {
-    console.error('获取工作流预览失败:', error);
-    return null;
-  }
-}
-
-/**
- * 生成工作流的 Markdown 预览
- */
-function generatePreviewMarkdown(
-  nodes: any[],
-  edges: any[],
-  workflowConfig: {
-    startNodeLabel: string;
-    startNodeDescription: string;
-    endNodeLabel: string;
-    endNodeDescription: string;
-  },
-  workflowName: string
-): string {
-  let markdown = `# ${workflowName}\n\n`;
-
-  // 找到开始节点
-  const startNode = nodes.find(n => n.type === 'start');
-  // 找到结束节点
-  const endNode = nodes.find(n => n.type === 'end');
-  // 找到所有任务节点（从开始节点直接连接的）
-  const taskNodes: { node: typeof nodes[0]; subtasks: typeof nodes }[] = [];
-
-  // 构建边的关系映射
-  const outEdges = new Map<string, typeof edges>();
-  edges.forEach(e => {
-    if (!outEdges.has(e.source)) {
-      outEdges.set(e.source, []);
-    }
-    outEdges.get(e.source)!.push(e);
-  });
-
-  // 记录已处理的节点
-  const processedNodes = new Set<string>();
-
-  // 从开始节点开始，按顺序获取任务节点
-  if (startNode) {
-    processedNodes.add(startNode.id);
-    const startEdges = outEdges.get(startNode.id) || [];
-
-    // 遍历从开始节点出发的边，找到任务节点
-    const processTask = (taskId: string) => {
-      const taskNode = nodes.find(n => n.id === taskId && n.type === 'task');
-      if (!taskNode || processedNodes.has(taskId)) return;
-      processedNodes.add(taskId);
-
-      const subtasks: typeof nodes = [];
-
-      // 找到从任务节点底部(subtask handle)连接出去的子任务
-      const taskOutEdges = outEdges.get(taskId) || [];
-      taskOutEdges.forEach(edge => {
-        // 检查是否是子任务连接（sourceHandle 为 'subtask' 或底部连接）
-        const isSubtaskEdge = edge.sourceHandle === 'subtask' ||
-          (edge.sourceHandle === null && nodes.find(n => n.id === edge.target)?.type === 'subtask');
-
-        if (isSubtaskEdge) {
-          // 收集所有子任务（包括链式连接的子任务）
-          const collectSubtasks = (subtaskId: string) => {
-            const subtaskNode = nodes.find(n => n.id === subtaskId && n.type === 'subtask');
-            if (subtaskNode && !processedNodes.has(subtaskId)) {
-              processedNodes.add(subtaskId);
-              subtasks.push(subtaskNode);
-
-              // 检查这个子任务是否连接到其他子任务
-              const subtaskOutEdges = outEdges.get(subtaskId) || [];
-              subtaskOutEdges.forEach(subEdge => {
-                collectSubtasks(subEdge.target);
-              });
-            }
-          };
-          collectSubtasks(edge.target);
-        }
-      });
-
-      taskNodes.push({ node: taskNode, subtasks });
-    };
-
-    // 按边的顺序处理任务节点
-    startEdges.forEach(edge => {
-      if (edge.target) {
-        const targetNode = nodes.find(n => n.id === edge.target);
-        if (targetNode?.type === 'task') {
-          processTask(edge.target);
-        }
-      }
-    });
-
-    // 处理链式任务连接（任务到任务）
-    let currentTask: typeof nodes[0] | undefined = taskNodes.length > 0 ? taskNodes[taskNodes.length - 1].node : undefined;
-    while (currentTask) {
-      const taskOutEdges = outEdges.get(currentTask.id) || [];
-      const nextTaskEdge = taskOutEdges.find(e => (e.sourceHandle === 'out' || !e.sourceHandle) && nodes.find(n => n.id === e.target)?.type === 'task');
-      if (nextTaskEdge) {
-        processTask(nextTaskEdge.target);
-        currentTask = taskNodes.find(t => t.node.id === nextTaskEdge.target)?.node;
-      } else {
-        break;
-      }
-    }
-  }
-
-  // 输出开始节点
-  if (startNode) {
-    const startLabel = workflowConfig.startNodeLabel || '开始';
-    const startDesc = workflowConfig.startNodeDescription || 'Agent编排的起始点';
-    const startType = NODE_TYPE_MAP[startNode.type as keyof typeof NODE_TYPE_MAP];
-    markdown += `## 1. ${startLabel}\n`;
-    markdown += `**类型**: ${startType?.label || startNode.type}  \n`;
-    markdown += `**描述**: ${startDesc}\n\n`;
-  }
-
-  // 输出任务节点和子任务
-  taskNodes.forEach((task, taskIdx) => {
-    const taskData = task.node.data || {};
-    const taskNumber = taskIdx + 2; // 从2开始（1是开始节点）
-    const taskType = NODE_TYPE_MAP[task.node.type as keyof typeof NODE_TYPE_MAP];
-
-    markdown += `## ${taskNumber}. ${taskData.label || taskType?.label || '任务'}\n`;
-    markdown += `**类型**: ${taskType?.label || task.node.type}  \n`;
-    if (taskData.description) {
-      markdown += `**描述**: ${taskData.description}`;
-    }
-    markdown += '\n\n';
-
-    // 输出子任务
-    task.subtasks.forEach((subtask, subtaskIdx) => {
-      const subtaskData = subtask.data || {};
-      const subtaskType = NODE_TYPE_MAP[subtask.type as keyof typeof NODE_TYPE_MAP];
-      const subtaskNumber = `${taskNumber}.${subtaskIdx + 1}`;
-
-      markdown += `### ${subtaskNumber}. ${subtaskData.label || subtaskType?.label || '子任务'}\n`;
-      markdown += `**类型**: ${subtaskType?.label || subtask.type}  \n`;
-      if (subtaskData.description) {
-        markdown += `**描述**: ${subtaskData.description}`;
-      }
-      markdown += '\n\n';
-    });
-  });
-
-  // 输出结束节点
-  if (endNode) {
-    const endLabel = workflowConfig.endNodeLabel || '结束';
-    const endDesc = workflowConfig.endNodeDescription || 'Agent编排的结束点';
-    const endNumber = taskNodes.length + 2; // 开始节点 + 任务节点数 + 1
-    const endType = NODE_TYPE_MAP[endNode.type as keyof typeof NODE_TYPE_MAP];
-    markdown += `## ${endNumber}. ${endLabel}\n`;
-    markdown += `**类型**: ${endType?.label || endNode.type}  \n`;
-    markdown += `**描述**: ${endDesc}\n\n`;
-  }
-
-  return markdown;
 }

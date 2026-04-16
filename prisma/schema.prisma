@@ -9,7 +9,7 @@ datasource db {
 }
 
 model AgentDefinition {
-  id              String            @id @default(cuid())
+  id              String            @id
   userId          String?
   name            String            @unique
   displayName     String
@@ -24,19 +24,19 @@ model AgentDefinition {
   isActive        Boolean           @default(true)
   isBuiltin       Boolean           @default(false)
   createdAt       DateTime          @default(now())
-  updatedAt       DateTime @updatedAt
-  ModelConfig     ModelConfig?      @relation(fields: [modelConfigId], references: [id])
+  updatedAt       DateTime
   User            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ModelConfig     ModelConfig?      @relation(fields: [modelConfigId], references: [id])
   AgentTeam       AgentTeam[]
   AgentTeamMember AgentTeamMember[]
 
-  @@index([isActive])
-  @@index([category])
   @@index([name])
+  @@index([category])
+  @@index([isActive])
 }
 
 model AgentMemberExecution {
-  id                 String             @id @default(cuid())
+  id                 String             @id
   teamExecutionId    String
   memberId           String
   status             String             @default("pending")
@@ -45,16 +45,16 @@ model AgentMemberExecution {
   inputTokens        Int                @default(0)
   outputTokens       Int                @default(0)
   createdAt          DateTime           @default(now())
-  AgentTeamMember    AgentTeamMember    @relation(fields: [memberId], references: [id])
   AgentTeamExecution AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
+  AgentTeamMember    AgentTeamMember    @relation(fields: [memberId], references: [id])
 
-  @@index([status])
-  @@index([memberId])
   @@index([teamExecutionId])
+  @@index([memberId])
+  @@index([status])
 }
 
 model AgentTeam {
-  id                 String               @id @default(cuid())
+  id                 String               @id
   userId             String
   name               String
   description        String?
@@ -62,22 +62,22 @@ model AgentTeam {
   taskStrategy       String?              @default("parallel")
   maxTeammates       Int                  @default(5)
   status             String               @default("idle")
-  ralphConfig        String?              // JSON: RalphLoopConfig for iteration mode
+  ralphConfig        String?
   createdAt          DateTime             @default(now())
-  updatedAt          DateTime @updatedAt
-  AgentDefinition    AgentDefinition      @relation(fields: [leadAgentId], references: [id], onDelete: Cascade)
+  updatedAt          DateTime
   User               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  AgentDefinition    AgentDefinition      @relation(fields: [leadAgentId], references: [id], onDelete: Cascade)
   AgentTeamExecution AgentTeamExecution[]
   AgentTeamMember    AgentTeamMember[]
-  EvaluationSessions EvaluationSession[]
+  EvaluationSession  EvaluationSession[]
 
-  @@index([leadAgentId])
-  @@index([status])
   @@index([userId])
+  @@index([status])
+  @@index([leadAgentId])
 }
 
 model AgentTeamExecution {
-  id                   String                 @id @default(cuid())
+  id                   String                 @id
   teamId               String
   evaluationId         String?
   status               String                 @default("pending")
@@ -87,16 +87,16 @@ model AgentTeamExecution {
   totalOutputTokens    Int                    @default(0)
   createdAt            DateTime               @default(now())
   AgentMemberExecution AgentMemberExecution[]
-  EvaluationSession    EvaluationSession?     @relation(fields: [evaluationId], references: [id])
   AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  EvaluationSession    EvaluationSession?     @relation(fields: [evaluationId], references: [id])
 
-  @@index([status])
-  @@index([evaluationId])
   @@index([teamId])
+  @@index([evaluationId])
+  @@index([status])
 }
 
 model AgentTeamMember {
-  id                   String                 @id @default(cuid())
+  id                   String                 @id
   teamId               String
   agentId              String
   role                 String
@@ -104,15 +104,15 @@ model AgentTeamMember {
   overrideTools        String?
   createdAt            DateTime               @default(now())
   AgentMemberExecution AgentMemberExecution[]
-  AgentDefinition      AgentDefinition        @relation(fields: [agentId], references: [id], onDelete: Cascade)
   AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  AgentDefinition      AgentDefinition        @relation(fields: [agentId], references: [id], onDelete: Cascade)
 
-  @@index([agentId])
   @@index([teamId])
+  @@index([agentId])
 }
 
 model AlertInstance {
-  id               String    @id @default(cuid())
+  id               String    @id
   ruleId           String
   ruleName         String
   severity         String
@@ -127,7 +127,7 @@ model AlertInstance {
   details          String?
   notifiedChannels String?
   createdAt        DateTime  @default(now())
-  updatedAt        DateTime @updatedAt
+  updatedAt        DateTime
   AlertRule        AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
   @@index([triggeredAt])
@@ -137,7 +137,7 @@ model AlertInstance {
 }
 
 model AlertRule {
-  id                   String          @id @default(cuid())
+  id                   String          @id
   name                 String          @unique
   description          String?
   metricType           String
@@ -150,7 +150,7 @@ model AlertRule {
   lastTriggeredAt      DateTime?
   triggerCount         Int             @default(0)
   createdAt            DateTime        @default(now())
-  updatedAt            DateTime @updatedAt
+  updatedAt            DateTime
   AlertInstance        AlertInstance[]
 
   @@index([severity])
@@ -159,7 +159,7 @@ model AlertRule {
 }
 
 model AuditLog {
-  id        String   @id @default(cuid())
+  id        String   @id
   userId    String?
   action    String
   resource  String?
@@ -175,7 +175,7 @@ model AuditLog {
 }
 
 model AutonomousEvolutionExperience {
-  id              String    @id @default(cuid())
+  id              String    @id
   title           String
   errorCategory   String
   errorPatterns   String
@@ -190,7 +190,7 @@ model AutonomousEvolutionExperience {
   hitCount        Int       @default(1)
   savedAttempts   Float     @default(0)
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime
 
   @@index([hitCount])
   @@index([sourceModel])
@@ -199,7 +199,7 @@ model AutonomousEvolutionExperience {
 }
 
 model AutonomousEvolutionRunLog {
-  id           String    @id @default(cuid())
+  id           String    @id
   mode         String
   trigger      String    @default("manual")
   scanned      Int       @default(0)
@@ -218,7 +218,7 @@ model AutonomousEvolutionRunLog {
 }
 
 model CodeKnowledge {
-  id         String   @id @default(cuid())
+  id         String   @id
   projectId  String
   entityType String
   name       String
@@ -234,7 +234,7 @@ model CodeKnowledge {
   summary    String?
   riskScore  Float?
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  updatedAt  DateTime
   Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([name])
@@ -243,7 +243,7 @@ model CodeKnowledge {
 }
 
 model DataFlow {
-  id          String   @id @default(cuid())
+  id          String   @id
   projectId   String
   sourceId    String
   sinkId      String
@@ -261,7 +261,7 @@ model DataFlow {
 }
 
 model EvaluationIteration {
-  id                   String            @id @default(cuid())
+  id                   String            @id
   evaluationSessionId  String
   iterationNumber      Int
   status               String            @default("pending")
@@ -276,7 +276,7 @@ model EvaluationIteration {
   verificationReason   String?
   errorMessage         String?
   createdAt            DateTime          @default(now())
-  updatedAt            DateTime @updatedAt
+  updatedAt            DateTime
   EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
   @@unique([evaluationSessionId, iterationNumber])
@@ -286,7 +286,7 @@ model EvaluationIteration {
 }
 
 model EvaluationResult {
-  id                String            @id @default(cuid())
+  id                String            @id
   evaluationId      String            @unique
   totalVulns        Int               @default(0)
   criticalCount     Int               @default(0)
@@ -301,7 +301,7 @@ model EvaluationResult {
 }
 
 model EvaluationSession {
-  id                  String                @id @default(cuid())
+  id                  String                @id
   projectId           String
   workflowId          String?
   agentTeamId         String?
@@ -327,26 +327,26 @@ model EvaluationSession {
   AgentTeamExecution  AgentTeamExecution[]
   EvaluationIteration EvaluationIteration[]
   EvaluationResult    EvaluationResult?
-  ModelConfig         ModelConfig?          @relation(fields: [modelConfigId], references: [id])
-  AgentTeam           AgentTeam?            @relation(fields: [agentTeamId], references: [id])
   Project             Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  AgentTeam           AgentTeam?            @relation(fields: [agentTeamId], references: [id])
+  ModelConfig         ModelConfig?          @relation(fields: [modelConfigId], references: [id])
   NodeExecution       NodeExecution[]
   SessionMessage      SessionMessage[]
   TokenUsage          TokenUsage[]
   Vulnerability       Vulnerability[]
 
-  @@index([lastActivity])
-  @@index([provider])
-  @@index([status])
-  @@index([opencodeSessionId])
-  @@index([modelConfigId])
-  @@index([workflowId])
-  @@index([agentTeamId])
   @@index([projectId])
+  @@index([agentTeamId])
+  @@index([workflowId])
+  @@index([modelConfigId])
+  @@index([opencodeSessionId])
+  @@index([status])
+  @@index([provider])
+  @@index([lastActivity])
 }
 
 model ExpectedOutputTemplate {
-  id          String   @id @default(cuid())
+  id          String   @id
   name        String   @unique
   displayName String
   description String
@@ -357,7 +357,7 @@ model ExpectedOutputTemplate {
   isBuiltin   Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
 
   @@index([isActive])
   @@index([category])
@@ -365,21 +365,21 @@ model ExpectedOutputTemplate {
 }
 
 model ExperienceUsageLog {
-  id           String   @id @default(cuid())
+  id           String   @id
   experienceId String
   evaluationId String
   projectId    String?
   source       String   @default("pre_injected")
   usedAt       DateTime @default(now())
 
-  @@index([source])
-  @@index([usedAt])
-  @@index([evaluationId])
   @@index([experienceId])
+  @@index([evaluationId])
+  @@index([usedAt])
+  @@index([source])
 }
 
 model LogFileRecord {
-  id            String   @id @default(cuid())
+  id            String   @id
   filePath      String   @unique
   fileHash      String
   processedAt   DateTime @default(now())
@@ -389,7 +389,7 @@ model LogFileRecord {
 }
 
 model McpServerConfig {
-  id        String   @id @default(cuid())
+  id        String   @id
   userId    String
   projectId String?
   name      String
@@ -402,7 +402,7 @@ model McpServerConfig {
   autoStart Boolean  @default(false)
   isShared  Boolean  @default(false)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime
   Project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
   User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -413,7 +413,7 @@ model McpServerConfig {
 }
 
 model ModelConfig {
-  id                String              @id @default(cuid())
+  id                String              @id
   userId            String?
   name              String
   providerType      String              @default("openai")
@@ -425,7 +425,7 @@ model ModelConfig {
   isDefault         Boolean             @default(false)
   isPublic          Boolean             @default(false)
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime
   AgentDefinition   AgentDefinition[]
   EvaluationSession EvaluationSession[]
   User              User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -439,7 +439,7 @@ model ModelConfig {
 }
 
 model NodeExecution {
-  id                  String            @id @default(cuid())
+  id                  String            @id
   evaluationSessionId String
   workflowNodeId      String
   nodeLabel           String
@@ -449,7 +449,7 @@ model NodeExecution {
   completedAt         DateTime?
   order               Int               @default(0)
   createdAt           DateTime          @default(now())
-  updatedAt           DateTime @updatedAt
+  updatedAt           DateTime
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
   @@unique([evaluationSessionId, workflowNodeId])
@@ -459,20 +459,20 @@ model NodeExecution {
 }
 
 model NotificationChannel {
-  id        String   @id @default(cuid())
+  id        String   @id
   name      String   @unique
   type      String
   config    String
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime
 
   @@index([enabled])
   @@index([type])
 }
 
 model OpencodeConfig {
-  id                       String    @id @default(cuid())
+  id                       String    @id
   userId                   String
   name                     String
   baseURL                  String    @default("http://localhost:54321")
@@ -494,7 +494,7 @@ model OpencodeConfig {
   claudemdTemplate         String?
   maxConcurrentEvaluations Int       @default(3)
   createdAt                DateTime  @default(now())
-  updatedAt                DateTime @updatedAt
+  updatedAt                DateTime
   defaultToolPermissions   String?
   User                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   Project                  Project[]
@@ -503,14 +503,14 @@ model OpencodeConfig {
 }
 
 model Permission {
-  id          String   @id @default(cuid())
+  id          String   @id
   name        String   @unique
   description String?
   module      String
   action      String
   resource    String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
   Role        Role[]
 
   @@unique([module, action])
@@ -518,7 +518,7 @@ model Permission {
 }
 
 model Plugin {
-  id          String   @id @default(cuid())
+  id          String   @id
   name        String   @unique
   displayName String
   description String
@@ -534,7 +534,7 @@ model Plugin {
   homepage    String?
   repository  String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
 
   @@index([isEnabled])
   @@index([status])
@@ -543,7 +543,7 @@ model Plugin {
 }
 
 model Project {
-  id                String              @id @default(cuid())
+  id                String              @id
   userId            String
   configId          String?
   name              String
@@ -558,7 +558,7 @@ model Project {
   normalUsername    String?
   normalPassword    String?
   createdAt         DateTime            @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime
   techStack         String?
   CodeKnowledge     CodeKnowledge[]
   DataFlow          DataFlow[]
@@ -581,7 +581,7 @@ model Project {
 }
 
 model ProjectFile {
-  id         String   @id @default(cuid())
+  id         String   @id
   projectId  String
   fileName   String
   filePath   String
@@ -594,7 +594,7 @@ model ProjectFile {
 }
 
 model ProjectStructure {
-  id            String    @id @default(cuid())
+  id            String    @id
   projectId     String    @unique
   structure     String
   fileCount     Int       @default(0)
@@ -603,19 +603,19 @@ model ProjectStructure {
   status        String    @default("pending")
   analyzedAt    DateTime?
   createdAt     DateTime  @default(now())
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime
   Project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
 
 model Role {
-  id          String       @id @default(cuid())
+  id          String       @id
   name        String       @unique
   description String?
   isSystem    Boolean      @default(false)
   createdAt   DateTime     @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
   UserRole    UserRole[]
   Permission  Permission[]
 
@@ -623,7 +623,7 @@ model Role {
 }
 
 model ScanReport {
-  id         String   @id @default(cuid())
+  id         String   @id
   scanTaskId String
   projectId  String
   summary    String
@@ -637,7 +637,7 @@ model ScanReport {
 }
 
 model ScanTask {
-  id              String           @id @default(cuid())
+  id              String           @id
   projectId       String
   userId          String
   name            String
@@ -655,7 +655,7 @@ model ScanTask {
   findingsCount   Int              @default(0)
   error           String?
   createdAt       DateTime         @default(now())
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime
   ScanReport      ScanReport[]
   Project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   SkillExecution  SkillExecution[]
@@ -667,7 +667,7 @@ model ScanTask {
 }
 
 model SessionMessage {
-  id                  String            @id @default(cuid())
+  id                  String            @id
   evaluationSessionId String
   role                String
   content             String
@@ -679,7 +679,7 @@ model SessionMessage {
 }
 
 model SessionMeta {
-  id             String   @id @default(cuid())
+  id             String   @id
   projectId      String   @unique
   total          Int      @default(0)
   hasMore        Boolean  @default(false)
@@ -690,14 +690,14 @@ model SessionMeta {
   runningCount   Int      @default(0)
   completedCount Int      @default(0)
   failedCount    Int      @default(0)
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime
   Project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
 }
 
 model Skill {
-  id                                                     String                   @id @default(cuid())
+  id                                                     String                   @id
   userId                                                 String?
   name                                                   String
   displayName                                            String
@@ -719,30 +719,30 @@ model Skill {
   referenceCount                                         Int                      @default(0)
   vulnerabilityCount                                     Int                      @default(0)
   createdAt                                              DateTime                 @default(now())
-  updatedAt                                              DateTime @updatedAt
+  updatedAt                                              DateTime
+  User                                                   User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   Skill                                                  Skill?                   @relation("SkillToSkill", fields: [parentId], references: [id])
   other_Skill                                            Skill[]                  @relation("SkillToSkill")
-  User                                                   User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   SkillEvolution                                         SkillEvolution[]
   SkillExecution                                         SkillExecution[]
-  SkillMergeRecord_SkillMergeRecord_targetSkillIdToSkill SkillMergeRecord[]       @relation("SkillMergeRecord_targetSkillIdToSkill")
   SkillMergeRecord_SkillMergeRecord_sourceSkillIdToSkill SkillMergeRecord[]       @relation("SkillMergeRecord_sourceSkillIdToSkill")
+  SkillMergeRecord_SkillMergeRecord_targetSkillIdToSkill SkillMergeRecord[]       @relation("SkillMergeRecord_targetSkillIdToSkill")
   SkillNewImpactAnalysis                                 SkillNewImpactAnalysis[]
   SkillObservationLog                                    SkillObservationLog[]
   SkillObservationStats                                  SkillObservationStats?
 
   @@unique([userId, name])
-  @@index([isPublic])
-  @@index([isActive])
-  @@index([category])
-  @@index([version])
-  @@index([isLatest])
-  @@index([name])
   @@index([userId])
+  @@index([name])
+  @@index([isLatest])
+  @@index([version])
+  @@index([category])
+  @@index([isActive])
+  @@index([isPublic])
 }
 
 model SkillEvolution {
-  id          String   @id @default(cuid())
+  id          String   @id
   skillId     String
   fromVersion Int
   toVersion   Int
@@ -761,7 +761,7 @@ model SkillEvolution {
 }
 
 model SkillExecution {
-  id                 String          @id @default(cuid())
+  id                 String          @id
   skillId            String
   projectId          String
   scanTaskId         String?
@@ -792,7 +792,7 @@ model SkillExecution {
 }
 
 model SkillGovernanceConfig {
-  id             String   @id @default(cuid())
+  id             String   @id
   configKey      String   @unique
   thresholdValue Float
   configValue    String?
@@ -800,14 +800,14 @@ model SkillGovernanceConfig {
   isActive       Boolean  @default(true)
   isBuiltin      Boolean  @default(false)
   createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime
 
-  @@index([isActive])
   @@index([configKey])
+  @@index([isActive])
 }
 
 model SkillMergeRecord {
-  id                                          String    @id @default(cuid())
+  id                                          String    @id
   sourceSkillId                               String
   targetSkillId                               String
   mergeReason                                 String
@@ -822,19 +822,19 @@ model SkillMergeRecord {
   mergedBy                                    String?
   mergedAt                                    DateTime?
   createdAt                                   DateTime  @default(now())
-  updatedAt                                   DateTime @updatedAt
-  Skill_SkillMergeRecord_targetSkillIdToSkill Skill     @relation("SkillMergeRecord_targetSkillIdToSkill", fields: [targetSkillId], references: [id])
+  updatedAt                                   DateTime
   Skill_SkillMergeRecord_sourceSkillIdToSkill Skill     @relation("SkillMergeRecord_sourceSkillIdToSkill", fields: [sourceSkillId], references: [id])
+  Skill_SkillMergeRecord_targetSkillIdToSkill Skill     @relation("SkillMergeRecord_targetSkillIdToSkill", fields: [targetSkillId], references: [id])
 
-  @@index([sourceSkillId, targetSkillId])
-  @@index([createdAt])
-  @@index([status])
-  @@index([targetSkillId])
   @@index([sourceSkillId])
+  @@index([targetSkillId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([sourceSkillId, targetSkillId])
 }
 
 model SkillNewImpactAnalysis {
-  id                   String    @id @default(cuid())
+  id                   String    @id
   skillId              String
   similarSkills        String?
   overlapScore         Float?
@@ -846,17 +846,17 @@ model SkillNewImpactAnalysis {
   actionedAt           DateTime?
   createdBy            String?
   createdAt            DateTime  @default(now())
-  updatedAt            DateTime @updatedAt
+  updatedAt            DateTime
   Skill                Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([createdAt])
-  @@index([status])
-  @@index([overlapScore])
   @@index([skillId])
+  @@index([overlapScore])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model SkillObservationLog {
-  id             String    @id @default(cuid())
+  id             String    @id
   skillId        String
   triggerType    String
   triggerContext String?
@@ -868,19 +868,19 @@ model SkillObservationLog {
   resolvedBy     String?
   resolution     String?
   createdAt      DateTime  @default(now())
-  updatedAt      DateTime @updatedAt
+  updatedAt      DateTime
   Skill          Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([skillId, createdAt])
-  @@index([createdAt])
-  @@index([status])
-  @@index([severity])
-  @@index([triggerType])
   @@index([skillId])
+  @@index([triggerType])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+  @@index([skillId, createdAt])
 }
 
 model SkillObservationStats {
-  id                String    @id @default(cuid())
+  id                String    @id
   skillId           String    @unique
   totalObservations Int       @default(0)
   warningCount      Int       @default(0)
@@ -893,16 +893,16 @@ model SkillObservationStats {
   firstObservedAt   DateTime?
   lastObservedAt    DateTime?
   createdAt         DateTime  @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime
   Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([matchRate])
-  @@index([warningCount])
   @@index([skillId])
+  @@index([warningCount])
+  @@index([matchRate])
 }
 
 model SkillPrediction {
-  id                String    @id @default(cuid())
+  id                String   @id
   userId            String
   workflowId        String?
   taskName          String
@@ -910,18 +910,18 @@ model SkillPrediction {
   matches           String
   method            String
   workflowTechStack String?
-  matchCount        Int       @default(0)
-  createdAt         DateTime  @default(now())
-  User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matchCount        Int      @default(0)
+  createdAt         DateTime @default(now())
+  User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, createdAt])
-  @@index([createdAt])
-  @@index([workflowId])
   @@index([userId])
+  @@index([workflowId])
+  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 model SkillPredictionTask {
-  id                String    @id @default(cuid())
+  id                String    @id
   userId            String
   workflowId        String?
   taskName          String
@@ -937,33 +937,33 @@ model SkillPredictionTask {
   completedAt       DateTime?
   duration          Int?
   createdAt         DateTime  @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime
   nodeId            String?
   governanceWarning String?
   User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([workflowId, nodeId])
-  @@index([nodeId])
-  @@index([userId, status])
-  @@index([createdAt])
-  @@index([status])
-  @@index([workflowId])
   @@index([userId])
+  @@index([workflowId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId, status])
+  @@index([nodeId])
+  @@index([workflowId, nodeId])
 }
 
 model SystemConfig {
-  id          String   @id @default(cuid())
+  id          String   @id
   key         String   @unique
   value       String
   description String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
 
   @@index([key])
 }
 
 model SystemMetric {
-  id         String   @id @default(cuid())
+  id         String   @id
   name       String
   type       String
   value      Float
@@ -976,7 +976,7 @@ model SystemMetric {
 }
 
 model TechStackOption {
-  id          String   @id @default(cuid())
+  id          String   @id
   name        String   @unique
   category    String
   description String?
@@ -984,7 +984,7 @@ model TechStackOption {
   isBuiltin   Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
 
   @@index([isActive])
   @@index([category])
@@ -992,7 +992,7 @@ model TechStackOption {
 }
 
 model TokenUsage {
-  id                 String             @id @default(cuid())
+  id                 String             @id
   evaluationId       String?
   projectId          String?
   apiProvider        String
@@ -1023,7 +1023,7 @@ model TokenUsage {
 }
 
 model Tool {
-  id                 String   @id @default(cuid())
+  id                 String   @id
   name               String   @unique
   displayName        String
   description        String
@@ -1037,20 +1037,20 @@ model Tool {
   isActive           Boolean  @default(true)
   isBuiltin          Boolean  @default(true)
   createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  updatedAt          DateTime
 
   @@index([isActive])
   @@index([category])
 }
 
 model ToolPermission {
-  id          String   @id @default(cuid())
+  id          String   @id
   projectId   String
   toolPattern String
   permission  String
   description String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
   Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, toolPattern])
@@ -1058,32 +1058,32 @@ model ToolPermission {
 }
 
 model User {
-  id                                           String                @id @default(cuid())
-  email                                        String                @unique
-  username                                     String                @unique
-  passwordHash                                 String
-  name                                         String?
-  avatar                                       String?
-  isActive                                     Boolean               @default(true)
-  createdAt                                    DateTime              @default(now())
-  updatedAt                                    DateTime @updatedAt
-  AgentDefinition                              AgentDefinition[]
-  AgentTeam                                    AgentTeam[]
-  McpServerConfig                              McpServerConfig[]
-  ModelConfig                                  ModelConfig[]
-  OpencodeConfig                               OpencodeConfig[]
-  Project                                      Project[]
-  Skill                                        Skill[]
-  SkillPrediction                              SkillPrediction[]
-  SkillPredictionTask                          SkillPredictionTask[]
-  UserRole                                     UserRole[]
+  id                  String                @id
+  email               String                @unique
+  username            String                @unique
+  passwordHash        String
+  name                String?
+  avatar              String?
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  AgentDefinition     AgentDefinition[]
+  AgentTeam           AgentTeam[]
+  McpServerConfig     McpServerConfig[]
+  ModelConfig         ModelConfig[]
+  OpencodeConfig      OpencodeConfig[]
+  Project             Project[]
+  Skill               Skill[]
+  SkillPrediction     SkillPrediction[]
+  SkillPredictionTask SkillPredictionTask[]
+  UserRole            UserRole[]
 
   @@index([username])
   @@index([email])
 }
 
 model UserRole {
-  id        String   @id @default(cuid())
+  id        String   @id
   userId    String
   roleId    String
   createdAt DateTime @default(now())
@@ -1096,7 +1096,7 @@ model UserRole {
 }
 
 model Vulnerability {
-  id                String             @id @default(cuid())
+  id                String             @id
   projectId         String
   evaluationId      String?
   skillExecutionId  String?
@@ -1122,7 +1122,7 @@ model Vulnerability {
   verifiedAt        DateTime?
   notes             String?
   createdAt         DateTime           @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime
   SkillExecution    SkillExecution?    @relation(fields: [skillExecutionId], references: [id])
   EvaluationSession EvaluationSession? @relation(fields: [evaluationId], references: [id])
   Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1138,7 +1138,7 @@ model Vulnerability {
 }
 
 model VulnerabilityPattern {
-  id                String   @id @default(cuid())
+  id                String   @id
   name              String   @unique
   displayName       String
   description       String
@@ -1153,7 +1153,7 @@ model VulnerabilityPattern {
   isActive          Boolean  @default(true)
   isBuiltin         Boolean  @default(true)
   createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  updatedAt         DateTime
 
   @@index([isActive])
   @@index([category])

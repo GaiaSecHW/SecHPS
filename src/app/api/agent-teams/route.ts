@@ -48,16 +48,16 @@ function formatAgentTeam(team: any) {
     name: team.name,
     description: team.description,
     leadAgentId: team.leadAgentId,
-    leadAgentName: team.leadAgent?.displayName || team.leadAgent?.name || null,
+    leadAgentName: team.AgentDefinition?.displayName || team.AgentDefinition?.name || null,
     taskStrategy: team.taskStrategy,
     maxTeammates: team.maxTeammates,
     status: team.status,
     createdAt: team.createdAt,
     updatedAt: team.updatedAt,
-    members: team.members?.map((m: any) => ({
+    members: team.AgentTeamMember?.map((m: any) => ({
       id: m.id,
       agentId: m.agentId,
-      agentName: m.agent?.displayName || m.agent?.name || null,
+      agentName: m.AgentDefinition?.displayName || m.AgentDefinition?.name || null,
       role: m.role,
       overrideModel: m.overrideModel,
       overrideTools: m.overrideTools ? JSON.parse(m.overrideTools) : null,
@@ -123,21 +123,21 @@ export async function GET(request: Request) {
               username: true,
             },
           },
-          leadAgent: {
+          AgentDefinition: {
             select: {
               id: true,
               name: true,
               displayName: true,
             },
           },
-          members: {
+          AgentTeamMember: {
             select: {
               id: true,
               agentId: true,
               role: true,
               overrideModel: true,
               overrideTools: true,
-              agent: {
+              AgentDefinition: {
                 select: {
                   id: true,
                   name: true,
@@ -148,8 +148,8 @@ export async function GET(request: Request) {
           },
           _count: {
             select: {
-              members: true,
-              teamExecutions: true,
+              AgentTeamMember: true,
+              AgentTeamExecution: true,
             },
           },
         },
@@ -247,6 +247,7 @@ export async function POST(request: Request) {
     // Create team with members
     const team = await prisma.agentTeam.create({
       data: {
+        id: `team-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         name: trimmedName,
         description: description?.trim() || undefined,
@@ -254,9 +255,11 @@ export async function POST(request: Request) {
         taskStrategy: taskStrategy || 'parallel',
         maxTeammates: maxTeamSize,
         status: 'idle',
-        members: members && Array.isArray(members) && members.length > 0
+        updatedAt: new Date(),
+        AgentTeamMember: members && Array.isArray(members) && members.length > 0
           ? {
               create: members.map((m: any) => ({
+                id: `member-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                 agentId: m.agentId,
                 role: m.role || 'teammate',
                 overrideModel: m.overrideModel || undefined,
@@ -266,16 +269,16 @@ export async function POST(request: Request) {
           : undefined,
       },
       include: {
-        leadAgent: {
+        AgentDefinition: {
           select: {
             id: true,
             name: true,
             displayName: true,
           },
         },
-        members: {
+        AgentTeamMember: {
           include: {
-            agent: {
+            AgentDefinition: {
               select: {
                 id: true,
                 name: true,

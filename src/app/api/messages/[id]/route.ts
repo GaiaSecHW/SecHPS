@@ -30,7 +30,7 @@ export async function GET(
     const message = await prisma.sessionMessage.findUnique({
       where: { id },
       include: {
-        evaluationSession: {
+        EvaluationSession: {
           select: {
             id: true,
             opencodeSessionId: true,
@@ -48,8 +48,8 @@ export async function GET(
     // sessionId 可能是 evaluationSession.id 或 opencodeSessionId
     if (sessionId) {
       const belongsToSession =
-        message.evaluationSession.id === sessionId ||
-        (message.evaluationSession.opencodeSessionId && message.evaluationSession.opencodeSessionId === sessionId);
+        message.EvaluationSession.id === sessionId ||
+        (message.EvaluationSession.opencodeSessionId && message.EvaluationSession.opencodeSessionId === sessionId);
 
       if (!belongsToSession) {
         return NextResponse.json({ error: '消息不属于该会话' }, { status: 403 });
@@ -82,7 +82,7 @@ export async function GET(
         content: parsedContent,
         metadata: parsedMetadata,
         createdAt: message.createdAt,
-        session: message.evaluationSession,
+        session: message.EvaluationSession,
       },
     });
   } catch (error) {

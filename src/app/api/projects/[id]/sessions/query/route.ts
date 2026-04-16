@@ -54,7 +54,7 @@ export async function GET(
         skip: offset,
         include: {
           _count: {
-            select: { messages: true },
+            select: { SessionMessage: true },
           },
         },
       }),
@@ -68,7 +68,7 @@ export async function GET(
       title: session.title,
       summary: session.summary,
       status: session.status,
-      messageCount: session.messageCount || session._count.messages,
+      messageCount: session.messageCount || session._count.SessionMessage,
       lastActivity: session.lastActivity,
       startedAt: session.startedAt,
       completedAt: session.completedAt,
@@ -118,7 +118,7 @@ export async function POST(
       orderBy: { lastActivity: 'desc' },
       include: {
         _count: {
-          select: { messages: true },
+          select: { SessionMessage: true },
         },
       },
     });
@@ -148,7 +148,7 @@ export async function POST(
       title: session.title,
       summary: session.summary,
       status: session.status,
-      messageCount: session.messageCount || session._count.messages,
+      messageCount: session.messageCount || session._count.SessionMessage,
       lastActivity: session.lastActivity,
       startedAt: session.startedAt,
       completedAt: session.completedAt,

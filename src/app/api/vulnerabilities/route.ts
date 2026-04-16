@@ -78,7 +78,7 @@ export async function GET(request: Request) {
           status: true,
           createdAt: true,
           updatedAt: true,
-          project: {
+          Project: {
             select: { id: true, name: true },
           },
         },
@@ -143,6 +143,7 @@ export async function POST(request: Request) {
 
     const vulnerability = await prisma.vulnerability.create({
       data: {
+        id: `vuln-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         projectId,
         skillExecutionId,
         title,
@@ -158,12 +159,14 @@ export async function POST(request: Request) {
         aiAnalysis,
         fixSuggestion,
         status: 'new',
+        updatedAt: new Date(),
       },
     });
 
     // 记录审计日志
     prisma.auditLog.create({
       data: {
+        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         userId: payload.userId,
         action: 'vulnerability_create',
         resource: vulnerability.id,

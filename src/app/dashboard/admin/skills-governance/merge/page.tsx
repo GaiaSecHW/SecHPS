@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import toast from 'react-hot-toast';
 import {
   GitMerge,
@@ -439,15 +440,18 @@ export default function SkillMergePage() {
 
   return (
     <div className="space-y-6">
+      {/* Back Button */}
+      <Link 
+        href="/dashboard/admin/skills-governance"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        返回治理总览
+      </Link>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <button
-            onClick={() => router.push('/dashboard/admin/skills-governance')}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-          >
-            <ArrowLeft size={20} />
-          </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Skill 合并操作</h1>
             <p className="mt-1 text-sm text-gray-600">

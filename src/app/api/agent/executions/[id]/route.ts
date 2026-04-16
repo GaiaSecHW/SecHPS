@@ -27,10 +27,10 @@ export async function GET(
     const execution = await prisma.skillExecution.findUnique({
       where: { id },
       include: {
-        skill: {
+        Skill: {
           select: { id: true, name: true, displayName: true, category: true },
         },
-        project: {
+        Project: {
           select: { id: true, name: true },
         },
       },

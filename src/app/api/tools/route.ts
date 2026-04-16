@@ -97,6 +97,7 @@ export async function POST(request: Request) {
 
     const tool = await prisma.tool.create({
       data: {
+        id: `tool-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         displayName,
         description,
@@ -108,6 +109,7 @@ export async function POST(request: Request) {
         allowedInSandbox: allowedInSandbox ?? true,
         timeout: timeout ?? 30000,
         isBuiltin: false,
+        updatedAt: new Date(),
       },
     });
 

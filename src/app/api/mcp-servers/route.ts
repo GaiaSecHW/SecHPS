@@ -83,7 +83,7 @@ export async function GET(request: Request) {
       skip,
       take,
       include: {
-        user: {
+        User: {
           select: { id: true, username: true, name: true },
         },
       },
@@ -187,6 +187,7 @@ export async function POST(request: Request) {
     // 创建 MCP 配置（绑定到当前用户）
     const mcpServer = await prisma.mcpServerConfig.create({
       data: {
+        id: `mcp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name,
         type,
         command: command || null,
@@ -198,6 +199,7 @@ export async function POST(request: Request) {
         isShared: isAdmin ? isShared : false, // 非管理员强制为 false
         userId: payload.userId,
         projectId: null,
+        updatedAt: new Date(),
       },
     });
 
