@@ -22,7 +22,7 @@ export async function GET(request: Request) {
 
     // 检查权限 - 所有登录用户都可以访问，但只能查看自己的数据
     // 管理员可以查看所有数据
-    const isAdmin = payload.roles?.includes('admin');
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
     // TOKEN_DETAIL 权限可以查看用户级别的统计（仅管理员可见部分）
     const hasTokenDetail = hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL);
 
@@ -54,11 +54,9 @@ export async function GET(request: Request) {
       evalWhereClause.projectId = projectId;
       tokenWhereClause.projectId = projectId;
     } else {
-      // 系统项目（所有人可见）
-      const SYSTEM_PROJECT_ID = 'system-00000000-0000-0000-0000-000000000001';
-      
       if (isAdmin) {
-        // 管理员：查询所有项目（包括所有用户的）
+        // 管理员：查询所有项目（包括所有用户的）+ 系统项目
+        const SYSTEM_PROJECT_ID = 'system-00000000-0000-0000-0000-000000000001';
         const allProjects = await prisma.project.findMany({
           select: { id: true },
         });
@@ -67,12 +65,33 @@ export async function GET(request: Request) {
         evalWhereClause.projectId = { in: projectIds };
         tokenWhereClause.projectId = { in: projectIds };
       } else {
-        // 普通用户：只查询自己的项目 + 系统项目
+        // 普通用户：只查询自己的项目（不包括系统项目）
         const userProjects = await prisma.project.findMany({
           where: { userId: payload.userId },
           select: { id: true },
         });
-        const projectIds = [...userProjects.map(p => p.id), SYSTEM_PROJECT_ID];
+        const projectIds = userProjects.map(p => p.id);
+        
+        if (projectIds.length === 0) {
+          // 用户没有项目，返回空统计
+          return NextResponse.json({
+            period,
+            startDate,
+            endDate: now,
+            summary: {
+              totalInputTokens: 0,
+              totalOutputTokens: 0,
+              totalTokens: 0,
+              estimatedCost: 0,
+              evaluationCount: 0,
+              callCount: 0,
+            },
+            modelStats: [],
+            projectStats: [],
+            trendData: [],
+            userStats: [],
+          });
+        }
         
         evalWhereClause.projectId = { in: projectIds };
         tokenWhereClause.projectId = { in: projectIds };
