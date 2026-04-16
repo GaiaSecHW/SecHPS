@@ -1,357 +1,158 @@
-# AI4WEB 测试平台 - 代理开发指南
+# AI4WEB 测试平台 - 开发指南
 
-## 项目概述
+Next.js 16 + React 19 + TypeScript App Router 平台，支持 RBAC 权限、会话管理、代码搜索、AI 评估等功能。
 
-这是一个基于 Next.js 16 + React 19 + TypeScript 的 AI4WEB AI 编程助手测试平台，采用 App Router 架构，使用 Prisma ORM 和 SQLite 数据库。
-
-## 构建和开发命令
+## 开发命令
 
 ```bash
-# 开发服务器
-npm run dev
+npm run dev              # 开发服务器 (localhost:3000)
+npm run build            # 构建 + postbuild 复制运行时目录
+npm run start            # 生产运行 (standalone server)
+npm run lint             # 代码检查
 
-# 生产构建
-npm run build
-
-# 生产运行
-npm start
-
-# 代码检查
-npm run lint
-
-# 数据库相关
-npm run db:generate     # 生成 Prisma 客户端
-npm run db:push         # 推送 schema 到数据库
-npm run db:seed         # 运行数据库种子
+# 数据库
+npm run db:generate      # 生成 Prisma 客户端 (postinstall 自动执行)
+npm run db:push          # 推送 schema 变更
+npm run db:seed          # 初始化数据库 + 创建默认管理员
+npm run db:seed-techstack  # 技术栈种子数据
 ```
 
-## 代码风格指南
+## 项目结构要点
 
-### 导入顺序和约定
+- **App Router**: `src/app/` - API 路由在 `src/app/api/` (30+ 端点)
+- **Prisma**: `prisma/schema.prisma` - 1600+ 行，包含 User/Role/Permission/Workflow/Skill/Vulnerability 等模型
+- **Skills**: `data/skills/` - Markdown 格式的 AI 技能定义
+- **Plugins**: `plugins/` - 可插拔扩展
+- **上传文件**: `uploads/` - 用户上传的项目文件
+
+## 认证模块导入规则 (重要)
+
+**服务端 API 路由** 必须从 `@/lib/auth` 导入:
+```typescript
+import { verifyToken, hasPermission } from '@/lib/auth';
+```
+
+**客户端组件** 必须从 `@/lib/permissions` 导入（避免服务端环境变量检查):
+```typescript
+import { hasPermission } from '@/lib/permissions';
+```
+
+## Prisma 使用规范
+
+- **必须** 从 `@/lib/prisma` 导入 prisma 实例（单例模式）
+- Prisma Client 在 `postinstall` 时自动生成
+- SQLite 数据库文件: `prisma/dev.db`
 
 ```typescript
-// 1. React 相关导入
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-
-// 2. 第三方库导入
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-
-// 3. 内部导入（使用 @ 别名）
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS, ROLES } from '@/types/permissions';
+import type { User, Role } from '@prisma/client';
 ```
 
-### TypeScript 类型定义
+## 权限系统
 
-- 使用 `@/types/` 目录存放类型定义
-- 权限常量定义在 `@/types/permissions.ts`
-- Prisma 生成的类型通过 `@prisma/client` 导入
+权限常量在 `@/types/permissions.ts`，格式为 `module:action` (如 `session:create`).
 
+API 路由权限检查模式:
 ```typescript
-// 从 Prisma 导入类型
-import type { User, Role, Permission } from '@prisma/client';
+const authHeader = request.headers.get('authorization');
+if (!authHeader) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-// 使用权限常量
-import { PERMISSIONS, ROLES } from '@/types/permissions';
-```
-
-### 命名约定
-
-- **组件**: PascalCase (如 `UserTable`, `CreateUserModal`)
-- **函数**: camelCase (如 `fetchUsers`, `handleSubmit`)
-- **常量**: UPPER_SNAKE_CASE (如 `PERMISSIONS`, `ROLES`)
-- **接口/类型**: PascalCase (如 `JWTPayload`, `UserResponse`)
-- **文件**: kebab-case (如 `user-table.tsx`, `auth-utils.ts`)
-
-### 错误处理
-
-#### API 路由错误处理
-
-```typescript
-export async function POST(request: Request) {
-  try {
-    // 1. 验证输入
-    const body = await request.json();
-    if (!email || !password) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
-
-    // 2. 验证 Token（如果需要认证）
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // 3. 检查权限
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.USER_READ)) {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-
-    // 4. 业务逻辑
-    // ...
-
-    return NextResponse.json({ data: result }, { status: 200 });
-  } catch (error) {
-    console.error('Operation error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
-  }
-}
-```
-
-#### 客户端错误处理
-
-```typescript
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError('');
-  setLoading(true);
-
-  try {
-    const token = localStorage.getItem('token');
-    const response = await fetch('/api/users', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      setError(data.error || 'Operation failed');
-      setLoading(false);
-      return;
-    }
-
-    onSuccess();
-  } catch (err) {
-    setError('Network error. Please try again.');
-    setLoading(false);
-  }
-};
-```
-
-### 组件模式
-
-#### 客户端组件
-
-```typescript
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
-
-export default function MyComponent() {
-  const [data, setData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  // ...
-
-  return <div>{/* JSX */}</div>
-}
-```
-
-#### 加载状态
-
-```typescript
-if (loading) {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
-}
-```
-
-### 样式约定（Tailwind CSS）
-
-- 使用 Tailwind CSS 进行所有样式
-- 颜色使用项目定义的 primary 色系
-- 响应式设计使用 Tailwind 断点
-
-```typescript
-// 按钮样式
-<button className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-  Submit
-</button>
-
-// 输入框样式
-<input
-  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-/>
-
-// 错误提示
-{error && (
-  <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-    {error}
-  </div>
-)}
-```
-
-### 认证和授权
-
-#### JWT Token 管理
-
-```typescript
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS } from '@/types/permissions';
-
-// 验证 Token
 const token = authHeader.replace('Bearer ', '');
 const payload = verifyToken(token);
+if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
-// 检查权限
-if (!hasPermission(payload.permissions, PERMISSIONS.USER_READ)) {
+if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_CREATE)) {
   return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 }
 ```
 
-#### 客户端认证
+默认角色: `admin`, `manager`, `developer`, `user`, `viewer`
+默认管理员: `admin@ai4web.com` / `admin123` (seed 创建)
 
-```typescript
-// 保存 Token
-localStorage.setItem('token', data.token);
-localStorage.setItem('user', JSON.stringify(data.user));
-
-// 使用 Token
-const token = localStorage.getItem('token');
-const response = await fetch('/api/endpoint', {
-  headers: {
-    Authorization: `Bearer ${token}`,
-  },
-});
-```
-
-### API 路由结构
+## API 路由结构
 
 ```
 src/app/api/
-├── auth/
-│   ├── login/route.ts
-│   └── register/route.ts
-├── users/
-│   ├── route.ts
-│   └── [id]/route.ts
-├── roles/route.ts
-├── permissions/route.ts
-├── sessions/route.ts
-└── config/route.ts
+├── auth/          # 认证 (login, register)
+├── users/         # 用户管理
+├── roles/         # 角色管理
+├── permissions/   # 权限管理
+├── sessions/      # 评估会话
+├── projects/      # 项目管理
+├── workflows/     # 工作流编排
+├── skills/        # AI 技能定义
+├── evaluations/   # AI 评估执行
+├── models/        # 模型配置
+├── mcp-servers/   # MCP 服务器配置
+├── plugins/       # 插件管理
+├── vulnerabilities/ # 漏洞管理
+└── ...
 ```
 
-### 数据库操作
+## 客户端组件规范
 
+使用 hooks 或浏览器 API 的组件必须添加 `'use client'` 指令:
 ```typescript
-import { prisma } from '@/lib/prisma';
+'use client';
 
-// 查询
-const user = await prisma.user.findUnique({
-  where: { email },
-  include: {
-    userRoles: {
-      include: {
-        role: {
-          include: {
-            permissions: true,
-          },
-        },
-      },
-    },
-  },
-});
-
-// 创建
-const newUser = await prisma.user.create({
-  data: {
-    email,
-    username,
-    passwordHash,
-  },
-});
-
-// 更新
-const updatedUser = await prisma.user.update({
-  where: { id },
-  data: { name, avatar },
-});
-
-// 删除
-await prisma.user.delete({
-  where: { id },
-});
+import { useState, useEffect } from 'react';
 ```
 
-### 审计日志
+## 命名约定
 
-```typescript
-// 记录审计日志
-await prisma.auditLog.create({
-  data: {
-    userId: user.id,
-    action: 'user_create',
-    resource: userId,
-    details: JSON.stringify({ email, username }),
-  },
-});
+| 类型 | 格式 | 示例 |
+|------|------|------|
+| 组件 | PascalCase | `UserTable` |
+| 函数 | camelCase | `fetchUsers` |
+| 常量 | UPPER_SNAKE_CASE | `PERMISSIONS` |
+| 文件 | kebab-case | `user-table.tsx` |
+
+## 构建注意事项
+
+`npm run build` 执行 `next build && node scripts/postbuild.js`:
+- postbuild 复制运行时必需目录到 `.next/standalone/`
+- 复制内容: `.next/` (部分), `prisma/` (schema + db), `plugins/`
+- 不复制: `data/`, `uploads/` (运行时动态)
+
+## TypeScript 配置
+
+- `strict: true` - 新代码必须严格类型
+- Path alias: `@/*` -> `./src/*`
+- 排除目录: `src/lib/claude-router`, `src/examples`, `tmp`, `scripts`, `uploads`, `data`, `prisma`
+
+## 运行时数据目录
+
+- `data/skills/` - 技能 Markdown 文件 (运行时加载)
+- `uploads/` - 用户上传文件
+- `plugins/` - 插件存储
+
+## 关键依赖
+
+- `@anthropic-ai/claude-agent-sdk` - Claude Agent SDK
+- `@prisma/client` + `prisma` - ORM
+- `bcryptjs` + `jsonwebtoken` - 认证
+- `@xyflow/react` - 工作流可视化
+- `@xterm/xterm` - 终端组件
+- `fastify` + `ws` - WebSocket 服务
+
+## 环境变量
+
+```env
+DATABASE_URL="file:./dev.db"
+JWT_SECRET="your-secret-key"
+NODE_ENV="development"
+CLAUDE_CODE_STREAM_CLOSE_TIMEOUT=600000  # MCP 超时 10 分钟
 ```
-
-## 重要注意事项
-
-1. **严格类型**: 虽然项目 `strict: false`，但新代码应使用严格类型
-2. **权限检查**: 所有需要权限的 API 端点必须检查权限
-3. **错误处理**: 所有 API 调用必须处理错误情况
-4. **认证保护**: Dashboard 下的所有页面都通过 layout.tsx 进行认证保护
-5. **Prisma 使用**: 始终使用 `@/lib/prisma` 导入的 prisma 实例
-6. **环境变量**: 敏感信息使用 `process.env` 从环境变量读取
-7. **客户端组件**: 使用 hooks 或浏览器 API 的组件必须添加 `'use client'` 指令
 
 ## 测试
 
-项目目前没有配置测试框架。如需添加测试，建议使用 Jest + React Testing Library。
+项目目前没有配置测试框架。
 
-## 常用权限常量
+## 高级功能模块
 
-```typescript
-// 会话权限
-PERMISSIONS.SESSION_CREATE
-PERMISSIONS.SESSION_READ
-PERMISSIONS.SESSION_UPDATE
-PERMISSIONS.SESSION_DELETE
-
-// 用户权限
-PERMISSIONS.USER_CREATE
-PERMISSIONS.USER_READ
-PERMISSIONS.USER_UPDATE
-PERMISSIONS.USER_DELETE
-
-// 配置权限
-PERMISSIONS.CONFIG_READ
-PERMISSIONS.CONFIG_UPDATE
-PERMISSIONS.CONFIG_DELETE
-
-// 搜索权限
-PERMISSIONS.SEARCH_FILE
-PERMISSIONS.SEARCH_SYMBOL
-PERMISSIONS.SEARCH_TEXT
-```
+- **Workflow 系统**: 可视化 Agent 编排 (`@xyflow/react`)
+- **Skills 系统**: Markdown 定义 AI 技能 (`data/skills/`)
+- **MCP 服务器**: Model Context Protocol 集成
+- **自主进化**: 失败序列学习 (`AutonomousEvolutionExperience` model)
+- **漏洞管理**: Vulnerability/VulnerabilityPattern/ScanTask 模型
+- **Token 统计**: `TokenUsage` 模型追踪 API 调用成本

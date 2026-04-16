@@ -421,7 +421,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ### Wave 2: 预警集成
 
-- [ ] 6. 扩展/api/skills POST（创建提示）
+- [x] 6. 扩展/api/skills POST（创建提示）
 
   **What to do**:
   - 修改 src/app/api/skills/route.ts POST handler
@@ -461,7 +461,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 7. 扩展/api/skills/match（编排预警）
+- [x] 7. 扩展/api/skills/match（编排预警）
 
   **What to do**:
   - 修改 src/app/api/skills/match/route.ts POST handler
@@ -501,7 +501,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 8. 扩展/api/skills/predict-tasks（预警记录）
+- [x] 8. 扩展/api/skills/predict-tasks（预警记录）
 
   **What to do**:
   - 查找 predict-tasks API 或创建
@@ -536,7 +536,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 9. 观测日志记录服务
+- [x] 9. 观测日志记录服务
 
   **What to do**:
   - 创建 src/services/skill-observation-log.ts
@@ -575,7 +575,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ### Wave 3: 观测模块
 
-- [ ] 10. 观测统计聚合服务
+- [x] 10. 观测统计聚合服务
 
   **What to do**:
   - 创建 src/services/skill-observation-stats.ts
@@ -614,7 +614,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 11. 观测API /api/admin/skills-governance/*
+- [x] 11. 观测API /api/admin/skills-governance/*
 
   **What to do**:
   - 创建 src/app/api/admin/skills-governance/route.ts
@@ -653,7 +653,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 12. 观测Dashboard总览页面
+- [x] 12. 观测Dashboard总览页面
 
   **What to do**:
   - 创建 src/app/dashboard/admin/skills-governance/page.tsx
@@ -690,7 +690,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 13. 高频重复排行页面
+- [x] 13. 高频重复排行页面
 
   **What to do**:
   - 创建排行表格组件
@@ -722,7 +722,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 14. 新增Skill影响分析页面
+- [x] 14. 新增Skill影响分析页面
 
   **What to do**:
   - 创建新增影响列表组件
@@ -756,7 +756,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ### Wave 4: 合并执行
 
-- [ ] 15. Skill合并执行服务
+- [x] 15. Skill合并执行服务
 
   **What to do**:
   - 创建 src/services/skill-merge.ts
@@ -802,7 +802,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 16. 合并API /api/skills/merge
+- [x] 16. 合并API /api/skills/merge
 
   **What to do**:
   - 创建 src/app/api/skills/merge/route.ts
@@ -835,7 +835,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 17. 合并操作UI页面
+- [x] 17. 合并操作UI页面
 
   **What to do**:
   - 创建 src/app/dashboard/admin/skills-governance/merge/page.tsx
@@ -871,7 +871,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 18. 合并版本管理
+- [x] 18. 合并版本管理
 
   **What to do**:
   - 确保合并后版本链正确
@@ -906,7 +906,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ### Wave 5: 评估集成
 
-- [ ] 19. 扩展copySkillsToProject（治理过滤）
+- [x] 19. 扩展copySkillsToProject（治理过滤）
 
   **What to do**:
   - 修改 src/services/skill-files.ts copySkillsToProject()
@@ -944,7 +944,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 20. 治理过滤日志
+- [x] 20. 治理过滤日志
 
   **What to do**:
   - 创建 src/services/skill-governance-log.ts
@@ -976,7 +976,7 @@ Wave FINAL (验证 - 所有任务完成后):
 
 ---
 
-- [ ] 21. 权限扩展
+- [x] 21. 权限扩展
 
   **What to do**:
   - 在 src/types/permissions.ts 添加新权限：

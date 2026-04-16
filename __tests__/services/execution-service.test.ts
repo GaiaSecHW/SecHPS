@@ -25,6 +25,8 @@ vi.mock('@/lib/prisma', () => ({
     agentMemberExecution: {
       createMany: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
       updateMany: vi.fn(),
     },
   },
@@ -630,6 +632,391 @@ describe('AgentTeamExecutionService', () => {
           completedAt: expect.any(Date),
         },
       });
+    });
+  });
+
+  describe('Lead Agent + Subagent orchestration', () => {
+    const mockTeamWithMembers = {
+      id: 'team-1',
+      userId: 'user-1',
+      name: 'Test Team',
+      description: 'A test team with subagents',
+      leadAgentId: 'agent-1',
+      taskStrategy: 'parallel',
+      maxTeammates: 5,
+      status: 'idle',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      leadAgent: {
+        id: 'agent-1',
+        name: 'lead-agent',
+        displayName: 'Lead Agent',
+        description: 'Lead agent for orchestration',
+        category: 'reviewer',
+        model: 'claude-sonnet-4-20250514',
+        systemPrompt: 'You are a lead agent that delegates to subagents.',
+        allowedTools: JSON.stringify(['Read', 'Write', 'Bash']),
+        mcpServers: null,
+        isActive: true,
+        isBuiltin: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      members: [
+        {
+          id: 'member-1',
+          teamId: 'team-1',
+          agentId: 'agent-2',
+          role: 'coder',
+          overrideModel: null,
+          overrideTools: null,
+          createdAt: new Date(),
+          agent: {
+            id: 'agent-2',
+            name: 'coder-agent',
+            displayName: 'Coder Agent',
+            description: 'Writes code implementations',
+            category: 'coder',
+            model: 'claude-sonnet-4-20250514',
+            systemPrompt: 'You are a coder agent.',
+            allowedTools: JSON.stringify(['Read', 'Write', 'Edit', 'Bash']),
+            mcpServers: null,
+            isActive: true,
+            isBuiltin: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+        {
+          id: 'member-2',
+          teamId: 'team-1',
+          agentId: 'agent-3',
+          role: 'tester',
+          overrideModel: null,
+          overrideTools: JSON.stringify(['Read', 'Grep', 'Bash']),
+          createdAt: new Date(),
+          agent: {
+            id: 'agent-3',
+            name: 'tester-agent',
+            displayName: 'Tester Agent',
+            description: 'Runs tests and validates code',
+            category: 'tester',
+            model: 'claude-haiku-4-20250514',
+            systemPrompt: 'You are a tester agent.',
+            allowedTools: null,
+            mcpServers: null,
+            isActive: true,
+            isBuiltin: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+      ],
+    };
+
+    const mockExecution = {
+      id: 'exec-1',
+      teamId: 'team-1',
+      evaluationId: null,
+      status: 'running',
+      startedAt: new Date(),
+      completedAt: null,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      createdAt: new Date(),
+      memberExecutions: [],
+    };
+
+    const mockMemberExecutions = [
+      {
+        id: 'member-exec-1',
+        teamExecutionId: 'exec-1',
+        memberId: 'member-1',
+        status: 'pending',
+        startedAt: null,
+        completedAt: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        createdAt: new Date(),
+      },
+      {
+        id: 'member-exec-2',
+        teamExecutionId: 'exec-1',
+        memberId: 'member-2',
+        status: 'pending',
+        startedAt: null,
+        completedAt: null,
+        inputTokens: 0,
+        outputTokens: 0,
+        createdAt: new Date(),
+      },
+    ];
+
+    test('Lead Agent has Agent tool in allowedTools', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      await service.execute({ teamId: 'team-1', task: 'Test' });
+
+      // Verify query was called with Agent tool in allowedTools
+      expect(query).toHaveBeenCalled();
+      const callArgs = (query as any).mock.calls[0][0];
+      expect(callArgs.options.allowedTools).toContain('Agent');
+    });
+
+    test('Subagent definitions are built from team members', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      await service.execute({ teamId: 'team-1', task: 'Test' });
+
+      // Verify agents config was built
+      expect(query).toHaveBeenCalled();
+      const callArgs = (query as any).mock.calls[0][0];
+      expect(callArgs.options.agents).toBeDefined();
+      expect(callArgs.options.agents['coder-agent']).toBeDefined();
+      expect(callArgs.options.agents['tester-agent']).toBeDefined();
+    });
+
+    test('Subagent tools do NOT include Agent (SDK limitation)', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      await service.execute({ teamId: 'team-1', task: 'Test' });
+
+      // Verify subagent tools don't include Agent
+      const callArgs = (query as any).mock.calls[0][0];
+      const coderAgentTools = callArgs.options.agents['coder-agent'].tools;
+      const testerAgentTools = callArgs.options.agents['tester-agent'].tools;
+      
+      expect(coderAgentTools).not.toContain('Agent');
+      expect(testerAgentTools).not.toContain('Agent');
+    });
+
+    test('Subagent invocation is tracked via Agent tool_use', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      // Mock member execution lookup
+      (prisma.agentMemberExecution.findFirst as any).mockResolvedValue(mockMemberExecutions[0]);
+      (prisma.agentMemberExecution.update as any).mockResolvedValue({ ...mockMemberExecutions[0], status: 'running' });
+
+      // Mock query with Agent tool invocation
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'tool_use',
+            tool_name: 'Agent',
+            tool_input: { agent_name: 'coder-agent', prompt: 'Write a function' },
+          };
+          yield {
+            type: 'tool_result',
+            tool_name: 'Agent',
+            tool_result: 'Function written successfully',
+          };
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.update as any).mockResolvedValue(mockExecution);
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      const onSubagentStart = vi.fn();
+      const onSubagentComplete = vi.fn();
+
+      await service.execute({
+        teamId: 'team-1',
+        task: 'Test',
+        callbacks: { onSubagentStart, onSubagentComplete },
+      });
+
+      // Wait for async execution
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Verify subagent start was tracked
+      expect(onSubagentStart).toHaveBeenCalledWith('coder-agent', 'member-exec-1');
+      
+      // Verify member execution status was updated
+      expect(prisma.agentMemberExecution.update).toHaveBeenCalledWith({
+        where: { id: 'member-exec-1' },
+        data: {
+          status: 'running',
+          startedAt: expect.any(Date),
+        },
+      });
+    });
+
+    test('Member execution status updates when subagent completes', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      // Mock member execution lookup
+      (prisma.agentMemberExecution.findFirst as any).mockResolvedValue(mockMemberExecutions[0]);
+      (prisma.agentMemberExecution.update as any).mockResolvedValue({ ...mockMemberExecutions[0], status: 'completed' });
+
+      // Mock query with Agent tool invocation and completion
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield {
+            type: 'tool_use',
+            tool_name: 'Agent',
+            tool_input: { agent_name: 'coder-agent', prompt: 'Write a function' },
+          };
+          yield {
+            type: 'tool_result',
+            tool_name: 'Agent',
+            tool_result: 'Function written successfully',
+          };
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.update as any).mockResolvedValue(mockExecution);
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      const onSubagentComplete = vi.fn();
+
+      await service.execute({
+        teamId: 'team-1',
+        task: 'Test',
+        callbacks: { onSubagentComplete },
+      });
+
+      // Wait for async execution
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Verify member execution was marked as completed
+      expect(prisma.agentMemberExecution.update).toHaveBeenCalledWith({
+        where: { id: 'member-exec-1' },
+        data: {
+          status: 'completed',
+          completedAt: expect.any(Date),
+        },
+      });
+      
+      // Verify subagent complete callback was called
+      expect(onSubagentComplete).toHaveBeenCalled();
+    });
+
+    test('Override tools are used for subagent when defined', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      await service.execute({ teamId: 'team-1', task: 'Test' });
+
+      // Verify tester-agent uses override tools (Read, Grep, Bash) not Agent
+      const callArgs = (query as any).mock.calls[0][0];
+      const testerAgentTools = callArgs.options.agents['tester-agent'].tools;
+      
+      expect(testerAgentTools).toContain('Read');
+      expect(testerAgentTools).toContain('Grep');
+      expect(testerAgentTools).toContain('Bash');
+      expect(testerAgentTools).not.toContain('Agent');
+    });
+
+    test('Subagent model is set from override or agent definition', async () => {
+      (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+      (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+      (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 2 });
+      (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+      (prisma.agentTeam.update as any).mockResolvedValue({ ...mockTeamWithMembers, status: 'running' });
+
+      const mockIterator = {
+        async *[Symbol.asyncIterator]() {
+          yield { type: 'result', subtype: 'success', result: 'Done' };
+        },
+      };
+      (query as any).mockReturnValue(mockIterator);
+
+      (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+        ...mockExecution,
+        memberExecutions: mockMemberExecutions,
+      });
+
+      await service.execute({ teamId: 'team-1', task: 'Test' });
+
+      // Verify subagent models are set correctly
+      const callArgs = (query as any).mock.calls[0][0];
+      
+      // coder-agent uses agent's model (sonnet)
+      expect(callArgs.options.agents['coder-agent'].model).toBe('claude-sonnet-4-20250514');
+      
+      // tester-agent uses agent's model (haiku)
+      expect(callArgs.options.agents['tester-agent'].model).toBe('claude-haiku-4-20250514');
     });
   });
 });

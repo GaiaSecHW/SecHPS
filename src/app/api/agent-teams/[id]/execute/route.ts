@@ -2,7 +2,9 @@
  * Agent Team Execution API - Start execution
  * 
  * POST /api/agent-teams/[id]/execute
- * Creates an AgentTeamExecution record and returns executionId + websocketUrl
+ * Creates an AgentTeamExecution record, starts SDK execution, and returns executionId + streamUrl
+ * 
+ * Events are broadcast via SSE to connected clients at /api/agent-teams/[id]/stream
  */
 
 import { NextResponse } from 'next/server';
@@ -10,10 +12,18 @@ import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { createAgentTeamExecutionService, ExecutionCallbacks } from '@/services/agent-team/execution-service';
+import {
+  emitExecutionStarted,
+  emitAgentInvoked,
+  emitMessageDelta,
+  emitAgentCompleted,
+  emitExecutionCompleted,
+} from '@/lib/agent-team-events';
 
 interface ExecuteRequestBody {
   projectId?: string;
-  task?: string;
+  task: string; // Task is now required
   modelConfigId?: string;
 }
 
@@ -30,19 +40,29 @@ export async function POST(
     }
     const payload = auth.payload;
 
-    const { id } = await params;
+    const { id: teamId } = await params;
 
     // Parse request body
     const body: ExecuteRequestBody = await request.json();
     const { projectId, task, modelConfigId } = body;
 
+    // Validate task is provided
+    if (!task || !task.trim()) {
+      return NextResponse.json({ error: 'Task is required' }, { status: 400 });
+    }
+
     // Verify team exists and belongs to user
     const team = await prisma.agentTeam.findUnique({
-      where: { id },
+      where: { id: teamId },
       include: {
         user: { select: { id: true } },
-        leadAgent: { select: { id: true, name: true } },
-        members: { select: { id: true, agentId: true, role: true } },
+        leadAgent: { select: { id: true, name: true, displayName: true } },
+        members: {
+          select: { id: true, agentId: true, role: true },
+          include: {
+            agent: { select: { id: true, name: true, displayName: true } },
+          },
+        },
       },
     });
 
@@ -51,55 +71,106 @@ export async function POST(
     }
 
     // Ownership check
-    if (team.userId !== payload.userId) {
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    if (!isAdmin && team.userId !== payload.userId) {
       return NextResponse.json({ error: 'Forbidden: You do not own this team' }, { status: 403 });
     }
 
-    // Create execution record
-    const execution = await prisma.agentTeamExecution.create({
-      data: {
-        teamId: id,
-        evaluationId: null, // Will be linked later if needed
-        status: 'running',
-        startedAt: new Date(),
-        totalInputTokens: 0,
-        totalOutputTokens: 0,
+    // Create event-emitting callbacks
+    const callbacks: ExecutionCallbacks = {
+      onChunk: (text, memberId) => {
+        emitMessageDelta(teamId, teamId, {
+          agentId: team.leadAgentId,
+          content: text,
+          memberId,
+        });
       },
+      onToolUse: (name, input, memberId) => {
+        // Emit agent invoked when a tool is used (could be subagent invocation)
+        if (name === 'Task' || name === 'task') {
+          emitAgentInvoked(teamId, teamId, {
+            agentId: (input as any).subagent_type || 'unknown',
+            agentName: (input as any).description || name,
+            agentRole: 'member',
+            parentToolUseId: null, // Would need to track tool_use ID
+            memberId,
+          });
+        }
+      },
+      onToolResult: (name, result, memberId) => {
+        // Could emit agent completed for subagent results
+        if (name === 'Task' || name === 'task') {
+          emitAgentCompleted(teamId, teamId, {
+            agentId: (result as any)?.agentId || 'unknown',
+            agentName: name,
+            result: typeof result === 'string' ? result : JSON.stringify(result),
+            tokens: { input: 0, output: 0 }, // Would need actual token tracking
+            memberId,
+          });
+        }
+      },
+      onUsage: (usage) => {
+        // Usage events are tracked in database, not emitted as separate events
+        logger.debug(LOG_MODULES.WORKFLOW, `Token usage: ${usage.inputTokens} in, ${usage.outputTokens} out`, {
+          userId: payload.userId,
+          details: { executionId: teamId, usage },
+        });
+      },
+      onComplete: (result, executionId) => {
+        emitExecutionCompleted(executionId, teamId, {
+          result,
+          totalTokens: { input: 0, output: 0 }, // Would need actual totals
+          status: 'completed',
+        });
+      },
+      onError: (error, executionId) => {
+        emitExecutionCompleted(executionId, teamId, {
+          result: error.message,
+          totalTokens: { input: 0, output: 0 },
+          status: 'failed',
+        });
+      },
+      onStatusChange: (status, executionId) => {
+        logger.info(LOG_MODULES.WORKFLOW, `Execution status changed: ${status}`, {
+          userId: payload.userId,
+          details: { executionId, status },
+        });
+      },
+    };
+
+    // Create execution service and start execution
+    const executionService = createAgentTeamExecutionService();
+
+    const { executionId, status } = await executionService.execute({
+      teamId,
+      projectId,
+      task: task.trim(),
+      modelConfigId,
+      callbacks,
     });
 
-    // Create member execution records for each team member
-    if (team.members.length > 0) {
-      await prisma.agentMemberExecution.createMany({
-        data: team.members.map(member => ({
-          teamExecutionId: execution.id,
-          memberId: member.id,
-          status: 'pending',
-          inputTokens: 0,
-          outputTokens: 0,
-        })),
-      });
-    }
-
-    // Update team status to running
-    await prisma.agentTeam.update({
-      where: { id },
-      data: { status: 'running' },
+    // Emit execution started event
+    emitExecutionStarted(executionId, teamId, {
+      teamName: team.name,
+      leadAgentId: team.leadAgentId,
+      leadAgentName: team.leadAgent.displayName || team.leadAgent.name,
+      memberCount: team.members.length,
     });
 
-    // Generate WebSocket URL for streaming events
-    const protocol = request.headers.get('x-forwarded-proto') || 'ws';
+    // Generate SSE URL for streaming events
+    const protocol = request.headers.get('x-forwarded-proto') || 'http';
     const host = request.headers.get('host') || 'localhost:3000';
-    const websocketUrl = `${protocol}://${host}/api/agent-teams/${id}/stream`;
+    const streamUrl = `${protocol}://${host}/api/agent-teams/${teamId}/stream?executionId=${executionId}`;
 
-    logger.info(LOG_MODULES.WORKFLOW, `Agent team execution started: ${execution.id}`, {
+    logger.info(LOG_MODULES.WORKFLOW, `Agent team execution started: ${executionId}`, {
       userId: payload.userId,
-      details: { teamId: id, executionId: execution.id },
+      details: { teamId, executionId },
     });
 
     return NextResponse.json({
-      executionId: execution.id,
-      status: execution.status,
-      websocketUrl,
+      executionId,
+      status: status.status,
+      streamUrl,
       team: {
         id: team.id,
         name: team.name,

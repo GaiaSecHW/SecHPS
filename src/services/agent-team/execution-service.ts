@@ -1,6 +1,7 @@
 // src/services/agent-team/execution-service.ts
 
 import { query, Options, SDKMessage, SDKResultSuccess, SDKResultError, McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
+import type { AgentDefinition as SdkAgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import { prisma } from '@/lib/prisma';
 import type { AgentTeamExecution, AgentMemberExecution, AgentTeam, AgentTeamMember, AgentDefinition } from '@prisma/client';
 
@@ -30,6 +31,10 @@ export interface ExecutionCallbacks {
   onComplete?: (result: string, executionId: string) => void;
   onError?: (error: Error, executionId: string) => void;
   onStatusChange?: (status: string, executionId: string) => void;
+  /** Called when a subagent is invoked via Agent tool */
+  onSubagentStart?: (agentName: string, memberExecutionId: string) => void;
+  /** Called when a subagent completes */
+  onSubagentComplete?: (agentName: string, memberExecutionId: string, result: unknown) => void;
 }
 
 /**
@@ -191,11 +196,34 @@ export class AgentTeamExecutionService {
         CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: '600000',
       };
 
+      // Build Lead Agent's allowedTools - MUST include "Agent" for subagent invocation
+      const leadAgentTools = this.parseAllowedTools(team.leadAgent.allowedTools);
+      if (!leadAgentTools.includes('Agent')) {
+        leadAgentTools.push('Agent');
+      }
+
+      // Build subagent definitions from team members
+      // IMPORTANT: Subagent tools MUST NOT include "Agent" (SDK limitation - no nesting)
+      const agents: Record<string, SdkAgentDefinition> = {};
+      for (const member of team.members) {
+        const memberTools = this.parseMemberTools(member);
+        // Ensure "Agent" is NOT in subagent tools (no nesting allowed)
+        const filteredTools = memberTools.filter(t => t !== 'Agent');
+        
+        agents[member.agent.name] = {
+          description: member.agent.description || `Use for ${member.role} tasks`,
+          prompt: member.agent.systemPrompt || `You are a ${member.role} agent.`,
+          tools: filteredTools,
+          model: member.overrideModel || member.agent.model || undefined,
+        };
+      }
+
       // Build SDK options with safety limits
       const options: Options = {
         cwd: process.cwd(),
         model: team.leadAgent.model || 'claude-sonnet-4-20250514',
-        allowedTools: this.parseAllowedTools(team.leadAgent.allowedTools),
+        allowedTools: leadAgentTools,
+        agents: Object.keys(agents).length > 0 ? agents : undefined,
         abortController,
         env,
         // Safety limits
@@ -225,6 +253,15 @@ export class AgentTeamExecutionService {
       // Track token usage per member
       const tokenUsageByMember: Map<string, { input: number; output: number }> = new Map();
 
+      // Track active subagent invocations (agent_name -> member_execution_id)
+      const activeSubagents: Map<string, string> = new Map();
+
+      // Build member lookup map (agent_name -> member)
+      const memberByAgentName: Map<string, typeof team.members[0]> = new Map();
+      for (const member of team.members) {
+        memberByAgentName.set(member.agent.name, member);
+      }
+
       // Run SDK query
       const q = query({ prompt: fullPrompt, options });
 
@@ -247,6 +284,11 @@ export class AgentTeamExecutionService {
             totalCostUsd,
           });
 
+          // Mark all active subagents as completed
+          for (const [agentName, memberExecId] of activeSubagents) {
+            await this.updateMemberExecutionStatus(memberExecId, 'completed');
+          }
+
           // Mark execution as completed
           await this.markExecutionCompleted(executionId, fullResponse, totalCostUsd);
           callbacks?.onComplete?.(fullResponse, executionId);
@@ -254,13 +296,62 @@ export class AgentTeamExecutionService {
 
         } else if (this.isResultError(message)) {
           const errorMsg = message.errors?.join('\n') || 'Unknown error';
+          
+          // Mark all active subagents as failed
+          for (const [agentName, memberExecId] of activeSubagents) {
+            await this.updateMemberExecutionStatus(memberExecId, 'failed');
+          }
+          
           throw new Error(errorMsg);
 
         } else if (this.isToolUseMessage(message)) {
-          callbacks?.onToolUse?.(msg.tool_name, msg.tool_input || {}, currentMemberId);
+          const toolName = msg.tool_name;
+          const toolInput = msg.tool_input || {};
+          
+          callbacks?.onToolUse?.(toolName, toolInput, currentMemberId);
+
+          // Track Agent tool invocations (subagent starts)
+          if (toolName === 'Agent') {
+            const agentName = toolInput.agent_name || toolInput.agent_type;
+            if (agentName) {
+              const member = memberByAgentName.get(agentName);
+              if (member) {
+                // Find the member execution record
+                const memberExec = await this.findMemberExecution(executionId, member.id);
+                if (memberExec) {
+                  // Update status to running
+                  await this.updateMemberExecutionStatus(memberExec.id, 'running');
+                  activeSubagents.set(agentName, memberExec.id);
+                  currentMemberId = member.id;
+                  
+                  // Callback for subagent start
+                  callbacks?.onSubagentStart?.(agentName, memberExec.id);
+                }
+              }
+            }
+          }
 
         } else if (this.isToolResultMessage(message)) {
-          callbacks?.onToolResult?.(msg.tool_name, msg.tool_result, currentMemberId);
+          const toolName = msg.tool_name;
+          const toolResult = msg.tool_result;
+          
+          callbacks?.onToolResult?.(toolName, toolResult, currentMemberId);
+
+          // Track Agent tool results (subagent completes)
+          if (toolName === 'Agent') {
+            // Find the agent name from the tool_use context
+            // The result indicates subagent completion
+            for (const [agentName, memberExecId] of activeSubagents) {
+              if (currentMemberId === memberByAgentName.get(agentName)?.id) {
+                await this.updateMemberExecutionStatus(memberExecId, 'completed');
+                activeSubagents.delete(agentName);
+                currentMemberId = undefined;
+                
+                // Callback for subagent complete
+                callbacks?.onSubagentComplete?.(agentName, memberExecId, toolResult);
+              }
+            }
+          }
 
         } else if (this.isAssistantMessage(message)) {
           // Extract usage data
@@ -271,6 +362,11 @@ export class AgentTeamExecutionService {
 
             // Update database token counts
             await this.updateTokenCounts(executionId, inputTokens, outputTokens);
+
+            // Update member token counts if in subagent context
+            if (currentMemberId) {
+              await this.updateMemberTokenCounts(executionId, currentMemberId, inputTokens, outputTokens);
+            }
 
             callbacks?.onUsage?.({
               inputTokens,
@@ -541,6 +637,83 @@ export class AgentTeamExecutionService {
       return JSON.parse(allowedTools);
     } catch {
       return allowedTools.split(',').map(t => t.trim());
+    }
+  }
+
+  /**
+   * Parse member tools from override or agent definition
+   * IMPORTANT: Subagent tools MUST NOT include "Agent" (SDK limitation)
+   */
+  private parseMemberTools(member: AgentTeamMember & { agent: AgentDefinition }): string[] {
+    // Use override tools if defined, otherwise use agent's allowed tools
+    if (member.overrideTools) {
+      try {
+        return JSON.parse(member.overrideTools);
+      } catch {
+        return member.overrideTools.split(',').map(t => t.trim());
+      }
+    }
+    
+    if (member.agent.allowedTools) {
+      try {
+        return JSON.parse(member.agent.allowedTools);
+      } catch {
+        return member.agent.allowedTools.split(',').map(t => t.trim());
+      }
+    }
+    
+    // Default tools for subagents (no "Agent" tool)
+    return ['Read', 'Grep', 'Glob', 'LS'];
+  }
+
+  /**
+   * Find member execution record by execution ID and member ID
+   */
+  private async findMemberExecution(executionId: string, memberId: string): Promise<AgentMemberExecution | null> {
+    return prisma.agentMemberExecution.findFirst({
+      where: {
+        teamExecutionId: executionId,
+        memberId: memberId,
+      },
+    });
+  }
+
+  /**
+   * Update member execution status
+   */
+  private async updateMemberExecutionStatus(memberExecutionId: string, status: string): Promise<void> {
+    const updateData: { status: string; startedAt?: Date; completedAt?: Date } = { status };
+    
+    if (status === 'running') {
+      updateData.startedAt = new Date();
+    } else if (status === 'completed' || status === 'failed' || status === 'cancelled') {
+      updateData.completedAt = new Date();
+    }
+    
+    await prisma.agentMemberExecution.update({
+      where: { id: memberExecutionId },
+      data: updateData,
+    });
+  }
+
+  /**
+   * Update member token counts
+   */
+  private async updateMemberTokenCounts(
+    executionId: string,
+    memberId: string,
+    inputTokens: number,
+    outputTokens: number
+  ): Promise<void> {
+    const memberExec = await this.findMemberExecution(executionId, memberId);
+    if (memberExec) {
+      await prisma.agentMemberExecution.update({
+        where: { id: memberExec.id },
+        data: {
+          inputTokens: { increment: inputTokens },
+          outputTokens: { increment: outputTokens },
+        },
+      });
     }
   }
 

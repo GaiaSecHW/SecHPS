@@ -1,0 +1,73 @@
+{
+  "vulnerabilities": [
+    {
+      "type": "弱密码配置",
+      "title": "硬编码测试密码风险",
+      "description": "在 prisma/seed.ts 和 prisma/reset-admin-password.ts 中发现硬编码的测试密码 'admin123'。虽然这是开发/测试环境的初始化脚本，但如果在生产环境中误运行，将创建一个弱密码的管理员账户。此外，密码被打印到控制台输出（第431行），可能导致密码泄露。",
+      "location": "prisma/seed.ts:396, prisma/seed.ts:431, prisma/reset-admin-password.ts:10",
+      "POC": "1. 运行 'npx prisma db seed' 初始化数据库\n2. 使用邮箱 'admin@ai4web.com' 和密码 'admin123' 登录\n3. 如果生产环境使用此配置，攻击者可轻易猜测初始密码",
+      "cwe_id": "CWE-798",
+      "severity": "Medium",
+      "recommendation": "1. 使用环境变量或命令行参数设置初始管理员密码\n2. 生产环境部署前强制修改初始密码\n3. 移除控制台密码输出\n4. 在脚本中添加环境检测，禁止在生产环境使用默认密码"
+    }
+  ],
+  "audit_summary": {
+    "scan_date": "2026-04-16",
+    "scan_scope": "加密安全审计",
+    "total_vulnerabilities": 1,
+    "severity_distribution": {
+      "critical": 0,
+      "high": 0,
+      "medium": 1,
+      "low": 0
+    },
+    "checked_items": {
+      "password_storage": {
+        "status": "PASS",
+        "details": "使用 bcrypt 进行密码哈希，10轮salt，实现安全"
+      },
+      "jwt_secret": {
+        "status": "PASS",
+        "details": "JWT_SECRET 从环境变量获取，无硬编码，未设置时拒绝启动"
+      },
+      "random_number_generation": {
+        "status": "PASS",
+        "details": "会话ID使用 crypto.randomUUID()，Math.random() 仅用于非安全关键的ID生成"
+      },
+      "sensitive_data_storage": {
+        "status": "PASS",
+        "details": "密码使用bcrypt哈希存储，无明文存储敏感数据"
+      },
+      "https_certificate": {
+        "status": "PASS",
+        "details": "未发现禁用证书验证的配置"
+      },
+      "weak_hash_algorithms": {
+        "status": "PASS",
+        "details": "MD5 仅用于 cursor-provider.ts 生成目录哈希（与Cursor IDE兼容），非密码或安全关键场景"
+      }
+    },
+    "secure_implementations": [
+      {
+        "file": "src/lib/auth.ts",
+        "description": "密码使用 bcrypt.hash(password, 10) 哈希，JWT secret 从环境变量获取",
+        "line": "51-58, 8-37"
+      },
+      {
+        "file": "src/services/session-manager.ts",
+        "description": "会话ID使用 crypto.randomUUID() 生成",
+        "line": "80, 87"
+      },
+      {
+        "file": "src/lib/websocket-server.ts",
+        "description": "会话ID使用 crypto.randomUUID() 生成",
+        "line": "31"
+      },
+      {
+        "file": "src/services/autonomous-evolution/log-hash-tracker.ts",
+        "description": "文件哈希使用 SHA-256",
+        "line": "11"
+      }
+    ]
+  }
+}

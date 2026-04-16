@@ -756,7 +756,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add AgentTeamExecutionService`
   - Files: src/services/agent-team/execution-service.ts
 
-- [ ] 11. **Implement Lead Agent + Subagent orchestration**
+- [x] 11. **Implement Lead Agent + Subagent orchestration**
 
   **What to do**:
   - Implement Lead Agent invocation with `allowedTools: ["Agent", "Read", "Glob", "Grep"]`
@@ -817,7 +817,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): implement Lead+Subagent orchestration`
   - Files: src/services/agent-team/execution-service.ts
 
-- [ ] 12. **Create WebSocket server for real-time events**
+- [x] 12. **Create WebSocket server for real-time events**
 
   **What to do**:
   - Extend `src/lib/websocket-server.ts` or create new file
