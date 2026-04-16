@@ -574,11 +574,11 @@ export default function WorkflowsPage() {
                         {workflow.isPublic ? '公开' : '私有'}
                       </span>
                     </div>
-                    {/* 管理员视角显示创建者 */}
-                    {isAdmin && workflow.userName && (
+                    {/* 显示创建者（非自己的编排显示创建者名称） */}
+                    {workflow.userName && workflow.userId !== user?.id && (
                       <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
                         <User size={12} />
-                        {workflow.userName || workflow.userUsername}
+                        创建者: {workflow.userName || workflow.userUsername}
                       </p>
                     )}
                   </div>
@@ -612,14 +612,26 @@ export default function WorkflowsPage() {
               <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
-                    <Link
-                      href={`/dashboard/workflows/${workflow.id}`}
-                      className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
-                    >
-                      <Edit2 size={16} />
-                      <span>编辑流程</span>
-                    </Link>
-                    {workflow.status === 'draft' && (
+                    {/* 编辑流程按钮 - 仅管理员和作者显示"编辑"，其他人显示"查看" */}
+                    {isAdmin || workflow.userId === user?.id ? (
+                      <Link
+                        href={`/dashboard/workflows/${workflow.id}`}
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
+                      >
+                        <Edit2 size={16} />
+                        <span>编辑流程</span>
+                      </Link>
+                    ) : (
+                      <Link
+                        href={`/dashboard/workflows/${workflow.id}`}
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+                      >
+                        <FileText size={16} />
+                        <span>查看流程</span>
+                      </Link>
+                    )}
+                    {/* 发布/下线/恢复按钮 - 仅管理员和作者可见 */}
+                    {(isAdmin || workflow.userId === user?.id) && workflow.status === 'draft' && (
                       <button
                         onClick={() => publishWorkflow(workflow.id)}
                         className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
@@ -629,7 +641,7 @@ export default function WorkflowsPage() {
                         <span>发布</span>
                       </button>
                     )}
-                    {workflow.status === 'published' && (
+                    {(isAdmin || workflow.userId === user?.id) && workflow.status === 'published' && (
                       <button
                         onClick={() => archiveWorkflow(workflow.id)}
                         className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
@@ -639,7 +651,7 @@ export default function WorkflowsPage() {
                         <span>下线</span>
                       </button>
                     )}
-                    {workflow.status === 'archived' && (
+                    {(isAdmin || workflow.userId === user?.id) && workflow.status === 'archived' && (
                       <button
                         onClick={() => restoreWorkflow(workflow.id)}
                         className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
@@ -652,31 +664,36 @@ export default function WorkflowsPage() {
                   </div>
 
                   <div className="flex space-x-1">
-                    <button
-                      onClick={() => openEditModal(workflow)}
-                      className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
-                      title="编辑信息"
-                    >
-                      <FileText size={16} />
-                    </button>
-                    <button
-                      onClick={() => toggleShare(workflow)}
-                      className={`p-1.5 rounded-md transition-colors ${
-                        workflow.isPublic
-                          ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
-                          : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
-                      }`}
-                      title={workflow.isPublic ? '点击设为私有' : '点击设为公开分享'}
-                    >
-                      {workflow.isPublic ? <Globe size={16} /> : <Lock size={16} />}
-                    </button>
-                    <button
-                      onClick={() => deleteWorkflow(workflow.id)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                      title="删除"
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    {/* 编辑/分享/删除按钮 - 仅管理员和作者可见 */}
+                    {(isAdmin || workflow.userId === user?.id) && (
+                      <>
+                        <button
+                          onClick={() => openEditModal(workflow)}
+                          className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
+                          title="编辑信息"
+                        >
+                          <FileText size={16} />
+                        </button>
+                        <button
+                          onClick={() => toggleShare(workflow)}
+                          className={`p-1.5 rounded-md transition-colors ${
+                            workflow.isPublic
+                              ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                              : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
+                          title={workflow.isPublic ? '点击设为私有' : '点击设为公开分享'}
+                        >
+                          {workflow.isPublic ? <Globe size={16} /> : <Lock size={16} />}
+                        </button>
+                        <button
+                          onClick={() => deleteWorkflow(workflow.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                          title="删除"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
