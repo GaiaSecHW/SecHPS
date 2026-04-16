@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
@@ -97,7 +98,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ models: formattedModels });
   } catch (error) {
-    console.error('获取模型配置错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, `获取模型配置错误: ${error}`);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -200,12 +201,20 @@ export async function POST(request: Request) {
     // 格式化返回数据
     const formattedModel = formatModel(model);
 
+    // 记录创建成功日志
+    logger.create(LOG_MODULES.MODEL, payload, model.id, { 
+      name, 
+      providerType, 
+      isSystemModel, 
+      isPublic 
+    });
+
     return NextResponse.json(
       { model: formattedModel },
       { status: 201 }
     );
   } catch (error) {
-    console.error('创建模型配置错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, `创建模型配置错误: ${error}`);
     return NextResponse.json(
       { error: '服务器内部错误', details: String(error) },
       { status: 500 }

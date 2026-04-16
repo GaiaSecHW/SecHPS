@@ -4,6 +4,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { buildSearchFilter, combineWhereClauses } from '@/lib/query-optimizer';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 格式化工作流数据
 function formatWorkflow(workflow: any) {
@@ -130,7 +131,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(createPaginatedResponse(formattedWorkflows, total, pageNum, pageLimit));
   } catch (error) {
-    console.error('Get workflows error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, `获取工作流列表错误: ${error}`);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -213,6 +214,9 @@ export async function POST(request: Request) {
       },
     });
 
+    // 记录创建成功日志
+    logger.create(LOG_MODULES.WORKFLOW, payload, workflow.id, { name, isPublic });
+
     return NextResponse.json(
       {
         message: '工作流创建成功',
@@ -221,7 +225,7 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    console.error('Create workflow error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, `创建工作流错误: ${error}`);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

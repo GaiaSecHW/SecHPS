@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { mkdir, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取项目列表
 export async function GET(request: Request) {
@@ -130,11 +130,11 @@ export async function POST(request: Request) {
       ? config.projectUploadDir
       : join(process.cwd(), 'uploads');
     
-    console.log('[Project] uploadBaseDir:', uploadBaseDir);
+    logger.debug(LOG_MODULES.PROJECT, `上传目录: ${uploadBaseDir}`, { userId: payload.userId });
     
     // 创建项目目录
     const projectDir = join(uploadBaseDir, 'projects', Date.now().toString());
-    console.log('[Project] projectDir:', projectDir);
+    logger.debug(LOG_MODULES.PROJECT, `项目目录: ${projectDir}`, { userId: payload.userId });
     
     await mkdir(projectDir, { recursive: true });
 
@@ -196,16 +196,19 @@ export async function POST(request: Request) {
               });
             }
           }
-          console.log('[Project] 已继承默认工具权限:', defaultPermissions.length, '条');
+          logger.debug(LOG_MODULES.PROJECT, `已继承默认工具权限: ${defaultPermissions.length}条`, { userId: payload.userId });
         }
       } catch (err) {
-        console.warn('[Project] 继承默认工具权限失败:', err);
+        logger.warn(LOG_MODULES.PROJECT, `继承默认工具权限失败: ${err}`, { userId: payload.userId });
       }
     }
 
+    // 记录创建成功日志
+    logger.create(LOG_MODULES.PROJECT, payload, project.id, { name, techStack, files: files.length });
+
     return NextResponse.json({ project }, { status: 201 });
   } catch (error) {
-    console.error('创建项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, `创建项目错误: ${error}`);
     return NextResponse.json({ error: '服务器内部错误', details: String(error) }, { status: 500 });
   }
 }
