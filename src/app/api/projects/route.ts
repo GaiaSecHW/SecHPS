@@ -30,12 +30,12 @@ export async function GET(request: Request) {
         createdAt: 'desc',  // 按创建时间降序排列
       },
       include: {
-        files: {
+        ProjectFile: {
           orderBy: {
             uploadedAt: 'desc',
           },
         },
-        evaluations: {
+        EvaluationSession: {
           orderBy: {
             startedAt: 'desc',
           },
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         },
         _count: {
           select: {
-            vulnerabilities: {
+            Vulnerability: {
               where: {
                 status: { notIn: ['false-positive', 'closed'] }
               }
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
     // 转换数据格式，添加漏洞数量
     const projectsWithVulnCount = projects.map(project => ({
       ...project,
-      vulnerabilityCount: project._count?.vulnerabilities || 0,
+      vulnerabilityCount: project._count?.Vulnerability || 0,
     }));
 
     return NextResponse.json({ projects: projectsWithVulnCount });
@@ -137,12 +137,14 @@ export async function POST(request: Request) {
     // 创建项目记录
     const project = await prisma.project.create({
       data: {
+        id: `proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: name.trim(),
         description: description || null,
         projectPath: projectDir,
         techStack: techStack.length > 0 ? JSON.stringify(techStack) : null,
         userId: payload.userId,
         status: 'idle',
+        updatedAt: new Date(),
       },
     });
 
@@ -150,6 +152,7 @@ export async function POST(request: Request) {
     for (const file of savedFiles) {
       await prisma.projectFile.create({
         data: {
+          id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           projectId: project.id,
           fileName: file.name,
           filePath: file.path,
@@ -168,10 +171,12 @@ export async function POST(request: Request) {
             if (perm.toolPattern && perm.permission) {
               await prisma.toolPermission.create({
                 data: {
+                  id: `toolperm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                   projectId: project.id,
                   toolPattern: perm.toolPattern,
                   permission: perm.permission,
                   description: perm.description || `继承全局默认配置`,
+                  updatedAt: new Date(),
                 },
               });
             }

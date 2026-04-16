@@ -328,7 +328,6 @@ model EvaluationSession {
   EvaluationIteration EvaluationIteration[]
   EvaluationResult    EvaluationResult?
   ModelConfig         ModelConfig?          @relation(fields: [modelConfigId], references: [id])
-  Workflow            Workflow?             @relation(fields: [workflowId], references: [id])
   AgentTeam           AgentTeam?            @relation(fields: [agentTeamId], references: [id])
   Project             Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   NodeExecution       NodeExecution[]
@@ -913,7 +912,6 @@ model SkillPrediction {
   workflowTechStack String?
   matchCount        Int       @default(0)
   createdAt         DateTime  @default(now())
-  Workflow          Workflow? @relation(fields: [workflowId], references: [id])
   User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
@@ -942,7 +940,6 @@ model SkillPredictionTask {
   updatedAt         DateTime @updatedAt
   nodeId            String?
   governanceWarning String?
-  Workflow          Workflow? @relation(fields: [workflowId], references: [id])
   User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([workflowId, nodeId])
@@ -1080,10 +1077,6 @@ model User {
   SkillPrediction                              SkillPrediction[]
   SkillPredictionTask                          SkillPredictionTask[]
   UserRole                                     UserRole[]
-  Workflow                                     Workflow[]
-  WorkflowExecution                            WorkflowExecution[]
-  WorkflowShare_WorkflowShare_sharedWithToUser WorkflowShare[]       @relation("WorkflowShare_sharedWithToUser")
-  WorkflowShare_WorkflowShare_sharedByToUser   WorkflowShare[]       @relation("WorkflowShare_sharedByToUser")
 
   @@index([username])
   @@index([email])
@@ -1164,130 +1157,4 @@ model VulnerabilityPattern {
 
   @@index([isActive])
   @@index([category])
-}
-
-model Workflow {
-  id                  String                @id @default(cuid())
-  userId              String
-  name                String
-  description         String?
-  thumbnail           String?
-  techStack           String?
-  version             Int                   @default(1)
-  status              String                @default("draft")
-  isActive            Boolean               @default(false)
-  isPublic            Boolean               @default(false)
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime @updatedAt
-  EvaluationSession   EvaluationSession[]
-  SkillPrediction     SkillPrediction[]
-  SkillPredictionTask SkillPredictionTask[]
-  User                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  WorkflowEdge        WorkflowEdge[]
-  WorkflowExecution   WorkflowExecution[]
-  WorkflowNode        WorkflowNode[]
-  WorkflowShare       WorkflowShare[]
-
-  @@index([status, isActive])
-  @@index([userId, status])
-  @@index([isPublic])
-  @@index([isActive])
-  @@index([status])
-  @@index([userId])
-}
-
-model WorkflowEdge {
-  id                                               String       @id @default(cuid())
-  workflowId                                       String
-  sourceId                                         String
-  targetId                                         String
-  sourceHandle                                     String?
-  targetHandle                                     String?
-  label                                            String?
-  data                                             String?
-  createdAt                                        DateTime     @default(now())
-  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
-  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
-  Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceId, targetId, sourceHandle])
-  @@index([targetId])
-  @@index([sourceId])
-  @@index([workflowId])
-}
-
-model WorkflowExecution {
-  id                    String                  @id @default(cuid())
-  workflowId            String
-  userId                String
-  status                String                  @default("pending")
-  startedAt             DateTime                @default(now())
-  completedAt           DateTime?
-  error                 String?
-  result                String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime @updatedAt
-  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  WorkflowExecutionStep WorkflowExecutionStep[]
-
-  @@index([workflowId, status])
-  @@index([startedAt])
-  @@index([status])
-  @@index([userId])
-  @@index([workflowId])
-}
-
-model WorkflowExecutionStep {
-  id                String            @id @default(cuid())
-  executionId       String
-  nodeId            String
-  status            String            @default("pending")
-  startedAt         DateTime?
-  completedAt       DateTime?
-  input             String?
-  output            String?
-  error             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime @updatedAt
-  WorkflowExecution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-
-  @@index([status])
-  @@index([nodeId])
-  @@index([executionId])
-}
-
-model WorkflowNode {
-  id                                               String         @id @default(cuid())
-  workflowId                                       String
-  type                                             String
-  positionX                                        Float
-  positionY                                        Float
-  data                                             String
-  createdAt                                        DateTime       @default(now())
-  updatedAt                                        DateTime @updatedAt
-  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_targetIdToWorkflowNode")
-  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_sourceIdToWorkflowNode")
-  Workflow                                         Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-
-  @@index([type])
-  @@index([workflowId])
-}
-
-model WorkflowShare {
-  id                                  String    @id @default(cuid())
-  workflowId                          String
-  sharedBy                            String
-  sharedWith                          String
-  permission                          String    @default("read")
-  expiresAt                           DateTime?
-  createdAt                           DateTime  @default(now())
-  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
-  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
-  Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-
-  @@unique([workflowId, sharedWith])
-  @@index([sharedWith])
-  @@index([sharedBy])
-  @@index([workflowId])
 }
