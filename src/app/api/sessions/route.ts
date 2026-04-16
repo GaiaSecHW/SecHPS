@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { ProjectDiscovery } from '@/services/session-manager';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -12,22 +12,12 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 // 获取所有 Claude SDK 项目的会话列表
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 验证 Token 并检查权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查 SESSION_READ 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_READ)) {
-      return NextResponse.json({ details: { error: '无权限查看会话' } }, { status: 403 });
-    }
+    const { payload } = auth;
 
     // 从 Claude SDK 发现所有项目
     const projectDiscovery = new ProjectDiscovery();

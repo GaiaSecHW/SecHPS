@@ -25,6 +25,8 @@ import {
   ChevronRight,
   Download,
   Upload,
+  Globe,
+  Lock,
 } from 'lucide-react';
 
 interface Skill {
@@ -38,6 +40,7 @@ interface Skill {
   content: string;
   isActive: boolean;
   isBuiltin: boolean;
+  isPublic: boolean;  // 是否公开分享
   version: number;
   parentId: string | null;
   isLatest: boolean;
@@ -46,6 +49,9 @@ interface Skill {
   execCount: number;
   createdAt: string;
   updatedAt: string;
+  userId: string | null;  // 创建者ID
+  userName: string | null;  // 创建者姓名
+  userUsername: string | null;  // 创建者用户名
 }
 
 // 分类标签映射
@@ -96,7 +102,7 @@ function SkillsPageContent() {
   
   const [categories, setCategories] = useState<{ name: string; label: string; count: number }[]>([]);
   const [expandedSkill, setExpandedSkill] = useState<string | null>(null);
-  const [user, setUser] = useState<{ roles?: string[] } | null>(null);
+  const [user, setUser] = useState<{ id?: string; roles?: string[] } | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set());
   const [batchOperating, setBatchOperating] = useState(false);
@@ -318,6 +324,31 @@ toast.error(err instanceof Error ? err.message : '删除失败');
       fetchSkills();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '导出失败');
+    }
+  };
+
+  // 切换分享状态
+  const handleToggleShare = async (skillId: string, currentPublic: boolean) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/${skillId}`, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ isPublic: !currentPublic }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '更新失败');
+      }
+
+      fetchSkills();
+      toast.success(currentPublic ? '已取消分享' : '已分享给其他用户');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '操作失败');
     }
   };
 
@@ -790,6 +821,12 @@ toast.error(err instanceof Error ? err.message : '删除失败');
                             已禁用
                           </span>
                         )}
+                        {/* 创建者标签 */}
+                        {skill.userId !== null && (
+                          <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                            {skill.userName || skill.userUsername || '未知用户'}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-500">{skill.name}</p>
                     </div>
@@ -900,75 +937,98 @@ toast.error(err instanceof Error ? err.message : '删除失败');
                         {new Date(skill.createdAt).toLocaleString('zh-CN')}
                       </p>
                     </div>
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">创建者</h4>
+                      <p className="text-sm text-gray-600">
+                        {skill.userId === null ? (
+                          <span className="text-purple-600">系统内置</span>
+                        ) : (
+                          skill.userName || skill.userUsername || '未知用户'
+                        )}
+                      </p>
+                    </div>
                   </div>
 
-                  {isAdmin && (
-                    <div className="mt-4 flex items-center space-x-2">
-                      <button
-                        onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                      >
-                        <Edit size={16} className="mr-1" />
-                        查看详情
-                      </button>
-                      <button
-                        onClick={() => window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank')}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
-                        title="在新窗口中打开详情页"
-                      >
-                        <ExternalLink size={16} className="mr-1" />
-                        新窗口查看
-                      </button>
-                      <button
-                        onClick={() => handleToggleActive(skill.id, skill.isActive)}
-                        className={`inline-flex items-center px-3 py-1.5 text-sm rounded ${
-                          skill.isActive
-                            ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                            : 'bg-green-100 text-green-800 hover:bg-green-200'
-                        }`}
-                      >
-                        {skill.isActive ? (
-                          <>
-                            <XCircle size={16} className="mr-1" />
-                            禁用
-                          </>
-                        ) : (
-                          <>
-                            <CheckCircle size={16} className="mr-1" />
-                            启用
-                          </>
-                        )}
-                      </button>
-                      {!skill.isBuiltin && (
+                  {/* 操作按钮 - 根据权限显示 */}
+                  {(() => {
+                    const canEdit = isAdmin || (skill.userId !== null && skill.userId === user?.id);
+                    const canDelete = isAdmin || (skill.userId !== null && skill.userId === user?.id && !skill.isBuiltin);
+                    const canShare = skill.userId !== null && skill.userId === user?.id;  // 只有私有 Skill 的所有者可以分享
+                    
+                    return (
+                      <div className="mt-4 flex items-center space-x-2">
                         <button
-                          onClick={() => handleDelete(skill.id, skill.displayName)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
                         >
-                          <Trash2 size={16} className="mr-1" />
-                          删除
+                          <Edit size={16} className="mr-1" />
+                          {canEdit ? '编辑' : '查看详情'}
                         </button>
-                      )}
-                    </div>
-                  )}
-                  {!isAdmin && (
-                    <div className="mt-4 flex items-center space-x-2">
-                      <button
-                        onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                      >
-                        <Edit size={16} className="mr-1" />
-                        查看详情
-                      </button>
-                      <button
-                        onClick={() => window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank')}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
-                        title="在新窗口中打开详情页"
-                      >
-                        <ExternalLink size={16} className="mr-1" />
-                        新窗口查看
-                      </button>
-                    </div>
-                  )}
+                        <button
+                          onClick={() => window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank')}
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-800 rounded hover:bg-gray-200"
+                          title="在新窗口中打开详情页"
+                        >
+                          <ExternalLink size={16} className="mr-1" />
+                          新窗口查看
+                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => handleToggleActive(skill.id, skill.isActive)}
+                            className={`inline-flex items-center px-3 py-1.5 text-sm rounded ${
+                              skill.isActive
+                                ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                                : 'bg-green-100 text-green-800 hover:bg-green-200'
+                            }`}
+                          >
+                            {skill.isActive ? (
+                              <>
+                                <XCircle size={16} className="mr-1" />
+                                禁用
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle size={16} className="mr-1" />
+                                启用
+                              </>
+                            )}
+                          </button>
+                        )}
+                        {canShare && (
+                          <button
+                            onClick={() => handleToggleShare(skill.id, skill.isPublic)}
+                            className={`inline-flex items-center px-3 py-1.5 text-sm rounded ${
+                              skill.isPublic
+                                ? 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                            title={skill.isPublic ? '取消分享' : '分享给其他用户'}
+                          >
+                            {skill.isPublic ? (
+                              <>
+                                <Globe size={16} className="mr-1" />
+                                已分享
+                              </>
+                            ) : (
+                              <>
+                                <Lock size={16} className="mr-1" />
+                                分享
+                              </>
+                            )}
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => handleDelete(skill.id, skill.displayName)}
+                            className="inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          >
+                            <Trash2 size={16} className="mr-1" />
+                            删除
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>

@@ -75,6 +75,7 @@ export const skillSelectMinimal = {
   techStack: true,
   isActive: true,
   isBuiltin: true,
+  isPublic: true,  // 是否公开分享
   version: true,
   parentId: true,
   isLatest: true,
@@ -85,6 +86,14 @@ export const skillSelectMinimal = {
   execCount: true,
   createdAt: true,
   updatedAt: true,
+  userId: true,  // 创建者ID
+  user: {
+    select: {
+      id: true,
+      name: true,
+      username: true,
+    },
+  },
 };
 
 /**

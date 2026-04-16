@@ -1,3 +1,28 @@
+/**
+ * @fileoverview 认证和权限模块 - 规范导入源
+ * 
+ * 本模块是认证相关函数的规范导入源（canonical import source）。
+ * 
+ * 导入规则：
+ * - 服务端 API 路由应从此模块导入所有认证和权限函数
+ * - 客户端组件应使用 @/lib/permissions 以避免服务端环境变量检查
+ * 
+ * 导出内容：
+ * - JWT 相关：verifyToken, generateToken, generateRefreshToken, verifyRefreshToken
+ * - 密码相关：hashPassword, verifyPassword
+ * - 权限相关：hasPermission, hasAnyPermission, hasAllPermissions, hasRole, hasAnyRole
+ * - 用户相关：getUserWithPermissions
+ * - Cookie 相关：COOKIE_CONFIG, generateCookieHeader, generateClearCookieHeader
+ * 
+ * @example
+ * // 服务端 API 路由的正确导入方式
+ * import { verifyToken, hasPermission } from '@/lib/auth';
+ * 
+ * @example
+ * // 客户端组件的正确导入方式
+ * import { hasPermission } from '@/lib/permissions';
+ */
+
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '@/lib/prisma';

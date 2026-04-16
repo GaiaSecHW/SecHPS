@@ -1,27 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { validateJsonField, validateJsonObject } from '@/lib/validation';
 import { PERMISSIONS } from '@/types/permissions';
-
-// Validate JSON string field
-function validateJsonField(value: string | null | undefined, fieldName: string): { valid: boolean; error?: string } {
-  if (!value) return { valid: true }; // null/undefined allowed
-  try {
-    JSON.parse(value);
-    return { valid: true };
-  } catch {
-    return { valid: false, error: `${fieldName} 格式无效，必须是合法的 JSON` };
-  }
-}
-
-// Validate JSON object field (already parsed)
-function validateJsonObject(value: unknown, fieldName: string): { valid: boolean; error?: string } {
-  if (value === undefined || value === null) return { valid: true };
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    return { valid: false, error: `${fieldName} 格式无效，必须是 JSON 对象` };
-  }
-  return { valid: true };
-}
 
 // PATCH /api/config/[id] - Update a config
 export async function PATCH(
@@ -29,23 +10,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Verify Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // Authenticate and check permission
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // Check permission
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const { payload } = auth;
 
     const { id } = await params;
     const body = await request.json();
@@ -169,23 +139,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Verify Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // Authenticate and check permission
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_DELETE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // Check permission
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const { payload } = auth;
 
     const { id } = await params;
 

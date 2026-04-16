@@ -5,8 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getSessionInfo, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -17,22 +16,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 并检查权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查 SESSION_READ 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_READ)) {
-      return NextResponse.json({ error: '无权限查看会话' }, { status: 403 });
-    }
+    const { payload } = auth;
 
     const { id: sessionId } = await params;
 
@@ -104,22 +93,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 并检查权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_DELETE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查 SESSION_DELETE 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.SESSION_DELETE)) {
-      return NextResponse.json({ error: '无权限删除会话' }, { status: 403 });
-    }
+    const { payload } = auth;
 
     const { id: sessionId } = await params;
 

@@ -50,6 +50,8 @@ interface Skill {
   execCount: number;
   createdAt: string;
   updatedAt: string;
+  userId: string | null;  // 创建者ID
+  isPublic: boolean;  // 是否公开分享
 }
 
 export default function SkillDetailPage() {
@@ -61,6 +63,7 @@ export default function SkillDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);  // 当前用户ID
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState('');
@@ -115,6 +118,7 @@ export default function SkillDetailPage() {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         setIsAdmin(hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE));
+        setCurrentUserId(payload.userId);  // 保存当前用户ID
       } catch (error) {
         console.error('解析 token 失败:', error);
       }
@@ -569,75 +573,91 @@ export default function SkillDetailPage() {
             )}
           </button>
           
-          {isAdmin && (
-            <>
-              {!isEditing ? (
-                <>
-                  <button
-                    onClick={handleToggleActive}
-                    className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
-                      skill.isActive
-                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                        : 'bg-green-100 text-green-800 hover:bg-green-200'
-                    }`}
-                  >
-                    {skill.isActive ? (
-                      <>
-                        <XCircle size={16} className="mr-2" />
-                        禁用
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle size={16} className="mr-2" />
-                        启用
-                      </>
+          {/* 根据权限显示操作按钮 */}
+          {(() => {
+            // 权限检查：管理员可操作所有，用户只能操作自己的私有 Skill
+            const canEdit = isAdmin || (skill.userId !== null && skill.userId === currentUserId);
+            const canDelete = isAdmin || (skill.userId !== null && skill.userId === currentUserId && !skill.isBuiltin);
+            const canToggleActive = canEdit;
+            
+            if (!canEdit && !canDelete) return null;
+            
+            return (
+              <>
+                {!isEditing ? (
+                  <>
+                    {canToggleActive && (
+                      <button
+                        onClick={handleToggleActive}
+                        className={`inline-flex items-center px-4 py-2 rounded-lg transition-colors ${
+                          skill.isActive
+                            ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+                            : 'bg-green-100 text-green-800 hover:bg-green-200'
+                        }`}
+                      >
+                        {skill.isActive ? (
+                          <>
+                            <XCircle size={16} className="mr-2" />
+                            禁用
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle size={16} className="mr-2" />
+                            启用
+                          </>
+                        )}
+                      </button>
                     )}
-                  </button>
-                  <button
-                    onClick={startEditing}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    <Edit size={16} className="mr-2" />
-                    编辑
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                  >
-                    <Trash2 size={16} className="mr-2" />
-                    删除
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    onClick={cancelEditing}
-                    disabled={saving}
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleSaveEdit}
-                    disabled={saving}
-                    className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    {saving ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        保存中...
-                      </>
-                    ) : (
-                      <>
-                        <Save size={16} className="mr-2" />
-                        保存
-                      </>
+                    {canEdit && (
+                      <button
+                        onClick={startEditing}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Edit size={16} className="mr-2" />
+                        编辑
+                      </button>
                     )}
-                  </button>
-                </>
-              )}
-            </>
-          )}
+                    {canDelete && (
+                      <button
+                        onClick={handleDelete}
+                        className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        <Trash2 size={16} className="mr-2" />
+                        删除
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={cancelEditing}
+                      disabled={saving}
+                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={saving}
+                      className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                    >
+                      {saving ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          保存中...
+                        </>
+                      ) : (
+                        <>
+                          <Save size={16} className="mr-2" />
+                          保存
+                        </>
+                      )}
+                    </button>
+                  </>
+                )}
+              </>
+            );
+          })()}
         </div>
       </div>
 

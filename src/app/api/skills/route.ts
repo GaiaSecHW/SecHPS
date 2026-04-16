@@ -2,7 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { AuditLogger } from '@/lib/audit/logger';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { skillSelectMinimal } from '@/lib/query-optimizer';
@@ -25,17 +27,11 @@ async function getSkillOutputTemplate(): Promise<string | undefined> {
 // - scope=all: 返回用户可用的所有 Skills（公共 + 私有）
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') || undefined;
@@ -65,14 +61,18 @@ export async function GET(request: Request) {
 
     // 作用域过滤
     if (scope === 'public') {
-      where.userId = null;  // 公共 Skills
+      where.OR = [
+        { userId: null },        // 公共 Skills
+        { isPublic: true },      // 公开分享的私有 Skills
+      ];
     } else if (scope === 'mine') {
       where.userId = payload.userId;  // 用户私有 Skills
     } else {
-      // scope === 'all': 用户可用的所有 Skills（公共 + 私有）
+      // scope === 'all': 用户可用的所有 Skills（公共 + 私有 + 公开分享的）
       where.OR = [
         { userId: null },           // 公共 Skills
         { userId: payload.userId }, // 用户私有 Skills
+        { isPublic: true },         // 其他用户公开分享的 Skills
       ];
     }
 
@@ -109,7 +109,15 @@ export async function GET(request: Request) {
       prisma.skill.count({ where }),
     ]);
 
-    return NextResponse.json(createPaginatedResponse(skills, total, pageNum, pageLimit));
+    // 转换数据格式，添加创建者信息
+    const skillsWithCreator = skills.map(skill => ({
+      ...skill,
+      userName: skill.user?.name || null,
+      userUsername: skill.user?.username || null,
+      user: undefined, // 移除嵌套的 user 对象
+    }));
+
+    return NextResponse.json(createPaginatedResponse(skillsWithCreator, total, pageNum, pageLimit));
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '获取 Skills 列表错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
@@ -120,17 +128,11 @@ export async function GET(request: Request) {
 // 支持创建公共 Skill（需要管理员权限）或私有 Skill
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const body = await request.json();
     const {
@@ -206,13 +208,11 @@ export async function POST(request: Request) {
     });
 
     // 记录审计日志
-    prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'skill_create',
-        resource: skill.id,
-        details: JSON.stringify({ name: skill.name, displayName, category, isPublic }),
-      },
+    AuditLogger.log({
+      userId: payload.userId,
+      action: 'skill_create' as any,
+      resource: skill.id,
+      details: { name: skill.name, displayName, category, isPublic },
     }).catch(err => logger.errorWithUser(LOG_MODULES.SKILL, payload, '记录审计日志失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } }));
 
     // 双写：同步保存到磁盘

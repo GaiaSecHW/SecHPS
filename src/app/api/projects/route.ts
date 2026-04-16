@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { mkdir, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
@@ -9,22 +9,12 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 // 获取项目列表
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PROJECT_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查 PROJECT_READ 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PROJECT_READ)) {
-      return NextResponse.json({ details: { error: '无权限查看项目' } }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
@@ -79,22 +69,12 @@ export async function GET(request: Request) {
 // 创建新项目
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PROJECT_CREATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查 PROJECT_CREATE 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PROJECT_CREATE)) {
-      return NextResponse.json({ details: { error: '无权限创建项目' } }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const formData = await request.formData();
     const name = formData.get('name') as string;

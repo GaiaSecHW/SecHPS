@@ -2471,6 +2471,7 @@ toast.error(data.error || '更新项目失败');
                     {models.map((model) => (
                       <option key={model.id} value={model.id}>
                         {model.name} ({model.providerType}) - {model.models?.join(', ')}
+                        {model.userId === null ? ' [系统]' : ` [${model.userName || model.userUsername || '用户'}]`}
                         {model.isDefault ? ' [默认]' : ''}
                       </option>
                     ))}
@@ -2487,6 +2488,12 @@ toast.error(data.error || '更新项目失败');
                             <div className="flex justify-between">
                               <span className="text-gray-600">模型名称:</span>
                               <span className="font-medium text-gray-900">{model.name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-600">创建者:</span>
+                              <span className="font-medium text-gray-900">
+                                {model.userId === null ? '系统模型' : (model.userName || model.userUsername || '未知用户')}
+                              </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-gray-600">提供商类型:</span>

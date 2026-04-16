@@ -151,15 +151,23 @@ export async function POST(
       console.log('[启动评估] ⚠️  未找到激活的全局配置');
     }
 
-    // 加载 MCP 服务器配置（全局 + 项目级别）
+    // 加载 MCP 服务器配置（用户私有 + 共享 + 项目级别）
     let mcpServers: any[] = [];
     if (enableMcp) {
-      // 加载全局 MCP 配置
-      const globalMcpServers = await prisma.mcpServerConfig.findMany({
+      // 加载共享的 MCP 配置（isShared=true，管理员设置的共享 MCP）
+      const sharedMcpServers = await prisma.mcpServerConfig.findMany({
         where: { 
-          userId: null as any, 
-          projectId: null as any, 
-          isEnabled: true 
+          isShared: true, 
+          isEnabled: true,
+        },
+      });
+      
+      // 加载用户私有的 MCP 配置
+      const userMcpServers = await prisma.mcpServerConfig.findMany({
+        where: { 
+          userId: payload.userId, 
+          projectId: null,
+          isEnabled: true,
         },
       });
       
@@ -168,16 +176,17 @@ export async function POST(
         where: { projectId: id, isEnabled: true },
       });
       
-      // 合并配置（项目级别优先级更高）
-      const globalNames = new Set(globalMcpServers.map(s => s.name));
+      // 合并配置（项目级别 > 用户私有 > 共享）
+      const allServers = [...sharedMcpServers, ...userMcpServers];
+      const allNames = new Set(allServers.map(s => s.name));
       const projectNames = new Set(projectMcpServers.map(s => s.name));
       
-      // 添加全局配置（不在项目配置中的）
-      mcpServers = [...globalMcpServers.filter(s => !projectNames.has(s.name))];
-      // 添加项目配置
+      // 添加共享和用户配置（不在项目配置中的）
+      mcpServers = [...allServers.filter(s => !projectNames.has(s.name))];
+      // 添加项目配置（优先级最高）
       mcpServers = [...mcpServers, ...projectMcpServers];
       
-      console.log(`[启动评估] 加载 MCP 服务器: 全局 ${globalMcpServers.length} 个, 项目 ${projectMcpServers.length} 个, 合并后 ${mcpServers.length} 个`);
+      console.log(`[启动评估] 加载 MCP 服务器: 共享 ${sharedMcpServers.length} 个, 用户私有 ${userMcpServers.length} 个, 项目 ${projectMcpServers.length} 个, 合并后 ${mcpServers.length} 个`);
     }
 
     // 加载工具权限配置

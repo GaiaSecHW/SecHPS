@@ -1,49 +1,19 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { validateJsonField, validateJsonObject } from '@/lib/validation';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
-
-// Validate JSON string field
-function validateJsonField(value: string | null | undefined, fieldName: string): { valid: boolean; error?: string } {
-  if (!value) return { valid: true }; // null/undefined allowed
-  try {
-    JSON.parse(value);
-    return { valid: true };
-  } catch {
-    return { valid: false, error: `${fieldName} 格式无效，必须是合法的 JSON` };
-  }
-}
-
-// Validate JSON object field (already parsed)
-function validateJsonObject(value: unknown, fieldName: string): { valid: boolean; error?: string } {
-  if (value === undefined || value === null) return { valid: true };
-  if (typeof value !== 'object' || Array.isArray(value)) {
-    return { valid: false, error: `${fieldName} 格式无效，必须是 JSON 对象` };
-  }
-  return { valid: true };
-}
 
 // GET /api/config - Get all configs for authenticated user
 export async function GET(request: Request) {
   try {
-    // Verify Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // Authenticate and check permission
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // Check permission
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
+    const { payload } = auth;
 
     // Get configs for user
     const configs = await prisma.opencodeConfig.findMany({
@@ -65,23 +35,12 @@ export async function GET(request: Request) {
 // POST /api/config - Create a new config
 export async function POST(request: Request) {
   try {
-    // Verify Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // Authenticate and check permission
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // Check permission
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
+    const { payload } = auth;
 
     const body = await request.json();
     const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, progressQuestion, customSystemPrompt, maxConcurrentEvaluations, defaultToolPermissions } = body;
