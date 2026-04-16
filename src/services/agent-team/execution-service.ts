@@ -4,6 +4,15 @@ import { query, Options, SDKMessage, SDKResultSuccess, SDKResultError, McpServer
 import type { AgentDefinition as SdkAgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import { prisma } from '@/lib/prisma';
 import type { AgentTeamExecution, AgentMemberExecution, AgentTeam, AgentTeamMember, AgentDefinition } from '@prisma/client';
+import { parseRalphConfig } from '@/types/ralph-loop-config';
+import type {
+  AgentTeamVerificationContext,
+  AgentTeamVerificationResult,
+  SubagentCallRecord,
+  IterationRecord,
+} from '@/types/ralph-loop-config';
+import { emitIterationStarted, emitIterationCompleted, emitExperienceQueried } from '@/lib/agent-team-events';
+import { buildDynamicExperiencePrompt } from '@/services/autonomous-evolution/experience-query-service';
 
 /**
  * Safety limits for agent team execution
@@ -157,10 +166,10 @@ export class AgentTeamExecutionService {
     const team = await prisma.agentTeam.findUnique({
       where: { id: teamId },
       include: {
-        leadAgent: true,
-        members: {
+        AgentDefinition: true,
+        AgentTeamMember: {
           include: {
-            agent: true,
+            AgentDefinition: true,
           },
         },
       },
@@ -173,6 +182,7 @@ export class AgentTeamExecutionService {
     // Create execution record in database
     const execution = await prisma.agentTeamExecution.create({
       data: {
+        id: `team-exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         teamId,
         evaluationId: projectId,
         status: 'running',
@@ -184,9 +194,10 @@ export class AgentTeamExecutionService {
 
     // Create member execution records
     const memberExecutions: AgentMemberExecution[] = [];
-    if (team.members.length > 0) {
+    if (team.AgentTeamMember.length > 0) {
       const createdMembers = await prisma.agentMemberExecution.createMany({
-        data: team.members.map(member => ({
+        data: team.AgentTeamMember.map((member, index) => ({
+          id: `memberexec-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 9)}`,
           teamExecutionId: execution.id,
           memberId: member.id,
           status: 'pending',
@@ -220,7 +231,7 @@ export class AgentTeamExecutionService {
     });
 
     // Start async execution (non-blocking)
-    this.runExecution(execution.id, team, task, modelConfigId, callbacks, abortController)
+    this.runExecution(execution.id, team, task, abortController, modelConfigId, callbacks)
       .catch(error => {
         console.error(`[AgentTeamExecutionService] Execution ${execution.id} failed:`, error);
         this.handleExecutionError(execution.id, error, callbacks);
@@ -234,15 +245,524 @@ export class AgentTeamExecutionService {
   }
 
   /**
+   * Start a new agent team execution with Ralph Loop iteration
+   *
+   * @param params Execution parameters
+   * @returns Execution result with iteration count and completion reason
+   */
+  async executeWithRalphLoop(params: ExecuteParams): Promise<{
+    executionId: string;
+    iterations: number;
+    completionReason: 'verified' | 'max_iterations' | 'max_cost' | 'aborted';
+    totalCostUsd: number;
+  }> {
+    const { teamId, projectId, task, modelConfigId, callbacks } = params;
+
+    // Fetch team with members and lead agent
+    const team = await prisma.agentTeam.findUnique({
+      where: { id: teamId },
+      include: {
+        AgentDefinition: true,
+        AgentTeamMember: {
+          include: {
+            AgentDefinition: true,
+          },
+        },
+      },
+    });
+
+    if (!team) {
+      throw new Error(`Agent team not found: ${teamId}`);
+    }
+
+    // Parse Ralph Loop config
+    const ralphConfig = parseRalphConfig(team.ralphConfig);
+
+    // If Ralph Loop is not enabled, fall back to regular execute()
+    if (!ralphConfig.enabled) {
+      const result = await this.execute(params);
+      return {
+        executionId: result.executionId,
+        iterations: 1,
+        completionReason: 'verified',
+        totalCostUsd: 0,
+      };
+    }
+
+    // Create execution record in database
+    const execution = await prisma.agentTeamExecution.create({
+      data: {
+        id: `team-exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        teamId,
+        evaluationId: projectId,
+        status: 'running',
+        startedAt: new Date(),
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+      },
+    });
+
+    // Create member execution records
+    if (team.AgentTeamMember.length > 0) {
+      await prisma.agentMemberExecution.createMany({
+        data: team.AgentTeamMember.map((member, index) => ({
+          id: `member-exec-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 9)}`,
+          teamExecutionId: execution.id,
+          memberId: member.id,
+          status: 'pending',
+          inputTokens: 0,
+          outputTokens: 0,
+        })),
+      });
+    }
+
+    // Update team status to running
+    await prisma.agentTeam.update({
+      where: { id: teamId },
+      data: { status: 'running' },
+    });
+
+    callbacks?.onStatusChange?.('running', execution.id);
+
+    // Create abort controller for this execution
+    const abortController = new AbortController();
+    this.activeExecutions.set(execution.id, {
+      executionId: execution.id,
+      abortController,
+      teamId,
+    });
+
+    // Iteration loop
+    let iteration = 0;
+    let totalCostUsd = 0;
+    let completionReason: 'verified' | 'max_iterations' | 'max_cost' | 'aborted' = 'max_iterations';
+    let lastFeedback: string | undefined;
+    let currentTask = task;
+    const iterationRecords: IterationRecord[] = [];
+    let usedExperienceLearning = false;
+
+    try {
+      while (iteration < ralphConfig.maxIterations && totalCostUsd < ralphConfig.maxCostUsd) {
+        iteration++;
+
+        // Check abort signal
+        if (abortController.signal.aborted) {
+          completionReason = 'aborted';
+          console.log(`[RalphLoop] Execution ${execution.id} aborted at iteration ${iteration}`);
+          break;
+        }
+
+        const iterationStartedAt = new Date();
+
+        // Broadcast iteration_started event
+        emitIterationStarted(execution.id, teamId, {
+          iteration,
+          maxIterations: ralphConfig.maxIterations,
+          previousFeedback: lastFeedback,
+          totalCostUsdSoFar: totalCostUsd,
+        });
+
+        console.log(`[RalphLoop] Starting iteration ${iteration}/${ralphConfig.maxIterations} for execution ${execution.id}`);
+
+        // Execute single iteration (Lead Agent)
+        const iterationResult = await this.runSingleIteration(
+          execution.id,
+          team,
+          currentTask,
+          abortController,
+          modelConfigId,
+          callbacks
+        );
+
+        // Build VerificationContext
+        const context: AgentTeamVerificationContext = {
+          finalText: iterationResult.text,
+          totalInputTokens: iterationResult.inputTokens,
+          totalOutputTokens: iterationResult.outputTokens,
+          estimatedCostUsd: iterationResult.costUsd,
+          subagentCalls: iterationResult.subagentCalls,
+          iteration,
+          maxIterations: ralphConfig.maxIterations,
+          originalTask: task,
+          teamId,
+          executionId: execution.id,
+        };
+
+        // Run verification if configured
+        let verification: AgentTeamVerificationResult = { verified: false };
+        if (ralphConfig.verifyCompletion) {
+          verification = await this.runVerification(context, ralphConfig.verifyCompletion);
+        } else {
+          // Default verification: check for completion keywords
+          const text = iterationResult.text.toLowerCase();
+          const completionKeywords = [
+            '任务完成', '评估完成', '扫描完成', '已完成', '完成了', '全部完成',
+            'task complete', 'completed', 'done', 'finished', 'all tasks', 'successfully completed',
+          ];
+          if (completionKeywords.some(kw => text.includes(kw))) {
+            verification = { verified: true, feedback: '检测到完成关键词' };
+          }
+        }
+
+        // Record iteration
+        const iterationRecord: IterationRecord = {
+          iteration,
+          startedAt: iterationStartedAt,
+          completedAt: new Date(),
+          result: iterationResult.text,
+          verification,
+          tokensUsed: {
+            input: iterationResult.inputTokens,
+            output: iterationResult.outputTokens,
+          },
+          costUsd: iterationResult.costUsd,
+          experienceQueried: false,
+        };
+        iterationRecords.push(iterationRecord);
+
+        // Broadcast iteration_completed event
+        emitIterationCompleted(execution.id, teamId, {
+          iteration,
+          result: iterationResult.text,
+          verified: verification.verified,
+          feedback: verification.feedback,
+          tokensUsed: {
+            input: iterationResult.inputTokens,
+            output: iterationResult.outputTokens,
+          },
+          costUsd: iterationResult.costUsd,
+          totalCostUsdSoFar: totalCostUsd + iterationResult.costUsd,
+        });
+
+        totalCostUsd += iterationResult.costUsd;
+
+        console.log(`[RalphLoop] Iteration ${iteration} completed: verified=${verification.verified}, cost=$${iterationResult.costUsd.toFixed(4)}, total=$${totalCostUsd.toFixed(4)}`);
+
+        if (verification.verified) {
+          completionReason = 'verified';
+          console.log(`[RalphLoop] Task verified at iteration ${iteration}`);
+          break;
+        }
+
+        // Query experiences on verification failure (if configured)
+        if (ralphConfig.experienceTrigger === 'on_failure' && !verification.verified) {
+          const errorContext = {
+            errorMessage: verification.feedback || iterationResult.text,
+          };
+
+          try {
+            const guidanceData = await buildDynamicExperiencePrompt(errorContext);
+
+            if (guidanceData.prompt && guidanceData.matches.length > 0) {
+              usedExperienceLearning = true;
+              iterationRecord.experienceQueried = true;
+              iterationRecord.experiencesFound = guidanceData.matches.length;
+
+              // Broadcast experience_queried event
+              emitExperienceQueried(execution.id, teamId, {
+                iteration,
+                experiencesFound: guidanceData.matches.length,
+                experienceTitles: guidanceData.matches.map(m => m.experience.title),
+                guidanceInjected: guidanceData.prompt.substring(0, 100),
+              });
+
+              console.log(`[RalphLoop] Queried ${guidanceData.matches.length} experiences for iteration ${iteration}`);
+
+              // Inject experience guidance into next iteration's task
+              currentTask = `${task}\n\n[经验指导]\n${guidanceData.prompt}`;
+            }
+          } catch (expError) {
+            console.error(`[RalphLoop] Experience query failed:`, expError);
+          }
+        }
+
+        // Update feedback for next iteration
+        lastFeedback = verification.feedback;
+
+        // Check cost limit
+        if (totalCostUsd >= ralphConfig.maxCostUsd) {
+          completionReason = 'max_cost';
+          console.log(`[RalphLoop] Max cost limit reached: $${totalCostUsd.toFixed(4)} >= $${ralphConfig.maxCostUsd}`);
+          break;
+        }
+      }
+
+      // Mark execution as completed
+      await this.markExecutionCompleted(execution.id, iterationRecords[iterationRecords.length - 1]?.result || '', totalCostUsd);
+      callbacks?.onComplete?.(iterationRecords[iterationRecords.length - 1]?.result || '', execution.id);
+      callbacks?.onStatusChange?.('completed', execution.id);
+
+    } catch (error) {
+      console.error(`[RalphLoop] Execution ${execution.id} failed:`, error);
+      await this.handleExecutionError(execution.id, error as Error, callbacks);
+      throw error;
+    } finally {
+      // Clean up active execution tracking
+      this.activeExecutions.delete(execution.id);
+    }
+
+    return {
+      executionId: execution.id,
+      iterations: iteration,
+      completionReason,
+      totalCostUsd,
+    };
+  }
+
+  /**
+   * Run a single iteration of the Ralph Loop
+   *
+   * @returns Iteration result with text, tokens, cost, and subagent calls
+   */
+  private async runSingleIteration(
+    executionId: string,
+    team: AgentTeam & { AgentDefinition: AgentDefinition; AgentTeamMember: (AgentTeamMember & { AgentDefinition: AgentDefinition })[] },
+    task: string,
+    abortController: AbortController,
+    modelConfigId?: string,
+    callbacks?: ExecutionCallbacks
+  ): Promise<{
+    text: string;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number;
+    subagentCalls: SubagentCallRecord[];
+  }> {
+    // Build environment variables
+    const env: Record<string, string | undefined> = {
+      ...process.env,
+      CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: '600000',
+    };
+
+    // Build Lead Agent's allowedTools - MUST include "Agent" for subagent invocation
+    const leadAgentTools = this.parseAllowedTools(team.AgentDefinition.allowedTools);
+    if (!leadAgentTools.includes('Agent')) {
+      leadAgentTools.push('Agent');
+    }
+
+    // Build subagent definitions from team members
+    const agents: Record<string, SdkAgentDefinition> = {};
+    for (const member of team.AgentTeamMember) {
+      const memberTools = this.parseMemberTools(member);
+      const filteredTools = memberTools.filter(t => t !== 'Agent');
+
+      agents[member.AgentDefinition.name] = {
+        description: member.AgentDefinition.description || `Use for ${member.role} tasks`,
+        prompt: member.AgentDefinition.systemPrompt || `You are a ${member.role} agent.`,
+        tools: filteredTools,
+        model: member.overrideModel || member.AgentDefinition.model || undefined,
+      };
+    }
+
+    // Build SDK options with safety limits
+    const options: Options = {
+      cwd: process.cwd(),
+      model: team.AgentDefinition.model || 'claude-sonnet-4-20250514',
+      allowedTools: leadAgentTools,
+      agents: Object.keys(agents).length > 0 ? agents : undefined,
+      abortController,
+      env,
+      maxBudgetUsd: SAFETY_LIMITS.maxBudgetUsd,
+      maxTurns: SAFETY_LIMITS.maxTurns,
+      permissionMode: 'auto',
+      allowDangerouslySkipPermissions: true,
+    } as any;
+
+    // Configure MCP servers if defined
+    if (team.AgentDefinition.mcpServers) {
+      const mcpServers = this.parseMcpServers(team.AgentDefinition.mcpServers);
+      if (mcpServers && Object.keys(mcpServers).length > 0) {
+        options.mcpServers = mcpServers;
+      }
+    }
+
+    // Configure system prompt
+    if (team.AgentDefinition.systemPrompt) {
+      options.systemPrompt = team.AgentDefinition.systemPrompt;
+    }
+
+    // Build prompt with team context
+    const fullPrompt = this.buildTeamPrompt(team, task);
+
+    // Track token usage
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let fullResponse = '';
+    const subagentCalls: SubagentCallRecord[] = [];
+
+    // Track model for cost attribution
+    const leadAgentModel = team.AgentDefinition.model || 'claude-sonnet-4-20250514';
+    let currentModel = leadAgentModel;
+
+    // Run SDK query
+    const q = query({ prompt: fullPrompt, options });
+
+    for await (const message of q) {
+      const msg = message as any;
+
+      if (this.isResultSuccess(message)) {
+        fullResponse = message.result || '';
+        callbacks?.onChunk?.(message.result);
+
+      } else if (this.isResultError(message)) {
+        const errorMsg = message.errors?.join('\n') || 'Unknown error';
+        throw new Error(errorMsg);
+
+      } else if (this.isToolUseMessage(message)) {
+        const toolName = msg.tool_name;
+        const toolInput = msg.tool_input || {};
+
+        callbacks?.onToolUse?.(toolName, toolInput);
+
+        // Track Agent tool invocations (subagent calls)
+        if (toolName === 'Agent') {
+          const agentName = toolInput.agent_name || toolInput.agent_type;
+          if (agentName) {
+            subagentCalls.push({
+              agentName,
+              result: '',
+              tokensUsed: 0,
+              status: 'pending',
+            });
+          }
+        }
+
+      } else if (this.isToolResultMessage(message)) {
+        const toolName = msg.tool_name;
+        const toolResult = msg.tool_result;
+
+        callbacks?.onToolResult?.(toolName, toolResult);
+
+        // Update subagent call record on completion
+        if (toolName === 'Agent') {
+          const lastCall = subagentCalls[subagentCalls.length - 1];
+          if (lastCall && lastCall.status === 'pending') {
+            lastCall.result = typeof toolResult === 'string' ? toolResult : JSON.stringify(toolResult);
+            lastCall.status = 'completed';
+          }
+        }
+
+      } else if (this.isAssistantMessage(message)) {
+        // Extract usage data
+        const usageData = msg.message?.usage || msg.usage;
+        if (usageData) {
+          const iterInputTokens = usageData.input_tokens || 0;
+          const iterOutputTokens = usageData.output_tokens || 0;
+
+          inputTokens += iterInputTokens;
+          outputTokens += iterOutputTokens;
+
+          // Update database token counts
+          await this.updateTokenCounts(executionId, iterInputTokens, iterOutputTokens);
+
+          callbacks?.onUsage?.({
+            inputTokens: iterInputTokens,
+            outputTokens: iterOutputTokens,
+            cacheReadInputTokens: usageData.cache_read_input_tokens || 0,
+            cacheCreationInputTokens: usageData.cache_creation_input_tokens || 0,
+            model: currentModel,
+            totalCostUsd: calculateCost(iterInputTokens, iterOutputTokens, currentModel),
+          });
+        }
+
+        // Extract text content
+        if (msg.content) {
+          for (const block of msg.content) {
+            if (block.type === 'text' && block.text) {
+              fullResponse += block.text;
+              callbacks?.onChunk?.(block.text);
+            }
+          }
+        }
+      }
+    }
+
+    // Calculate cost
+    const costUsd = calculateCost(inputTokens, outputTokens, leadAgentModel);
+
+    return {
+      text: fullResponse,
+      inputTokens,
+      outputTokens,
+      costUsd,
+      subagentCalls,
+    };
+  }
+
+  /**
+   * Run verification function for Ralph Loop
+   *
+   * @param context Verification context
+   * @param verifyCompletion Verification function code or path
+   * @returns Verification result
+   */
+  private async runVerification(
+    context: AgentTeamVerificationContext,
+    verifyCompletion: string
+  ): Promise<AgentTeamVerificationResult> {
+    try {
+      // If verifyCompletion is a path to a script, we would load and execute it
+      // For now, we implement a simple keyword-based verification
+
+      const text = context.finalText.toLowerCase();
+
+      // Check for explicit completion signals
+      const completionKeywords = [
+        '任务完成', '评估完成', '扫描完成', '已完成', '完成了', '全部完成',
+        'task complete', 'completed', 'done', 'finished', 'all tasks', 'successfully completed',
+        'verification passed', '验证通过',
+      ];
+
+      const failureKeywords = [
+        '任务失败', '评估失败', '扫描失败', '失败',
+        'task failed', 'failed', 'error', '错误',
+      ];
+
+      // Check for completion
+      if (completionKeywords.some(kw => text.includes(kw))) {
+        return {
+          verified: true,
+          feedback: '检测到完成关键词',
+          stopReason: 'verified',
+        };
+      }
+
+      // Check for explicit failure
+      if (failureKeywords.some(kw => text.includes(kw))) {
+        return {
+          verified: false,
+          feedback: `检测到失败关键词，建议检查错误并重新尝试。输出内容: ${context.finalText.substring(0, 200)}...`,
+          suggestedAction: '检查错误日志并修复问题',
+        };
+      }
+
+      // Default: not verified, provide feedback for next iteration
+      return {
+        verified: false,
+        feedback: `迭代 ${context.iteration} 未检测到明确的完成信号。请继续完成任务并明确声明完成状态。`,
+        suggestedAction: '继续执行任务，完成后明确声明',
+      };
+
+    } catch (error) {
+      console.error('[RalphLoop] Verification failed:', error);
+      return {
+        verified: false,
+        feedback: `验证函数执行错误: ${(error as Error).message}`,
+        stopReason: 'error',
+      };
+    }
+  }
+
+  /**
    * Internal method to run the actual SDK execution
    */
   private async runExecution(
     executionId: string,
-    team: AgentTeam & { leadAgent: AgentDefinition; members: (AgentTeamMember & { agent: AgentDefinition })[] },
+    team: AgentTeam & { AgentDefinition: AgentDefinition; AgentTeamMember: (AgentTeamMember & { AgentDefinition: AgentDefinition })[] },
     task: string,
+    abortController: AbortController,
     modelConfigId?: string,
-    callbacks?: ExecutionCallbacks,
-    abortController: AbortController
+    callbacks?: ExecutionCallbacks
   ): Promise<void> {
     try {
       // Build environment variables
@@ -252,7 +772,7 @@ export class AgentTeamExecutionService {
       };
 
       // Build Lead Agent's allowedTools - MUST include "Agent" for subagent invocation
-      const leadAgentTools = this.parseAllowedTools(team.leadAgent.allowedTools);
+      const leadAgentTools = this.parseAllowedTools(team.AgentDefinition.allowedTools);
       if (!leadAgentTools.includes('Agent')) {
         leadAgentTools.push('Agent');
       }
@@ -260,23 +780,23 @@ export class AgentTeamExecutionService {
       // Build subagent definitions from team members
       // IMPORTANT: Subagent tools MUST NOT include "Agent" (SDK limitation - no nesting)
       const agents: Record<string, SdkAgentDefinition> = {};
-      for (const member of team.members) {
+      for (const member of team.AgentTeamMember) {
         const memberTools = this.parseMemberTools(member);
         // Ensure "Agent" is NOT in subagent tools (no nesting allowed)
         const filteredTools = memberTools.filter(t => t !== 'Agent');
         
-        agents[member.agent.name] = {
-          description: member.agent.description || `Use for ${member.role} tasks`,
-          prompt: member.agent.systemPrompt || `You are a ${member.role} agent.`,
+        agents[member.AgentDefinition.name] = {
+          description: member.AgentDefinition.description || `Use for ${member.role} tasks`,
+          prompt: member.AgentDefinition.systemPrompt || `You are a ${member.role} agent.`,
           tools: filteredTools,
-          model: member.overrideModel || member.agent.model || undefined,
+          model: member.overrideModel || member.AgentDefinition.model || undefined,
         };
       }
 
       // Build SDK options with safety limits
       const options: Options = {
         cwd: process.cwd(),
-        model: team.leadAgent.model || 'claude-sonnet-4-20250514',
+        model: team.AgentDefinition.model || 'claude-sonnet-4-20250514',
         allowedTools: leadAgentTools,
         agents: Object.keys(agents).length > 0 ? agents : undefined,
         abortController,
@@ -290,16 +810,16 @@ export class AgentTeamExecutionService {
       } as any;
 
       // Configure MCP servers if defined
-      if (team.leadAgent.mcpServers) {
-        const mcpServers = this.parseMcpServers(team.leadAgent.mcpServers);
+      if (team.AgentDefinition.mcpServers) {
+        const mcpServers = this.parseMcpServers(team.AgentDefinition.mcpServers);
         if (mcpServers && Object.keys(mcpServers).length > 0) {
           options.mcpServers = mcpServers;
         }
       }
 
       // Configure system prompt
-      if (team.leadAgent.systemPrompt) {
-        options.systemPrompt = team.leadAgent.systemPrompt;
+      if (team.AgentDefinition.systemPrompt) {
+        options.systemPrompt = team.AgentDefinition.systemPrompt;
       }
 
       // Build prompt with team context
@@ -312,20 +832,20 @@ export class AgentTeamExecutionService {
       const activeSubagents: Map<string, string> = new Map();
 
       // Build member lookup map (agent_name -> member)
-      const memberByAgentName: Map<string, typeof team.members[0]> = new Map();
-      for (const member of team.members) {
-        memberByAgentName.set(member.agent.name, member);
+      const memberByAgentName: Map<string, typeof team.AgentTeamMember[0]> = new Map();
+      for (const member of team.AgentTeamMember) {
+        memberByAgentName.set(member.AgentDefinition.name, member);
       }
 
       // Track model per member for cost attribution
       const modelByMemberId: Map<string, string> = new Map();
-      for (const member of team.members) {
-        const memberModel = member.overrideModel || member.agent.model || team.leadAgent.model || 'claude-sonnet-4-20250514';
+      for (const member of team.AgentTeamMember) {
+        const memberModel = member.overrideModel || member.AgentDefinition.model || team.AgentDefinition.model || 'claude-sonnet-4-20250514';
         modelByMemberId.set(member.id, memberModel);
       }
 
       // Lead agent model
-      const leadAgentModel = team.leadAgent.model || 'claude-sonnet-4-20250514';
+      const leadAgentModel = team.AgentDefinition.model || 'claude-sonnet-4-20250514';
 
       // Run SDK query
       const q = query({ prompt: fullPrompt, options });
@@ -530,7 +1050,7 @@ export class AgentTeamExecutionService {
     const execution = await prisma.agentTeamExecution.findUnique({
       where: { id: executionId },
       include: {
-        memberExecutions: {
+        AgentMemberExecution: {
           select: {
             id: true,
             memberId: true,
@@ -565,7 +1085,7 @@ export class AgentTeamExecutionService {
       totalInputTokens: execution.totalInputTokens,
       totalOutputTokens: execution.totalOutputTokens,
       estimatedCostUsd: totalCostUsd,
-      memberExecutions: execution.memberExecutions.map(me => ({
+      memberExecutions: execution.AgentMemberExecution.map(me => ({
         id: me.id,
         memberId: me.memberId,
         status: me.status,
@@ -700,14 +1220,14 @@ export class AgentTeamExecutionService {
    * Build team prompt with context
    */
   private buildTeamPrompt(
-    team: AgentTeam & { leadAgent: AgentDefinition; members: (AgentTeamMember & { agent: AgentDefinition })[] },
+    team: AgentTeam & { AgentDefinition: AgentDefinition; AgentTeamMember: (AgentTeamMember & { AgentDefinition: AgentDefinition })[] },
     task: string
   ): string {
-    const leadAgentInfo = `Lead Agent: ${team.leadAgent.displayName} (${team.leadAgent.category})`;
+    const leadAgentInfo = `Lead Agent: ${team.AgentDefinition.displayName} (${team.AgentDefinition.category})`;
     
-    const memberInfo = team.members.length > 0
-      ? `\nTeam Members:\n${team.members.map(m => 
-          `- ${m.agent.displayName} (${m.agent.category}) - Role: ${m.role}`
+    const memberInfo = team.AgentTeamMember.length > 0
+      ? `\nTeam Members:\n${team.AgentTeamMember.map(m => 
+          `- ${m.AgentDefinition.displayName} (${m.AgentDefinition.category}) - Role: ${m.role}`
         ).join('\n')}`
       : '';
 
@@ -734,7 +1254,7 @@ export class AgentTeamExecutionService {
    * Parse member tools from override or agent definition
    * IMPORTANT: Subagent tools MUST NOT include "Agent" (SDK limitation)
    */
-  private parseMemberTools(member: AgentTeamMember & { agent: AgentDefinition }): string[] {
+  private parseMemberTools(member: AgentTeamMember & { AgentDefinition: AgentDefinition }): string[] {
     // Use override tools if defined, otherwise use agent's allowed tools
     if (member.overrideTools) {
       try {
@@ -744,11 +1264,11 @@ export class AgentTeamExecutionService {
       }
     }
     
-    if (member.agent.allowedTools) {
+    if (member.AgentDefinition.allowedTools) {
       try {
-        return JSON.parse(member.agent.allowedTools);
+        return JSON.parse(member.AgentDefinition.allowedTools);
       } catch {
-        return member.agent.allowedTools.split(',').map(t => t.trim());
+        return member.AgentDefinition.allowedTools.split(',').map(t => t.trim());
       }
     }
     

@@ -140,6 +140,7 @@ export class SkillObservationStatsService {
           // 创建空统计记录
           const stats = await prisma.skillObservationStats.create({
             data: {
+              id: `stats-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
               skillId,
               totalObservations: 0,
               warningCount: 0,
@@ -149,6 +150,7 @@ export class SkillObservationStatsService {
               warningRate: null,
               firstObservedAt: null,
               lastObservedAt: null,
+              updatedAt: new Date(),
             },
           });
 
@@ -206,6 +208,7 @@ export class SkillObservationStatsService {
       const stats = await prisma.skillObservationStats.upsert({
         where: { skillId },
         create: {
+          id: `stats-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           skillId,
           totalObservations,
           warningCount,
@@ -216,6 +219,7 @@ export class SkillObservationStatsService {
           avgMatchScore: matchScores.length > 0 ? avgMatchScore : null,
           firstObservedAt,
           lastObservedAt,
+          updatedAt: new Date(),
         },
         update: {
           totalObservations,
@@ -227,6 +231,7 @@ export class SkillObservationStatsService {
           avgMatchScore: matchScores.length > 0 ? avgMatchScore : null,
           firstObservedAt,
           lastObservedAt,
+          updatedAt: new Date(),
         },
       });
 
@@ -452,7 +457,7 @@ export class SkillObservationStatsService {
         ],
         take: limit,
         include: {
-          skill: {
+          Skill: {
             select: {
               id: true,
               name: true,
@@ -466,9 +471,9 @@ export class SkillObservationStatsService {
       return stats.map(s => ({
         id: s.id,
         skillId: s.skillId,
-        skillName: s.skill?.name || 'Unknown',
-        skillDisplayName: s.skill?.displayName || 'Unknown',
-        skillCategory: s.skill?.category || 'Unknown',
+        skillName: s.Skill?.name || 'Unknown',
+        skillDisplayName: s.Skill?.displayName || 'Unknown',
+        skillCategory: s.Skill?.category || 'Unknown',
         totalObservations: s.totalObservations,
         warningCount: s.warningCount,
         matchCount: s.matchCount,
@@ -772,7 +777,7 @@ export class SkillObservationStatsService {
       const stats = await prisma.skillObservationStats.findUnique({
         where: { skillId },
         include: {
-          skill: {
+          Skill: {
             select: {
               id: true,
               name: true,
@@ -793,9 +798,9 @@ export class SkillObservationStatsService {
       return {
         id: stats.id,
         skillId: stats.skillId,
-        skillName: stats.skill?.name || 'Unknown',
-        skillDisplayName: stats.skill?.displayName || 'Unknown',
-        skillCategory: stats.skill?.category || 'Unknown',
+        skillName: stats.Skill?.name || 'Unknown',
+        skillDisplayName: stats.Skill?.displayName || 'Unknown',
+        skillCategory: stats.Skill?.category || 'Unknown',
         totalObservations: stats.totalObservations,
         warningCount: stats.warningCount,
         matchCount: stats.matchCount,
@@ -854,7 +859,7 @@ export class SkillObservationStatsService {
         ],
         take: limit,
         include: {
-          skill: {
+          Skill: {
             select: {
               id: true,
               name: true,
@@ -868,9 +873,9 @@ export class SkillObservationStatsService {
       return stats.map(s => ({
         id: s.id,
         skillId: s.skillId,
-        skillName: s.skill?.name || 'Unknown',
-        skillDisplayName: s.skill?.displayName || 'Unknown',
-        skillCategory: s.skill?.category || 'Unknown',
+        skillName: s.Skill?.name || 'Unknown',
+        skillDisplayName: s.Skill?.displayName || 'Unknown',
+        skillCategory: s.Skill?.category || 'Unknown',
         totalObservations: s.totalObservations,
         warningCount: s.warningCount,
         matchCount: s.matchCount,

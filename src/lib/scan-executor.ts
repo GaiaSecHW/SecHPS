@@ -47,7 +47,7 @@ export class ScanExecutor {
     const task = await prisma.scanTask.findUnique({
       where: { id: this.taskId },
       include: {
-        project: { include: { files: true } },
+        Project: { include: { ProjectFile: true } },
       },
     });
 
@@ -95,12 +95,13 @@ export class ScanExecutor {
       });
 
       // 执行单个 Skill
-      const result = await this.executeSkill(skill as any, task.project);
+      const result = await this.executeSkill(skill as any, task.Project);
       results.push(result);
 
-      // 创建执行记录
+// 创建执行记录
       await prisma.skillExecution.create({
         data: {
+          id: `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           skillId: skill.id,
           projectId: task.projectId,
           scanTaskId: task.id,
@@ -108,7 +109,7 @@ export class ScanExecutor {
           output: result.output ? JSON.stringify(result.output) : null,
           status: result.status,
           duration: result.duration,
-        error: result.error ?? null,
+          error: result.error ?? null,
           startedAt: new Date(Date.now() - result.duration),
           completedAt: new Date(),
         },
@@ -147,7 +148,7 @@ export class ScanExecutor {
    */
   private async executeSkill(
     skill: { id: string; name: string; displayName: string; systemPrompt: string; userPrompt: string; category: string; severity: string },
-    project: { id: string; name: string; description: string | null; files: Array<{ fileName: string; fileType: string; fileSize: number }> }
+    project: { id: string; name: string; description: string | null }
   ): Promise<ScanResult> {
     const startTime = Date.now();
 
@@ -315,8 +316,8 @@ export async function createScanReport(taskId: string): Promise<string> {
   const task = await prisma.scanTask.findUnique({
     where: { id: taskId },
     include: {
-      executions: {
-        include: { skill: true },
+      SkillExecution: {
+        include: { Skill: true },
       },
     },
   });
@@ -327,6 +328,7 @@ export async function createScanReport(taskId: string): Promise<string> {
 
   const report = await prisma.scanReport.create({
     data: {
+      id: `report-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
       scanTaskId: taskId,
       projectId: task.projectId,
       title: `扫描报告 - ${task.name}`,
@@ -339,8 +341,8 @@ export async function createScanReport(taskId: string): Promise<string> {
           : 0,
       }),
       details: JSON.stringify({
-        executions: task.executions.map(e => ({
-          skill: e.skill?.displayName,
+        executions: task.SkillExecution.map(e => ({
+          skill: e.Skill?.displayName,
           status: e.status,
           duration: e.duration,
           error: e.error,

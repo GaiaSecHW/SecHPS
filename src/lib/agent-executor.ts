@@ -107,7 +107,7 @@ export class AgentExecutor {
       // 获取项目信息
       const project = await prisma.project.findUnique({
         where: { id: this.context.projectId },
-        include: { files: true },
+        include: { ProjectFile: true },
       });
 
       if (!project) {
@@ -216,6 +216,7 @@ export class AgentExecutor {
     }
     const execution = await prisma.skillExecution.create({
       data: {
+        id: `exec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         skillId: this.context.skillId,
         projectId: this.context.projectId,
         scanTaskId: this.context.scanTaskId,
@@ -255,11 +256,11 @@ export class AgentExecutor {
    */
   private buildPrompt(
     skill: { content: string; category: string; description?: string | null },
-    project: { name: string; description: string | null; files: Array<{ fileName: string; fileType: string }> }
+    project: { name: string; description: string | null }
   ): string {
     // skill.content 是完整的 Markdown 内容，作为系统提示
     const systemMessage = skill.content || skill.description || '';
-    const userMessage = `请分析项目 ${project.name}。${project.description ? `项目描述: ${project.description}` : ''}。项目共有 ${project.files.length} 个文件。`;
+    const userMessage = `请分析项目 ${project.name}。${project.description ? `项目描述: ${project.description}` : ''}。`;
 
     return `System: ${systemMessage}\n\n---\n\nHuman: ${userMessage}`;
   }
@@ -320,6 +321,7 @@ export class AgentExecutor {
     for (const vuln of vulnerabilities) {
       await prisma.vulnerability.create({
         data: {
+          id: `vuln-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
           projectId: this.context.projectId,
           skillExecutionId: this.executionId,  // 关联到执行记录
           skill: this.skillName,               // 记录来源 Skill 名称
@@ -332,8 +334,9 @@ export class AgentExecutor {
           lineStart: vuln.lineStart,
           lineEnd: vuln.lineEnd,
           codeSnippet: vuln.codeSnippet,
-          recommendation: vuln.recommendation,
+          fixSuggestion: vuln.recommendation,
           cwe: vuln.cwe,
+          updatedAt: new Date(),
         },
       });
     }
