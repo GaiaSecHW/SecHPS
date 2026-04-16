@@ -14,6 +14,58 @@ export const SAFETY_LIMITS = {
 };
 
 /**
+ * Model pricing (USD per million tokens)
+ * Reference: https://www.anthropic.com/pricing
+ */
+export const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  // Anthropic Claude models
+  'claude-opus-4-20250514': { input: 15, output: 75 },
+  'claude-opus-4': { input: 15, output: 75 },
+  'claude-sonnet-4-20250514': { input: 3, output: 15 },
+  'claude-sonnet-4': { input: 3, output: 15 },
+  'claude-3-5-sonnet': { input: 3, output: 15 },
+  'claude-3-5-sonnet-20241022': { input: 3, output: 15 },
+  'claude-haiku-3-5-20241022': { input: 0.8, output: 4 },
+  'claude-3-5-haiku': { input: 0.8, output: 4 },
+  'claude-haiku-4-20250514': { input: 0.8, output: 4 },
+  'claude-haiku-4': { input: 0.8, output: 4 },
+  // OpenAI models (approximate pricing)
+  'gpt-4o': { input: 2.5, output: 10 },
+  'gpt-4o-mini': { input: 0.15, output: 0.6 },
+  // GLM models (RMB pricing, converted to USD at ~7:1 ratio)
+  'glm-5': { input: 0.86, output: 3.14 },
+  'glm-4': { input: 0.86, output: 3.14 },
+};
+
+/**
+ * Get model pricing with fallback to default
+ */
+export function getModelPricing(model: string): { input: number; output: number } {
+  const pricing = MODEL_PRICING[model];
+  if (pricing) {
+    return pricing;
+  }
+  // Default pricing for unknown models (use sonnet-like pricing)
+  console.warn(`[CostAttribution] Unknown model "${model}", using default pricing`);
+  return { input: 3, output: 15 };
+}
+
+/**
+ * Calculate cost from token usage
+ * Formula: (inputTokens / 1_000_000) * inputPrice + (outputTokens / 1_000_000) * outputPrice
+ */
+export function calculateCost(
+  inputTokens: number,
+  outputTokens: number,
+  model: string
+): number {
+  const pricing = getModelPricing(model);
+  const inputCost = (inputTokens / 1_000_000) * pricing.input;
+  const outputCost = (outputTokens / 1_000_000) * pricing.output;
+  return inputCost + outputCost;
+}
+
+/**
  * Execution callbacks for streaming events
  */
 export interface ExecutionCallbacks {
@@ -27,6 +79,7 @@ export interface ExecutionCallbacks {
     cacheCreationInputTokens?: number;
     totalCostUsd?: number;
     memberId?: string;
+    model?: string;
   }) => void;
   onComplete?: (result: string, executionId: string) => void;
   onError?: (error: Error, executionId: string) => void;
@@ -59,12 +112,14 @@ export interface ExecutionStatus {
   completedAt: Date | null;
   totalInputTokens: number;
   totalOutputTokens: number;
+  estimatedCostUsd: number;
   memberExecutions: Array<{
     id: string;
     memberId: string;
     status: string;
     inputTokens: number;
     outputTokens: number;
+    estimatedCostUsd: number;
   }>;
 }
 
@@ -262,11 +317,22 @@ export class AgentTeamExecutionService {
         memberByAgentName.set(member.agent.name, member);
       }
 
+      // Track model per member for cost attribution
+      const modelByMemberId: Map<string, string> = new Map();
+      for (const member of team.members) {
+        const memberModel = member.overrideModel || member.agent.model || team.leadAgent.model || 'claude-sonnet-4-20250514';
+        modelByMemberId.set(member.id, memberModel);
+      }
+
+      // Lead agent model
+      const leadAgentModel = team.leadAgent.model || 'claude-sonnet-4-20250514';
+
       // Run SDK query
       const q = query({ prompt: fullPrompt, options });
 
       let fullResponse = '';
       let currentMemberId: string | undefined;
+      let currentModel = leadAgentModel;
 
       for await (const message of q) {
         const msg = message as any;
@@ -324,6 +390,9 @@ export class AgentTeamExecutionService {
                   activeSubagents.set(agentName, memberExec.id);
                   currentMemberId = member.id;
                   
+                  // Switch to subagent model for cost attribution
+                  currentModel = modelByMemberId.get(member.id) || leadAgentModel;
+                  
                   // Callback for subagent start
                   callbacks?.onSubagentStart?.(agentName, memberExec.id);
                 }
@@ -347,6 +416,9 @@ export class AgentTeamExecutionService {
                 activeSubagents.delete(agentName);
                 currentMemberId = undefined;
                 
+                // Switch back to lead agent model
+                currentModel = leadAgentModel;
+                
                 // Callback for subagent complete
                 callbacks?.onSubagentComplete?.(agentName, memberExecId, toolResult);
               }
@@ -359,6 +431,9 @@ export class AgentTeamExecutionService {
           if (usageData) {
             const inputTokens = usageData.input_tokens || 0;
             const outputTokens = usageData.output_tokens || 0;
+
+            // Calculate cost for this usage
+            const costUsd = calculateCost(inputTokens, outputTokens, currentModel);
 
             // Update database token counts
             await this.updateTokenCounts(executionId, inputTokens, outputTokens);
@@ -374,6 +449,8 @@ export class AgentTeamExecutionService {
               cacheReadInputTokens: usageData.cache_read_input_tokens || 0,
               cacheCreationInputTokens: usageData.cache_creation_input_tokens || 0,
               memberId: currentMemberId,
+              model: currentModel,
+              totalCostUsd: costUsd,
             });
           }
 
@@ -446,9 +523,10 @@ export class AgentTeamExecutionService {
    * Get execution status
    * 
    * @param executionId Execution ID
-   * @returns Execution status with member executions
+   * @param model Optional model for cost calculation (defaults to sonnet pricing)
+   * @returns Execution status with member executions and estimated costs
    */
-  async getStatus(executionId: string): Promise<ExecutionStatus> {
+  async getStatus(executionId: string, model?: string): Promise<ExecutionStatus> {
     const execution = await prisma.agentTeamExecution.findUnique({
       where: { id: executionId },
       include: {
@@ -468,6 +546,16 @@ export class AgentTeamExecutionService {
       throw new Error(`Execution not found: ${executionId}`);
     }
 
+    // Use provided model or default for cost calculation
+    const costModel = model || 'claude-sonnet-4-20250514';
+    
+    // Calculate total estimated cost
+    const totalCostUsd = calculateCost(
+      execution.totalInputTokens,
+      execution.totalOutputTokens,
+      costModel
+    );
+
     return {
       id: execution.id,
       teamId: execution.teamId,
@@ -476,12 +564,14 @@ export class AgentTeamExecutionService {
       completedAt: execution.completedAt,
       totalInputTokens: execution.totalInputTokens,
       totalOutputTokens: execution.totalOutputTokens,
+      estimatedCostUsd: totalCostUsd,
       memberExecutions: execution.memberExecutions.map(me => ({
         id: me.id,
         memberId: me.memberId,
         status: me.status,
         inputTokens: me.inputTokens,
         outputTokens: me.outputTokens,
+        estimatedCostUsd: calculateCost(me.inputTokens, me.outputTokens, costModel),
       })),
     };
   }

@@ -152,8 +152,17 @@ describe('AgentTeam and AgentTeamMember Models', () => {
   });
 
   test('AgentTeamMember can be queried with relations', async () => {
+    // First get the team by name to ensure we query the correct team's member
+    const team = await prisma.agentTeam.findFirst({
+      where: { name: testTeamName },
+    });
+    expect(team).toBeDefined();
+
     const teamMember = await prisma.agentTeamMember.findFirst({
-      where: { role: 'teammate-1' },
+      where: { 
+        teamId: team!.id,
+        role: 'teammate-1' 
+      },
       include: {
         team: true,
         agent: true,

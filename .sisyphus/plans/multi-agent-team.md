@@ -871,7 +871,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): add WebSocket real-time events`
   - Files: src/lib/websocket-server.ts, src/app/api/agent-teams/[id]/stream/route.ts
 
-- [ ] 13. **Write TDD tests for AgentTeam execution**
+- [x] 13. **Write TDD tests for AgentTeam execution**
 
   **What to do**:
   - Create `__tests__/services/agent-team-execution.test.ts`
@@ -923,7 +923,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `test(agent-team): add execution service tests`
   - Files: __tests__/services/agent-team-execution.test.ts
 
-- [ ] 14. **Implement cost attribution per Agent**
+- [x] 14. **Implement cost attribution per Agent**
 
   **What to do**:
   - Track inputTokens and outputTokens per AgentMemberExecution

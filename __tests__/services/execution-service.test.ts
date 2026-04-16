@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AgentTeamExecutionService, SAFETY_LIMITS, ExecutionCallbacks, ExecuteParams, createAgentTeamExecutionService } from '@/services/agent-team/execution-service';
+import { AgentTeamExecutionService, SAFETY_LIMITS, ExecutionCallbacks, ExecuteParams, createAgentTeamExecutionService, MODEL_PRICING, calculateCost, getModelPricing } from '@/services/agent-team/execution-service';
 import { prisma } from '@/lib/prisma';
 
 // Mock the Claude Agent SDK
@@ -1017,6 +1017,601 @@ describe('AgentTeamExecutionService', () => {
       
       // tester-agent uses agent's model (haiku)
       expect(callArgs.options.agents['tester-agent'].model).toBe('claude-haiku-4-20250514');
+    });
+  });
+
+  describe('Cost Attribution', () => {
+    describe('MODEL_PRICING', () => {
+      test('MODEL_PRICING contains common models', () => {
+        expect(MODEL_PRICING['claude-opus-4-20250514']).toBeDefined();
+        expect(MODEL_PRICING['claude-sonnet-4-20250514']).toBeDefined();
+        expect(MODEL_PRICING['claude-haiku-3-5-20241022']).toBeDefined();
+        expect(MODEL_PRICING['gpt-4o']).toBeDefined();
+        expect(MODEL_PRICING['glm-5']).toBeDefined();
+      });
+
+      test('MODEL_PRICING has input and output rates', () => {
+        const sonnetPricing = MODEL_PRICING['claude-sonnet-4-20250514'];
+        expect(sonnetPricing.input).toBeGreaterThan(0);
+        expect(sonnetPricing.output).toBeGreaterThan(0);
+        expect(sonnetPricing.output).toBeGreaterThan(sonnetPricing.input); // Output is typically more expensive
+      });
+
+      test('Opus is most expensive, Haiku is cheapest', () => {
+        const opusPricing = MODEL_PRICING['claude-opus-4-20250514'];
+        const sonnetPricing = MODEL_PRICING['claude-sonnet-4-20250514'];
+        const haikuPricing = MODEL_PRICING['claude-haiku-3-5-20241022'];
+        
+        expect(opusPricing.input).toBeGreaterThan(sonnetPricing.input);
+        expect(sonnetPricing.input).toBeGreaterThan(haikuPricing.input);
+        expect(opusPricing.output).toBeGreaterThan(sonnetPricing.output);
+        expect(sonnetPricing.output).toBeGreaterThan(haikuPricing.output);
+      });
+    });
+
+    describe('getModelPricing()', () => {
+      test('returns pricing for known models', () => {
+        const pricing = getModelPricing('claude-sonnet-4-20250514');
+        expect(pricing.input).toBe(3);
+        expect(pricing.output).toBe(15);
+      });
+
+      test('returns default pricing for unknown models', () => {
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const pricing = getModelPricing('unknown-model-xyz');
+        expect(pricing.input).toBe(3); // Default sonnet-like pricing
+        expect(pricing.output).toBe(15);
+        expect(consoleSpy).toHaveBeenCalled();
+        consoleSpy.mockRestore();
+      });
+
+      test('handles model aliases', () => {
+        // Test that different model name formats work
+        expect(getModelPricing('claude-sonnet-4').input).toBe(3);
+        expect(getModelPricing('claude-3-5-sonnet').input).toBe(3);
+      });
+    });
+
+    describe('calculateCost()', () => {
+      test('calculates cost correctly for sonnet', () => {
+        // Sonnet: $3/M input, $15/M output
+        // 1000 input + 500 output = (1000/1M * 3) + (500/1M * 15) = 0.003 + 0.0075 = 0.0105
+        const cost = calculateCost(1000, 500, 'claude-sonnet-4-20250514');
+        expect(cost).toBeCloseTo(0.0105, 6);
+      });
+
+      test('calculates cost correctly for opus', () => {
+        // Opus: $15/M input, $75/M output
+        // 1000 input + 500 output = (1000/1M * 15) + (500/1M * 75) = 0.015 + 0.0375 = 0.0525
+        const cost = calculateCost(1000, 500, 'claude-opus-4-20250514');
+        expect(cost).toBeCloseTo(0.0525, 6);
+      });
+
+      test('calculates cost correctly for haiku', () => {
+        // Haiku: $0.8/M input, $4/M output
+        // 1000 input + 500 output = (1000/1M * 0.8) + (500/1M * 4) = 0.0008 + 0.002 = 0.0028
+        const cost = calculateCost(1000, 500, 'claude-haiku-3-5-20241022');
+        expect(cost).toBeCloseTo(0.0028, 6);
+      });
+
+      test('returns 0 for zero tokens', () => {
+        const cost = calculateCost(0, 0, 'claude-sonnet-4-20250514');
+        expect(cost).toBe(0);
+      });
+
+      test('handles large token counts', () => {
+        // 1M input + 1M output for sonnet = 3 + 15 = 18 USD
+        const cost = calculateCost(1_000_000, 1_000_000, 'claude-sonnet-4-20250514');
+        expect(cost).toBe(18);
+      });
+
+      test('uses default pricing for unknown model', () => {
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        const cost = calculateCost(1000, 500, 'unknown-model');
+        // Default: $3/M input, $15/M output
+        expect(cost).toBeCloseTo(0.0105, 6);
+        consoleSpy.mockRestore();
+      });
+    });
+
+    describe('Cost in onUsage callback', () => {
+      const mockTeam = {
+        id: 'team-1',
+        userId: 'user-1',
+        name: 'Test Team',
+        leadAgentId: 'agent-1',
+        taskStrategy: 'parallel',
+        maxTeammates: 5,
+        status: 'idle',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        leadAgent: {
+          id: 'agent-1',
+          name: 'lead-agent',
+          displayName: 'Lead Agent',
+          category: 'reviewer',
+          model: 'claude-sonnet-4-20250514',
+          systemPrompt: 'Lead agent',
+          allowedTools: null,
+          mcpServers: null,
+          isActive: true,
+          isBuiltin: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        members: [],
+      };
+
+      const mockExecution = {
+        id: 'exec-1',
+        teamId: 'team-1',
+        status: 'running',
+        startedAt: new Date(),
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        createdAt: new Date(),
+      };
+
+      test('onUsage callback includes model and cost', async () => {
+        (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeam);
+        (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+        (prisma.agentTeam.update as any).mockResolvedValue({});
+        (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 0 });
+
+        const mockIterator = {
+          async *[Symbol.asyncIterator]() {
+            yield {
+              type: 'assistant',
+              content: [{ type: 'text', text: 'Processing...' }],
+              message: {
+                usage: { input_tokens: 1000, output_tokens: 500 },
+              },
+            };
+            yield {
+              type: 'result',
+              subtype: 'success',
+              result: 'Done',
+              total_cost_usd: 0.0105,
+            };
+          },
+        };
+        (query as any).mockReturnValue(mockIterator);
+
+        (prisma.agentTeamExecution.update as any).mockResolvedValue({
+          ...mockExecution,
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+        });
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+          ...mockExecution,
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+          memberExecutions: [],
+        });
+
+        const onUsage = vi.fn();
+        await service.execute({
+          teamId: 'team-1',
+          task: 'Test',
+          callbacks: { onUsage },
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Verify onUsage was called with model and cost
+        expect(onUsage).toHaveBeenCalled();
+        const usageCall = onUsage.mock.calls.find(call => call[0].inputTokens === 1000);
+        expect(usageCall).toBeDefined();
+        expect(usageCall[0].model).toBe('claude-sonnet-4-20250514');
+        expect(usageCall[0].totalCostUsd).toBeCloseTo(0.0105, 6);
+      });
+
+      test('cost is calculated with correct model for subagent', async () => {
+        const mockTeamWithMembers = {
+          ...mockTeam,
+          members: [
+            {
+              id: 'member-1',
+              teamId: 'team-1',
+              agentId: 'agent-2',
+              role: 'coder',
+              overrideModel: 'claude-haiku-3-5-20241022',
+              createdAt: new Date(),
+              agent: {
+                id: 'agent-2',
+                name: 'coder-agent',
+                displayName: 'Coder Agent',
+                category: 'coder',
+                model: 'claude-sonnet-4-20250514',
+                systemPrompt: 'Coder agent',
+                allowedTools: null,
+                mcpServers: null,
+                isActive: true,
+                isBuiltin: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            },
+          ],
+        };
+
+        const mockMemberExecutions = [
+          {
+            id: 'member-exec-1',
+            teamExecutionId: 'exec-1',
+            memberId: 'member-1',
+            status: 'pending',
+            inputTokens: 0,
+            outputTokens: 0,
+            createdAt: new Date(),
+          },
+        ];
+
+        (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+        (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+        (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 1 });
+        (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+        (prisma.agentTeam.update as any).mockResolvedValue({});
+        (prisma.agentMemberExecution.findFirst as any).mockResolvedValue(mockMemberExecutions[0]);
+        (prisma.agentMemberExecution.update as any).mockResolvedValue(mockMemberExecutions[0]);
+
+        // Mock query with subagent invocation
+        const mockIterator = {
+          async *[Symbol.asyncIterator]() {
+            // Lead agent usage (sonnet)
+            yield {
+              type: 'assistant',
+              content: [{ type: 'text', text: 'Starting...' }],
+              message: {
+                usage: { input_tokens: 500, output_tokens: 200 },
+              },
+            };
+            // Subagent invocation
+            yield {
+              type: 'tool_use',
+              tool_name: 'Agent',
+              tool_input: { agent_name: 'coder-agent', prompt: 'Write code' },
+            };
+            // Subagent usage (haiku - override model)
+            yield {
+              type: 'assistant',
+              content: [{ type: 'text', text: 'Coding...' }],
+              message: {
+                usage: { input_tokens: 1000, output_tokens: 500 },
+              },
+            };
+            // Subagent result
+            yield {
+              type: 'tool_result',
+              tool_name: 'Agent',
+              tool_result: 'Code written',
+            };
+            // Final result
+            yield {
+              type: 'result',
+              subtype: 'success',
+              result: 'Done',
+              total_cost_usd: 0.0133,
+            };
+          },
+        };
+        (query as any).mockReturnValue(mockIterator);
+
+        (prisma.agentTeamExecution.update as any).mockResolvedValue(mockExecution);
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+          ...mockExecution,
+          totalInputTokens: 1500,
+          totalOutputTokens: 700,
+          memberExecutions: mockMemberExecutions,
+        });
+
+        const onUsage = vi.fn();
+        await service.execute({
+          teamId: 'team-1',
+          task: 'Test',
+          callbacks: { onUsage },
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Verify onUsage was called multiple times
+        expect(onUsage).toHaveBeenCalled();
+        
+        // Find lead agent usage call (before subagent)
+        const leadAgentCall = onUsage.mock.calls.find(
+          call => call[0].inputTokens === 500 && !call[0].memberId
+        );
+        expect(leadAgentCall).toBeDefined();
+        expect(leadAgentCall[0].model).toBe('claude-sonnet-4-20250514');
+        // Sonnet: (500/1M * 3) + (200/1M * 15) = 0.0015 + 0.003 = 0.0045
+        expect(leadAgentCall[0].totalCostUsd).toBeCloseTo(0.0045, 6);
+
+        // Find subagent usage call (with memberId)
+        const subagentCall = onUsage.mock.calls.find(
+          call => call[0].inputTokens === 1000 && call[0].memberId === 'member-1'
+        );
+        expect(subagentCall).toBeDefined();
+        expect(subagentCall[0].model).toBe('claude-haiku-3-5-20241022'); // Override model
+        // Haiku: (1000/1M * 0.8) + (500/1M * 4) = 0.0008 + 0.002 = 0.0028
+        expect(subagentCall[0].totalCostUsd).toBeCloseTo(0.0028, 6);
+      });
+    });
+
+    describe('Cost in ExecutionStatus', () => {
+      test('getStatus returns estimatedCostUsd', async () => {
+        const mockExecution = {
+          id: 'exec-1',
+          teamId: 'team-1',
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+          createdAt: new Date(),
+          memberExecutions: [
+            {
+              id: 'member-exec-1',
+              memberId: 'member-1',
+              status: 'completed',
+              inputTokens: 500,
+              outputTokens: 250,
+            },
+          ],
+        };
+
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue(mockExecution);
+
+        const status = await service.getStatus('exec-1');
+
+        expect(status.estimatedCostUsd).toBeDefined();
+        expect(status.estimatedCostUsd).toBeGreaterThan(0);
+        // Default model (sonnet): (1000/1M * 3) + (500/1M * 15) = 0.0105
+        expect(status.estimatedCostUsd).toBeCloseTo(0.0105, 6);
+      });
+
+      test('getStatus calculates member execution costs', async () => {
+        const mockExecution = {
+          id: 'exec-1',
+          teamId: 'team-1',
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+          createdAt: new Date(),
+          memberExecutions: [
+            {
+              id: 'member-exec-1',
+              memberId: 'member-1',
+              status: 'completed',
+              inputTokens: 500,
+              outputTokens: 250,
+            },
+          ],
+        };
+
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue(mockExecution);
+
+        const status = await service.getStatus('exec-1');
+
+        expect(status.memberExecutions[0].estimatedCostUsd).toBeDefined();
+        // Member: (500/1M * 3) + (250/1M * 15) = 0.0015 + 0.00375 = 0.00525
+        expect(status.memberExecutions[0].estimatedCostUsd).toBeCloseTo(0.00525, 6);
+      });
+
+      test('getStatus accepts model parameter for cost calculation', async () => {
+        const mockExecution = {
+          id: 'exec-1',
+          teamId: 'team-1',
+          status: 'completed',
+          startedAt: new Date(),
+          completedAt: new Date(),
+          totalInputTokens: 1000,
+          totalOutputTokens: 500,
+          createdAt: new Date(),
+          memberExecutions: [],
+        };
+
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue(mockExecution);
+
+        // Get status with opus model
+        const status = await service.getStatus('exec-1', 'claude-opus-4-20250514');
+
+        // Opus: (1000/1M * 15) + (500/1M * 75) = 0.015 + 0.0375 = 0.0525
+        expect(status.estimatedCostUsd).toBeCloseTo(0.0525, 6);
+      });
+
+      test('getStatus returns 0 cost for zero tokens', async () => {
+        const mockExecution = {
+          id: 'exec-1',
+          teamId: 'team-1',
+          status: 'pending',
+          startedAt: null,
+          completedAt: null,
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          createdAt: new Date(),
+          memberExecutions: [],
+        };
+
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue(mockExecution);
+
+        const status = await service.getStatus('exec-1');
+
+        expect(status.estimatedCostUsd).toBe(0);
+      });
+    });
+
+    describe('Cost aggregation', () => {
+      test('Total cost equals lead agent + sum of member costs', async () => {
+        const mockTeamWithMembers = {
+          id: 'team-1',
+          userId: 'user-1',
+          name: 'Test Team',
+          leadAgentId: 'agent-1',
+          taskStrategy: 'parallel',
+          maxTeammates: 5,
+          status: 'idle',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          leadAgent: {
+            id: 'agent-1',
+            name: 'lead-agent',
+            displayName: 'Lead Agent',
+            category: 'reviewer',
+            model: 'claude-sonnet-4-20250514',
+            systemPrompt: 'Lead agent',
+            allowedTools: JSON.stringify(['Read', 'Agent']),
+            mcpServers: null,
+            isActive: true,
+            isBuiltin: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+          members: [
+            {
+              id: 'member-1',
+              teamId: 'team-1',
+              agentId: 'agent-2',
+              role: 'coder',
+              overrideModel: null,
+              createdAt: new Date(),
+              agent: {
+                id: 'agent-2',
+                name: 'coder-agent',
+                displayName: 'Coder',
+                category: 'coder',
+                model: 'claude-haiku-3-5-20241022',
+                systemPrompt: 'Coder',
+                allowedTools: null,
+                mcpServers: null,
+                isActive: true,
+                isBuiltin: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            },
+          ],
+        };
+
+        const mockExecution = {
+          id: 'exec-1',
+          teamId: 'team-1',
+          status: 'running',
+          startedAt: new Date(),
+          totalInputTokens: 0,
+          totalOutputTokens: 0,
+          createdAt: new Date(),
+        };
+
+        const mockMemberExecutions = [
+          {
+            id: 'member-exec-1',
+            teamExecutionId: 'exec-1',
+            memberId: 'member-1',
+            status: 'pending',
+            inputTokens: 0,
+            outputTokens: 0,
+            createdAt: new Date(),
+          },
+        ];
+
+        (prisma.agentTeam.findUnique as any).mockResolvedValue(mockTeamWithMembers);
+        (prisma.agentTeamExecution.create as any).mockResolvedValue(mockExecution);
+        (prisma.agentMemberExecution.createMany as any).mockResolvedValue({ count: 1 });
+        (prisma.agentMemberExecution.findMany as any).mockResolvedValue(mockMemberExecutions);
+        (prisma.agentTeam.update as any).mockResolvedValue({});
+        (prisma.agentMemberExecution.findFirst as any).mockResolvedValue(mockMemberExecutions[0]);
+        (prisma.agentMemberExecution.update as any).mockResolvedValue(mockMemberExecutions[0]);
+
+        // Track all usage calls
+        const usageCalls: Array<{ inputTokens: number; outputTokens: number; model: string; memberId?: string }> = [];
+        const onUsage = vi.fn((usage) => {
+          usageCalls.push(usage);
+        });
+
+        // Mock query with lead agent + subagent usage
+        const mockIterator = {
+          async *[Symbol.asyncIterator]() {
+            // Lead agent usage (sonnet)
+            yield {
+              type: 'assistant',
+              content: [{ type: 'text', text: 'Planning...' }],
+              message: {
+                usage: { input_tokens: 1000, output_tokens: 500 },
+              },
+            };
+            // Invoke subagent
+            yield {
+              type: 'tool_use',
+              tool_name: 'Agent',
+              tool_input: { agent_name: 'coder-agent', prompt: 'Write code' },
+            };
+            // Subagent usage (haiku)
+            yield {
+              type: 'assistant',
+              content: [{ type: 'text', text: 'Coding...' }],
+              message: {
+                usage: { input_tokens: 2000, output_tokens: 1000 },
+              },
+            };
+            // Subagent result
+            yield {
+              type: 'tool_result',
+              tool_name: 'Agent',
+              tool_result: 'Done',
+            };
+            // Final result
+            yield {
+              type: 'result',
+              subtype: 'success',
+              result: 'Complete',
+              total_cost_usd: 0.0183,
+            };
+          },
+        };
+        (query as any).mockReturnValue(mockIterator);
+
+        (prisma.agentTeamExecution.update as any).mockResolvedValue(mockExecution);
+        (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+          ...mockExecution,
+          totalInputTokens: 3000,
+          totalOutputTokens: 1500,
+          memberExecutions: mockMemberExecutions.map(me => ({
+            ...me,
+            inputTokens: 2000,
+            outputTokens: 1000,
+          })),
+        });
+
+        await service.execute({
+          teamId: 'team-1',
+          task: 'Test',
+          callbacks: { onUsage },
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Calculate expected costs
+        // Lead agent (sonnet): (1000/1M * 3) + (500/1M * 15) = 0.003 + 0.0075 = 0.0105
+        const leadAgentCost = calculateCost(1000, 500, 'claude-sonnet-4-20250514');
+        
+        // Subagent (haiku): (2000/1M * 0.8) + (1000/1M * 4) = 0.0016 + 0.004 = 0.0056
+        const subagentCost = calculateCost(2000, 1000, 'claude-haiku-3-5-20241022');
+        
+        // Total expected cost
+        const expectedTotal = leadAgentCost + subagentCost;
+
+        // Verify usage calls have correct models
+        const leadUsage = usageCalls.find(u => !u.memberId && u.inputTokens === 1000);
+        expect(leadUsage?.model).toBe('claude-sonnet-4-20250514');
+        
+        const subagentUsage = usageCalls.find(u => u.memberId === 'member-1' && u.inputTokens === 2000);
+        expect(subagentUsage?.model).toBe('claude-haiku-3-5-20241022');
+
+        // Verify total cost matches sum
+        expect(expectedTotal).toBeCloseTo(0.0161, 6);
+      });
     });
   });
 });
