@@ -89,7 +89,7 @@ export async function POST(request: Request) {
     });
     
     // 登录成功日志
-    logger.loginSuccess(user.id, user.email, { username: user.username, roles: roles.map(r => r.name) });
+    logger.loginSuccess(user.id, user.username, { roles: roles.map(r => r.name) });
 
     // 设置 HttpOnly Cookie
     const accessTokenCookie = generateCookieHeader(

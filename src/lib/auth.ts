@@ -69,6 +69,7 @@ const REFRESH_TOKEN_EXPIRES_IN = '30d'; // Refresh Token 有效期 30 天
 
 export interface JWTPayload {
   userId: string;
+  username: string;  // 用户名（注册名）
   email: string;
   roles: string[];
   permissions: string[];
@@ -94,6 +95,7 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 export function generateToken(user: User, roles: Role[], permissions: string[]): string {
   const payload: JWTPayload = {
     userId: user.id,
+    username: user.username,  // 添加用户名
     email: user.email,
     roles: roles.map(r => r.name),
     permissions: permissions,

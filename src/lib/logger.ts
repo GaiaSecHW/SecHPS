@@ -93,8 +93,7 @@ function log(level: LogLevel, module: string, message: string, context?: LogCont
 function buildContext(payload: JWTPayload, resource?: string, action?: string, details?: any): LogContext {
   return {
     userId: payload.userId,
-    userEmail: payload.email,
-    username: payload.email, // 使用 email 作为用户名标识
+    username: payload.username,  // 使用用户名
     roles: payload.roles,
     resource,
     action,
@@ -106,18 +105,17 @@ function buildContext(payload: JWTPayload, resource?: string, action?: string, d
 function buildCrossUserContext(
   payload: JWTPayload, 
   targetUserId?: string, 
-  targetUserEmail?: string,
+  targetUsername?: string,
   resource?: string, 
   action?: string, 
   details?: any
 ): LogContext {
   return {
     userId: payload.userId,
-    userEmail: payload.email,
-    username: payload.email,
+    username: payload.username,
     roles: payload.roles,
     targetUserId,
-    targetUserEmail,
+    targetUsername,
     resource,
     action,
     details,
@@ -142,22 +140,22 @@ function logPermissionDenied(
 /**
  * 登录成功日志
  */
-function logLoginSuccess(userId: string, userEmail: string, details?: any) {
-  log('info', LOG_MODULES.AUTH, '登录成功', { userId, userEmail, details: { ...details, action: 'login_success' } });
+function logLoginSuccess(userId: string, username: string, details?: any) {
+  log('info', LOG_MODULES.AUTH, '登录成功', { userId, username, details: { ...details, action: 'login_success' } });
 }
 
 /**
  * 登录失败日志（有用户信息）
  */
-function logLoginFailed(email: string, reason: string, details?: any) {
-  log('warn', LOG_MODULES.AUTH, `登录失败: ${reason}`, { userEmail: email, details: { reason, ...details, action: 'login_failed' } });
+function logLoginFailed(username: string, reason: string, details?: any) {
+  log('warn', LOG_MODULES.AUTH, `登录失败: ${reason}`, { username, details: { reason, ...details, action: 'login_failed' } });
 }
 
 /**
  * 登录失败日志（无用户信息）
  */
-function logLoginFailedNoUser(email: string, reason: string, details?: any) {
-  log('warn', LOG_MODULES.AUTH, `登录失败: ${reason}`, { userEmail: email, details: { reason, email, ...details, action: 'login_failed' } });
+function logLoginFailedNoUser(username: string, reason: string, details?: any) {
+  log('warn', LOG_MODULES.AUTH, `登录失败: ${reason}`, { username, details: { reason, username, ...details, action: 'login_failed' } });
 }
 
 /**
@@ -180,12 +178,12 @@ function logReadOther(
   module: string,
   payload: JWTPayload,
   targetUserId: string,
-  targetUserEmail?: string,
+  targetUsername?: string,
   resourceType?: string,
   resourceId?: string,
   details?: any
 ) {
-  log('info', module, `读取他人资源 ${resourceType || ''}`, buildCrossUserContext(payload, targetUserId, targetUserEmail, resourceId, 'read_other', { resourceType, ...details }));
+  log('info', module, `读取他人资源 ${resourceType || ''}`, buildCrossUserContext(payload, targetUserId, targetUsername, resourceId, 'read_other', { resourceType, ...details }));
 }
 
 /**
@@ -287,9 +285,9 @@ export const logger = {
     payload: JWTPayload, 
     targetUserId: string, 
     resource: string, 
-    targetUserEmail?: string,
+    targetUsername?: string,
     details?: any
-  ) => log('info', module, '访问他人资源', buildCrossUserContext(payload, targetUserId, targetUserEmail, resource, 'access_other', details)),
+  ) => log('info', module, '访问他人资源', buildCrossUserContext(payload, targetUserId, targetUsername, resource, 'access_other', details)),
   
   // 跨用户更新 - 操作人更新目标用户的资源
   updateOther: (
@@ -297,9 +295,9 @@ export const logger = {
     payload: JWTPayload, 
     targetUserId: string, 
     resource: string, 
-    targetUserEmail?: string,
+    targetUsername?: string,
     details?: any
-  ) => log('info', module, '更新他人资源', buildCrossUserContext(payload, targetUserId, targetUserEmail, resource, 'update_other', details)),
+  ) => log('info', module, '更新他人资源', buildCrossUserContext(payload, targetUserId, targetUsername, resource, 'update_other', details)),
   
   // 跨用户删除 - 操作人删除目标用户的资源
   deleteOther: (
@@ -307,9 +305,9 @@ export const logger = {
     payload: JWTPayload, 
     targetUserId: string, 
     resource: string, 
-    targetUserEmail?: string,
+    targetUsername?: string,
     details?: any
-  ) => log('info', module, '删除他人资源', buildCrossUserContext(payload, targetUserId, targetUserEmail, resource, 'delete_other', details)),
+  ) => log('info', module, '删除他人资源', buildCrossUserContext(payload, targetUserId, targetUsername, resource, 'delete_other', details)),
   
   // 跨用户操作失败
   errorOther: (
@@ -317,10 +315,10 @@ export const logger = {
     payload: JWTPayload, 
     targetUserId: string, 
     error: string, 
-    targetUserEmail?: string,
+    targetUsername?: string,
     resource?: string, 
     details?: any
-  ) => log('error', module, `操作他人资源失败: ${error}`, buildCrossUserContext(payload, targetUserId, targetUserEmail, resource, 'error_other', details)),
+  ) => log('error', module, `操作他人资源失败: ${error}`, buildCrossUserContext(payload, targetUserId, targetUsername, resource, 'error_other', details)),
   
   // 自带目标用户上下文的通用日志
   withTarget: (
@@ -329,10 +327,10 @@ export const logger = {
     message: string, 
     payload: JWTPayload, 
     targetUserId?: string, 
-    targetUserEmail?: string,
+    targetUsername?: string,
     resource?: string, 
     details?: any
-  ) => log(level, module, message, buildCrossUserContext(payload, targetUserId, targetUserEmail, resource, undefined, details)),
+  ) => log(level, module, message, buildCrossUserContext(payload, targetUserId, targetUsername, resource, undefined, details)),
   
   // ========== 审计专用日志方法 ==========
   
