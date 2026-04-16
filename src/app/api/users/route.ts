@@ -1,6 +1,6 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -25,23 +25,12 @@ function validatePassword(password: string): { valid: boolean; error?: string } 
 // 获取所有用户
 export async function GET(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.USER_READ)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     // 解析分页参数
     const { searchParams } = new URL(request.url);
@@ -111,23 +100,12 @@ export async function GET(request: Request) {
 // 创建用户（管理员专用）
 export async function POST(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_CREATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.USER_CREATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const body = await request.json();
     const { email, username, password, name, roles } = body;

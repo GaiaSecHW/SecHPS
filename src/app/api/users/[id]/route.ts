@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
@@ -10,23 +11,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.USER_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     // 获取用户
     const { id } = await params;
@@ -94,18 +84,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token（不检查权限，因为 PATCH 有特殊权限逻辑）
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 检查权限（可以更新自己，或者有用户管理权限）
     const canUpdateOthers = hasPermission(payload.permissions, PERMISSIONS.USER_UPDATE);
@@ -113,6 +97,8 @@ export async function PATCH(
     const isSelf = payload.userId === id;
 
     if (!canUpdateOthers && !isSelf) {
+      // 权限拒绝日志
+      logger.permissionDenied(LOG_MODULES.USER, payload, 'USER_UPDATE', id);
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
@@ -169,23 +155,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_DELETE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.USER_DELETE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     // 不允许删除自己
     const { id } = await params;

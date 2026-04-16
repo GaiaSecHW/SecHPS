@@ -96,6 +96,9 @@ export async function GET(request: Request) {
     // 格式化返回数据
     const formattedModels = models.map((model) => formatModel(model, false));
 
+    // 记录列表查询日志
+    logger.list(LOG_MODULES.MODEL, payload, 'models', { isActive: isActiveParam, forEvaluation, isAdmin }, formattedModels.length);
+
     return NextResponse.json({ models: formattedModels });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.MODEL, `获取模型配置错误: ${error}`);

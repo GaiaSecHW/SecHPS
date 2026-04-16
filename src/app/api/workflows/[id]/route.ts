@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { AuditLogger } from '@/lib/audit/logger';
 
 // 格式化工作流数据
 function formatWorkflow(workflow: any) {
@@ -22,23 +23,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
@@ -99,6 +89,15 @@ export async function GET(
       return NextResponse.json({ error: '工作流不存在' }, { status: 404 });
     }
 
+    // 记录读取日志 - 区分是否跨用户
+    if (workflow.userId && workflow.userId !== payload.userId) {
+      // 访问他人工作流
+      logger.readOther(LOG_MODULES.WORKFLOW, payload, workflow.userId, workflow.user?.email, 'workflow', id, { name: workflow.name });
+    } else {
+      // 自己的工作流
+      logger.read(LOG_MODULES.WORKFLOW, payload, 'workflow', id, { name: workflow.name });
+    }
+
     return NextResponse.json({ workflow: formatWorkflow(workflow) });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Get workflow error', { details: { error: String(error) } });
@@ -113,23 +112,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_UPDATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
@@ -147,6 +135,8 @@ export async function PATCH(
 
     // 检查权限：只能更新自己的，管理员可以更新所有
     if (!isAdmin && existingWorkflow.userId !== payload.userId) {
+      // 权限拒绝日志
+      logger.permissionDenied(LOG_MODULES.WORKFLOW, payload, 'WORKFLOW_UPDATE', id, { workflowName: existingWorkflow.name });
       return NextResponse.json({ error: '禁止访问：只能更新自己创建的工作流' }, { status: 403 });
     }
 
@@ -189,14 +179,19 @@ export async function PATCH(
     });
 
     // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'workflow_update',
-        resource: workflow.id,
-        details: JSON.stringify(updateData),
-      },
+    await AuditLogger.logWorkflow('workflow_update', payload.userId, workflow.id, request, {
+      after: updateData,
     });
+
+    // 记录更新日志 - 区分是否跨用户
+    if (existingWorkflow.userId && existingWorkflow.userId !== payload.userId) {
+      // 管理员更新他人工作流
+      const targetUserId = existingWorkflow.userId;
+      logger.updateOther(LOG_MODULES.WORKFLOW, payload, targetUserId, id, undefined, { name: workflow.name });
+    } else {
+      // 自己的工作流
+      logger.update(LOG_MODULES.WORKFLOW, payload, id, { name: workflow.name });
+    }
 
     return NextResponse.json({
       message: '工作流更新成功',
@@ -215,23 +210,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_DELETE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_DELETE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
@@ -241,6 +225,11 @@ export async function DELETE(
     // 检查工作流是否存在
     const existingWorkflow = await prisma.workflow.findUnique({
       where: { id },
+      include: {
+        user: {
+          select: { id: true, email: true, username: true },
+        },
+      },
     });
 
     if (!existingWorkflow) {
@@ -249,6 +238,8 @@ export async function DELETE(
 
     // 检查权限：只能删除自己的，管理员可以删除所有
     if (!isAdmin && existingWorkflow.userId !== payload.userId) {
+      // 权限拒绝日志
+      logger.permissionDenied(LOG_MODULES.WORKFLOW, payload, 'WORKFLOW_DELETE', id, { workflowName: existingWorkflow.name });
       return NextResponse.json({ error: '禁止访问：只能删除自己创建的工作流' }, { status: 403 });
     }
 
@@ -258,16 +249,19 @@ export async function DELETE(
     });
 
     // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'workflow_delete',
-        resource: id,
-        details: JSON.stringify({
-          name: existingWorkflow.name,
-        }),
-      },
+    await AuditLogger.logWorkflow('workflow_delete', payload.userId, id, request, {
+      after: { name: existingWorkflow.name },
     });
+
+    // 记录删除日志 - 区分是否跨用户
+    if (existingWorkflow.userId && existingWorkflow.userId !== payload.userId) {
+      // 管理员删除他人工作流
+      const targetUserId = existingWorkflow.userId;
+      logger.deleteOther(LOG_MODULES.WORKFLOW, payload, targetUserId!, id, existingWorkflow.user?.email, { name: existingWorkflow.name });
+    } else {
+      // 自己的工作流
+      logger.delete(LOG_MODULES.WORKFLOW, payload, id, { name: existingWorkflow.name });
+    }
 
     return NextResponse.json({
       message: '工作流删除成功',

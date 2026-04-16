@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { buildSearchFilter, combineWhereClauses } from '@/lib/query-optimizer';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { AuditLogger } from '@/lib/audit/logger';
 
 // 格式化工作流数据
 function formatWorkflow(workflow: any) {
@@ -32,23 +33,12 @@ function formatWorkflow(workflow: any) {
 // 管理员：可以看到所有工作流 + 创建者信息
 export async function GET(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     // 获取查询参数
     const { searchParams } = new URL(request.url);
@@ -132,6 +122,9 @@ user: {
     // 格式化返回数据
     const formattedWorkflows = workflows.map(formatWorkflow);
 
+    // 记录列表查询日志
+    logger.list(LOG_MODULES.WORKFLOW, payload, 'workflows', { search, status, forEvaluation, isAdmin }, formattedWorkflows.length);
+
     return NextResponse.json(createPaginatedResponse(formattedWorkflows, total, pageNum, pageLimit));
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.WORKFLOW, `获取工作流列表错误: ${error}`);
@@ -142,23 +135,12 @@ user: {
 // 创建新工作流
 export async function POST(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_CREATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_CREATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     // 解析请求体
     const body = await request.json();
@@ -204,17 +186,8 @@ export async function POST(request: Request) {
     });
 
     // 记录审计日志
-    await prisma.auditLog.create({
-      data: {
-        userId: payload.userId,
-        action: 'workflow_create',
-        resource: workflow.id,
-        details: JSON.stringify({
-          name,
-          description,
-          isPublic,
-        }),
-      },
+    await AuditLogger.logWorkflow('workflow_create', payload.userId, workflow.id, request, {
+      after: { name, description, isPublic },
     });
 
     // 记录创建成功日志
