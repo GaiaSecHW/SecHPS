@@ -299,3 +299,275 @@
 ### Files Modified
 
 - `src/app/api/agent-teams/[id]/execute/route.ts` - Integrated event callbacks, returns streamUrl
+
+## Task 14: Cost Attribution per Agent
+
+### Implementation Patterns
+
+1. **MODEL_PRICING Constant**:
+   - USD per million tokens for each model
+   - Anthropic: Opus ($15/$75), Sonnet ($3/$15), Haiku ($0.8/$4)
+   - OpenAI: GPT-4o ($2.5/$10), GPT-4o-mini ($0.15/$0.6)
+   - GLM: ($0.86/$3.14) - converted from RMB at ~7:1 ratio
+   - Default fallback: Sonnet-like pricing ($3/$15)
+
+2. **Cost Calculation Formula**:
+   ```typescript
+   cost = (inputTokens / 1_000_000) * inputPrice + (outputTokens / 1_000_000) * outputPrice;
+   ```
+
+3. **Model Tracking per Agent**:
+   - Build `modelByMemberId` map during execution setup
+   - `member.overrideModel || member.agent.model || leadAgent.model`
+   - Track `currentModel` variable during execution
+   - Switch to subagent model when Agent tool invoked
+   - Switch back to lead agent model when subagent completes
+
+4. **Cost in onUsage Callback**:
+   - Added `model` field to usage callback
+   - Added `totalCostUsd` calculated from tokens and model
+   - Calculate cost immediately when tokens are tracked
+
+5. **ExecutionStatus with Cost**:
+   - Added `estimatedCostUsd` to ExecutionStatus interface
+   - Added `estimatedCostUsd` to each member execution
+   - `getStatus()` accepts optional `model` parameter for cost calculation
+   - Default model for cost calculation: 'claude-sonnet-4-20250514'
+
+6. **Cost Aggregation**:
+   - Total cost = Lead Agent cost + Sum(Member costs)
+   - Each agent's cost calculated with its own model pricing
+   - Tokens tracked per member execution in database
+
+### Testing Patterns
+
+1. **Test MODEL_PRICING Constants**:
+   ```typescript
+   expect(MODEL_PRICING['claude-sonnet-4-20250514']).toBeDefined();
+   expect(sonnetPricing.output).toBeGreaterThan(sonnetPricing.input);
+   ```
+
+2. **Test calculateCost Function**:
+   ```typescript
+   const cost = calculateCost(1000, 500, 'claude-sonnet-4-20250514');
+   expect(cost).toBeCloseTo(0.0105, 6);
+   ```
+
+3. **Test Cost in onUsage Callback**:
+   - Mock assistant message with usage data
+   - Verify onUsage called with `model` and `totalCostUsd`
+   - Check cost matches expected calculation
+
+4. **Test Subagent Cost Attribution**:
+   - Mock subagent invocation with override model
+   - Verify usage callback has correct model for subagent
+   - Verify cost calculated with subagent's model pricing
+
+5. **Test Cost in ExecutionStatus**:
+   - Mock execution with token counts
+   - Verify `estimatedCostUsd` in status response
+   - Verify member execution costs calculated
+
+6. **Test Cost Aggregation**:
+   - Track all usage calls during execution
+   - Calculate expected total = lead + sum(members)
+   - Verify models match for each agent
+
+### Gotchas
+
+1. **Model Not Stored in Database**: Model info only available during execution, not persisted
+2. **Default Model for getStatus**: Uses sonnet pricing if model not specified
+3. **Override Model Priority**: `member.overrideModel` takes precedence over `member.agent.model`
+4. **Console Warning for Unknown Models**: `getModelPricing()` logs warning for unknown models
+
+### Files Modified
+
+- `src/services/agent-team/execution-service.ts` - Added MODEL_PRICING, calculateCost, cost tracking (870+ lines)
+- `__tests__/services/execution-service.test.ts` - Added 19 cost attribution tests (40 total, all passing)## Task 13: TDD Tests for AgentTeam Execution
+
+### Test Coverage (33 Tests)
+
+1. **Test Case 1: Execution starts with correct SDK config** (5 tests):
+   - SDK query called with correct maxBudgetUsd (5.00)
+   - SDK query called with correct maxTurns (20)
+   - SDK query called with agents config from team members
+   - Lead Agent allowedTools includes Agent tool
+   - Subagent tools do NOT include Agent (SDK limitation)
+
+2. **Test Case 2: Subagent invocation tracked** (4 tests):
+   - Agent tool_use triggers subagent tracking
+   - Member execution status updates to running on Agent tool_use
+   - Member execution status updates to completed on Agent tool_result
+   - onSubagentComplete callback called with result
+
+3. **Test Case 3: Token usage attributed per agent** (3 tests):
+   - Token usage tracked for Lead Agent
+   - Token usage attributed to member when in subagent context
+   - Total execution tokens aggregate Lead + Member tokens
+
+4. **Test Case 4: SSE events emitted correctly** (5 tests):
+   - emitExecutionStarted called when execution starts
+   - emitMessageDelta called for streaming text
+   - emitExecutionCompleted called when execution finishes
+   - emitExecutionCompleted called with failed status on error
+   - agentTeamEventBroadcaster.broadcast called for events
+
+5. **Test Case 5: Budget exhaustion handling** (4 tests):
+   - SDK returns error_max_budget when budget exceeded
+   - Execution status updated to failed on budget exhaustion
+   - Team status updated to idle on budget exhaustion
+   - Safety limits enforced at SDK level
+
+6. **Test Case 6: Circular dependency rejection** (8 tests):
+   - hasCircularDependency detects simple cycle A -> B -> A
+   - hasCircularDependency detects longer cycle A -> B -> C -> A
+   - hasCircularDependency returns false for valid chain A -> B -> C
+   - hasCircularDependency returns false for empty dependencies
+   - hasCircularDependency returns false for single dependency
+   - hasCircularDependency handles self-loop A -> A
+   - hasCircularDependency handles disconnected graphs
+   - API route accepts valid dependencies on team creation
+
+7. **Additional comprehensive tests** (4 tests):
+   - Multiple subagent invocations tracked correctly
+   - Execution cancellation aborts SDK query
+   - Error in SDK query handled gracefully
+
+### Testing Patterns
+
+1. **Avoid Auth Import in Tests**:
+   - Copy circular dependency function directly to test file
+   - Avoid importing route handlers that require JWT_SECRET
+   - Use i.mock('@/lib/auth') if auth is needed
+
+2. **Mock memberExecutions for getStatus**:
+   `	ypescript
+   (prisma.agentTeamExecution.findUnique as any).mockResolvedValue({
+     ...mockExecution,
+     memberExecutions: [], // REQUIRED for getStatus()
+   });
+   `
+
+3. **Use expect.objectContaining for Callbacks**:
+   `	ypescript
+   expect(onUsage).toHaveBeenCalledWith(expect.objectContaining({
+     inputTokens: 500,
+     outputTokens: 200,
+     memberId: undefined,
+   }));
+   `
+
+4. **Test Budget Exhaustion Error Handling**:
+   - Mock SDK to return error_max_budget subtype
+   - Verify onError callback called
+   - Verify execution status updated to 'failed'
+   - Verify team status updated to 'idle'
+
+5. **Test Circular Dependency Detection**:
+   - Use DFS-based algorithm
+   - Test simple cycles, longer cycles, self-loops
+   - Test valid chains (no cycles)
+   - Test disconnected graphs with cycles
+
+### Gotchas
+
+1. **JWT_SECRET Required**: Auth module calls process.exit(1) if JWT_SECRET not set
+2. **memberExecutions Required**: getStatus() fails if memberExecutions undefined
+3. **onUsage Extra Fields**: Callback includes model and totalCostUsd (use objectContaining)
+4. **Console Suppression**: Use vi.spyOn(console, 'log/error').mockImplementation(() => {})
+
+### Files Created
+
+- __tests__/services/agent-team-execution.test.ts - Comprehensive execution tests (33 tests, all passing)
+
+## Task 15: AgentTeamList Page
+
+### Implementation Patterns
+
+1. **Page Structure**:
+   - 'use client' directive for client-side rendering
+   - Suspense wrapper for async components with LoadingSpinner fallback
+   - Main content component separated from Suspense wrapper
+
+2. **Permission Check Pattern**:
+   - Import `hasPermission` from `@/lib/permissions` (client-safe)
+   - Import `PERMISSIONS` from `@/types/permissions`
+   - Parse token payload with `atob(token.split('.')[1])` for permissions
+   - Check `AGENT_TEAM_CREATE` and `AGENT_TEAM_EXECUTE` permissions
+
+3. **API Response Format** (from `/api/agent-teams`):
+   ```typescript
+   {
+     data: [
+       {
+         id: string;
+         userId: string;
+         userName: string | null;
+         name: string;
+         description: string | null;
+         leadAgentId: string;
+         leadAgentName: string | null;
+         taskStrategy: string;
+         maxTeammates: number;
+         status: 'idle' | 'running';
+         members: AgentTeamMember[];
+         _count: { members: number; teamExecutions: number };
+       }
+     ],
+     pagination: { total: number; totalPages: number; page: number; limit: number }
+   }
+   ```
+
+4. **URL State Management**:
+   - Use `useSearchParams` and `usePathname` for URL params
+   - `updateUrlParams()` helper to sync state with URL
+   - Search debounce (300ms) before triggering API call
+   - Reset to page 1 when filters change
+
+5. **Card Layout Pattern**:
+   - Expandable cards with `expandedTeam` state
+   - Click to expand/collapse details
+   - ChevronUp/ChevronDown icons for visual feedback
+   - Details section shows: description, strategy, members, timestamps
+
+6. **Status Display**:
+   - Status badge with color: idle (gray), running (green)
+   - Status icon: Clock for idle, Activity (animated) for running
+   - Status text: '空闲', '运行中'
+
+7. **Action Buttons**:
+   - "Create New Team" → Link to `/dashboard/agent-teams/new`
+   - "Execute" → POST to `/api/agent-teams/[id]/execute`
+   - "Edit/View" → Link to `/dashboard/agent-teams/[id]`
+   - "Delete" → DELETE to `/api/agent-teams/[id]`
+   - "View Execution" → Link to `/dashboard/agent-teams/[id]/execution` (when running)
+
+8. **Stats Cards**:
+   - Total teams, idle count, running count, total executions
+   - Grid layout: 1/2/4 columns responsive
+   - Icon + value pattern with colored background
+
+9. **Pagination Pattern**:
+   - URL params: `page`, `limit`
+   - Page size selector: 10/20/50/100
+   - First/Previous/Next/Last navigation
+   - ChevronLeft/ChevronRight icons
+
+### UI Components Used
+
+- `lucide-react`: Users, Plus, Search, Filter, Play, Edit2, Trash2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Activity, Clock, User, Loader2, Zap
+- `react-hot-toast`: toast.success(), toast.error()
+- `next/navigation`: useRouter, useSearchParams, usePathname
+- `next/link`: Link component for navigation
+
+### Gotchas
+
+1. **Permission Import**: Use `@/lib/permissions` for client components (not `@/lib/auth`)
+2. **Token Parsing**: Use `atob()` for client-side token decode (no signature verification)
+3. **Execute Button**: Only show when `status === 'idle'` and user has `AGENT_TEAM_EXECUTE` permission
+4. **Delete Button**: Only show for admin or team owner (`team.userId === user?.id`)
+5. **Search Debounce**: 300ms delay to avoid excessive API calls
+
+### Files Created
+
+- `src/app/dashboard/agent-teams/page.tsx` - AgentTeam list page (450+ lines)

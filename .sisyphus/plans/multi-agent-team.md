@@ -974,7 +974,7 @@ Wave FINAL (Verification - 4 parallel reviews):
   - Message: `feat(agent-team): implement cost attribution per agent`
   - Files: src/services/agent-team/execution-service.ts
 
-- [ ] 15. **Create AgentTeamList page**
+- [x] 15. **Create AgentTeamList page**
 
   **What to do**:
   - Create `src/app/dashboard/agent-teams/page.tsx`
