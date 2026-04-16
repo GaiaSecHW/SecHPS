@@ -323,6 +323,34 @@ export default function WorkflowsPage() {
     }
   };
 
+  // 切换分享状态（公开/私有）
+  const toggleShare = async (workflow: Workflow) => {
+    try {
+      const token = localStorage.getItem('token');
+      const newIsPublic = !workflow.isPublic;
+      
+      const response = await fetch(`/api/workflows/${workflow.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ isPublic: newIsPublic }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || '切换分享状态失败');
+        return;
+      }
+
+      toast.success(newIsPublic ? '已设置为公开，其他用户可查看' : '已设置为私有');
+      await fetchWorkflows();
+    } catch (err) {
+      toast.error('网络错误，请重试');
+    }
+  };
+
   const getStatusText = (status: WorkflowStatus) => {
     switch (status) {
       case 'draft':
@@ -632,10 +660,15 @@ export default function WorkflowsPage() {
                       <FileText size={16} />
                     </button>
                     <button
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
-                      title="分享"
+                      onClick={() => toggleShare(workflow)}
+                      className={`p-1.5 rounded-md transition-colors ${
+                        workflow.isPublic
+                          ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                          : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
+                      }`}
+                      title={workflow.isPublic ? '点击设为私有' : '点击设为公开分享'}
                     >
-                      <Share2 size={16} />
+                      {workflow.isPublic ? <Globe size={16} /> : <Lock size={16} />}
                     </button>
                     <button
                       onClick={() => deleteWorkflow(workflow.id)}

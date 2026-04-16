@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { AgentExecutor, AgentExecutionContext, AgentExecutionCallbacks } from '@/lib/agent-executor';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/agent/execute - 执行 Skill
 export async function POST(request: Request) {
@@ -147,7 +148,8 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('执行 Skill 错误:', error);
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    logger.errorNoUser(LOG_MODULES.AGENT, errorMessage, { action: 'agent-execute' });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

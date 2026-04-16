@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS, ROLES } from '@/types/permissions';
 import { getOffsetPagination } from '@/lib/pagination';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取所有角色
 export async function GET(request: Request) {
@@ -80,7 +81,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Get roles error:', error);
+    logger.errorNoUser(LOG_MODULES.ROLE, '获取角色列表失败', { details: String(error) });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -139,11 +140,12 @@ export async function POST(request: Request) {
         resource: role.id,
         details: JSON.stringify({ name: role.name, description }),
       },
-    }).catch(err => console.error('记录审计日志失败:', err));
+    }).catch(err => logger.errorWithUser(LOG_MODULES.ROLE, payload, '记录审计日志失败', role.id, { error: String(err) }));
 
+    logger.create(LOG_MODULES.ROLE, payload, role.id, { name: role.name, description });
     return NextResponse.json({ role }, { status: 201 });
   } catch (error) {
-    console.error('Create role error:', error);
+    logger.errorNoUser(LOG_MODULES.ROLE, '创建角色失败', { error: String(error) });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

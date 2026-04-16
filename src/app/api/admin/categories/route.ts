@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const DEFAULT_CATEGORIES = [
   { value: 'code-audit', label: '代码审计' },
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
         where: { key: 'skill_categories' },
       });
     } catch (dbError) {
-      console.warn('数据库连接失败，使用默认分类:', dbError);
+      logger.warn(LOG_MODULES.CONFIG, '数据库连接失败，使用默认分类', { details: String(dbError) });
       // 如果数据库连接失败，返回默认值
       return NextResponse.json({ categories: DEFAULT_CATEGORIES });
     }
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
           },
         });
       } catch (createError) {
-        console.warn('创建配置失败，使用默认分类:', createError);
+        logger.warn(LOG_MODULES.CONFIG, '创建配置失败，使用默认分类', { details: String(createError) });
         return NextResponse.json({ categories: DEFAULT_CATEGORIES });
       }
     }
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
     const categories = JSON.parse(config.value);
     return NextResponse.json({ categories });
   } catch (error) {
-    console.error('获取漏洞分类错误:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取漏洞分类失败', { details: String(error) });
     // 返回默认分类而不是错误
     return NextResponse.json({ categories: DEFAULT_CATEGORIES });
   }
@@ -117,9 +118,10 @@ export async function PUT(request: Request) {
       },
     });
 
+    logger.update(LOG_MODULES.CONFIG, payload, 'skill_categories', { categoriesCount: categories.length });
     return NextResponse.json({ categories: JSON.parse(config.value) });
   } catch (error) {
-    console.error('更新漏洞分类错误:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '更新漏洞分类失败', { details: String(error) });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

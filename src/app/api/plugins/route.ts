@@ -4,6 +4,7 @@ import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import type { InstallPluginRequest } from '@/types/plugin';
 import { getOffsetPagination } from '@/lib/pagination';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * GET /api/plugins
@@ -30,17 +31,18 @@ export async function GET(request: Request) {
       );
     }
 
-    // 检查权限
-    console.log('[Plugins API] User payload:', {
+// 检查权限
+    logger.debug(LOG_MODULES.PLUGIN, '检查插件读取权限', {
       userId: payload.userId,
       roles: payload.roles,
-      permissionsCount: payload.permissions?.length,
-      hasPluginRead: payload.permissions?.includes(PERMISSIONS.PLUGIN_READ),
+      details: { hasPluginRead: payload.permissions?.includes(PERMISSIONS.PLUGIN_READ) },
     });
     
     if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_READ)) {
-      console.log('[Plugins API] Permission denied. Required:', PERMISSIONS.PLUGIN_READ);
-      console.log('[Plugins API] User permissions:', payload.permissions);
+      logger.warn(LOG_MODULES.PLUGIN, '插件读取权限不足', {
+        userId: payload.userId,
+        details: { required: PERMISSIONS.PLUGIN_READ, userPermissions: payload.permissions },
+      });
       return NextResponse.json(
         { error: '没有查看插件的权限' },
         { status: 403 }
@@ -83,7 +85,7 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error('获取插件列表失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '获取插件列表失败', error instanceof Error ? error.message : error);
     return NextResponse.json(
       { error: '获取插件列表失败' },
       { status: 500 }
@@ -141,12 +143,13 @@ export async function POST(request: Request) {
       body.pluginPath
     );
 
+    logger.create(LOG_MODULES.PLUGIN, payload, `plugin:${plugin.id}`, { name: plugin.name });
     return NextResponse.json({
       message: '插件安装成功',
       plugin,
     });
   } catch (error) {
-    console.error('安装插件失败:', error);
+    logger.errorNoUser(LOG_MODULES.PLUGIN, '安装插件失败', error instanceof Error ? error.message : error);
     
     if (error instanceof Error) {
       return NextResponse.json(

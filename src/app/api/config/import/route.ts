@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/config/import — 导入配置，覆盖当前用户的活跃配置
 export async function POST(request: Request) {
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       techStackImported,
     });
   } catch (error) {
-    console.error('Import config error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '导入配置失败', { details: String(error) });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

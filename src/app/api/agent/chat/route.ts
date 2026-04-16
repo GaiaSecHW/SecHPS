@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { createEvaluationCaller } from '@/services/evaluation';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/agent/chat - 与 Agent 对话
 export async function POST(request: Request) {
@@ -122,7 +123,8 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error('Agent 对话错误:', error);
+    const errorMessage = error instanceof Error ? error.message : '未知错误';
+    logger.errorNoUser(LOG_MODULES.AGENT, errorMessage, { action: 'agent-chat' });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

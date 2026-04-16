@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * GET /api/config/default-tool-permissions
@@ -46,7 +47,7 @@ export async function GET(request: Request) {
       try {
         permissions = JSON.parse(globalConfig.defaultToolPermissions);
       } catch {
-        console.error('[DefaultToolPermissions] 解析失败');
+        logger.errorNoUser(LOG_MODULES.CONFIG, '解析默认工具权限失败', { details: 'JSON parse error' });
         permissions = [];
       }
     }
@@ -56,7 +57,7 @@ export async function GET(request: Request) {
       permissions,
     });
   } catch (error) {
-    console.error('[DefaultToolPermissions GET] Error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取默认工具权限失败', { details: String(error) });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -66,6 +67,9 @@ export async function GET(request: Request) {
  * 更新全局默认工具权限配置
  */
 export async function PUT(request: Request) {
+  let payload: any = null;  // 在函数开头声明，以便在 catch 中可用
+  let configId: string | undefined;
+  
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader) {
@@ -73,7 +77,7 @@ export async function PUT(request: Request) {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
+    payload = verifyToken(token);
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
@@ -85,7 +89,8 @@ export async function PUT(request: Request) {
     }
 
     const body = await request.json();
-    const { configId, permissions } = body;
+    configId = body.configId;
+    const permissions = body.permissions;
 
     if (!configId) {
       return NextResponse.json({ error: '缺少配置ID' }, { status: 400 });
@@ -114,7 +119,7 @@ export async function PUT(request: Request) {
       },
     });
 
-    console.log('[DefaultToolPermissions] 已更新:', permissions.length, '条规则');
+    logger.update(LOG_MODULES.CONFIG, payload, configId, { permissionsCount: permissions.length });
 
     return NextResponse.json({
       message: '默认工具权限已更新',
@@ -122,7 +127,7 @@ export async function PUT(request: Request) {
       permissions,
     });
   } catch (error) {
-    console.error('[DefaultToolPermissions PUT] Error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '更新默认工具权限失败', { details: String(error), configId });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
