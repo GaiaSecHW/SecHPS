@@ -76,8 +76,11 @@ export async function GET(request: Request) {
       // 管理员可以看到所有
       // 不添加用户过滤
     } else {
-      // 普通用户管理页面：只看到自己创建的
-      baseWhere.userId = payload.userId;
+      // 普通用户管理页面：可以看到自己的 + 公开共享的
+      baseWhere.OR = [
+        { userId: payload.userId },
+        { isPublic: true },
+      ];
     }
 
     const where = combineWhereClauses(
@@ -104,13 +107,13 @@ export async function GET(request: Request) {
           isPublic: true,
           createdAt: true,
           updatedAt: true,
-          user: isAdmin ? {
-            select: {
-              id: true,
-              name: true,
-              username: true,
-            },
-          } : false,
+user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
           _count: {
             select: {
               nodes: true,
