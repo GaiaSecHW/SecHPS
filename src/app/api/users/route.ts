@@ -90,7 +90,15 @@ export async function GET(request: Request) {
     // 记录访问日志 - 管理员访问用户列表
     logger.access(LOG_MODULES.USER, payload, 'user_list', { total, page: pageNum, limit: pageLimit });
 
-    return NextResponse.json(createPaginatedResponse(formattedUsers, total, pageNum, pageLimit));
+    return NextResponse.json({
+      users: formattedUsers,
+      pagination: {
+        page: pageNum,
+        limit: pageLimit,
+        total,
+        totalPages: Math.ceil(total / pageLimit),
+      },
+    });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.USER, '获取用户列表失败', { details: { error: String(error) } });
     return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
