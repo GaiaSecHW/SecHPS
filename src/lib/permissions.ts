@@ -7,35 +7,50 @@
 /**
  * 检查用户是否拥有指定权限
  */
-export function hasPermission(userPermissions: string[], requiredPermission: string): boolean {
+export function hasPermission(userPermissions: string[] | undefined | null, requiredPermission: string): boolean {
+  if (!userPermissions || !Array.isArray(userPermissions)) {
+    return false;
+  }
   return userPermissions.includes(requiredPermission);
 }
 
 /**
  * 检查用户是否拥有任意一个权限
  */
-export function hasAnyPermission(userPermissions: string[], requiredPermissions: string[]): boolean {
+export function hasAnyPermission(userPermissions: string[] | undefined | null, requiredPermissions: string[]): boolean {
+  if (!userPermissions || !Array.isArray(userPermissions)) {
+    return false;
+  }
   return requiredPermissions.some(perm => userPermissions.includes(perm));
 }
 
 /**
  * 检查用户是否拥有所有权限
  */
-export function hasAllPermissions(userPermissions: string[], requiredPermissions: string[]): boolean {
+export function hasAllPermissions(userPermissions: string[] | undefined | null, requiredPermissions: string[]): boolean {
+  if (!userPermissions || !Array.isArray(userPermissions)) {
+    return false;
+  }
   return requiredPermissions.every(perm => userPermissions.includes(perm));
 }
 
 /**
  * 检查用户是否拥有指定角色
  */
-export function hasRole(userRoles: string[], requiredRole: string): boolean {
+export function hasRole(userRoles: string[] | undefined | null, requiredRole: string): boolean {
+  if (!userRoles || !Array.isArray(userRoles)) {
+    return false;
+  }
   return userRoles.includes(requiredRole);
 }
 
 /**
  * 检查用户是否拥有任意一个角色
  */
-export function hasAnyRole(userRoles: string[], requiredRoles: string[]): boolean {
+export function hasAnyRole(userRoles: string[] | undefined | null, requiredRoles: string[]): boolean {
+  if (!userRoles || !Array.isArray(userRoles)) {
+    return false;
+  }
   return requiredRoles.some(role => userRoles.includes(role));
 }
 

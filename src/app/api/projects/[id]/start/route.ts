@@ -157,8 +157,8 @@ export async function POST(
       // 加载全局 MCP 配置
       const globalMcpServers = await prisma.mcpServerConfig.findMany({
         where: { 
-          userId: null, 
-          projectId: null, 
+          userId: null as any, 
+          projectId: null as any, 
           isEnabled: true 
         },
       });
