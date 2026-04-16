@@ -68,6 +68,12 @@ export const PERMISSIONS = {
   AGENT_EXECUTE: 'agent:execute',
   AGENT_READ: 'agent:read',
 
+  // Agent Definition 权限
+  AGENT_DEFINITION_CREATE: 'agent-definition:create',
+  AGENT_DEFINITION_READ: 'agent-definition:read',
+  AGENT_DEFINITION_UPDATE: 'agent-definition:update',
+  AGENT_DEFINITION_DELETE: 'agent-definition:delete',
+
   // 自主进化权限
   AUTONOMOUS_EVOLUTION_READ: 'autonomous_evolution:read',
   AUTONOMOUS_EVOLUTION_CREATE: 'autonomous_evolution:create',
@@ -127,6 +133,13 @@ export const PERMISSIONS = {
   // Token 统计权限
   TOKEN_READ: 'token:read',
   TOKEN_DETAIL: 'token:detail',
+
+  // Agent 团队权限
+  AGENT_TEAM_CREATE: 'agent-team:create',
+  AGENT_TEAM_READ: 'agent-team:read',
+  AGENT_TEAM_UPDATE: 'agent-team:update',
+  AGENT_TEAM_DELETE: 'agent-team:delete',
+  AGENT_TEAM_EXECUTE: 'agent-team:execute',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -184,6 +197,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.AGENT_CHAT,
     PERMISSIONS.AGENT_EXECUTE,
     PERMISSIONS.AGENT_READ,
+    // Agent Definition 权限
+    PERMISSIONS.AGENT_DEFINITION_CREATE,
+    PERMISSIONS.AGENT_DEFINITION_READ,
+    PERMISSIONS.AGENT_DEFINITION_UPDATE,
+    PERMISSIONS.AGENT_DEFINITION_DELETE,
     // 自主进化权限
     PERMISSIONS.AUTONOMOUS_EVOLUTION_READ,
     PERMISSIONS.AUTONOMOUS_EVOLUTION_CREATE,
@@ -229,6 +247,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // Token 权限
     PERMISSIONS.TOKEN_READ,
     PERMISSIONS.TOKEN_DETAIL,
+    // Agent 团队权限
+    PERMISSIONS.AGENT_TEAM_CREATE,
+    PERMISSIONS.AGENT_TEAM_READ,
+    PERMISSIONS.AGENT_TEAM_UPDATE,
+    PERMISSIONS.AGENT_TEAM_DELETE,
+    PERMISSIONS.AGENT_TEAM_EXECUTE,
   ],
 
   [ROLES.DEVELOPER]: [
@@ -251,6 +275,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // Agent权限
     PERMISSIONS.AGENT_CHAT,
     PERMISSIONS.AGENT_EXECUTE,
+    // Agent Definition 权限
+    PERMISSIONS.AGENT_DEFINITION_CREATE,
+    PERMISSIONS.AGENT_DEFINITION_READ,
+    PERMISSIONS.AGENT_DEFINITION_UPDATE,
     // 代码分析权限
     PERMISSIONS.CODE_ANALYZE,
     PERMISSIONS.CODE_READ,
@@ -270,6 +298,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.PROJECT_CREATE,
     PERMISSIONS.PROJECT_READ,
     PERMISSIONS.PROJECT_UPDATE,
+    // Agent 团队权限
+    PERMISSIONS.AGENT_TEAM_CREATE,
+    PERMISSIONS.AGENT_TEAM_READ,
+    PERMISSIONS.AGENT_TEAM_UPDATE,
+    PERMISSIONS.AGENT_TEAM_EXECUTE,
   ],
 
   [ROLES.USER]: [
@@ -288,6 +321,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // Agent权限
     PERMISSIONS.AGENT_CHAT,
     PERMISSIONS.AGENT_EXECUTE,
+    // Agent Definition 权限
+    PERMISSIONS.AGENT_DEFINITION_CREATE,
+    PERMISSIONS.AGENT_DEFINITION_READ,
     // 技能权限
     PERMISSIONS.SKILL_READ,
     PERMISSIONS.SKILL_EXECUTE,
@@ -303,6 +339,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.MODEL_READ,
     PERMISSIONS.MODEL_UPDATE,
     PERMISSIONS.MODEL_DELETE,
+    // Agent 团队权限
+    PERMISSIONS.AGENT_TEAM_CREATE,
+    PERMISSIONS.AGENT_TEAM_READ,
   ],
 
   [ROLES.VIEWER]: [
@@ -314,9 +353,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.CONFIG_READ,
     // 工作流权限
     PERMISSIONS.WORKFLOW_READ,
+    // Agent Definition 读取权限
+    PERMISSIONS.AGENT_DEFINITION_READ,
     // 技能读取权限
     PERMISSIONS.SKILL_READ,
     // 项目读取权限
     PERMISSIONS.PROJECT_READ,
+    // Agent 团队读取权限
+    PERMISSIONS.AGENT_TEAM_READ,
   ],
 };

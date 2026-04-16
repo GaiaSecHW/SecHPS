@@ -1,6 +1,3 @@
-// Prisma Schema for AI4WEB 测试平台
-// RBAC (Role-Based Access Control) System
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "windows", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
@@ -11,1799 +8,1281 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 用户模型
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  username      String    @unique
-  passwordHash   String
-  name          String?
-  avatar        String?
-  isActive      Boolean   @default(true)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
- 
-  // 关系
-  userRoles      UserRole[]
-  projects       Project[]
-  opencodeConfig OpencodeConfig[]
-  workflows      Workflow[]
-  workflowExecutions WorkflowExecution[]
-  workflowSharesAsSharer WorkflowShare[] @relation("SharedBy")
-  workflowSharesAsRecipient WorkflowShare[] @relation("SharedWith")
-  mcpServers     McpServerConfig[]
-  skills         Skill[]  // 用户创建的 Skills
-  skillPredictions SkillPrediction[] // Skill 预测记录
-  skillPredictionTasks SkillPredictionTask[] // Skill 预测任务
-  modelConfigs   ModelConfig[] // 用户创建的模型配置
-  agentDefinitions AgentDefinition[] // 用户创建的 Agent 定义
-  agentTeams      AgentTeam[] // 用户创建的 Agent 团队
- 
-  @@index([email])
-  @@index([username])
-}
-
-// 角色模型
-model Role {
-  id          String   @id @default(cuid())
-  name        String   @unique // admin, user, viewer, etc.
-  description String?
-  isSystem    Boolean  @default(false) // 系统角色不可删除
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // 关系
-  userRoles  UserRole[]
-  permissions Permission[]
-
-  @@index([name])
-}
-
-// 权限模型
-model Permission {
-  id          String   @id @default(cuid())
-  name        String   @unique // session:create, session:read, user:manage, etc.
-  description String?
-  module      String   // session, user, config, search, file
-  action      String   // create, read, update, delete, share
-  resource    String?  // specific resource identifier
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // 关系
-  roles       Role[]
-
-  @@unique([module, action])  // resource 可为 null，SQLite 允许多个 NULL，故移除
-  @@index([module])
-}
-
-// 用户-角色关联表（多对多）
-model UserRole {
-  id        String   @id @default(cuid())
-  userId    String
-  roleId    String
-  createdAt DateTime  @default(now())
-
-  // 关系
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, roleId])
-  @@index([userId])
-  @@index([roleId])
-}
-
-// AI4WEB 会话配置（每个用户可以配置多个 AI4WEB 服务器）
-model OpencodeConfig {
-  id                String   @id @default(cuid())
-  userId            String
-  name              String
-  baseURL           String   @default("http://localhost:54321")
-  description       String?
-  isActive          Boolean  @default(true)
-  mcpServers        String?  // JSON string for MCP servers configuration
-  keybinds          String?  // JSON string for keybinds configuration
-  modelPreferences  String?  // JSON string for model preferences
-  projectUploadDir  String?  // 项目上传目录路径
-  taskDescription   String?  // 任务描述（Markdown格式），用于项目评估时发送的第一个消息
-  workflowConfig    String?  // JSON string for workflow configuration (startNodeLabel, startNodeDescription, endNodeLabel, endNodeDescription)
-  
-  // 新增字段 - SDK 高级配置
-  customSystemPrompt String?  // 自定义系统提示词
-  claudemdPath       String?  // CLAUDE.md 文件路径
-  resumeSession      Boolean  @default(false)  // 是否启用会话恢复
-  permissionMode     String?  // 权限模式: default | bypassPermissions | plan
-  settingSources     String?  // JSON: 设置源 ['project', 'user', 'local']
-  
-  // 评估配置
-  progressQuestion  String?  // 询问进展消息模板，用于评估运行时发送进展询问
-  skillOutputTemplate String?  // Skill标准输出模板（JSON格式），用于Skill测试用例的期望输出
-  claudemdTemplate  String?  // CLAUDE.md 全局模板，启动评估时写入项目 .claude 目录
-  
-  // 并发控制
-  maxConcurrentEvaluations Int @default(3)  // 最大并发评估数量，超出限制的评估将排队等候
-  
-  // 全局工具权限配置（新建项目时继承）
-  defaultToolPermissions String?  // JSON: [{ toolPattern: "Bash", permission: "ask" }, ...]
-  
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  // 关系
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projects          Project[]
-
-  @@index([userId])
-}
-
-// 项目（一个项目对应多个评估会话）
-model Project {
-  id              String   @id @default(cuid())
-  userId          String
-  configId        String?  // 可选：关联的 AI4WEB 配置
-  name            String   // 项目名称
-  displayName     String?  // 显示名称
-  fullPath        String?  // 完整路径
-  description     String?  // 项目描述
-  projectPath     String?  // 项目目录路径
-  techStack       String?  // JSON: ["Java", "Spring"] - 项目技术栈
-  status          String   @default("idle") // 项目状态：idle, running, completed, failed
-  
-  // 环境配置字段
-  environmentUrl  String?  // 环境 URL 地址
-  adminUsername   String?  // 管理员用户名
-  adminPassword   String?  // 管理员密码
-  normalUsername  String?  // 普通用户名
-  normalPassword  String?  // 普通用户密码
-  
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
- 
-  // 关系
-  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  config          OpencodeConfig?     @relation(fields: [configId], references: [id], onDelete: SetNull)
-  files           ProjectFile[]
-  evaluations     EvaluationSession[]
-  sessionMeta     SessionMeta?
-  
-  // 新增关系
-  structures      ProjectStructure[]
-  codeKnowledge   CodeKnowledge[]
-  dataFlows       DataFlow[]
-  scanTasks       ScanTask[]
-  skillExecutions SkillExecution[]
-  vulnerabilities Vulnerability[]
-  mcpServers      McpServerConfig[]
-  toolPermissions ToolPermission[]
-
-  @@index([userId])
-  @@index([configId])
-  @@index([status])
-  @@index([name])
-}
-
-// 项目文件记录
-model ProjectFile {
-  id          String   @id @default(cuid())
-  projectId   String
-  fileName    String
-  filePath    String
-  fileSize    Float
-  fileType    String   // zip, jar, war, pdf, doc, etc.
-  uploadedAt  DateTime  @default(now())
-
-  // 关系
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId])
-}
-
-// 评估会话（每次启动评估创建一条记录，一个项目可以有多个评估会话）
-model EvaluationSession {
-  id               String   @id @default(cuid())
-  projectId        String   // 关联项目
-  workflowId       String?  // 关联的工作流（Agent编排）
-  modelConfigId    String?  // 关联的模型配置ID
-  opencodeSessionId String? @unique // AI4WEB SDK 返回的会话 ID（唯一）
-  
-    // 多提供者支持
-    provider         String   @default("claude") // claude | cursor | codex | gemini
-    
-    // 会话信息
-    title            String?  // 会话标题
-    summary          String?  // 会话摘要
-    messageCount     Int      @default(0) // 消息数量
-    lastActivity     DateTime? @default(now()) // 最近活动时间?
-    
-    port             Int?     // OpenCode 服务器运行端口?
-    status           String   @default("running") // queued, running, completed, failed, cancelled
-    startedAt        DateTime  @default(now())
-    completedAt      DateTime?
-    errorMessage     String?
-    
-    // 模型信息
-    modelName        String?  // 使用的模型名称
-    providerType     String?  // 模型提供商类型
-    todoList         String?  // JSON: 最新任务列表快照
-
-    // Token 使用统计（汇总）
-    totalInputTokens   Int      @default(0) // 总输入 token 数
-    totalOutputTokens  Int      @default(0) // 总输出 token 数
-    totalTokens        Int      @default(0) // 总 token 数
-    estimatedCost      Float?   // 预估费用（美元）
-
-  // 关系
-  project          Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workflow         Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
-  modelConfig      ModelConfig? @relation(fields: [modelConfigId], references: [id], onDelete: SetNull)
-  messages         SessionMessage[]
-  nodeExecutions   NodeExecution[]
-  vulnerabilities  Vulnerability[]
-  result           EvaluationResult?
-  iterations       EvaluationIteration[]
-  tokenUsages      TokenUsage[]
-  teamExecutions   AgentTeamExecution[]
-
-  @@index([projectId])
-  @@index([workflowId])
-  @@index([modelConfigId])
-  @@index([opencodeSessionId])
-  @@index([status])
-  @@index([provider])
-  @@index([lastActivity])
-}
-
-// 评估结果摘要
-model EvaluationResult {
-  id                String   @id @default(cuid())
-  evaluationId      String   @unique
-  totalVulns        Int      @default(0)
-  criticalCount     Int      @default(0)
-  highCount         Int      @default(0)
-  mediumCount       Int      @default(0)
-  lowCount          Int      @default(0)
-  infoCount         Int      @default(0)
-  skillsUsed        String?  // JSON: ["nmap", "sqlmap", "burp"]
-  rawReport         String?  // 原始报告（完整 JSON）
-  createdAt         DateTime @default(now())
-
-  evaluation        EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
-}
-
-// 会话元数据（统计信息）
-model SessionMeta {
-  id            String   @id @default(cuid())
-  projectId     String   @unique
-  
-  // 总体统计
-  total         Int      @default(0) // 会话总数
-  hasMore       Boolean  @default(false) // 是否还有更多
-  
-  // 按提供者统计
-  claudeCount   Int      @default(0)
-  cursorCount   Int      @default(0)
-  codexCount    Int      @default(0)
-  geminiCount   Int      @default(0)
-  
-  // 状态统计
-  runningCount  Int      @default(0)
-  completedCount Int     @default(0)
-  failedCount   Int      @default(0)
-  
-  updatedAt     DateTime @updatedAt
-  
-  // 关系
-  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  @@index([projectId])
-}
-
-// 会话消息记录（用于本地缓存消息历史）
-model SessionMessage {
-  id               String   @id @default(cuid())
-  evaluationSessionId String  // 关联评估会话
-  role             String   // user | assistant
-  content          String
-  metadata         String?  // JSON string for additional data
-  createdAt        DateTime  @default(now())
-
-  // 关系
-  evaluationSession EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
-
-  @@index([evaluationSessionId])
-}
-
-// 节点执行记录（追踪工作流节点执行状态）
-model NodeExecution {
-  id               String   @id @default(cuid())
-  evaluationSessionId String  // 关联评估会话
-  workflowNodeId   String   // 关联工作流节点ID
-  nodeLabel        String   // 节点名称（冗余存储，方便查询）
-  nodeType         String   // 节点类型：start, task, subtask, end
-  status           String   @default("pending") // pending, running, completed, failed, skipped
-  startedAt        DateTime?
-  completedAt      DateTime?
-  order            Int      @default(0) // 执行顺序
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  // 关系
-  evaluationSession EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
-
-  @@index([evaluationSessionId])
-  @@index([workflowNodeId])
-  @@index([status])
-  @@unique([evaluationSessionId, workflowNodeId]) // 每个会话中每个节点只有一条执行记录
-}
-
-// 审计日志
-model AuditLog {
-  id          String   @id @default(cuid())
-  userId      String?
-  action      String   // login, logout, create_session, delete_session, etc.
-  resource    String?  // affected resource
-  details     String?  // JSON string for additional context
-  ipAddress   String?
-  userAgent   String?
-  createdAt   DateTime  @default(now())
-
-  @@index([userId])
-  @@index([action])
-  @@index([createdAt])
-  @@index([action, createdAt])
-}
-
-// 工作流模板（可视化工作流定义）
-model Workflow {
-  id          String   @id @default(cuid())
-  userId      String
-  name        String
-  description String?
-  thumbnail   String?  // Base64 编码的工作流预览图
-  techStack   String?  // JSON: ["Java", "Spring"] - 适合的技术栈
-  version     Int      @default(1)
-  status      String   @default("draft") // draft, published, archived
-  isActive    Boolean  @default(false) // 是否启用（可用于执行）
-  isPublic    Boolean  @default(false) // 是否公开（公开的编排其他用户可以在评估中使用）
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // 关系
-  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  nodes       WorkflowNode[]
-  edges       WorkflowEdge[]
-  executions  WorkflowExecution[]
-  shares      WorkflowShare[]
-  evaluations EvaluationSession[]
-  skillPredictions SkillPrediction[]
-  skillPredictionTasks SkillPredictionTask[]
-
-  @@index([userId])
-  @@index([status])
-  @@index([isActive])
-  @@index([isPublic])
-  @@index([userId, status])
-  @@index([status, isActive])
-}
-
-// 工作流节点（编辑器中的可视化节点）
-model WorkflowNode {
-  id          String   @id @default(cuid())
-  workflowId  String
-  type        String   // start, end, task, condition, parallel, merge, delay, variable, transform, notification
-  positionX   Float
-  positionY   Float
-  data        String   // JSON: { label, config, inputs, outputs, etc. }
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // 关系
-  workflow    Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  sourceEdges WorkflowEdge[]    @relation("SourceEdges")
-  targetEdges WorkflowEdge[]    @relation("TargetEdges")
-
-  @@index([workflowId])
-  @@index([type])
-}
-
-// 工作流连线（节点之间的连接）
-model WorkflowEdge {
-  id           String   @id @default(cuid())
-  workflowId   String
-  sourceId     String
-  targetId     String
-  sourceHandle String?  // 源节点的连接点（如 'out', 'subtask'）
-  targetHandle String?  // 目标节点的连接点（如 'in'）
-  label        String?
-  data         String?  // JSON: { condition, delay, etc. }
-  createdAt    DateTime  @default(now())
-
-  // 关系
-  workflow    Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  source      WorkflowNode @relation("SourceEdges", fields: [sourceId], references: [id], onDelete: Cascade)
-  target      WorkflowNode @relation("TargetEdges", fields: [targetId], references: [id], onDelete: Cascade)
-
-  @@index([workflowId])
-  @@index([sourceId])
-  @@index([targetId])
-  @@unique([sourceId, targetId, sourceHandle])
-}
-
-// 工作流执行实例（运行时记录）
-model WorkflowExecution {
-  id          String   @id @default(cuid())
-  workflowId  String
-  userId      String
-  status      String   @default("pending") // pending, running, completed, failed, cancelled
-  startedAt   DateTime  @default(now())
-  completedAt DateTime?
-  error       String?
-  result      String?  // JSON: 执行结果数据
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // 关系
-  workflow    Workflow            @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  steps       WorkflowExecutionStep[]
-
-  @@index([workflowId])
-  @@index([userId])
-  @@index([status])
-  @@index([startedAt])
-  @@index([workflowId, status])
-}
-
-// 工作流执行步骤（单个任务的执行记录）
-model WorkflowExecutionStep {
-  id          String   @id @default(cuid())
-  executionId String
-  nodeId      String
-  status      String   @default("pending") // pending, running, completed, failed, skipped
-  startedAt   DateTime?
-  completedAt DateTime?
-  input       String?  // JSON: 步骤输入数据
-  output      String?  // JSON: 步骤输出数据
-  error       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  // 关系
-  execution   WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-
-  @@index([executionId])
-  @@index([nodeId])
-  @@index([status])
-}
-
-// 工作流共享（与其他用户共享工作流）
-model WorkflowShare {
-  id          String   @id @default(cuid())
-  workflowId  String
-  sharedBy    String   // 分享者用户ID
-  sharedWith  String   // 被分享者用户ID
-  permission  String   @default("read") // read, execute, edit
-  expiresAt   DateTime?
-  createdAt   DateTime  @default(now())
-
-  // 关系
-  workflow      Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  sharedByUser  User     @relation("SharedBy", fields: [sharedBy], references: [id], onDelete: Cascade)
-  sharedWithUser User    @relation("SharedWith", fields: [sharedWith], references: [id], onDelete: Cascade)
-
-  @@index([workflowId])
-  @@index([sharedBy])
-  @@index([sharedWith])
-  @@unique([workflowId, sharedWith])
-}
-
-// Claude Code Router - 模型配置
-model ModelConfig {
-  id           String   @id @default(uuid())
-  userId       String?  // 创建者用户ID（null = 系统级模型，由管理员管理）
-  name         String   // 提供商名称（如 "internal-model" 或 "claude"）
-  providerType String   @default("openai") // 代理类型：claude 或 openai
-  apiBaseUrl   String   // API 地址（Claude API 或内部大模型）
-  apiKey       String   // API Key
-  models       String   // 模型名称
-  routeType    String?  // 路由类型：default, think, background, longContext, webSearch（仅 OpenAI 类型需要）
-  isActive     Boolean  @default(true)
-  isDefault    Boolean  @default(false)  // 是否为默认模型
-  isPublic     Boolean  @default(false)  // 是否公开（公开的模型其他用户可以选择使用）
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  // 关系
-  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  evaluations  EvaluationSession[]  // 使用此模型的评估会话
-  agentDefinitions AgentDefinition[] // 使用此模型配置的 Agent 定义
-
-  @@index([userId])
-  @@index([isActive])
-  @@index([isDefault])
-  @@index([isPublic])
-  @@index([providerType])
-  @@index([routeType])
-}
-
-// Agent 定义 - 存储不同能力的 Agent 配置
 model AgentDefinition {
-  id            String   @id @default(cuid())
-  userId        String?  // 创建者用户ID（null = 内置 Agent）
-  name          String   @unique // Agent 名称（唯一标识）
-  displayName   String   // 显示名称
-  description   String?  // 描述
-  category      String   // 分类：reviewer, coder, tester, architect, security
-  
-  // 模型绑定
-  modelConfigId String?  // 可选：关联的模型配置 ID
-  model         String   // 模型名称：opus, sonnet, haiku
-  
-  // Agent 定义
-  systemPrompt   String?  // 系统提示词
-  allowedTools   String?  // JSON 数组：允许的工具 ["Read", "Glob", "Grep"]
-  skills         String?  // JSON 数组：关联的 Skill ID
-  mcpServers     String?  // JSON 数组：MCP 服务器配置
-  
-  // 状态
-  isActive      Boolean  @default(true) // 是否启用
-  isBuiltin     Boolean  @default(false) // 是否内置（不可删除）
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // 关系
-  user          User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  modelConfig   ModelConfig? @relation(fields: [modelConfigId], references: [id], onDelete: SetNull)
-  
-  // 团队关系
-  leadTeams    AgentTeam[]      @relation("LeadAgent")  // 作为 lead 的团队
-  teamMembers  AgentTeamMember[] @relation("TeamMember") // 作为团队成员
+  id              String            @id
+  userId          String?
+  name            String            @unique
+  displayName     String
+  description     String?
+  category        String
+  modelConfigId   String?
+  model           String
+  systemPrompt    String?
+  allowedTools    String?
+  skills          String?
+  mcpServers      String?
+  isActive        Boolean           @default(true)
+  isBuiltin       Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  ModelConfig     ModelConfig?      @relation(fields: [modelConfigId], references: [id])
+  User            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  AgentTeam       AgentTeam[]
+  AgentTeamMember AgentTeamMember[]
 
-  // 索引
-  @@index([name])
-  @@index([category])
   @@index([isActive])
+  @@index([category])
+  @@index([name])
 }
 
-// Agent 团队 - 多 Agent 协作配置
-model AgentTeam {
-  id            String   @id @default(cuid())
-  userId        String
-  name          String
-  description   String?
-  
-  // Lead agent
-  leadAgentId   String
-  
-  // Configuration
-  taskStrategy  String?  @default("parallel")  // parallel, sequential, debate
-  maxTeammates  Int      @default(5)
-  
-  // Status
-  status        String   @default("idle")  // idle, running, completed
-  
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // Relations
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  leadAgent     AgentDefinition @relation("LeadAgent", fields: [leadAgentId], references: [id], onDelete: Cascade)
-  members       AgentTeamMember[]
-  teamExecutions AgentTeamExecution[]
-  
-  // Indexes
-  @@index([userId])
-  @@index([status])
-  @@index([leadAgentId])
-}
-
-// Agent 团队成员
-model AgentTeamMember {
-  id            String   @id @default(cuid())
-  teamId        String
-  agentId       String
-  role          String   // teammate-1, teammate-2, reviewer, tester
-  
-  // Overrides (optional)
-  overrideModel String?
-  overrideTools String?  // JSON array
-  
-  createdAt     DateTime @default(now())
-  
-  // Relations
-  team          AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  agent         AgentDefinition @relation("TeamMember", fields: [agentId], references: [id], onDelete: Cascade)
-  memberExecutions AgentMemberExecution[]
-  
-  // Indexes
-  @@index([teamId])
-  @@index([agentId])
-}
-
-// Agent 团队执行记录（追踪团队执行状态和 Token 使用）
-model AgentTeamExecution {
-  id              String   @id @default(cuid())
-  teamId          String
-  evaluationId    String?
-  
-  // Status
-  status          String   @default("pending")  // pending, running, completed, cancelled
-  startedAt       DateTime?
-  completedAt     DateTime?
-  
-  // Token tracking
-  totalInputTokens  Int     @default(0)
-  totalOutputTokens Int     @default(0)
-  
-  createdAt       DateTime @default(now())
-  
-  // Relations
-  team            AgentTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  evaluation      EvaluationSession? @relation(fields: [evaluationId], references: [id])
-  memberExecutions AgentMemberExecution[]
-  
-  // Indexes
-  @@index([teamId])
-  @@index([evaluationId])
-  @@index([status])
-}
-
-// Agent 成员执行记录（追踪每个成员的执行状态和 Token 使用）
 model AgentMemberExecution {
-  id              String   @id @default(cuid())
-  teamExecutionId String
-  memberId        String
-  
-  // Status
-  status          String   @default("pending")  // pending, running, completed
-  startedAt       DateTime?
-  completedAt     DateTime?
-  
-  // Token tracking per agent
-  inputTokens     Int      @default(0)
-  outputTokens    Int      @default(0)
-  
-  createdAt       DateTime @default(now())
-  
-  // Relations
-  teamExecution   AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
-  member          AgentTeamMember @relation(fields: [memberId], references: [id])
-  
-  // Indexes
-  @@index([teamExecutionId])
+  id                 String             @id
+  teamExecutionId    String
+  memberId           String
+  status             String             @default("pending")
+  startedAt          DateTime?
+  completedAt        DateTime?
+  inputTokens        Int                @default(0)
+  outputTokens       Int                @default(0)
+  createdAt          DateTime           @default(now())
+  AgentTeamMember    AgentTeamMember    @relation(fields: [memberId], references: [id])
+  AgentTeamExecution AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
+
+  @@index([status])
   @@index([memberId])
-  @@index([status])
+  @@index([teamExecutionId])
 }
 
-// ============================================
-// AI 漏洞挖掘平台 - Skills 系统
-// ============================================
+model AgentTeam {
+  id                 String               @id
+  userId             String
+  name               String
+  description        String?
+  leadAgentId        String
+  taskStrategy       String?              @default("parallel")
+  maxTeammates       Int                  @default(5)
+  status             String               @default("idle")
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  AgentDefinition    AgentDefinition      @relation(fields: [leadAgentId], references: [id], onDelete: Cascade)
+  User               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  AgentTeamExecution AgentTeamExecution[]
+  AgentTeamMember    AgentTeamMember[]
 
-// Skill 预测记录（保存 AI 匹配结果）
-model SkillPrediction {
-  id          String   @id @default(cuid())
-  userId      String
-  workflowId  String?  // 关联的工作流
-
-  // 任务信息
-  taskName    String
-  taskDescription String
-
-  // 预测结果
-  matches     String   // JSON: 匹配的 Skills 列表
-  method      String   // llm 或 keyword（使用的匹配方法）
-  workflowTechStack String? // JSON: 工作流的技术栈
-
-  // 统计
-  matchCount  Int      @default(0) // 匹配到的技能数量
-
-  createdAt   DateTime @default(now())
-
-  // 关系
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workflow    Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
-
+  @@index([leadAgentId])
+  @@index([status])
   @@index([userId])
-  @@index([workflowId])
-  @@index([createdAt])
-  @@index([userId, createdAt])
 }
 
-// Skill 预测任务（异步任务队列）
-model SkillPredictionTask {
-  id          String   @id @default(cuid())
-  userId      String
-  workflowId  String?  // 关联的工作流
-  nodeId      String?  // 关联的节点 ID（区分不同 Agent/子Agent）
+model AgentTeamExecution {
+  id                   String                 @id
+  teamId               String
+  evaluationId         String?
+  status               String                 @default("pending")
+  startedAt            DateTime?
+  completedAt          DateTime?
+  totalInputTokens     Int                    @default(0)
+  totalOutputTokens    Int                    @default(0)
+  createdAt            DateTime               @default(now())
+  AgentMemberExecution AgentMemberExecution[]
+  EvaluationSession    EvaluationSession?     @relation(fields: [evaluationId], references: [id])
+  AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  // 任务信息
-  taskName    String
-  taskDescription String
-  topK        Int      @default(5)
-
-  // 任务状态
-  status      String   @default("pending") // pending, running, completed, failed, cancelled
-  progress    Int      @default(0) // 0-100
-  errorMessage String?
-
-  // 预测结果（完成后存储）
-  matches     String?  // JSON: 匹配的 Skills 列表
-  method      String?  // llm 或 keyword
-  matchCount  Int?
-
-  // Skills Governance 预警信息
-  governanceWarning String? // JSON: 治理预警信息（重叠分析结果）
-
-  // 时间信息
-  startedAt   DateTime?
-  completedAt DateTime?
-  duration    Int?     // 执行时长（毫秒）
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workflow    Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([workflowId])
-  @@index([nodeId])
   @@index([status])
-  @@index([createdAt])
-  @@index([userId, status])
-  @@index([workflowId, nodeId])
-}
-
-// Skill 定义
-model Skill {
-  id          String   @id @default(cuid())
-  userId      String?  // null = 公共，有值 = 私有
-  name        String   // 作用域 + 名称组合唯一（公共或用户私有的名称唯一）
-  displayName String
-  description String   // 简短描述（用于列表显示）
-  category    String   // code-audit, auth, sensitive, api, config, crypto, web, business, client, cloud
-  techStack   String?  // JSON: ["Java", "Python"] - 适合的技术栈
-  
-  // 严重程度（用于漏洞扫描类 Skills）
-  severity    String?  // critical, high, medium, low, info
-  
-  // 核心：完整的 Markdown 内容
-  content     String   // 完整的 Skill 定义内容（Markdown 格式）
-  
-  // 元数据（可选）
-  cwe         String?  // CWE 编号，如 CWE-89
-
-  // 状态
-  isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(false)  // 是否内置（不可删除）
-  isPublic    Boolean  @default(false)  // 是否公开分享（私有 Skill 可以分享给其他用户使用）
-
-  // 版本管理
-  version     Int      @default(1)
-  parentId    String?  // 父版本 ID（用于版本链）
-  isLatest    Boolean  @default(true)  // 是否为最新版本
-
-  // 统计
-  successRate Float?   // 成功率
-  avgDuration Int?     // 平均执行时间（毫秒）
-  execCount   Int      @default(0)     // 执行次数
-  referenceCount Int   @default(0)     // 引用次数（被扫描任务、工作流引用的次数）
-  vulnerabilityCount Int @default(0)   // 发现漏洞次数（累计发现的漏洞数量）
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  executions  SkillExecution[]
-  evolutions  SkillEvolution[]
-  versions    Skill[]  @relation("SkillVersions")  // 子版本
-  parent      Skill?   @relation("SkillVersions", fields: [parentId], references: [id], onDelete: SetNull)
-  
-  // 治理系统关系
-  observationLogs SkillObservationLog[]
-  observationStats SkillObservationStats?
-  impactAnalyses SkillNewImpactAnalysis[]
-  
-  // 合并记录关系
-  mergeRecordsAsSource SkillMergeRecord[] @relation("SkillMergeSource")
-  mergeRecordsAsTarget SkillMergeRecord[] @relation("SkillMergeTarget")
-
-  @@unique([userId, name])  // 同一用户下名称唯一（公共 Skills 的 userId 为 null）
-  @@index([userId])
-  @@index([name])
-  @@index([isLatest])
-  @@index([version])
-  @@index([category])
-  @@index([isActive])
-  @@index([isPublic])
-}
-
-// Skill 执行记录
-model SkillExecution {
-  id          String   @id @default(cuid())
-  skillId     String
-  projectId   String
-  scanTaskId  String?
-
-  // 输入输出
-  input       String   // JSON: 输入参数
-  output      String?  // JSON: 输出结果
-
-  // 执行状态
-  status      String   @default("pending") // pending, running, completed, failed, cancelled
-  startedAt   DateTime?
-  completedAt DateTime?
-  duration    Int?     // 执行时长（毫秒）
-  error       String?
-
-  // 结果
-  findingsCount   Int @default(0)  // 发现数量
-  confirmedCount  Int @default(0)  // 确认数量
-  falsePositiveCount Int @default(0) // 误报数量
-
-  // Token 使用
-  inputTokens  Int?
-  outputTokens Int?
-
-  createdAt   DateTime @default(now())
-
-  // 关系
-  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  scanTask    ScanTask? @relation(fields: [scanTaskId], references: [id], onDelete: SetNull)
-  vulnerabilities Vulnerability[]
-
-  @@index([skillId])
-  @@index([projectId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([projectId, status])
-  @@index([skillId, status])
-}
-
-// Skill 进化记录
-model SkillEvolution {
-  id          String   @id @default(cuid())
-  skillId     String
-
-  // 版本信息
-  fromVersion Int
-  toVersion   Int
-
-  // 变更内容
-  changeType  String   // prompt-update, parameter-tune, tool-add, tool-remove
-  changeDesc  String   // 变更描述
-  beforeData  String   // JSON: 变更前数据
-  afterData   String   // JSON: 变更后数据
-
-  // 变更原因
-  reason      String   // 手动调整 | 自动优化 | 误报反馈 | 漏报反馈
-
-  // 效果评估
-  beforeRate  Float?   // 变更前成功率
-  afterRate   Float?   // 变更后成功率
-
-  createdAt   DateTime @default(now())
-
-  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-
-  @@index([skillId])
-  @@index([createdAt])
-}
-
-// ============================================
-// Skills 治理系统
-// ============================================
-
-// Skill 观测日志（每次预警触发记录）
-model SkillObservationLog {
-  id          String   @id @default(cuid())
-  skillId     String
-
-  // 触发信息
-  triggerType String   // similarity_warning | overlap_detected | merge_suggested | deprecated_warning
-  triggerContext String? // JSON: 触发上下文（如匹配的任务描述、技术栈等）
-
-  // 观测数据
-  matches     String?  // JSON: 匹配的相似 Skills 列表
-  issues      String?  // JSON: 发现的问题列表
-  severity    String   @default("info") // critical, high, medium, low, info
-
-  // 处理状态
-  status      String   @default("pending") // pending, acknowledged, resolved, dismissed
-  resolvedAt  DateTime?
-  resolvedBy  String?  // 处理人用户 ID
-  resolution  String?  // 处理说明
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-
-  @@index([skillId])
-  @@index([triggerType])
-  @@index([severity])
-  @@index([status])
-  @@index([createdAt])
-  @@index([skillId, createdAt])
-}
-
-// Skill 观测统计（聚合分析）
-model SkillObservationStats {
-  id          String   @id @default(cuid())
-  skillId     String   @unique
-
-  // 统计数据
-  totalObservations Int @default(0) // 总观测次数
-  warningCount      Int @default(0) // 预警次数
-  matchCount        Int @default(0) // 匹配次数
-  overlapCount      Int @default(0) // 重叠检测次数
-
-  // 比率统计
-  matchRate         Float?  // 匹配率（匹配次数/总观测次数）
-  warningRate       Float?  // 预警率（预警次数/总观测次数）
-
-  // 性能统计
-  avgResponseTime   Int?    // 平均响应时间（毫秒）
-  avgMatchScore     Float?  // 平均匹配分数
-
-  // 时间信息
-  firstObservedAt   DateTime? // 首次观测时间
-  lastObservedAt    DateTime? // 最近观测时间
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-
-  @@index([skillId])
-  @@index([warningCount])
-  @@index([matchRate])
-}
-
-// Skill 新增影响分析（新 Skill 创建时的影响评估）
-model SkillNewImpactAnalysis {
-  id          String   @id @default(cuid())
-  skillId     String
-
-  // 影响分析
-  similarSkills String? // JSON: 相似 Skills 列表 [{ id, name, similarityScore }]
-  overlapScore  Float?  // 与现有 Skills 的重叠分数（0-1）
-  affectedWorkflows String? // JSON: 可能受影响的工作流列表
-
-  // 推荐信息
-  recommendation String? // merge | keep_separate | deprecate_old
-  recommendationReason String? // 推荐原因说明
-
-  // 分析状态
-  status      String   @default("pending") // pending, analyzed, actioned, dismissed
-  analyzedAt  DateTime?
-  actionedAt  DateTime?
-
-  // 创建信息
-  createdBy   String?  // 创建者用户 ID（触发分析的用户）
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-
-  @@index([skillId])
-  @@index([overlapScore])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// Skill 合并记录（追溯合并历史）
-model SkillMergeRecord {
-  id          String   @id @default(cuid())
-
-  // 合并信息
-  sourceSkillId String  // 被合并的源 Skill ID
-  targetSkillId String  // 合并到的目标 Skill ID
-  
-  // 关联关系
-  sourceSkill Skill?  @relation("SkillMergeSource", fields: [sourceSkillId], references: [id])
-  targetSkill Skill?  @relation("SkillMergeTarget", fields: [targetSkillId], references: [id])
-
-  // 合并原因
-  mergeReason String   // similarity | duplicate | consolidation | user_request
-  mergeDetails String? // JSON: 合并详情（如合并前的内容差异）
-
-  // 合并状态
-  status      String   @default("pending") // pending, approved, completed, rejected, reverted
-  approvedBy  String?  // 审批人用户 ID
-  approvedAt  DateTime?
-  completedAt DateTime?
-  revertedAt  DateTime?
-
-  // 用户同意（跨用户合并需要）
-  sourceOwnerConsent Boolean @default(false) // 源 Skill 所有者同意
-  targetOwnerConsent Boolean @default(false) // 目标 Skill 所有者同意
-
-  // 执行信息
-  mergedBy    String?  // 执行合并的用户 ID
-  mergedAt    DateTime?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([sourceSkillId])
-  @@index([targetSkillId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([sourceSkillId, targetSkillId])
-}
-
-// Skill 治理配置（阈值设置）
-model SkillGovernanceConfig {
-  id          String   @id @default(cuid())
-
-  // 配置键名
-  configKey   String   @unique // 如 similarity_threshold, overlap_warning_threshold
-
-  // 配置值
-  thresholdValue Float  // 阈值值（0-1 或其他数值）
-  configValue    String? // JSON: 其他配置值（如启用/禁用特定检查）
-
-  // 配置描述
-  description String?  // 配置说明
-
-  // 状态
-  isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(false) // 是否内置配置（不可删除）
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([configKey])
-  @@index([isActive])
-}
-
-// ============================================
-// 漏洞管理
-// ============================================
-
-// 漏洞记录
-model Vulnerability {
-  id          String   @id @default(cuid())
-  projectId   String
-  evaluationId String?  // 关联评估会话（可选）
-  skillExecutionId String?
-
-  // 基本信息
-  title       String
-  description String
-  type        String   // SQL注入, XSS, 等等
-  cwe         String?  // CWE 编号
-  severity    String   // critical, high, medium, low, info
-  skill       String?  // 发现此漏洞的工具/skill名称（纯文本，非外键）
-
-  // 位置信息
-  filePath    String?
-  lineStart   Int?
-  lineEnd     Int?
-  codeSnippet String?  // 漏洞代码片段
-
-  // 详情
-  details     String?  // JSON: 详细信息
-  aiAnalysis  String?  // AI 分析结果
-  fixSuggestion String? // 修复建议
-
-  // 状态管理
-  status      String   @default("new") // new, confirmed, false-positive, fixed, verified, closed
-  confirmedBy String?  // 确认人
-  confirmedAt DateTime?
-  fixedBy     String?  // 修复人
-  fixedAt     DateTime?
-  verifiedBy  String?  // 验证人
-  verifiedAt  DateTime?
-
-  // 备注
-  notes       String?  // 处理备注
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  evaluation  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
-  execution   SkillExecution? @relation(fields: [skillExecutionId], references: [id], onDelete: SetNull)
-
-  @@index([projectId])
   @@index([evaluationId])
-  @@index([status])
-  @@index([severity])
-  @@index([type])
-  @@index([createdAt])
-  @@index([projectId, status])
-  @@index([severity, status])
+  @@index([teamId])
 }
 
-// 漏洞模式库
-model VulnerabilityPattern {
-  id          String   @id @default(cuid())
+model AgentTeamMember {
+  id                   String                 @id
+  teamId               String
+  agentId              String
+  role                 String
+  overrideModel        String?
+  overrideTools        String?
+  createdAt            DateTime               @default(now())
+  AgentMemberExecution AgentMemberExecution[]
+  AgentDefinition      AgentDefinition        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  // 基本信息
+  @@index([agentId])
+  @@index([teamId])
+}
+
+model AlertInstance {
+  id               String    @id
+  ruleId           String
+  ruleName         String
+  severity         String
+  status           String    @default("active")
+  message          String
+  value            Float
+  threshold        Float
+  triggeredAt      DateTime  @default(now())
+  resolvedAt       DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedBy   String?
+  details          String?
+  notifiedChannels String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime
+  AlertRule        AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([triggeredAt])
+  @@index([severity])
+  @@index([status])
+  @@index([ruleId])
+}
+
+model AlertRule {
+  id                   String          @id
+  name                 String          @unique
+  description          String?
+  metricType           String
+  condition            String
+  severity             String          @default("medium")
+  enabled              Boolean         @default(true)
+  cooldownPeriod       Int             @default(300)
+  notificationChannels String
+  tags                 String?
+  lastTriggeredAt      DateTime?
+  triggerCount         Int             @default(0)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime
+  AlertInstance        AlertInstance[]
+
+  @@index([severity])
+  @@index([enabled])
+  @@index([metricType])
+}
+
+model AuditLog {
+  id        String   @id
+  userId    String?
+  action    String
+  resource  String?
+  details   String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([createdAt])
+  @@index([action])
+  @@index([userId])
+}
+
+model AutonomousEvolutionExperience {
+  id              String    @id
+  title           String
+  errorCategory   String
+  errorPatterns   String
+  sourceModel     String
+  sourceSessionId String
+  sourceProjectId String?
+  attemptSequence String
+  directSolution  String
+  lesson          String
+  isInjected      Boolean   @default(false)
+  injectedAt      DateTime?
+  hitCount        Int       @default(1)
+  savedAttempts   Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime
+
+  @@index([hitCount])
+  @@index([sourceModel])
+  @@index([isInjected])
+  @@index([errorCategory])
+}
+
+model AutonomousEvolutionRunLog {
+  id           String    @id
+  mode         String
+  trigger      String    @default("manual")
+  scanned      Int       @default(0)
+  skipped      Int       @default(0)
+  newFiles     Int       @default(0)
+  sequences    Int       @default(0)
+  created      Int       @default(0)
+  merged       Int       @default(0)
+  status       String    @default("running")
+  errorMessage String?
+  startedAt    DateTime  @default(now())
+  finishedAt   DateTime?
+
+  @@index([trigger])
+  @@index([startedAt])
+}
+
+model CodeKnowledge {
+  id         String   @id
+  projectId  String
+  entityType String
+  name       String
+  filePath   String
+  lineStart  Int
+  lineEnd    Int?
+  parentId   String?
+  calls      String?
+  calledBy   String?
+  signature  String?
+  docstring  String?
+  code       String?
+  summary    String?
+  riskScore  Float?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([name])
+  @@index([entityType])
+  @@index([projectId])
+}
+
+model DataFlow {
+  id          String   @id
+  projectId   String
+  sourceId    String
+  sinkId      String
+  sourceName  String
+  sinkName    String
+  path        String
+  isUserInput Boolean  @default(false)
+  isSensitive Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([sinkId])
+  @@index([sourceId])
+  @@index([projectId])
+}
+
+model EvaluationIteration {
+  id                   String            @id
+  evaluationSessionId  String
+  iterationNumber      Int
+  status               String            @default("pending")
+  startedAt            DateTime?
+  completedAt          DateTime?
+  duration             Int?
+  responseText         String?
+  inputTokens          Int?
+  outputTokens         Int?
+  toolCallCount        Int               @default(0)
+  verificationComplete Boolean?
+  verificationReason   String?
+  errorMessage         String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime
+  EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([evaluationSessionId, iterationNumber])
+  @@index([iterationNumber])
+  @@index([status])
+  @@index([evaluationSessionId])
+}
+
+model EvaluationResult {
+  id                String            @id
+  evaluationId      String            @unique
+  totalVulns        Int               @default(0)
+  criticalCount     Int               @default(0)
+  highCount         Int               @default(0)
+  mediumCount       Int               @default(0)
+  lowCount          Int               @default(0)
+  infoCount         Int               @default(0)
+  skillsUsed        String?
+  rawReport         String?
+  createdAt         DateTime          @default(now())
+  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+}
+
+model EvaluationSession {
+  id                  String                @id
+  projectId           String
+  workflowId          String?
+  modelConfigId       String?
+  opencodeSessionId   String?               @unique
+  provider            String                @default("claude")
+  title               String?
+  summary             String?
+  messageCount        Int                   @default(0)
+  lastActivity        DateTime?             @default(now())
+  port                Int?
+  status              String                @default("running")
+  startedAt           DateTime              @default(now())
+  completedAt         DateTime?
+  errorMessage        String?
+  modelName           String?
+  providerType        String?
+  todoList            String?
+  totalInputTokens    Int                   @default(0)
+  totalOutputTokens   Int                   @default(0)
+  totalTokens         Int                   @default(0)
+  estimatedCost       Float?
+  AgentTeamExecution  AgentTeamExecution[]
+  EvaluationIteration EvaluationIteration[]
+  EvaluationResult    EvaluationResult?
+  ModelConfig         ModelConfig?          @relation(fields: [modelConfigId], references: [id])
+  Workflow            Workflow?             @relation(fields: [workflowId], references: [id])
+  Project             Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  NodeExecution       NodeExecution[]
+  SessionMessage      SessionMessage[]
+  TokenUsage          TokenUsage[]
+  Vulnerability       Vulnerability[]
+
+  @@index([lastActivity])
+  @@index([provider])
+  @@index([status])
+  @@index([opencodeSessionId])
+  @@index([modelConfigId])
+  @@index([workflowId])
+  @@index([projectId])
+}
+
+model ExpectedOutputTemplate {
+  id          String   @id
   name        String   @unique
   displayName String
   description String
   category    String
-
-  // CWE/CVE 映射
-  cwe         String?
-  cve         String?
-
-  // 检测规则
-  patterns    String   // JSON: 检测模式列表
-  languages   String   // JSON: 适用语言
-
-  // 示例
-  exampleVulnerable String? // 漏洞示例代码
-  exampleFixed      String? // 修复示例代码
-
-  // 修复建议
-  fixGuidance String?  // 修复指导
-
-  // 状态
+  template    String
+  example     String?
   isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(true)
-
+  isBuiltin   Boolean  @default(false)
+  sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
 
-  @@index([category])
   @@index([isActive])
-}
-
-// ============================================
-// 自动化扫描
-// ============================================
-
-// 扫描任务
-model ScanTask {
-  id          String   @id @default(cuid())
-  projectId   String
-  userId      String
-
-  // 任务配置
-  name        String
-  description String?
-  skillIds    String   // JSON: 选中的 Skill ID 列表
-
-  // 调度配置
-  schedule    String?  // cron 表达式，null 表示手动触发
-  nextRunAt   DateTime?
-
-  // 执行状态
-  status      String   @default("pending") // pending, running, completed, failed, cancelled
-  startedAt   DateTime?
-  completedAt DateTime?
-  progress    Int      @default(0) // 0-100
-  currentSkill String? // 当前执行的 Skill
-
-  // 统计
-  totalSkills    Int   @default(0)
-  completedSkills Int  @default(0)
-  findingsCount   Int  @default(0)
-
-  // 错误信息
-  error       String?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  executions  SkillExecution[]
-  reports     ScanReport[]
-
-  @@index([projectId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([userId, status])
-}
-
-// 扫描报告
-model ScanReport {
-  id          String   @id @default(cuid())
-  scanTaskId  String
-  projectId   String
-
-  // 报告内容
-  summary     String   // JSON: 摘要统计
-  details     String   // JSON: 详细结果
-
-  // 导出格式
-  format      String   @default("json") // json, pdf, html, sarif
-
-  createdAt   DateTime @default(now())
-
-  scanTask    ScanTask @relation(fields: [scanTaskId], references: [id], onDelete: Cascade)
-
-  @@index([scanTaskId])
-  @@index([projectId])
-}
-
-// ============================================
-// 代码理解
-// ============================================
-
-// 项目结构
-model ProjectStructure {
-  id          String   @id @default(cuid())
-  projectId   String   @unique
-
-  // 结构数据
-  structure   String   // JSON: 目录树结构
-  fileCount   Int      @default(0)
-  codeCount   Int      @default(0) // 代码文件数
-  languageStats String // JSON: 语言统计
-
-  // 分析状态
-  status      String   @default("pending") // pending, analyzing, completed, failed
-  analyzedAt  DateTime?
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId])
-}
-
-// 代码知识
-model CodeKnowledge {
-  id          String   @id @default(cuid())
-  projectId   String
-
-  // 实体信息
-  entityType  String   // function, class, interface, variable, import, call
-  name        String
-  filePath    String
-  lineStart   Int
-  lineEnd     Int?
-
-  // 关系
-  parentId    String?  // 父实体ID（如类包含方法）
-  calls       String?  // JSON: 调用的函数列表
-  calledBy    String?  // JSON: 被调用的函数列表
-
-  // 详情
-  signature   String?  // 函数签名
-  docstring   String?  // 文档字符串
-  code        String?  // 代码片段
-
-  // AI 分析
-  summary     String?  // AI 生成的摘要
-  riskScore   Float?   // 风险评分
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId])
-  @@index([entityType])
-  @@index([name])
-}
-
-// 数据流记录
-model DataFlow {
-  id          String   @id @default(cuid())
-  projectId   String
-
-  // 数据流信息
-  sourceId    String   // 数据源实体ID
-  sinkId      String   // 数据汇实体ID
-  sourceName  String
-  sinkName    String
-
-  // 路径
-  path        String   // JSON: 数据流路径
-
-  // 安全相关
-  isUserInput Boolean  @default(false)
-  isSensitive Boolean  @default(false)
-
-  createdAt   DateTime @default(now())
-
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([projectId])
-  @@index([sourceId])
-  @@index([sinkId])
-}
-
-// ============================================
-// 工具定义
-// ============================================
-
-// 工具定义
-model Tool {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  displayName String
-  description String
-  category    String   // file, code, security, network, system
-
-  // 工具参数定义
-  parameters  String   // JSON: 参数 schema
-
-  // 执行配置
-  executor    String   // builtin, mcp, http, script
-  executorConfig String? // JSON: 执行器配置
-
-  // 安全配置
-  requiresPermission Boolean @default(false)
-  allowedInSandbox   Boolean @default(true)
-  timeout            Int     @default(600000) // 超时时间（毫秒），默认10分钟
-
-  // 状态
-  isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(true)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
   @@index([category])
-  @@index([isActive])
-}
-
-// ============================================
-// 监控告警系统
-// ============================================
-
-// 告警规则
-model AlertRule {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-
-  // 指标配置
-  metricType  String   // api_response_time, error_rate, etc.
-  condition   String   // JSON: { type: 'threshold', operator: 'gt', value: 100 }
-
-  // 告警配置
-  severity    String   @default("medium") // critical, high, medium, low, info
-  enabled     Boolean  @default(true)
-  cooldownPeriod Int   @default(300) // 冷却期（秒）
-
-  // 通知配置
-  notificationChannels String // JSON: ["email", "webhook"]
-
-  // 标签过滤
-  tags        String?  // JSON: { path: "/api/workflows" }
-
-  // 状态
-  lastTriggeredAt DateTime?
-  triggerCount Int     @default(0)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  alerts      AlertInstance[]
-
-  @@index([metricType])
-  @@index([enabled])
-  @@index([severity])
-}
-
-// 告警实例
-model AlertInstance {
-  id          String   @id @default(cuid())
-  ruleId      String
-
-  // 告警信息
-  ruleName    String
-  severity    String   // critical, high, medium, low, info
-  status      String   @default("active") // active, resolved, acknowledged, silenced
-  message     String
-
-  // 触发详情
-  value       Float
-  threshold   Float
-  triggeredAt DateTime @default(now())
-
-  // 处理信息
-  resolvedAt  DateTime?
-  acknowledgedAt DateTime?
-  acknowledgedBy String?
-  details     String?  // JSON: 额外详情
-
-  // 通知状态
-  notifiedChannels String? // JSON: 已通知的渠道
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // 关系
-  rule        AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-
-  @@index([ruleId])
-  @@index([status])
-  @@index([severity])
-  @@index([triggeredAt])
-}
-
-// 通知渠道配置
-model NotificationChannel {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  type        String   // email, webhook, slack, dingtalk, wechat
-  config      String   // JSON: 渠道特定配置
-  enabled     Boolean  @default(true)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([type])
-  @@index([enabled])
-}
-
-// ============================================
-// MCP 服务器配置
-// ============================================
-
-// MCP 服务器配置
-model McpServerConfig {
-  id          String   @id @default(cuid())
-  userId      String   // 创建者 ID（必填）
-  projectId   String?  // 关联项目 ID（可选，项目级 MCP）
-  
-  // MCP 服务器信息
-  name        String   // 服务器名称
-  type        String   // local | remote
-  command     String?  // 本地命令
-  args        String?  // JSON: 参数数组
-  url         String?  // 远程 URL
-  env         String?  // JSON: 环境变量
-  
-  // 配置
-  isEnabled   Boolean  @default(true)
-  autoStart   Boolean  @default(false)
-  isShared    Boolean  @default(false)  // 是否共享给所有用户使用（仅管理员可设置）
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  project     Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  @@index([userId])
-  @@index([projectId])
   @@index([name])
-  @@index([isShared])
 }
 
-// 工具权限规则
-model ToolPermission {
-  id          String   @id @default(cuid())
-  projectId   String
-  
-  // 权限规则
-  toolPattern String   // 工具名称或模式（如 Bash(npm:*)）
-  permission  String   // allow | deny | ask
-  
-  // 元数据
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  @@unique([projectId, toolPattern])
-  @@index([projectId])
+model ExperienceUsageLog {
+  id           String   @id
+  experienceId String
+  evaluationId String
+  projectId    String?
+  source       String   @default("pre_injected")
+  usedAt       DateTime @default(now())
+
+  @@index([source])
+  @@index([usedAt])
+  @@index([evaluationId])
+  @@index([experienceId])
 }
 
-// ============================================
-// Ralph Loop Agent - 迭代记录
-// ============================================
-
-// 评估迭代记录（每次 Ralph Loop 迭代的详细信息）
-model EvaluationIteration {
-  id                   String   @id @default(cuid())
-  evaluationSessionId  String   // 关联评估会话
-
-  // 迭代信息
-  iterationNumber      Int      // 迭代序号（1-indexed）
-  status               String   @default("pending") // pending, running, completed, failed
-
-  // 时间信息
-  startedAt            DateTime?
-  completedAt          DateTime?
-  duration             Int?     // 执行时长（毫秒）
-
-  // 迭代结果
-  responseText         String?  // AI 响应文本
-  inputTokens          Int?     // 输入 token 数
-  outputTokens         Int?     // 输出 token 数
-  toolCallCount        Int      @default(0) // 工具调用次数
-
-  // 验证结果
-  verificationComplete Boolean? // 验证是否通过
-  verificationReason   String?  // 验证原因或反馈
-
-  // 错误信息
-  errorMessage         String?
-
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  // 关系
-  evaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
-
-  @@index([evaluationSessionId])
-  @@index([status])
-  @@index([iterationNumber])
-  @@unique([evaluationSessionId, iterationNumber])
-}
-
-// 系统指标存储（用于历史查询）
-model SystemMetric {
-  id          String   @id @default(cuid())
-  name        String
-  type        String   // api_response_time, db_query_time, etc.
-  value       Float
-  tags        String?  // JSON: { path: "/api/workflows", method: "GET" }
-  recordedAt  DateTime @default(now())
-
-  @@index([type])
-  @@index([name])
-  @@index([recordedAt])
-}
-
-// ============================================
-// 插件系统
-// ============================================
-
-// 插件模型
-model Plugin {
-  id          String   @id @default(cuid())
-  name        String   @unique // 插件唯一标识符
-  displayName String   // 显示名称
-  description String   // 插件描述
-  version     String   // 版本号
-  author      String   // 作者
-  type        String   // ui-tab, backend-service, integration, tool
-  status      String   @default("inactive") // active, inactive, error
-  
-  // 配置
-  config      String?  // JSON: 插件配置
-  
-  // 插件文件路径
-  pluginPath  String?  // 插件目录路径
-  
-  // 状态
-  isEnabled   Boolean  @default(false)
-  isBuiltin   Boolean  @default(false) // 是否内置插件
-  
-  // 元数据
-  icon        String?  // 图标
-  homepage    String?  // 主页
-  repository  String?  // 代码仓库
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([name])
-  @@index([type])
-  @@index([status])
-  @@index([isEnabled])
-}
-
-// ============================================
-// 期望输出模板（系统配置）
-// ============================================
-
-// 期望输出模板 - 用于 Skill 测试用例的标准化输出格式
-model ExpectedOutputTemplate {
-  id          String   @id @default(cuid())
-  name        String   @unique // 模板名称，如 "security-audit-report"
-  displayName String   // 显示名称，如 "安全审计报告"
-  description String   // 模板描述
-  category    String   // 分类，如 "security", "code-review", "performance"
-  
-  // 模板内容
-  template    String   // JSON 格式的输出模板结构
-  example     String?  // 示例输出（Markdown 格式）
-  
-  // 状态
-  isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(false) // 是否内置（不可删除）
-  sortOrder   Int      @default(0) // 排序顺序
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([name])
-  @@index([category])
-  @@index([isActive])
-}
-
-// ============================================
-// 技术栈配置（系统配置）
-// ============================================
-
-// 技术栈选项 - 用于 Skill 和 Workflow 的技术栈选择
-model TechStackOption {
-  id          String   @id @default(cuid())
-  name        String   @unique // 技术栈名称，如 "Java", "Python", "Spring"
-  category    String   // 分类：language, framework, database, middleware, cloud
-  description String?  // 描述
-  
-  // 状态
-  isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(false) // 是否内置（不可删除）
-  sortOrder   Int      @default(0) // 排序顺序
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([name])
-  @@index([category])
-  @@index([isActive])
-}
-
-// ============================================
-// 执行自主进化
-// ============================================
-
-// 自主进化经验库
-model AutonomousEvolutionExperience {
-  id              String   @id @default(cuid())
-
-  // 基本信息
-  title           String                    // 经验标题（大模型生成）
-  errorCategory   String                    // 错误分类：tool_failure/path_error/permission/mcp_timeout/other
-  errorPatterns   String                    // 触发特征（JSON数组，多个关键词）
-
-  // 来源信息
-  sourceModel     String                    // 产生该经验的评估模型
-  sourceSessionId String                    // 来源评估会话 ID（可跳转）
-  sourceProjectId String?                   // 来源项目 ID
-
-  // 尝试序列（原始数据，折叠展示）
-  attemptSequence String                    // JSON：完整的失败→成功序列
-
-  // 核心内容（大模型生成，可编辑）
-  directSolution  String                    // 直达方案：遇到此错误直接怎么做
-  lesson          String                    // 教训：为什么这样做有效
-
-  // 注入控制
-  isInjected      Boolean  @default(false)  // 是否注入到 System Prompt
-  injectedAt      DateTime?                 // 注入时间
-
-  // 统计
-  hitCount        Int      @default(1)      // 出现次数（合并时累加）
-  savedAttempts   Float    @default(0)      // 平均节省尝试次数
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([errorCategory])
-  @@index([isInjected])
-  @@index([sourceModel])
-  @@index([hitCount])
-}
-
-// 日志文件处理记录（哈希去重）
 model LogFileRecord {
-  id            String   @id @default(cuid())
-  filePath      String   @unique              // .jsonl 文件路径
-  fileHash      String                        // 路径+最后修改时间的哈希
-  processedAt   DateTime @default(now())      // 最后处理时间
-  sequenceCount Int      @default(0)          // 从该文件提取的序列数
+  id            String   @id
+  filePath      String   @unique
+  fileHash      String
+  processedAt   DateTime @default(now())
+  sequenceCount Int      @default(0)
 
   @@index([filePath])
 }
 
-// 自主进化提取运行历史
-model AutonomousEvolutionRunLog {
-  id            String   @id @default(cuid())
-  mode          String                        // "incremental" | "full" | "auto"
-  trigger       String   @default("manual")  // "manual" | "auto"
-  scanned       Int      @default(0)
-  skipped       Int      @default(0)
-  newFiles      Int      @default(0)
-  sequences     Int      @default(0)
-  created       Int      @default(0)
-  merged        Int      @default(0)
-  status        String   @default("running") // "running" | "done" | "error"
-  errorMessage  String?
-  startedAt     DateTime @default(now())
-  finishedAt    DateTime?
+model McpServerConfig {
+  id        String   @id
+  userId    String
+  projectId String?
+  name      String
+  type      String
+  command   String?
+  args      String?
+  url       String?
+  env       String?
+  isEnabled Boolean  @default(true)
+  autoStart Boolean  @default(false)
+  isShared  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  Project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([startedAt])
-  @@index([trigger])
+  @@index([isShared])
+  @@index([name])
+  @@index([projectId])
+  @@index([userId])
 }
 
-// 经验引用记录（每次评估启动时注入了哪些经验）
-model ExperienceUsageLog {
-  id             String   @id @default(cuid())
-  experienceId   String                        // 关联的经验 ID
-  evaluationId   String                        // 关联的评估会话 ID
-  projectId      String?                       // 关联的项目 ID
-  source         String   @default("pre_injected") // 来源：pre_injected | dynamic_query
-  usedAt         DateTime @default(now())
+model ModelConfig {
+  id                String              @id
+  userId            String?
+  name              String
+  providerType      String              @default("openai")
+  apiBaseUrl        String
+  apiKey            String
+  models            String
+  routeType         String?
+  isActive          Boolean             @default(true)
+  isDefault         Boolean             @default(false)
+  isPublic          Boolean             @default(false)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  AgentDefinition   AgentDefinition[]
+  EvaluationSession EvaluationSession[]
+  User              User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([experienceId])
-  @@index([evaluationId])
-  @@index([usedAt])
-  @@index([source])
+  @@index([routeType])
+  @@index([providerType])
+  @@index([isPublic])
+  @@index([isDefault])
+  @@index([isActive])
+  @@index([userId])
 }
 
-// ============================================
-// 系统配置
-// ============================================
+model NodeExecution {
+  id                  String            @id
+  evaluationSessionId String
+  workflowNodeId      String
+  nodeLabel           String
+  nodeType            String
+  status              String            @default("pending")
+  startedAt           DateTime?
+  completedAt         DateTime?
+  order               Int               @default(0)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime
+  EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
-// 系统配置 - 存储各种系统级配置
-model SystemConfig {
-  id          String   @id @default(cuid())
-  key         String   @unique // 配置键名，如 "skill_categories"
-  value       String   // 配置值（JSON 字符串）
-  description String?  // 配置描述
-  
+  @@unique([evaluationSessionId, workflowNodeId])
+  @@index([status])
+  @@index([workflowNodeId])
+  @@index([evaluationSessionId])
+}
+
+model NotificationChannel {
+  id        String   @id
+  name      String   @unique
+  type      String
+  config    String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+
+  @@index([enabled])
+  @@index([type])
+}
+
+model OpencodeConfig {
+  id                       String    @id
+  userId                   String
+  name                     String
+  baseURL                  String    @default("http://localhost:54321")
+  description              String?
+  isActive                 Boolean   @default(true)
+  mcpServers               String?
+  keybinds                 String?
+  modelPreferences         String?
+  projectUploadDir         String?
+  taskDescription          String?
+  workflowConfig           String?
+  customSystemPrompt       String?
+  claudemdPath             String?
+  resumeSession            Boolean   @default(false)
+  permissionMode           String?
+  settingSources           String?
+  progressQuestion         String?
+  skillOutputTemplate      String?
+  claudemdTemplate         String?
+  maxConcurrentEvaluations Int       @default(3)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime
+  defaultToolPermissions   String?
+  User                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Project                  Project[]
+
+  @@index([userId])
+}
+
+model Permission {
+  id          String   @id
+  name        String   @unique
+  description String?
+  module      String
+  action      String
+  resource    String?
   createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updatedAt   DateTime
+  Role        Role[]
+
+  @@unique([module, action])
+  @@index([module])
+}
+
+model Plugin {
+  id          String   @id
+  name        String   @unique
+  displayName String
+  description String
+  version     String
+  author      String
+  type        String
+  status      String   @default("inactive")
+  config      String?
+  pluginPath  String?
+  isEnabled   Boolean  @default(false)
+  isBuiltin   Boolean  @default(false)
+  icon        String?
+  homepage    String?
+  repository  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([isEnabled])
+  @@index([status])
+  @@index([type])
+  @@index([name])
+}
+
+model Project {
+  id                String              @id
+  userId            String
+  configId          String?
+  name              String
+  displayName       String?
+  fullPath          String?
+  description       String?
+  projectPath       String?
+  status            String              @default("idle")
+  environmentUrl    String?
+  adminUsername     String?
+  adminPassword     String?
+  normalUsername    String?
+  normalPassword    String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  techStack         String?
+  CodeKnowledge     CodeKnowledge[]
+  DataFlow          DataFlow[]
+  EvaluationSession EvaluationSession[]
+  McpServerConfig   McpServerConfig[]
+  OpencodeConfig    OpencodeConfig?     @relation(fields: [configId], references: [id])
+  User              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ProjectFile       ProjectFile[]
+  ProjectStructure  ProjectStructure?
+  ScanTask          ScanTask[]
+  SessionMeta       SessionMeta?
+  SkillExecution    SkillExecution[]
+  ToolPermission    ToolPermission[]
+  Vulnerability     Vulnerability[]
+
+  @@index([name])
+  @@index([status])
+  @@index([configId])
+  @@index([userId])
+}
+
+model ProjectFile {
+  id         String   @id
+  projectId  String
+  fileName   String
+  filePath   String
+  fileSize   Float
+  fileType   String
+  uploadedAt DateTime @default(now())
+  Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model ProjectStructure {
+  id            String    @id
+  projectId     String    @unique
+  structure     String
+  fileCount     Int       @default(0)
+  codeCount     Int       @default(0)
+  languageStats String
+  status        String    @default("pending")
+  analyzedAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime
+  Project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Role {
+  id          String       @id
+  name        String       @unique
+  description String?
+  isSystem    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime
+  UserRole    UserRole[]
+  Permission  Permission[]
+
+  @@index([name])
+}
+
+model ScanReport {
+  id         String   @id
+  scanTaskId String
+  projectId  String
+  summary    String
+  details    String
+  format     String   @default("json")
+  createdAt  DateTime @default(now())
+  ScanTask   ScanTask @relation(fields: [scanTaskId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([scanTaskId])
+}
+
+model ScanTask {
+  id              String           @id
+  projectId       String
+  userId          String
+  name            String
+  description     String?
+  skillIds        String
+  schedule        String?
+  nextRunAt       DateTime?
+  status          String           @default("pending")
+  startedAt       DateTime?
+  completedAt     DateTime?
+  progress        Int              @default(0)
+  currentSkill    String?
+  totalSkills     Int              @default(0)
+  completedSkills Int              @default(0)
+  findingsCount   Int              @default(0)
+  error           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime
+  ScanReport      ScanReport[]
+  Project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  SkillExecution  SkillExecution[]
+
+  @@index([userId, status])
+  @@index([createdAt])
+  @@index([status])
+  @@index([projectId])
+}
+
+model SessionMessage {
+  id                  String            @id
+  evaluationSessionId String
+  role                String
+  content             String
+  metadata            String?
+  createdAt           DateTime          @default(now())
+  EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationSessionId])
+}
+
+model SessionMeta {
+  id             String   @id
+  projectId      String   @unique
+  total          Int      @default(0)
+  hasMore        Boolean  @default(false)
+  claudeCount    Int      @default(0)
+  cursorCount    Int      @default(0)
+  codexCount     Int      @default(0)
+  geminiCount    Int      @default(0)
+  runningCount   Int      @default(0)
+  completedCount Int      @default(0)
+  failedCount    Int      @default(0)
+  updatedAt      DateTime
+  Project        Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Skill {
+  id                                                     String                   @id
+  userId                                                 String?
+  name                                                   String
+  displayName                                            String
+  description                                            String
+  category                                               String
+  techStack                                              String?
+  severity                                               String?
+  content                                                String
+  cwe                                                    String?
+  isActive                                               Boolean                  @default(true)
+  isBuiltin                                              Boolean                  @default(false)
+  isPublic                                               Boolean                  @default(false)
+  version                                                Int                      @default(1)
+  parentId                                               String?
+  isLatest                                               Boolean                  @default(true)
+  successRate                                            Float?
+  avgDuration                                            Int?
+  execCount                                              Int                      @default(0)
+  referenceCount                                         Int                      @default(0)
+  vulnerabilityCount                                     Int                      @default(0)
+  createdAt                                              DateTime                 @default(now())
+  updatedAt                                              DateTime
+  Skill                                                  Skill?                   @relation("SkillToSkill", fields: [parentId], references: [id])
+  other_Skill                                            Skill[]                  @relation("SkillToSkill")
+  User                                                   User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  SkillEvolution                                         SkillEvolution[]
+  SkillExecution                                         SkillExecution[]
+  SkillMergeRecord_SkillMergeRecord_targetSkillIdToSkill SkillMergeRecord[]       @relation("SkillMergeRecord_targetSkillIdToSkill")
+  SkillMergeRecord_SkillMergeRecord_sourceSkillIdToSkill SkillMergeRecord[]       @relation("SkillMergeRecord_sourceSkillIdToSkill")
+  SkillNewImpactAnalysis                                 SkillNewImpactAnalysis[]
+  SkillObservationLog                                    SkillObservationLog[]
+  SkillObservationStats                                  SkillObservationStats?
+
+  @@unique([userId, name])
+  @@index([isPublic])
+  @@index([isActive])
+  @@index([category])
+  @@index([version])
+  @@index([isLatest])
+  @@index([name])
+  @@index([userId])
+}
+
+model SkillEvolution {
+  id          String   @id
+  skillId     String
+  fromVersion Int
+  toVersion   Int
+  changeType  String
+  changeDesc  String
+  beforeData  String
+  afterData   String
+  reason      String
+  beforeRate  Float?
+  afterRate   Float?
+  createdAt   DateTime @default(now())
+  Skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([skillId])
+}
+
+model SkillExecution {
+  id                 String          @id
+  skillId            String
+  projectId          String
+  scanTaskId         String?
+  input              String
+  output             String?
+  status             String          @default("pending")
+  startedAt          DateTime?
+  completedAt        DateTime?
+  duration           Int?
+  error              String?
+  findingsCount      Int             @default(0)
+  confirmedCount     Int             @default(0)
+  falsePositiveCount Int             @default(0)
+  inputTokens        Int?
+  outputTokens       Int?
+  createdAt          DateTime        @default(now())
+  ScanTask           ScanTask?       @relation(fields: [scanTaskId], references: [id])
+  Project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  Skill              Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  Vulnerability      Vulnerability[]
+
+  @@index([skillId, status])
+  @@index([projectId, status])
+  @@index([createdAt])
+  @@index([status])
+  @@index([projectId])
+  @@index([skillId])
+}
+
+model SkillGovernanceConfig {
+  id             String   @id
+  configKey      String   @unique
+  thresholdValue Float
+  configValue    String?
+  description    String?
+  isActive       Boolean  @default(true)
+  isBuiltin      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime
+
+  @@index([isActive])
+  @@index([configKey])
+}
+
+model SkillMergeRecord {
+  id                                          String    @id
+  sourceSkillId                               String
+  targetSkillId                               String
+  mergeReason                                 String
+  mergeDetails                                String?
+  status                                      String    @default("pending")
+  approvedBy                                  String?
+  approvedAt                                  DateTime?
+  completedAt                                 DateTime?
+  revertedAt                                  DateTime?
+  sourceOwnerConsent                          Boolean   @default(false)
+  targetOwnerConsent                          Boolean   @default(false)
+  mergedBy                                    String?
+  mergedAt                                    DateTime?
+  createdAt                                   DateTime  @default(now())
+  updatedAt                                   DateTime
+  Skill_SkillMergeRecord_targetSkillIdToSkill Skill     @relation("SkillMergeRecord_targetSkillIdToSkill", fields: [targetSkillId], references: [id])
+  Skill_SkillMergeRecord_sourceSkillIdToSkill Skill     @relation("SkillMergeRecord_sourceSkillIdToSkill", fields: [sourceSkillId], references: [id])
+
+  @@index([sourceSkillId, targetSkillId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([targetSkillId])
+  @@index([sourceSkillId])
+}
+
+model SkillNewImpactAnalysis {
+  id                   String    @id
+  skillId              String
+  similarSkills        String?
+  overlapScore         Float?
+  affectedWorkflows    String?
+  recommendation       String?
+  recommendationReason String?
+  status               String    @default("pending")
+  analyzedAt           DateTime?
+  actionedAt           DateTime?
+  createdBy            String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime
+  Skill                Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([overlapScore])
+  @@index([skillId])
+}
+
+model SkillObservationLog {
+  id             String    @id
+  skillId        String
+  triggerType    String
+  triggerContext String?
+  matches        String?
+  issues         String?
+  severity       String    @default("info")
+  status         String    @default("pending")
+  resolvedAt     DateTime?
+  resolvedBy     String?
+  resolution     String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime
+  Skill          Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([skillId, createdAt])
+  @@index([createdAt])
+  @@index([status])
+  @@index([severity])
+  @@index([triggerType])
+  @@index([skillId])
+}
+
+model SkillObservationStats {
+  id                String    @id
+  skillId           String    @unique
+  totalObservations Int       @default(0)
+  warningCount      Int       @default(0)
+  matchCount        Int       @default(0)
+  overlapCount      Int       @default(0)
+  matchRate         Float?
+  warningRate       Float?
+  avgResponseTime   Int?
+  avgMatchScore     Float?
+  firstObservedAt   DateTime?
+  lastObservedAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+  Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@index([matchRate])
+  @@index([warningCount])
+  @@index([skillId])
+}
+
+model SkillPrediction {
+  id                String    @id
+  userId            String
+  workflowId        String?
+  taskName          String
+  taskDescription   String
+  matches           String
+  method            String
+  workflowTechStack String?
+  matchCount        Int       @default(0)
+  createdAt         DateTime  @default(now())
+  Workflow          Workflow? @relation(fields: [workflowId], references: [id])
+  User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([workflowId])
+  @@index([userId])
+}
+
+model SkillPredictionTask {
+  id                String    @id
+  userId            String
+  workflowId        String?
+  taskName          String
+  taskDescription   String
+  topK              Int       @default(5)
+  status            String    @default("pending")
+  progress          Int       @default(0)
+  errorMessage      String?
+  matches           String?
+  method            String?
+  matchCount        Int?
+  startedAt         DateTime?
+  completedAt       DateTime?
+  duration          Int?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime
+  nodeId            String?
+  governanceWarning String?
+  Workflow          Workflow? @relation(fields: [workflowId], references: [id])
+  User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId, nodeId])
+  @@index([nodeId])
+  @@index([userId, status])
+  @@index([createdAt])
+  @@index([status])
+  @@index([workflowId])
+  @@index([userId])
+}
+
+model SystemConfig {
+  id          String   @id
+  key         String   @unique
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
 
   @@index([key])
 }
 
-// ============================================
-// Token 使用记录
-// ============================================
+model SystemMetric {
+  id         String   @id
+  name       String
+  type       String
+  value      Float
+  tags       String?
+  recordedAt DateTime @default(now())
 
-// Token 使用记录（每次 API 调用的详细信息）
+  @@index([recordedAt])
+  @@index([name])
+  @@index([type])
+}
+
+model TechStackOption {
+  id          String   @id
+  name        String   @unique
+  category    String
+  description String?
+  isActive    Boolean  @default(true)
+  isBuiltin   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  @@index([isActive])
+  @@index([category])
+  @@index([name])
+}
+
 model TokenUsage {
-  id                String   @id @default(cuid())
-  evaluationId      String?  // 关联评估会话（系统调用时为 null）
-  projectId         String?  // 关联项目（冗余存储，方便查询）
-  
-  // API 调用信息
-  apiProvider       String   // claude | openai | cursor | gemini
-  modelName         String?  // 使用的模型名称
-  callType          String   // chat | completion | embedding | tool_call
-  
-  // Token 使用详情
-  inputTokens       Int      @default(0)  // 输入 token 数（发送给模型）
-  outputTokens      Int      @default(0)  // 输出 token 数（模型返回）
-  totalTokens       Int      @default(0)  // 总 token 数
-  cachedTokens      Int?     // 缓存 token 数（如果有）
-  
-  // 请求/响应内容（可选，用于调试）
-  requestPreview    String?  // 请求内容预览（前500字符）
-  responsePreview   String?  // 响应内容预览（前500字符）
-  
-  // 时间信息
-  requestStartedAt  DateTime @default(now())  // 请求开始时间
-  requestCompletedAt DateTime?                // 请求完成时间
-  durationMs        Int?     // 请求耗时（毫秒）
-  
-  // 费用估算
-  estimatedCost     Float?   // 预估费用（美元）
-  
-  // 状态
-  status            String   @default("success") // success | error | timeout
-  errorMessage      String?  // 错误信息
-  
-  createdAt         DateTime @default(now())
+  id                 String             @id
+  evaluationId       String?
+  projectId          String?
+  apiProvider        String
+  modelName          String?
+  callType           String
+  inputTokens        Int                @default(0)
+  outputTokens       Int                @default(0)
+  totalTokens        Int                @default(0)
+  cachedTokens       Int?
+  requestPreview     String?
+  responsePreview    String?
+  requestStartedAt   DateTime           @default(now())
+  requestCompletedAt DateTime?
+  durationMs         Int?
+  estimatedCost      Float?
+  status             String             @default("success")
+  errorMessage       String?
+  createdAt          DateTime           @default(now())
+  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
-  // 关系
-  evaluation        EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  @@index([projectId, createdAt])
+  @@index([evaluationId, createdAt])
+  @@index([createdAt])
+  @@index([modelName])
+  @@index([apiProvider])
+  @@index([projectId])
+  @@index([evaluationId])
+}
 
+model Tool {
+  id                 String   @id
+  name               String   @unique
+  displayName        String
+  description        String
+  category           String
+  parameters         String
+  executor           String
+  executorConfig     String?
+  requiresPermission Boolean  @default(false)
+  allowedInSandbox   Boolean  @default(true)
+  timeout            Int      @default(600000)
+  isActive           Boolean  @default(true)
+  isBuiltin          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model ToolPermission {
+  id          String   @id
+  projectId   String
+  toolPattern String
+  permission  String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, toolPattern])
+  @@index([projectId])
+}
+
+model User {
+  id                                           String                @id
+  email                                        String                @unique
+  username                                     String                @unique
+  passwordHash                                 String
+  name                                         String?
+  avatar                                       String?
+  isActive                                     Boolean               @default(true)
+  createdAt                                    DateTime              @default(now())
+  updatedAt                                    DateTime
+  AgentDefinition                              AgentDefinition[]
+  AgentTeam                                    AgentTeam[]
+  McpServerConfig                              McpServerConfig[]
+  ModelConfig                                  ModelConfig[]
+  OpencodeConfig                               OpencodeConfig[]
+  Project                                      Project[]
+  Skill                                        Skill[]
+  SkillPrediction                              SkillPrediction[]
+  SkillPredictionTask                          SkillPredictionTask[]
+  UserRole                                     UserRole[]
+  Workflow                                     Workflow[]
+  WorkflowExecution                            WorkflowExecution[]
+  WorkflowShare_WorkflowShare_sharedWithToUser WorkflowShare[]       @relation("WorkflowShare_sharedWithToUser")
+  WorkflowShare_WorkflowShare_sharedByToUser   WorkflowShare[]       @relation("WorkflowShare_sharedByToUser")
+
+  @@index([username])
+  @@index([email])
+}
+
+model UserRole {
+  id        String   @id
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  Role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([roleId])
+  @@index([userId])
+}
+
+model Vulnerability {
+  id                String             @id
+  projectId         String
+  evaluationId      String?
+  skillExecutionId  String?
+  title             String
+  description       String
+  type              String
+  cwe               String?
+  severity          String
+  skill             String?
+  filePath          String?
+  lineStart         Int?
+  lineEnd           Int?
+  codeSnippet       String?
+  details           String?
+  aiAnalysis        String?
+  fixSuggestion     String?
+  status            String             @default("new")
+  confirmedBy       String?
+  confirmedAt       DateTime?
+  fixedBy           String?
+  fixedAt           DateTime?
+  verifiedBy        String?
+  verifiedAt        DateTime?
+  notes             String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime
+  SkillExecution    SkillExecution?    @relation(fields: [skillExecutionId], references: [id])
+  EvaluationSession EvaluationSession? @relation(fields: [evaluationId], references: [id])
+  Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([severity, status])
+  @@index([projectId, status])
+  @@index([createdAt])
+  @@index([type])
+  @@index([severity])
+  @@index([status])
   @@index([evaluationId])
   @@index([projectId])
-  @@index([apiProvider])
-  @@index([modelName])
-  @@index([createdAt])
-  @@index([evaluationId, createdAt])
-  @@index([projectId, createdAt])
+}
+
+model VulnerabilityPattern {
+  id                String   @id
+  name              String   @unique
+  displayName       String
+  description       String
+  category          String
+  cwe               String?
+  cve               String?
+  patterns          String
+  languages         String
+  exampleVulnerable String?
+  exampleFixed      String?
+  fixGuidance       String?
+  isActive          Boolean  @default(true)
+  isBuiltin         Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model Workflow {
+  id                  String                @id
+  userId              String
+  name                String
+  description         String?
+  thumbnail           String?
+  techStack           String?
+  version             Int                   @default(1)
+  status              String                @default("draft")
+  isActive            Boolean               @default(false)
+  isPublic            Boolean               @default(false)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime
+  EvaluationSession   EvaluationSession[]
+  SkillPrediction     SkillPrediction[]
+  SkillPredictionTask SkillPredictionTask[]
+  User                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  WorkflowEdge        WorkflowEdge[]
+  WorkflowExecution   WorkflowExecution[]
+  WorkflowNode        WorkflowNode[]
+  WorkflowShare       WorkflowShare[]
+
+  @@index([status, isActive])
+  @@index([userId, status])
+  @@index([isPublic])
+  @@index([isActive])
+  @@index([status])
+  @@index([userId])
+}
+
+model WorkflowEdge {
+  id                                               String       @id
+  workflowId                                       String
+  sourceId                                         String
+  targetId                                         String
+  sourceHandle                                     String?
+  targetHandle                                     String?
+  label                                            String?
+  data                                             String?
+  createdAt                                        DateTime     @default(now())
+  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
+  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, sourceHandle])
+  @@index([targetId])
+  @@index([sourceId])
+  @@index([workflowId])
+}
+
+model WorkflowExecution {
+  id                    String                  @id
+  workflowId            String
+  userId                String
+  status                String                  @default("pending")
+  startedAt             DateTime                @default(now())
+  completedAt           DateTime?
+  error                 String?
+  result                String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  WorkflowExecutionStep WorkflowExecutionStep[]
+
+  @@index([workflowId, status])
+  @@index([startedAt])
+  @@index([status])
+  @@index([userId])
+  @@index([workflowId])
+}
+
+model WorkflowExecutionStep {
+  id                String            @id
+  executionId       String
+  nodeId            String
+  status            String            @default("pending")
+  startedAt         DateTime?
+  completedAt       DateTime?
+  input             String?
+  output            String?
+  error             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime
+  WorkflowExecution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([nodeId])
+  @@index([executionId])
+}
+
+model WorkflowNode {
+  id                                               String         @id
+  workflowId                                       String
+  type                                             String
+  positionX                                        Float
+  positionY                                        Float
+  data                                             String
+  createdAt                                        DateTime       @default(now())
+  updatedAt                                        DateTime
+  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_targetIdToWorkflowNode")
+  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_sourceIdToWorkflowNode")
+  Workflow                                         Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([workflowId])
+}
+
+model WorkflowShare {
+  id                                  String    @id
+  workflowId                          String
+  sharedBy                            String
+  sharedWith                          String
+  permission                          String    @default("read")
+  expiresAt                           DateTime?
+  createdAt                           DateTime  @default(now())
+  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
+  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
+  Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, sharedWith])
+  @@index([sharedWith])
+  @@index([sharedBy])
+  @@index([workflowId])
 }
