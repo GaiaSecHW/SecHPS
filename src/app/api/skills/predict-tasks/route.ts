@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { analyzeSkillOverlap, getHighRiskGroups } from '@/services/skill-overlap-analysis';
+import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
 
 /**
  * POST /api/skills/predict-tasks
@@ -112,6 +114,8 @@ export async function GET(request: Request) {
     const parsedTasks = tasks.map(task => ({
       ...task,
       matches: task.matches ? JSON.parse(task.matches) : null,
+      // 解析 governanceWarning 字段
+      governanceWarning: task.governanceWarning ? JSON.parse(task.governanceWarning) : null,
     }));
 
     return NextResponse.json({ tasks: parsedTasks });
@@ -282,6 +286,49 @@ async function executePredictionTask(taskId: string) {
       data: { progress: 90 },
     });
 
+    // ============================================
+    // Skills Governance: 生成 governanceWarning
+    // ============================================
+    
+    // 将 matches 转换为 SimilarSkill 格式
+    const similarSkills: SimilarSkill[] = matches.map(match => ({
+      skillId: match.skillId,
+      skillName: match.skillName,
+      displayName: match.displayName,
+      category: match.category,
+      techStack: match.techStack || [],
+      cwe: match.cwe || null,
+      similarity: match.relevance || 0.5,
+      overlapType: determineOverlapType(match, workflowTechStack),
+      overlapScore: match.relevance || 0.5,
+      keywordScore: match.relevance || 0.5,
+      reason: match.reason || '匹配成功',
+    }));
+
+    // 执行重叠分析
+    const overlapAnalysis = analyzeSkillOverlap(similarSkills);
+    
+    // 获取高风险组
+    const highRiskGroups = getHighRiskGroups(overlapAnalysis);
+    
+    // 生成 governanceWarning
+    const governanceWarning = generateGovernanceWarning(overlapAnalysis, highRiskGroups);
+
+    // ============================================
+    // Skills Governance: 触发观测日志记录
+    // ============================================
+    
+    // 如果存在重叠问题且 governanceWarning 存在，记录观测日志
+    if (overlapAnalysis.totalGroups > 0 && governanceWarning) {
+      await triggerObservationLog({
+        taskId,
+        userId: task.userId,
+        matches: similarSkills,
+        overlapAnalysis,
+        governanceWarning,
+      });
+    }
+
     // 保存结果
     const completedAt = new Date();
     const duration = task.startedAt ? completedAt.getTime() - task.startedAt.getTime() : null;
@@ -296,6 +343,8 @@ async function executePredictionTask(taskId: string) {
         matches: JSON.stringify(matches),
         method,
         matchCount: matches.length,
+        // 存储 governanceWarning（扩展字段）
+        governanceWarning: governanceWarning ? JSON.stringify(governanceWarning) : null,
       },
     });
 
@@ -599,4 +648,284 @@ function simpleKeywordMatch(
     relevance: Math.min(1, s.score),
     reason: `关键词匹配得分: ${(s.score * 100).toFixed(0)}%`,
   }));
+}
+
+// ============================================================================
+// Skills Governance Helper Functions
+// ============================================================================
+
+/**
+ * 根据匹配结果确定重叠类型
+ */
+function determineOverlapType(
+  match: { category: string; techStack: string[]; relevance: number },
+  workflowTechStack: string[]
+): OverlapType {
+  // 技术栈匹配优先
+  if (match.techStack && match.techStack.length > 0 && workflowTechStack.length > 0) {
+    const techStackOverlap = match.techStack.some(ts =>
+      workflowTechStack.some(wts =>
+        ts.toLowerCase() === wts.toLowerCase() ||
+        ts.toLowerCase().includes(wts.toLowerCase()) ||
+        wts.toLowerCase().includes(ts.toLowerCase())
+      )
+    );
+    if (techStackOverlap) {
+      return 'techStack-overlap';
+    }
+  }
+  
+  // 高相关性视为语义重叠
+  if (match.relevance >= 0.85) {
+    return 'semantic-overlap';
+  }
+  
+  // 中等相关性视为触发词重叠
+  if (match.relevance >= 0.75) {
+    return 'trigger-overlap';
+  }
+  
+  // 默认为语义重叠
+  return 'semantic-overlap';
+}
+
+/**
+ * 生成治理预警信息
+ */
+function generateGovernanceWarning(
+  overlapAnalysis: ReturnType<typeof analyzeSkillOverlap>,
+  highRiskGroups: ReturnType<typeof getHighRiskGroups>
+): {
+  hasWarning: boolean;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  message: string;
+  details: {
+    totalGroups: number;
+    highRiskCount: number;
+    summary: typeof overlapAnalysis.summary;
+    recommendations: string[];
+  };
+} | null {
+  // 无重叠则无预警
+  if (overlapAnalysis.totalGroups === 0) {
+    return null;
+  }
+  
+  // 确定严重程度
+  let severity: 'low' | 'medium' | 'high' | 'critical' = 'low';
+  
+  if (highRiskGroups.length >= 3) {
+    severity = 'critical';
+  } else if (highRiskGroups.length >= 1) {
+    severity = 'high';
+  } else if (overlapAnalysis.summary.semanticOverlaps >= 2) {
+    severity = 'medium';
+  }
+  
+  // 生成预警消息
+  const message = generateWarningMessage(severity, overlapAnalysis, highRiskGroups);
+  
+  // 生成建议
+  const recommendations = generateRecommendations(overlapAnalysis, highRiskGroups);
+  
+  return {
+    hasWarning: true,
+    severity,
+    message,
+    details: {
+      totalGroups: overlapAnalysis.totalGroups,
+      highRiskCount: highRiskGroups.length,
+      summary: overlapAnalysis.summary,
+      recommendations,
+    },
+  };
+}
+
+/**
+ * 生成预警消息
+ */
+function generateWarningMessage(
+  severity: string,
+  overlapAnalysis: ReturnType<typeof analyzeSkillOverlap>,
+  highRiskGroups: ReturnType<typeof getHighRiskGroups>
+): string {
+  const parts: string[] = [];
+  
+  if (severity === 'critical') {
+    parts.push('⚠️ 发现多个高风险技能重叠组，可能导致严重的重复检测和资源浪费。');
+  } else if (severity === 'high') {
+    parts.push('⚠️ 发现高风险技能重叠组，建议审核并优化技能配置。');
+  } else if (severity === 'medium') {
+    parts.push('⚡ 发现技能重叠情况，可能产生冗余检测。');
+  } else {
+    parts.push('ℹ️ 检测到轻微技能重叠，影响可控。');
+  }
+  
+  parts.push(`共发现 ${overlapAnalysis.totalGroups} 个重叠组，其中 ${highRiskGroups.length} 个为高风险组。`);
+  
+  if (overlapAnalysis.summary.exactMatches > 0) {
+    parts.push(`包含 ${overlapAnalysis.summary.exactMatches} 个完全匹配。`);
+  }
+  
+  if (overlapAnalysis.summary.semanticOverlaps > 0) {
+    parts.push(`包含 ${overlapAnalysis.summary.semanticOverlaps} 个语义重叠。`);
+  }
+  
+  return parts.join(' ');
+}
+
+/**
+ * 生成处理建议
+ */
+function generateRecommendations(
+  overlapAnalysis: ReturnType<typeof analyzeSkillOverlap>,
+  highRiskGroups: ReturnType<typeof getHighRiskGroups>
+): string[] {
+  const recommendations: string[] = [];
+  
+  // 高风险组建议
+  if (highRiskGroups.length > 0) {
+    recommendations.push('建议优先处理高风险重叠组，考虑合并或拆分技能。');
+    
+    for (const group of highRiskGroups.slice(0, 3)) {
+      const skillNames = group.skills.map(s => s.displayName).join(', ');
+      recommendations.push(`高风险组 "${group.groupName}" 包含: ${skillNames}`);
+    }
+  }
+  
+  // 完全匹配建议
+  if (overlapAnalysis.summary.exactMatches > 0) {
+    recommendations.push('发现完全匹配的技能，建议合并以避免重复检测。');
+  }
+  
+  // 语义重叠建议
+  if (overlapAnalysis.summary.semanticOverlaps > 0) {
+    recommendations.push('语义重叠可能导致触发冲突，建议优化技能描述或触发词。');
+  }
+  
+  // 技术栈重叠建议
+  if (overlapAnalysis.summary.techStackOverlaps > 0) {
+    recommendations.push('技术栈重叠可通过明确技术栈范围来区分触发场景。');
+  }
+  
+  // 默认建议
+  if (recommendations.length === 0) {
+    recommendations.push('当前重叠情况可控，无需特别处理。');
+  }
+  
+  return recommendations;
+}
+
+/**
+ * 触发观测日志记录
+ * 
+ * 为 T9 观测日志系统提供触发点
+ */
+async function triggerObservationLog(params: {
+  taskId: string;
+  userId: string;
+  matches: SimilarSkill[];
+  overlapAnalysis: ReturnType<typeof analyzeSkillOverlap>;
+  governanceWarning: NonNullable<ReturnType<typeof generateGovernanceWarning>>;
+}): Promise<void> {
+  try {
+    // 为每个高风险组创建观测日志
+    const highRiskGroups = getHighRiskGroups(params.overlapAnalysis);
+    
+    for (const group of highRiskGroups) {
+      // 为组内每个技能创建观测日志
+      for (const skill of group.skills) {
+        await prisma.skillObservationLog.create({
+          data: {
+            skillId: skill.skillId,
+            triggerType: 'overlap_detected',
+            triggerContext: JSON.stringify({
+              taskId: params.taskId,
+              groupName: group.groupName,
+              overlapType: group.overlapType,
+              overlapScore: group.overlapScore,
+            }),
+            matches: JSON.stringify(group.skills.map(s => ({
+              skillId: s.skillId,
+              skillName: s.skillName,
+              displayName: s.displayName,
+              similarity: s.similarity,
+            }))),
+            issues: JSON.stringify({
+              overlapGroup: group.groupName,
+              sharedKeywords: group.sharedKeywords,
+              severity: params.governanceWarning.severity,
+            }),
+            severity: mapSeverityToLogLevel(params.governanceWarning.severity),
+            status: 'pending',
+          },
+        });
+      }
+    }
+    
+    // 如果存在完全匹配，创建额外预警日志
+    if (params.overlapAnalysis.summary.exactMatches > 0) {
+      const exactGroups = params.overlapAnalysis.groups.filter(g => g.overlapType === 'exact');
+      
+      for (const group of exactGroups) {
+        for (const skill of group.skills) {
+          await prisma.skillObservationLog.create({
+            data: {
+              skillId: skill.skillId,
+              triggerType: 'similarity_warning',
+              triggerContext: JSON.stringify({
+                taskId: params.taskId,
+                groupName: group.groupName,
+                overlapType: 'exact',
+              }),
+              matches: JSON.stringify(group.skills.map(s => ({
+                skillId: s.skillId,
+                skillName: s.skillName,
+                displayName: s.displayName,
+              }))),
+              issues: JSON.stringify({
+                type: 'exact_match',
+                message: '发现完全匹配的技能，建议合并',
+              }),
+              severity: 'high',
+              status: 'pending',
+            },
+          });
+        }
+      }
+    }
+    
+    logger.debug(LOG_MODULES.SKILL, '观测日志记录完成', {
+      details: {
+        taskId: params.taskId,
+        logCount: highRiskGroups.length * (highRiskGroups[0]?.skills.length || 0),
+      },
+    });
+  } catch (error) {
+    // 观测日志记录失败不影响主流程
+    logger.errorNoUser(LOG_MODULES.SKILL, '观测日志记录失败', {
+      details: {
+        taskId: params.taskId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+  }
+}
+
+/**
+ * 将治理严重程度映射到日志级别
+ */
+function mapSeverityToLogLevel(severity: 'low' | 'medium' | 'high' | 'critical'): string {
+  switch (severity) {
+    case 'critical':
+      return 'critical';
+    case 'high':
+      return 'high';
+    case 'medium':
+      return 'medium';
+    case 'low':
+      return 'low';
+    default:
+      return 'info';
+  }
 }

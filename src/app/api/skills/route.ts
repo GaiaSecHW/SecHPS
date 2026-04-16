@@ -10,6 +10,7 @@ import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { skillSelectMinimal } from '@/lib/query-optimizer';
 import { saveSkillToDisk } from '@/services/skill-files';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { findSimilarSkills, SkillForSimilarity, SimilarSkill } from '@/services/skill-similarity';
 
 // 获取 skillOutputTemplate 的辅助函数
 async function getSkillOutputTemplate(): Promise<string | undefined> {
@@ -223,7 +224,65 @@ export async function POST(request: Request) {
       });
     });
 
-    return NextResponse.json({ skill }, { status: 201 });
+    // 相似度检测（非阻塞，仅提示）
+    let governanceWarnings: { similarSkills: SimilarSkill[]; hasSimilar: boolean } = { similarSkills: [], hasSimilar: false };
+    try {
+      // 获取现有技能列表（同一作用域）
+      const existingSkills = await prisma.skill.findMany({
+        where: {
+          userId,  // 同一作用域（公共或私有）
+          isLatest: true,
+          id: { not: skill.id },  // 排除刚创建的技能
+        },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          description: true,
+          category: true,
+          techStack: true,
+          cwe: true,
+          content: true,
+        },
+      });
+
+      // 转换为 SkillForSimilarity 格式
+      const skillsForSimilarity: SkillForSimilarity[] = existingSkills.map(s => ({
+        id: s.id,
+        name: s.name,
+        displayName: s.displayName,
+        description: s.description,
+        category: s.category,
+        techStack: s.techStack ? JSON.parse(s.techStack) : [],
+        cwe: s.cwe,
+        content: s.content,
+      }));
+
+      // 新技能的相似度格式
+      const newSkillForSimilarity: SkillForSimilarity = {
+        id: skill.id,
+        name: skill.name,
+        displayName: skill.displayName,
+        description: skill.description,
+        category: skill.category,
+        techStack: skill.techStack ? JSON.parse(skill.techStack) : [],
+        cwe: skill.cwe,
+        content: skill.content,
+      };
+
+      // 调用相似度检测（使用默认阈值 0.75）
+      const similarSkills = await findSimilarSkills(newSkillForSimilarity, skillsForSimilarity);
+      
+      governanceWarnings = {
+        similarSkills,
+        hasSimilar: similarSkills.length > 0,
+      };
+    } catch (similarityError) {
+      // 相似度检测失败不影响创建，仅记录日志
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, '相似度检测失败', skill.id, { details: { error: similarityError instanceof Error ? similarityError.message : String(similarityError) } });
+    }
+
+    return NextResponse.json({ skill, governanceWarnings }, { status: 201 });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '创建 Skill 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });

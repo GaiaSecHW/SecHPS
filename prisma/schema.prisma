@@ -578,6 +578,9 @@ model SkillPredictionTask {
   method      String?  // llm 或 keyword
   matchCount  Int?
 
+  // Skills Governance 预警信息
+  governanceWarning String? // JSON: 治理预警信息（重叠分析结果）
+
   // 时间信息
   startedAt   DateTime?
   completedAt DateTime?

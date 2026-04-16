@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { analyzeSkillOverlap, type OverlapGroup } from '@/services/skill-overlap-analysis';
+import { predictImpact, type ImpactPrediction } from '@/services/skill-impact-prediction';
+import { generateRecommendations, type Recommendation } from '@/services/skill-recommendations';
+import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
 
 /**
  * Skill 匹配请求
@@ -25,6 +29,119 @@ interface SkillMatch {
   techStack: string[];
   relevance: number;
   reason: string;
+}
+
+/**
+ * Governance Warning 结构
+ */
+interface GovernanceWarning {
+  overlapGroups: OverlapGroup[];
+  impact: ImpactPrediction[];
+  recommendations: Recommendation[];
+  hasOverlap: boolean;
+}
+
+/**
+ * 将 SkillMatch 转换为 SimilarSkill（用于治理分析）
+ */
+function convertToSimilarSkill(matches: SkillMatch[]): SimilarSkill[] {
+  return matches.map((match, index) => {
+    // 推断重叠类型：基于类别和技术栈
+    let overlapType: OverlapType = 'trigger-overlap';
+    let overlapScore = match.relevance * 0.8; // 基于相关性估算重叠得分
+    
+    // 检查是否有相同类别的其他技能
+    const sameCategoryCount = matches.filter(m => m.category === match.category).length;
+    if (sameCategoryCount > 1) {
+      overlapType = 'semantic-overlap';
+      overlapScore = Math.min(0.9, match.relevance * 0.9);
+    }
+    
+    // 检查技术栈重叠
+    const techStackOverlap = matches.filter(m => 
+      m.skillId !== match.skillId && 
+      m.techStack.some(ts => match.techStack.includes(ts))
+    ).length;
+    if (techStackOverlap > 0) {
+      overlapType = 'techStack-overlap';
+      overlapScore = Math.min(0.85, match.relevance * 0.85 + techStackOverlap * 0.05);
+    }
+    
+    return {
+      skillId: match.skillId,
+      skillName: match.skillName,
+      displayName: match.displayName,
+      category: match.category,
+      techStack: match.techStack,
+      cwe: null, // SkillMatch 不包含 CWE，设为 null
+      similarity: match.relevance,
+      overlapType,
+      overlapScore,
+      keywordScore: match.relevance * 0.7, // 估算关键词得分
+      reason: match.reason,
+    };
+  });
+}
+
+/**
+ * 生成治理预警
+ */
+function generateGovernanceWarning(matches: SkillMatch[]): GovernanceWarning | null {
+  // 少于2个匹配时无重复可能，跳过分析
+  if (matches.length < 2) {
+    return null;
+  }
+  
+  try {
+    // 转换为 SimilarSkill 格式
+    const similarSkills = convertToSimilarSkill(matches);
+    
+    // 调用重叠分析
+    const overlapAnalysis = analyzeSkillOverlap(similarSkills);
+    
+    // 如果没有重叠组，返回无重叠
+    if (overlapAnalysis.groups.length === 0) {
+      return {
+        overlapGroups: [],
+        impact: [],
+        recommendations: [],
+        hasOverlap: false,
+      };
+    }
+    
+    // 调用影响预测（批量）
+    const impactPredictions = overlapAnalysis.groups.map(group => predictImpact(group));
+    
+    // 转换 ImpactPrediction 格式以匹配 skill-recommendations.ts 的期望
+    const convertedImpactPredictions: import('@/services/skill-recommendations').ImpactPrediction[] = 
+      impactPredictions.map(p => ({
+        duplicateDetection: p.duplicateDetection,
+        estimatedRedundantReports: p.estimatedRedundantReports,
+        estimatedTokenIncrease: parseInt(p.estimatedTokenIncrease, 10),
+        overallSeverity: p.overallSeverity,
+        details: {
+          affectedWorkflows: 0,
+          userConfusionRisk: p.details.groupSize > 2 ? 0.5 : 0.2,
+          selectionConflictRate: p.details.overlapScore,
+        },
+      }));
+    
+    // 调用建议生成（批量）并扁平化结果
+    const allRecommendations = overlapAnalysis.groups.flatMap((group, idx) => 
+      generateRecommendations(group, convertedImpactPredictions[idx])
+    );
+    
+    return {
+      overlapGroups: overlapAnalysis.groups,
+      impact: impactPredictions,
+      recommendations: allRecommendations,
+      hasOverlap: true,
+    };
+  } catch (error) {
+    // 分析失败不影响主流程，返回 null
+    logger.errorNoUser(LOG_MODULES.SKILL, '治理预警生成失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return null;
+  }
 }
 
 /**
@@ -99,6 +216,7 @@ export async function POST(request: Request) {
       return NextResponse.json({
         matches: [],
         analyzedAt: new Date().toISOString(),
+        governanceWarning: null,
       });
     }
 
@@ -162,10 +280,14 @@ export async function POST(request: Request) {
 logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', undefined, { details: { error: saveError instanceof Error ? saveError.message : String(saveError) } });
       }
       
+      // 生成治理预警
+      const governanceWarning = generateGovernanceWarning(matches);
+      
       return NextResponse.json({
         matches,
         analyzedAt: new Date().toISOString(),
         method: 'keyword',
+        governanceWarning,
       });
     }
 
@@ -191,11 +313,15 @@ logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存预测结果失败', und
       // 不影响主流程，只记录错误
     }
  
+    // 生成治理预警
+    const governanceWarning = generateGovernanceWarning(matches);
+    
     return NextResponse.json({
       matches,
       workflowTechStack,
       analyzedAt: new Date().toISOString(),
       method: 'llm',
+      governanceWarning,
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, 'Skill match 错误', { details: { error: error instanceof Error ? error.message : String(error) } });
