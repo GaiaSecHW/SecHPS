@@ -195,28 +195,52 @@ export async function analyzeSkillDuplication(
     let content = '';
     
     // 调试：打印完整响应结构
-    console.log('[SkillLLMAnalysis] response keys:', Object.keys(response || {}));
-    console.log('[SkillLLMAnalysis] response structure:', JSON.stringify(response, null, 2).substring(0, 1000));
+    try {
+      console.log('[SkillLLMAnalysis] response type:', typeof response);
+      console.log('[SkillLLMAnalysis] response is null:', response === null);
+      console.log('[SkillLLMAnalysis] response is undefined:', response === undefined);
+      if (response) {
+        console.log('[SkillLLMAnalysis] response keys:', Object.keys(response));
+        console.log('[SkillLLMAnalysis] response JSON:', JSON.stringify(response).substring(0, 2000));
+      }
+    } catch (e) {
+      console.error('[SkillLLMAnalysis] 无法序列化 response:', e);
+    }
     
     // Claude 格式: response.content[0].text
-    if (response.content?.[0]?.text) {
+    if (response?.content?.[0]?.text) {
       content = response.content[0].text;
       console.log('[SkillLLMAnalysis] 使用 Claude 格式解析');
     }
     // OpenAI 格式: response.choices[0].message.content
-    else if (response.choices?.[0]?.message?.content) {
+    else if (response?.choices?.[0]?.message?.content) {
       content = response.choices[0].message.content;
       console.log('[SkillLLMAnalysis] 使用 OpenAI 格式解析');
     }
-    // 某些 OpenAI 兼容格式可能直接返回 text
-    else if (response.text) {
+    // 某些模型可能直接在 response.text 返回
+    else if (response?.text) {
       content = response.text;
       console.log('[SkillLLMAnalysis] 使用 response.text 解析');
+    }
+    // 某些模型可能在 response.result 返回
+    else if (response?.result) {
+      content = typeof response.result === 'string' ? response.result : JSON.stringify(response.result);
+      console.log('[SkillLLMAnalysis] 使用 response.result 解析');
+    }
+    // 某些模型可能在 response.output 返回
+    else if (response?.output) {
+      content = typeof response.output === 'string' ? response.output : JSON.stringify(response.output);
+      console.log('[SkillLLMAnalysis] 使用 response.output 解析');
     }
     // 兜底
     else if (typeof response === 'string') {
       content = response;
       console.log('[SkillLLMAnalysis] 使用字符串格式解析');
+    }
+    // 最后尝试：直接 JSON 序列化整个响应
+    else {
+      content = JSON.stringify(response);
+      console.log('[SkillLLMAnalysis] 使用 JSON.stringify 兜底解析');
     }
     
     console.log(`[SkillLLMAnalysis] LLM 原始响应 (前500字符): ${content.substring(0, 500)}`);
@@ -360,9 +384,10 @@ export async function batchAnalyzeSkills(
     concurrency?: number;      // 并发数，默认 3
     skipCache?: boolean;       // 是否跳过缓存
     onProgress?: (current: number, total: number) => void;
+    onResult?: (result: { skillA: string; skillB: string; analysis: LLMAnalysisResult }) => void;
   } = {}
 ): Promise<BatchAnalysisResult> {
-  const { concurrency = 3, onProgress } = options;
+  const { concurrency = 3, onProgress, onResult } = options;
   const results: BatchAnalysisResult['results'] = [];
   
   let duplicates = 0;
@@ -385,7 +410,7 @@ export async function batchAnalyzeSkills(
       })
     );
     
-    // 统计
+    // 统计并回调
     for (const result of batchResults) {
       results.push(result);
       
@@ -395,6 +420,11 @@ export async function batchAnalyzeSkills(
         related++;
       } else {
         distinct++;
+      }
+      
+      // 每个结果完成后的回调
+      if (onResult) {
+        onResult(result);
       }
     }
     

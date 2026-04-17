@@ -14,6 +14,130 @@ import {
 import { computeKeywordSimilarity, computeCategorySimilarity, type SkillForSimilarity } from '@/services/skill-similarity';
 
 /**
+ * DELETE /api/admin/skills-governance/full-analysis
+ * 重置分析进度状态
+ */
+export async function DELETE(request: Request) {
+  try {
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SKILL_UPDATE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
+    }
+
+    const currentProgress = await getProgress();
+    
+    // 检查是否真的可以重置
+    if (currentProgress.status === 'running') {
+      const lastUpdate = currentProgress.updatedAt ? new Date(currentProgress.updatedAt) : null;
+      const now = new Date();
+      const secondsSinceUpdate = lastUpdate ? (now.getTime() - lastUpdate.getTime()) / 1000 : Infinity;
+      
+      // 如果 30 秒内有更新，说明任务还在跑，不能重置
+      if (secondsSinceUpdate < 30) {
+        return NextResponse.json({ 
+          error: '分析任务正在运行中，无法重置',
+          lastUpdate: lastUpdate?.toISOString(),
+          secondsSinceUpdate: Math.round(secondsSinceUpdate),
+        }, { status: 409 });
+      }
+    }
+
+    // 重置进度为 idle
+    await updateProgress({
+      status: 'idle',
+      startedAt: null,
+      completedAt: null,
+      current: 0,
+      total: 0,
+      error: null,
+      results: { duplicates: 0, related: 0, distinct: 0 },
+    });
+
+    logger.info(LOG_MODULES.SKILL, '分析进度已重置');
+
+    return NextResponse.json({
+      data: { success: true, message: '进度已重置' }
+    }, { status: 200 });
+
+  } catch (error) {
+    logger.errorNoUser(LOG_MODULES.SKILL, '重置进度失败', {
+      details: { error: error instanceof Error ? error.message : String(error) },
+    });
+    return NextResponse.json({ error: '重置失败' }, { status: 500 });
+  }
+}
+
+/**
+ * 分析进度状态键
+ */
+const ANALYSIS_PROGRESS_KEY = 'skill_full_analysis_progress';
+
+/**
+ * 进度状态接口
+ */
+interface AnalysisProgress {
+  status: 'idle' | 'running' | 'completed' | 'error';
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string | null;  // 最后更新时间
+  current: number;
+  total: number;
+  error: string | null;
+  results: {
+    duplicates: number;
+    related: number;
+    distinct: number;
+  };
+}
+
+/**
+ * 获取分析进度
+ */
+async function getProgress(): Promise<AnalysisProgress> {
+  const config = await prisma.systemConfig.findUnique({
+    where: { key: ANALYSIS_PROGRESS_KEY },
+  });
+  
+  if (!config) {
+    return {
+      status: 'idle',
+      startedAt: null,
+      completedAt: null,
+      updatedAt: null,
+      current: 0,
+      total: 0,
+      error: null,
+      results: { duplicates: 0, related: 0, distinct: 0 },
+    };
+  }
+  
+  return JSON.parse(config.value);
+}
+
+/**
+ * 更新分析进度
+ */
+async function updateProgress(progress: Partial<AnalysisProgress>): Promise<void> {
+  const current = await getProgress();
+  const updated = { ...current, ...progress, updatedAt: new Date().toISOString() };
+  
+  await prisma.systemConfig.upsert({
+    where: { key: ANALYSIS_PROGRESS_KEY },
+    create: {
+      id: `config-${Date.now()}`,
+      key: ANALYSIS_PROGRESS_KEY,
+      value: JSON.stringify(updated),
+      description: 'Skills 全量 LLM 分析进度',
+      updatedAt: new Date(),
+    },
+    update: {
+      value: JSON.stringify(updated),
+      updatedAt: new Date(),
+    },
+  });
+}
+
+/**
  * GET /api/admin/skills-governance/full-analysis
  * 获取全量分析状态和预估信息
  */
@@ -123,6 +247,9 @@ export async function GET(request: Request) {
     const estimatedCostUSD = filteredPairs.length * 0.001;
     const estimatedCostCNY = estimatedCostUSD * USD_TO_CNY_RATE;
 
+    // 获取当前进度状态
+    const progress = await getProgress();
+
     return NextResponse.json({
       data: {
         totalSkills: skills.length,
@@ -132,6 +259,8 @@ export async function GET(request: Request) {
         estimatedCost: `¥${estimatedCostCNY.toFixed(2)} (≈ $${estimatedCostUSD.toFixed(2)})`, // 人民币 + 美元
         estimatedCostUSD: estimatedCostUSD.toFixed(2),
         estimatedCostCNY: estimatedCostCNY.toFixed(2),
+        // 添加进度状态
+        progress,
       }
     }, { status: 200 });
 
@@ -161,6 +290,15 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const { mode = 'execute', limit, skipConfirmed = true } = body;
+
+    // 检查是否已有分析在进行
+    const currentProgress = await getProgress();
+    if (currentProgress.status === 'running') {
+      return NextResponse.json({ 
+        error: '已有分析任务在进行中，请等待完成',
+        progress: currentProgress,
+      }, { status: 409 });
+    }
 
     // 获取所有最新版本的 Skills
     const skills = await prisma.skill.findMany({
@@ -300,11 +438,41 @@ export async function POST(request: Request) {
       }, { status: 200 });
     }
 
-    // 执行模式：进行 LLM 分析
+    // 执行模式：初始化进度状态
+    await updateProgress({
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      current: 0,
+      total: filteredPairs.length,
+      error: null,
+      results: { duplicates: 0, related: 0, distinct: 0 },
+    });
+
+    // 用于追踪进度的临时结果
+    let tempResults: Array<{ analysis: { isDuplicate: boolean; overlapType: string } }> = [];
+
+    // 进行 LLM 分析
     const results = await batchAnalyzeSkills(filteredPairs, {
       concurrency: 3,
-      onProgress: (current, total) => {
-        logger.info(LOG_MODULES.SKILL, 'LLM 分析进度');
+      onProgress: async (current, total) => {
+        logger.info(LOG_MODULES.SKILL, 'LLM 分析进度', { current, total });
+        
+        // 计算当前结果统计
+        const duplicates = tempResults.filter(r => r.analysis.isDuplicate).length;
+        const related = tempResults.filter(r => r.analysis.overlapType === 'related').length;
+        const distinct = tempResults.filter(r => r.analysis.overlapType === 'distinct').length;
+        
+        // 更新进度
+        await updateProgress({
+          current,
+          total,
+          results: { duplicates, related, distinct },
+        });
+      },
+      // 每完成一个分析后更新临时结果
+      onResult: (result) => {
+        tempResults.push(result);
       },
     });
 
@@ -380,6 +548,19 @@ export async function POST(request: Request) {
 
     logger.info(LOG_MODULES.SKILL, '全量 LLM 分析完成');
 
+    // 更新进度为完成
+    await updateProgress({
+      status: 'completed',
+      completedAt: new Date().toISOString(),
+      current: results.total,
+      total: results.total,
+      results: {
+        duplicates: results.duplicates,
+        related: results.related,
+        distinct: results.distinct,
+      },
+    });
+
     return NextResponse.json({
       data: {
         success: true,
@@ -408,6 +589,14 @@ export async function POST(request: Request) {
     logger.errorNoUser(LOG_MODULES.SKILL, '全量 LLM 分析失败', {
       details: { error: error instanceof Error ? error.message : String(error) },
     });
+    
+    // 更新进度为错误
+    await updateProgress({
+      status: 'error',
+      completedAt: new Date().toISOString(),
+      error: error instanceof Error ? error.message : String(error),
+    });
+    
     return NextResponse.json({ 
       error: '服务器内部错误',
       details: error instanceof Error ? error.message : String(error),

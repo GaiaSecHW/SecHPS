@@ -102,14 +102,45 @@ export default function SkillsGovernancePage() {
     filteredPairs: number;
     estimatedTime: string;
     estimatedCost: string;
+    progress?: {
+      status: 'idle' | 'running' | 'completed' | 'error';
+      startedAt: string | null;
+      completedAt: string | null;
+      updatedAt: string | null;
+      current: number;
+      total: number;
+      error: string | null;
+      results: { duplicates: number; related: number; distinct: number };
+    };
   } | null>(null);
   const [analysisRunning, setAnalysisRunning] = useState(false);
   const [analysisProgress, setAnalysisProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // 判断进度是否卡住（超过 30 秒没更新）
+  const isProgressStuck = () => {
+    if (!analysisPreview?.progress || analysisPreview.progress.status !== 'running') return false;
+    if (!analysisPreview.progress.updatedAt) return true; // 没有更新时间，认为卡住了
+    const lastUpdate = new Date(analysisPreview.progress.updatedAt);
+    const now = new Date();
+    const secondsSinceUpdate = (now.getTime() - lastUpdate.getTime()) / 1000;
+    return secondsSinceUpdate > 30;
+  };
 
   useEffect(() => {
     fetchOverview();
     fetchAnalysisPreview();
   }, []);
+
+  // 轮询进度
+  useEffect(() => {
+    if (!analysisRunning) return;
+    
+    const interval = setInterval(() => {
+      fetchAnalysisPreview();
+    }, 3000); // 每 3 秒轮询一次
+    
+    return () => clearInterval(interval);
+  }, [analysisRunning]);
 
   const fetchOverview = async () => {
     try {
@@ -158,6 +189,25 @@ export default function SkillsGovernancePage() {
       if (response.ok) {
         const data = await response.json();
         setAnalysisPreview(data.data);
+        
+        // 如果 API 返回进度状态为 running，更新本地状态
+        if (data.data.progress?.status === 'running') {
+          setAnalysisRunning(true);
+          setAnalysisProgress({
+            current: data.data.progress.current,
+            total: data.data.progress.total,
+          });
+        } else if (data.data.progress?.status === 'completed' || data.data.progress?.status === 'error') {
+          // 分析完成或出错，停止轮询
+          if (analysisRunning) {
+            setAnalysisRunning(false);
+            if (data.data.progress.status === 'completed') {
+              toast.success('分析已完成！');
+            } else {
+              toast.error(`分析失败: ${data.data.progress.error || '未知错误'}`);
+            }
+          }
+        }
       }
     } catch (err) {
       // 静默失败
@@ -165,6 +215,12 @@ export default function SkillsGovernancePage() {
   };
 
   const handleStartFullAnalysis = async () => {
+    // 检查是否已有分析在进行
+    if (analysisRunning || analysisPreview?.progress?.status === 'running') {
+      toast.error('已有分析任务在进行中，请等待完成');
+      return;
+    }
+
     if (!confirm(`即将进行全量 LLM 分析，预计分析 ${analysisPreview?.filteredPairs || 0} 对技能。\n\n预估时间: ${analysisPreview?.estimatedTime}\n预估成本: ${analysisPreview?.estimatedCost}\n\n是否继续？`)) {
       return;
     }
@@ -187,7 +243,8 @@ export default function SkillsGovernancePage() {
       });
 
       if (!response.ok) {
-        throw new Error('分析失败');
+        const errorData = await response.json();
+        throw new Error(errorData.error || '分析失败');
       }
 
       const data = await response.json();
@@ -200,9 +257,35 @@ export default function SkillsGovernancePage() {
       
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '分析失败');
-    } finally {
       setAnalysisRunning(false);
       setAnalysisProgress(null);
+    }
+  };
+
+  const handleResetProgress = async () => {
+    if (!confirm('确定要重置进度吗？这将清除当前的分析状态，允许重新开始分析。')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/skills-governance/full-analysis', {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('重置失败');
+      }
+
+      toast.success('进度已重置');
+      setAnalysisRunning(false);
+      setAnalysisProgress(null);
+      await fetchAnalysisPreview();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '重置失败');
     }
   };
 
@@ -294,10 +377,10 @@ export default function SkillsGovernancePage() {
           </div>
           <button
             onClick={handleStartFullAnalysis}
-            disabled={analysisRunning || analysisPreview?.filteredPairs === 0}
+            disabled={analysisRunning || analysisPreview?.progress?.status === 'running' || analysisPreview?.filteredPairs === 0}
             className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {analysisRunning ? (
+            {analysisRunning || analysisPreview?.progress?.status === 'running' ? (
               <>
                 <Loader2 size={20} className="mr-2 animate-spin" />
                 分析中...
@@ -314,20 +397,37 @@ export default function SkillsGovernancePage() {
               </>
             )}
           </button>
+          {/* 卡住的进度显示重置按钮 */}
+          {analysisPreview?.progress?.status === 'running' && isProgressStuck() && (
+            <button
+              onClick={handleResetProgress}
+              className="inline-flex items-center px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+              title="分析任务可能已停止，点击重置进度状态"
+            >
+              重置进度
+            </button>
+          )}
         </div>
         
-        {analysisRunning && analysisProgress && (
+        {(analysisRunning || analysisPreview?.progress?.status === 'running') && (analysisProgress || analysisPreview?.progress) && (
           <div className="mt-4">
             <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
               <span>分析进度</span>
-              <span>{analysisProgress.current} / {analysisProgress.total}</span>
+              <span>{analysisProgress?.current ?? analysisPreview?.progress?.current ?? 0} / {analysisProgress?.total ?? analysisPreview?.progress?.total ?? 0}</span>
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div 
                 className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
+                style={{ width: `${((analysisProgress?.current ?? analysisPreview?.progress?.current ?? 0) / (analysisProgress?.total ?? analysisPreview?.progress?.total ?? 1)) * 100}%` }}
               />
             </div>
+            {analysisPreview?.progress?.results && (
+              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+                <span>重复: {analysisPreview.progress.results.duplicates}</span>
+                <span>相关: {analysisPreview.progress.results.related}</span>
+                <span>独立: {analysisPreview.progress.results.distinct}</span>
+              </div>
+            )}
           </div>
         )}
       </div>
