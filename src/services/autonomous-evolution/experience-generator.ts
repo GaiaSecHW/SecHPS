@@ -4,8 +4,8 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import type { FailureSuccessSequence } from './log-parser';
-import { trackSystemTokenUsage, calculateSystemCost } from '@/lib/system-token-tracker';
 
 export interface GeneratedExperience {
   title: string;
@@ -38,79 +38,26 @@ function guessCategory(errors: string[]): string {
   return 'other';
 }
 
-async function getModelConfig(): Promise<{
-  providerType: string;
-  apiKey: string;
-  apiBaseUrl: string;
-  model: string;
-} | null> {
-  try {
-    const config = await prisma.modelConfig.findFirst({
-      where: { isActive: true, isDefault: true },
-    });
-    if (config) {
-      return {
-        providerType: config.providerType,
-        apiKey: config.apiKey,
-        apiBaseUrl: config.apiBaseUrl,
-        model: (JSON.parse(config.models)[0] as string) || 'gpt-4o',
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return null;
-}
-
+/**
+ * 调用 LLM（使用统一的 model-client，自动统计 Token）
+ */
 async function callLLM(prompt: string): Promise<string> {
-  const cfg = await getModelConfig();
-  if (!cfg) throw new Error('未配置默认模型');
-
-  const baseUrl = cfg.apiBaseUrl.replace(/\/$/, '');
-  const url = `${baseUrl}/chat/completions`;
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${cfg.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: cfg.model,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.2,
+  const response = await routeRequestWithDefaultModel(
+    [{ role: 'user', content: prompt }],
+    {
       max_tokens: 1024,
-    }),
-    signal: AbortSignal.timeout(60_000),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`LLM 调用失败: ${res.status} ${text.slice(0, 200)}`);
-  }
-
-  const data = await res.json() as {
-    choices: Array<{ message: { content: string } }>;
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
+      temperature: 0.2,
+      context: {
+        userId: 'system',
+        scene: 'experience-gen',
+        description: '自主进化经验生成',
+      },
+    }
+  );
   
-  // 统计 Token 使用量
-  if (data.usage) {
-    const inputTokens = data.usage.prompt_tokens || 0;
-    const outputTokens = data.usage.completion_tokens || 0;
-    const estimatedCost = calculateSystemCost(inputTokens, outputTokens);
-    await trackSystemTokenUsage(
-      'experience-gen',
-      cfg.model,
-      inputTokens,
-      outputTokens,
-      estimatedCost,
-      '自主进化经验生成'
-    );
-    console.log('[ExperienceGenerator] Token 统计:', { inputTokens, outputTokens, estimatedCost });
-  }
-  
-  return data.choices[0]?.message?.content || '';
+  // 解析响应
+  const content = response.content?.[0]?.text || response.choices?.[0]?.message?.content || '';
+  return content;
 }
 
 function buildPrompt(seq: FailureSuccessSequence): string {
