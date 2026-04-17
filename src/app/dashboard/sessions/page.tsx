@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -111,6 +111,11 @@ export default function SessionsPage() {
   const editFileInputRef = useRef<HTMLInputElement>(null);
   const filesModalInputRef = useRef<HTMLInputElement>(null);
   
+  // 工作流相关状态
+  const [workflows, setWorkflows] = useState<any[]>([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState<string | null>(null);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [loadingWorkflows, setLoadingWorkflows] = useState(false);
   
   const [showImagePreview, setShowImagePreview] = useState(false);
   const [previewImage, setPreviewImage] = useState<{ src: string; alt: string } | null>(null);
@@ -139,8 +144,41 @@ export default function SessionsPage() {
     p.evaluations?.some((e: any) => e.status === 'running')
   );
 
+  // 定义 fetchWorkflows 函数（在 useEffect 之前，避免引用错误）
+  const fetchWorkflows = async () => {
+    try {
+      setLoadingWorkflows(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/workflows', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('获取工作流列表失败');
+        return;
+      }
+
+      const data = await response.json();
+      // 只显示已发布的工作流，并映射 nodeCount
+      const publishedWorkflows = (data.data || [])
+        .filter((w: any) => w.status === 'published')
+        .map((w: any) => ({
+          ...w,
+          nodeCount: w._count?.nodes || 0,
+        }));
+      setWorkflows(publishedWorkflows);
+    } catch (err) {
+      console.error('获取工作流失败:', err);
+    } finally {
+      setLoadingWorkflows(false);
+    }
+  };
+
   useEffect(() => {
     fetchProjects();
+    fetchWorkflows();
   }, []); // 只在组件挂载时执行一次
 
   // 单独的 effect 处理自动刷新
@@ -539,7 +577,7 @@ export default function SessionsPage() {
     }
   };
 
-  const startProject = async (projectId: string, modelId?: string | null) => {
+  const startProject = async (projectId: string, workflowId?: string | null, modelId?: string | null) => {
     setStartingProject(projectId);
 
     try {
@@ -551,6 +589,7 @@ export default function SessionsPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          workflowId: workflowId || undefined,
           modelId: modelId || undefined,
         }),
       });
@@ -1318,18 +1357,18 @@ toast.error(data.error || '更新项目失败');
                      ) : (
                       <>
 {/* 无运行中的会话：显示启动评估 */}
-                         <button
-                           onClick={async () => {
-                             setSelectedProject(project);
-                             await fetchModels();
-                             setShowModelModal(true);
-                           }}
-                           disabled={startingProject === project.id}
-                           className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                         >
-                           <Play size={16} />
-                           <span>启动评估</span>
-                         </button>
+                          <button
+                            onClick={() => {
+                              setSelectedProject(project);
+                              setSelectedWorkflow(null);
+                              setShowWorkflowModal(true);
+                            }}
+                            disabled={startingProject === project.id}
+                            className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Play size={16} />
+                            <span>启动评估</span>
+                          </button>
                       </>
                     )}
                     <button

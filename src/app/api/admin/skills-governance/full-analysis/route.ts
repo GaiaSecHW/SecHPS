@@ -308,56 +308,70 @@ export async function POST(request: Request) {
       },
     });
 
-    // 将结果保存到数据库
+    // 将结果保存到 SkillAnalysis 表
     let savedCount = 0;
+    let duplicateGroupsCreated = 0;
+    
     for (const result of results.results) {
-      // 查找或创建 SkillNewImpactAnalysis
       try {
-        const existing = await prisma.skillNewImpactAnalysis.findFirst({
-          where: {
+        // 创建 SkillAnalysis 记录
+        await prisma.skillAnalysis.create({
+          data: {
+            id: `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             skillId: result.skillA,
-            status: 'pending',
+            relatedSkillId: result.skillB,
+            analysisType: 'full_analysis',
+            isDuplicate: result.analysis.isDuplicate,
+            overlapType: result.analysis.overlapType,
+            confidence: result.analysis.confidence,
+            llmReason: result.analysis.reason,
+            keyDifferences: result.analysis.keyDifferences 
+              ? JSON.stringify(result.analysis.keyDifferences) 
+              : null,
+            recommendation: result.analysis.recommendation,
+            reviewStatus: result.analysis.confidence >= 0.85 ? 'pending' : 'approved',
+            analyzedBy: 'system',
           },
         });
-
-        if (existing) {
-          await prisma.skillNewImpactAnalysis.update({
-            where: { id: existing.id },
-            data: {
-              similarSkills: JSON.stringify([{
-                skillId: result.skillB,
-                similarity: result.analysis.confidence,
-                overlapType: result.analysis.overlapType,
-                reason: result.analysis.reason,
-              }]),
-              overlapScore: result.analysis.confidence,
-              recommendation: result.analysis.recommendation,
-              recommendationReason: result.analysis.reason,
-              analyzedAt: new Date(),
-              updatedAt: new Date(),
+        
+        // 高置信度重复：自动创建重复组
+        if (result.analysis.isDuplicate && result.analysis.confidence >= 0.85) {
+          const existingGroup = await prisma.skillDuplicateGroup.findFirst({
+            where: {
+              members: {
+                some: { skillId: result.skillA },
+              },
             },
           });
-        } else {
-          await prisma.skillNewImpactAnalysis.create({
-            data: {
-              id: `llm-analysis-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-              skillId: result.skillA,
-              similarSkills: JSON.stringify([{
-                skillId: result.skillB,
-                similarity: result.analysis.confidence,
-                overlapType: result.analysis.overlapType,
-                reason: result.analysis.reason,
-              }]),
-              overlapScore: result.analysis.confidence,
-              affectedWorkflows: null,
-              recommendation: result.analysis.recommendation,
-              recommendationReason: result.analysis.reason,
-              status: 'pending',
-              analyzedAt: new Date(),
-              updatedAt: new Date(),
-            },
-          });
+          
+          if (!existingGroup) {
+            // 获取技能信息
+            const skillA = await prisma.skill.findUnique({
+              where: { id: result.skillA },
+              select: { techStackId: true, vulnerabilityPatternId: true },
+            });
+            
+            const groupId = `group-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+            
+            await prisma.skillDuplicateGroup.create({
+              data: {
+                id: groupId,
+                language: skillA?.techStackId || 'unknown',
+                vulnerabilityType: skillA?.vulnerabilityPatternId || 'unknown',
+                status: 'pending_review',
+                skillCount: 2,
+                members: {
+                  create: [
+                    { skillId: result.skillA, role: 'primary', similarityScore: 1.0 },
+                    { skillId: result.skillB, role: 'member', similarityScore: result.analysis.confidence },
+                  ],
+                },
+              },
+            });
+            duplicateGroupsCreated++;
+          }
         }
+        
         savedCount++;
       } catch (e) {
         // 忽略重复等错误
@@ -376,6 +390,7 @@ export async function POST(request: Request) {
           distinct: results.distinct,
         },
         savedToDb: savedCount,
+        duplicateGroupsCreated,
         results: results.results.slice(0, 50).map(r => ({
           skillA: r.skillA,
           skillB: r.skillB,

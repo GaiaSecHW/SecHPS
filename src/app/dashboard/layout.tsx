@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
+import { BroadcastMarquee } from '@/components/BroadcastMarquee';
 import {
   LayoutDashboard,
   Users,
@@ -243,10 +244,11 @@ function DashboardLayoutContent({
         {/* 顶部栏 */}
         <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0">
           <div className="h-16 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center space-x-4">
-              <h2 className="text-lg font-semibold text-gray-900">
+            <div className="flex items-center space-x-4 flex-1">
+              <h2 className="text-lg font-semibold text-gray-900 whitespace-nowrap">
                 AI4WEB 测试平台
               </h2>
+              <BroadcastMarquee />
             </div>
 
             <div className="flex items-center space-x-4">
