@@ -36,7 +36,8 @@ export async function GET(request: Request) {
         cwe: true,
         techStack: true,
         content: true,
-        triggers: true,
+        techStackId: true,
+        vulnerabilityPatternId: true,
       },
     });
 
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
           displayName: skillA.displayName,
           description: skillA.description || '',
           category: skillA.category,
-          techStack: Array.isArray(skillA.techStack) ? skillA.techStack : [],
+          techStack: typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : [],
           cwe: skillA.cwe,
           content: skillA.content || undefined,
         };
@@ -73,7 +74,7 @@ export async function GET(request: Request) {
           displayName: skillB.displayName,
           description: skillB.description || '',
           category: skillB.category,
-          techStack: Array.isArray(skillB.techStack) ? skillB.techStack : [],
+          techStack: typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : [],
           cwe: skillB.cwe,
           content: skillB.content || undefined,
         };
@@ -91,10 +92,9 @@ export async function GET(request: Request) {
               displayName: skillA.displayName || skillA.name,
               description: skillA.description || '',
               category: skillA.category,
-              techStack: Array.isArray(skillA.techStack) ? skillA.techStack : [],
+              techStack: Array.isArray(skillA.techStack) ? skillA.techStack : (typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : []),
               cwe: skillA.cwe,
               content: skillA.content || undefined,
-              triggers: Array.isArray(skillA.triggers) ? skillA.triggers : [],
             },
             skillB: {
               id: skillB.id,
@@ -102,10 +102,9 @@ export async function GET(request: Request) {
               displayName: skillB.displayName || skillB.name,
               description: skillB.description || '',
               category: skillB.category,
-              techStack: Array.isArray(skillB.techStack) ? skillB.techStack : [],
+              techStack: Array.isArray(skillB.techStack) ? skillB.techStack : (typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : []),
               cwe: skillB.cwe,
               content: skillB.content || undefined,
-              triggers: Array.isArray(skillB.triggers) ? skillB.triggers : [],
             },
             preliminarySimilarity,
           });
@@ -119,13 +118,20 @@ export async function GET(request: Request) {
       skipDifferentCategory: true,
     });
 
+    // USD to CNY 汇率（可配置）
+    const USD_TO_CNY_RATE = 7.2;
+    const estimatedCostUSD = filteredPairs.length * 0.001;
+    const estimatedCostCNY = estimatedCostUSD * USD_TO_CNY_RATE;
+
     return NextResponse.json({
       data: {
         totalSkills: skills.length,
         totalPairs: pairs.length,
         filteredPairs: filteredPairs.length,
         estimatedTime: `${Math.ceil(filteredPairs.length * 2 / 60)} 分钟`, // 约 2 秒/对
-        estimatedCost: `${(filteredPairs.length * 0.001).toFixed(2)} USD`, // 预估成本
+        estimatedCost: `¥${estimatedCostCNY.toFixed(2)} (≈ $${estimatedCostUSD.toFixed(2)})`, // 人民币 + 美元
+        estimatedCostUSD: estimatedCostUSD.toFixed(2),
+        estimatedCostCNY: estimatedCostCNY.toFixed(2),
       }
     }, { status: 200 });
 
@@ -168,11 +174,18 @@ export async function POST(request: Request) {
         cwe: true,
         techStack: true,
         content: true,
-        triggers: true,
+        techStackId: true,
+        vulnerabilityPatternId: true,
       },
     });
 
     logger.info(LOG_MODULES.SKILL, '开始全量 LLM 分析');
+
+    // 清除现有的待分析数据，避免重复
+    const deletedPending = await prisma.skillNewImpactAnalysis.deleteMany({
+      where: { status: 'pending' },
+    });
+    logger.info(LOG_MODULES.SKILL, '清除待分析数据', { deletedCount: deletedPending.count });
 
     // 构建需要分析的技能对
     const pairs: Array<{ 
@@ -210,7 +223,7 @@ export async function POST(request: Request) {
           displayName: skillA.displayName,
           description: skillA.description || '',
           category: skillA.category,
-          techStack: Array.isArray(skillA.techStack) ? skillA.techStack : [],
+          techStack: typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : [],
           cwe: skillA.cwe,
           content: skillA.content || undefined,
         };
@@ -221,7 +234,7 @@ export async function POST(request: Request) {
           displayName: skillB.displayName,
           description: skillB.description || '',
           category: skillB.category,
-          techStack: Array.isArray(skillB.techStack) ? skillB.techStack : [],
+          techStack: typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : [],
           cwe: skillB.cwe,
           content: skillB.content || undefined,
         };
@@ -239,10 +252,9 @@ export async function POST(request: Request) {
               displayName: skillA.displayName || skillA.name,
               description: skillA.description || '',
               category: skillA.category,
-              techStack: Array.isArray(skillA.techStack) ? skillA.techStack : [],
+              techStack: Array.isArray(skillA.techStack) ? skillA.techStack : (typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : []),
               cwe: skillA.cwe,
               content: skillA.content || undefined,
-              triggers: Array.isArray(skillA.triggers) ? skillA.triggers : [],
             },
             skillB: {
               id: skillB.id,
@@ -250,10 +262,9 @@ export async function POST(request: Request) {
               displayName: skillB.displayName || skillB.name,
               description: skillB.description || '',
               category: skillB.category,
-              techStack: Array.isArray(skillB.techStack) ? skillB.techStack : [],
+              techStack: Array.isArray(skillB.techStack) ? skillB.techStack : (typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : []),
               cwe: skillB.cwe,
               content: skillB.content || undefined,
-              triggers: Array.isArray(skillB.triggers) ? skillB.triggers : [],
             },
             preliminarySimilarity,
           });

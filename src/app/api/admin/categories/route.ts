@@ -6,7 +6,9 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
+// 基于 OWASP Top 10 2021 和 CWE Top 25 2023 的漏洞分类
 const DEFAULT_CATEGORIES = [
+  // 原有分类
   { value: 'code-audit', label: '代码审计' },
   { value: 'auth', label: '认证鉴权' },
   { value: 'sensitive', label: '敏感信息' },
@@ -17,6 +19,18 @@ const DEFAULT_CATEGORIES = [
   { value: 'business', label: '业务逻辑' },
   { value: 'client', label: '客户端安全' },
   { value: 'cloud', label: '云安全' },
+  // 新增分类 - 基于 OWASP Top 10 2021
+  { value: 'access-control', label: '访问控制' },       // OWASP A01:2021
+  { value: 'design', label: '设计安全' },               // OWASP A04:2021
+  { value: 'components', label: '组件安全' },           // OWASP A06:2021
+  { value: 'integrity', label: '完整性安全' },          // OWASP A08:2021
+  { value: 'logging', label: '日志监控' },              // OWASP A09:2021
+  // 新增分类 - 基于 CWE Top 25 2023
+  { value: 'memory', label: '内存安全' },               // CWE-119, CWE-125, CWE-787
+  { value: 'file-ops', label: '文件操作' },             // CWE-22, CWE-73
+  { value: 'deserialization', label: '反序列化' },      // CWE-502
+  { value: 'input-validation', label: '输入验证' },     // CWE-20
+  { value: 'privilege', label: '权限管理' },            // CWE-269, CWE-732
 ];
 
 // GET /api/admin/categories - 获取漏洞分类列表
@@ -104,6 +118,36 @@ export async function PUT(request: Request) {
     for (const cat of categories) {
       if (!cat.value || !cat.label) {
         return NextResponse.json({ error: '每个分类必须包含 value 和 label' }, { status: 400 });
+      }
+    }
+
+    // 获取当前分类列表，检查是否有分类被删除
+    const currentConfig = await prisma.systemConfig.findUnique({
+      where: { key: 'skill_categories' },
+    });
+
+    if (currentConfig) {
+      const currentCategories = JSON.parse(currentConfig.value) as Array<{ value: string; label: string }>;
+      const currentValues = currentCategories.map(c => c.value);
+      const newValues = categories.map(c => c.value);
+      
+      // 找出被删除的分类值
+      const deletedValues = currentValues.filter(v => !newValues.includes(v));
+      
+      // 检查被删除的分类是否被漏洞模式引用
+      for (const deletedValue of deletedValues) {
+        const patternCount = await prisma.vulnerabilityPattern.count({
+          where: { category: deletedValue, isActive: true },
+        });
+        
+        if (patternCount > 0) {
+          const deletedCategory = currentCategories.find(c => c.value === deletedValue);
+          return NextResponse.json({
+            error: `分类 "${deletedCategory?.label || deletedValue}" 被 ${patternCount} 个漏洞模式引用，无法删除`,
+            deletedCategory: deletedValue,
+            patternCount,
+          }, { status: 400 });
+        }
       }
     }
 
