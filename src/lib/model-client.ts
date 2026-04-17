@@ -641,7 +641,7 @@ export async function testModelConnection(modelConfig: {
     };
     body = {
       model: modelName,
-      max_tokens: 100,
+      max_tokens: 512,
       messages: [{ role: 'user', content: 'Hi' }],
     };
   } else {
@@ -655,7 +655,7 @@ export async function testModelConnection(modelConfig: {
     };
     body = {
       model: modelName,
-      max_tokens: 100,
+      max_tokens: 512,
       messages: [{ role: 'user', content: 'Hi' }],
     };
   }
@@ -681,16 +681,47 @@ export async function testModelConnection(modelConfig: {
     if (response.ok) {
       const data = await response.json();
       
-      // 提取响应内容
+      // 提取响应内容 - 支持多种 API 格式
       let responseContent = '';
       let inputTokens = 0;
       let outputTokens = 0;
       
+      // 打印完整响应用于调试（不截断）
+      console.log(`[ModelClient] Test raw response (full):`);
+      console.log(JSON.stringify(data, null, 2));
+      
       if (providerType === 'claude') {
-        // Claude 格式: content[0].text
+        // Claude 格式: content[0].text 或 content[0].thinking（思考模型）
         if (data.content && Array.isArray(data.content)) {
+          // 先找 text 类型的块
           const textBlock = data.content.find((block: any) => block.type === 'text');
-          responseContent = textBlock?.text || '';
+          if (textBlock?.text) {
+            responseContent = textBlock.text;
+          }
+          // 如果没有 text，找 thinking 类型的块（思考模型如 GLM-5, Qwen3.5）
+          if (!responseContent) {
+            const thinkingBlock = data.content.find((block: any) => block.type === 'thinking');
+            if (thinkingBlock?.thinking) {
+              responseContent = thinkingBlock.thinking;
+            }
+          }
+          // 兼容：content 数组中直接有 text 字段
+          if (!responseContent) {
+            for (const block of data.content) {
+              if (block.text) {
+                responseContent = block.text;
+                break;
+              }
+            }
+          }
+        }
+        // 兼容：有些代理返回 Claude 格式但 content 是字符串
+        if (!responseContent && typeof data.content === 'string') {
+          responseContent = data.content;
+        }
+        // 兼容：直接返回 text 字段
+        if (!responseContent && data.text) {
+          responseContent = data.text;
         }
         // Token 使用量
         if (data.usage) {
@@ -700,14 +731,57 @@ export async function testModelConnection(modelConfig: {
       } else {
         // OpenAI 格式: choices[0].message.content
         responseContent = data.choices?.[0]?.message?.content || '';
-        // Token 使用量
+        
+        // 兼容：有些 API 返回 choices[0].text（旧版 OpenAI 格式）
+        if (!responseContent && data.choices?.[0]?.text) {
+          responseContent = data.choices[0].text;
+        }
+        
+        // 兼容：直接返回 content 字段
+        if (!responseContent && data.content) {
+          responseContent = typeof data.content === 'string' 
+            ? data.content 
+            : (data.content[0]?.text || '');
+        }
+        
+        // 兼容：直接返回 text 字段
+        if (!responseContent && data.text) {
+          responseContent = data.text;
+        }
+        
+        // 兼容：response 字段
+        if (!responseContent && data.response) {
+          responseContent = typeof data.response === 'string'
+            ? data.response
+            : JSON.stringify(data.response);
+        }
+        
+        // 兼容：result 字段
+        if (!responseContent && data.result) {
+          responseContent = typeof data.result === 'string'
+            ? data.result
+            : JSON.stringify(data.result);
+        }
+        
+        // Token 使用量 - 支持多种格式
         if (data.usage) {
-          inputTokens = data.usage.prompt_tokens || 0;
-          outputTokens = data.usage.completion_tokens || 0;
+          inputTokens = data.usage.prompt_tokens || data.usage.input_tokens || 0;
+          outputTokens = data.usage.completion_tokens || data.usage.output_tokens || 0;
+        }
+        // 兼容：有些 API 把 token 放在 choices 里
+        if (!inputTokens && data.choices?.[0]?.usage) {
+          const choiceUsage = data.choices[0].usage;
+          inputTokens = choiceUsage.prompt_tokens || choiceUsage.input_tokens || 0;
+          outputTokens = choiceUsage.completion_tokens || choiceUsage.output_tokens || 0;
         }
       }
       
-      console.log(`[ModelClient] Test response: ${responseContent.substring(0, 100)}`);
+      // 如果还是没有提取到内容，把整个响应作为调试信息
+      if (!responseContent) {
+        responseContent = `[API响应格式未知，完整响应: ${JSON.stringify(data).substring(0, 200)}]`;
+      }
+      
+      console.log(`[ModelClient] Test extracted content: ${responseContent.substring(0, 100)}`);
       
       return { 
         success: true, 

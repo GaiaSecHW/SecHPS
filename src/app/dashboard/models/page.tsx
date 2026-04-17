@@ -645,7 +645,7 @@ export default function ModelsPage() {
                                 <div className="break-words">{testResults[model.id].response}</div>
                                 {testResults[model.id].usage && (
                                   <div className="mt-1 text-gray-400">
-                                    Token: {testResults[model.id].usage.inputTokens} + {testResults[model.id].usage.outputTokens}
+                                    Token: {testResults[model.id].usage!.inputTokens} + {testResults[model.id].usage!.outputTokens}
                                   </div>
                                 )}
                               </div>
