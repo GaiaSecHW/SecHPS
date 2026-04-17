@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Coins,
+  GitBranch,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -152,6 +153,9 @@ function DashboardLayoutContent({
           <NavLink href="/dashboard/agent-teams" icon={<Users size={20} />} collapsed={collapsed}>
             Agent 团队
           </NavLink>
+          <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />} collapsed={collapsed}>
+            工作流编排
+          </NavLink>
           <NavLink href="/dashboard/agent-definitions" icon={<Brain size={20} />} collapsed={collapsed}>
             Agent 定义
           </NavLink>
@@ -203,8 +207,8 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/claude" icon={<Clock size={20} />} collapsed={collapsed}>
                 Claude 会话
               </NavLink>
-              <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />} collapsed={collapsed}>
-                漏洞分类
+              <NavLink href="/dashboard/admin/vulnerability-patterns" icon={<Shield size={20} />} collapsed={collapsed}>
+                漏洞模式
               </NavLink>
               <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={20} />} collapsed={collapsed}>
                 漏洞管理
