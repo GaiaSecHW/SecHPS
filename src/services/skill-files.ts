@@ -67,6 +67,7 @@ export interface CopyResult {
   failed: number;
   errors: string[];
   copiedSkills: string[];
+  skillIds: string[];  // 新增：返回 Skill ID 列表，用于记录评估使用的 Skills
   filteredSkills?: FilteredSkillInfo[];  // 治理过滤的 Skills
 }
 
@@ -273,6 +274,7 @@ export async function copySkillsToProject(
     failed: 0,
     errors: [],
     copiedSkills: [],
+    skillIds: [],  // 初始化 Skill ID 列表
   };
   
   try {
@@ -466,6 +468,7 @@ export async function copySkillsToProject(
           
           result.success++;
           result.copiedSkills.push(metadata.name);
+          result.skillIds.push(metadata.id);  // 记录 Skill ID
           console.log(`[SkillFiles] 拷贝成功: ${metadata.name} v${metadata.latestVersion}（包含标准输出模板）`);
         } else {
           // 使用最新版本文件
@@ -480,6 +483,7 @@ export async function copySkillsToProject(
           
           result.success++;
           result.copiedSkills.push(metadata.name);
+          result.skillIds.push(metadata.id);  // 记录 Skill ID
           console.log(`[SkillFiles] 拷贝成功: ${metadata.name}（包含标准输出模板）`);
         }
       } catch (error) {

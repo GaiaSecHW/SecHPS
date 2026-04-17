@@ -79,16 +79,20 @@ export async function POST(
 
     const { id } = await params;
 
-    // 解析请求体获取 agentTeamId 和其他选项
+    // 解析请求体获取 workflowId, modelId, roleModels 和其他选项
+    let workflowId: string | null = null;
     let agentTeamId: string | null = null;
     let modelId: string | null = null;
+    let roleModels: { roleId: string; modelId: string }[] | null = null;
     let enableMcp = true;
     let enableToolPermissions = true;
     let queuedEvaluationId: string | null = null; // 队列启动时复用的评估ID
     try {
       const body = await request.json();
+      workflowId = body.workflowId || null;
       agentTeamId = body.agentTeamId || null;
       modelId = body.modelId || null;
+      roleModels = body.roleModels || null;
       enableMcp = body.enableMcp !== false;
       enableToolPermissions = body.enableToolPermissions !== false;
       queuedEvaluationId = body.queuedEvaluationId || null;
@@ -96,7 +100,7 @@ export async function POST(
       // 如果没有请求体，继续执行
     }
 
-    console.log('[启动评估] 是否队列启动:', isQueuedStart, 'queuedEvaluationId:', queuedEvaluationId);
+    console.log('[启动评估] workflowId:', workflowId, 'modelId:', modelId, 'roleModels:', roleModels?.length || 0);
 
     // 获取项目信息（包括运行中的评估）
     const project = await prisma.project.findUnique({
@@ -156,8 +160,10 @@ export async function POST(
         data: {
           id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           projectId: id,
+          workflowId: workflowId,
           agentTeamId: agentTeamId,
           modelConfigId: modelId, // 保存请求的模型配置ID
+          roleModels: roleModels ? JSON.stringify(roleModels) : null,
           status: 'queued',
           providerType: 'queued', // 标记为排队状态
         },
@@ -358,6 +364,8 @@ export async function POST(
     }
 
     // 同步 Skills 到项目目录（直接从磁盘拷贝，无需查询数据库）
+    // 同时记录使用的 Skills ID 列表
+    let skillsUsedJson: string | null = null;
     if (project.projectPath) {
       try {
         console.log('[启动评估] 开始同步 Skills 到项目目录');
@@ -388,6 +396,18 @@ export async function POST(
         console.log(`  - 成功: ${copyResult.success}`);
         console.log(`  - 失败: ${copyResult.failed}`);
         console.log(`  - 拷贝的 Skills: ${copyResult.copiedSkills.join(', ')}`);
+        
+        // 记录使用的 Skills ID 列表
+        if (copyResult.skillIds.length > 0) {
+          // 查询 Skill 名称，构建 skillsUsed JSON
+          const skills = await prisma.skill.findMany({
+            where: { id: { in: copyResult.skillIds } },
+            select: { id: true, name: true },
+          });
+          const skillsUsed = skills.map(s => ({ skillId: s.id, skillName: s.name }));
+          skillsUsedJson = JSON.stringify(skillsUsed);
+          console.log(`[启动评估] 使用的 Skills ID: ${copyResult.skillIds.length} 个`);
+        }
         
         if (copyResult.failed > 0) {
           copyResult.errors.forEach(err => {
@@ -435,6 +455,9 @@ export async function POST(
       evaluation = await prisma.evaluationSession.update({
         where: { id: queuedEvaluationId },
         data: {
+          workflowId: workflowId,
+          roleModels: roleModels ? JSON.stringify(roleModels) : null,
+          skillsUsed: skillsUsedJson,  // 记录使用的 Skills
           status: 'running',
           startedAt: new Date(),
           modelName: modelConfig.name,
@@ -448,14 +471,17 @@ export async function POST(
         data: {
           id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
           projectId: id,
+          workflowId: workflowId,
           agentTeamId: agentTeamId, // 关联 Agent Team
           modelConfigId: modelConfig.id, // 关联模型配置
+          roleModels: roleModels ? JSON.stringify(roleModels) : null,
+          skillsUsed: skillsUsedJson,  // 记录使用的 Skills
           status: 'running',
           modelName: modelConfig.name, // 保存模型名称
           providerType: modelConfig.providerType, // 保存提供商类型
         },
       });
-      console.log('[启动评估] 创建新评估记录:', evaluation.id);
+      console.log('[启动评估] 创建新评估记录:', evaluation.id, 'workflowId:', workflowId, 'roleModels:', roleModels?.length || 0, 'skillsUsed:', skillsUsedJson ? JSON.parse(skillsUsedJson).length : 0);
     }
 
     // 记录经验引用（哪些经验被注入到本次评估）
@@ -509,7 +535,7 @@ export async function POST(
         onIterationEnd: async (iteration, duration) => {
           console.log(`[Ralph Loop] 第 ${iteration} 次迭代完成，耗时 ${duration}ms`);
           
-          // 保存迭代记录到数据库
+          // 保存迭代记录到数据库（包含模型信息）
           try {
             await prisma.evaluationIteration.create({
               data: {
@@ -520,6 +546,9 @@ export async function POST(
                 duration,
                 completedAt: new Date(),
                 updatedAt: new Date(),
+                // 添加模型信息
+                modelConfigId: modelConfig.id,
+                modelName: modelConfig.name,
               },
             });
             console.log(`[Ralph Loop] 迭代记录已保存到数据库`);
@@ -1128,6 +1157,112 @@ export async function POST(
                   }
                   if (vulnsToSave.length > 0) {
                     console.log(`[Ralph Loop] 保存了 ${vulnsToSave.length} 个漏洞详情`);
+                    
+                    // ===== 新增：Skill 匹配和 Mapping 创建 =====
+                    // 根据 vulnerabilities.json 的 skill 字段匹配 Skill 并创建 Mapping 记录
+                    try {
+                      // 1. 获取本次评估使用的 Skill 列表
+                      let usedSkills: { skillId: string; skillName: string }[] = [];
+                      if (evaluation.skillsUsed) {
+                        usedSkills = JSON.parse(evaluation.skillsUsed);
+                      }
+                      
+                      // 2. 构建 Skill 名称 -> ID 映射
+                      const skillNameToId = new Map<string, string>();
+                      for (const s of usedSkills) {
+                        skillNameToId.set(s.skillName, s.skillId);
+                        // 也添加小写版本用于模糊匹配
+                        skillNameToId.set(s.skillName.toLowerCase(), s.skillId);
+                      }
+                      
+                      // 3. 统计每个 Skill 发现的漏洞数量
+                      const skillFindings = new Map<string, { skillId: string; count: number; matchType: string }>();
+                      
+                      for (const vuln of vulnsToSave) {
+                        if (vuln.skill) {
+                          const reportedSkillName = vuln.skill;
+                          let matchedSkillId: string | null = null;
+                          let matchType = 'unmatched';
+                          
+                          // 精确匹配
+                          if (skillNameToId.has(reportedSkillName)) {
+                            matchedSkillId = skillNameToId.get(reportedSkillName)!;
+                            matchType = 'exact';
+                          }
+                          // 模糊匹配（小写）
+                          else if (skillNameToId.has(reportedSkillName.toLowerCase())) {
+                            matchedSkillId = skillNameToId.get(reportedSkillName.toLowerCase())!;
+                            matchType = 'fuzzy';
+                          }
+                          // 尝试从数据库查询
+                          else {
+                            const dbSkill = await prisma.skill.findFirst({
+                              where: { name: reportedSkillName, isLatest: true, isActive: true },
+                              select: { id: true },
+                            });
+                            if (dbSkill) {
+                              matchedSkillId = dbSkill.id;
+                              matchType = 'exact';
+                            }
+                          }
+                          
+                          if (matchedSkillId) {
+                            const existing = skillFindings.get(matchedSkillId);
+                            if (existing) {
+                              existing.count++;
+                            } else {
+                              skillFindings.set(matchedSkillId, { skillId: matchedSkillId, count: 1, matchType });
+                            }
+                          }
+                        }
+                      }
+                      
+                      // 4. 更新 Skill 统计并创建 Mapping 记录
+                      for (const [skillId, info] of skillFindings) {
+                        // 更新 vulnerabilityCount
+                        await prisma.skill.update({
+                          where: { id: skillId },
+                          data: { vulnerabilityCount: { increment: info.count } },
+                        });
+                        
+                        // 为每个漏洞创建 Mapping 记录
+                        const relatedVulns = vulnsToSave.filter(v => v.skill && 
+                          (skillNameToId.get(v.skill) === skillId || 
+                           skillNameToId.get(v.skill?.toLowerCase()) === skillId));
+                        
+                        for (const vuln of relatedVulns) {
+                          // 查找刚创建的漏洞记录
+                          const dbVuln = await prisma.vulnerability.findFirst({
+                            where: {
+                              projectId: id,
+                              evaluationId: evaluation.id,
+                              title: vuln.title || '未命名漏洞',
+                            },
+                            orderBy: { createdAt: 'desc' },
+                            select: { id: true },
+                          });
+                          
+                          if (dbVuln) {
+                            await prisma.skillVulnerabilityMapping.create({
+                              data: {
+                                skillId,
+                                vulnerabilityId: dbVuln.id,
+                                evaluationId: evaluation.id,
+                                projectId: id,
+                                skillNameReported: vuln.skill,
+                                matchType: info.matchType,
+                              },
+                            }).catch(() => {
+                              // 忽略唯一约束冲突
+                            });
+                          }
+                        }
+                        
+                        console.log(`[Ralph Loop] Skill ${skillId} 发现 ${info.count} 个漏洞 (${info.matchType} 匹配)`);
+                      }
+                    } catch (mappingError) {
+                      console.error('[Ralph Loop] Skill 匹配失败:', mappingError);
+                    }
                   }
                 } catch (e) {
                   console.error('[Ralph Loop] 保存评估结果失败:', e);

@@ -19,6 +19,10 @@ interface LogContext {
   // 目标用户 - 用于记录谁在使用谁的资源
   targetUserId?: string;
   targetUsername?: string;  // 目标用户名
+  // 其他常用字段
+  deletedCount?: number;
+  count?: number;
+  [key: string]: any;  // 允许其他任意字段
 }
 
 // 常用模块名称常量

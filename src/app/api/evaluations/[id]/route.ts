@@ -44,6 +44,39 @@ export async function GET(
             userId: true,
           },
         },
+        // 添加迭代记录（包含模型信息）
+        EvaluationIteration: {
+          orderBy: { iterationNumber: 'asc' },
+          select: {
+            id: true,
+            iterationNumber: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            duration: true,
+            inputTokens: true,
+            outputTokens: true,
+            modelConfigId: true,
+            modelName: true,
+            roleId: true,
+          },
+        },
+        // 添加节点执行记录（包含模型信息）
+        NodeExecution: {
+          orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            workflowNodeId: true,
+            nodeLabel: true,
+            nodeType: true,
+            status: true,
+            startedAt: true,
+            completedAt: true,
+            modelConfigId: true,
+            modelName: true,
+            roleId: true,
+          },
+        },
       },
     });
 

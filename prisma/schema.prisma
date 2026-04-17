@@ -275,14 +275,20 @@ model EvaluationIteration {
   verificationComplete Boolean?
   verificationReason   String?
   errorMessage         String?
+  // ===== 新增字段：模型信息 =====
+  modelConfigId        String?           // 本次迭代使用的模型配置ID
+  modelName            String?           // 本次迭代使用的模型名称
+  roleId               String?           // 本次迭代对应的角色ID
   createdAt            DateTime          @default(now())
   updatedAt            DateTime
   EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+  ModelConfig          ModelConfig?      @relation(fields: [modelConfigId], references: [id])
 
   @@unique([evaluationSessionId, iterationNumber])
   @@index([iterationNumber])
   @@index([status])
   @@index([evaluationSessionId])
+  @@index([modelConfigId])
 }
 
 model EvaluationResult {
@@ -306,6 +312,8 @@ model EvaluationSession {
   workflowId          String?
   agentTeamId         String?
   modelConfigId       String?
+  roleModels          String?               // JSON: [{ roleId, modelId }]
+  skillsUsed          String?               // JSON: [{ skillId, skillName }] 本次评估使用的 Skill 列表
   opencodeSessionId   String?               @unique
   provider            String                @default("claude")
   title               String?
@@ -334,6 +342,7 @@ model EvaluationSession {
   SessionMessage      SessionMessage[]
   TokenUsage          TokenUsage[]
   Vulnerability       Vulnerability[]
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
 
   @@index([projectId])
   @@index([agentTeamId])
@@ -428,6 +437,8 @@ model ModelConfig {
   updatedAt         DateTime
   AgentDefinition   AgentDefinition[]
   EvaluationSession EvaluationSession[]
+  EvaluationIteration EvaluationIteration[]  // 新增：迭代关联
+  NodeExecution    NodeExecution[]          // 新增：节点执行关联
   User              User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([routeType])
@@ -448,14 +459,20 @@ model NodeExecution {
   startedAt           DateTime?
   completedAt         DateTime?
   order               Int               @default(0)
+  // ===== 新增字段：模型信息 =====
+  modelConfigId       String?           // 节点使用的模型配置ID
+  modelName           String?           // 节点使用的模型名称
+  roleId              String?           // 节点关联的角色ID
   createdAt           DateTime          @default(now())
   updatedAt           DateTime
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+  ModelConfig         ModelConfig?      @relation(fields: [modelConfigId], references: [id])
 
   @@unique([evaluationSessionId, workflowNodeId])
   @@index([status])
   @@index([workflowNodeId])
   @@index([evaluationSessionId])
+  @@index([modelConfigId])
 }
 
 model NotificationChannel {
@@ -573,6 +590,7 @@ model Project {
   SkillExecution    SkillExecution[]
   ToolPermission    ToolPermission[]
   Vulnerability     Vulnerability[]
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]  // 新增：Skill漏洞映射关联
 
   @@index([name])
   @@index([status])
@@ -718,11 +736,23 @@ model Skill {
   execCount                                              Int                      @default(0)
   referenceCount                                         Int                      @default(0)
   vulnerabilityCount                                     Int                      @default(0)
+  successExecCount                                       Int                      @default(0) // 有发现问题的执行次数（用于计算成功率）
   createdAt                                              DateTime                 @default(now())
   updatedAt                                              DateTime
+  
+  // ===== 新增字段：治理改造 =====
+  techStackId                                            String?                  // 单选语言 ID
+  vulnerabilityPatternId                                 String?                  // 漏洞类型 ID
+  migrationStatus                                        String                   @default("pending") // pending | analyzing | migrated | pending_review | failed
+  migrationNotes                                         String?                  // 迁移备注
+  migrationConfidence                                    Float?                   // LLM 推断置信度
+  
+  // ===== 关联关系 =====
   User                                                   User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   Skill                                                  Skill?                   @relation("SkillToSkill", fields: [parentId], references: [id])
   other_Skill                                            Skill[]                  @relation("SkillToSkill")
+  TechStackOption                                        TechStackOption?         @relation(fields: [techStackId], references: [id])
+  VulnerabilityPattern                                   VulnerabilityPattern?    @relation(fields: [vulnerabilityPatternId], references: [id])
   SkillEvolution                                         SkillEvolution[]
   SkillExecution                                         SkillExecution[]
   SkillMergeRecord_SkillMergeRecord_sourceSkillIdToSkill SkillMergeRecord[]       @relation("SkillMergeRecord_sourceSkillIdToSkill")
@@ -730,6 +760,9 @@ model Skill {
   SkillNewImpactAnalysis                                 SkillNewImpactAnalysis[]
   SkillObservationLog                                    SkillObservationLog[]
   SkillObservationStats                                  SkillObservationStats?
+  SkillAnalysis                                          SkillAnalysis[]
+  SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
+  SkillVulnerabilityMapping                              SkillVulnerabilityMapping[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -739,6 +772,9 @@ model Skill {
   @@index([category])
   @@index([isActive])
   @@index([isPublic])
+  @@index([techStackId])
+  @@index([vulnerabilityPatternId])
+  @@index([migrationStatus])
 }
 
 model SkillEvolution {
@@ -985,6 +1021,9 @@ model TechStackOption {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime
+  
+  // 关联关系
+  Skills      Skill[]
 
   @@index([isActive])
   @@index([category])
@@ -1077,6 +1116,10 @@ model User {
   SkillPrediction     SkillPrediction[]
   SkillPredictionTask SkillPredictionTask[]
   UserRole            UserRole[]
+  Workflow            Workflow[]
+  WorkflowExecution   WorkflowExecution[]
+  WorkflowShare_SharedBy   WorkflowShare[]  @relation("WorkflowShare_sharedByToUser")
+  WorkflowShare_SharedWith WorkflowShare[]  @relation("WorkflowShare_sharedWithToUser")
 
   @@index([username])
   @@index([email])
@@ -1126,6 +1169,7 @@ model Vulnerability {
   SkillExecution    SkillExecution?    @relation(fields: [skillExecutionId], references: [id])
   EvaluationSession EvaluationSession? @relation(fields: [evaluationId], references: [id])
   Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
 
   @@index([severity, status])
   @@index([projectId, status])
@@ -1154,7 +1198,276 @@ model VulnerabilityPattern {
   isBuiltin         Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime
+  
+  // 关联关系
+  Skills            Skill[]
 
   @@index([isActive])
   @@index([category])
+}
+
+// ============================================
+// Skill Governance Models
+// ============================================
+
+/// Skill 分析结果表 - 存储 LLM 分析过程
+model SkillAnalysis {
+  id                  String    @id @default(cuid())
+  skillId             String    // 被分析的 Skill
+  relatedSkillId      String?   // 相关的另一个 Skill（两两比较时）
+  
+  // 分析类型
+  analysisType        String    // 'duplication_check' | 'full_analysis' | 'migration_inference'
+  
+  // 分析结果
+  isDuplicate         Boolean   @default(false)
+  overlapType         String?   // 'exact' | 'subset' | 'related' | 'distinct'
+  confidence          Float     @default(0)  // 0-1
+  
+  // LLM 详细分析过程
+  llmReason           String?   // LLM 给出的判断理由
+  keyDifferences      String?   // JSON: 主要差异点列表
+  sharedFunctionality String?   // JSON: 共享功能列表
+  recommendation      String?   // 'merge' | 'keep_separate' | 'review'
+  
+  // 迁移推断结果（用于存量数据迁移）
+  inferredLanguage    String?   // LLM 推断的语言
+  inferredVulnPatternId String? // LLM 推断的漏洞类型 ID
+  
+  // 审核状态
+  reviewStatus        String    @default("pending") // 'pending' | 'approved' | 'rejected'
+  reviewedBy          String?   // 审核人
+  reviewedAt          DateTime?
+  reviewNotes         String?   // 审核备注
+  
+  // 元数据
+  analyzedAt          DateTime  @default(now())
+  analyzedBy          String    @default("system") // 'system' | 'manual' | 'llm'
+  
+  createdAt           DateTime  @default(now())
+  
+  skill               Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  
+  @@index([skillId])
+  @@index([reviewStatus])
+  @@index([analysisType])
+  @@index([analysisType, reviewStatus])
+}
+
+/// Skill 重复组 - 管理重复 Skill 分组
+model SkillDuplicateGroup {
+  id                  String   @id @default(cuid())
+  name                String?  // 组名（可选）
+  language            String   // 共同语言
+  vulnerabilityType   String   // 共同漏洞类型
+  
+  // 组状态
+  status              String   @default("pending_review") // 'pending_review' | 'resolved'
+  resolution          String?  // 'merged' | 'keep_all' | 'deleted_duplicates'
+  resolvedBy          String?
+  resolvedAt          DateTime?
+  resolutionNotes     String?
+  
+  // 统计
+  skillCount          Int      @default(0)
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  
+  members             SkillDuplicateGroupMember[]
+  
+  @@index([status])
+  @@index([language])
+  @@index([vulnerabilityType])
+}
+
+/// Skill 重复组成员
+model SkillDuplicateGroupMember {
+  id                String   @id @default(cuid())
+  groupId           String
+  skillId           String
+  
+  // 在组中的角色
+  role              String   @default("member") // 'primary' | 'member' | 'duplicate'
+  similarityScore   Float    @default(0)
+  
+  joinedAt          DateTime @default(now())
+  
+  group             SkillDuplicateGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  skill             Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  
+  @@unique([groupId, skillId])
+  @@index([groupId])
+  @@index([skillId])
+}
+
+// ============================================
+// Workflow Models (Restored + Enhanced)
+// ============================================
+
+model Workflow {
+  id                  String                @id @default(cuid())
+  userId              String
+  name                String
+  description         String?
+  thumbnail           String?
+  techStack           String?
+  version             Int                   @default(1)
+  status              String                @default("draft")
+  isActive            Boolean               @default(false)
+  isPublic            Boolean               @default(false)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  User                User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  WorkflowEdge        WorkflowEdge[]
+  WorkflowExecution   WorkflowExecution[]
+  WorkflowNode        WorkflowNode[]
+  WorkflowRole        WorkflowRole[]
+  WorkflowShare       WorkflowShare[]
+
+  @@index([status, isActive])
+  @@index([userId, status])
+  @@index([isPublic])
+  @@index([isActive])
+  @@index([status])
+  @@index([userId])
+}
+
+model WorkflowRole {
+  id          String          @id @default(cuid())
+  workflowId  String
+  name        String
+  description String?
+  color       String?
+  order       Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  workflow    Workflow        @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  nodes       WorkflowNode[]
+
+  @@index([workflowId])
+}
+
+model WorkflowNode {
+  id                                               String         @id @default(cuid())
+  workflowId                                       String
+  roleId                                           String?
+  type                                             String
+  positionX                                        Float
+  positionY                                        Float
+  data                                             String
+  createdAt                                        DateTime       @default(now())
+  updatedAt                                        DateTime       @updatedAt
+  role                                             WorkflowRole?  @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_targetIdToWorkflowNode")
+  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_sourceIdToWorkflowNode")
+  Workflow                                         Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([workflowId])
+  @@index([roleId])
+}
+
+model WorkflowEdge {
+  id                                               String       @id @default(cuid())
+  workflowId                                       String
+  sourceId                                         String
+  targetId                                         String
+  sourceHandle                                     String?
+  targetHandle                                     String?
+  label                                            String?
+  data                                             String?
+  createdAt                                        DateTime     @default(now())
+  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
+  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, sourceHandle])
+  @@index([targetId])
+  @@index([sourceId])
+  @@index([workflowId])
+}
+
+model WorkflowExecution {
+  id                    String                  @id @default(cuid())
+  workflowId            String
+  userId                String
+  status                String                  @default("pending")
+  roleModels            String?
+  startedAt             DateTime                @default(now())
+  completedAt           DateTime?
+  error                 String?
+  result                String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  WorkflowExecutionStep WorkflowExecutionStep[]
+
+  @@index([workflowId, status])
+  @@index([startedAt])
+  @@index([status])
+  @@index([userId])
+  @@index([workflowId])
+}
+
+model WorkflowExecutionStep {
+  id                String            @id @default(cuid())
+  executionId       String
+  nodeId            String
+  status            String            @default("pending")
+  startedAt         DateTime?
+  completedAt       DateTime?
+  input             String?
+  output            String?
+  error             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  WorkflowExecution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([nodeId])
+  @@index([executionId])
+}
+
+model WorkflowShare {
+  id                                  String    @id @default(cuid())
+  workflowId                          String
+  sharedBy                            String
+  sharedWith                          String
+  permission                          String    @default("read")
+  expiresAt                           DateTime?
+  createdAt                           DateTime  @default(now())
+  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
+  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
+  Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, sharedWith])
+  @@index([sharedWith])
+  @@index([sharedBy])
+  @@index([workflowId])
+}
+
+// Skill-漏洞关联表：记录哪个 Skill 发现了哪个漏洞
+model SkillVulnerabilityMapping {
+  id                  String   @id @default(cuid())
+  skillId             String   // Skill ID（匹配后）
+  vulnerabilityId     String   // Vulnerability ID
+  evaluationId        String   // 评估会话 ID
+  projectId           String   // 项目 ID
+  skillNameReported   String?  // AI 报告的原始 Skill 名称（vulnerabilities.json 中的 skill 字段）
+  matchType           String   @default("exact") // exact | fuzzy | unmatched
+  matchedAt           DateTime @default(now())
+
+  Skill               Skill        @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  Vulnerability       Vulnerability @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
+  EvaluationSession   EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  Project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, vulnerabilityId])
+  @@index([skillId])
+  @@index([vulnerabilityId])
+  @@index([evaluationId])
+  @@index([projectId])
+  @@index([matchType])
 }

@@ -1079,6 +1079,126 @@ function SessionDetailContent({
               )}
             </div>
 
+            {/* Iterations with Model Info */}
+            {evaluation?.EvaluationIteration && evaluation.EvaluationIteration.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <Code size={18} className="mr-2 text-green-600" />
+                  迭代记录 ({evaluation.EvaluationIteration.length})
+                </h3>
+                <div className="space-y-2">
+                  {evaluation.EvaluationIteration.map((iteration: any) => (
+                    <div key={iteration.id} className="p-3 bg-white rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">
+                              迭代 #{iteration.iterationNumber}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              iteration.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              iteration.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                              iteration.status === 'failed' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {iteration.status === 'completed' ? '已完成' :
+                               iteration.status === 'running' ? '运行中' :
+                               iteration.status === 'failed' ? '失败' : iteration.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
+                            {iteration.modelName && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium text-blue-600">模型:</span>
+                                {iteration.modelName}
+                              </span>
+                            )}
+                            {iteration.roleId && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium text-purple-600">角色:</span>
+                                {iteration.roleId}
+                              </span>
+                            )}
+                            {iteration.duration && (
+                              <span className="flex items-center gap-1">
+                                <Clock size={10} />
+                                {Math.round(iteration.duration / 1000)}s
+                              </span>
+                            )}
+                            {iteration.inputTokens !== null && iteration.inputTokens !== undefined && (
+                              <span>输入: {formatTokenNumber(iteration.inputTokens)}</span>
+                            )}
+                            {iteration.outputTokens !== null && iteration.outputTokens !== undefined && (
+                              <span>输出: {formatTokenNumber(iteration.outputTokens)}</span>
+                            )}
+                          </div>
+                        </div>
+                        {iteration.startedAt && (
+                          <span className="text-xs text-gray-400">
+                            {new Date(iteration.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Node Executions with Model Info */}
+            {evaluation?.NodeExecution && evaluation.NodeExecution.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                  <GitBranch size={18} className="mr-2 text-orange-600" />
+                  节点执行 ({evaluation.NodeExecution.length})
+                </h3>
+                <div className="space-y-2">
+                  {evaluation.NodeExecution.map((node: any) => (
+                    <div key={node.id} className="p-3 bg-white rounded-lg border border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-gray-900">
+                              {node.nodeLabel || node.nodeType || `节点 ${node.workflowNodeId?.substring(0, 8)}`}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              node.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              node.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                              node.status === 'failed' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {node.status === 'completed' ? '已完成' :
+                               node.status === 'running' ? '运行中' :
+                               node.status === 'failed' ? '失败' : node.status}
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
+                            {node.modelName && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium text-blue-600">模型:</span>
+                                {node.modelName}
+                              </span>
+                            )}
+                            {node.roleId && (
+                              <span className="flex items-center gap-1">
+                                <span className="font-medium text-purple-600">角色:</span>
+                                {node.roleId}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {node.startedAt && (
+                          <span className="text-xs text-gray-400">
+                            {new Date(node.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Children Sessions */}
             {childrenSessions.length > 0 && (
               <div className="mb-6">

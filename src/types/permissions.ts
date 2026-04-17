@@ -130,6 +130,14 @@ export const PERMISSIONS = {
   AGENT_TEAM_UPDATE: 'agent-team:update',
   AGENT_TEAM_DELETE: 'agent-team:delete',
   AGENT_TEAM_EXECUTE: 'agent-team:execute',
+
+  // Workflow 权限
+  WORKFLOW_CREATE: 'workflow:create',
+  WORKFLOW_READ: 'workflow:read',
+  WORKFLOW_UPDATE: 'workflow:update',
+  WORKFLOW_DELETE: 'workflow:delete',
+  WORKFLOW_EXECUTE: 'workflow:execute',
+  WORKFLOW_SHARE: 'workflow:share',
 } as const;
 
 export type Permission = typeof PERMISSIONS[keyof typeof PERMISSIONS];
@@ -234,6 +242,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.AGENT_TEAM_UPDATE,
     PERMISSIONS.AGENT_TEAM_DELETE,
     PERMISSIONS.AGENT_TEAM_EXECUTE,
+    // Workflow 权限
+    PERMISSIONS.WORKFLOW_CREATE,
+    PERMISSIONS.WORKFLOW_READ,
+    PERMISSIONS.WORKFLOW_UPDATE,
+    PERMISSIONS.WORKFLOW_DELETE,
+    PERMISSIONS.WORKFLOW_EXECUTE,
+    PERMISSIONS.WORKFLOW_SHARE,
   ],
 
   [ROLES.DEVELOPER]: [
@@ -277,6 +292,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.AGENT_TEAM_READ,
     PERMISSIONS.AGENT_TEAM_UPDATE,
     PERMISSIONS.AGENT_TEAM_EXECUTE,
+    // Workflow 权限
+    PERMISSIONS.WORKFLOW_CREATE,
+    PERMISSIONS.WORKFLOW_READ,
+    PERMISSIONS.WORKFLOW_UPDATE,
+    PERMISSIONS.WORKFLOW_EXECUTE,
   ],
 
   [ROLES.USER]: [
@@ -312,6 +332,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // Agent 团队权限
     PERMISSIONS.AGENT_TEAM_CREATE,
     PERMISSIONS.AGENT_TEAM_READ,
+    // Workflow 权限
+    PERMISSIONS.WORKFLOW_CREATE,
+    PERMISSIONS.WORKFLOW_READ,
   ],
 
   [ROLES.VIEWER]: [
@@ -329,5 +352,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     PERMISSIONS.PROJECT_READ,
     // Agent 团队读取权限
     PERMISSIONS.AGENT_TEAM_READ,
+    // Workflow 读取权限
+    PERMISSIONS.WORKFLOW_READ,
   ],
 };
