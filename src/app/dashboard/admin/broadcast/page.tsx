@@ -82,7 +82,10 @@ export default function BroadcastManagePage() {
         throw new Error(data.error || '保存失败');
       }
 
-      toast.success('广播配置已保存，将在 30 秒内自动生效');
+      toast.success('广播配置已保存');
+      
+      // 强制刷新页面让跑马灯立即生效
+      window.location.reload();
     } catch (e: any) {
       toast.error(e.message || '保存失败');
     } finally {

@@ -33,35 +33,27 @@ export function BroadcastMarquee() {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [messages, setMessages] = useState<string[]>([]);
 
-  // 获取广播配置
-  const fetchConfig = async () => {
-    try {
-      const res = await fetch('/api/broadcast');
-      const data = await res.json();
-      setConfig(data.config);
-      // 支持多条消息，用 || 分隔
-      const msgList = data.config.content
-        .split('||')
-        .map((s: string) => s.trim())
-        .filter((s: string) => s.length > 0);
-      setMessages(msgList);
-    } catch {
-      // 使用默认配置
-      setConfig({
-        content: '欢迎使用 AI4WEB 测试平台',
-        enabled: true,
-        color: 'blue',
-      });
-      setMessages(['欢迎使用 AI4WEB 测试平台']);
-    }
-  };
-
   useEffect(() => {
-    fetchConfig();
-    
-    // 每 30 秒刷新一次配置（支持动态更新）
-    const interval = setInterval(fetchConfig, 30000);
-    return () => clearInterval(interval);
+    fetch('/api/broadcast')
+      .then((res) => res.json())
+      .then((data) => {
+        setConfig(data.config);
+        // 支持多条消息，用 || 分隔
+        const msgList = data.config.content
+          .split('||')
+          .map((s: string) => s.trim())
+          .filter((s: string) => s.length > 0);
+        setMessages(msgList);
+      })
+      .catch(() => {
+        // 使用默认配置
+        setConfig({
+          content: '欢迎使用 AI4WEB 测试平台',
+          enabled: true,
+          color: 'blue',
+        });
+        setMessages(['欢迎使用 AI4WEB 测试平台']);
+      });
   }, []);
 
   // 多条消息轮播
@@ -69,7 +61,7 @@ export function BroadcastMarquee() {
     if (messages.length <= 1) return;
     const interval = setInterval(() => {
       setCurrentMessageIndex((prev) => (prev + 1) % messages.length);
-    }, 20000); // 每20秒切换一条消息
+    }, 20000);
     return () => clearInterval(interval);
   }, [messages.length]);
 
