@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { routeRequest, routeStreamRequest, RouteError } from '@/lib/claude-router/router';
+import { routeRequest, routeStreamRequest, RouteError } from '@/lib/model-client';
 
 /**
  * 生成 Anthropic 格式的消息 ID

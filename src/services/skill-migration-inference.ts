@@ -3,7 +3,7 @@
  * 使用 LLM 分析 Skill 内容，推断正确的语言和漏洞类型
  */
 
-import { routeRequest } from '@/lib/claude-router/router';
+import { routeRequest } from '@/lib/model-client';
 import { prisma } from '@/lib/prisma';
 
 // ============================================================================

@@ -3,7 +3,7 @@
  * 使用 LLM 判断两个 Skill 是否真正功能重复
  */
 
-import { routeRequest } from '@/lib/claude-router/router';
+import { routeRequest } from '@/lib/model-client';
 
 // ============================================================================
 // Types

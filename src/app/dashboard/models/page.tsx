@@ -524,6 +524,11 @@ export default function ModelsPage() {
                         <div className="flex items-center gap-2">
                           <Cpu size={16} className="text-gray-400" />
                           <span className="font-medium text-gray-900">{model.name}</span>
+                          {model.isDefault && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-800 rounded">
+                              默认
+                            </span>
+                          )}
                           {model.userId === null && (
                             <span className="text-xs text-gray-500">(系统)</span>
                           )}
