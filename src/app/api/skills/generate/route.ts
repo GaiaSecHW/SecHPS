@@ -1,6 +1,5 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -10,7 +9,7 @@ import {
   extractCwe,
   type SkillIntent,
 } from '@/lib/skill-builder';
-import { trackSystemTokenUsage, extractTokenUsageFromResponse, calculateSystemCost } from '@/lib/system-token-tracker';
+import { routeRequestWithDefaultModel, getDefaultModelInfo, RouteError } from '@/lib/model-client';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
@@ -42,15 +41,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 获取模型配置
-    const modelConfig = await getModelConfig();
-    if (!modelConfig) {
+    const modelInfo = await getDefaultModelInfo();
+    if (!modelInfo) {
       return NextResponse.json(
         { details: { error: '模型配置不存在，请先在系统设置中配置 AI 模型' } },
         { status: 500 }
       );
     }
 
-    logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelConfig.defaultModel } });
+    logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelInfo.defaultModel } });
 
     // 使用公共模块构建提示词
     const systemPrompt = buildSystemPrompt();
@@ -62,25 +61,23 @@ export async function POST(request: NextRequest) {
       outputTemplate = await getStandardOutputTemplate();
     }
 
-    // 调用大模型
+    // 调用大模型（使用统一的 model-client，自动统计 Token）
     logger.debug(LOG_MODULES.SKILL, '开始调用大模型');
-    const response = await callModel(modelConfig, systemPrompt, userPrompt);
+    const response = await routeRequestWithDefaultModel(
+      [{ role: 'user', content: userPrompt }],
+      {
+        system: systemPrompt,
+        max_tokens: 32000,
+        temperature: 0.7,
+        context: {
+          userId: payload.userId,
+          username: payload.username,
+          scene: 'skill-generate',
+          description: `Skill生成: ${intent.name || '未命名'}`,
+        },
+      }
+    );
     logger.debug(LOG_MODULES.SKILL, '大模型响应完成');
-    
-    // 统计 Token 使用量
-    const tokenUsage = extractTokenUsageFromResponse(response);
-    if (tokenUsage) {
-      const estimatedCost = calculateSystemCost(tokenUsage.inputTokens, tokenUsage.outputTokens);
-      await trackSystemTokenUsage(
-        'skill-generate',
-        modelConfig.defaultModel,
-        tokenUsage.inputTokens,
-        tokenUsage.outputTokens,
-        estimatedCost,
-        `Skill生成: ${intent.name || '未命名'}`
-      );
-      logger.debug(LOG_MODULES.SKILL, 'Token 统计', { details: { inputTokens: tokenUsage.inputTokens, outputTokens: tokenUsage.outputTokens, cost: estimatedCost } });
-    }
 
     // 检查是否被截断
     const stopReason = response.stop_reason || response.choices?.[0]?.finish_reason;
@@ -133,117 +130,5 @@ export async function POST(request: NextRequest) {
     }
     
     return NextResponse.json({ details: { error: errorMessage } }, { status: 500 });
-  }
-}
-
-/**
- * 获取模型配置
- */
-async function getModelConfig(): Promise<{
-  providerType: string;
-  apiKey: string;
-  apiBaseUrl: string;
-  defaultModel: string;
-} | null> {
-  try {
-    const config = await prisma.modelConfig.findFirst({
-      where: { isActive: true, isDefault: true },
-    });
-
-    if (config) {
-      let models: string[] = ['default'];
-      try {
-        const parsed = JSON.parse(config.models);
-        models = Array.isArray(parsed) ? parsed : [parsed];
-      } catch {
-        models = [config.models || 'default'];
-      }
-
-      return {
-        providerType: config.providerType,
-        apiKey: config.apiKey,
-        apiBaseUrl: config.apiBaseUrl,
-        defaultModel: models[0] || 'default',
-      };
-    }
-} catch (error) {
-      logger.errorNoUser(LOG_MODULES.SKILL, '获取模型配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
-    }
-
-    return null;
-  }
-
-/**
- * 调用大模型
- */
-async function callModel(
-  config: { providerType: string; apiKey: string; apiBaseUrl: string; defaultModel: string },
-  systemPrompt: string,
-  userPrompt: string
-): Promise<any> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 600000); // 10分钟超时
-
-  try {
-    if (config.providerType === 'claude') {
-      let apiUrl = config.apiBaseUrl;
-      if (!apiUrl.includes('/v1/messages') && !apiUrl.endsWith('/messages')) {
-        apiUrl = apiUrl.replace(/\/$/, '') + '/v1/messages';
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': config.apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: config.defaultModel,
-          max_tokens: 32000,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Claude API 错误 (${response.status}): ${errorText}`);
-      }
-
-      return await response.json();
-    } else {
-      let apiUrl = config.apiBaseUrl;
-      if (!apiUrl.endsWith('/chat/completions')) {
-        apiUrl = apiUrl.replace(/\/$/, '') + '/v1/chat/completions';
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.defaultModel,
-          max_tokens: 32000,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API 错误 (${response.status}): ${errorText}`);
-      }
-
-      return await response.json();
-    }
-  } finally {
-    clearTimeout(timeoutId);
   }
 }

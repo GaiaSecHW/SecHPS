@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { routeRequestWithDefaultModel, getDefaultModelInfo } from '@/lib/model-client';
 import { analyzeSkillOverlap, getHighRiskGroups } from '@/services/skill-overlap-analysis';
 import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
 
@@ -199,12 +200,7 @@ async function executePredictionTask(taskId: string) {
     });
 
     // 获取模型配置
-    const modelConfig = await prisma.modelConfig.findFirst({
-      where: {
-        isActive: true,
-        isDefault: true,
-      },
-    });
+    const modelInfo = await getDefaultModelInfo();
 
     // 构建技能列表摘要
     const skillSummaries = skills.map(skill => {
@@ -245,14 +241,21 @@ async function executePredictionTask(taskId: string) {
     let matches: any[];
     let method: string;
 
-    if (!modelConfig) {
+    if (!modelInfo) {
       // 使用关键词匹配
       matches = simpleKeywordMatch(task.taskName, task.taskDescription, skillSummaries, task.topK);
       method = 'keyword';
     } else {
-      // 调用 LLM 匹配
+      // 调用 LLM 匹配（使用统一的 model-client，自动统计 Token）
       try {
-        matches = await callLLMForMatch(modelConfig, prompt, skillSummaries, task.topK);
+        matches = await callLLMForMatchWithDefaultModel(
+          modelInfo,
+          prompt,
+          skillSummaries,
+          task.topK,
+          task.userId,
+          task.taskName
+        );
         method = 'llm';
       } catch (error) {
         logger.errorNoUser(LOG_MODULES.SKILL, 'LLM 匹配失败，降级到关键词匹配', { details: { taskId, error: error instanceof Error ? error.message : String(error) } });
@@ -408,127 +411,85 @@ ${skillsTable}
 }
 
 /**
- * 调用 LLM 进行匹配
+ * 调用 LLM 进行匹配（使用统一 model-client）
  */
-async function callLLMForMatch(
-  modelConfig: {
-    apiBaseUrl: string;
+async function callLLMForMatchWithDefaultModel(
+  modelInfo: {
+    providerType: 'openai' | 'claude';
     apiKey: string;
-    models: string;
-    providerType: string;
+    apiBaseUrl: string;
+    defaultModel: string;
   },
   prompt: string,
-  skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[] }>,
-  topK: number
+  skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[]; cwe?: string | null }>,
+  topK: number,
+  userId: string,
+  taskName: string
 ): Promise<any[]> {
-  // 解析 models JSON 字符串并取第一个模型
-  let modelName = 'default';
   try {
-    const parsedModels = JSON.parse(modelConfig.models);
-    modelName = Array.isArray(parsedModels) ? parsedModels[0] : modelConfig.models;
-  } catch {
-    modelName = modelConfig.models.split(',')[0].trim();
-  }
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${modelConfig.apiKey}`,
-  };
-
-  // 处理 API URL 和请求格式
-  let apiUrl = modelConfig.apiBaseUrl;
-  let body: Record<string, unknown>;
-
-  if (modelConfig.providerType === 'claude') {
-    // Claude API
-    if (!apiUrl.includes('/v1/messages') && !apiUrl.endsWith('/messages')) {
-      apiUrl = apiUrl.replace(/\/$/, '') + '/v1/messages';
-    }
-    // Claude 使用不同的 headers
-    delete headers['Authorization'];
-    headers['x-api-key'] = modelConfig.apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-
-    // Claude 请求格式
-    body = {
-      model: modelName,
+    logger.debug(LOG_MODULES.SKILL, '调用 LLM API', { details: { provider: modelInfo.providerType, model: modelInfo.defaultModel } });
+    
+    const response = await routeRequestWithDefaultModel(
+      [{ role: 'user', content: '请从上面的 Skills 列表中选择最匹配的Skills并返回JSON格式结果' }],
+      {
+        system: prompt,
         max_tokens: 8192,
-      system: prompt,
-      messages: [{ role: 'user', content: '请从上面的 Skills 列表中选择最匹配的Skills并返回JSON格式结果' }],
-    };
-  } else {
-    // OpenAI 兼容 API
-    if (!apiUrl.endsWith('/chat/completions')) {
-      apiUrl = apiUrl.replace(/\/$/, '') + '/v1/chat/completions';
-    }
-
-    body = {
-      model: modelName,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
+        temperature: 0.3,
+        context: {
+          userId,
+          scene: 'skill-predict',
+          description: `任务预测: ${taskName}`,
         },
-      ],
-      temperature: 0.3,
-        max_tokens: 8192,
-    };
-  }
-
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LLM API error (${response.status}): ${errorText}`);
-  }
-
-  const llmResponse = await response.json();
-
-  // 解析响应
-  let content = '';
-  if (modelConfig.providerType === 'claude') {
-    // Claude 响应格式
-    if (Array.isArray(llmResponse.content)) {
-      const textBlock = llmResponse.content.find((block: any) => block.type === 'text');
-      content = textBlock?.text || '';
-    } else if (typeof llmResponse.content === 'string') {
-      content = llmResponse.content;
+      }
+    );
+    
+    logger.debug(LOG_MODULES.SKILL, 'LLM 响应接收', { details: { responsePreview: JSON.stringify(response).substring(0, 200) } });
+    
+    // 解析响应
+    let content = '';
+    if (modelInfo.providerType === 'claude') {
+      // Claude 响应格式
+      if (Array.isArray(response.content)) {
+        const textBlock = response.content.find((block: any) => block.type === 'text');
+        content = textBlock?.text || '';
+      } else if (typeof response.content === 'string') {
+        content = response.content;
+      }
+    } else {
+      // OpenAI 响应格式
+      content = response.choices?.[0]?.message?.content || '';
     }
-  } else {
-    // OpenAI 响应格式
-    content = llmResponse.choices?.[0]?.message?.content || '';
-  }
 
-  // 解析 LLM 返回的 JSON
-  const jsonMatch = content.match(/\[[\s\S]*\]/);
-  if (!jsonMatch) {
-    return [];
-  }
-
-  const parsed = JSON.parse(jsonMatch[0]);
-
-  // 构建 SkillMatch 结果
-  const matches: any[] = [];
-  for (const item of parsed) {
-    const skill = skills.find(s => s.id === item.skillId);
-    if (skill) {
-      matches.push({
-        skillId: skill.id,
-        skillName: skill.name,
-        displayName: skill.displayName,
-        category: skill.category,
-        techStack: skill.techStack,
-        relevance: Math.min(1, Math.max(0, item.relevance || 0.5)),
-        reason: item.reason || '匹配成功',
-      });
+    // 解析 LLM 返回的 JSON
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return [];
     }
-  }
 
-  return matches.slice(0, topK);
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    // 构建 SkillMatch 结果
+    const matches: any[] = [];
+    for (const item of parsed) {
+      const skill = skills.find(s => s.id === item.skillId);
+      if (skill) {
+        matches.push({
+          skillId: skill.id,
+          skillName: skill.name,
+          displayName: skill.displayName,
+          category: skill.category,
+          techStack: skill.techStack,
+          relevance: Math.min(1, Math.max(0, item.relevance || 0.5)),
+          reason: item.reason || '匹配成功',
+        });
+      }
+    }
+
+    return matches.slice(0, topK);
+  } catch (error) {
+    logger.errorNoUser(LOG_MODULES.SKILL, 'LLM 匹配错误', { details: { error: error instanceof Error ? error.message : String(error) } });
+    throw error; // 让调用者处理降级
+  }
 }
 
 /**

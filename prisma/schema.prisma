@@ -1032,6 +1032,8 @@ model TechStackOption {
 
 model TokenUsage {
   id                 String             @id
+  userId             String?            // 用户 ID
+  username           String?            // 用户名
   evaluationId       String?
   projectId          String?
   apiProvider        String
@@ -1052,6 +1054,7 @@ model TokenUsage {
   createdAt          DateTime           @default(now())
   EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
+  @@index([userId, createdAt])
   @@index([projectId, createdAt])
   @@index([evaluationId, createdAt])
   @@index([createdAt])
