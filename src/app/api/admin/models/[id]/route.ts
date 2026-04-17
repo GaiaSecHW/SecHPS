@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 
 // 获取单个模型配置
 export async function GET(
@@ -33,6 +34,15 @@ export async function GET(
         { error: '模型配置不存在' },
         { status: 404 }
       );
+    }
+
+    // 权限检查：管理员可查看所有，普通用户只能查看自己的或公开的模型
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    if (!isAdmin) {
+      // 检查是否是自己的模型或公开模型
+      if (model.userId !== payload.userId && !model.isPublic) {
+        return NextResponse.json({ error: '无权访问此模型配置' }, { status: 403 });
+      }
     }
 
     // 格式化返回数据
@@ -90,6 +100,18 @@ export async function PUT(
         { error: '模型配置不存在' },
         { status: 404 }
       );
+    }
+
+    // 权限检查：管理员可修改所有，普通用户只能修改自己的模型
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    if (!isAdmin) {
+      if (existingModel.userId !== payload.userId) {
+        return NextResponse.json({ error: '无权修改此模型配置' }, { status: 403 });
+      }
+      // 防止普通用户修改 userId
+      if (body.userId !== undefined && body.userId !== payload.userId) {
+        return NextResponse.json({ error: '不能修改模型归属用户' }, { status: 403 });
+      }
     }
 
     // 验证 providerType
@@ -197,6 +219,12 @@ export async function DELETE(
         { error: '模型配置不存在' },
         { status: 404 }
       );
+    }
+
+    // 权限检查：管理员可删除所有，普通用户只能删除自己的模型
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    if (!isAdmin && existingModel.userId !== payload.userId) {
+      return NextResponse.json({ error: '无权删除此模型配置' }, { status: 403 });
     }
 
     // 删除模型配置

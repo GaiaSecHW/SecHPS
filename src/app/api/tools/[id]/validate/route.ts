@@ -2,7 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 
 // POST /api/tools/:id/validate - 验证工具参数
 export async function POST(
@@ -20,6 +21,11 @@ export async function POST(
 
     if (!payload) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+    }
+
+    // 权限检查：需要 AGENT_EXECUTE 权限才能验证工具参数
+    if (!hasPermission(payload.permissions, PERMISSIONS.AGENT_EXECUTE)) {
+      return NextResponse.json({ error: '无权验证工具参数' }, { status: 403 });
     }
 
     const { id } = await params;

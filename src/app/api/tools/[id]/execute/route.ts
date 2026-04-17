@@ -2,7 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { PERMISSIONS } from '@/types/permissions';
 import { ToolExecutor } from '@/lib/tool-executor';
 
 // POST /api/tools/:id/execute - 执行工具
@@ -23,9 +24,26 @@ export async function POST(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
+    // 权限检查：需要 AGENT_EXECUTE 权限
+    if (!hasPermission(payload.permissions, PERMISSIONS.AGENT_EXECUTE)) {
+      return NextResponse.json({ error: '无权执行工具' }, { status: 403 });
+    }
+
     const { id } = await params;
     const body = await request.json();
     const { projectId, parameters } = body;
+
+    // 如果提供了 projectId，验证项目归属
+    if (projectId) {
+      const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+      const project = await prisma.project.findUnique({ where: { id: projectId } });
+      if (!project) {
+        return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+      }
+      if (!isAdmin && project.userId !== payload.userId) {
+        return NextResponse.json({ error: '无权访问此项目' }, { status: 403 });
+      }
+    }
 
     const tool = await prisma.tool.findUnique({ where: { id } });
 
