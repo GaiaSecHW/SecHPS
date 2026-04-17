@@ -90,6 +90,12 @@ export default function ModelsPage() {
   const [testResults, setTestResults] = useState<Record<string, {
     success: boolean;
     message: string;
+    response?: string;      // 模型返回的内容
+    usage?: {               // Token 使用量
+      inputTokens: number;
+      outputTokens: number;
+    };
+    duration?: number;      // 响应时间(ms)
     timestamp: number;
   }>>({});
 
@@ -346,16 +352,19 @@ export default function ModelsPage() {
         [model.id]: {
           success: data.success,
           message: data.message || (data.success ? '连接成功' : '连接失败'),
+          response: data.response,      // 保存模型返回的内容
+          usage: data.usage,            // 保存 Token 使用量
+          duration: data.duration,      // 保存响应时间
           timestamp: Date.now(),
         },
       });
 
       if (data.success) {
-        setSuccess(`模型 "${model.name}" 连接测试成功`);
-        setTimeout(() => setSuccess(null), 5000);
+        setSuccess(`模型 "${model.name}" 连接测试成功${data.response ? `: ${data.response.substring(0, 100)}${data.response.length > 100 ? '...' : ''}` : ''}`);
+        setTimeout(() => setSuccess(null), 10000);  // 延长到10秒
       } else {
         setError(data.message || '连接失败');
-        setTimeout(() => setError(null), 5000);
+        setTimeout(() => setError(null), 10000);
       }
     } catch (err: any) {
       const errorMsg = err.message || '模型连接测试失败';
@@ -612,20 +621,36 @@ export default function ModelsPage() {
                       </td>
                       <td className="px-4 py-4">
                         {testResults[model.id] ? (
-                          <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
-                              testResults[model.id].success
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {testResults[model.id].success ? (
-                              <Check size={12} />
-                            ) : (
-                              <AlertCircle size={12} />
+                          <div className="space-y-1">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
+                                testResults[model.id].success
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-red-100 text-red-800'
+                              }`}
+                            >
+                              {testResults[model.id].success ? (
+                                <Check size={12} />
+                              ) : (
+                                <AlertCircle size={12} />
+                              )}
+                              {testResults[model.id].success ? '正常' : '异常'}
+                              {testResults[model.id].duration && (
+                                <span className="ml-1 text-gray-500">({testResults[model.id].duration}ms)</span>
+                              )}
+                            </span>
+                            {testResults[model.id].response && (
+                              <div className="mt-1 p-2 bg-gray-50 rounded text-xs text-gray-700 max-w-xs overflow-hidden">
+                                <div className="font-medium text-gray-500 mb-1">模型响应:</div>
+                                <div className="break-words">{testResults[model.id].response}</div>
+                                {testResults[model.id].usage && (
+                                  <div className="mt-1 text-gray-400">
+                                    Token: {testResults[model.id].usage.inputTokens} + {testResults[model.id].usage.outputTokens}
+                                  </div>
+                                )}
+                              </div>
                             )}
-                            {testResults[model.id].success ? '正常' : '异常'}
-                          </span>
+                          </div>
                         ) : (
                           <span className="text-xs text-gray-400">未测试</span>
                         )}
