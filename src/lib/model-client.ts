@@ -600,18 +600,29 @@ export async function routeRequestWithDefaultModel(
 
 /**
  * 测试模型连接（统一入口）
- * 发送简单的 "Hi" 测试连通性，不统计 Token
+ * 发送简单的 "Hi" 测试连通性，返回模型响应内容
  * 
  * @param modelConfig 模型配置
- * @returns 测试结果
+ * @returns 测试结果（包含响应内容）
  */
 export async function testModelConnection(modelConfig: {
   providerType: string;
   apiKey: string;
   apiBaseUrl: string;
   modelName: string;
-}): Promise<{ success: boolean; message: string; error?: string }> {
+}): Promise<{ 
+  success: boolean; 
+  message: string; 
+  error?: string;
+  response?: string;      // 模型返回的内容
+  usage?: {               // Token 使用量
+    inputTokens: number;
+    outputTokens: number;
+  };
+  duration?: number;      // 响应时间(ms)
+}> {
   const { providerType, apiKey, apiBaseUrl, modelName } = modelConfig;
+  const startTime = Date.now();
   
   // 构建 URL 和请求体
   let url: string;
@@ -630,7 +641,7 @@ export async function testModelConnection(modelConfig: {
     };
     body = {
       model: modelName,
-      max_tokens: 10,
+      max_tokens: 100,
       messages: [{ role: 'user', content: 'Hi' }],
     };
   } else {
@@ -644,7 +655,7 @@ export async function testModelConnection(modelConfig: {
     };
     body = {
       model: modelName,
-      max_tokens: 10,
+      max_tokens: 100,
       messages: [{ role: 'user', content: 'Hi' }],
     };
   }
@@ -665,9 +676,46 @@ export async function testModelConnection(modelConfig: {
     });
     
     clearTimeout(timeoutId);
+    const duration = Date.now() - startTime;
     
     if (response.ok) {
-      return { success: true, message: '模型连接成功' };
+      const data = await response.json();
+      
+      // 提取响应内容
+      let responseContent = '';
+      let inputTokens = 0;
+      let outputTokens = 0;
+      
+      if (providerType === 'claude') {
+        // Claude 格式: content[0].text
+        if (data.content && Array.isArray(data.content)) {
+          const textBlock = data.content.find((block: any) => block.type === 'text');
+          responseContent = textBlock?.text || '';
+        }
+        // Token 使用量
+        if (data.usage) {
+          inputTokens = data.usage.input_tokens || 0;
+          outputTokens = data.usage.output_tokens || 0;
+        }
+      } else {
+        // OpenAI 格式: choices[0].message.content
+        responseContent = data.choices?.[0]?.message?.content || '';
+        // Token 使用量
+        if (data.usage) {
+          inputTokens = data.usage.prompt_tokens || 0;
+          outputTokens = data.usage.completion_tokens || 0;
+        }
+      }
+      
+      console.log(`[ModelClient] Test response: ${responseContent.substring(0, 100)}`);
+      
+      return { 
+        success: true, 
+        message: '模型连接成功',
+        response: responseContent,
+        usage: { inputTokens, outputTokens },
+        duration
+      };
     } else {
       const errorText = await response.text();
       let errorDetails = errorText;
@@ -680,11 +728,13 @@ export async function testModelConnection(modelConfig: {
       return { 
         success: false, 
         message: '模型连接失败', 
-        error: `HTTP ${response.status}: ${errorDetails}` 
+        error: `HTTP ${response.status}: ${errorDetails}`,
+        duration
       };
     }
   } catch (error) {
     clearTimeout(timeoutId);
+    const duration = Date.now() - startTime;
     
     let errorMessage = '请求失败';
     if (error instanceof Error && error.name === 'AbortError') {
@@ -696,7 +746,8 @@ export async function testModelConnection(modelConfig: {
     return { 
       success: false, 
       message: errorMessage, 
-      error: String(error) 
+      error: String(error),
+      duration
     };
   }
 }
