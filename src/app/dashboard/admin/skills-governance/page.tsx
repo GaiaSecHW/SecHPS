@@ -437,6 +437,27 @@ export default function SkillsGovernancePage() {
         )}
       </div>
 
+      {/* 待审核入口 */}
+      {overview?.pendingItems.llmAnalysis && overview.pendingItems.llmAnalysis > 0 && (
+        <Link
+          href="/dashboard/admin/skills-governance/analysis-review?status=pending"
+          className="block bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-200 p-4 hover:shadow-md transition-shadow"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <AlertTriangle className="text-orange-600" size={20} />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-900">待审核分析结果</h4>
+                <p className="text-sm text-gray-600">有 {overview.pendingItems.llmAnalysis} 个 LLM 分析结果等待人工确认</p>
+              </div>
+            </div>
+            <ChevronRight className="text-gray-400" size={24} />
+          </div>
+        </Link>
+      )}
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Skills总数 */}

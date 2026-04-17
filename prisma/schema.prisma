@@ -1232,6 +1232,7 @@ model SkillAnalysis {
   keyDifferences      String?   // JSON: 主要差异点列表
   sharedFunctionality String?   // JSON: 共享功能列表
   recommendation      String?   // 'merge' | 'keep_separate' | 'review'
+  entryPointComparison String?  // JSON: 入口点对比信息（新增）
   
   // 迁移推断结果（用于存量数据迁移）
   inferredLanguage    String?   // LLM 推断的语言

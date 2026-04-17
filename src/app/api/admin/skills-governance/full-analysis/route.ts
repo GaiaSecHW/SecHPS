@@ -503,55 +503,15 @@ export async function POST(request: Request) {
               ? JSON.stringify(result.analysis.keyDifferences) 
               : null,
             recommendation: result.analysis.recommendation,
-            reviewStatus: result.analysis.confidence >= 0.85 ? 'pending' : 'approved',
+            entryPointComparison: result.analysis.entryPointComparison 
+              ? JSON.stringify(result.analysis.entryPointComparison) 
+              : null,
+            reviewStatus: 'pending',  // 所有结果都需要人工确认
             analyzedBy: 'system',
           },
         });
         
-        // 高置信度重复：自动创建重复组
-        if (result.analysis.isDuplicate && result.analysis.confidence >= 0.85) {
-          logger.info(LOG_MODULES.SKILL, '发现高置信度重复', {
-            skillA: result.skillA,
-            skillB: result.skillB,
-            confidence: result.analysis.confidence,
-          });
-          
-          const existingGroup = await prisma.skillDuplicateGroup.findFirst({
-            where: {
-              members: {
-                some: { skillId: result.skillA },
-              },
-            },
-          });
-          
-          if (!existingGroup) {
-            // 获取技能信息
-            const skillA = await prisma.skill.findUnique({
-              where: { id: result.skillA },
-              select: { techStackId: true, vulnerabilityPatternId: true },
-            });
-            
-            const groupId = `group-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-            
-            await prisma.skillDuplicateGroup.create({
-              data: {
-                id: groupId,
-                language: skillA?.techStackId || 'unknown',
-                vulnerabilityType: skillA?.vulnerabilityPatternId || 'unknown',
-                status: 'pending_review',
-                skillCount: 2,
-                members: {
-                  create: [
-                    { skillId: result.skillA, role: 'primary', similarityScore: 1.0 },
-                    { skillId: result.skillB, role: 'member', similarityScore: result.analysis.confidence },
-                  ],
-                },
-              },
-            });
-            duplicateGroupsCreated++;
-            logger.info(LOG_MODULES.SKILL, '创建重复组', { groupId });
-          }
-        }
+        // 不再自动创建重复组，由人工审核后创建
         
         savedCount++;
       } catch (e) {
