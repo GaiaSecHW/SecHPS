@@ -142,22 +142,16 @@ function DashboardLayoutContent({
             我的项目
           </NavLink>
 
-          {/* Agent编排 */}
+          {/* 工作流 */}
           {!collapsed && (
             <div className="pt-4 pb-1">
-              <p className="text-xs text-gray-500 uppercase tracking-wider px-2">Agent编排</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider px-2">工作流</p>
             </div>
           )}
           {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
           
-          <NavLink href="/dashboard/agent-teams" icon={<Users size={20} />} collapsed={collapsed}>
-            Agent 团队
-          </NavLink>
           <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />} collapsed={collapsed}>
             工作流编排
-          </NavLink>
-          <NavLink href="/dashboard/agent-definitions" icon={<Brain size={20} />} collapsed={collapsed}>
-            Agent 定义
           </NavLink>
           <NavLink href="/dashboard/skills" icon={<Award size={20} />} collapsed={collapsed}>
             Skills 管理
