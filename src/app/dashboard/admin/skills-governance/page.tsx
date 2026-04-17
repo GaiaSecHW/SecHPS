@@ -55,6 +55,8 @@ interface OverlapPair {
 interface PendingItems {
   impactAnalysis: number;
   mergeRecords: number;
+  llmAnalysis: number;
+  duplicateGroups: number;
 }
 
 interface GovernanceOverview {
@@ -315,7 +317,10 @@ export default function SkillsGovernancePage() {
   }
 
   const stats = overview?.stats;
-  const pendingTotal = (overview?.pendingItems.impactAnalysis || 0) + (overview?.pendingItems.mergeRecords || 0);
+  const pendingTotal = (overview?.pendingItems.impactAnalysis || 0) + 
+                       (overview?.pendingItems.mergeRecords || 0) + 
+                       (overview?.pendingItems.llmAnalysis || 0) + 
+                       (overview?.pendingItems.duplicateGroups || 0);
 
   return (
     <div className="space-y-6">
@@ -502,7 +507,7 @@ export default function SkillsGovernancePage() {
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            影响分析: {overview?.pendingItems.impactAnalysis || 0} | 合并: {overview?.pendingItems.mergeRecords || 0}
+            LLM分析: {overview?.pendingItems.llmAnalysis || 0} | 重复组: {overview?.pendingItems.duplicateGroups || 0} | 影响: {overview?.pendingItems.impactAnalysis || 0}
           </p>
         </div>
       </div>

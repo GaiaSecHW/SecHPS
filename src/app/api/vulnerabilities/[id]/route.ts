@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/vulnerabilities/:id - 获取漏洞详情
+// 数据隔离：普通用户只能查看自己项目的漏洞，管理员可以查看所有
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,8 +26,18 @@ export async function GET(
 
     const { id } = await params;
 
-    const vulnerability = await prisma.vulnerability.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件
+    let where: any = { id };
+    if (!isAdmin) {
+      // 普通用户：通过 Project.userId 验证所有权
+      where.Project = { userId: payload.userId };
+    }
+
+    const vulnerability = await prisma.vulnerability.findFirst({
+      where,
       include: {
         Project: {
           select: { id: true, name: true },
@@ -58,6 +69,7 @@ export async function GET(
 }
 
 // PUT /api/vulnerabilities/:id - 更新漏洞
+// 数据隔离：普通用户只能更新自己项目的漏洞，管理员可以更新所有
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -76,12 +88,25 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const body = await request.json();
 
-    const vulnerability = await prisma.vulnerability.findUnique({ where: { id } });
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 验证所有权
+    let existingWhere: any = { id };
+    if (!isAdmin) {
+      existingWhere.Project = { userId: payload.userId };
+    }
+
+    const vulnerability = await prisma.vulnerability.findFirst({ 
+      where: existingWhere,
+      include: { Project: { select: { userId: true } } },
+    });
     if (!vulnerability) {
       return NextResponse.json({ error: '漏洞不存在' }, { status: 404 });
     }
+
+    const body = await request.json();
 
     const updateData: Record<string, unknown> = {};
     if (body.title !== undefined) updateData.title = body.title;
@@ -97,6 +122,7 @@ export async function PUT(
     if (body.aiAnalysis !== undefined) updateData.aiAnalysis = body.aiAnalysis;
     if (body.fixSuggestion !== undefined) updateData.fixSuggestion = body.fixSuggestion;
     if (body.notes !== undefined) updateData.notes = body.notes;
+    // 注意：projectId 不在更新字段中，防止漏洞转移到其他项目
 
     const updated = await prisma.vulnerability.update({
       where: { id },
@@ -118,6 +144,7 @@ export async function PUT(
 }
 
 // DELETE /api/vulnerabilities/:id - 删除漏洞
+// 数据隔离：普通用户只能删除自己项目的漏洞，管理员可以删除所有
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -137,7 +164,16 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const vulnerability = await prisma.vulnerability.findUnique({ where: { id } });
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 验证所有权
+    let where: any = { id };
+    if (!isAdmin) {
+      where.Project = { userId: payload.userId };
+    }
+
+    const vulnerability = await prisma.vulnerability.findFirst({ where });
     if (!vulnerability) {
       return NextResponse.json({ error: '漏洞不存在' }, { status: 404 });
     }

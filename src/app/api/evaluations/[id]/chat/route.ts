@@ -10,6 +10,8 @@ interface ChatRequest {
   message: string;
 }
 
+// POST /api/evaluations/[id]/chat - 继续对话
+// 数据隔离：普通用户只能在自己项目的评估中对话，管理员可以在所有评估中对话
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -34,9 +36,14 @@ export async function POST(
       return NextResponse.json({ error: '消息不能为空' }, { status: 400 });
     }
 
-    // 获取评估会话
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 获取评估会话并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: {
         Project: {
           include: {
@@ -48,6 +55,11 @@ export async function POST(
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

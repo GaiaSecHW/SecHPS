@@ -1,4 +1,5 @@
 // src/app/api/agent/executions/[id]/route.ts
+// 数据隔离：普通用户只能查看自己项目的执行记录，管理员可以查看所有
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -24,8 +25,18 @@ export async function GET(
 
     const { id } = await params;
 
-    const execution = await prisma.skillExecution.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件
+    let where: any = { id };
+    if (!isAdmin) {
+      // 普通用户：通过 SkillExecution.Project.userId 验证所有权
+      where.Project = { userId: payload.userId };
+    }
+
+    const execution = await prisma.skillExecution.findFirst({
+      where,
       include: {
         Skill: {
           select: { id: true, name: true, displayName: true, category: true },

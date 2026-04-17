@@ -1,6 +1,8 @@
 /**
  * 项目会话列表 API
  * 从数据库获取项目的评估会话历史
+ * 
+ * 数据隔离：普通用户只能查看自己项目的会话，管理员可以查看所有
  */
 
 import { NextResponse } from 'next/server';
@@ -26,6 +28,24 @@ export async function GET(
     }
 
     const { id } = await params;
+
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 验证项目所有权
+    let projectWhere: any = { id };
+    if (!isAdmin) {
+      // 普通用户：只能查看自己项目的会话
+      projectWhere.userId = payload.userId;
+    }
+
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+    }
 
     // 从 URL 参数获取分页信息
     const url = new URL(request.url);

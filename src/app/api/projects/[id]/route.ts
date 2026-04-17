@@ -5,6 +5,8 @@ import { PERMISSIONS } from '@/types/permissions';
 import { rm, stat } from 'fs/promises';
 
 // 获取单个项目详情
+// 普通用户：只能查看自己的项目
+// 管理员：可以查看所有项目
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -15,11 +17,22 @@ export async function GET(
     if (!auth.success) {
       return authErrorResponse(auth);
     }
+    const payload = auth.payload;
 
     const { id } = await params;
 
-    const project = await prisma.project.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件
+    let where: any = { id };
+    if (!isAdmin) {
+      // 普通用户：只能查看自己的项目
+      where.userId = payload.userId;
+    }
+
+    const project = await prisma.project.findFirst({
+      where,
       include: {
         ProjectFile: {
           orderBy: { uploadedAt: 'desc' },
@@ -42,6 +55,8 @@ export async function GET(
 }
 
 // 更新项目
+// 只能更新自己的项目，管理员可以更新所有项目
+// 注意：userId 字段不允许修改（防止项目接管攻击）
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -52,16 +67,37 @@ export async function PUT(
     if (!auth.success) {
       return authErrorResponse(auth);
     }
+    const payload = auth.payload;
 
     const { id } = await params;
+
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查项目是否存在及所有权
+    const existingProject = await prisma.project.findUnique({
+      where: { id },
+    });
+
+    if (!existingProject) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+    }
+
+    // 检查权限：只能更新自己的项目，管理员可以更新所有
+    if (!isAdmin && existingProject.userId !== payload.userId) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+    }
+
     const body = await request.json();
 
+    // 更新项目（userId 不允许修改）
     const project = await prisma.project.update({
       where: { id },
       data: {
         name: body.name,
         description: body.description,
         techStack: body.techStack,
+        // 注意：userId 不在更新字段中，防止项目接管攻击
       },
     });
 
@@ -73,6 +109,8 @@ export async function PUT(
 }
 
 // 部分更新项目（PATCH）
+// 只能更新自己的项目，管理员可以更新所有项目
+// 注意：userId 字段不允许修改（防止项目接管攻击）
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -83,11 +121,30 @@ export async function PATCH(
     if (!auth.success) {
       return authErrorResponse(auth);
     }
+    const payload = auth.payload;
 
     const { id } = await params;
+
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查项目是否存在及所有权
+    const existingProject = await prisma.project.findUnique({
+      where: { id },
+    });
+
+    if (!existingProject) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+    }
+
+    // 检查权限：只能更新自己的项目，管理员可以更新所有
+    if (!isAdmin && existingProject.userId !== payload.userId) {
+      return NextResponse.json({ error: '项目不存在' }, { status: 404 });
+    }
+
     const body = await request.json();
 
-    // 构建更新数据
+    // 构建更新数据（userId 不允许修改）
     const updateData: any = {};
     
     if (body.name !== undefined) updateData.name = body.name;
@@ -98,6 +155,7 @@ export async function PATCH(
     if (body.adminPassword !== undefined) updateData.adminPassword = body.adminPassword;
     if (body.normalUsername !== undefined) updateData.normalUsername = body.normalUsername;
     if (body.normalPassword !== undefined) updateData.normalPassword = body.normalPassword;
+    // 注意：userId 不在更新字段中，防止项目接管攻击
 
     const project = await prisma.project.update({
       where: { id },
@@ -112,6 +170,7 @@ export async function PATCH(
 }
 
 // 删除项目
+// 只能删除自己的项目，管理员可以删除所有项目
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -122,12 +181,23 @@ export async function DELETE(
     if (!auth.success) {
       return authErrorResponse(auth);
     }
+    const payload = auth.payload;
 
     const { id } = await params;
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件
+    let where: any = { id };
+    if (!isAdmin) {
+      // 普通用户：只能删除自己的项目
+      where.userId = payload.userId;
+    }
+
     // 获取项目信息（包括文件和评估会话）
-    const project = await prisma.project.findUnique({
-      where: { id },
+    const project = await prisma.project.findFirst({
+      where,
       include: {
         ProjectFile: true,
         EvaluationSession: true,

@@ -1,4 +1,5 @@
 // src/app/api/messages/[id]/route.ts
+// 数据隔离：普通用户只能查看自己项目评估的消息，管理员可以查看所有
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -26,9 +27,19 @@ export async function GET(
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 构建查询条件
+    let where: any = { id };
+    if (!isAdmin) {
+      // 普通用户：通过 SessionMessage.EvaluationSession.Project.userId 验证所有权
+      where.EvaluationSession = { Project: { userId: payload.userId } };
+    }
+
     // 查找消息
-    const message = await prisma.sessionMessage.findUnique({
-      where: { id },
+    const message = await prisma.sessionMessage.findFirst({
+      where,
       include: {
         EvaluationSession: {
           select: {

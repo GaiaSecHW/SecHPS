@@ -1,4 +1,5 @@
 // src/app/api/autonomous-evolution/[id]/route.ts
+// 数据隔离：普通用户只能操作自己的进化经验，管理员可以操作所有
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -14,7 +15,17 @@ export async function GET(
   if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
 
   const { id } = await params;
-  const item = await prisma.autonomousEvolutionExperience.findUnique({ where: { id } });
+
+  // 检查是否是管理员
+  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+  // 构建查询条件
+  let where: any = { id };
+  if (!isAdmin) {
+    where.userId = payload.userId;
+  }
+
+  const item = await prisma.autonomousEvolutionExperience.findFirst({ where });
   if (!item) return NextResponse.json({ error: '未找到' }, { status: 404 });
   return NextResponse.json(item);
 }
@@ -29,6 +40,19 @@ export async function PUT(
   if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
 
   const { id } = await params;
+
+  // 检查是否是管理员
+  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+  // 验证所有权
+  let where: any = { id };
+  if (!isAdmin) {
+    where.userId = payload.userId;
+  }
+
+  const existing = await prisma.autonomousEvolutionExperience.findFirst({ where });
+  if (!existing) return NextResponse.json({ error: '未找到' }, { status: 404 });
+
   const body = await request.json() as { directSolution?: string; lesson?: string };
 
   // Only allow editing directSolution and lesson
@@ -50,6 +74,19 @@ export async function DELETE(
   if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
 
   const { id } = await params;
+
+  // 检查是否是管理员
+  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+  // 验证所有权
+  let where: any = { id };
+  if (!isAdmin) {
+    where.userId = payload.userId;
+  }
+
+  const existing = await prisma.autonomousEvolutionExperience.findFirst({ where });
+  if (!existing) return NextResponse.json({ error: '未找到' }, { status: 404 });
+
   await prisma.autonomousEvolutionExperience.delete({ where: { id } });
   return NextResponse.json({ success: true });
 }

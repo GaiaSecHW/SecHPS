@@ -1,4 +1,4 @@
-﻿// src/app/api/vulnerabilities/route.ts
+// src/app/api/vulnerabilities/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -9,6 +9,7 @@ import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { combineWhereClauses, buildDateRangeFilter, buildStatusFilter } from '@/lib/query-optimizer';
 
 // GET /api/vulnerabilities - 获取漏洞列表
+// 数据隔离：普通用户只能看到自己项目的漏洞，管理员可以看到所有漏洞
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -28,6 +29,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ details: { error: '权限不足' } }, { status: 403 });
     }
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId') || undefined;
     const status = searchParams.get('status')?.split(',') || undefined;
@@ -41,9 +45,33 @@ export async function GET(request: Request) {
 
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
 
+    // 数据隔离：普通用户只能查看自己项目的漏洞
+    let projectFilter: any = undefined;
+    if (!isAdmin) {
+      const userProjects = await prisma.project.findMany({
+        where: { userId: payload.userId },
+        select: { id: true },
+      });
+      if (projectId) {
+        // 如果指定了 projectId，检查是否属于用户
+        if (!userProjects.some(p => p.id === projectId)) {
+          return NextResponse.json({ details: { error: '项目不存在' } }, { status: 404 });
+        }
+        projectFilter = { projectId };
+      } else {
+        // 未指定 projectId，查看所有用户项目的漏洞
+        projectFilter = { projectId: { in: userProjects.map(p => p.id) } };
+      }
+    } else {
+      // 管理员：可以查看所有项目的漏洞
+      if (projectId) {
+        projectFilter = { projectId };
+      }
+    }
+
     // 构建查询条件
     const where = combineWhereClauses(
-      projectId ? { projectId } : undefined,
+      projectFilter,
       buildStatusFilter(status),
       severity ? { severity: { in: severity } } : undefined,
       type ? { type } : undefined,
@@ -97,6 +125,7 @@ export async function GET(request: Request) {
 }
 
 // POST /api/vulnerabilities - 创建漏洞（内部使用）
+// 数据隔离：普通用户只能在自己项目中创建漏洞，管理员可以在任意项目创建
 export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -139,6 +168,23 @@ export async function POST(request: Request) {
         { details: { error: '缺少必填字段' } },
         { status: 400 }
       );
+    }
+
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 数据隔离：验证项目所有权
+    let projectWhere: any = { id: projectId };
+    if (!isAdmin) {
+      projectWhere.userId = payload.userId;
+    }
+
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
+    });
+
+    if (!project) {
+      return NextResponse.json({ details: { error: '项目不存在' } }, { status: 404 });
     }
 
     const vulnerability = await prisma.vulnerability.create({

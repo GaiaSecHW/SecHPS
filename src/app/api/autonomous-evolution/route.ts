@@ -1,5 +1,6 @@
 // src/app/api/autonomous-evolution/route.ts
 // GET 列表（支持筛选/分页）
+// 数据隔离：普通用户只能查看自己的进化经验，管理员可以查看所有
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -17,6 +18,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: '禁止访问' }, { status: 403 });
   }
 
+  // 检查是否是管理员
+  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') || '1');
   const pageSize = parseInt(searchParams.get('pageSize') || '20');
@@ -26,6 +30,12 @@ export async function GET(request: Request) {
   const search = searchParams.get('search') || undefined;
 
   const where: Record<string, unknown> = {};
+  
+  // 数据隔离：普通用户只能查看自己的进化经验
+  if (!isAdmin) {
+    where.userId = payload.userId;
+  }
+  
   if (errorCategory) where.errorCategory = errorCategory;
   if (isInjected !== null && isInjected !== '') where.isInjected = isInjected === 'true';
   if (sourceModel) where.sourceModel = sourceModel;

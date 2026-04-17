@@ -3,6 +3,7 @@
 // Ralph Loop Agent 启动端点
 // 使用 Ralph Loop Agent 来解决任务结束时间不稳定的问题
 //
+// 数据隔离：普通用户只能启动自己项目评估的 Ralph Agent，管理员可以启动所有
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -80,16 +81,7 @@ async function getModelConfig() {
  *
  * 使用 Ralph Loop Agent 启动评估任务
  *
- * 示例请求体：
- * {
- *   "maxIterations": 15,
- *   "maxTokens": 100000,
- *   "maxCost": 5.00,
- *   "verifyCompletionConfig": {
- *     "type": "keyword",
- *     "keywords": ["任务完成", "评估完成"]
- *   }
- * }
+ * 数据隔离：普通用户只能启动自己项目评估的 Ralph Agent，管理员可以启动所有
  */
 export async function POST(
   request: Request,
@@ -109,11 +101,16 @@ export async function POST(
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 2. 获取评估会话信息
+    // 2. 获取评估会话信息并验证所有权
     const { id } = await params;
 
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: {
         Project: {
           include: {
@@ -125,6 +122,11 @@ export async function POST(
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

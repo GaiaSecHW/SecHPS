@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { createClaudeAgentService, ClaudeAgentCallbacks } from '@/services/ai';
 
 // POST /api/evaluations/[id]/ask-progress - 询问评估进展
+// 数据隔离：普通用户只能询问自己项目评估的进展，管理员可以询问所有
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,9 +26,14 @@ export async function POST(
 
     const { id } = await params;
 
-    // 获取评估会话
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 获取评估会话并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: {
         Project: {
           include: { ProjectFile: true, OpencodeConfig: true, User: true },
@@ -36,6 +42,11 @@ export async function POST(
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

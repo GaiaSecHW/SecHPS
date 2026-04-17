@@ -36,6 +36,16 @@ export async function GET(request: Request) {
       where: { status: 'pending' },
     });
 
+    // 7. 获取待审核的 LLM 分析结果数量
+    const pendingAnalysisCount = await prisma.skillAnalysis.count({
+      where: { reviewStatus: 'pending' },
+    });
+
+    // 8. 获取待审核的重复组数量
+    const pendingDuplicateGroupCount = await prisma.skillDuplicateGroup.count({
+      where: { status: 'pending_review' },
+    });
+
     // 7. 组装响应
     const overview = {
       stats: statsSummary,
@@ -60,6 +70,8 @@ export async function GET(request: Request) {
       pendingItems: {
         impactAnalysis: pendingImpactCount,
         mergeRecords: pendingMergeCount,
+        llmAnalysis: pendingAnalysisCount,
+        duplicateGroups: pendingDuplicateGroupCount,
       },
     };
 

@@ -479,6 +479,12 @@ export async function POST(request: Request) {
     // 将结果保存到 SkillAnalysis 表
     let savedCount = 0;
     let duplicateGroupsCreated = 0;
+    let errorCount = 0;
+    
+    logger.info(LOG_MODULES.SKILL, '开始保存分析结果', { 
+      totalResults: results.results.length,
+      summary: results,
+    });
     
     for (const result of results.results) {
       try {
@@ -504,6 +510,12 @@ export async function POST(request: Request) {
         
         // 高置信度重复：自动创建重复组
         if (result.analysis.isDuplicate && result.analysis.confidence >= 0.85) {
+          logger.info(LOG_MODULES.SKILL, '发现高置信度重复', {
+            skillA: result.skillA,
+            skillB: result.skillB,
+            confidence: result.analysis.confidence,
+          });
+          
           const existingGroup = await prisma.skillDuplicateGroup.findFirst({
             where: {
               members: {
@@ -537,14 +549,26 @@ export async function POST(request: Request) {
               },
             });
             duplicateGroupsCreated++;
+            logger.info(LOG_MODULES.SKILL, '创建重复组', { groupId });
           }
         }
         
         savedCount++;
       } catch (e) {
-        // 忽略重复等错误
+        errorCount++;
+        logger.errorNoUser(LOG_MODULES.SKILL, '保存分析结果失败', {
+          skillA: result.skillA,
+          skillB: result.skillB,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
     }
+    
+    logger.info(LOG_MODULES.SKILL, '分析结果保存完成', {
+      savedCount,
+      errorCount,
+      duplicateGroupsCreated,
+    });
 
     logger.info(LOG_MODULES.SKILL, '全量 LLM 分析完成');
 

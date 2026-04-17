@@ -5,6 +5,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
 
 // 上传文件到项目
+// 数据隔离：普通用户只能向自己的项目上传文件，管理员可以向任何项目上传
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -24,8 +25,18 @@ export async function POST(
 
     const { id } = await params;
 
-    const project = await prisma.project.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 验证项目所有权
+    let projectWhere: any = { id };
+    if (!isAdmin) {
+      // 普通用户：只能向自己的项目上传文件
+      projectWhere.userId = payload.userId;
+    }
+
+    const project = await prisma.project.findFirst({
+      where: projectWhere,
     });
 
     if (!project) {

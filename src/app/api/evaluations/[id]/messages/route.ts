@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 
 // GET /api/evaluations/[id]/messages - 获取评估会话的消息列表
+// 数据隔离：普通用户只能查看自己项目评估的消息，管理员可以查看所有
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -25,20 +26,31 @@ export async function GET(
 
     const { id } = await params;
 
-    // 检查评估会话是否存在，并获取关联的项目信息
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查评估会话是否存在，并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: {
         Project: {
           select: {
             id: true,
             projectPath: true,
+            userId: true,
           },
         },
       },
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

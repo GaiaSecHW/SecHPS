@@ -7,6 +7,7 @@ import { hasPermission } from '@/lib/permissions';
 import { PERMISSIONS } from '@/types/permissions';
 
 // GET /api/evaluations/[id] - 获取评估会话详情
+// 数据隔离：普通用户只能查看自己项目的评估，管理员可以查看所有
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -31,9 +32,14 @@ export async function GET(
 
     const { id } = await params;
 
-    // 基础查询
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 基础查询（使用 findFirst 支持条件过滤）
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: {
         Project: {
           select: {
@@ -84,9 +90,9 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 归属校验
-    if (evaluation.Project.userId !== payload.userId) {
-      return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
     // 尝试获取模型配置信息（如果 modelConfigId 存在）
@@ -146,6 +152,7 @@ export async function GET(
 }
 
 // DELETE /api/evaluations/[id] - 删除评估会话
+// 数据隔离：普通用户只能删除自己项目的评估，管理员可以删除所有
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -170,9 +177,14 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // 检查评估会话是否存在并获取项目归属
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查评估会话是否存在并获取项目归属（使用 findFirst 支持条件过滤）
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: { Project: { select: { userId: true } } },
     });
 
@@ -180,9 +192,9 @@ export async function DELETE(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 归属校验
-    if (evaluation.Project.userId !== payload.userId) {
-      return NextResponse.json({ error: '无权删除此评估' }, { status: 403 });
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
     // 级联删除所有关联数据（使用事务）

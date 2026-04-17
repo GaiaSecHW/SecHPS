@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 
 // GET /api/evaluations/[id]/nodes - 获取评估会话的节点执行状态
+// 数据隔离：普通用户只能查看自己项目评估的节点，管理员可以查看所有
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -24,10 +25,16 @@ export async function GET(
 
     const { id } = await params;
 
-    // 获取评估会话
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 获取评估会话并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
       include: {
+        Project: { select: { userId: true } },
         NodeExecution: {
           orderBy: { order: 'asc' },
         },
@@ -35,6 +42,11 @@ export async function GET(
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -60,6 +72,7 @@ export async function GET(
 }
 
 // POST /api/evaluations/[id]/nodes - 更新节点执行状态
+// 数据隔离：普通用户只能更新自己项目评估的节点，管理员可以更新所有
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -86,12 +99,23 @@ export async function POST(
       return NextResponse.json({ error: '缺少必要参数' }, { status: 400 });
     }
 
-    // 验证评估会话存在
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 验证评估会话存在并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
+      include: { Project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -140,6 +164,7 @@ export async function POST(
 }
 
 // PUT /api/evaluations/[id]/nodes - 批量初始化节点执行记录
+// 数据隔离：普通用户只能初始化自己项目评估的节点，管理员可以初始化所有
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -166,12 +191,23 @@ export async function PUT(
       return NextResponse.json({ error: '缺少节点数据' }, { status: 400 });
     }
 
-    // 验证评估会话存在
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 验证评估会话存在并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
+      include: { Project: { select: { userId: true } } },
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

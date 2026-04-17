@@ -52,6 +52,7 @@ async function getTodosFromSession(sessionId: string): Promise<any[]> {
 }
 
 // GET /api/evaluations/[id]/todos - 获取评估会话的 TODO 列表
+// 数据隔离：普通用户只能查看自己项目评估的 TODO，管理员可以查看所有
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -71,13 +72,28 @@ export async function GET(
 
     const { id } = await params;
 
-    // 获取评估会话
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id },
-      select: { opencodeSessionId: true },
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 获取评估会话并验证所有权
+    let where: any = { id };
+    
+    const evaluation = await prisma.evaluationSession.findFirst({
+      where,
+      select: { 
+        opencodeSessionId: true,
+        todoList: true,
+        status: true,
+        Project: { select: { userId: true } },
+      },
     });
 
     if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 归属校验（管理员绕过）
+    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -89,14 +105,9 @@ export async function GET(
     console.log('[TODO] Fetching todos for session:', evaluation.opencodeSessionId);
 
     // 优先从数据库读取快照
-    const evalSession = await prisma.evaluationSession.findUnique({
-      where: { id },
-      select: { todoList: true, status: true },
-    });
-
-    if (evalSession?.todoList) {
+    if (evaluation.todoList) {
       try {
-        const todos = JSON.parse(evalSession.todoList);
+        const todos = JSON.parse(evaluation.todoList);
         if (Array.isArray(todos) && todos.length > 0) {
           console.log('[TODO] Returning', todos.length, 'todos from DB snapshot');
           return NextResponse.json({ todos, source: 'db' });
