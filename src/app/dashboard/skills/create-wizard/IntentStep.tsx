@@ -43,7 +43,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   
   // 漏洞模式选择相关
   const [vulnerabilityPatterns, setVulnerabilityPatterns] = useState<VulnerabilityPattern[]>([]);
-  const [patternCategories, setPatternCategories] = useState<string[]>([]);
+  const [patternCategories, setPatternCategories] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingPatterns, setLoadingPatterns] = useState(true);
   const [showPatternDropdown, setShowPatternDropdown] = useState(false);
   
@@ -53,20 +53,31 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   // 获取语言列表（从 categories.languages）
   const languageOptions = techStackCategories?.languages || techStackOptions || [];
   
-  // 加载漏洞模式
+  // 加载漏洞模式和分类（分别从两个 API）
   useEffect(() => {
-    const fetchPatterns = async () => {
+    const fetchData = async () => {
       try {
         setLoadingPatterns(true);
         const token = localStorage.getItem('token');
-        const response = await fetch('/api/vulnerability-patterns', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
         
-        if (response.ok) {
-          const resData = await response.json();
-          setVulnerabilityPatterns(resData.patterns || []);
-          setPatternCategories(resData.categories || []);
+        // 并行获取漏洞模式和分类
+        const [patternsRes, categoriesRes] = await Promise.all([
+          fetch('/api/vulnerability-patterns', {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch('/api/admin/categories', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ]);
+        
+        if (patternsRes.ok) {
+          const patternsData = await patternsRes.json();
+          setVulnerabilityPatterns(patternsData.patterns || []);
+        }
+        
+        if (categoriesRes.ok) {
+          const categoriesData = await categoriesRes.json();
+          setPatternCategories(categoriesData.categories || []);
         }
       } catch (error) {
         console.error('加载漏洞模式失败:', error);
@@ -74,7 +85,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         setLoadingPatterns(false);
       }
     };
-    fetchPatterns();
+    fetchData();
   }, []);
 
   // 加载 Skill 标准输出模板（从系统配置）
@@ -221,12 +232,12 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
             {showPatternDropdown && !loadingPatterns && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-80 overflow-y-auto">
                 {patternCategories.map((category) => (
-                  <div key={category}>
+                  <div key={category.value}>
                     <div className="px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-200">
-                      {category}
+                      {category.label}
                     </div>
                     {vulnerabilityPatterns
-                      .filter(p => p.category === category)
+                      .filter(p => p.category === category.value)
                       .map((pattern) => (
                         <button
                           key={pattern.id}

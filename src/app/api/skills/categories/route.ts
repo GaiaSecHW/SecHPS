@@ -3,10 +3,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
-import { getOffsetPagination } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
-// GET /api/skills/categories - 获取 Skills 分类列表
+// GET /api/skills/categories - 获取 Skills 分类列表（从 SystemConfig）
 export async function GET(request: Request) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -21,65 +20,45 @@ export async function GET(request: Request) {
       return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
     }
 
-    // 解析 URL 参数
-    const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1', 10);
-    const limit = parseInt(searchParams.get('limit') || '20', 10);
-
-    // 获取分页参数
-    const { skip, take } = getOffsetPagination({ page, limit });
-
-    // 获取总数
-    const total = await prisma.skill.count({
-      where: {
-        isActive: true,
-      },
+    // 从 SystemConfig 获取分类配置（唯一数据源）
+    const categoriesConfig = await prisma.systemConfig.findUnique({
+      where: { key: 'skill_categories' },
     });
 
-    // 获取分页数据
-    const categories = await prisma.skill.groupBy({
+    if (!categoriesConfig) {
+      return NextResponse.json({ categories: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } });
+    }
+
+    let categories: Array<{ value: string; label: string }> = [];
+    try {
+      categories = JSON.parse(categoriesConfig.value);
+    } catch {
+      logger.warn(LOG_MODULES.SKILL, '解析分类配置失败');
+      return NextResponse.json({ categories: [], pagination: { total: 0, page: 1, limit: 20, totalPages: 0 } });
+    }
+
+    // 获取每个分类的 Skill 数量
+    const skillCounts = await prisma.skill.groupBy({
       by: ['category'],
-      _count: {
-        id: true,
-      },
-      where: {
-        isActive: true,
-      },
-      skip,
-      take,
-      orderBy: {
-        category: 'asc',
-      },
+      where: { isActive: true },
+      _count: { id: true },
     });
 
-    const categoryLabels: Record<string, string> = {
-      'code-audit': '代码安全审计',
-      'auth': '认证与授权',
-      'sensitive': '敏感信息泄露',
-      'api': 'API 安全',
-      'config': '依赖与配置',
-      'crypto': '加密与数据',
-      'web': 'Web 安全',
-      'business': '业务逻辑',
-      'client': '客户端安全',
-      'cloud': '云与容器安全',
-    };
+    const countMap = new Map(skillCounts.map(s => [s.category, s._count.id]));
 
     const result = categories.map(c => ({
-      name: c.category,
-      label: categoryLabels[c.category] || c.category,
-      count: c._count.id,
+      name: c.value,
+      label: c.label,
+      count: countMap.get(c.value) || 0,
     }));
-
-    const totalPages = Math.ceil(total / take);
 
     return NextResponse.json({
       categories: result,
       pagination: {
-        total,
-        page,
-        limit: take,
-        totalPages,
+        total: result.length,
+        page: 1,
+        limit: result.length,
+        totalPages: 1,
       },
     });
   } catch (error) {
