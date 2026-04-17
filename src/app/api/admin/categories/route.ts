@@ -8,29 +8,28 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 基于 OWASP Top 10 2021 和 CWE Top 25 2023 的漏洞分类
 const DEFAULT_CATEGORIES = [
-  // 原有分类
-  { value: 'code-audit', label: '代码审计' },
-  { value: 'auth', label: '认证鉴权' },
-  { value: 'sensitive', label: '敏感信息' },
-  { value: 'api', label: 'API 安全' },
-  { value: 'config', label: '配置安全' },
-  { value: 'crypto', label: '加密解密' },
-  { value: 'web', label: 'Web 安全' },
-  { value: 'business', label: '业务逻辑' },
-  { value: 'client', label: '客户端安全' },
-  { value: 'cloud', label: '云安全' },
-  // 新增分类 - 基于 OWASP Top 10 2021
-  { value: 'access-control', label: '访问控制' },       // OWASP A01:2021
-  { value: 'design', label: '设计安全' },               // OWASP A04:2021
-  { value: 'components', label: '组件安全' },           // OWASP A06:2021
-  { value: 'integrity', label: '完整性安全' },          // OWASP A08:2021
-  { value: 'logging', label: '日志监控' },              // OWASP A09:2021
-  // 新增分类 - 基于 CWE Top 25 2023
-  { value: 'memory', label: '内存安全' },               // CWE-119, CWE-125, CWE-787
-  { value: 'file-ops', label: '文件操作' },             // CWE-22, CWE-73
-  { value: 'deserialization', label: '反序列化' },      // CWE-502
-  { value: 'input-validation', label: '输入验证' },     // CWE-20
-  { value: 'privilege', label: '权限管理' },            // CWE-269, CWE-732
+  // OWASP Top 10 2021
+  { value: 'access-control', label: '访问控制' },      // A01
+  { value: 'cryptography', label: '加密安全' },        // A02
+  { value: 'injection', label: '注入攻击' },           // A03
+  { value: 'design', label: '安全设计' },              // A04
+  { value: 'configuration', label: '安全配置' },       // A05
+  { value: 'components', label: '组件安全' },          // A06
+  { value: 'authentication', label: '身份认证' },      // A07
+  { value: 'integrity', label: '数据完整性' },         // A08
+  { value: 'logging', label: '日志监控' },             // A09
+  { value: 'ssrf', label: '服务端请求' },               // A10
+  // CWE Top 25 2023 补充
+  { value: 'memory', label: '内存安全' },              // CWE-787/125/416/476
+  { value: 'input-validation', label: '输入验证' },    // CWE-20
+  { value: 'privilege', label: '权限管理' },           // CWE-269/276
+  { value: 'sensitive', label: '敏感信息' },           // CWE-200/798
+  { value: 'file-ops', label: '文件操作' },            // CWE-22/434
+  // 业务通用
+  { value: 'business-logic', label: '业务逻辑' },
+  { value: 'compliance', label: '合规安全' },
+  // 其他
+  { value: 'other', label: '其他' },
 ];
 
 // GET /api/admin/categories - 获取漏洞分类列表
