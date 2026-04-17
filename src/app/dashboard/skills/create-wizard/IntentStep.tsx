@@ -1,27 +1,26 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { HelpCircle, Lightbulb, Eye, X, Loader2 } from 'lucide-react';
+import { HelpCircle, Lightbulb, Eye, X, Loader2, ChevronDown } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 
-const CATEGORIES = [
-  { value: 'code-audit', label: '代码安全审计', description: '检测代码中的安全漏洞' },
-  { value: 'auth', label: '认证与授权', description: '身份验证和权限控制问题' },
-  { value: 'sensitive', label: '敏感信息泄露', description: '敏感数据暴露风险' },
-  { value: 'api', label: 'API 安全', description: 'API 接口安全问题' },
-  { value: 'config', label: '依赖与配置', description: '配置错误和依赖漏洞' },
-  { value: 'crypto', label: '加密与数据', description: '加密算法和数据保护' },
-  { value: 'web', label: 'Web 安全', description: '常见 Web 攻击防护' },
-  { value: 'business', label: '业务逻辑', description: '业务流程安全风险' },
-  { value: 'client', label: '客户端安全', description: '前端和客户端漏洞' },
-  { value: 'cloud', label: '云与容器安全', description: '云服务和容器安全' },
-];
+// 漏洞模式数据结构
+interface VulnerabilityPattern {
+  id: string;
+  name: string;
+  displayName: string;
+  category: string;
+  cwe?: string;
+  languages?: string;
+}
 
 interface IntentData {
   name: string;
   description: string;
-  category: string;
-  techStack: string[];
+  category: string; // 保留用于兼容，但实际使用 vulnerabilityPatternId
+  techStack: string[]; // 保留用于兼容，但实际使用 techStackId
+  techStackId?: string; // 新增：单选语言 ID
+  vulnerabilityPatternId?: string; // 新增：漏洞类型 ID
   whatDoesItDo: string;
   whenShouldItTrigger: string;
   expectedOutput: string;
@@ -39,12 +38,44 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   
-  // 技术栈选择相关
-  const [techStackSearch, setTechStackSearch] = useState('');
+  // 技术栈选择相关（单选）
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   
+  // 漏洞模式选择相关
+  const [vulnerabilityPatterns, setVulnerabilityPatterns] = useState<VulnerabilityPattern[]>([]);
+  const [patternCategories, setPatternCategories] = useState<string[]>([]);
+  const [loadingPatterns, setLoadingPatterns] = useState(true);
+  const [showPatternDropdown, setShowPatternDropdown] = useState(false);
+  
   // 使用 Hook 获取技术栈选项
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  const { options: techStackOptions, categories: techStackCategories, loading: loadingTechStack } = useTechStackOptions();
+  
+  // 获取语言列表（从 categories.languages）
+  const languageOptions = techStackCategories?.languages || techStackOptions || [];
+  
+  // 加载漏洞模式
+  useEffect(() => {
+    const fetchPatterns = async () => {
+      try {
+        setLoadingPatterns(true);
+        const token = localStorage.getItem('token');
+        const response = await fetch('/api/vulnerability-patterns', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        
+        if (response.ok) {
+          const resData = await response.json();
+          setVulnerabilityPatterns(resData.patterns || []);
+          setPatternCategories(resData.categories || []);
+        }
+      } catch (error) {
+        console.error('加载漏洞模式失败:', error);
+      } finally {
+        setLoadingPatterns(false);
+      }
+    };
+    fetchPatterns();
+  }, []);
 
   // 加载 Skill 标准输出模板（从系统配置）
   useEffect(() => {
@@ -71,13 +102,41 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   const handleChange = (field: keyof IntentData, value: string | boolean | string[]) => {
     onChange({ ...data, [field]: value });
   };
+  
+  // 处理语言选择（单选）
+  const handleLanguageSelect = (language: string) => {
+    onChange({ 
+      ...data, 
+      techStack: [language], // 保持兼容性
+      techStackId: language, // 新字段：语言名称作为 ID（或可改为实际 ID）
+    });
+    setShowTechStackDropdown(false);
+  };
+  
+  // 处理漏洞模式选择
+  const handlePatternSelect = (pattern: VulnerabilityPattern) => {
+    onChange({
+      ...data,
+      category: pattern.category, // 保持兼容性
+      vulnerabilityPatternId: pattern.id, // 新字段
+    });
+    setShowPatternDropdown(false);
+  };
+  
+  // 获取选中的漏洞模式信息
+  const getSelectedPattern = (): VulnerabilityPattern | null => {
+    if (!data.vulnerabilityPatternId) return null;
+    return vulnerabilityPatterns.find(p => p.id === data.vulnerabilityPatternId) || null;
+  };
 
   const isValid = () => {
     return (
       data.name.trim() !== '' &&
       data.description.trim() !== '' &&
       data.whatDoesItDo.trim() !== '' &&
-      data.whenShouldItTrigger.trim() !== ''
+      data.whenShouldItTrigger.trim() !== '' &&
+      (data.techStackId || data.techStack?.length > 0) && // 必须选择语言
+      data.vulnerabilityPatternId // 必须选择漏洞类型
     );
   };
 
@@ -131,115 +190,141 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           </p>
         </div>
 
+        {/* 漏洞类型选择 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            分类 <span className="text-red-500">*</span>
+            漏洞类型 <span className="text-red-500">*</span>
           </label>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat.value}
-                type="button"
-                onClick={() => handleChange('category', cat.value)}
-                className={`px-4 py-3 rounded-md border-2 transition-all text-left ${
-                  data.category === cat.value
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <div className="font-medium text-sm">{cat.label}</div>
-                <div className="text-xs text-gray-500 mt-1">{cat.description}</div>
-              </button>
-            ))}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowPatternDropdown(!showPatternDropdown)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between bg-white"
+              disabled={loadingPatterns}
+            >
+              {loadingPatterns ? (
+                <span className="text-gray-500">加载中...</span>
+              ) : getSelectedPattern() ? (
+                <span className="text-gray-900">
+                  {getSelectedPattern()?.displayName}
+                  {getSelectedPattern()?.cwe && (
+                    <span className="text-gray-500 ml-2">({getSelectedPattern()?.cwe})</span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-gray-500">请选择漏洞类型...</span>
+              )}
+              <ChevronDown size={16} className="text-gray-400" />
+            </button>
+            
+            {/* 下拉选项 - 按分类分组 */}
+            {showPatternDropdown && !loadingPatterns && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-80 overflow-y-auto">
+                {patternCategories.map((category) => (
+                  <div key={category}>
+                    <div className="px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-200">
+                      {category}
+                    </div>
+                    {vulnerabilityPatterns
+                      .filter(p => p.category === category)
+                      .map((pattern) => (
+                        <button
+                          key={pattern.id}
+                          type="button"
+                          onClick={() => handlePatternSelect(pattern)}
+                          className={`w-full px-4 py-2 text-left hover:bg-gray-50 text-sm ${
+                            data.vulnerabilityPatternId === pattern.id
+                              ? 'bg-blue-50 text-blue-700'
+                              : ''
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span>{pattern.displayName}</span>
+                            {pattern.cwe && (
+                              <span className="text-xs text-gray-500">{pattern.cwe}</span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                ))}
+                {vulnerabilityPatterns.length === 0 && (
+                  <div className="px-4 py-2 text-sm text-gray-500">
+                    暂无漏洞类型数据
+                  </div>
+                )}
+              </div>
+            )}
+            {loadingPatterns && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+                <div className="flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-gray-500">加载中...</span>
+                </div>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              选择此 Skill 要检测的漏洞类型
+            </p>
           </div>
         </div>
 
-        {/* 技术栈选择 */}
+        {/* 语言选择（单选） */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            适合的技术栈
+            适用语言 <span className="text-red-500">*</span>
           </label>
           <div className="relative">
-            {/* 已选择的技术栈 */}
-            <div className="flex flex-wrap gap-2 mb-2">
-              {(data.techStack || []).map((ts) => (
-                <span
-                  key={ts}
-                  className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                >
-                  {ts}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleChange('techStack', (data.techStack || []).filter((t: string) => t !== ts));
-                    }}
-                    className="ml-2 text-blue-600 hover:text-blue-800"
-                  >
-                    <X size={14} />
-                  </button>
-                </span>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowTechStackDropdown(!showTechStackDropdown)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between bg-white"
+              disabled={loadingTechStack}
+            >
+              {loadingTechStack ? (
+                <span className="text-gray-500">加载中...</span>
+              ) : data.techStackId ? (
+                <span className="text-gray-900">{data.techStackId}</span>
+              ) : (
+                <span className="text-gray-500">请选择编程语言...</span>
+              )}
+              <ChevronDown size={16} className="text-gray-400" />
+            </button>
             
-            {/* 搜索输入 */}
-            <div className="relative">
-              <input
-                type="text"
-                value={techStackSearch}
-                onChange={(e) => {
-                  setTechStackSearch(e.target.value);
-                  setShowTechStackDropdown(true);
-                }}
-                onFocus={() => setShowTechStackDropdown(true)}
-                placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={loadingTechStack}
-              />
-              
-              {/* 下拉选项 */}
-              {showTechStackDropdown && !loadingTechStack && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {techStackOptions
-                    .filter((option) => 
-                      option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                      !(data.techStack || []).includes(option)
-                    )
-                    .slice(0, 20)
-                    .map((option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() => {
-                          handleChange('techStack', [...(data.techStack || []), option]);
-                          setTechStackSearch('');
-                          setShowTechStackDropdown(false);
-                        }}
-                        className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
-                      >
-                        {option}
-                      </button>
-                    ))}
-                  {techStackOptions.filter((option) => 
-                    option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                    !(data.techStack || []).includes(option)
-                  ).length === 0 && (
-                    <div className="px-4 py-2 text-sm text-gray-500">
-                      无匹配选项
-                    </div>
-                  )}
-                </div>
-              )}
-              {loadingTechStack && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
-                  <div className="flex items-center justify-center">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-sm text-gray-500">加载中...</span>
+            {/* 下拉选项 */}
+            {showTechStackDropdown && !loadingTechStack && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {languageOptions.map((language) => (
+                  <button
+                    key={language}
+                    type="button"
+                    onClick={() => handleLanguageSelect(language)}
+                    className={`w-full px-4 py-2 text-left hover:bg-gray-50 text-sm ${
+                      data.techStackId === language
+                        ? 'bg-blue-50 text-blue-700'
+                        : ''
+                    }`}
+                  >
+                    {language}
+                  </button>
+                ))}
+                {languageOptions.length === 0 && (
+                  <div className="px-4 py-2 text-sm text-gray-500">
+                    暂无语言数据
                   </div>
+                )}
+              </div>
+            )}
+            {loadingTechStack && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+                <div className="flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-gray-500">加载中...</span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
             <p className="mt-1 text-xs text-gray-500">
-              可选择多个技术栈，表示此 Skill 适用于这些技术（可选）
+              选择此 Skill 适用的编程语言
             </p>
           </div>
         </div>

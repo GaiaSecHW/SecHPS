@@ -16,8 +16,8 @@ import {
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
-import { getCategories, Category } from '@/lib/categories';
-import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { useTechStackOptionsWithIds, TechStackOptionWithId } from '@/hooks/useTechStackOptionsWithIds';
+import { useVulnerabilityPatterns, VulnerabilityPattern } from '@/hooks/useVulnerabilityPatterns';
 import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 使用公共模块的默认模板
@@ -32,13 +32,18 @@ export default function CreateSkillPage() {
   const [error, setError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('');
   const [content, setContent] = useState(DEFAULT_TEMPLATE);
   const [isPublic, setIsPublic] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [techStack, setTechStack] = useState<string[]>([]);
+  
+  // 技术栈单选（改为 ID）
+  const [techStackId, setTechStackId] = useState<string>('');
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  
+  // 漏洞模式单选（改为 ID）
+  const [vulnerabilityPatternId, setVulnerabilityPatternId] = useState<string>('');
+  const [showVulnerabilityDropdown, setShowVulnerabilityDropdown] = useState(false);
+  const [vulnerabilitySearch, setVulnerabilitySearch] = useState('');
 
   // AI 生成相关状态
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -65,8 +70,11 @@ export default function CreateSkillPage() {
     }
   };
 
-  // 使用 Hook 获取技术栈选项
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  // 使用 Hook 获取技术栈选项（带 ID，筛选 language 类别）
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds('language');
+  
+  // 使用 Hook 获取漏洞模式
+  const { patterns: vulnerabilityPatterns, groupedPatterns, loading: loadingVulnerabilityPatterns } = useVulnerabilityPatterns();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -80,20 +88,16 @@ export default function CreateSkillPage() {
     }
   }, []);
 
-  useEffect(() => {
-    // 加载分类
-    getCategories().then((cats) => {
-      setCategories(cats);
-      if (cats.length > 0 && !category) {
-        setCategory(cats[0].value);
-      }
-    });
-  }, [category]);
+  // 获取选中的技术栈对象
+  const selectedTechStack = techStackOptions.find(opt => opt.id === techStackId);
+  
+  // 获取选中的漏洞模式对象
+  const selectedVulnerabilityPattern = vulnerabilityPatterns.find(p => p.id === vulnerabilityPatternId);
 
   // AI 生成 Skill 内容
   const handleAiGenerate = async () => {
     if (!name.trim()) {
-      setAiGenerateError('请先填写 Skill 名称，AI 将根据名称和分类生成内容');
+      setAiGenerateError('请先填写 Skill 名称，AI 将根据名称和漏洞类型生成内容');
       return;
     }
 
@@ -132,7 +136,9 @@ try {
             intent: {
               name: name.trim(),
               description: name.trim(),
-              category: category || 'code-audit',
+              category: selectedVulnerabilityPattern?.category || 'code-audit',
+              vulnerabilityPatternId: vulnerabilityPatternId || undefined,
+              techStackId: techStackId || undefined,
               whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
               whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
               expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
@@ -191,10 +197,14 @@ try {
           name: name.trim(),
           displayName: name.trim(),
           description: name.trim(),
-          category,
-          techStack,
+          // 新字段：ID 形式
+          techStackId: techStackId || null,
+          vulnerabilityPatternId: vulnerabilityPatternId || null,
+          // 向后兼容：也发送旧字段
+          techStack: selectedTechStack ? [selectedTechStack.name] : [],
+          category: selectedVulnerabilityPattern?.category || 'code-audit',
           content,
-          cwe: null,
+          cwe: selectedVulnerabilityPattern?.cwe || null,
           isPublic,
         }),
       });
@@ -283,103 +293,145 @@ try {
               />
             </div>
 
-            {/* 漏洞分类 */}
+            {/* 漏洞类型（VulnerabilityPattern） */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                漏洞分类 <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                {categories.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 技术栈 */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                适合的技术栈
+                漏洞类型 <span className="text-red-500">*</span>
               </label>
               <div className="relative">
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {techStack.map((ts) => (
-                    <span
-                      key={ts}
-                      className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                    >
-                      {ts}
-                      <button
-                        type="button"
-                        onClick={() => setTechStack(techStack.filter((t) => t !== ts))}
-                        className="ml-2 text-blue-600 hover:text-blue-800"
-                      >
-                        <X size={14} />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={techStackSearch}
-                    onChange={(e) => {
-                      setTechStackSearch(e.target.value);
-                      setShowTechStackDropdown(true);
-                    }}
-                    onFocus={() => setShowTechStackDropdown(true)}
-                    placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    disabled={loadingTechStack}
-                  />
-                  {showTechStackDropdown && !loadingTechStack && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {techStackOptions
-                        .filter((option) => 
-                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !techStack.includes(option)
-                        )
-                        .slice(0, 20)
-                        .map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => {
-                              setTechStack([...techStack, option]);
-                              setTechStackSearch('');
-                              setShowTechStackDropdown(false);
-                            }}
-                            className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      {techStackOptions.filter((option) => 
-                        option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                        !techStack.includes(option)
-                      ).length === 0 && (
-                        <div className="px-4 py-2 text-sm text-gray-500">
-                          无匹配选项
+                <input
+                  type="text"
+                  value={vulnerabilitySearch || (selectedVulnerabilityPattern 
+                    ? `${selectedVulnerabilityPattern.displayName}${selectedVulnerabilityPattern.cwe ? ` (${selectedVulnerabilityPattern.cwe})` : ''}`
+                    : '')}
+                  onChange={(e) => {
+                    setVulnerabilitySearch(e.target.value);
+                    setShowVulnerabilityDropdown(true);
+                  }}
+                  onFocus={() => setShowVulnerabilityDropdown(true)}
+                  placeholder={loadingVulnerabilityPatterns ? "加载中..." : "搜索并选择漏洞类型..."}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loadingVulnerabilityPatterns}
+                />
+                {showVulnerabilityDropdown && !loadingVulnerabilityPatterns && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {Object.entries(groupedPatterns).map(([category, patterns]) => (
+                      <div key={category}>
+                        <div className="px-4 py-1.5 bg-gray-100 text-xs font-semibold text-gray-600 uppercase">
+                          {category}
                         </div>
-                      )}
-                    </div>
-                  )}
-                  {loadingTechStack && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-                      <div className="flex items-center justify-center">
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        <span className="text-sm text-gray-500">加载中...</span>
+                        {patterns
+                          .filter((p) => 
+                            p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
+                            (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase())) ||
+                            p.name.toLowerCase().includes(vulnerabilitySearch.toLowerCase())
+                          )
+                          .slice(0, 10)
+                          .map((pattern) => (
+                            <button
+                              key={pattern.id}
+                              type="button"
+                              onClick={() => {
+                                setVulnerabilityPatternId(pattern.id);
+                                setVulnerabilitySearch('');
+                                setShowVulnerabilityDropdown(false);
+                              }}
+                              className={`w-full px-4 py-2 text-left hover:bg-gray-100 text-sm ${
+                                pattern.id === vulnerabilityPatternId ? 'bg-blue-50 text-blue-700' : ''
+                              }`}
+                            >
+                              {pattern.displayName}
+                              {pattern.cwe && <span className="text-gray-400 ml-2">({pattern.cwe})</span>}
+                            </button>
+                          ))}
                       </div>
+                    ))}
+                    {Object.values(groupedPatterns).every(
+                      (patterns) => !patterns.some((p) => 
+                        p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
+                        (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase()))
+                      )
+                    ) && (
+                      <div className="px-4 py-2 text-sm text-gray-500">
+                        无匹配选项
+                      </div>
+                    )}
+                  </div>
+                )}
+                {loadingVulnerabilityPatterns && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <span className="text-sm text-gray-500">加载中...</span>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 技术栈（单选） */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                适合的语言
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={techStackSearch || (selectedTechStack ? selectedTechStack.name : '')}
+                  onChange={(e) => {
+                    setTechStackSearch(e.target.value);
+                    setShowTechStackDropdown(true);
+                  }}
+                  onFocus={() => setShowTechStackDropdown(true)}
+                  placeholder={loadingTechStack ? "加载中..." : "搜索并选择语言..."}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  disabled={loadingTechStack}
+                />
+                {showTechStackDropdown && !loadingTechStack && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {techStackOptions
+                      .filter((option) => 
+                        option.name.toLowerCase().includes(techStackSearch.toLowerCase())
+                      )
+                      .slice(0, 20)
+                      .map((option) => (
+                        <button
+                          key={option.id}
+                          type="button"
+                          onClick={() => {
+                            setTechStackId(option.id);
+                            setTechStackSearch('');
+                            setShowTechStackDropdown(false);
+                          }}
+                          className={`w-full px-4 py-2 text-left hover:bg-gray-100 text-sm ${
+                            option.id === techStackId ? 'bg-blue-50 text-blue-700' : ''
+                          }`}
+                        >
+                          {option.name}
+                          {option.description && (
+                            <span className="text-gray-400 ml-2 text-xs">{option.description}</span>
+                          )}
+                        </button>
+                      ))}
+                    {techStackOptions.filter((option) => 
+                      option.name.toLowerCase().includes(techStackSearch.toLowerCase())
+                    ).length === 0 && (
+                      <div className="px-4 py-2 text-sm text-gray-500">
+                        无匹配选项
+                      </div>
+                    )}
+                  </div>
+                )}
+                {loadingTechStack && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      <span className="text-sm text-gray-500">加载中...</span>
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-gray-500 mt-1">
-                  可选择多个技术栈，表示此Skill适用于这些技术
+                  选择此 Skill 适用的编程语言
                 </p>
               </div>
             </div>

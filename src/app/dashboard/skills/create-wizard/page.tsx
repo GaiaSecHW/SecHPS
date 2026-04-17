@@ -45,8 +45,10 @@ interface SkillWizardData {
   intent: {
     name: string;
     description: string;
-    category: string;
-    techStack: string[];
+    category: string; // 保留用于兼容
+    techStack: string[]; // 保留用于兼容
+    techStackId?: string; // 新增：单选语言 ID
+    vulnerabilityPatternId?: string; // 新增：漏洞类型 ID
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -124,8 +126,10 @@ const initialWizardData: SkillWizardData = {
   intent: {
     name: '',
     description: '',
-    category: 'code-audit',
-    techStack: [],
+    category: '', // 保留用于兼容
+    techStack: [], // 保留用于兼容
+    techStackId: '', // 新增：单选语言
+    vulnerabilityPatternId: '', // 新增：漏洞类型 ID
     whatDoesItDo: '',
     whenShouldItTrigger: '',
     expectedOutput: '',
@@ -321,6 +325,9 @@ export default function SkillCreateWizardPage() {
       const skillData = {
         ...wizardData.skill,
         isPublic: false, // 默认私有
+        // 新增字段：从 intent 步骤传递
+        techStackId: wizardData.intent.techStackId || null,
+        vulnerabilityPatternId: wizardData.intent.vulnerabilityPatternId || null,
       };
       
       // 检查必填字段
@@ -328,8 +335,9 @@ export default function SkillCreateWizardPage() {
       if (!skillData.name) missingFields.push('name');
       if (!skillData.displayName) missingFields.push('displayName');
       if (!skillData.description) missingFields.push('description');
-      if (!skillData.category) missingFields.push('category');
       if (!skillData.content) missingFields.push('content');
+      if (!wizardData.intent.techStackId) missingFields.push('techStackId (语言)');
+      if (!wizardData.intent.vulnerabilityPatternId) missingFields.push('vulnerabilityPatternId (漏洞类型)');
       
       if (missingFields.length > 0) {
         throw new Error(`缺少必填字段: ${missingFields.join(', ')}`);
