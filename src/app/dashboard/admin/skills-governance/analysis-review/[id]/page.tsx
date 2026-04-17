@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter, use } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   ArrowLeft,
@@ -59,8 +59,8 @@ function LoadingSpinner() {
 
 function AnalysisReviewDetailContent() {
   const router = useRouter();
-  const params = use<{ id: string }>();
-  const id = params.id;
+  const params = useParams();
+  const id = params.id as string;
 
   const [analysis, setAnalysis] = useState<AnalysisDetail | null>(null);
   const [loading, setLoading] = useState(true);

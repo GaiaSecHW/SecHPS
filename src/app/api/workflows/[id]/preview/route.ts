@@ -30,6 +30,31 @@ export async function GET(
 
     const { id } = await params;
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 查询工作流及其节点和边
+    const workflow = await prisma.workflow.findFirst({
+      where: {
+        id,
+        ...(isAdmin ? {} : {
+          OR: [
+            { userId: payload.userId },
+            { isPublic: true },
+            { WorkflowShare: { some: { sharedWith: payload.userId } } },
+          ],
+        }),
+      },
+      include: {
+        WorkflowNode: true,
+        WorkflowEdge: true,
+      },
+    });
+
+    if (!workflow) {
+      return NextResponse.json({ error: '工作流不存在或无权访问' }, { status: 404 });
+    }
+
     // 获取工作流配置（用于开始/结束节点的标签）
     const config = await prisma.systemConfig.findUnique({
       where: { key: 'workflow' },
@@ -49,25 +74,6 @@ export async function GET(
       } catch (e) {
         // 使用默认配置
       }
-    }
-
-    // 查询工作流及其节点和边
-    const workflow = await prisma.workflow.findFirst({
-      where: {
-        id,
-        OR: [
-          { userId: payload.userId },
-          { WorkflowShare: { some: { sharedWith: payload.userId } } },
-        ],
-      },
-      include: {
-        WorkflowNode: true,
-        WorkflowEdge: true,
-      },
-    });
-
-    if (!workflow) {
-      return NextResponse.json({ error: '工作流不存在或无权访问' }, { status: 404 });
     }
 
     // 转换节点数据

@@ -29,11 +29,14 @@ export async function DELETE(
 
     const { id, shareId } = await params;
 
-    // 检查工作流是否存在且属于当前用户
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查工作流是否存在且属于当前用户（管理员可取消所有分享）
     const workflow = await prisma.workflow.findFirst({
       where: {
         id,
-        userId: payload.userId,
+        ...(isAdmin ? {} : { userId: payload.userId }),
       },
     });
 

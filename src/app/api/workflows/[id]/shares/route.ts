@@ -29,20 +29,20 @@ export async function GET(
 
     const { id } = await params;
 
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
     // 检查工作流是否存在且用户有访问权限
     const workflow = await prisma.workflow.findFirst({
       where: {
         id,
-        OR: [
-          { userId: payload.userId },
-          {
-            WorkflowShare: {
-              some: {
-                sharedWith: payload.userId,
-              },
-            },
-          },
-        ],
+        ...(isAdmin ? {} : {
+          OR: [
+            { userId: payload.userId },
+            { isPublic: true },
+            { WorkflowShare: { some: { sharedWith: payload.userId } } },
+          ],
+        }),
       },
     });
 
@@ -113,11 +113,14 @@ export async function POST(
 
     const { id } = await params;
 
-    // 检查工作流是否存在且属于当前用户
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    // 检查工作流是否存在且属于当前用户（管理员可分享所有）
     const workflow = await prisma.workflow.findFirst({
       where: {
         id,
-        userId: payload.userId,
+        ...(isAdmin ? {} : { userId: payload.userId }),
       },
     });
 

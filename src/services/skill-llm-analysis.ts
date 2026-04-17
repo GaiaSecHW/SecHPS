@@ -36,6 +36,12 @@ export interface LLMAnalysisResult {
   recommendation: 'merge' | 'keep_separate' | 'review';
   keyDifferences?: string[];      // 主要差异点
   sharedFunctionality?: string[]; // 共享功能
+  entryPointComparison?: {        // 入口点比较（可选）
+    sameEntryPoint: boolean;
+    skillAEntryPoint?: string;
+    skillBEntryPoint?: string;
+    details?: string;
+  };
 }
 
 /**

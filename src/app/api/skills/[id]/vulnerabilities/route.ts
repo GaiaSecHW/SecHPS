@@ -22,14 +22,23 @@ export async function GET(
     const limit = parseInt(searchParams.get('limit') || '20');
     const skip = (page - 1) * limit;
 
-    // 验证 Skill 存在
-    const skill = await prisma.skill.findUnique({
-      where: { id },
-      select: { id: true, name: true, vulnerabilityCount: true },
+    // 验证 Skill 存在并检查所有权
+    const isAdmin = Array.isArray(auth.payload?.roles) && auth.payload.roles.includes('admin');
+    const skill = await prisma.skill.findFirst({
+      where: {
+        id,
+        ...(isAdmin ? {} : {
+          OR: [
+            { userId: auth.payload?.userId },
+            { isPublic: true },
+          ],
+        }),
+      },
+      select: { id: true, name: true, vulnerabilityCount: true, userId: true, isPublic: true },
     });
 
     if (!skill) {
-      return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
+      return NextResponse.json({ error: 'Skill 不存在或无权访问' }, { status: 404 });
     }
 
     // 获取 Skill 发现的漏洞列表（通过 SkillVulnerabilityMapping）

@@ -23,6 +23,20 @@ export async function GET(
     }
 
     const { projectId } = await params;
+
+    // 验证项目所有权
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const project = await prisma.project.findFirst({
+      where: {
+        id: projectId,
+        ...(isAdmin ? {} : { userId: payload.userId }),
+      },
+    });
+
+    if (!project) {
+      return NextResponse.json({ error: '项目不存在或无权访问' }, { status: 404 });
+    }
+
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get('entityType');
     const name = searchParams.get('name');
