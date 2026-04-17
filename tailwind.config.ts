@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-
+ 
 const config: Config = {
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
@@ -23,11 +23,20 @@ const config: Config = {
           950: '#082f49',
         },
       },
+      animation: {
+        marquee: 'marquee 20s linear infinite',
+      },
+      keyframes: {
+        marquee: {
+          '0%': { transform: 'translateX(100%)' },
+          '100%': { transform: 'translateX(-100%)' },
+        },
+      },
     },
   },
   plugins: [
     require('@tailwindcss/typography'),
   ],
 };
-
+ 
 export default config;

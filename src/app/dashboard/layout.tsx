@@ -30,6 +30,7 @@ import {
   ChevronRight,
   Coins,
   GitBranch,
+  Megaphone,
 } from 'lucide-react';
 
 export default function DashboardLayout({
@@ -195,6 +196,9 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/config" icon={<Cog size={20} />} collapsed={collapsed}>
                 系统配置
+              </NavLink>
+              <NavLink href="/dashboard/admin/broadcast" icon={<Megaphone size={20} />} collapsed={collapsed}>
+                通知广播
               </NavLink>
               <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
                 插件管理
