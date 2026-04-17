@@ -33,27 +33,35 @@ export function BroadcastMarquee() {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [messages, setMessages] = useState<string[]>([]);
 
-  useEffect(() => {
-    fetch('/api/broadcast')
-      .then((res) => res.json())
-      .then((data) => {
-        setConfig(data.config);
-        // 支持多条消息，用 || 分隔
-        const msgList = data.config.content
-          .split('||')
-          .map((s: string) => s.trim())
-          .filter((s: string) => s.length > 0);
-        setMessages(msgList);
-      })
-      .catch(() => {
-        // 使用默认配置
-        setConfig({
-          content: '欢迎使用 AI4WEB 测试平台',
-          enabled: true,
-          color: 'blue',
-        });
-        setMessages(['欢迎使用 AI4WEB 测试平台']);
+  // 获取广播配置
+  const fetchConfig = async () => {
+    try {
+      const res = await fetch('/api/broadcast');
+      const data = await res.json();
+      setConfig(data.config);
+      // 支持多条消息，用 || 分隔
+      const msgList = data.config.content
+        .split('||')
+        .map((s: string) => s.trim())
+        .filter((s: string) => s.length > 0);
+      setMessages(msgList);
+    } catch {
+      // 使用默认配置
+      setConfig({
+        content: '欢迎使用 AI4WEB 测试平台',
+        enabled: true,
+        color: 'blue',
       });
+      setMessages(['欢迎使用 AI4WEB 测试平台']);
+    }
+  };
+
+  useEffect(() => {
+    fetchConfig();
+    
+    // 每 30 秒刷新一次配置（支持动态更新）
+    const interval = setInterval(fetchConfig, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // 多条消息轮播
@@ -76,9 +84,9 @@ export function BroadcastMarquee() {
     <div className={`flex-1 overflow-hidden ${colorStyle.gradient} rounded-md shadow-sm h-10`}>
       <div className="flex items-center h-full px-4">
         <Megaphone className="w-5 h-5 text-white mr-3 flex-shrink-0" />
-        <div className="overflow-hidden whitespace-nowrap flex-1">
+        <div className="overflow-hidden whitespace-nowrap flex-1 relative">
           <span
-            className="inline-block animate-marquee text-white font-medium text-base"
+            className="inline-block animate-marquee text-white font-medium text-base pl-[100%]"
             style={{
               animationDuration: '20s',
             }}

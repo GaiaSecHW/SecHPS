@@ -76,13 +76,15 @@ export default function BroadcastManagePage() {
         body: JSON.stringify(config),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        throw new Error('保存失败');
+        throw new Error(data.error || '保存失败');
       }
 
-      toast.success('广播配置已保存');
-    } catch (e) {
-      toast.error('保存失败');
+      toast.success('广播配置已保存，将在 30 秒内自动生效');
+    } catch (e: any) {
+      toast.error(e.message || '保存失败');
     } finally {
       setSaving(false);
     }
