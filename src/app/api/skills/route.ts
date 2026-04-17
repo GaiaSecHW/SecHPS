@@ -11,6 +11,7 @@ import { skillSelectMinimal } from '@/lib/query-optimizer';
 import { saveSkillToDisk } from '@/services/skill-files';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { findSimilarSkills, SkillForSimilarity, SimilarSkill } from '@/services/skill-similarity';
+import { triggerGovernanceAnalysis } from '@/services/skill-governance';
 
 // 获取 skillOutputTemplate 的辅助函数
 async function getSkillOutputTemplate(): Promise<string | undefined> {
@@ -39,7 +40,9 @@ export async function GET(request: Request) {
     const isActive = searchParams.get('isActive');
     const search = searchParams.get('search') || undefined;
     const scope = searchParams.get('scope') || 'all'; // public | mine | all
-    const techStack = searchParams.get('techStack') || undefined; // 技术栈过滤
+    const techStack = searchParams.get('techStack') || undefined; // 技术栈过滤（旧字段，JSON 数组字符串）
+    const techStackId = searchParams.get('techStackId') || undefined; // 新字段：技术栈 ID 过滤
+    const vulnerabilityPatternId = searchParams.get('vulnerabilityPatternId') || undefined; // 新字段：漏洞类型 ID 过滤
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
 
@@ -50,12 +53,16 @@ export async function GET(request: Request) {
     if (category) where.category = category;
     if (isActive !== null) where.isActive = isActive === 'true';
     
-    // 技术栈过滤
+    // 技术栈过滤（旧字段）
     if (techStack) {
       // techStack 字段是 JSON 数组字符串，使用 contains 匹配
       // 例如: ["Java", "Python"] 包含 "Java"
       where.techStack = { contains: techStack };
     }
+    
+    // 新字段过滤
+    if (techStackId) where.techStackId = techStackId;
+    if (vulnerabilityPatternId) where.vulnerabilityPatternId = vulnerabilityPatternId;
     
     // 默认只返回最新版本
     where.isLatest = true;
@@ -110,12 +117,20 @@ export async function GET(request: Request) {
       prisma.skill.count({ where }),
     ]);
 
-    // 转换数据格式，添加创建者信息
+    // 转换数据格式，添加创建者信息和关联名称
     const skillsWithCreator = skills.map(skill => ({
       ...skill,
       userName: skill.User?.name || null,
       userUsername: skill.User?.username || null,
       User: undefined, // 移除嵌套的 User 对象
+      // ===== 新增字段：关联名称 =====
+      techStackName: skill.TechStackOption?.name || null,
+      techStackCategory: skill.TechStackOption?.category || null,
+      vulnerabilityPatternName: skill.VulnerabilityPattern?.displayName || skill.VulnerabilityPattern?.name || null,
+      vulnerabilityPatternCategory: skill.VulnerabilityPattern?.category || null,
+      vulnerabilityPatternCwe: skill.VulnerabilityPattern?.cwe || null,
+      TechStackOption: undefined, // 移除嵌套对象
+      VulnerabilityPattern: undefined, // 移除嵌套对象
     }));
 
     return NextResponse.json(createPaginatedResponse(skillsWithCreator, total, pageNum, pageLimit));
@@ -141,7 +156,9 @@ export async function POST(request: Request) {
       displayName,
       description,
       category,
-      techStack,  // 技术栈 ["Java", "Spring"]
+      techStack,  // 技术栈 ["Java", "Spring"] - 旧字段，向后兼容
+      techStackId,  // 新字段：技术栈 ID（优先）
+      vulnerabilityPatternId,  // 新字段：漏洞类型 ID（优先）
       cwe,
       content,  // 完整的 Markdown 内容
       isPublic = false,  // 是否为公共 Skill，默认为私有
@@ -155,7 +172,34 @@ export async function POST(request: Request) {
       );
     }
 
-    // 处理技术栈数据
+    // ===== 新字段验证 =====
+    // 验证 techStackId 存在性（如果提供）
+    if (techStackId) {
+      const techStackOption = await prisma.techStackOption.findUnique({
+        where: { id: techStackId },
+      });
+      if (!techStackOption) {
+        return NextResponse.json(
+          { details: { error: `技术栈 ID "${techStackId}" 不存在` } },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 验证 vulnerabilityPatternId 存在性（如果提供）
+    if (vulnerabilityPatternId) {
+      const vulnerabilityPattern = await prisma.vulnerabilityPattern.findUnique({
+        where: { id: vulnerabilityPatternId },
+      });
+      if (!vulnerabilityPattern) {
+        return NextResponse.json(
+          { details: { error: `漏洞类型 ID "${vulnerabilityPatternId}" 不存在` } },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 处理技术栈数据（向后兼容）
     let techStackJson: string | null = null;
     if (techStack && Array.isArray(techStack) && techStack.length > 0) {
       techStackJson = JSON.stringify(techStack);
@@ -199,7 +243,9 @@ export async function POST(request: Request) {
         displayName,
         description,
         category,
-        techStack: techStackJson,
+        techStack: techStackJson,  // 旧字段，向后兼容
+        techStackId: techStackId || null,  // 新字段
+        vulnerabilityPatternId: vulnerabilityPatternId || null,  // 新字段
         cwe: cwe || null,
         content,  // 保存完整的 Markdown 内容
         userId,
@@ -224,6 +270,12 @@ export async function POST(request: Request) {
         logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存到磁盘失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
         // 不阻塞响应，仅记录错误
       });
+    });
+
+    // ===== 触发治理分析（非阻塞） =====
+    triggerGovernanceAnalysis(skill.id).catch(err => {
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, '触发治理分析失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
+      // 不阻塞响应，仅记录错误
     });
 
     // 相似度检测（非阻塞，仅提示）

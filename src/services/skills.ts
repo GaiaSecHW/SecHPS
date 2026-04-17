@@ -226,6 +226,7 @@ export async function createSkill(
 
     const skill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: data.name,
         displayName: data.displayName,
         description: data.description,
@@ -237,6 +238,7 @@ export async function createSkill(
         isBuiltin: data.isBuiltin ?? false,
         version: 1,
         isLatest: true,
+        updatedAt: new Date(),
       },
     });
 
@@ -285,6 +287,7 @@ export async function createSkillVersion(
     // 创建新版本
     const newSkill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: currentSkill.name,
         displayName: updates.displayName ?? currentSkill.displayName,
         description: updates.description ?? currentSkill.description,
@@ -301,6 +304,7 @@ export async function createSkillVersion(
         successRate: currentSkill.successRate,
         avgDuration: currentSkill.avgDuration,
         execCount: currentSkill.execCount,
+        updatedAt: new Date(),
       },
     });
 
@@ -319,6 +323,7 @@ export async function createSkillVersion(
 
     await prisma.skillEvolution.create({
       data: {
+        id: `evolution-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         skillId: newSkill.id,
         fromVersion: currentSkill.version,
         toVersion: newSkill.version,
@@ -378,6 +383,7 @@ export async function rollbackSkillVersion(
     // 创建新版本（基于目标版本）
     const newSkill = await prisma.skill.create({
       data: {
+        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         name: targetSkill.name,
         displayName: targetSkill.displayName,
         description: targetSkill.description,
@@ -394,12 +400,14 @@ export async function rollbackSkillVersion(
         successRate: targetSkill.successRate,
         avgDuration: targetSkill.avgDuration,
         execCount: targetSkill.execCount,
+        updatedAt: new Date(),
       },
     });
 
     // 记录进化历史
     await prisma.skillEvolution.create({
       data: {
+        id: `evolution-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         skillId: newSkill.id,
         fromVersion: currentLatest.version,
         toVersion: newSkill.version,

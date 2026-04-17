@@ -89,11 +89,34 @@ export const skillSelectMinimal = {
   createdAt: true,
   updatedAt: true,
   userId: true,  // 创建者ID
+  // ===== 新增字段：治理改造 =====
+  techStackId: true,
+  vulnerabilityPatternId: true,
+  migrationStatus: true,
+  migrationNotes: true,
+  migrationConfidence: true,
   User: {
     select: {
       id: true,
       name: true,
       username: true,
+    },
+  },
+  // ===== 关联查询 =====
+  TechStackOption: {
+    select: {
+      id: true,
+      name: true,
+      category: true,
+    },
+  },
+  VulnerabilityPattern: {
+    select: {
+      id: true,
+      name: true,
+      displayName: true,
+      category: true,
+      cwe: true,
     },
   },
 };

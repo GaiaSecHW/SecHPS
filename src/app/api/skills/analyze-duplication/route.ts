@@ -130,6 +130,7 @@ export async function POST(request: Request) {
             recommendationReason: analysis.reason,
             status: 'pending',
             analyzedAt: new Date(),
+            updatedAt: new Date(),
           },
         });
       } catch (e) {
