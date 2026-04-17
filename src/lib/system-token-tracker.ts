@@ -82,6 +82,8 @@ export async function ensureSystemProject(): Promise<void> {
  * @param outputTokens - 输出 token 数
  * @param estimatedCost - 预估费用（人民币）
  * @param description - 描述（可选）
+ * @param userId - 用户 ID（可选，默认为系统用户）
+ * @param username - 用户名（可选）
  */
 export async function trackSystemTokenUsage(
   callType: SystemCallType,
@@ -89,7 +91,9 @@ export async function trackSystemTokenUsage(
   inputTokens: number,
   outputTokens: number,
   estimatedCost: number = 0,
-  description?: string
+  description?: string,
+  userId?: string,
+  username?: string
 ): Promise<void> {
   try {
     // 确保系统项目存在
@@ -99,6 +103,8 @@ export async function trackSystemTokenUsage(
     await prisma.tokenUsage.create({
       data: {
         id: `token-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        userId: userId || SYSTEM_USER_ID,
+        username: username || 'system',
         evaluationId: null, // 系统调用没有评估 ID
         projectId: SYSTEM_PROJECT_ID,
         apiProvider: 'system',

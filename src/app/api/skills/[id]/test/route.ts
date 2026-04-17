@@ -160,7 +160,7 @@ export async function POST(
 
       const duration = Date.now() - startTime;
       
-      // 记录系统 Token 使用量
+      // 记录系统 Token 使用量（传入用户信息）
       if (tokenUsage.inputTokens > 0 || tokenUsage.outputTokens > 0) {
         const estimatedCost = calculateSystemCost(tokenUsage.inputTokens, tokenUsage.outputTokens);
         await trackSystemTokenUsage(
@@ -169,7 +169,9 @@ export async function POST(
           tokenUsage.inputTokens,
           tokenUsage.outputTokens,
           estimatedCost,
-          `Skill测试: ${skill.name || skill.id}`
+          `Skill测试: ${skill.name || skill.id}`,
+          payload.userId,
+          payload.username
         );
       }
 
