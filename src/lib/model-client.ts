@@ -9,12 +9,26 @@
  * - 统一模型调用接口
  * - 自动 Token 统计
  * - 支持用户上下文
+ * - 支持超时控制
  */
 
 import { prisma } from '@/lib/prisma';
 import type { TokenUsageContext, CallScene } from '@/types/call-scene';
 
+// ============================================================================
+// 超时常量配置
+// ============================================================================
+
+/** 统一超时时间：10分钟（与 MCP 一致） */
+export const DEFAULT_TIMEOUT_MS = 600000;
+/** 长时间任务超时：10分钟 */
+export const LONG_TIMEOUT_MS = 600000;
+/** 测试超时：10分钟 */
+export const TEST_TIMEOUT_MS = 600000;
+
+// ============================================================================
 // 错误类型
+// ============================================================================
 export class RouteError extends Error {
   constructor(
     message: string,
@@ -235,7 +249,7 @@ async function recordTokenUsage(
  * 调用 OpenAI 格式的 API
  * URL: http://xxx/v1/chat/completions
  */
-async function callOpenAI(config: ModelConfig, request: any): Promise<any> {
+async function callOpenAI(config: ModelConfig, request: any, timeout: number = DEFAULT_TIMEOUT_MS): Promise<any> {
   let apiUrl = config.apiBaseUrl;
   
   // 确保 URL 正确
@@ -244,33 +258,47 @@ async function callOpenAI(config: ModelConfig, request: any): Promise<any> {
     apiUrl = `${apiUrl}/chat/completions`;
   }
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey}`,
-    },
-    body: JSON.stringify(request),
-  });
+  // 创建超时控制器
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[ModelClient] OpenAI API Error:', response.status, errorText);
-    throw new RouteError(
-      `OpenAI API error: ${response.status} ${response.statusText}`,
-      response.status,
-      { error: errorText }
-    );
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ModelClient] OpenAI API Error:', response.status, errorText);
+      throw new RouteError(
+        `OpenAI API error: ${response.status} ${response.statusText}`,
+        response.status,
+        { error: errorText }
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new RouteError(`请求超时 (${timeout}ms)`, 408);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return await response.json();
 }
 
 /**
  * 调用 Claude 格式的 API
  * URL: http://xxx/v1/messages
  */
-async function callClaude(config: ModelConfig, request: any): Promise<any> {
+async function callClaude(config: ModelConfig, request: any, timeout: number = DEFAULT_TIMEOUT_MS): Promise<any> {
   let apiUrl = config.apiBaseUrl;
   
   // 确保 URL 正确
@@ -285,27 +313,41 @@ async function callClaude(config: ModelConfig, request: any): Promise<any> {
     }
   }
 
-  const response = await fetch(apiUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': config.apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify(request),
-  });
+  // 创建超时控制器
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[ModelClient] Claude API Error:', response.status, errorText);
-    throw new RouteError(
-      `Claude API error: ${response.status} ${response.statusText}`,
-      response.status,
-      { error: errorText }
-    );
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify(request),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[ModelClient] Claude API Error:', response.status, errorText);
+      throw new RouteError(
+        `Claude API error: ${response.status} ${response.statusText}`,
+        response.status,
+        { error: errorText }
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new RouteError(`请求超时 (${timeout}ms)`, 408);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return await response.json();
 }
 
 /**
@@ -553,6 +595,109 @@ export async function routeRequestWithDefaultModel(
       500,
       error
     );
+  }
+}
+
+/**
+ * 测试模型连接（统一入口）
+ * 发送简单的 "Hi" 测试连通性，不统计 Token
+ * 
+ * @param modelConfig 模型配置
+ * @returns 测试结果
+ */
+export async function testModelConnection(modelConfig: {
+  providerType: string;
+  apiKey: string;
+  apiBaseUrl: string;
+  modelName: string;
+}): Promise<{ success: boolean; message: string; error?: string }> {
+  const { providerType, apiKey, apiBaseUrl, modelName } = modelConfig;
+  
+  // 构建 URL 和请求体
+  let url: string;
+  let headers: Record<string, string>;
+  let body: any;
+  
+  if (providerType === 'claude') {
+    url = apiBaseUrl.replace(/\/$/, '');
+    if (!url.includes('/v1/messages') && !url.includes('/messages')) {
+      url = `${url}/v1/messages`;
+    }
+    headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    };
+    body = {
+      model: modelName,
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'Hi' }],
+    };
+  } else {
+    url = apiBaseUrl.replace(/\/$/, '');
+    if (!url.includes('/chat/completions')) {
+      url = `${url}/v1/chat/completions`;
+    }
+    headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    };
+    body = {
+      model: modelName,
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'Hi' }],
+    };
+  }
+  
+  console.log(`[ModelClient] Testing connection: ${modelName} (${providerType})`);
+  console.log(`[ModelClient] URL: ${url}`);
+  
+  // 创建超时控制器
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      return { success: true, message: '模型连接成功' };
+    } else {
+      const errorText = await response.text();
+      let errorDetails = errorText;
+      try {
+        const errorJson = JSON.parse(errorText);
+        errorDetails = errorJson.error?.message || errorJson.message || errorText;
+      } catch {
+        // 保持原始文本
+      }
+      return { 
+        success: false, 
+        message: '模型连接失败', 
+        error: `HTTP ${response.status}: ${errorDetails}` 
+      };
+    }
+  } catch (error) {
+    clearTimeout(timeoutId);
+    
+    let errorMessage = '请求失败';
+    if (error instanceof Error && error.name === 'AbortError') {
+      errorMessage = `连接超时 (${TEST_TIMEOUT_MS}ms)`;
+    } else if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    return { 
+      success: false, 
+      message: errorMessage, 
+      error: String(error) 
+    };
   }
 }
 
