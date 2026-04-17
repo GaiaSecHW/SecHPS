@@ -3,7 +3,8 @@
  * 使用 LLM 判断两个 Skill 是否真正功能重复
  */
 
-import { routeRequest } from '@/lib/model-client';
+import { routeRequestWithDefaultModel } from '@/lib/model-client';
+import type { TokenUsageContext } from '@/types/call-scene';
 
 // ============================================================================
 // Types
@@ -145,25 +146,26 @@ ${truncateContent(skillB.content)}
  */
 export async function analyzeSkillDuplication(
   skillA: SkillForLLMAnalysis,
-  skillB: SkillForLLMAnalysis
+  skillB: SkillForLLMAnalysis,
+  context?: TokenUsageContext
 ): Promise<LLMAnalysisResult> {
   try {
     const prompt = buildAnalysisPrompt(skillA, skillB);
     
-    const request = {
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 1024,
-      temperature: 0.3, // 低温度以保证稳定性
-    };
-
     console.log(`[SkillLLMAnalysis] 分析: ${skillA.name} vs ${skillB.name}`);
     
-    const response = await routeRequest(request);
+    const response = await routeRequestWithDefaultModel(
+      [{ role: 'user', content: prompt }],
+      {
+        max_tokens: 1024,
+        temperature: 0.3, // 低温度以保证稳定性
+        context: context || {
+          userId: 'system',
+          scene: 'other',
+          description: `Skill分析: ${skillA.name} vs ${skillB.name}`,
+        },
+      }
+    );
     
     // 解析 LLM 响应
     const content = response.content?.[0]?.text || response.choices?.[0]?.message?.content || '';

@@ -3,8 +3,9 @@
  * 使用 LLM 分析 Skill 内容，推断正确的语言和漏洞类型
  */
 
-import { routeRequest } from '@/lib/model-client';
+import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import { prisma } from '@/lib/prisma';
+import type { TokenUsageContext } from '@/types/call-scene';
 
 // ============================================================================
 // Types
@@ -201,6 +202,7 @@ export async function inferSkillMetadata(
   options?: {
     languages?: Array<{ id: string; name: string; category: string }>;
     vulnerabilityPatterns?: Array<{ id: string; name: string; displayName: string; category: string }>;
+    context?: TokenUsageContext;
   }
 ): Promise<InferenceResult> {
   try {
@@ -211,20 +213,20 @@ export async function inferSkillMetadata(
     // 构建请求
     const prompt = buildInferencePrompt(skill, languages, vulnerabilityPatterns);
     
-    const request = {
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      max_tokens: 1024,
-      temperature: 0.2, // 低温度以保证稳定性
-    };
-
     console.log(`[SkillMigrationInference] 推断 Skill: ${skill.name}`);
 
-    const response = await routeRequest(request);
+    const response = await routeRequestWithDefaultModel(
+      [{ role: 'user', content: prompt }],
+      {
+        max_tokens: 1024,
+        temperature: 0.2, // 低温度以保证稳定性
+        context: options?.context || {
+          userId: 'system',
+          scene: 'other',
+          description: `Skill推断: ${skill.name}`,
+        },
+      }
+    );
 
     // 解析 LLM 响应
     const content = response.content?.[0]?.text || response.choices?.[0]?.message?.content || '';
