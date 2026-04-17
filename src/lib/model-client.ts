@@ -603,6 +603,7 @@ export async function routeRequestWithDefaultModel(
  * 发送简单的 "Hi" 测试连通性，返回模型响应内容
  * 
  * @param modelConfig 模型配置
+ * @param context 可选的用户上下文，用于记录 Token 使用
  * @returns 测试结果（包含响应内容）
  */
 export async function testModelConnection(modelConfig: {
@@ -610,7 +611,7 @@ export async function testModelConnection(modelConfig: {
   apiKey: string;
   apiBaseUrl: string;
   modelName: string;
-}): Promise<{ 
+}, context?: TokenUsageContext): Promise<{ 
   success: boolean; 
   message: string; 
   error?: string;
@@ -782,6 +783,17 @@ export async function testModelConnection(modelConfig: {
       }
       
       console.log(`[ModelClient] Test extracted content: ${responseContent.substring(0, 100)}`);
+      
+      // 记录 Token 使用到数据库（如果提供了用户上下文）
+      if (context && inputTokens > 0) {
+        await recordTokenUsage(
+          context,
+          modelName,
+          providerType,
+          inputTokens,
+          outputTokens
+        );
+      }
       
       return { 
         success: true, 

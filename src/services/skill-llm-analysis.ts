@@ -53,6 +53,42 @@ export interface BatchAnalysisResult {
   }>;
 }
 
+/**
+ * 清理 JSON 字符串中的控制字符
+ * 解决 LLM 返回的 JSON 中字符串值包含未转义换行符的问题
+ */
+function cleanJsonString(jsonStr: string): string {
+  let result = '';
+  let inString = false;
+  let i = 0;
+  
+  while (i < jsonStr.length) {
+    const char = jsonStr[i];
+    
+    // 检查是否进入或退出字串模式
+    if (char === '"' && (i === 0 || jsonStr[i - 1] !== '\\')) {
+      inString = !inString;
+      result += char;
+    } else if (inString) {
+      // 字串内，转义未转义的控制字符
+      if (char === '\n') {
+        result += '\\n';
+      } else if (char === '\r') {
+        result += '\\r';
+      } else if (char === '\t') {
+        result += '\\t';
+      } else {
+        result += char;
+      }
+    } else {
+      result += char;
+    }
+    i++;
+  }
+  
+  return result;
+}
+
 // ============================================================================
 // Prompt 模板
 // ============================================================================
@@ -220,10 +256,14 @@ export async function analyzeSkillDuplication(
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         const jsonStr = content.substring(jsonStart, jsonEnd + 1);
         try {
-          parsed = JSON.parse(jsonStr);
+          // 清理 JSON 中的控制字符
+          const cleanedJson = cleanJsonString(jsonStr);
+          parsed = JSON.parse(cleanedJson);
           console.log('[SkillLLMAnalysis] 从独立 JSON 对象解析成功');
         } catch (e) {
           console.warn('[SkillLLMAnalysis] 独立 JSON 解析失败:', e);
+          // 打印有问题的 JSON 片段帮助调试
+          console.warn('[SkillLLMAnalysis] JSON 内容 (前200字符):', jsonStr.substring(0, 200));
         }
       }
     }

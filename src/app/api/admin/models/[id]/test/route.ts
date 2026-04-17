@@ -60,13 +60,21 @@ export async function POST(
 
     const modelName = models[0];
 
-    // 使用统一的模型连接测试
+    // 构建用户上下文，用于记录 Token 使用
+    const context = {
+      userId: payload.userId,
+      username: payload.username,
+      scene: 'model-test' as const,
+      description: `管理员测试模型: ${model.name} (${modelName})`,
+    };
+
+    // 使用统一的模型连接测试（传入用户上下文以记录 Token）
     const result = await testModelConnection({
       providerType: model.providerType,
       apiKey: model.apiKey,
       apiBaseUrl: model.apiBaseUrl,
       modelName,
-    });
+    }, context);
 
     return NextResponse.json({
       ...result,
