@@ -126,6 +126,12 @@ export default function SessionsPage() {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
   
+  // 角色模型配置相关状态
+  const [showRoleModelModal, setShowRoleModelModal] = useState(false);
+  const [workflowRoles, setWorkflowRoles] = useState<any[]>([]);
+  const [roleModels, setRoleModels] = useState<{ roleId: string; modelId: string }[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  
   // 漏洞管理相关状态
   const [showVulnerabilityModal, setShowVulnerabilityModal] = useState(false);
   const [vulnerabilityProject, setVulnerabilityProject] = useState<Project | null>(null);
@@ -221,6 +227,61 @@ export default function SessionsPage() {
       console.error('获取模型列表错误:', err);
     } finally {
       setLoadingModels(false);
+    }
+  };
+
+  // 获取工作流角色列表
+  const fetchWorkflowRoles = async (workflowId: string) => {
+    try {
+      setLoadingRoles(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/workflows/${workflowId}/roles`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        console.error('获取工作流角色失败');
+        return;
+      }
+
+      const data = await response.json();
+      const roles = data.roles || [];
+      
+      // 检查是否有未分配角色的节点
+      // 如果有，添加"默认角色"
+      const workflowResponse = await fetch(`/api/workflows/${workflowId}/data`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (workflowResponse.ok) {
+        const workflowData = await workflowResponse.json();
+        const nodes = workflowData.nodes || [];
+        const nodesWithoutRole = nodes.filter((n: any) => !n.roleId && n.type !== 'subtask');
+        
+        if (nodesWithoutRole.length > 0) {
+          // 添加默认角色
+          roles.push({
+            id: 'default',
+            name: '默认角色',
+            description: '未分配角色的节点将使用此模型',
+            color: '#gray',
+            nodeCount: nodesWithoutRole.length,
+          });
+        }
+      }
+      
+      setWorkflowRoles(roles);
+      
+      // 初始化 roleModels 状态
+      const initialRoleModels = roles.map((r: any) => ({
+        roleId: r.id,
+        modelId: '',
+      }));
+      setRoleModels(initialRoleModels);
+    } catch (err) {
+      console.error('获取工作流角色错误:', err);
+    } finally {
+      setLoadingRoles(false);
     }
   };
 
@@ -577,8 +638,17 @@ export default function SessionsPage() {
     }
   };
 
-  const startProject = async (projectId: string, workflowId?: string | null, modelId?: string | null) => {
+  const startProject = async (
+    projectId: string,
+    workflowId?: string | null,
+    roleModelsOrModelId?: { roleId: string; modelId: string }[] | string | null
+  ) => {
     setStartingProject(projectId);
+
+    // 判断参数类型：roleModels array 或 modelId string
+    const isRoleModels = Array.isArray(roleModelsOrModelId);
+    const roleModelsParam = isRoleModels ? roleModelsOrModelId : null;
+    const modelId = isRoleModels ? null : roleModelsOrModelId;
 
     try {
       const token = localStorage.getItem('token');
@@ -591,6 +661,7 @@ export default function SessionsPage() {
         body: JSON.stringify({
           workflowId: workflowId || undefined,
           modelId: modelId || undefined,
+          roleModels: roleModelsParam || undefined,
         }),
       });
 
@@ -2283,7 +2354,7 @@ toast.error(data.error || '更新项目失败');
       {/* 图片预览模态框 */}
       {showImagePreview && previewImage && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-75"
           onClick={() => {
             setShowImagePreview(false);
             setPreviewImage(null);
@@ -2312,20 +2383,20 @@ toast.error(data.error || '更新项目失败');
         </div>
       )}
 
-      {/* 模型选择模态框 */}
-      {showModelModal && selectedProject && (
+      {/* Workflow 选择对话框 */}
+      {showWorkflowModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">选择评估大模型</h3>
+                <h3 className="text-lg font-semibold text-gray-900">选择评估工作流</h3>
                 <p className="text-sm text-gray-500 mt-1">项目: {selectedProject.name}</p>
               </div>
               <button
                 onClick={() => {
-                  setShowModelModal(false);
+                  setShowWorkflowModal(false);
                   setSelectedProject(null);
-                  setSelectedModel(null);
+                  setSelectedWorkflow(null);
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -2334,83 +2405,84 @@ toast.error(data.error || '更新项目失败');
             </div>
 
             <div className="p-6">
-              {loadingModels ? (
+              {loadingWorkflows ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-                  <span className="ml-2 text-gray-500">加载模型列表中...</span>
+                  <span className="ml-2 text-gray-500">加载工作流列表中...</span>
                 </div>
-              ) : models.length === 0 ? (
+              ) : workflows.length === 0 ? (
                 <div className="text-center py-12">
-                  <Zap className="mx-auto h-12 w-12 text-gray-400" />
+                  <Workflow className="mx-auto h-12 w-12 text-gray-400" />
                   <h3 className="mt-4 text-lg font-medium text-gray-900">
-                    暂无可用模型
+                    暂无可用工作流
                   </h3>
                   <p className="mt-2 text-sm text-gray-600">
-                    请先在模型管理中添加模型配置
+                    请先在工作流管理中创建并发布工作流
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <label htmlFor="modelSelect" className="block text-sm font-medium text-gray-700">
-                    选择要使用的模型
-                  </label>
-                  <select
-                    id="modelSelect"
-                    value={selectedModel || ''}
-                    onChange={(e) => setSelectedModel(e.target.value)}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">请选择模型</option>
-                    {models.map((model) => (
-                      <option key={model.id} value={model.id}>
-                        {model.name} ({model.providerType}) - {model.models?.join(', ')}
-                        {model.userId === null ? ' [系统]' : ` [${model.userName || model.userUsername || '用户'}]`}
-                        {model.isDefault ? ' [默认]' : ''}
-                      </option>
-                    ))}
-                  </select>
-
-                  {/* 显示选中模型的详情 */}
-                  {selectedModel && (
-                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      {(() => {
-                        const model = models.find(m => m.id === selectedModel);
-                        if (!model) return null;
-                        return (
-                          <div className="space-y-2 text-sm">
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">模型名称:</span>
-                              <span className="font-medium text-gray-900">{model.name}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">创建者:</span>
-                              <span className="font-medium text-gray-900">
-                                {model.userId === null ? '系统模型' : (model.userName || model.userUsername || '未知用户')}
-                              </span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">提供商类型:</span>
-                              <span className="font-medium text-gray-900">{model.providerType}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">支持模型:</span>
-                              <span className="font-medium text-gray-900">{model.models?.join(', ')}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gray-600">API地址:</span>
-                              <span className="font-medium text-gray-900 truncate max-w-[250px]">{model.apiBaseUrl}</span>
-                            </div>
-                            {model.routeType && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-600">路由类型:</span>
-                                <span className="font-medium text-gray-900">{model.routeType}</span>
-                              </div>
+                  <p className="text-sm text-gray-600 mb-4">
+                    选择一个已发布的工作流来执行评估。工作流定义了评估的步骤和使用的 Agent。
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {workflows.map((workflow) => (
+                      <div
+                        key={workflow.id}
+                        onClick={() => setSelectedWorkflow(workflow.id)}
+                        className={`border-2 rounded-lg p-4 cursor-pointer transition-all relative ${
+                          selectedWorkflow === workflow.id
+                            ? 'border-blue-600 bg-blue-100 shadow-md'
+                            : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
+                        }`}
+                      >
+                        {/* 选中标记 */}
+                        {selectedWorkflow === workflow.id && (
+                          <div className="absolute top-2 right-2">
+                            <CheckCircle className="h-5 w-5 text-blue-600" />
+                          </div>
+                        )}
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h4 className={`text-sm font-semibold ${
+                              selectedWorkflow === workflow.id ? 'text-blue-700' : 'text-gray-900'
+                            }`}>
+                              {workflow.name}
+                            </h4>
+                            {workflow.description && (
+                              <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                {workflow.description}
+                              </p>
                             )}
                           </div>
-                        );
-                      })()}
-                    </div>
-                  )}
+                          {!selectedWorkflow && (
+                            <Workflow className="h-5 w-5 text-gray-400 flex-shrink-0 ml-2" />
+                          )}
+                        </div>
+                        <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
+                          <span>节点数: {workflow.nodeCount || 0}</span>
+                          <span>
+                            更新于 {new Date(workflow.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+{/* 缩略图预览 */}
+                         {workflow.thumbnail && (
+                           <div className="mt-3">
+                             <img
+                               src={`data:image/png;base64,${workflow.thumbnail}`}
+                               alt={`${workflow.name} 缩略图`}
+                               className="w-full h-24 object-cover rounded border border-gray-200"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 setPreviewImage({ src: `data:image/png;base64,${workflow.thumbnail}`, alt: workflow.name });
+                                 setShowImagePreview(true);
+                               }}
+                             />
+                           </div>
+                         )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -2418,8 +2490,159 @@ toast.error(data.error || '更新项目失败');
             <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
               <button
                 onClick={() => {
-                  setShowModelModal(false);
+                  setShowWorkflowModal(false);
                   setSelectedProject(null);
+                  setSelectedWorkflow(null);
+                }}
+                disabled={!!startingProject}
+                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                取消
+              </button>
+              <div className="flex items-center space-x-3">
+                <button
+                  onClick={async () => {
+                    if (!selectedProject || !selectedWorkflow) return;
+                    setShowWorkflowModal(false);
+                    await fetchWorkflowRoles(selectedWorkflow);
+                    await fetchModels();
+                    setShowRoleModelModal(true);
+                  }}
+                  disabled={!selectedWorkflow || !!startingProject}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  下一步
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 角色模型配置对话框 */}
+      {showRoleModelModal && selectedProject && selectedWorkflow && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">为角色配置模型</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  项目: {selectedProject.name} | 编排: {workflows.find(w => w.id === selectedWorkflow)?.name}
+                </p>
+              </div>
+              <button onClick={() => {
+                setShowRoleModelModal(false);
+                setSelectedProject(null);
+                setSelectedWorkflow(null);
+                setWorkflowRoles([]);
+                setRoleModels([]);
+              }} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {loadingRoles ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <span className="ml-2 text-gray-500">加载角色列表...</span>
+                </div>
+              ) : workflowRoles.length === 0 ? (
+                <div className="text-center py-12">
+                  <Workflow className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-4 text-lg font-medium text-gray-900">该编排无角色定义</h3>
+                  <p className="mt-2 text-sm text-gray-600">请先在编排编辑器中定义角色</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* 快速设置：全部使用同一模型 */}
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                    <label className="block text-sm font-medium text-blue-800 mb-2">
+                      快速设置：为所有角色使用同一模型
+                    </label>
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) {
+                          const newRoleModels = workflowRoles.map((r: any) => ({
+                            roleId: r.id,
+                            modelId: e.target.value,
+                          }));
+                          setRoleModels(newRoleModels);
+                        }
+                      }}
+                      className="block w-full px-3 py-2 border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    >
+                      <option value="">选择模型应用到所有角色</option>
+                      {models.map((model) => (
+                        <option key={model.id} value={model.id}>
+                          {model.name} ({model.providerType})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 为每个角色配置模型 */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium text-gray-700">角色模型配置</h4>
+                    {workflowRoles.map((role: any) => (
+                      <div key={role.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                        {/* 角色信息 */}
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            {role.color && (
+                              <div className={`w-4 h-4 rounded-full`} style={{ backgroundColor: role.color }} />
+                            )}
+                            <span className="font-medium text-gray-900">{role.name}</span>
+                            {role.id === 'default' && (
+                              <span className="text-xs bg-gray-200 px-2 py-0.5 rounded">自动添加</span>
+                            )}
+                          </div>
+                          {role.description && (
+                            <p className="text-sm text-gray-500 mt-1">{role.description}</p>
+                          )}
+                          {role.nodes && (
+                            <p className="text-xs text-gray-400 mt-1">节点数: {role.nodes.length}</p>
+                          )}
+                          {role.nodeCount && (
+                            <p className="text-xs text-gray-400 mt-1">节点数: {role.nodeCount}</p>
+                          )}
+                        </div>
+                        
+                        {/* 模型选择 */}
+                        <div className="w-64">
+                          <select
+                            value={roleModels.find(rm => rm.roleId === role.id)?.modelId || ''}
+                            onChange={(e) => {
+                              const newRoleModels = [...roleModels];
+                              const index = newRoleModels.findIndex(rm => rm.roleId === role.id);
+                              if (index >= 0) {
+                                newRoleModels[index].modelId = e.target.value;
+                              }
+                              setRoleModels(newRoleModels);
+                            }}
+                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="">选择模型</option>
+                            {models.map((model) => (
+                              <option key={model.id} value={model.id}>
+                                {model.name} ({model.providerType})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setShowRoleModelModal(false);
+                  setShowWorkflowModal(true);
                 }}
                 disabled={!!startingProject}
                 className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
@@ -2429,15 +2652,26 @@ toast.error(data.error || '更新项目失败');
               <div className="flex items-center space-x-3">
                 <button
                   onClick={async () => {
-                    if (!selectedProject || !selectedModel) return;
-                    // 关闭模态框
-                    setShowModelModal(false);
+                    if (!selectedProject || !selectedWorkflow) return;
+                    
+                    // 验证所有角色都有模型
+                    const allConfigured = roleModels.every(rm => rm.modelId);
+                    if (!allConfigured) {
+                      toast.error('请为所有角色配置模型');
+                      return;
+                    }
+                    
+                    // 关闭对话框
+                    setShowRoleModelModal(false);
                     setSelectedProject(null);
-                    setSelectedModel(null);
-                    // 启动评估
-                    await startProject(selectedProject.id, selectedModel);
+                    setSelectedWorkflow(null);
+                    setWorkflowRoles([]);
+                    setRoleModels([]);
+                    
+                    // 启动评估，传递 roleModels
+                    await startProject(selectedProject.id, selectedWorkflow, roleModels);
                   }}
-                  disabled={!selectedModel || !!startingProject}
+                  disabled={!roleModels.every(rm => rm.modelId) || !!startingProject}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {startingProject ? '启动中...' : '启动评估'}

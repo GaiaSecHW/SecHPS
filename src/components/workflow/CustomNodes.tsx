@@ -32,6 +32,10 @@ interface NodeData {
     endNodeLabel: string;
     endNodeDescription: string;
   };
+  roleId?: string | null;
+  roleColor?: string;
+  inheritedRoleId?: string | null;
+  inheritedRoleColor?: string;
   [key: string]: any; // 添加索引签名
 }
 
@@ -74,6 +78,14 @@ const BaseNode = memo((props: NodeProps) => {
         overflow: 'visible',
       }}
     >
+      {/* 角色颜色标识 */}
+      {nodeData.roleId && nodeData.roleColor && (
+        <div
+          className="absolute top-0 left-0 w-2 h-full rounded-l-md"
+          style={{ backgroundColor: nodeData.roleColor }}
+        />
+      )}
+      
       {/* 输入句柄 - 左侧 */}
       {nodeType?.inputs && nodeType.inputs.length > 0 && nodeType.inputs.map((input, index) => (
         <Handle
@@ -154,6 +166,14 @@ const SubtaskNode = memo((props: NodeProps) => {
         overflow: 'visible',
       }}
     >
+      {/* 继承角色颜色标识 */}
+      {nodeData.inheritedRoleId && nodeData.inheritedRoleColor && (
+        <div
+          className="absolute top-0 left-0 w-2 h-full rounded-l-md"
+          style={{ backgroundColor: nodeData.inheritedRoleColor }}
+        />
+      )}
+      
       {/* 输入句柄 - 顶部 */}
       <Handle
         type="target"
@@ -254,6 +274,14 @@ export const TaskNode = memo((props: NodeProps) => {
         overflow: 'visible',
       }}
     >
+      {/* 角色颜色标识 */}
+      {nodeData.roleId && nodeData.roleColor && (
+        <div
+          className="absolute top-0 left-0 w-2 h-full rounded-l-md"
+          style={{ backgroundColor: nodeData.roleColor }}
+        />
+      )}
+      
       {/* 输入句柄 - 左侧 */}
       <Handle
         type="target"

@@ -17,11 +17,12 @@ import {
 } from '@xyflow/react';
 import { toPng } from 'html-to-image';
 import '@xyflow/react/dist/style.css';
-import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff, Sparkles, Loader2, Edit2, Check, ChevronDown, ChevronRight } from 'lucide-react';
+import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, Power, PowerOff, Sparkles, Loader2, Edit2, Check, ChevronDown, ChevronRight, Users, Plus, Palette } from 'lucide-react';
 import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
 import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP, WorkflowNodeType } from '@/types/workflow';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import toast from 'react-hot-toast';
 
 interface WorkflowEditorProps {
   workflowId?: string;
@@ -99,6 +100,13 @@ const [showPreview, setShowPreview] = useState(false);
   // 展开的预测任务 ID 集合
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   
+  // 角色管理相关状态
+  const [roles, setRoles] = useState<any[]>([]);
+  const [showRolePanel, setShowRolePanel] = useState(false);
+  const [loadingRoles, setLoadingRoles] = useState(false);
+  const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleColor, setNewRoleColor] = useState('#3B82F6');
+  
   // 工作流信息编辑模态框
   const [showEditModal, setShowEditModal] = useState(false);
   const [editName, setEditName] = useState('');
@@ -146,6 +154,33 @@ const [showPreview, setShowPreview] = useState(false);
 
     fetchWorkflowConfig();
   }, []);
+
+  // 获取角色列表
+  const fetchRoles = async () => {
+    if (!workflowId) return;
+    try {
+      setLoadingRoles(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/workflows/${workflowId}/roles`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRoles(data.roles || []);
+      }
+    } catch (err) {
+      console.error('获取角色失败:', err);
+    } finally {
+      setLoadingRoles(false);
+    }
+  };
+
+  // workflowId 变化时刷新角色列表
+  useEffect(() => {
+    if (workflowId) {
+      fetchRoles();
+    }
+  }, [workflowId]);
 
 // 保存当前状态到历史记录
   const saveToHistory = useCallback(() => {
@@ -343,16 +378,46 @@ const [showPreview, setShowPreview] = useState(false);
     }
   }, [workflowId]);
 
-  // 为节点添加 workflowConfig
+  // 为节点添加 workflowConfig 和角色颜色
   const nodesWithConfig = useMemo(() => {
-    return nodes.map(node => ({
-      ...node,
-      data: {
-        ...node.data,
-        workflowConfig,
-      },
-    }));
-  }, [nodes, workflowConfig]);
+    return nodes.map(node => {
+      const nodeData = node.data as NodeData;
+      let roleColor = undefined;
+      let inheritedRoleId = undefined;
+      let inheritedRoleColor = undefined;
+      
+      // 非 Subtask 节点：根据 roleId 查找角色颜色
+      if (node.type !== 'subtask' && nodeData.roleId) {
+        const role = roles.find(r => r.id === nodeData.roleId);
+        roleColor = role?.color;
+      }
+      
+      // Subtask 节点：继承父 Task 的角色颜色
+      if (node.type === 'subtask') {
+        const parentEdge = edges.find(e => e.target === node.id && e.source);
+        const parentNode = parentEdge ? nodes.find(n => n.id === parentEdge.source && n.type === 'task') : null;
+        if (parentNode) {
+          const parentRoleId = (parentNode.data as NodeData).roleId;
+          if (parentRoleId) {
+            inheritedRoleId = parentRoleId;
+            const parentRole = roles.find(r => r.id === parentRoleId);
+            inheritedRoleColor = parentRole?.color;
+          }
+        }
+      }
+      
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          workflowConfig,
+          roleColor,
+          inheritedRoleId,
+          inheritedRoleColor,
+        },
+      };
+    });
+  }, [nodes, workflowConfig, roles, edges]);
 
   // 初始化历史记录
   useEffect(() => {
@@ -616,8 +681,19 @@ const [showPreview, setShowPreview] = useState(false);
       // 生成缩略图
       const thumbnail = await generateThumbnail();
       
+      // 处理 Subtask 的 roleId - Subtask 不存储 roleId，运行时动态继承
+      const processedNodes = nodes.map(node => {
+        if (node.type === 'subtask') {
+          return {
+            ...node,
+            data: { ...node.data, roleId: null }
+          };
+        }
+        return node;
+      });
+      
       const data: WorkflowData = {
-        nodes,
+        nodes: processedNodes,
         edges,
         viewport: undefined,
         thumbnail, // 添加缩略图
@@ -778,6 +854,16 @@ const [showPreview, setShowPreview] = useState(false);
                   <Eye size={16} />
                   <span>预览</span>
                 </button>
+                <button
+                  onClick={() => {
+                    fetchRoles();
+                    setShowRolePanel(true);
+                  }}
+                  className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700"
+                >
+                  <Users size={16} />
+                  <span>角色管理</span>
+                </button>
               </>
             )}
           </div>
@@ -921,6 +1007,50 @@ const [showPreview, setShowPreview] = useState(false);
                 {/* 检查节点是否可编辑 */}
                 {NODE_TYPE_MAP[selectedNode.type as WorkflowNodeType]?.editable !== false ? (
                   <>
+                    {/* 角色选择器 - 在节点名称之前 */}
+                    {selectedNode.type !== 'subtask' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          角色
+                        </label>
+                        <select
+                          value={selectedNode.data.roleId || ''}
+                          onChange={(e) => {
+                            const updatedNode = {
+                              ...selectedNode,
+                              data: { ...selectedNode.data, roleId: e.target.value || null }
+                            };
+                            setNodes((nds) =>
+                              nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                            );
+                            setSelectedNode(updatedNode);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">默认角色</option>
+                          {roles.map((role: any) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </select>
+                        {/* 显示角色颜色标识 */}
+                        {selectedNode.data.roleId && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{
+                                backgroundColor: roles.find(r => r.id === selectedNode.data.roleId)?.color || '#3B82F6'
+                              }}
+                            />
+                            <span className="text-xs text-gray-600">
+                              {roles.find(r => r.id === selectedNode.data.roleId)?.name || '默认角色'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         节点名称
@@ -969,6 +1099,50 @@ const [showPreview, setShowPreview] = useState(false);
                   </>
                 ) : (
                   <>
+                    {/* 角色选择器 - 开始/结束节点也需要 */}
+                    {selectedNode.type !== 'subtask' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          角色
+                        </label>
+                        <select
+                          value={selectedNode.data.roleId || ''}
+                          onChange={(e) => {
+                            const updatedNode = {
+                              ...selectedNode,
+                              data: { ...selectedNode.data, roleId: e.target.value || null }
+                            };
+                            setNodes((nds) =>
+                              nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                            );
+                            setSelectedNode(updatedNode);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">默认角色</option>
+                          {roles.map((role: any) => (
+                            <option key={role.id} value={role.id}>
+                              {role.name}
+                            </option>
+                          ))}
+                        </select>
+                        {/* 显示角色颜色标识 */}
+                        {selectedNode.data.roleId && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <div
+                              className="w-3 h-3 rounded-full"
+                              style={{
+                                backgroundColor: roles.find(r => r.id === selectedNode.data.roleId)?.color || '#3B82F6'
+                              }}
+                            />
+                            <span className="text-xs text-gray-600">
+                              {roles.find(r => r.id === selectedNode.data.roleId)?.name || '默认角色'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
                       <p className="text-sm text-blue-800 font-medium mb-2">
                         系统节点配置
@@ -1004,6 +1178,42 @@ const [showPreview, setShowPreview] = useState(false);
                       </div>
                     </div>
                   </>
+                )}
+
+                {/* Subtask 继承角色显示 */}
+                {selectedNode.type === 'subtask' && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
+                    <p className="text-sm text-purple-800 font-medium mb-2">
+                      角色继承
+                    </p>
+                    {(() => {
+                      // 查找父 Task 节点
+                      const parentEdge = edges.find(e => e.target === selectedNode.id && e.source);
+                      const parentNode = parentEdge ? nodes.find(n => n.id === parentEdge.source && n.type === 'task') : null;
+                      const parentRoleId = parentNode?.data?.roleId;
+                      const parentRole = parentRoleId ? roles.find(r => r.id === parentRoleId) : null;
+                      
+                      if (parentRole) {
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: parentRole.color || '#3B82F6' }} />
+                            <span className="text-sm text-purple-700">
+                              继承自 {parentNode?.data?.label}: {parentRole.name}
+                            </span>
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <span className="text-sm text-gray-600">
+                            继承自 {parentNode?.data?.label || '父节点'}: 默认角色
+                          </span>
+                        );
+                      }
+                    })()}
+                    <p className="text-xs text-purple-600 mt-2">
+                      Subtask 自动继承父 Agent 的角色配置
+                    </p>
+                  </div>
                 )}
 
                 <div>
@@ -1366,6 +1576,135 @@ const [showPreview, setShowPreview] = useState(false);
               >
                 关闭
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 角色管理面板 */}
+      {showRolePanel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">角色管理</h3>
+              <button onClick={() => setShowRolePanel(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {/* 角色列表 */}
+              {loadingRoles ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {roles.map((role: any) => (
+                    <div key={role.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: role.color || '#3B82F6' }} />
+                        <span className="font-medium text-gray-900">{role.name}</span>
+                        <span className="text-xs text-gray-500">({role.nodes?.length || 0} 个节点)</span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const token = localStorage.getItem('token');
+                          await fetch(`/api/workflows/${workflowId}/roles/${role.id}`, {
+                            method: 'DELETE',
+                            headers: { Authorization: `Bearer ${token}` },
+                          });
+                          fetchRoles();
+                        }}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {roles.length === 0 && (
+                    <p className="text-center text-gray-500">暂无角色，请创建</p>
+                  )}
+                </div>
+              )}
+              
+              {/* 创建新角色 */}
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">创建新角色</h4>
+                <p className="text-xs text-gray-500 mb-3">
+                  角色颜色用于标识节点归属，节点左侧会显示角色颜色条
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    value={newRoleName}
+                    onChange={(e) => setNewRoleName(e.target.value)}
+                    placeholder="角色名称（如：分析员、审计员）"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  />
+                  
+                  {/* 预制颜色选择 */}
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-2">选择颜色</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[
+                        '#3B82F6', // 蓝色
+                        '#10B981', // 绿色
+                        '#F59E0B', // 黄色
+                        '#EF4444', // 红色
+                        '#8B5CF6', // 紫色
+                        '#EC4899', // 粉色
+                        '#06B6D4', // 青色
+                        '#F97316', // 橙色
+                        '#6366F1', // 靛蓝
+                        '#84CC16', // 草绿
+                        '#64748B', // 灰色
+                        '#1E293B', // 深灰
+                      ].map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setNewRoleColor(color)}
+                          className={`w-6 h-6 rounded-full transition-all ${
+                            newRoleColor === color 
+                              ? 'ring-2 ring-offset-2 ring-gray-400 scale-110' 
+                              : 'hover:scale-105'
+                          }`}
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={async () => {
+                      if (!newRoleName.trim()) {
+                        toast.error('请输入角色名称');
+                        return;
+                      }
+                      const token = localStorage.getItem('token');
+                      await fetch(`/api/workflows/${workflowId}/roles`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: `Bearer ${token}`,
+                        },
+                        body: JSON.stringify({ name: newRoleName, color: newRoleColor }),
+                      });
+                      setNewRoleName('');
+                      setNewRoleColor('#3B82F6');
+                      fetchRoles();
+                      toast.success('角色创建成功');
+                    }}
+                    disabled={!newRoleName.trim()}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  >
+                    创建角色
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

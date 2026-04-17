@@ -76,7 +76,9 @@ const ANALYSIS_SYSTEM_PROMPT = `你是一个 Skill 治理专家，负责判断�
 - 同语言同框架的多个审计 Skill 可能是**重复**
 - 内容相似但触发条件不同的 Skill 可能是**互补**
 
-请用中文回答，给出清晰的判断理由。`;
+**输出格式要求**:
+你必须只输出一个有效的 JSON 对象，不要输出任何其他文字、解释或 markdown 标记。
+JSON 必须包含以下字段：isDuplicate, overlapType, confidence, recommendation, reason, keyDifferences, sharedFunctionality。`;
 
 function buildAnalysisPrompt(skillA: SkillForLLMAnalysis, skillB: SkillForLLMAnalysis): string {
   const truncateContent = (content: string | undefined, maxLen: number = 2000): string => {
@@ -113,28 +115,14 @@ ${truncateContent(skillA.content)}
 ${truncateContent(skillB.content)}
 \`\`\`
 
-## 请回答
+## 输出格式
 
-1. **是否重复**: [是/否]
-2. **重叠类型**: [exact/subset/related/distinct]
-3. **置信度**: [0.0-1.0]
-4. **建议操作**: [merge/keep_separate/review]
-5. **判断理由**: [简要说明为什么这样判断]
-6. **主要差异**: [列出2-3个关键差异点，如果有的话]
-7. **共享功能**: [列出重叠的功能点，如果有的话]
+**重要**: 只输出 JSON 对象，不要输出任何其他内容。不要使用 markdown 代码块标记。
 
-请以 JSON 格式输出：
-\`\`\`json
-{
-  "isDuplicate": boolean,
-  "overlapType": "exact" | "subset" | "related" | "distinct",
-  "confidence": number,
-  "recommendation": "merge" | "keep_separate" | "review",
-  "reason": "string",
-  "keyDifferences": ["string"],
-  "sharedFunctionality": ["string"]
-}
-\`\`\``;
+示例输出格式:
+{"isDuplicate":false,"overlapType":"related","confidence":0.7,"recommendation":"keep_separate","reason":"两个 Skill 针对不同编程语言，属于设计差异","keyDifferences":["技术栈不同","检测方法有差异"],"sharedFunctionality":["都是代码审计","都检查类似漏洞类型"]}
+
+请输出你的分析结果 JSON:`;
 }
 
 // ============================================================================
@@ -167,19 +155,101 @@ export async function analyzeSkillDuplication(
       }
     );
     
-    // 解析 LLM 响应
-    const content = response.content?.[0]?.text || response.choices?.[0]?.message?.content || '';
+    // 解析 LLM 响应 - 支持 OpenAI 和 Claude 格式
+    let content = '';
     
-    // 提取 JSON
-    const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || 
-                      content.match(/\{[\s\S]*\}/);
+    // 调试：打印完整响应结构
+    console.log('[SkillLLMAnalysis] response keys:', Object.keys(response || {}));
+    console.log('[SkillLLMAnalysis] response structure:', JSON.stringify(response, null, 2).substring(0, 1000));
     
-    if (!jsonMatch) {
-      console.warn('[SkillLLMAnalysis] 无法解析 LLM 响应，使用默认值');
-      return createDefaultResult(skillA, skillB);
+    // Claude 格式: response.content[0].text
+    if (response.content?.[0]?.text) {
+      content = response.content[0].text;
+      console.log('[SkillLLMAnalysis] 使用 Claude 格式解析');
+    }
+    // OpenAI 格式: response.choices[0].message.content
+    else if (response.choices?.[0]?.message?.content) {
+      content = response.choices[0].message.content;
+      console.log('[SkillLLMAnalysis] 使用 OpenAI 格式解析');
+    }
+    // 某些 OpenAI 兼容格式可能直接返回 text
+    else if (response.text) {
+      content = response.text;
+      console.log('[SkillLLMAnalysis] 使用 response.text 解析');
+    }
+    // 兜底
+    else if (typeof response === 'string') {
+      content = response;
+      console.log('[SkillLLMAnalysis] 使用字符串格式解析');
     }
     
-    const parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+    console.log(`[SkillLLMAnalysis] LLM 原始响应 (前500字符): ${content.substring(0, 500)}`);
+    
+    // 多种方式提取 JSON
+    let parsed: any = null;
+    
+    // 方式1: 从 ```json 代码块提取
+    const jsonBlockMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch) {
+      try {
+        parsed = JSON.parse(jsonBlockMatch[1].trim());
+        console.log('[SkillLLMAnalysis] 从 ```json 代码块解析成功');
+      } catch (e) {
+        console.warn('[SkillLLMAnalysis] ```json 代码块解析失败:', e);
+      }
+    }
+    
+    // 方式2: 从 ``` 代码块提取（无 json 标记）
+    if (!parsed) {
+      const codeBlockMatch = content.match(/```\s*([\s\S]*?)\s*```/);
+      if (codeBlockMatch) {
+        try {
+          parsed = JSON.parse(codeBlockMatch[1].trim());
+          console.log('[SkillLLMAnalysis] 从 ``` 代码块解析成功');
+        } catch (e) {
+          // 忽略，继续尝试其他方式
+        }
+      }
+    }
+    
+    // 方式3: 查找独立的 JSON 对象
+    if (!parsed) {
+      // 查找以 { 开头的 JSON
+      const jsonStart = content.indexOf('{');
+      const jsonEnd = content.lastIndexOf('}');
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        const jsonStr = content.substring(jsonStart, jsonEnd + 1);
+        try {
+          parsed = JSON.parse(jsonStr);
+          console.log('[SkillLLMAnalysis] 从独立 JSON 对象解析成功');
+        } catch (e) {
+          console.warn('[SkillLLMAnalysis] 独立 JSON 解析失败:', e);
+        }
+      }
+    }
+    
+    // 方式4: 逐行查找 JSON
+    if (!parsed) {
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+          try {
+            parsed = JSON.parse(trimmed);
+            console.log('[SkillLLMAnalysis] 从单行 JSON 解析成功');
+            break;
+          } catch (e) {
+            // 继续尝试下一行
+          }
+        }
+      }
+    }
+    
+    if (!parsed) {
+      console.warn('[SkillLLMAnalysis] 无法从 LLM 响应解析 JSON，使用默认值');
+      console.warn('[SkillLLMAnalysis] 完整响应内容:', content);
+      return createDefaultResult(skillA, skillB);
+    }
     
     return {
       isDuplicate: parsed.isDuplicate ?? false,

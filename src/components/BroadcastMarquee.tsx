@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Megaphone } from 'lucide-react';
+import { Volume2 } from 'lucide-react';
 
 interface BroadcastConfig {
   content: string;
@@ -33,7 +33,8 @@ export function BroadcastMarquee() {
   const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
   const [messages, setMessages] = useState<string[]>([]);
 
-  useEffect(() => {
+  // 获取广播配置
+  const fetchBroadcast = () => {
     fetch('/api/broadcast')
       .then((res) => res.json())
       .then((data) => {
@@ -54,6 +55,13 @@ export function BroadcastMarquee() {
         });
         setMessages(['欢迎使用 AI4WEB 测试平台']);
       });
+  };
+
+  // 初始加载 + 30秒轮询
+  useEffect(() => {
+    fetchBroadcast(); // 立即获取一次
+    const interval = setInterval(fetchBroadcast, 30000); // 30秒轮询
+    return () => clearInterval(interval);
   }, []);
 
   // 多条消息轮播
@@ -75,7 +83,7 @@ export function BroadcastMarquee() {
   return (
     <div className={`flex-1 overflow-hidden ${colorStyle.gradient} rounded-md shadow-sm h-10`}>
       <div className="flex items-center h-full px-4">
-        <Megaphone className="w-5 h-5 text-white mr-3 flex-shrink-0" />
+        <Volume2 className="w-5 h-5 text-white mr-3 flex-shrink-0" />
         <div className="overflow-hidden whitespace-nowrap flex-1 relative">
           <span
             className="inline-block animate-marquee text-white font-medium text-base pl-[100%]"
