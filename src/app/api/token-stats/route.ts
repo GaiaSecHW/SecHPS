@@ -56,46 +56,26 @@ export async function GET(request: Request) {
       tokenWhereClause.projectId = projectId;
     } else {
       if (isAdmin) {
-        // 管理员：查询所有项目（包括所有用户的）+ 系统项目
-        const SYSTEM_PROJECT_ID = 'system-00000000-0000-0000-0000-000000000001';
-        const allProjects = await prisma.project.findMany({
-          select: { id: true },
-        });
-        const projectIds = [...allProjects.map(p => p.id), SYSTEM_PROJECT_ID];
-        
-        evalWhereClause.projectId = { in: projectIds };
-        tokenWhereClause.projectId = { in: projectIds };
+        // 管理员：查询所有数据（不过滤用户）
+        // evalWhereClause 保持不变（查询所有项目）
+        // tokenWhereClause 也不需要额外过滤
       } else {
-        // 普通用户：只查询自己的项目（不包括系统项目）
+        // 普通用户：查询自己项目的评估 + 自己的 Token 使用记录
         const userProjects = await prisma.project.findMany({
           where: { userId: payload.userId },
           select: { id: true },
         });
         const projectIds = userProjects.map(p => p.id);
         
-        if (projectIds.length === 0) {
-          // 用户没有项目，返回空统计
-          return NextResponse.json({
-            period,
-            startDate,
-            endDate: now,
-            summary: {
-              totalInputTokens: 0,
-              totalOutputTokens: 0,
-              totalTokens: 0,
-              estimatedCost: 0,
-              evaluationCount: 0,
-              callCount: 0,
-            },
-            modelStats: [],
-            projectStats: [],
-            trendData: [],
-            userStats: [],
-          });
+        // 评估会话按项目过滤
+        if (projectIds.length > 0) {
+          evalWhereClause.projectId = { in: projectIds };
+        } else {
+          evalWhereClause.projectId = 'no-projects'; // 强制返回空
         }
         
-        evalWhereClause.projectId = { in: projectIds };
-        tokenWhereClause.projectId = { in: projectIds };
+        // TokenUsage 按 userId 过滤（这样能捕获 Skill 优化等无项目的调用）
+        tokenWhereClause.userId = payload.userId;
       }
     }
 
