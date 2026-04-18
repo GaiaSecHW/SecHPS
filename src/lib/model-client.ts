@@ -255,8 +255,14 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
   // 确保 URL 正确
   if (!apiUrl.includes('/chat/completions')) {
     apiUrl = apiUrl.replace(/\/$/, '');
+    // 如果 URL 不包含 /v1，先添加 /v1
+    if (!apiUrl.includes('/v1')) {
+      apiUrl = `${apiUrl}/v1`;
+    }
     apiUrl = `${apiUrl}/chat/completions`;
   }
+
+  console.log(`[ModelClient] OpenAI request URL: ${apiUrl}`);
 
   // 创建超时控制器
   const controller = new AbortController();
