@@ -18,6 +18,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { useTechStackOptionsWithIds, TechStackOptionWithId } from '@/hooks/useTechStackOptionsWithIds';
 import { useVulnerabilityPatterns, VulnerabilityPattern } from '@/hooks/useVulnerabilityPatterns';
+import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
 import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 使用公共模块的默认模板
@@ -42,9 +43,6 @@ export default function CreateSkillPage() {
   
   // 漏洞模式单选（改为 ID）
   const [vulnerabilityPatternId, setVulnerabilityPatternId] = useState<string>('');
-  const [showVulnerabilityDropdown, setShowVulnerabilityDropdown] = useState(false);
-  const [vulnerabilitySearch, setVulnerabilitySearch] = useState('');
-  const vulnerabilityDropdownRef = useRef<HTMLDivElement>(null);
   const techStackDropdownRef = useRef<HTMLDivElement>(null);
 
   // AI 生成相关状态
@@ -90,12 +88,9 @@ export default function CreateSkillPage() {
     }
   }, []);
 
-  // 点击外部关闭下拉框
+  // 点击外部关闭技术栈下拉框
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (vulnerabilityDropdownRef.current && !vulnerabilityDropdownRef.current.contains(event.target as Node)) {
-        setShowVulnerabilityDropdown(false);
-      }
       if (techStackDropdownRef.current && !techStackDropdownRef.current.contains(event.target as Node)) {
         setShowTechStackDropdown(false);
       }
@@ -321,109 +316,14 @@ try {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 漏洞类型 <span className="text-red-500">*</span>
               </label>
-              
-              {/* 热门漏洞快捷标签 */}
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {['SQL注入', 'XSS', '命令注入', '路径遍历', 'SSRF', '越权访问'].map((name) => {
-                  const pattern = vulnerabilityPatterns.find(p => 
-                    p.displayName === name || p.displayName.includes(name)
-                  );
-                  if (!pattern) return null;
-                  return (
-                    <button
-                      key={pattern.id}
-                      type="button"
-                      onClick={() => {
-                        setVulnerabilityPatternId(pattern.id);
-                        setVulnerabilitySearch('');
-                        setShowVulnerabilityDropdown(false);
-                      }}
-                      className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
-                        pattern.id === vulnerabilityPatternId
-                          ? 'bg-blue-500 text-white border-blue-500'
-                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'
-                      }`}
-                    >
-                      {pattern.displayName}
-                    </button>
-                  );
-                })}
-              </div>
-              
-              <div className="relative" ref={vulnerabilityDropdownRef}>
-                <input
-                  type="text"
-                  value={vulnerabilitySearch || (selectedVulnerabilityPattern 
-                    ? `${selectedVulnerabilityPattern.displayName}${selectedVulnerabilityPattern.cwe ? ` (${selectedVulnerabilityPattern.cwe})` : ''}`
-                    : '')}
-                  onChange={(e) => {
-                    setVulnerabilitySearch(e.target.value);
-                    setShowVulnerabilityDropdown(true);
-                  }}
-                  onFocus={() => setShowVulnerabilityDropdown(true)}
-                  placeholder={loadingVulnerabilityPatterns ? "加载中..." : "搜索并选择漏洞类型..."}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loadingVulnerabilityPatterns}
-                />
-                {showVulnerabilityDropdown && !loadingVulnerabilityPatterns && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {/* 搜索提示 */}
-                    <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
-                      输入关键词搜索，如 "SQL"、"XSS"、"注入" 等
-                    </div>
-                    {Object.entries(groupedPatterns).map(([category, patterns]) => {
-                      const filtered = patterns.filter((p) => 
-                        p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
-                        (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase())) ||
-                        p.name.toLowerCase().includes(vulnerabilitySearch.toLowerCase())
-                      );
-                      if (filtered.length === 0) return null;
-                      return (
-                        <div key={category}>
-                          <div className="px-4 py-1.5 bg-gray-100 text-xs font-semibold text-gray-600 uppercase sticky top-0">
-                            {category}
-                          </div>
-                          {filtered.slice(0, 15).map((pattern) => (
-                            <button
-                              key={pattern.id}
-                              type="button"
-                              onClick={() => {
-                                setVulnerabilityPatternId(pattern.id);
-                                setVulnerabilitySearch('');
-                                setShowVulnerabilityDropdown(false);
-                              }}
-                              className={`w-full px-4 py-2 text-left hover:bg-gray-100 text-sm ${
-                                pattern.id === vulnerabilityPatternId ? 'bg-blue-50 text-blue-700' : ''
-                              }`}
-                            >
-                              {pattern.displayName}
-                              {pattern.cwe && <span className="text-gray-400 ml-2">({pattern.cwe})</span>}
-                            </button>
-                          ))}
-                        </div>
-                      );
-                    })}
-                    {Object.values(groupedPatterns).every(
-                      (patterns) => !patterns.some((p) => 
-                        p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
-                        (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase()))
-                      )
-                    ) && (
-                      <div className="px-4 py-2 text-sm text-gray-500">
-                        无匹配选项
-                      </div>
-                    )}
-                  </div>
-                )}
-                {loadingVulnerabilityPatterns && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      <span className="text-sm text-gray-500">加载中...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <VulnerabilityPatternSelector
+                value={vulnerabilityPatternId}
+                onChange={(id) => setVulnerabilityPatternId(id)}
+                patterns={vulnerabilityPatterns}
+                groupedPatterns={groupedPatterns}
+                loading={loadingVulnerabilityPatterns}
+                placeholder="选择漏洞模式"
+              />
             </div>
 
             {/* 技术栈（单选） */}
