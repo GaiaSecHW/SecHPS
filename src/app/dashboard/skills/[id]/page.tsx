@@ -817,6 +817,36 @@ export default function SkillDetailPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   漏洞模式 <span className="text-red-500">*</span>
                 </label>
+                
+                {/* 热门漏洞快捷标签 */}
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {['SQL注入', 'XSS', '命令注入', '路径遍历', 'SSRF', '越权访问'].map((name) => {
+                    const pattern = vulnerabilityPatterns.find(p => 
+                      p.displayName === name || p.displayName.includes(name)
+                    );
+                    if (!pattern) return null;
+                    return (
+                      <button
+                        key={pattern.id}
+                        type="button"
+                        onClick={() => {
+                          setEditVulnerabilityPatternId(pattern.id);
+                          setEditCategory(pattern.category);
+                          setVulnerabilitySearch('');
+                          setShowVulnerabilityDropdown(false);
+                        }}
+                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
+                          pattern.id === editVulnerabilityPatternId
+                            ? 'bg-blue-500 text-white border-blue-500'
+                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'
+                        }`}
+                      >
+                        {pattern.displayName}
+                      </button>
+                    );
+                  })}
+                </div>
+                
                 <div className="relative" ref={vulnerabilityDropdownRef}>
                   <input
                     type="text"
@@ -834,19 +864,23 @@ export default function SkillDetailPage() {
                   />
                   {showVulnerabilityDropdown && !loadingVulnerabilityPatterns && (
                     <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {Object.entries(groupedPatterns).map(([category, patterns]) => (
-                        <div key={category}>
-                          <div className="px-4 py-1.5 bg-gray-100 text-xs font-semibold text-gray-600 uppercase">
-                            {category}
-                          </div>
-                          {patterns
-                            .filter((p) => 
-                              p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
-                              (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase())) ||
-                              p.name.toLowerCase().includes(vulnerabilitySearch.toLowerCase())
-                            )
-                            .slice(0, 10)
-                            .map((pattern) => (
+                      {/* 搜索提示 */}
+                      <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-500">
+                        输入关键词搜索，如 "SQL"、"XSS"、"注入" 等
+                      </div>
+                      {Object.entries(groupedPatterns).map(([category, patterns]) => {
+                        const filtered = patterns.filter((p) => 
+                          p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
+                          (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase())) ||
+                          p.name.toLowerCase().includes(vulnerabilitySearch.toLowerCase())
+                        );
+                        if (filtered.length === 0) return null;
+                        return (
+                          <div key={category}>
+                            <div className="px-4 py-1.5 bg-gray-100 text-xs font-semibold text-gray-600 uppercase sticky top-0">
+                              {category}
+                            </div>
+                            {filtered.slice(0, 15).map((pattern) => (
                               <button
                                 key={pattern.id}
                                 type="button"
@@ -864,8 +898,9 @@ export default function SkillDetailPage() {
                                 {pattern.cwe && <span className="text-gray-400 ml-2">({pattern.cwe})</span>}
                               </button>
                             ))}
-                        </div>
-                      ))}
+                          </div>
+                        );
+                      })}
                       {Object.values(groupedPatterns).every(
                         (patterns) => !patterns.some((p) => 
                           p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
