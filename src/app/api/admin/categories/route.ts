@@ -6,32 +6,6 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
-// 基于 OWASP Top 10 2021 和 CWE Top 25 2023 的漏洞分类
-const DEFAULT_CATEGORIES = [
-  // OWASP Top 10 2021
-  { value: 'access-control', label: '访问控制' },      // A01
-  { value: 'cryptography', label: '加密安全' },        // A02
-  { value: 'injection', label: '注入攻击' },           // A03
-  { value: 'design', label: '安全设计' },              // A04
-  { value: 'configuration', label: '安全配置' },       // A05
-  { value: 'components', label: '组件安全' },          // A06
-  { value: 'authentication', label: '身份认证' },      // A07
-  { value: 'integrity', label: '数据完整性' },         // A08
-  { value: 'logging', label: '日志监控' },             // A09
-  { value: 'ssrf', label: '服务端请求' },               // A10
-  // CWE Top 25 2023 补充
-  { value: 'memory', label: '内存安全' },              // CWE-787/125/416/476
-  { value: 'input-validation', label: '输入验证' },    // CWE-20
-  { value: 'privilege', label: '权限管理' },           // CWE-269/276
-  { value: 'sensitive', label: '敏感信息' },           // CWE-200/798
-  { value: 'file-ops', label: '文件操作' },            // CWE-22/434
-  // 业务通用
-  { value: 'business-logic', label: '业务逻辑' },
-  { value: 'compliance', label: '合规安全' },
-  // 其他
-  { value: 'other', label: '其他' },
-];
-
 // GET /api/admin/categories - 获取漏洞分类列表
 export async function GET(request: Request) {
   try {
@@ -47,42 +21,25 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
     }
 
-    // 从数据库获取配置
-    let config = null;
-    try {
-      config = await prisma.systemConfig.findUnique({
-        where: { key: 'skill_categories' },
-      });
-    } catch (dbError) {
-      logger.warn(LOG_MODULES.CONFIG, '数据库连接失败，使用默认分类', { details: String(dbError) });
-      // 如果数据库连接失败，返回默认值
-      return NextResponse.json({ categories: DEFAULT_CATEGORIES });
-    }
+    // 从 VulnerabilityCategory 表获取分类列表
+    const categories = await prisma.vulnerabilityCategory.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, value: true, label: true, description: true, sortOrder: true },
+    });
 
-    // 如果没有配置，使用默认值并创建
-    if (!config) {
-      try {
-        config = await prisma.systemConfig.create({
-          data: {
-            id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            key: 'skill_categories',
-            value: JSON.stringify(DEFAULT_CATEGORIES),
-            description: '漏洞分类配置',
-            updatedAt: new Date(),
-          },
-        });
-      } catch (createError) {
-        logger.warn(LOG_MODULES.CONFIG, '创建配置失败，使用默认分类', { details: String(createError) });
-        return NextResponse.json({ categories: DEFAULT_CATEGORIES });
-      }
-    }
-
-    const categories = JSON.parse(config.value);
-    return NextResponse.json({ categories });
+    return NextResponse.json({ 
+      categories: categories.map(c => ({ 
+        id: c.id,
+        value: c.value, 
+        label: c.label,
+        description: c.description,
+        sortOrder: c.sortOrder,
+      })) 
+    });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.CONFIG, '获取漏洞分类失败', { details: String(error) });
-    // 返回默认分类而不是错误
-    return NextResponse.json({ categories: DEFAULT_CATEGORIES });
+    return NextResponse.json({ categories: [] });
   }
 }
 
@@ -121,53 +78,73 @@ export async function PUT(request: Request) {
     }
 
     // 获取当前分类列表，检查是否有分类被删除
-    const currentConfig = await prisma.systemConfig.findUnique({
-      where: { key: 'skill_categories' },
+    const currentCategories = await prisma.vulnerabilityCategory.findMany({
+      where: { isActive: true },
     });
-
-    if (currentConfig) {
-      const currentCategories = JSON.parse(currentConfig.value) as Array<{ value: string; label: string }>;
-      const currentValues = currentCategories.map(c => c.value);
-      const newValues = categories.map(c => c.value);
+    const currentValues = currentCategories.map(c => c.value);
+    const newValues = categories.map(c => c.value);
+    
+    // 找出被删除的分类值
+    const deletedValues = currentValues.filter(v => !newValues.includes(v));
+    
+    // 检查被删除的分类是否被漏洞模式引用
+    for (const deletedValue of deletedValues) {
+      const patternCount = await prisma.vulnerabilityPattern.count({
+        where: { category: deletedValue, isActive: true },
+      });
       
-      // 找出被删除的分类值
-      const deletedValues = currentValues.filter(v => !newValues.includes(v));
-      
-      // 检查被删除的分类是否被漏洞模式引用
-      for (const deletedValue of deletedValues) {
-        const patternCount = await prisma.vulnerabilityPattern.count({
-          where: { category: deletedValue, isActive: true },
-        });
-        
-        if (patternCount > 0) {
-          const deletedCategory = currentCategories.find(c => c.value === deletedValue);
-          return NextResponse.json({
-            error: `分类 "${deletedCategory?.label || deletedValue}" 被 ${patternCount} 个漏洞模式引用，无法删除`,
-            deletedCategory: deletedValue,
-            patternCount,
-          }, { status: 400 });
-        }
+      if (patternCount > 0) {
+        const deletedCategory = currentCategories.find(c => c.value === deletedValue);
+        return NextResponse.json({
+          error: `分类 "${deletedCategory?.label || deletedValue}" 被 ${patternCount} 个漏洞模式引用，无法删除`,
+          deletedCategory: deletedValue,
+          patternCount,
+        }, { status: 400 });
       }
     }
 
-    // 更新或创建配置
-    const config = await prisma.systemConfig.upsert({
-      where: { key: 'skill_categories' },
-      update: {
-        value: JSON.stringify(categories),
-        updatedAt: new Date(),
-      },
-      create: {
-        id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        key: 'skill_categories',
-        value: JSON.stringify(categories),
-        description: '漏洞分类配置',
-        updatedAt: new Date(),
-      },
+    // 更新分类：先标记删除的不活跃，再创建或更新
+    await prisma.$transaction(async (tx) => {
+      // 标记删除的分类为不活跃
+      for (const deletedValue of deletedValues) {
+        await tx.vulnerabilityCategory.updateMany({
+          where: { value: deletedValue },
+          data: { isActive: false, updatedAt: new Date() },
+        });
+      }
+
+      // 创建或更新分类
+      for (let i = 0; i < categories.length; i++) {
+        const cat = categories[i];
+        await tx.vulnerabilityCategory.upsert({
+          where: { value: cat.value },
+          update: {
+            label: cat.label,
+            description: cat.description,
+            sortOrder: i,
+            isActive: true,
+            updatedAt: new Date(),
+          },
+          create: {
+            id: cat.id || `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            value: cat.value,
+            label: cat.label,
+            description: cat.description,
+            sortOrder: i,
+            updatedAt: new Date(),
+          },
+        });
+      }
     });
 
-    logger.update(LOG_MODULES.CONFIG, payload, 'skill_categories', { categoriesCount: categories.length });
-    return NextResponse.json({ categories: JSON.parse(config.value) });
+    // 返回更新后的列表
+    const updatedCategories = await prisma.vulnerabilityCategory.findMany({
+      where: { isActive: true },
+      orderBy: { sortOrder: 'asc' },
+    });
+
+    logger.update(LOG_MODULES.CONFIG, payload, 'vulnerability_categories', { categoriesCount: categories.length });
+    return NextResponse.json({ categories: updatedCategories });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.CONFIG, '更新漏洞分类失败', { details: String(error) });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

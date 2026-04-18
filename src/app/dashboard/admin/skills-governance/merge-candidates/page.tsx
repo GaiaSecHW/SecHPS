@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { useSkillCategories } from '@/hooks/useSkillCategories';
 
 // Types from API response
 interface SimilarSkill {
@@ -90,20 +91,6 @@ const recommendationConfig: Record<string, { label: string; icon: React.ReactNod
   },
 };
 
-// Category labels
-const categoryLabels: Record<string, string> = {
-  'code-audit': '代码安全审计',
-  'auth': '认证与授权',
-  'sensitive': '敏感信息泄露',
-  'api': 'API 安全',
-  'config': '依赖与配置',
-  'crypto': '加密与数据',
-  'web': 'Web 安全',
-  'business': '业务逻辑',
-  'client': '客户端安全',
-  'cloud': '云与容器安全',
-};
-
 // Status colors for merge records
 const statusColors: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
@@ -142,6 +129,9 @@ function MergeCandidatesPageContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [minOverlapScore, setMinOverlapScore] = useState('0.75');
   const [activeTab, setActiveTab] = useState<'candidates' | 'pending'>('candidates');
+
+  // 分类标签 - 从数据库动态获取
+  const { categoryLabels } = useSkillCategories();
 
   useEffect(() => {
     fetchMergeCandidates();

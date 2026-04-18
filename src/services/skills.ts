@@ -6,21 +6,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Skill 分类
- */
-export type SkillCategory =
-  | 'code-audit'    // 代码审计
-  | 'auth'          // 认证鉴权
-  | 'sensitive'     // 敏感信息
-  | 'api'           // API 安全
-  | 'config'        // 配置安全
-  | 'crypto'        // 加密解密
-  | 'web'           // Web 安全
-  | 'business'      // 业务逻辑
-  | 'client'        // 客户端安全
-  | 'cloud';        // 云安全
-
-/**
  * 严重程度
  */
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
@@ -35,7 +20,7 @@ export interface LoadedSkill {
   name: string;
   displayName: string;
   description: string;
-  category: SkillCategory;
+  category: string;
   severity: Severity;
   cwe?: string | null;
   content: string;  // 完整的 Markdown 内容
@@ -542,7 +527,7 @@ export async function loadSkillsByNames(names: string[]): Promise<LoadedSkill[]>
  */
 export function filterSkillsByCategory(
   skills: LoadedSkill[],
-  categories: SkillCategory[]
+  categories: string[]
 ): LoadedSkill[] {
   return skills.filter(skill => categories.includes(skill.category));
 }
@@ -568,7 +553,7 @@ function parseSkill(skill: Skill): LoadedSkill {
     name: skill.name,
     displayName: skill.displayName,
     description: skill.description,
-    category: skill.category as SkillCategory,
+    category: skill.category,
     severity: skill.severity as Severity,
     cwe: skill.cwe,
     content: skill.content || '',
@@ -654,8 +639,8 @@ export function buildSkillUserPrompt(
 /**
  * 获取分类标签
  */
-function getCategoryLabel(category: SkillCategory): string {
-  const labels: Record<SkillCategory, string> = {
+function getCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
     'code-audit': '代码审计',
     'auth': '认证鉴权',
     'sensitive': '敏感信息',
@@ -829,7 +814,7 @@ export async function importSkillFromMarkdown(
 /**
  * 推断 Skill 分类
  */
-function inferCategory(description: string): SkillCategory {
+function inferCategory(description: string): string {
   const keywords: Record<string, string[]> = {
     'code-audit': ['代码审计', 'SQL 注入', 'XSS', '代码漏洞', '注入'],
     'auth': ['认证', '授权', '登录', '密码', 'JWT', 'OAuth', '鉴权'],
@@ -845,7 +830,7 @@ function inferCategory(description: string): SkillCategory {
   
   for (const [category, words] of Object.entries(keywords)) {
     if (words.some(word => description.includes(word))) {
-      return category as SkillCategory;
+      return category;
     }
   }
   

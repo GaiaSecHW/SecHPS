@@ -1,38 +1,24 @@
 // src/lib/categories.ts
 
+import type { Category } from '@/types/skills';
+
+export type { Category };
+
 /**
  * 获取漏洞分类列表
- * 从 API 获取分类配置，如果失败则使用默认值
+ * 从 SystemConfig 获取，数据库没有就返回空数组
  */
-export const DEFAULT_CATEGORIES = [
-  { value: 'code-audit', label: '代码审计' },
-  { value: 'auth', label: '认证鉴权' },
-  { value: 'sensitive', label: '敏感信息' },
-  { value: 'api', label: 'API 安全' },
-  { value: 'config', label: '配置安全' },
-  { value: 'crypto', label: '加密解密' },
-  { value: 'web', label: 'Web 安全' },
-  { value: 'business', label: '业务逻辑' },
-  { value: 'client', label: '客户端安全' },
-  { value: 'cloud', label: '云安全' },
-];
-
-export interface Category {
-  value: string;
-  label: string;
-}
-
 export async function getCategories(): Promise<Category[]> {
   // 检查是否在浏览器环境中
   if (typeof window === 'undefined') {
-    // 服务端直接返回默认值
-    return DEFAULT_CATEGORIES;
+    // 服务端直接返回空数组（服务端应通过 Prisma 直接查询）
+    return [];
   }
 
   try {
     const token = localStorage.getItem('token');
     if (!token) {
-      return DEFAULT_CATEGORIES;
+      return [];
     }
 
     const response = await fetch('/api/admin/categories', {
@@ -42,13 +28,13 @@ export async function getCategories(): Promise<Category[]> {
     });
 
     if (!response.ok) {
-      return DEFAULT_CATEGORIES;
+      return [];
     }
 
     const data = await response.json();
-    return data.categories || DEFAULT_CATEGORIES;
+    return data.categories || [];
   } catch (error) {
     console.error('获取分类失败:', error);
-    return DEFAULT_CATEGORIES;
+    return [];
   }
 }

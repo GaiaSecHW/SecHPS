@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 
 /**
  * 获取技术栈选项的 Hook
- * 优先从数据库获取，数据库为空则返回默认值
+ * 从数据库 TechStackOption 表获取，有数据就返回，没有就是空
  */
 export function useTechStackOptions() {
   const [options, setOptions] = useState<string[]>([]);
@@ -42,4 +42,48 @@ export function useTechStackOptions() {
   }, []);
 
   return { options, categories, loading, source };
+}
+
+/**
+ * 获取带 ID 的技术栈选项的 Hook
+ * 用于需要关联 TechStackOption ID 的场景
+ */
+export interface TechStackOptionWithId {
+  id: string;
+  name: string;
+  category: string;
+  description?: string | null;
+}
+
+export function useTechStackOptionsWithIds(category?: string) {
+  const [options, setOptions] = useState<TechStackOptionWithId[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        setLoading(true);
+        const url = category 
+          ? `/api/techstack-options?withIds=true&category=${category}`
+          : '/api/techstack-options?withIds=true';
+        const response = await fetch(url);
+        
+        if (response.ok) {
+          const data = await response.json();
+          setOptions(data.options || []);
+        } else {
+          setOptions([]);
+        }
+      } catch (error) {
+        console.error('获取技术栈选项失败:', error);
+        setOptions([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchOptions();
+  }, [category]);
+
+  return { options, loading };
 }

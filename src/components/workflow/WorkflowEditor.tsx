@@ -21,12 +21,15 @@ import { Save, Undo, Redo, ZoomIn, ZoomOut, Maximize, Settings, Trash2, Eye, X, 
 import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
 import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP, WorkflowNodeType } from '@/types/workflow';
-import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { useTechStackOptions, useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
+import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
+import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import toast from 'react-hot-toast';
 
 interface WorkflowEditorProps {
   workflowId?: string;
   initialData?: WorkflowData;
+  workflowTechStack?: string;  // 工作流级别的技术栈（JSON 数组字符串）
   onSave?: (data: WorkflowData) => Promise<void>;
   onExecute?: () => Promise<void>;
   readOnly?: boolean;
@@ -37,6 +40,7 @@ interface WorkflowEditorProps {
 function WorkflowEditorContent({
   workflowId,
   initialData,
+  workflowTechStack,
   onSave,
   onExecute,
   readOnly = false,
@@ -56,10 +60,62 @@ function WorkflowEditorContent({
 const [showPreview, setShowPreview] = useState(false);
   const [previewContent, setPreviewContent] = useState('');
   
-  // 使用 Hook 获取技术栈选项
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
-  
-  // 预测任务
+  // 使用 Hook 获取技术栈选项（带 ID，用于匹配）
+  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
+
+  /**
+   * 匹配 Skills 的逻辑：
+   * 1. 必须是 isActive=true（API 已筛选）
+   * 2. 漏洞类型必须匹配（如果节点设置了漏洞类型）
+   * 3. 技术栈匹配规则：
+   *    - 工作流有技术栈：Skill 技术栈匹配 OR Skill 没有技术栈
+   *    - 工作流没技术栈：所有 Skills 都能匹配
+   */
+  const filterMatchedSkills = (skills: typeof availableSkills, vulnPatternId: string | null) => {
+    // 解析工作流技术栈（可能是名称数组或 ID 数组）
+    let workflowTechStackIds: string[] = [];
+    if (workflowTechStack) {
+      try {
+        const parsed = JSON.parse(workflowTechStack);
+        if (Array.isArray(parsed)) {
+          // 将名称转换为 ID（兼容两种格式）
+          const techStackNameToId = new Map<string, string>();
+          techStackOptionsWithIds.forEach(opt => {
+            techStackNameToId.set(opt.name, opt.id);  // 名称完全匹配，不转小写
+          });
+          
+          workflowTechStackIds = parsed.map((item: string) => {
+            // 如果已经是 ID 格式（以 ts_ 开头），直接使用
+            if (item.startsWith('ts_')) {
+              return item;
+            }
+            // 否则当作名称，转换为 ID（完全匹配）
+            return techStackNameToId.get(item) || item;
+          }).filter((id): id is string => Boolean(id));
+        }
+      } catch (e) {
+        console.error('解析工作流技术栈失败:', e);
+      }
+    }
+
+    return skills.filter(skill => {
+      // 1. 漏洞类型匹配
+      if (vulnPatternId && skill.vulnerabilityPatternId !== vulnPatternId) {
+        return false;
+      }
+
+      // 2. 技术栈匹配
+      if (workflowTechStackIds.length > 0) {
+        // 工作流有技术栈：Skill 技术栈必须匹配，或者 Skill 没有设置技术栈
+        if (skill.techStackId && !workflowTechStackIds.includes(skill.techStackId)) {
+          return false;
+        }
+      }
+      // 工作流没技术栈：所有 Skills 都能匹配（不额外过滤）
+
+      return true;
+    });
+  };
   const [predictionTasks, setPredictionTasks] = useState<Array<{
     id: string;
     taskName: string;
@@ -136,16 +192,10 @@ const [showPreview, setShowPreview] = useState(false);
     name: string;
     displayName: string;
     category: string;
+    vulnerabilityPatternId: string | null;
+    techStackId: string | null;
   }>>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
-  const [vulnerabilityPatterns, setVulnerabilityPatterns] = useState<Array<{
-    id: string;
-    name: string;
-    displayName: string;
-    category: string;
-    cwe: string | null;
-  }>>([]);
-  const [loadingVulnerabilityPatterns, setLoadingVulnerabilityPatterns] = useState(false);
   const [skillCategories, setSkillCategories] = useState<Array<{ value: string; label: string }>>([]);
   const [loadingSkillCategories, setLoadingSkillCategories] = useState(false);
 
@@ -211,36 +261,18 @@ const [showPreview, setShowPreview] = useState(false);
     try {
       setLoadingSkills(true);
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/skills?isActive=true&scope=all&limit=100', {
+      const response = await fetch('/api/skills?isActive=true&scope=all&limit=500', {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (response.ok) {
         const data = await response.json();
-        setAvailableSkills(data.skills || []);
+        const skillsList = data.data || data.skills || [];
+        setAvailableSkills(skillsList);
       }
     } catch (err) {
       console.error('获取 Skills 列表失败:', err);
     } finally {
       setLoadingSkills(false);
-    }
-  };
-
-  // 获取漏洞模式列表
-  const fetchVulnerabilityPatterns = async () => {
-    try {
-      setLoadingVulnerabilityPatterns(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/vulnerability-patterns', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setVulnerabilityPatterns(data.patterns || []);
-      }
-    } catch (err) {
-      console.error('获取漏洞模式列表失败:', err);
-    } finally {
-      setLoadingVulnerabilityPatterns(false);
     }
   };
 
@@ -263,10 +295,9 @@ const [showPreview, setShowPreview] = useState(false);
     }
   };
 
-// 初始化加载 Skills 和漏洞模式
+// 初始化加载 Skills 和分类
   useEffect(() => {
     fetchAvailableSkills();
-    fetchVulnerabilityPatterns();
     fetchSkillCategories();
   }, []);
 
@@ -1296,107 +1327,85 @@ const [showPreview, setShowPreview] = useState(false);
                       </p>
                     </div>
 
-                    {/* 漏洞类别模式 - 显示漏洞类别选择器 */}
-                    {(selectedNode.data.skillLoadingMode || 'description') === 'vulnerability' && (
-                      <div className="bg-orange-50 border border-orange-200 rounded-md p-3 mt-3">
-                        <p className="text-sm text-orange-800 font-medium mb-2">
-                          漏洞类别配置
-                        </p>
-                        <div className="space-y-3">
-                          <div>
-                            <label className="block text-xs text-gray-600 mb-1">
-                              漏洞类别
-                            </label>
-                            {loadingVulnerabilityPatterns ? (
-                              <div className="flex items-center justify-center py-2">
-                                <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
-                              </div>
-                            ) : (
-                              <select
-                                value={selectedNode.data.vulnerabilityCategory || ''}
-                                onChange={(e) => {
-                                  const selectedCategory = e.target.value;
-                                  const selectedPattern = vulnerabilityPatterns.find(p => p.category === selectedCategory);
-                                  // 检查是否需要自动重命名节点
-                                  const currentLabel = selectedNode.data.label || '';
-                                  const isDefaultLabel = !currentLabel || currentLabel === '新节点' || currentLabel === 'Agent' || currentLabel.startsWith('node-');
-                                  const newLabel = isDefaultLabel && selectedPattern 
-                                    ? `${selectedPattern.displayName}安全排查` 
-                                    : selectedNode.data.label;
-                                  const updatedNode = {
-                                    ...selectedNode,
-                                    data: {
-                                      ...selectedNode.data,
-                                      vulnerabilityCategory: selectedCategory || undefined,
-                                      label: newLabel,
-                                    }
-                                  };
-                                  setNodes((nds) =>
-                                    nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
-                                  );
-                                  setSelectedNode(updatedNode);
+{/* 漏洞类别模式 - 显示漏洞类别选择器 */}
+                     {(selectedNode.data.skillLoadingMode || 'description') === 'vulnerability' && (
+                       <div className="bg-orange-50 border border-orange-200 rounded-md p-3 mt-3">
+                         <p className="text-sm text-orange-800 font-medium mb-2">
+                           漏洞类别配置
+                         </p>
+                         <div className="space-y-3">
+                           <div>
+                             <label className="block text-xs text-gray-600 mb-1">
+                               漏洞类别
+                             </label>
+                             <VulnerabilityPatternSelector
+                               value={selectedNode.data.vulnerabilityPatternId || ''}
+                               onChange={(patternId, pattern) => {
+                                 // 检查是否需要自动重命名节点
+                                 const currentLabel = selectedNode.data.label || '';
+                                 const isDefaultLabel = !currentLabel || currentLabel === '新节点' || currentLabel === 'Agent' || currentLabel.startsWith('node-');
+                                 const newLabel = isDefaultLabel
+                                   ? `${pattern.displayName}安全排查`
+                                   : selectedNode.data.label;
+                                 const updatedNode = {
+                                   ...selectedNode,
+                                   data: {
+                                     ...selectedNode.data,
+                                     vulnerabilityPatternId: patternId,
+                                     vulnerabilityCategory: pattern.category,
+                                     label: newLabel,
+                                   }
+                                 };
+                                 setNodes((nds) =>
+                                   nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                 );
+                                 setSelectedNode(updatedNode);
+                               }}
+                               placeholder="选择漏洞类别..."
+                             />
+                           </div>
+                            {/* 查看此漏洞类型的 Skills 按钮 */}
+                            {selectedNode.data.vulnerabilityPatternId && (
+                              <button
+                                onClick={() => {
+                                  const matchedSkills = filterMatchedSkills(availableSkills, selectedNode.data.vulnerabilityPatternId);
+                                  const skillList = matchedSkills.length > 0
+                                    ? matchedSkills.map(s => `• ${s.displayName}`).join('\n')
+                                    : '该漏洞类型暂无关联的 Skills';
+                                  const patternName = selectedNode.data.label || '此漏洞类型';
+                                  alert(`【${patternName}】关联的 Skills:\n\n${skillList}`);
                                 }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm"
                               >
-                                <option value="">选择漏洞类别...</option>
-                                {vulnerabilityPatterns.map((pattern) => {
-                                  const skillCount = availableSkills.filter(
-                                    skill => skill.category === pattern.category
-                                  ).length;
-                                  return (
-                                    <option key={pattern.id} value={pattern.category}>
-                                      {pattern.displayName} ({pattern.category}) - {skillCount} 个 Skill
-                                    </option>
-                                  );
-                                })}
-                              </select>
+                                <Eye size={14} />
+                                查看此漏洞类型的 Skills
+                              </button>
                             )}
-                          </div>
-                          {/* 查看此漏洞类型的 Skills 按钮 */}
-                          {selectedNode.data.vulnerabilityCategory && (
-                            <button
-                              onClick={() => {
-                                // 显示该类别下的所有 skill 列表
-                                const categorySkills = availableSkills.filter(
-                                  skill => skill.category === selectedNode.data.vulnerabilityCategory
-                                );
-                                const skillList = categorySkills.length > 0
-                                  ? categorySkills.map(s => `• ${s.displayName}`).join('\n')
-                                  : '该类别下暂无 Skills';
-                                alert(`【${selectedNode.data.vulnerabilityCategory}】类别的 Skills:\n\n${skillList}`);
-                              }}
-                              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm"
-                            >
-                              <Eye size={14} />
-                              查看此漏洞类型的 Skills
-                            </button>
-                          )}
-                          {/* 显示匹配的 Skills */}
-                          {selectedNode.data.vulnerabilityCategory && (
-                            <div>
-                              <label className="block text-xs text-gray-600 mb-1">
-                                匹配的 Skills
-                              </label>
-                              <div className="bg-white rounded-md p-2 border border-gray-200 max-h-32 overflow-y-auto">
-                                {availableSkills
-                                  .filter(skill => skill.category === selectedNode.data.vulnerabilityCategory)
-                                  .slice(0, 5)
-                                  .map((skill) => (
-                                    <div key={skill.id} className="text-xs text-gray-700 py-1">
-                                      {skill.displayName} ({skill.category})
-                                    </div>
-                                  ))}
-                                {availableSkills.filter(skill => skill.category === selectedNode.data.vulnerabilityCategory).length === 0 && (
-                                  <p className="text-xs text-gray-400">
-                                    该类别下暂无匹配的 Skills
-                                  </p>
-                                )}
-                                <p className="text-xs text-gray-400 mt-1">
-                                  运行时将根据漏洞类别自动匹配 Skills
-                                </p>
-                              </div>
-                            </div>
-                          )}
+                           {/* 显示匹配的 Skills */}
+                           {selectedNode.data.vulnerabilityPatternId && (
+                             <div>
+                               <label className="block text-xs text-gray-600 mb-1">
+                                 匹配的 Skills
+                               </label>
+                               <div className="bg-white rounded-md p-2 border border-gray-200 max-h-32 overflow-y-auto">
+                                 {filterMatchedSkills(availableSkills, selectedNode.data.vulnerabilityPatternId)
+                                   .slice(0, 5)
+                                   .map((skill) => (
+                                     <div key={skill.id} className="text-xs text-gray-700 py-1">
+                                       {skill.displayName}
+                                     </div>
+                                   ))}
+                                 {filterMatchedSkills(availableSkills, selectedNode.data.vulnerabilityPatternId).length === 0 && (
+                                   <p className="text-xs text-gray-400">
+                                     该漏洞类型暂无关联的 Skills
+                                   </p>
+                                 )}
+                                 <p className="text-xs text-gray-400 mt-1">
+                                   运行时将根据漏洞类型和技术栈自动匹配 Skills
+                                 </p>
+                               </div>
+                             </div>
+                           )}
                         </div>
                       </div>
                     )}

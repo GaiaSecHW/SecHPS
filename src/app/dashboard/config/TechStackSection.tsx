@@ -26,7 +26,8 @@ interface TechStackOption {
   sortOrder: number;
 }
 
-const CATEGORY_LABELS: Record<string, { label: string; icon: any }> = {
+// 分类默认图标映射（fallback）
+const DEFAULT_CATEGORY_CONFIG: Record<string, { label: string; icon: any }> = {
   language: { label: '编程语言', icon: Code },
   framework: { label: '框架', icon: Boxes },
   database: { label: '数据库', icon: Database },
@@ -34,13 +35,8 @@ const CATEGORY_LABELS: Record<string, { label: string; icon: any }> = {
   cloud: { label: '云服务', icon: Cloud },
 };
 
-const CATEGORY_OPTIONS = [
-  { value: 'language', label: '编程语言' },
-  { value: 'framework', label: '框架' },
-  { value: 'database', label: '数据库' },
-  { value: 'middleware', label: '中间件' },
-  { value: 'cloud', label: '云服务' },
-];
+// 默认图标用于未知分类
+const DEFAULT_ICON = Code;
 
 interface TechStackSectionProps {
   token: string;
@@ -205,6 +201,20 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
     return acc;
   }, {} as Record<string, TechStackOption[]>);
 
+  // 动态提取分类选项（从数据中获取所有分类）
+  const categoryOptions = Object.keys(groupedOptions).map(cat => ({
+    value: cat,
+    label: DEFAULT_CATEGORY_CONFIG[cat]?.label || cat,
+  }));
+
+  // 如果没有数据，提供默认选项
+  const effectiveCategoryOptions = categoryOptions.length > 0
+    ? categoryOptions
+    : Object.entries(DEFAULT_CATEGORY_CONFIG).map(([value, config]) => ({
+        value,
+        label: config.label,
+      }));
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -241,7 +251,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
       {/* 按类别显示 */}
       <div className="space-y-6">
         {Object.entries(groupedOptions).map(([category, opts]) => {
-          const categoryInfo = CATEGORY_LABELS[category] || { label: category, icon: Code };
+          const categoryInfo = DEFAULT_CATEGORY_CONFIG[category] || { label: category, icon: DEFAULT_ICON };
           const Icon = categoryInfo.icon;
 
           return (
@@ -349,7 +359,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  {CATEGORY_OPTIONS.map((opt) => (
+                  {effectiveCategoryOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {opt.label}
                     </option>

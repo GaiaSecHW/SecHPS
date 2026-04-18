@@ -1,16 +1,10 @@
 // src/types/skills.ts
 
-export type SkillCategory =
-  | 'code-audit'
-  | 'auth'
-  | 'sensitive'
-  | 'api'
-  | 'config'
-  | 'crypto'
-  | 'web'
-  | 'business'
-  | 'client'
-  | 'cloud';
+// 漏洞分类
+export interface Category {
+  value: string;
+  label: string;
+}
 
 export type SkillSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 
@@ -33,7 +27,7 @@ export interface CreateSkillRequest {
   name: string;
   displayName: string;
   description: string;
-  category: SkillCategory;
+  category: string;
   cwe?: string;
   systemPrompt: string;
   userPrompt: string;
@@ -46,7 +40,7 @@ export interface CreateSkillRequest {
 export interface UpdateSkillRequest {
   displayName?: string;
   description?: string;
-  category?: SkillCategory;
+  category?: string;
   cwe?: string;
   systemPrompt?: string;
   userPrompt?: string;
@@ -84,7 +78,7 @@ export interface SkillResponse {
   name: string;
   displayName: string;
   description: string;
-  category: SkillCategory;
+  category: string;
   cwe: string | null;
   systemPrompt: string;
   userPrompt: string;

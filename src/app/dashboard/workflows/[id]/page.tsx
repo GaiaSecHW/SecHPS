@@ -41,6 +41,7 @@ interface Workflow {
   userName?: string;
   userUsername?: string;
   isPublic?: boolean;
+  techStack?: string;  // 工作流级别的技术栈（JSON 数组字符串）
 }
 
 export default function WorkflowEditPage() {
@@ -280,6 +281,7 @@ export default function WorkflowEditPage() {
         <WorkflowEditor
           workflowId={workflowId}
           initialData={initialData}
+          workflowTechStack={workflow?.techStack}
           onSave={canEdit ? handleSave : undefined}
           readOnly={!canEdit}
         />

@@ -1,18 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { HelpCircle, Lightbulb, Eye, X, Loader2, ChevronDown } from 'lucide-react';
+import { HelpCircle, Lightbulb, Eye, X, ChevronDown, Loader2 } from 'lucide-react';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
-
-// 漏洞模式数据结构
-interface VulnerabilityPattern {
-  id: string;
-  name: string;
-  displayName: string;
-  category: string;
-  cwe?: string;
-  languages?: string;
-}
+import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
+import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 
 interface IntentData {
   name: string;
@@ -41,52 +33,11 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   // 技术栈选择相关（单选）
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   
-  // 漏洞模式选择相关
-  const [vulnerabilityPatterns, setVulnerabilityPatterns] = useState<VulnerabilityPattern[]>([]);
-  const [patternCategories, setPatternCategories] = useState<Array<{ value: string; label: string }>>([]);
-  const [loadingPatterns, setLoadingPatterns] = useState(true);
-  const [showPatternDropdown, setShowPatternDropdown] = useState(false);
-  
   // 使用 Hook 获取技术栈选项
   const { options: techStackOptions, categories: techStackCategories, loading: loadingTechStack } = useTechStackOptions();
   
   // 获取语言列表（从 categories.languages）
   const languageOptions = techStackCategories?.languages || techStackOptions || [];
-  
-  // 加载漏洞模式和分类（分别从两个 API）
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoadingPatterns(true);
-        const token = localStorage.getItem('token');
-        
-        // 并行获取漏洞模式和分类
-        const [patternsRes, categoriesRes] = await Promise.all([
-          fetch('/api/vulnerability-patterns', {
-            headers: { Authorization: `Bearer ${token}` },
-          }),
-          fetch('/api/admin/categories', {
-            headers: { Authorization: `Bearer ${token}` },
-          })
-        ]);
-        
-        if (patternsRes.ok) {
-          const patternsData = await patternsRes.json();
-          setVulnerabilityPatterns(patternsData.patterns || []);
-        }
-        
-        if (categoriesRes.ok) {
-          const categoriesData = await categoriesRes.json();
-          setPatternCategories(categoriesData.categories || []);
-        }
-      } catch (error) {
-        console.error('加载漏洞模式失败:', error);
-      } finally {
-        setLoadingPatterns(false);
-      }
-    };
-    fetchData();
-  }, []);
 
   // 加载 Skill 标准输出模板（从系统配置）
   useEffect(() => {
@@ -125,19 +76,12 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   };
   
   // 处理漏洞模式选择
-  const handlePatternSelect = (pattern: VulnerabilityPattern) => {
+  const handlePatternSelect = (patternId: string, pattern: VulnerabilityPatternOption) => {
     onChange({
       ...data,
       category: pattern.category, // 保持兼容性
       vulnerabilityPatternId: pattern.id, // 新字段
     });
-    setShowPatternDropdown(false);
-  };
-  
-  // 获取选中的漏洞模式信息
-  const getSelectedPattern = (): VulnerabilityPattern | null => {
-    if (!data.vulnerabilityPatternId) return null;
-    return vulnerabilityPatterns.find(p => p.id === data.vulnerabilityPatternId) || null;
   };
 
   const isValid = () => {
@@ -206,78 +150,14 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             漏洞类型 <span className="text-red-500">*</span>
           </label>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowPatternDropdown(!showPatternDropdown)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between bg-white"
-              disabled={loadingPatterns}
-            >
-              {loadingPatterns ? (
-                <span className="text-gray-500">加载中...</span>
-              ) : getSelectedPattern() ? (
-                <span className="text-gray-900">
-                  {getSelectedPattern()?.displayName}
-                  {getSelectedPattern()?.cwe && (
-                    <span className="text-gray-500 ml-2">({getSelectedPattern()?.cwe})</span>
-                  )}
-                </span>
-              ) : (
-                <span className="text-gray-500">请选择漏洞类型...</span>
-              )}
-              <ChevronDown size={16} className="text-gray-400" />
-            </button>
-            
-            {/* 下拉选项 - 按分类分组 */}
-            {showPatternDropdown && !loadingPatterns && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-80 overflow-y-auto">
-                {patternCategories.map((category) => (
-                  <div key={category.value}>
-                    <div className="px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 border-b border-gray-200">
-                      {category.label}
-                    </div>
-                    {vulnerabilityPatterns
-                      .filter(p => p.category === category.value)
-                      .map((pattern) => (
-                        <button
-                          key={pattern.id}
-                          type="button"
-                          onClick={() => handlePatternSelect(pattern)}
-                          className={`w-full px-4 py-2 text-left hover:bg-gray-50 text-sm ${
-                            data.vulnerabilityPatternId === pattern.id
-                              ? 'bg-blue-50 text-blue-700'
-                              : ''
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span>{pattern.displayName}</span>
-                            {pattern.cwe && (
-                              <span className="text-xs text-gray-500">{pattern.cwe}</span>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                  </div>
-                ))}
-                {vulnerabilityPatterns.length === 0 && (
-                  <div className="px-4 py-2 text-sm text-gray-500">
-                    暂无漏洞类型数据
-                  </div>
-                )}
-              </div>
-            )}
-            {loadingPatterns && (
-              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
-                <div className="flex items-center justify-center">
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  <span className="text-sm text-gray-500">加载中...</span>
-                </div>
-              </div>
-            )}
-            <p className="mt-1 text-xs text-gray-500">
-              选择此 Skill 要检测的漏洞类型
-            </p>
-          </div>
+          <VulnerabilityPatternSelector
+            value={data.vulnerabilityPatternId || ''}
+            onChange={handlePatternSelect}
+            placeholder="选择漏洞类型"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            选择此 Skill 要检测的漏洞类型
+          </p>
         </div>
 
         {/* 语言选择（单选） */}

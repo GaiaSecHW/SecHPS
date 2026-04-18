@@ -116,7 +116,9 @@ function SkillsPageContent() {
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page') || '1'));
   const [pageSize, setPageSize] = useState(Number(searchParams.get('limit') || '20'));
   const [totalPages, setTotalPages] = useState(1);
-  const [searchDebounce, setSearchDebounce] = useState<NodeJS.Timeout | null>(null);
+  
+  // 搜索输入框的值（用于输入）
+  const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   
   // 技术栈选项
   const techStackOptions = [
@@ -169,25 +171,29 @@ function SkillsPageContent() {
   useEffect(() => {
     fetchSkills();
     fetchCategories();
-  }, [selectedCategory, selectedTechStack, selectedActiveStatus, currentPage, pageSize]);
+  }, [selectedCategory, selectedTechStack, selectedActiveStatus, currentPage, pageSize, searchTerm]);
   
-  // 搜索防抖 - 搜索时重置到第一页并更新 URL
-  useEffect(() => {
-    if (searchDebounce) {
-      clearTimeout(searchDebounce);
+  // 执行搜索
+  const handleSearch = () => {
+    setCurrentPage(1);
+    updateUrlParams({ search: searchInput || null, page: null });
+    setSearchTerm(searchInput);
+  };
+  
+  // 按回车搜索
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
     }
-    const timer = setTimeout(() => {
-      if (searchTerm !== (searchParams.get('search') || '')) {
-        setCurrentPage(1);
-        updateUrlParams({ search: searchTerm || null, page: null });
-      }
-      fetchSkills();
-    }, 300);
-    setSearchDebounce(timer);
-    return () => {
-      if (timer) clearTimeout(timer);
-    };
-  }, [searchTerm]);
+  };
+  
+  // 清除搜索
+  const handleClearSearch = () => {
+    setSearchInput('');
+    setSearchTerm('');
+    setCurrentPage(1);
+    updateUrlParams({ search: null, page: null });
+  };
 
   const fetchSkills = async () => {
     try {
@@ -663,15 +669,33 @@ toast.error(err instanceof Error ? err.message : '删除失败');
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="搜索 Skills..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="text"
+                placeholder="搜索 Skills..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              onClick={handleSearch}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Search size={18} />
+              搜索
+            </button>
+            {searchTerm && (
+              <button
+                onClick={handleClearSearch}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                清除
+              </button>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-4">

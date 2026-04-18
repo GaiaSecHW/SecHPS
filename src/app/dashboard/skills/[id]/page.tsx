@@ -29,8 +29,8 @@ import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
-import { useVulnerabilityPatterns, VulnerabilityPattern } from '@/hooks/useVulnerabilityPatterns';
 import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
+import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
@@ -82,6 +82,7 @@ export default function SkillDetailPage() {
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editVulnerabilityPatternId, setEditVulnerabilityPatternId] = useState<string>('');
+  const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -212,12 +213,6 @@ export default function SkillDetailPage() {
   // 使用 Hook 获取技术栈选项
   const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
   
-  // 使用 Hook 获取漏洞模式
-  const { patterns: vulnerabilityPatterns, groupedPatterns, loading: loadingVulnerabilityPatterns } = useVulnerabilityPatterns();
-  
-  // 获取选中的漏洞模式对象
-  const selectedVulnerabilityPattern = vulnerabilityPatterns.find(p => p.id === editVulnerabilityPatternId);
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -799,11 +794,9 @@ export default function SkillDetailPage() {
                   value={editVulnerabilityPatternId}
                   onChange={(id, pattern) => {
                     setEditVulnerabilityPatternId(id);
+                    setSelectedVulnerabilityPattern(pattern);
                     setEditCategory(pattern.category);
                   }}
-                  patterns={vulnerabilityPatterns}
-                  groupedPatterns={groupedPatterns}
-                  loading={loadingVulnerabilityPatterns}
                   placeholder="选择漏洞模式"
                 />
               </div>

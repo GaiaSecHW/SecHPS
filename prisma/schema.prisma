@@ -1011,6 +1011,23 @@ model SystemMetric {
   @@index([type])
 }
 
+model VulnerabilityCategory {
+  id          String   @id
+  value       String   @unique   // 英文标识，如 injection, authentication
+  label       String             // 中文标签，如 注入攻击, 身份认证
+  description String?            // 描述
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+
+  // 关联关系
+  VulnerabilityPatterns VulnerabilityPattern[]
+
+  @@index([isActive])
+  @@index([value])
+}
+
 model TechStackOption {
   id          String   @id
   name        String   @unique
@@ -1189,7 +1206,9 @@ model VulnerabilityPattern {
   name              String   @unique
   displayName       String
   description       String
-  category          String
+  categoryId        String?                     // 外键关联分类（可选，迁移完成后改为必填）
+  categoryRef       VulnerabilityCategory? @relation(fields: [categoryId], references: [id])
+  category          String                      // 分类值，迁移过渡用（完成后可删除）
   cwe               String?
   cve               String?
   patterns          String
@@ -1200,12 +1219,13 @@ model VulnerabilityPattern {
   isActive          Boolean  @default(true)
   isBuiltin         Boolean  @default(true)
   createdAt         DateTime @default(now())
-  updatedAt         DateTime
+  updatedAt   DateTime
   
   // 关联关系
   Skills            Skill[]
 
   @@index([isActive])
+  @@index([categoryId])
   @@index([category])
 }
 

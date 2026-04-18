@@ -21,6 +21,7 @@ import {
   MinusCircle,
   Layers,
 } from 'lucide-react';
+import { useSkillCategories } from '@/hooks/useSkillCategories';
 
 interface SimilarSkill {
   skillId: string;
@@ -90,20 +91,6 @@ const recommendationConfig: Record<string, { label: string; icon: React.ReactNod
   },
 };
 
-// Category labels
-const categoryLabels: Record<string, string> = {
-  'code-audit': '代码安全审计',
-  'auth': '认证与授权',
-  'sensitive': '敏感信息泄露',
-  'api': 'API 安全',
-  'config': '依赖与配置',
-  'crypto': '加密与数据',
-  'web': 'Web 安全',
-  'business': '业务逻辑',
-  'client': '客户端安全',
-  'cloud': '云与容器安全',
-};
-
 export default function NewImpactPage() {
   const [analyses, setAnalyses] = useState<ImpactAnalysis[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
@@ -121,6 +108,9 @@ export default function NewImpactPage() {
   
   // Selected analysis for detail view
   const [selectedAnalysis, setSelectedAnalysis] = useState<ImpactAnalysis | null>(null);
+
+  // 分类标签 - 从数据库动态获取
+  const { categoryLabels } = useSkillCategories();
 
   useEffect(() => {
     fetchAnalyses();

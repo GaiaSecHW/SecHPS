@@ -1,7 +1,7 @@
 // src/services/evaluation/prompt.ts
 
 import { AIMessage } from '@/services/ai';
-import type { LoadedSkill, SkillCategory, Severity } from '@/services/skills';
+import type { LoadedSkill, Severity } from '@/services/skills';
 
 export interface PromptContext {
   projectName: string;
@@ -138,8 +138,8 @@ export class PromptBuilder {
 /**
  * 获取分类标签
  */
-function getCategoryLabel(category: SkillCategory): string {
-  const labels: Record<SkillCategory, string> = {
+function getCategoryLabel(category: string): string {
+  const labels: Record<string, string> = {
     'code-audit': '代码审计',
     'auth': '认证鉴权',
     'sensitive': '敏感信息',

@@ -22,6 +22,7 @@ import {
   Award,
   Clock,
 } from 'lucide-react';
+import { useSkillCategories } from '@/hooks/useSkillCategories';
 
 // Types based on API response
 interface MergeCandidate {
@@ -107,20 +108,6 @@ const mergeReasons = [
   { value: 'user_request', label: '用户请求' },
 ];
 
-// Category labels
-const categoryLabels: Record<string, string> = {
-  'code-audit': '代码安全审计',
-  'auth': '认证与授权',
-  'sensitive': '敏感信息泄露',
-  'api': 'API 安全',
-  'config': '依赖与配置',
-  'crypto': '加密与数据',
-  'web': 'Web 安全',
-  'business': '业务逻辑',
-  'client': '客户端安全',
-  'cloud': '云与容器安全',
-};
-
 // Overlap type labels
 const overlapTypeLabels: Record<string, string> = {
   exact: '完全匹配',
@@ -136,6 +123,9 @@ export default function SkillMergePage() {
   const [candidates, setCandidates] = useState<MergeCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // 分类标签 - 从数据库动态获取
+  const { categoryLabels } = useSkillCategories();
   
   // Selection state
   const [selectedStrategy, setSelectedStrategy] = useState<string>('content-merge');

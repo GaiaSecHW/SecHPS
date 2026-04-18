@@ -17,8 +17,8 @@ import {
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { useTechStackOptionsWithIds, TechStackOptionWithId } from '@/hooks/useTechStackOptionsWithIds';
-import { useVulnerabilityPatterns, VulnerabilityPattern } from '@/hooks/useVulnerabilityPatterns';
 import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
+import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 使用公共模块的默认模板
@@ -41,8 +41,9 @@ export default function CreateSkillPage() {
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   
-  // 漏洞模式单选（改为 ID）
+// 漏洞模式单选（改为 ID）
   const [vulnerabilityPatternId, setVulnerabilityPatternId] = useState<string>('');
+  const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
   const techStackDropdownRef = useRef<HTMLDivElement>(null);
 
   // AI 生成相关状态
@@ -66,15 +67,13 @@ export default function CreateSkillPage() {
     setAiGenerating(false);
     setAiCountdown(0);
     if (reason === 'timeout') {
-      setAiGenerateError('AI 生成超时（5 分钟），界面已自动解锁，请稍后重试。');
+      setAiGenerateError('AI 生成超时（5 分钟），界面已自动解锁，请稍后重试');
     }
   };
 
-  // 使用 Hook 获取技术栈选项（带 ID，筛选 language 类别）
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds('language');
-  
-  // 使用 Hook 获取漏洞模式
-  const { patterns: vulnerabilityPatterns, groupedPatterns, loading: loadingVulnerabilityPatterns } = useVulnerabilityPatterns();
+  // 技术栈选项 - 从数据库动态获取
+  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds('language');
+  const techStackOptions = techStackOptionsWithIds;
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -103,9 +102,6 @@ export default function CreateSkillPage() {
 
   // 获取选中的技术栈对象
   const selectedTechStack = techStackOptions.find(opt => opt.id === techStackId);
-  
-  // 获取选中的漏洞模式对象
-  const selectedVulnerabilityPattern = vulnerabilityPatterns.find(p => p.id === vulnerabilityPatternId);
 
   // AI 生成 Skill 内容
   const handleAiGenerate = async () => {
@@ -318,11 +314,10 @@ try {
               </label>
               <VulnerabilityPatternSelector
                 value={vulnerabilityPatternId}
-                onChange={(id) => setVulnerabilityPatternId(id)}
-                patterns={vulnerabilityPatterns}
-                groupedPatterns={groupedPatterns}
-                loading={loadingVulnerabilityPatterns}
-                placeholder="选择漏洞模式"
+                onChange={(id, pattern) => {
+                  setVulnerabilityPatternId(id);
+                  setSelectedVulnerabilityPattern(pattern);
+                }}
               />
             </div>
 

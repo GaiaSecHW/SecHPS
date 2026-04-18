@@ -16,6 +16,7 @@ import {
   Shield,
   XCircle,
 } from 'lucide-react';
+import { useSkillCategories } from '@/hooks/useSkillCategories';
 
 // Types from API response
 interface SkillStatsWithDetails {
@@ -61,20 +62,6 @@ const riskLevelConfig: Record<string, { bg: string; text: string; label: string 
   critical: { bg: 'bg-red-100', text: 'text-red-800', label: '严重' },
 };
 
-// Category labels
-const categoryLabels: Record<string, string> = {
-  'code-audit': '代码安全审计',
-  'auth': '认证与授权',
-  'sensitive': '敏感信息泄露',
-  'api': 'API 安全',
-  'config': '依赖与配置',
-  'crypto': '加密与数据',
-  'web': 'Web 安全',
-  'business': '业务逻辑',
-  'client': '客户端安全',
-  'cloud': '云与容器安全',
-};
-
 function LoadingSpinner() {
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -102,6 +89,9 @@ function HighFrequencyPageContent() {
   const [batchOperating, setBatchOperating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [limit, setLimit] = useState(20);
+
+  // 分类标签 - 从数据库动态获取
+  const { categoryLabels } = useSkillCategories();
 
   useEffect(() => {
     fetchHighFrequencyData();

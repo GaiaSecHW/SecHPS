@@ -3,7 +3,7 @@
 import type { PaginationParams, PaginatedResponse, CursorPaginationParams, CursorPaginatedResponse } from '@/types/pagination';
 
 export const DEFAULT_PAGE_SIZE = 20;
-export const MAX_PAGE_SIZE = 100;
+export const MAX_PAGE_SIZE = 500;
 
 /**
  * 获取偏移分页参数
