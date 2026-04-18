@@ -177,6 +177,11 @@ try {
       return;
     }
 
+    if (!vulnerabilityPatternId) {
+      setError('请选择漏洞类型');
+      return;
+    }
+
     if (!content.trim()) {
       setError('请输入 Skill 内容');
       return;

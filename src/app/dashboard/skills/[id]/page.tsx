@@ -353,6 +353,11 @@ export default function SkillDetailPage() {
       return;
     }
 
+    if (!editCategory) {
+      alert('请选择漏洞分类');
+      return;
+    }
+
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
