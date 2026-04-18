@@ -531,6 +531,8 @@ export default function SkillDetailPage() {
             systemPrompt: '',
             userPrompt: '',
             tools: [],
+            techStack: editTechStack.length > 0 ? editTechStack : (skill.techStack ? JSON.parse(skill.techStack) : []),
+            cwe: skill.cwe,
           },
         }),
       });

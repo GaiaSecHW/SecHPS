@@ -194,7 +194,6 @@ export function buildSystemPrompt(): string {
 
 ## 简洁原则
 
-- 总行数 < 500 行
 - 只添加 Agent 不知道的内容
 - 用指令而非散文："查找..." 而非 "你应该查找..."
 
