@@ -795,36 +795,6 @@ export default function SkillDetailPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   漏洞模式 <span className="text-red-500">*</span>
                 </label>
-                
-                {/* 热门漏洞快捷标签 */}
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {['SQL注入', 'XSS', '命令注入', '路径遍历', 'SSRF', '越权访问'].map((name) => {
-                    const pattern = vulnerabilityPatterns.find(p => 
-                      p.displayName === name || p.displayName.includes(name)
-                    );
-                    if (!pattern) return null;
-                    return (
-                      <button
-                        key={pattern.id}
-                        type="button"
-                        onClick={() => {
-                          setEditVulnerabilityPatternId(pattern.id);
-                          setEditCategory(pattern.category);
-                          setVulnerabilitySearch('');
-                          setShowVulnerabilityDropdown(false);
-                        }}
-                        className={`px-2 py-0.5 text-xs rounded-full border transition-colors ${
-                          pattern.id === editVulnerabilityPatternId
-                            ? 'bg-blue-500 text-white border-blue-500'
-                            : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-300'
-                        }`}
-                      >
-                        {pattern.displayName}
-                      </button>
-                    );
-                  })}
-                </div>
-                
                 <VulnerabilityPatternSelector
                   value={editVulnerabilityPatternId}
                   onChange={(id, pattern) => {
