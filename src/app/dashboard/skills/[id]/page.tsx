@@ -83,6 +83,7 @@ export default function SkillDetailPage() {
   const [editVulnerabilityPatternId, setEditVulnerabilityPatternId] = useState<string>('');
   const [vulnerabilitySearch, setVulnerabilitySearch] = useState('');
   const [showVulnerabilityDropdown, setShowVulnerabilityDropdown] = useState(false);
+  const vulnerabilityDropdownRef = useRef<HTMLDivElement>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -237,6 +238,19 @@ export default function SkillDetailPage() {
     getCategories().then((cats) => {
       setCategories(cats);
     });
+  }, []);
+
+  // 点击外部关闭漏洞模式下拉框
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (vulnerabilityDropdownRef.current && !vulnerabilityDropdownRef.current.contains(event.target as Node)) {
+        setShowVulnerabilityDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   useEffect(() => {
@@ -803,7 +817,7 @@ export default function SkillDetailPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   漏洞模式 <span className="text-red-500">*</span>
                 </label>
-                <div className="relative">
+                <div className="relative" ref={vulnerabilityDropdownRef}>
                   <input
                     type="text"
                     value={vulnerabilitySearch || (selectedVulnerabilityPattern 

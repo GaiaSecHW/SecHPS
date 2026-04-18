@@ -44,6 +44,8 @@ export default function CreateSkillPage() {
   const [vulnerabilityPatternId, setVulnerabilityPatternId] = useState<string>('');
   const [showVulnerabilityDropdown, setShowVulnerabilityDropdown] = useState(false);
   const [vulnerabilitySearch, setVulnerabilitySearch] = useState('');
+  const vulnerabilityDropdownRef = useRef<HTMLDivElement>(null);
+  const techStackDropdownRef = useRef<HTMLDivElement>(null);
 
   // AI 生成相关状态
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -86,6 +88,22 @@ export default function CreateSkillPage() {
         console.error('解析 token 失败:', error);
       }
     }
+  }, []);
+
+  // 点击外部关闭下拉框
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (vulnerabilityDropdownRef.current && !vulnerabilityDropdownRef.current.contains(event.target as Node)) {
+        setShowVulnerabilityDropdown(false);
+      }
+      if (techStackDropdownRef.current && !techStackDropdownRef.current.contains(event.target as Node)) {
+        setShowTechStackDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // 获取选中的技术栈对象
@@ -303,7 +321,7 @@ try {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 漏洞类型 <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
+              <div className="relative" ref={vulnerabilityDropdownRef}>
                 <input
                   type="text"
                   value={vulnerabilitySearch || (selectedVulnerabilityPattern 
@@ -379,7 +397,7 @@ try {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 适合的语言
               </label>
-              <div className="relative">
+              <div className="relative" ref={techStackDropdownRef}>
                 <input
                   type="text"
                   value={techStackSearch || (selectedTechStack ? selectedTechStack.name : '')}
