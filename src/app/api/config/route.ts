@@ -99,7 +99,7 @@ export async function POST(request: Request) {
         id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         userId: payload.userId,
         name,
-        baseURL: baseURL || 'http://localhost:54321',
+        baseURL: baseURL || '',
         projectUploadDir: projectUploadDir || null,
         taskDescription,
         description,

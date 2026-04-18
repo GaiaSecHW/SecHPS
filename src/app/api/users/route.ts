@@ -207,17 +207,6 @@ export async function POST(request: Request) {
         }
       }
 
-      // 创建默认 AI4WEB 配置
-      await tx.opencodeConfig.create({
-        data: {
-          id: `config-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          userId: newUser.id,
-          name: 'Default',
-          baseURL: 'http://localhost:54321',
-          updatedAt: new Date(),
-        },
-      });
-
       return newUser;
     });
 

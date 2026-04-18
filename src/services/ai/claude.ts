@@ -16,7 +16,10 @@ export class ClaudeProvider extends AIProvider {
     const systemMessage = messages.find(m => m.role === 'system');
     const otherMessages = messages.filter(m => m.role !== 'system');
 
-    let baseUrl = this.config.baseUrl || 'https://api.anthropic.com/v1/messages';
+    let baseUrl = this.config.baseUrl;
+    if (!baseUrl) {
+      throw new Error('Claude API baseUrl 未配置，请在模型配置中设置 apiBaseUrl');
+    }
 
     // Claude 原生 API 格式 - 使用 /v1/messages 端点
     // 如果 URL 不包含 /v1/messages，自动添加

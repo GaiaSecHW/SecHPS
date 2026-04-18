@@ -81,17 +81,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // 创建默认 AI4WEB 配置
-    await prisma.opencodeConfig.create({
-      data: {
-        id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        userId: user.id,
-        name: 'Default',
-        baseURL: 'http://localhost:54321',
-        updatedAt: new Date(),
-      },
-    });
-
     // 获取用户权限
     const userWithPerms = await getUserWithPermissions(user.id);
     const roles = userWithPerms?.roles || [];

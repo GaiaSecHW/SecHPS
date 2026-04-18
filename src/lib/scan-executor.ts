@@ -168,11 +168,16 @@ export class ScanExecutor {
         modelConfig: {
           providerType: modelConfig.providerType,
           apiKey: modelConfig.apiKey,
-          apiBaseUrl: modelConfig.apiBaseUrl || 'https://api.anthropic.com/v1/messages',
+          apiBaseUrl: modelConfig.apiBaseUrl,
           model: JSON.parse(modelConfig.models)[0] || 'claude-sonnet-4-20250514',
         },
         maxToolCalls: 20,
         maxIterations: 10,
+      };
+
+      // 验证 apiBaseUrl 配置
+      if (!modelConfig.apiBaseUrl) {
+        throw new Error('模型配置缺少 apiBaseUrl，无法执行扫描');
       };
 
       // 执行

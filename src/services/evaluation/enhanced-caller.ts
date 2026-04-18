@@ -110,9 +110,10 @@ export class EnhancedEvaluationCaller {
     if (config.providerType === 'openai') {
       // OpenAI 类型：连接内部 CCR 代理
       if (typeof window === 'undefined') {
-        agentBaseUrl = process.env.NEXT_PUBLIC_APP_URL
-          ? `${process.env.NEXT_PUBLIC_APP_URL}/api/claude-proxy`
-          : 'http://localhost:3000/api/claude-proxy';
+        if (!process.env.NEXT_PUBLIC_APP_URL) {
+          throw new Error('NEXT_PUBLIC_APP_URL 未配置，无法使用内部 claude-proxy');
+        }
+        agentBaseUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/claude-proxy`;
       } else {
         agentBaseUrl = '/api/claude-proxy';
       }

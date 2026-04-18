@@ -743,7 +743,7 @@ export default function ModelsPage() {
                   onChange={(e) => {
                     const providerType = e.target.value as 'claude' | 'openai';
                     const defaultBaseUrl = providerType === 'claude'
-                      ? 'https://api.anthropic.com/v1/messages'
+                      ? ''  // Claude 原生需要用户手动填写 apiBaseUrl
                       : formData.apiBaseUrl;
                     setFormData({ ...formData, providerType, apiBaseUrl: formData.apiBaseUrl || defaultBaseUrl });
                   }}
@@ -794,7 +794,7 @@ export default function ModelsPage() {
                   onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                   placeholder={formData.providerType === 'claude'
-                    ? 'https://api.anthropic.com/v1/messages'
+                    ? '请输入 Claude API 地址（如 https://api.anthropic.com/v1/messages）'
                     : 'http://192.168.1.100:8000/v1/chat/completions'}
                 />
               </div>
