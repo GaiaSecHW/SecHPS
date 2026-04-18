@@ -10,7 +10,8 @@ import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
 import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
 import { join } from 'path';
-import { copySkillsToProject } from '@/services/skill-files';
+import { copySkillsToProject, copySkillsByIds } from '@/services/skill-files';
+import { matchSkillsByCategory } from '@/services/skill-matcher';
 import { registerAgent } from '@/lib/agent-registry';
 import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
 
@@ -338,10 +339,8 @@ export async function POST(
       console.warn('[启动评估] 注入自主进化经验失败:', err);
     }
 
-    // 设置源（加载 CLAUDE.md）
-    if (globalConfig?.claudemdPath) {
-      sdkOptions.settingSources = ['project', 'user', 'local'];
-    }
+    // 设置源（加载 CLAUDE.md 和 Skills）
+    sdkOptions.settingSources = ['project'];
 
     // 清理项目目录中的旧文件/目录，确保每次评估从干净状态开始
     if (project.projectPath) {
@@ -363,7 +362,7 @@ export async function POST(
       }
     }
 
-    // 同步 Skills 到项目目录（直接从磁盘拷贝，无需查询数据库）
+    // 同步 Skills 到项目目录（按 WorkflowNode 加载）
     // 同时记录使用的 Skills ID 列表
     let skillsUsedJson: string | null = null;
     if (project.projectPath) {
@@ -384,13 +383,80 @@ export async function POST(
           console.log('[启动评估] 项目未设置技术栈，将拷贝所有启用的 Skills');
         }
         
-        // 直接从磁盘拷贝 Skills（带技术栈过滤）
-        const copyResult = await copySkillsToProject(
-          project.projectPath,
-          payload.userId,
-          undefined,  // skillOutputTemplate（可选，后续可从 globalConfig 获取）
-          projectTechStack  // 项目技术栈
-        );
+        let copyResult: { success: number; failed: number; errors: string[]; copiedSkills: string[]; skillIds: string[] };
+        
+        // 如果有 workflowId，按 WorkflowNode 加载 Skills
+        if (workflowId) {
+          console.log('[启动评估] 检测到 workflowId，按 WorkflowNode 加载 Skills');
+          
+          // 查询 Workflow 的所有节点
+          const workflowNodes = await prisma.workflowNode.findMany({
+            where: { workflowId },
+            select: {
+              id: true,
+              data: true,
+              vulnerabilityCategory: true,
+              skills: true,
+            },
+          });
+          
+          console.log(`[启动评估] 找到 ${workflowNodes.length} 个 WorkflowNode`);
+          
+          // 遍历每个节点，收集 Skill IDs
+          const allSkillIds: string[] = [];
+          
+          for (const node of workflowNodes) {
+            // 模式 3：漏洞类别
+            if (node.vulnerabilityCategory) {
+              console.log(`[启动评估] Node ${node.id}: 模式 3 - 漏洞类别 ${node.vulnerabilityCategory}`);
+              const matchedIds = await matchSkillsByCategory(
+                node.vulnerabilityCategory,
+                projectTechStack
+              );
+              allSkillIds.push(...matchedIds);
+              console.log(`[启动评估] Node ${node.id}: 匹配到 ${matchedIds.length} 个 Skills`);
+              continue;
+            }
+            
+            // 模式 2：手工指定
+            if (node.skills) {
+              console.log(`[启动评估] Node ${node.id}: 模式 2 - 手工指定 Skills`);
+              try {
+                const skillIds = JSON.parse(node.skills);
+                if (Array.isArray(skillIds)) {
+                  allSkillIds.push(...skillIds);
+                  console.log(`[启动评估] Node ${node.id}: 指定了 ${skillIds.length} 个 Skills`);
+                }
+              } catch {
+                console.warn(`[启动评估] Node ${node.id}: skills 字段 JSON 解析失败`);
+              }
+              continue;
+            }
+            
+            // 模式 1：自定义描述（无 vulnerabilityCategory 和 skills）
+            console.log(`[启动评估] Node ${node.id}: 模式 1 - 自定义描述，不加载 Skills`);
+          }
+          
+          // 去重
+          const uniqueSkillIds = [...new Set(allSkillIds)];
+          console.log(`[启动评估] 合并后共 ${uniqueSkillIds.length} 个唯一 Skill IDs`);
+          
+          // 使用 copySkillsByIds 拷贝
+          copyResult = await copySkillsByIds(
+            project.projectPath,
+            uniqueSkillIds,
+            undefined  // skillOutputTemplate（可选，后续可从 globalConfig 获取）
+          );
+        } else {
+          // 没有 workflowId，保持现有逻辑（按项目技术栈过滤）
+          console.log('[启动评估] 无 workflowId，按项目技术栈过滤 Skills');
+          copyResult = await copySkillsToProject(
+            project.projectPath,
+            payload.userId,
+            undefined,  // skillOutputTemplate（可选，后续可从 globalConfig 获取）
+            projectTechStack  // 项目技术栈
+          );
+        }
         
         console.log(`[启动评估] Skills 同步完成:`);
         console.log(`  - 成功: ${copyResult.success}`);

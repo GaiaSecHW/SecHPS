@@ -148,6 +148,7 @@ export class ClaudeAgentService {
         'Grep',
         'LS',
         'Bash',
+        'Skill',
       ],
       disallowedTools: this.config.disallowedTools,
       abortController: this.abortController,

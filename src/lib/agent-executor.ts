@@ -65,7 +65,7 @@ export class AgentExecutor {
       model: context.modelConfig.model,
       maxTokens: 4096,
       cwd: context.cwd,
-      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
+      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'],
     });
 
     // 创建工具执行器

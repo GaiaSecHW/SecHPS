@@ -12,6 +12,20 @@ import type { Skill } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 
 /**
+ * 路径安全验证
+ * 检查路径是否包含恶意字符，防止路径遍历攻击
+ */
+function isPathSafe(inputPath: string): boolean {
+  // 检查路径遍历
+  if (inputPath.includes('..')) return false;
+  // 检查 null 字符
+  if (inputPath.includes('\0')) return false;
+  // 检查绝对路径（Windows 和 Unix）
+  if (/^[A-Za-z]:/.test(inputPath) || inputPath.startsWith('/')) return false;
+  return true;
+}
+
+/**
  * Skill 元数据（存储在 metadata.json）
  */
 export interface SkillMetadata {
@@ -276,6 +290,12 @@ export async function copySkillsToProject(
     copiedSkills: [],
     skillIds: [],  // 初始化 Skill ID 列表
   };
+  
+  // 安全验证：防止路径遍历攻击
+  if (!isPathSafe(projectPath)) {
+    result.errors.push('projectPath 包含不安全的路径字符');
+    return result;
+  }
   
   try {
     // 确保 targetDir 存在
@@ -654,25 +674,25 @@ export async function importSkillFromDisk(
 ): Promise<boolean> {
   const skillDir = getSkillDir(skillName, userId);
   const metadataPath = path.join(skillDir, 'metadata.json');
-  
+
   if (!fs.existsSync(metadataPath)) {
     console.error(`[SkillFiles] Skill 元数据不存在: ${skillName}`);
     return false;
   }
-  
+
   try {
     const { prisma } = await import('@/lib/prisma');
-    
+
     // 读取元数据
     const metadata: SkillMetadata = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
-    
+
     // 读取最新版本的 SKILL.md
     const skillFile = path.join(skillDir, 'SKILL.md');
     if (!fs.existsSync(skillFile)) {
       console.error(`[SkillFiles] SKILL.md 不存在: ${skillName}`);
       return false;
     }
-    
+
     // 这里可以添加解析 SKILL.md 的逻辑
     // 目前简化处理，仅返回成功
     console.log(`[SkillFiles] 导入成功: ${skillName}`);
@@ -681,4 +701,139 @@ export async function importSkillFromDisk(
     console.error(`[SkillFiles] 导入失败: ${skillName}`, error);
     return false;
   }
+}
+
+/**
+ * 按 Skill ID 列表拷贝 Skills 到项目目录
+ *
+ * @param projectPath - 项目路径
+ * @param skillIds - Skill ID 数组
+ * @param skillOutputTemplate - 可选的输出模板
+ * @returns 拷贝结果
+ */
+export async function copySkillsByIds(
+  projectPath: string,
+  skillIds: string[],
+  skillOutputTemplate?: string
+): Promise<CopyResult> {
+  const result: CopyResult = {
+    success: 0,
+    failed: 0,
+    errors: [],
+    copiedSkills: [],
+    skillIds: [],
+  };
+
+  // 安全验证：防止路径遍历攻击
+  if (!isPathSafe(projectPath)) {
+    result.errors.push('projectPath 包含不安全的路径字符');
+    return result;
+  }
+
+  const targetDir = path.join(projectPath, '.claude', 'skills');
+
+  if (!skillIds || skillIds.length === 0) {
+    return result;
+  }
+
+  try {
+    // 确保 targetDir 存在
+    ensureDir(targetDir);
+
+    // 查询数据库获取 Skill 信息
+    const skills = await prisma.skill.findMany({
+      where: {
+        id: { in: skillIds },
+        isLatest: true,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        userId: true,
+        version: true,
+        displayName: true,
+      },
+    });
+
+    // 构建 ID 到 Skill 的映射
+    const skillMap = new Map(skills.map((s) => [s.id, s]));
+
+    for (const skillId of skillIds) {
+      const skill = skillMap.get(skillId);
+
+      if (!skill) {
+        result.failed++;
+        result.errors.push(`Skill ${skillId} 不存在、未激活或不是最新版本`);
+        continue;
+      }
+
+      try {
+        // 获取 Skill 目录
+        const skillDir = getSkillDir(skill.name, skill.userId);
+
+        // 检查目录是否存在
+        if (!fs.existsSync(skillDir)) {
+          result.failed++;
+          result.errors.push(`Skill ${skill.name} 目录不存在: ${skillDir}`);
+          continue;
+        }
+
+        // 查找最新版本的 SKILL 文件
+        const versionedFile = path.join(skillDir, `SKILL-v${skill.version}.md`);
+        const latestFile = path.join(skillDir, 'SKILL.md');
+
+        let sourceFile: string | null = null;
+        if (fs.existsSync(versionedFile)) {
+          sourceFile = versionedFile;
+        } else if (fs.existsSync(latestFile)) {
+          sourceFile = latestFile;
+        }
+
+        if (!sourceFile) {
+          result.failed++;
+          result.errors.push(`Skill ${skill.name} 缺少 SKILL.md 或 SKILL-v${skill.version}.md`);
+          continue;
+        }
+
+        // 读取内容
+        let content = fs.readFileSync(sourceFile, 'utf-8');
+
+        // 追加输出模板（如果提供）
+        if (skillOutputTemplate && skillOutputTemplate.trim()) {
+          content = content + '\n\n' + skillOutputTemplate;
+        }
+
+        // 验证 skill.name 安全性，防止路径遍历
+        if (!isPathSafe(skill.name)) {
+          result.failed++;
+          result.errors.push(`Skill ${skill.name} 名称包含不安全的路径字符`);
+          continue;
+        }
+
+        // 为每个 Skill 创建独立子目录，避免覆盖
+        const skillSubDir = path.join(targetDir, skill.name);
+        fs.mkdirSync(skillSubDir, { recursive: true });
+        const destFile = path.join(skillSubDir, 'SKILL.md');
+        fs.writeFileSync(destFile, content, 'utf-8');
+
+        result.success++;
+        result.copiedSkills.push(skill.name);
+        result.skillIds.push(skill.id);
+        console.log(`[SkillFiles] 按 ID 拷贝成功: ${skill.name} (${skill.id})`);
+      } catch (error) {
+        result.failed++;
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        result.errors.push(`Skill ${skill.name} (${skillId}): ${errorMsg}`);
+        console.error(`[SkillFiles] 按 ID 拷贝失败: ${skillId}`, error);
+      }
+    }
+
+    console.log(`[SkillFiles] 按 ID 拷贝完成: 成功 ${result.success}, 失败 ${result.failed}`);
+  } catch (error) {
+    console.error('[SkillFiles] 按 ID 拷贝过程出错:', error);
+    result.errors.push(`系统错误: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  return result;
 }

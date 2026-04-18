@@ -129,6 +129,30 @@ const [showPreview, setShowPreview] = useState(false);
     endNodeDescription: '工作流的结束点',
   });
 
+  // Skill 加载模式相关状态
+  type SkillLoadingMode = 'description' | 'manual' | 'vulnerability';
+  const [availableSkills, setAvailableSkills] = useState<Array<{
+    id: string;
+    name: string;
+    displayName: string;
+    category: string;
+  }>>([]);
+  const [loadingSkills, setLoadingSkills] = useState(false);
+  const [vulnerabilityPatterns, setVulnerabilityPatterns] = useState<Array<{
+    id: string;
+    name: string;
+    displayName: string;
+    category: string;
+    cwe: string | null;
+  }>>([]);
+  const [loadingVulnerabilityPatterns, setLoadingVulnerabilityPatterns] = useState(false);
+  const [skillCategories, setSkillCategories] = useState<Array<{ value: string; label: string }>>([]);
+  const [loadingSkillCategories, setLoadingSkillCategories] = useState(false);
+
+  // Skills 分组展示相关状态
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [skillSearchQuery, setSkillSearchQuery] = useState('');
+
   // 加载工作流配置
   useEffect(() => {
     const fetchWorkflowConfig = async () => {
@@ -182,7 +206,144 @@ const [showPreview, setShowPreview] = useState(false);
     }
   }, [workflowId]);
 
-// 保存当前状态到历史记录
+  // 获取 Skills 列表
+  const fetchAvailableSkills = async () => {
+    try {
+      setLoadingSkills(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills?isActive=true&scope=all&limit=100', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableSkills(data.skills || []);
+      }
+    } catch (err) {
+      console.error('获取 Skills 列表失败:', err);
+    } finally {
+      setLoadingSkills(false);
+    }
+  };
+
+  // 获取漏洞模式列表
+  const fetchVulnerabilityPatterns = async () => {
+    try {
+      setLoadingVulnerabilityPatterns(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/vulnerability-patterns', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setVulnerabilityPatterns(data.patterns || []);
+      }
+    } catch (err) {
+      console.error('获取漏洞模式列表失败:', err);
+    } finally {
+      setLoadingVulnerabilityPatterns(false);
+    }
+  };
+
+  // 获取 Skill 分类列表
+  const fetchSkillCategories = async () => {
+    try {
+      setLoadingSkillCategories(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills/categories', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSkillCategories(data.categories?.map((c: any) => ({ value: c.name, label: c.label })) || []);
+      }
+    } catch (err) {
+      console.error('获取 Skill 分类列表失败:', err);
+    } finally {
+      setLoadingSkillCategories(false);
+    }
+  };
+
+// 初始化加载 Skills 和漏洞模式
+  useEffect(() => {
+    fetchAvailableSkills();
+    fetchVulnerabilityPatterns();
+    fetchSkillCategories();
+  }, []);
+
+  // 按 category 分组 Skills
+  const groupedSkills = useMemo(() => {
+    // 先根据搜索词过滤
+    const filtered = skillSearchQuery.trim()
+      ? availableSkills.filter(skill =>
+          skill.displayName.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+          skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
+          skill.category.toLowerCase().includes(skillSearchQuery.toLowerCase())
+        )
+      : availableSkills;
+
+    // 按 category 分组
+    const groups: Record<string, typeof availableSkills> = {};
+    for (const skill of filtered) {
+      const category = skill.category || 'uncategorized';
+      if (!groups[category]) {
+        groups[category] = [];
+      }
+      groups[category].push(skill);
+    }
+
+    // 按 category 名称排序
+    const sortedCategories = Object.keys(groups).sort();
+    return sortedCategories.map(category => ({
+      category,
+      skills: groups[category],
+      count: groups[category].length,
+    }));
+  }, [availableSkills, skillSearchQuery]);
+
+  // 切换分组展开状态
+  const toggleCategory = (category: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  };
+
+  // 全选/取消全选某个类别的 Skills
+  const toggleCategorySkills = (category: string, skills: typeof availableSkills, selectAll: boolean) => {
+    if (!selectedNode) return;
+    const currentSkills: string[] = selectedNode.data.skills
+      ? JSON.parse(selectedNode.data.skills)
+      : [];
+    const categorySkillIds = skills.map(s => s.id);
+
+    let newSkills: string[];
+    if (selectAll) {
+      // 添加该类别所有未选中的 Skills
+      newSkills = [...new Set([...currentSkills, ...categorySkillIds])];
+    } else {
+      // 移除该类别所有已选中的 Skills
+      newSkills = currentSkills.filter(id => !categorySkillIds.includes(id));
+    }
+
+    const updatedNode = {
+      ...selectedNode,
+      data: {
+        ...selectedNode.data,
+        skills: newSkills.length > 0 ? JSON.stringify(newSkills) : undefined,
+      }
+    };
+    setNodes((nds) =>
+      nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+    );
+    setSelectedNode(updatedNode);
+  };
+
+ // 保存当前状态到历史记录
   const saveToHistory = useCallback(() => {
     const currentState: WorkflowData = {
       nodes: JSON.parse(JSON.stringify(nodes)),
@@ -1074,28 +1235,435 @@ const [showPreview, setShowPreview] = useState(false);
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        描述
+                    {/* 描述输入框 - 仅在 description 模式下显示 */}
+                    {(selectedNode.data.skillLoadingMode || 'description') === 'description' && (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          描述
+                        </label>
+                        <textarea
+                          value={selectedNode.data.description || ''}
+                          onChange={(e) => {
+                            const updatedNode = { 
+                              ...selectedNode, 
+                              data: { ...selectedNode.data, description: e.target.value } 
+                            };
+                            setNodes((nds) =>
+                              nds.map((n) =>
+                                n.id === selectedNode.id ? updatedNode : n
+                              )
+                            );
+                            setSelectedNode(updatedNode);
+                          }}
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+
+                    {/* Skill 加载模式配置 */}
+                    <div className="pt-4 border-t border-gray-200">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Skill 加载模式
                       </label>
-                      <textarea
-                        value={selectedNode.data.description || ''}
+                      <select
+                        value={selectedNode.data.skillLoadingMode || 'description'}
                         onChange={(e) => {
-                          const updatedNode = { 
-                            ...selectedNode, 
-                            data: { ...selectedNode.data, description: e.target.value } 
+                          const newMode = e.target.value as SkillLoadingMode;
+                          const updatedNode = {
+                            ...selectedNode,
+                            data: {
+                              ...selectedNode.data,
+                              skillLoadingMode: newMode,
+                              // 清除其他模式的配置
+                              vulnerabilityCategory: newMode === 'vulnerability' ? selectedNode.data.vulnerabilityCategory : undefined,
+                              skills: newMode === 'manual' ? selectedNode.data.skills : undefined,
+                            }
                           };
                           setNodes((nds) =>
-                            nds.map((n) =>
-                              n.id === selectedNode.id ? updatedNode : n
-                            )
+                            nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
                           );
                           setSelectedNode(updatedNode);
                         }}
-                        rows={3}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      >
+                        <option value="description">自定义描述（默认）</option>
+                        <option value="manual">手工指定 Skills</option>
+                        <option value="vulnerability">漏洞类别</option>
+                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        选择如何为该节点加载 Skills
+                      </p>
                     </div>
+
+                    {/* 漏洞类别模式 - 显示漏洞类别选择器 */}
+                    {(selectedNode.data.skillLoadingMode || 'description') === 'vulnerability' && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-md p-3 mt-3">
+                        <p className="text-sm text-orange-800 font-medium mb-2">
+                          漏洞类别配置
+                        </p>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">
+                              漏洞类别
+                            </label>
+                            {loadingVulnerabilityPatterns ? (
+                              <div className="flex items-center justify-center py-2">
+                                <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
+                              </div>
+                            ) : (
+                              <select
+                                value={selectedNode.data.vulnerabilityCategory || ''}
+                                onChange={(e) => {
+                                  const selectedCategory = e.target.value;
+                                  const selectedPattern = vulnerabilityPatterns.find(p => p.category === selectedCategory);
+                                  // 检查是否需要自动重命名节点
+                                  const currentLabel = selectedNode.data.label || '';
+                                  const isDefaultLabel = !currentLabel || currentLabel === '新节点' || currentLabel === 'Agent' || currentLabel.startsWith('node-');
+                                  const newLabel = isDefaultLabel && selectedPattern 
+                                    ? `${selectedPattern.displayName}安全排查` 
+                                    : selectedNode.data.label;
+                                  const updatedNode = {
+                                    ...selectedNode,
+                                    data: {
+                                      ...selectedNode.data,
+                                      vulnerabilityCategory: selectedCategory || undefined,
+                                      label: newLabel,
+                                    }
+                                  };
+                                  setNodes((nds) =>
+                                    nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                  );
+                                  setSelectedNode(updatedNode);
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                              >
+                                <option value="">选择漏洞类别...</option>
+                                {vulnerabilityPatterns.map((pattern) => {
+                                  const skillCount = availableSkills.filter(
+                                    skill => skill.category === pattern.category
+                                  ).length;
+                                  return (
+                                    <option key={pattern.id} value={pattern.category}>
+                                      {pattern.displayName} ({pattern.category}) - {skillCount} 个 Skill
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            )}
+                          </div>
+                          {/* 查看此漏洞类型的 Skills 按钮 */}
+                          {selectedNode.data.vulnerabilityCategory && (
+                            <button
+                              onClick={() => {
+                                // 显示该类别下的所有 skill 列表
+                                const categorySkills = availableSkills.filter(
+                                  skill => skill.category === selectedNode.data.vulnerabilityCategory
+                                );
+                                const skillList = categorySkills.length > 0
+                                  ? categorySkills.map(s => `• ${s.displayName}`).join('\n')
+                                  : '该类别下暂无 Skills';
+                                alert(`【${selectedNode.data.vulnerabilityCategory}】类别的 Skills:\n\n${skillList}`);
+                              }}
+                              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm"
+                            >
+                              <Eye size={14} />
+                              查看此漏洞类型的 Skills
+                            </button>
+                          )}
+                          {/* 显示匹配的 Skills */}
+                          {selectedNode.data.vulnerabilityCategory && (
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">
+                                匹配的 Skills
+                              </label>
+                              <div className="bg-white rounded-md p-2 border border-gray-200 max-h-32 overflow-y-auto">
+                                {availableSkills
+                                  .filter(skill => skill.category === selectedNode.data.vulnerabilityCategory)
+                                  .slice(0, 5)
+                                  .map((skill) => (
+                                    <div key={skill.id} className="text-xs text-gray-700 py-1">
+                                      {skill.displayName} ({skill.category})
+                                    </div>
+                                  ))}
+                                {availableSkills.filter(skill => skill.category === selectedNode.data.vulnerabilityCategory).length === 0 && (
+                                  <p className="text-xs text-gray-400">
+                                    该类别下暂无匹配的 Skills
+                                  </p>
+                                )}
+                                <p className="text-xs text-gray-400 mt-1">
+                                  运行时将根据漏洞类别自动匹配 Skills
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+{/* 手工指定模式 - 显示 Skills 多选器 */}
+                    {(selectedNode.data.skillLoadingMode || 'description') === 'manual' && (
+                      <div className="bg-green-50 border border-green-200 rounded-md p-3 mt-3">
+                        <p className="text-sm text-green-800 font-medium mb-2">
+                          手工指定 Skills
+                        </p>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">
+                              选择 Skills
+                            </label>
+                            {loadingSkills ? (
+                              <div className="flex items-center justify-center py-2">
+                                <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {/* 快捷操作按钮 */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <button
+                                    onClick={() => {
+                                      // 全选
+                                      const allSkillIds = availableSkills.map(s => s.id);
+                                      const updatedNode = {
+                                        ...selectedNode,
+                                        data: {
+                                          ...selectedNode.data,
+                                          skills: JSON.stringify(allSkillIds),
+                                        }
+                                      };
+                                      setNodes((nds) =>
+                                        nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                      );
+                                      setSelectedNode(updatedNode);
+                                    }}
+                                    className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                                  >
+                                    全选
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      // 清空
+                                      const updatedNode = {
+                                        ...selectedNode,
+                                        data: {
+                                          ...selectedNode.data,
+                                          skills: undefined,
+                                        }
+                                      };
+                                      setNodes((nds) =>
+                                        nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                      );
+                                      setSelectedNode(updatedNode);
+                                    }}
+                                    className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                                  >
+                                    清空
+                                  </button>
+                                  {/* 按类别选择下拉框 */}
+                                  <select
+                                    onChange={(e) => {
+                                      if (e.target.value) {
+                                        // 选择该类别下的所有 Skills
+                                        const categorySkillIds = availableSkills
+                                          .filter(s => s.category === e.target.value)
+                                          .map(s => s.id);
+                                        const currentSkills: string[] = selectedNode.data.skills
+                                          ? JSON.parse(selectedNode.data.skills)
+                                          : [];
+                                        // 合并已选择的和该类别的（去重）
+                                        const newSkills = [...new Set([...currentSkills, ...categorySkillIds])];
+                                        const updatedNode = {
+                                          ...selectedNode,
+                                          data: {
+                                            ...selectedNode.data,
+                                            skills: JSON.stringify(newSkills),
+                                          }
+                                        };
+                                        setNodes((nds) =>
+                                          nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                        );
+                                        setSelectedNode(updatedNode);
+                                        e.target.value = ''; // 重置下拉框
+                                      }
+                                    }}
+                                    className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                  >
+                                    <option value="">按类别选择...</option>
+                                    {skillCategories.map((cat) => {
+                                      const count = availableSkills.filter(s => s.category === cat.value).length;
+                                      return (
+                                        <option key={cat.value} value={cat.value}>
+                                          {cat.label} ({count})
+                                        </option>
+                                      );
+                                    })}
+                                  </select>
+                                </div>
+                                {/* Skills 搜索框 */}
+                                <div className="relative mb-2">
+                                  <input
+                                    type="text"
+                                    placeholder="搜索 Skills..."
+                                    value={skillSearchQuery}
+                                    onChange={(e) => setSkillSearchQuery(e.target.value)}
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                  />
+                                  {skillSearchQuery && (
+                                    <button
+                                      onClick={() => setSkillSearchQuery('')}
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                    >
+                                      <X className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                                {/* Skills 分组列表 */}
+                                <div className="bg-white rounded-md border border-gray-200 max-h-64 overflow-y-auto">
+                                  {groupedSkills.length === 0 ? (
+                                    <div className="px-3 py-4 text-center text-sm text-gray-500">
+                                      {skillSearchQuery ? '没有匹配的 Skills' : '暂无可用 Skills'}
+                                    </div>
+                                  ) : (
+                                    groupedSkills.map((group) => {
+                                      const isExpanded = expandedCategories.has(group.category);
+                                      const selectedSkills: string[] = selectedNode.data.skills
+                                        ? JSON.parse(selectedNode.data.skills)
+                                        : [];
+                                      const selectedInCategory = group.skills.filter(s => selectedSkills.includes(s.id)).length;
+                                      const allSelected = selectedInCategory === group.skills.length;
+                                      const someSelected = selectedInCategory > 0 && !allSelected;
+
+                                      return (
+                                        <div key={group.category} className="border-b border-gray-100 last:border-b-0">
+                                          {/* 分组标题 */}
+                                          <div
+                                            className="flex items-center justify-between px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                                            onClick={() => toggleCategory(group.category)}
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              {isExpanded ? (
+                                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                                              ) : (
+                                                <ChevronRight className="w-4 h-4 text-gray-500" />
+                                              )}
+                                              <span className="text-sm font-medium text-gray-700">{group.category}</span>
+                                              <span className="text-xs text-gray-500">({group.count})</span>
+                                            </div>
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                toggleCategorySkills(group.category, group.skills, !allSelected);
+                                              }}
+                                              className="text-xs px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-200 text-gray-600"
+                                            >
+                                              {allSelected ? '取消全选' : '全选'}
+                                            </button>
+                                          </div>
+                                          {/* 分组内容 */}
+                                          {isExpanded && (
+                                            <div className="divide-y divide-gray-50">
+                                              {group.skills.map((skill) => {
+                                                const isSelected = selectedSkills.includes(skill.id);
+                                                return (
+                                                  <div
+                                                    key={skill.id}
+                                                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 ${
+                                                      isSelected ? 'bg-green-50' : ''
+                                                    }`}
+                                                    onClick={() => {
+                                                      const currentSkills: string[] = selectedNode.data.skills
+                                                        ? JSON.parse(selectedNode.data.skills)
+                                                        : [];
+                                                      const newSkills = isSelected
+                                                        ? currentSkills.filter(id => id !== skill.id)
+                                                        : [...currentSkills, skill.id];
+                                                      const updatedNode = {
+                                                        ...selectedNode,
+                                                        data: {
+                                                          ...selectedNode.data,
+                                                          skills: newSkills.length > 0 ? JSON.stringify(newSkills) : undefined,
+                                                        }
+                                                      };
+                                                      setNodes((nds) =>
+                                                        nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                                      );
+                                                      setSelectedNode(updatedNode);
+                                                    }}
+                                                  >
+                                                    <div className={`w-4 h-4 rounded border ${
+                                                      isSelected
+                                                        ? 'bg-green-600 border-green-600'
+                                                        : 'border-gray-300'
+                                                    } flex items-center justify-center`}>
+                                                      {isSelected && (
+                                                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                        </svg>
+                                                      )}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                      <span className="text-sm text-gray-900">{skill.displayName}</span>
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                                {/* 已选择的 Skills 数量 */}
+                                <div className="text-xs text-gray-600">
+                                  已选择 {selectedNode.data.skills ? JSON.parse(selectedNode.data.skills).length : 0} 个 Skills
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          {/* 显示已选择的 Skills 列表 */}
+                          {selectedNode.data.skills && JSON.parse(selectedNode.data.skills).length > 0 && (
+                            <div>
+                              <label className="block text-xs text-gray-600 mb-1">
+                                已选择的 Skills
+                              </label>
+<div className="bg-white rounded-md p-2 border border-gray-200">
+                                {JSON.parse(selectedNode.data.skills || '[]').map((skillId: string) => {
+                                  const skill = availableSkills.find(s => s.id === skillId);
+return (
+                                    <div key={skillId} className="flex items-center justify-between py-1">
+                                      <span className="text-xs text-gray-700">
+                                        {skill?.displayName || skillId}
+                                      </span>
+                                      <button
+                                        onClick={() => {
+                                          const currentSkills: string[] = JSON.parse(selectedNode.data.skills || '[]');
+                                          const newSkills = currentSkills.filter(id => id !== skillId);
+                                          const updatedNode = {
+                                            ...selectedNode,
+                                            data: {
+                                              ...selectedNode.data,
+                                              skills: newSkills.length > 0 ? JSON.stringify(newSkills) : undefined,
+                                            }
+                                          };
+                                          setNodes((nds) =>
+                                            nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                                          );
+                                          setSelectedNode(updatedNode);
+                                        }}
+                                        className="text-xs text-red-600 hover:text-red-800"
+                                      >
+                                        移除
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                           )}
+                         </div>
+                       </div>
+                     )}
                   </>
                 ) : (
                   <>
@@ -1234,8 +1802,9 @@ const [showPreview, setShowPreview] = useState(false);
                   </div>
                 </div>
 
-                {/* Skill 预测 - 对 Agent 和子Agent 类型节点显示 */}
-                {(selectedNode.type === 'task' || selectedNode.type === 'subtask') && (
+                {/* Skill 预测 - 仅在 description 模式下显示 */}
+                {(selectedNode.type === 'task' || selectedNode.type === 'subtask') && 
+                 (selectedNode.data.skillLoadingMode || 'description') === 'description' && (
                   <div className="pt-4 border-t border-gray-200">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Skill 匹配预测

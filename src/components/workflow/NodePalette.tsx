@@ -21,14 +21,16 @@ interface NodePaletteProps {
 }
 
 export default function NodePalette({ onNodeDragStart }: NodePaletteProps) {
-  // 按类别分组节点
-  const nodesByCategory = NODE_TYPES.reduce((acc, node) => {
-    if (!acc[node.category]) {
-      acc[node.category] = [];
-    }
-    acc[node.category].push(node);
-    return acc;
-  }, {} as Record<string, NodeTypeDefinition[]>);
+  // 按类别分组节点，过滤掉 subtask 类型（用户不应手动创建）
+  const nodesByCategory = NODE_TYPES
+    .filter(node => node.type !== 'subtask')
+    .reduce((acc, node) => {
+      if (!acc[node.category]) {
+        acc[node.category] = [];
+      }
+      acc[node.category].push(node);
+      return acc;
+    }, {} as Record<string, NodeTypeDefinition[]>);
 
   const categoryLabels: Record<string, string> = {
     trigger: '触发器',

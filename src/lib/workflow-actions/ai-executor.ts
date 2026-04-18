@@ -55,7 +55,7 @@ export async function executeAiProcess(
       apiKey: modelConfig.apiKey,
       model: config.model || modelConfig.defaultModel || 'claude-sonnet-4-20250514',
       maxTokens: config.maxTokens || 4096,
-      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
+      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'],
     });
 
     // 调用 AI

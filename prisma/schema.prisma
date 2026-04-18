@@ -1360,6 +1360,8 @@ model WorkflowNode {
   positionX                                        Float
   positionY                                        Float
   data                                             String
+  vulnerabilityCategory                            String?        // 漏洞类别（模式 3）
+  skills                                           String?        // 手工指定的 Skills（模式 2，JSON 数组）
   createdAt                                        DateTime       @default(now())
   updatedAt                                        DateTime       @updatedAt
   role                                             WorkflowRole?  @relation(fields: [roleId], references: [id], onDelete: SetNull)

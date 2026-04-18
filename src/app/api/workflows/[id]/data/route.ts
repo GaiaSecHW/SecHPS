@@ -179,6 +179,10 @@ export async function PUT(
               positionX: node.position.x,
               positionY: node.position.y,
               data: JSON.stringify(node.data),
+              vulnerabilityCategory: node.data.vulnerabilityCategory || null,
+              skills: typeof node.data.skills === 'string'
+                ? node.data.skills
+                : (node.data.skills ? JSON.stringify(node.data.skills) : null),
             },
           }).then((createdNode) => {
             // 保存 ID 映射
