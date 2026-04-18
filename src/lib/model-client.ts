@@ -643,7 +643,7 @@ export async function testModelConnection(modelConfig: {
     body = {
       model: modelName,
       max_tokens: 512,
-      messages: [{ role: 'user', content: 'Hi' }],
+      messages: [{ role: 'user', content: '1+1' }],
     };
   } else {
     url = apiBaseUrl.replace(/\/$/, '');
@@ -657,7 +657,7 @@ export async function testModelConnection(modelConfig: {
     body = {
       model: modelName,
       max_tokens: 512,
-      messages: [{ role: 'user', content: 'Hi' }],
+      messages: [{ role: 'user', content: '1+1' }],
     };
   }
   
