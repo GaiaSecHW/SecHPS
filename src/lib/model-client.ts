@@ -654,7 +654,11 @@ export async function testModelConnection(modelConfig: {
   } else {
     url = apiBaseUrl.replace(/\/$/, '');
     if (!url.includes('/chat/completions')) {
-      url = `${url}/v1/chat/completions`;
+      // 如果 URL 不包含 /v1，先添加 /v1
+      if (!url.includes('/v1')) {
+        url = `${url}/v1`;
+      }
+      url = `${url}/chat/completions`;
     }
     headers = {
       'Content-Type': 'application/json',
