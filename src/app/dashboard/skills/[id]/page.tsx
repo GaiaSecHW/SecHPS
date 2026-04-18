@@ -22,6 +22,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  History,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
@@ -29,6 +30,10 @@ import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
+import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
+import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
+import { SkillRollbackModal } from '@/components/skills/SkillRollbackModal';
+import toast from 'react-hot-toast';
 
 interface Skill {
   id: string;
@@ -99,6 +104,17 @@ export default function SkillDetailPage() {
   const [vulnTotal, setVulnTotal] = useState(0);
   const [vulnTotalPages, setVulnTotalPages] = useState(0);
   
+  // ===== 版本管理相关状态 =====
+  const [viewingVersionId, setViewingVersionId] = useState<string | null>(null); // 当前查看的版本 ID
+  const [viewingVersionNumber, setViewingVersionNumber] = useState<number | null>(null); // 当前查看的版本号
+  const [viewingVersionContent, setViewingVersionContent] = useState<string>(''); // 查看版本的内容
+  const [showVersionDiffModal, setShowVersionDiffModal] = useState(false); // 版本对比弹窗
+  const [diffTargetVersionId, setDiffTargetVersionId] = useState<string>(''); // 对比目标版本 ID
+  const [diffTargetVersionNumber, setDiffTargetVersionNumber] = useState<number>(0); // 对比目标版本号
+  const [showRollbackModal, setShowRollbackModal] = useState(false); // 回滚确认弹窗
+  const [rollbackTargetVersionId, setRollbackTargetVersionId] = useState<string>(''); // 回滚目标版本 ID
+  const [rollbackTargetVersionNumber, setRollbackTargetVersionNumber] = useState<number>(0); // 回滚目标版本号
+  
   // 获取漏洞列表
   const fetchVulnerabilities = async (page: number = 1) => {
     if (!skillId) return;
@@ -120,6 +136,53 @@ export default function SkillDetailPage() {
     } finally {
       setVulnLoading(false);
     }
+  };
+
+  // ===== 版本管理处理函数 =====
+  
+  // 查看特定版本内容
+  const handleSelectVersion = async (versionId: string, versionNumber: number) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/${versionId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('获取版本内容失败');
+      const data = await response.json();
+      setViewingVersionId(versionId);
+      setViewingVersionNumber(versionNumber);
+      setViewingVersionContent(data.skill?.content || '');
+    } catch (error) {
+      toast.error('获取版本内容失败');
+    }
+  };
+
+  // 关闭版本查看，返回当前版本
+  const handleCloseVersionView = () => {
+    setViewingVersionId(null);
+    setViewingVersionNumber(null);
+    setViewingVersionContent('');
+  };
+
+  // 打开版本对比弹窗
+  const handleCompareVersion = (versionId: string, versionNumber: number) => {
+    setDiffTargetVersionId(versionId);
+    setDiffTargetVersionNumber(versionNumber);
+    setShowVersionDiffModal(true);
+  };
+
+  // 打开回滚确认弹窗
+  const handleRollbackVersion = (versionId: string, versionNumber: number) => {
+    setRollbackTargetVersionId(versionId);
+    setRollbackTargetVersionNumber(versionNumber);
+    setShowRollbackModal(true);
+  };
+
+  // 回滚成功后刷新
+  const handleRollbackSuccess = () => {
+    toast.success(`成功回滚到版本 v${rollbackTargetVersionNumber}`);
+    fetchSkill(); // 重新获取当前 skill 数据
+    handleCloseVersionView(); // 关闭版本查看
   };
 
   // 清理定时器
@@ -1270,6 +1333,98 @@ export default function SkillDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ===== 版本管理区域 ===== */}
+      {!isEditing && skill && (
+        <>
+          {/* 版本查看提示条 */}
+          {viewingVersionId && viewingVersionId !== skill.id && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <History size={18} className="text-indigo-600" />
+                <div>
+                  <span className="text-sm font-medium text-indigo-800">
+                    正在查看历史版本 v{viewingVersionNumber}
+                  </span>
+                  <span className="text-xs text-indigo-600 ml-2">
+                    (当前版本: v{skill.version})
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseVersionView}
+                className="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+              >
+                返回当前版本
+              </button>
+            </div>
+          )}
+
+          {/* 版本历史面板 */}
+          <SkillVersionHistory
+            skillId={skill.id}
+            currentVersionId={skill.id}
+            onSelectVersion={handleSelectVersion}
+            onRollback={handleRollbackVersion}
+            onCompare={handleCompareVersion}
+            canEdit={isAdmin || (skill.userId !== null && skill.userId === currentUserId)}
+          />
+        </>
+      )}
+
+      {/* 版本内容查看区域 */}
+      {viewingVersionId && viewingVersionId !== skill?.id && !isEditing && (
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mt-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-medium text-gray-900">
+              v{viewingVersionNumber} 版本内容
+            </h3>
+            <button
+              onClick={() => {
+                if (viewingVersionContent) {
+                  navigator.clipboard.writeText(viewingVersionContent);
+                  toast.success('已复制版本内容');
+                }
+              }}
+              className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+            >
+              <Copy size={14} className="mr-1" />
+              复制内容
+            </button>
+          </div>
+          <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
+            <ReactMarkdown>{viewingVersionContent || '暂无内容'}</ReactMarkdown>
+          </div>
+        </div>
+      )}
+
+      {/* 版本对比弹窗 */}
+      {showVersionDiffModal && skill && (
+        <SkillVersionDiffModal
+          isOpen={showVersionDiffModal}
+          onClose={() => setShowVersionDiffModal(false)}
+          skillId={skill.id}
+          targetVersionId={diffTargetVersionId}
+          targetVersionNumber={diffTargetVersionNumber}
+          currentVersionNumber={skill.version}
+          currentContent={skill.content || ''}
+        />
+      )}
+
+      {/* 回滚确认弹窗 */}
+      {showRollbackModal && skill && (
+        <SkillRollbackModal
+          isOpen={showRollbackModal}
+          onClose={() => setShowRollbackModal(false)}
+          onSuccess={handleRollbackSuccess}
+          skillId={skill.id}
+          currentVersionId={skill.id}
+          targetVersionId={rollbackTargetVersionId}
+          targetVersionNumber={rollbackTargetVersionNumber}
+          currentVersionNumber={skill.version}
+          skillDisplayName={skill.displayName}
+        />
+      )}
 
       {/* AI 优化内容对比弹窗 */}
       {showDiffModal && (() => {
