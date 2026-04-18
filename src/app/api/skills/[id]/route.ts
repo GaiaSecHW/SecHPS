@@ -216,6 +216,7 @@ export async function PUT(
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
+      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityPatternId = updates.vulnerabilityPatternId;
       // 处理技术栈
       if (updates.techStack !== undefined) {
         updateData.techStack = updates.techStack && Array.isArray(updates.techStack) && updates.techStack.length > 0

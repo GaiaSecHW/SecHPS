@@ -29,6 +29,7 @@ import { hasPermission } from '@/lib/permissions';
 import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
 import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { useVulnerabilityPatterns, VulnerabilityPattern } from '@/hooks/useVulnerabilityPatterns';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
@@ -59,6 +60,7 @@ interface Skill {
   updatedAt: string;
   userId: string | null;  // 创建者ID
   isPublic: boolean;  // 是否公开分享
+  vulnerabilityPatternId: string | null;  // 漏洞模式 ID
 }
 
 export default function SkillDetailPage() {
@@ -78,6 +80,9 @@ export default function SkillDetailPage() {
   const [editTechStack, setEditTechStack] = useState<string[]>([]);
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
+  const [editVulnerabilityPatternId, setEditVulnerabilityPatternId] = useState<string>('');
+  const [vulnerabilitySearch, setVulnerabilitySearch] = useState('');
+  const [showVulnerabilityDropdown, setShowVulnerabilityDropdown] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -207,6 +212,12 @@ export default function SkillDetailPage() {
   
   // 使用 Hook 获取技术栈选项
   const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  
+  // 使用 Hook 获取漏洞模式
+  const { patterns: vulnerabilityPatterns, groupedPatterns, loading: loadingVulnerabilityPatterns } = useVulnerabilityPatterns();
+  
+  // 获取选中的漏洞模式对象
+  const selectedVulnerabilityPattern = vulnerabilityPatterns.find(p => p.id === editVulnerabilityPatternId);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -330,6 +341,7 @@ export default function SkillDetailPage() {
     if (!skill) return;
     setEditName(skill.displayName);
     setEditCategory(skill.category);
+    setEditVulnerabilityPatternId(skill.vulnerabilityPatternId || '');
     // 解析技术栈 JSON
     try {
       setEditTechStack(skill.techStack ? JSON.parse(skill.techStack) : []);
@@ -353,8 +365,8 @@ export default function SkillDetailPage() {
       return;
     }
 
-    if (!editCategory) {
-      alert('请选择漏洞分类');
+    if (!editVulnerabilityPatternId) {
+      alert('请选择漏洞模式');
       return;
     }
 
@@ -372,7 +384,9 @@ export default function SkillDetailPage() {
         body: JSON.stringify({
           displayName: editName.trim(),
           description: editName.trim(),
-          category: editCategory,
+          category: selectedVulnerabilityPattern?.category || editCategory,
+          vulnerabilityPatternId: editVulnerabilityPatternId,
+          cwe: selectedVulnerabilityPattern?.cwe || null,
           techStack: editTechStack,
           content: editContent,
           isActive: editIsActive,
@@ -783,21 +797,82 @@ export default function SkillDetailPage() {
                   required
                 />
               </div>
+              
+              {/* 漏洞模式选择 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  漏洞分类 <span className="text-red-500">*</span>
+                  漏洞模式 <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  {categories.map((cat) => (
-                    <option key={cat.value} value={cat.value}>
-                      {cat.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={vulnerabilitySearch || (selectedVulnerabilityPattern 
+                      ? `${selectedVulnerabilityPattern.displayName}${selectedVulnerabilityPattern.cwe ? ` (${selectedVulnerabilityPattern.cwe})` : ''}`
+                      : '')}
+                    onChange={(e) => {
+                      setVulnerabilitySearch(e.target.value);
+                      setShowVulnerabilityDropdown(true);
+                    }}
+                    onFocus={() => setShowVulnerabilityDropdown(true)}
+                    placeholder={loadingVulnerabilityPatterns ? "加载中..." : "搜索并选择漏洞模式..."}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    disabled={loadingVulnerabilityPatterns}
+                  />
+                  {showVulnerabilityDropdown && !loadingVulnerabilityPatterns && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {Object.entries(groupedPatterns).map(([category, patterns]) => (
+                        <div key={category}>
+                          <div className="px-4 py-1.5 bg-gray-100 text-xs font-semibold text-gray-600 uppercase">
+                            {category}
+                          </div>
+                          {patterns
+                            .filter((p) => 
+                              p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
+                              (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase())) ||
+                              p.name.toLowerCase().includes(vulnerabilitySearch.toLowerCase())
+                            )
+                            .slice(0, 10)
+                            .map((pattern) => (
+                              <button
+                                key={pattern.id}
+                                type="button"
+                                onClick={() => {
+                                  setEditVulnerabilityPatternId(pattern.id);
+                                  setEditCategory(pattern.category);
+                                  setVulnerabilitySearch('');
+                                  setShowVulnerabilityDropdown(false);
+                                }}
+                                className={`w-full px-4 py-2 text-left hover:bg-gray-100 text-sm ${
+                                  pattern.id === editVulnerabilityPatternId ? 'bg-blue-50 text-blue-700' : ''
+                                }`}
+                              >
+                                {pattern.displayName}
+                                {pattern.cwe && <span className="text-gray-400 ml-2">({pattern.cwe})</span>}
+                              </button>
+                            ))}
+                        </div>
+                      ))}
+                      {Object.values(groupedPatterns).every(
+                        (patterns) => !patterns.some((p) => 
+                          p.displayName.toLowerCase().includes(vulnerabilitySearch.toLowerCase()) ||
+                          (p.cwe && p.cwe.toLowerCase().includes(vulnerabilitySearch.toLowerCase()))
+                        )
+                      ) && (
+                        <div className="px-4 py-2 text-sm text-gray-500">
+                          无匹配选项
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {loadingVulnerabilityPatterns && (
+                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
+                      <div className="flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <span className="text-sm text-gray-500">加载中...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* 技术栈选择 */}
