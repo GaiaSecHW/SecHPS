@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, AlertTriangle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy, XCircle } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, AlertTriangle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy, XCircle, User } from 'lucide-react';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -81,6 +81,11 @@ interface Project {
   hasRunningEvaluation?: boolean;
   // 漏洞数量
   vulnerabilityCount?: number;
+  // 共享字段
+  isPublic?: boolean;
+  userId?: string;
+  userName?: string;
+  userUsername?: string;
 }
 
 export default function SessionsPage() {
@@ -100,6 +105,8 @@ export default function SessionsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [startingProject, setStartingProject] = useState<string | null>(null);
+  // 当前用户信息
+  const [user, setUser] = useState<{ id?: string; roles?: string[] } | null>(null);
   // 技术栈选择状态
   const [projectTechStack, setProjectTechStack] = useState<string[]>([]);
   const [techStackSearch, setTechStackSearch] = useState('');
@@ -187,6 +194,11 @@ export default function SessionsPage() {
   };
 
   useEffect(() => {
+    // 获取当前用户信息
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      setUser(JSON.parse(userData));
+    }
     fetchProjects();
     fetchWorkflows();
   }, []); // 只在组件挂载时执行一次
@@ -1217,9 +1229,25 @@ toast.error(data.error || '更新项目失败');
             >
               <div className="p-6">
                 <div className="flex items-start justify-between">
-                  <h3 className="text-lg font-semibold text-gray-900">
-                    {project.name || '未命名项目'}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      {project.name || '未命名项目'}
+                    </h3>
+                    {/* 共享状态标签 */}
+                    {project.isPublic && (
+                      <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                        <Share2 size={12} className="mr-1" />
+                        公开
+                      </span>
+                    )}
+                    {/* 所有者标签（显示别人的项目时） */}
+                    {project.userName && project.userId !== user?.id && (
+                      <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                        <User size={12} className="mr-1" />
+                        {project.userName || project.userUsername}
+                      </span>
+                    )}
+                  </div>
                   <span
                     className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
                   >
@@ -1281,93 +1309,63 @@ toast.error(data.error || '更新项目失败');
                 )}
               </div>
 
-              {/* 当前运行中的评估会话信息 */}
-              {project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued') && (
-                <div className="bg-blue-50 px-6 py-2 border-t border-blue-100">
-                  {(() => {
-                    const runningEval = project.evaluations.find((e: any) => e.status === 'running' || e.status === 'queued');
-                    if (!runningEval) return null;
-                    const runningTime = runningEval.startedAt ? new Date(runningEval.startedAt) : null;
-                    const timeStr = runningTime ? runningTime.toLocaleString('zh-CN', { 
-                      month: '2-digit', 
-                      day: '2-digit', 
-                      hour: '2-digit', 
-                      minute: '2-digit',
-                      second: '2-digit'
-                    }) : '';
-                    return (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="flex items-center space-x-2">
-                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                            <span className="text-sm text-blue-700 font-medium">
-                              {runningEval.status === 'queued' ? '📋 排队中' : '🔄 运行中'}
-                            </span>
-                          </div>
-                          {timeStr && (
-                            <span className="text-xs text-blue-500">
-                              启动: {timeStr}
-                            </span>
-                          )}
-                        </div>
+              {/* 最新评估会话信息 - 运行中时显示运行状态，否则显示最新评估状态 */}
+              {(() => {
+                const allEvals = project.evaluations || [];
+                const runningEval = allEvals.find((e: any) => e.status === 'running' || e.status === 'queued');
+                const latestEval = runningEval || allEvals
+                  .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
+                
+                if (!latestEval) return null;
+                
+                const isRunning = latestEval.status === 'running' || latestEval.status === 'queued';
+                const evalTime = latestEval.startedAt ? new Date(latestEval.startedAt) : null;
+                const timeStr = evalTime ? evalTime.toLocaleString('zh-CN', { 
+                  month: '2-digit', 
+                  day: '2-digit', 
+                  hour: '2-digit', 
+                  minute: '2-digit',
+                  second: '2-digit'
+                }) : '';
+                
+                const statusConfig: Record<string, { bg: string; border: string; text: string; label: string }> = {
+                  running: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', label: '运行中' },
+                  queued: { bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-700', label: '排队中' },
+                  completed: { bg: 'bg-green-50', border: 'border-green-100', text: 'text-green-700', label: '已完成' },
+                  failed: { bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700', label: '异常' },
+                  cancelled: { bg: 'bg-gray-100', border: 'border-gray-200', text: 'text-gray-700', label: '已中止' },
+                };
+                const config = statusConfig[latestEval.status] || statusConfig.completed;
+                
+                return (
+                  <div className={`${config.bg} px-6 py-2 border-t ${config.border}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
-                          <Link
-                            href={`/dashboard/sessions/${project.id}?evaluationId=${runningEval.id}`}
-                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1"
-                          >
-                            <MessageSquare size={12} />
-                            <span>详情</span>
-                          </Link>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {/* 最新完成的评估会话信息 - 仅在没有运行中的评估时显示 */}
-              {!project.evaluations?.some((e: any) => e.status === 'running') && 
-               (project.evaluations?.length ?? 0) > 0 && (
-                <div className="bg-gray-50 px-6 py-2 border-t border-gray-100">
-                  {(() => {
-                    const latestEval = (project.evaluations ?? [])
-                      .filter((e: any) => e.status === 'completed' || e.status === 'failed')
-                      .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
-                    if (!latestEval) return null;
-                    return (
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <span className={`w-2 h-2 rounded-full ${
-                            latestEval.status === 'completed' ? 'bg-green-500' : 'bg-red-500'
-                          }`}></span>
-                          <span className="text-sm text-gray-600">
-                            最新评估: {latestEval.status === 'completed' ? '已完成' : '失败'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(latestEval.completedAt || latestEval.startedAt).toLocaleString('zh-CN', {
-                              year: 'numeric',
-                              month: '2-digit',
-                              day: '2-digit',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                              second: '2-digit',
-                              hour12: false
-                            })}
+                          {isRunning && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                          <span className={`text-sm font-medium ${config.text}`}>
+                            {config.label}
                           </span>
                         </div>
-                        <div className="flex space-x-2">
-                          <Link
-                            href={`/dashboard/sessions/${project.id}?evaluationId=${latestEval.id}`}
-                            className="text-xs text-gray-600 hover:text-gray-800"
-                          >
-                            查看
-                          </Link>
-                        </div>
+                        {timeStr && (
+                          <span className={`text-xs opacity-75 ${config.text}`}>
+                            启动: {timeStr}
+                          </span>
+                        )}
                       </div>
-                    );
-                  })()}
-                </div>
-              )}
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          href={`/dashboard/sessions/${latestEval.id}?evaluationId=${latestEval.id}`}
+                          className={`text-xs ${config.text} hover:opacity-80 flex items-center space-x-1`}
+                        >
+                          <MessageSquare size={12} />
+                          <span>详情</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
                 {/* 第一行：黑盒渗透、环境配置 */}
