@@ -19,9 +19,20 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    const where: any = { userId: payload.userId };
+    // 检查是否是管理员
+    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+
+    const where: any = {};
     if (status) {
       where.status = status;
+    }
+
+    // 普通用户可以看到自己的 + 公开共享的项目，管理员可以看所有项目
+    if (!isAdmin) {
+      where.OR = [
+        { userId: payload.userId },  // 自己创建的
+        { isPublic: true },           // 公开共享的
+      ];
     }
 
     const projects = await prisma.project.findMany({
@@ -36,16 +47,17 @@ export async function GET(request: Request) {
           },
         },
         EvaluationSession: {
-          where: {
-            OR: [
-              { status: 'running' },
-              { status: 'queued' },
-            ],
-          },
           orderBy: {
             startedAt: 'desc',
           },
-          take: 1,
+          take: 3,  // 获取最近3个评估（包括运行中和已完成的）
+        },
+        User: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
         },
         _count: {
           select: {
@@ -65,6 +77,9 @@ export async function GET(request: Request) {
       evaluations: project.EvaluationSession || [],  // 映射字段名给前端
       vulnerabilityCount: project._count?.Vulnerability || 0,
       hasRunningEvaluation: project.EvaluationSession && project.EvaluationSession.length > 0,
+      userName: project.User?.name || null,
+      userUsername: project.User?.username || null,
+      User: undefined,  // 移除嵌套的 User 对象
     }));
 
     return NextResponse.json({ projects: projectsWithVulnCount });
