@@ -15,8 +15,18 @@ import {
   ChevronRight,
   Key,
 } from 'lucide-react';
+import { PermissionGuard } from '@/components/PermissionGuard';
+import { PERMISSIONS } from '@/types/permissions';
 
 export default function UsersPage() {
+  return (
+    <PermissionGuard permission={PERMISSIONS.USER_READ}>
+      <UsersPageContent />
+    </PermissionGuard>
+  );
+}
+
+function UsersPageContent() {
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

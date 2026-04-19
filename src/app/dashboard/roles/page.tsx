@@ -15,8 +15,18 @@ import {
   ChevronRight,
   Search,
 } from 'lucide-react';
+import { PermissionGuard } from '@/components/PermissionGuard';
+import { PERMISSIONS } from '@/types/permissions';
 
 export default function RolesPage() {
+  return (
+    <PermissionGuard permission={PERMISSIONS.ROLE_READ}>
+      <RolesPageContent />
+    </PermissionGuard>
+  );
+}
+
+function RolesPageContent() {
   const [roles, setRoles] = useState<any[]>([]);
   const [permissions, setPermissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
