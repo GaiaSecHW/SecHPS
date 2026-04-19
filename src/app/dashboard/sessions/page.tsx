@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
+import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, AlertTriangle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy, XCircle } from 'lucide-react';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
@@ -1412,52 +1412,100 @@ toast.error(data.error || '更新项目失败');
                 {/* 第二行：启动评估、编辑、文件管理、删除 或 当前会话操作 */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
-                    {/* 检查是否有运行中的评估 */}
-                    {project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued') ? (
-                      <>
-                        {/* 运行中的会话操作 */}
-                        {(() => {
-                          const runningEval = project.evaluations?.find((e: any) => e.status === 'running' || e.status === 'queued');
-                          const runningTime = runningEval?.startedAt ? new Date(runningEval.startedAt) : null;
-                          const timeStr = runningTime ? runningTime.toLocaleString('zh-CN', { 
-                            month: '2-digit', 
-                            day: '2-digit', 
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            second: '2-digit'
-                          }) : '';
-                          return (
-                             <>
-                               {/* 运行状态提示 */}
-                               <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-md">
-                                 <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                                 <span className="text-sm text-blue-700 font-medium">
-                                   {runningEval?.status === 'queued' ? '📋 排队中' : '🔄 运行中'}
-                                 </span>
-                               </div>
-                             </>
-                           );
-                         })()}
-                       </>
-                     ) : (
-                       <>
-                         {/* 无运行中的会话：显示启动评估 */}
-                         <button
-                           onClick={() => {
-                             // 重置启动状态（防止之前失败遗留的状态）
-                             setStartingProject(null);
-                             setSelectedProject(project);
-                             setSelectedWorkflow(null);
-                             setShowWorkflowModal(true);
-                           }}
-                           disabled={startingProject === project.id}
-                           className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                         >
-                           <Play size={16} />
-                           <span>启动评估</span>
-                         </button>
-                       </>
-                    )}
+                    {(() => {
+                      // 获取最近的评估（运行中优先，否则取最新的）
+                      const allEvals = project.evaluations || [];
+                      const runningEval = allEvals.find((e: any) => e.status === 'running' || e.status === 'queued');
+                      const latestEval = runningEval || allEvals.sort((a: any, b: any) => 
+                        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+                      )[0];
+                      
+                      if (latestEval) {
+                        const evalTime = latestEval.startedAt ? new Date(latestEval.startedAt) : null;
+                        const timeStr = evalTime ? evalTime.toLocaleString('zh-CN', { 
+                          month: '2-digit', 
+                          day: '2-digit', 
+                          hour: '2-digit', 
+                          minute: '2-digit',
+                          second: '2-digit'
+                        }) : '';
+                        
+                        // 根据状态显示不同样式
+                        const isRunning = latestEval.status === 'running' || latestEval.status === 'queued';
+                        const statusConfig: Record<string, { bg: string; border: string; text: string; icon: string; label: string }> = {
+                          running: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'animate-spin text-blue-600', label: '运行中' },
+                          queued: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', icon: 'text-yellow-600', label: '排队中' },
+                          completed: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: 'text-green-600', label: '已完成' },
+                          failed: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: 'text-red-600', label: '异常' },
+                          cancelled: { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', icon: 'text-gray-600', label: '已中止' },
+                        };
+                        const config = statusConfig[latestEval.status] || statusConfig.completed;
+                        
+                        return (
+                          <>
+                            {/* 评估状态提示 */}
+                            <button
+                              onClick={() => router.push(`/dashboard/sessions/${latestEval.id}?evaluationId=${latestEval.id}`)}
+                              className={`flex items-center space-x-2 px-3 py-1 ${config.bg} border ${config.border} rounded-md hover:opacity-80 transition-opacity`}
+                            >
+                              {isRunning ? (
+                                <Loader2 className={`h-4 w-4 ${config.icon}`} />
+                              ) : latestEval.status === 'completed' ? (
+                                <CheckCircle className={`h-4 w-4 ${config.icon}`} />
+                              ) : latestEval.status === 'failed' ? (
+                                <AlertTriangle className={`h-4 w-4 ${config.icon}`} />
+                              ) : (
+                                <XCircle className={`h-4 w-4 ${config.icon}`} />
+                              )}
+                              <span className={`text-sm font-medium ${config.text}`}>
+                                {config.label}
+                              </span>
+                              {timeStr && (
+                                <span className={`text-xs ${config.text} opacity-75`}>
+                                  启动: {timeStr}
+                                </span>
+                              )}
+                              <span className={`text-xs ${config.text} opacity-75`}>
+                                详情
+                              </span>
+                            </button>
+                            {/* 非运行中时显示启动评估按钮 */}
+                            {!isRunning && (
+                              <button
+                                onClick={() => {
+                                  setStartingProject(null);
+                                  setSelectedProject(project);
+                                  setSelectedWorkflow(null);
+                                  setShowWorkflowModal(true);
+                                }}
+                                disabled={startingProject === project.id}
+                                className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                <Play size={16} />
+                                <span>启动评估</span>
+                              </button>
+                            )}
+                          </>
+                        );
+                      }
+                      
+                      // 没有任何评估记录，显示启动评估按钮
+                      return (
+                        <button
+                          onClick={() => {
+                            setStartingProject(null);
+                            setSelectedProject(project);
+                            setSelectedWorkflow(null);
+                            setShowWorkflowModal(true);
+                          }}
+                          disabled={startingProject === project.id}
+                          className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Play size={16} />
+                          <span>启动评估</span>
+                        </button>
+                      );
+                    })()}
                     <button
                       onClick={() => openEditModal(project)}
                       className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
