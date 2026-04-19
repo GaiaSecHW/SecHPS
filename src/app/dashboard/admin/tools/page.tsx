@@ -12,6 +12,7 @@ import {
   Play,
   Power,
 } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 interface Tool {
   id: string;
@@ -36,6 +37,14 @@ const categoryLabels: Record<string, string> = {
 };
 
 export default function ToolsPage() {
+  return (
+    <AdminGuard>
+      <ToolsPageContent />
+    </AdminGuard>
+  );
+}
+
+function ToolsPageContent() {
   const router = useRouter();
   const [tools, setTools] = useState<Tool[]>([]);
   const [loading, setLoading] = useState(true);

@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Copy,
 } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 interface Vulnerability {
   id: string;
@@ -86,6 +87,14 @@ const formatDescription = (text: string): string => {
 };
 
 export default function VulnerabilitiesPage() {
+  return (
+    <AdminGuard>
+      <VulnerabilitiesPageContent />
+    </AdminGuard>
+  );
+}
+
+function VulnerabilitiesPageContent() {
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);

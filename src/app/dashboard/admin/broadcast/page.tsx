@@ -11,6 +11,7 @@ import {
   EyeOff,
   Palette,
 } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 interface BroadcastConfig {
   content: string;
@@ -26,6 +27,14 @@ const COLOR_OPTIONS = [
 ];
 
 export default function BroadcastManagePage() {
+  return (
+    <AdminGuard>
+      <BroadcastManageContent />
+    </AdminGuard>
+  );
+}
+
+function BroadcastManageContent() {
   const router = useRouter();
   const [config, setConfig] = useState<BroadcastConfig>({
     content: '欢迎使用 AI4WEB 测试平台',
