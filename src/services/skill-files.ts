@@ -14,14 +14,14 @@ import { prisma } from '@/lib/prisma';
 /**
  * 路径安全验证
  * 检查路径是否包含恶意字符，防止路径遍历攻击
+ * 注意：项目路径可能是绝对路径（如 e:\temp\projects\...），这是允许的
  */
 function isPathSafe(inputPath: string): boolean {
   // 检查路径遍历
   if (inputPath.includes('..')) return false;
   // 检查 null 字符
   if (inputPath.includes('\0')) return false;
-  // 检查绝对路径（Windows 和 Unix）
-  if (/^[A-Za-z]:/.test(inputPath) || inputPath.startsWith('/')) return false;
+  // 不再拒绝绝对路径 - 项目路径通常是绝对路径
   return true;
 }
 
@@ -284,6 +284,11 @@ export async function copySkillsToProject(
   skillOutputTemplate?: string,
   projectTechStack?: string[] | null  // 项目技术栈，null 或空数组表示拷贝所有
 ): Promise<CopyResult> {
+  console.log('[SkillFiles] copySkillsToProject 调用参数:');
+  console.log(`  - projectPath: ${projectPath}`);
+  console.log(`  - userId: ${userId}`);
+  console.log(`  - projectTechStack: ${JSON.stringify(projectTechStack)}`);
+  
   const skillsDataDir = getSkillsDataDir();
   const targetDir = path.join(projectPath, '.claude', 'skills');
   
@@ -319,187 +324,229 @@ export async function copySkillsToProject(
     
     // 检查源目录是否存在
     if (!fs.existsSync(skillsDataDir)) {
-      console.log('[SkillFiles] Skills 数据目录不存在，跳过拷贝');
-      return result;
+      console.log('[SkillFiles] Skills 数据目录不存在，创建目录');
+      ensureDir(skillsDataDir);
     }
     
-    // 读取公共 Skills
-    const publicSkillDirs = fs.readdirSync(skillsDataDir, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory() && !dirent.name.startsWith('user-'))
-      .map(dirent => dirent.name);
+    // ========================================
+    // 新流程：先过滤，再按需生成，最后拷贝
+    // ========================================
     
-    // 读取私有 Skills（如果提供了 userId）
-    let privateSkillDirs: string[] = [];
+    // Step 1: 从数据库查询满足条件的 Skills（先过滤）
+    console.log('[SkillFiles] Step 1: 从数据库查询满足条件的 Skills');
+    
+    // 构建 where 条件
+    const whereCondition: any = {
+      isActive: true,
+      isLatest: true,
+    };
+    
+    // 如果指定了 userId，只查询公共 + 用户私有的 Skills
     if (userId) {
-      const userDir = path.join(skillsDataDir, `user-${userId}`);
-      if (fs.existsSync(userDir)) {
-        privateSkillDirs = fs.readdirSync(userDir, { withFileTypes: true })
-          .filter(dirent => dirent.isDirectory())
-          .map(dirent => `user-${userId}/${dirent.name}`);
+      whereCondition.OR = [
+        { userId: null },  // 公共
+        { userId: userId }, // 用户私有
+      ];
+    } else {
+      whereCondition.userId = null; // 只查询公共
+    }
+    
+    // 查询满足条件的 Skills
+    const filteredDbSkills = await prisma.skill.findMany({
+      where: whereCondition,
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        userId: true,
+        version: true,
+        techStackId: true,
+        content: true,
+        description: true,
+        severity: true,
+        cwe: true,
+        parentId: true,
+        isLatest: true,
+        successRate: true,
+        avgDuration: true,
+        execCount: true,
+        isActive: true,
+        isBuiltin: true,
+        isPublic: true,
+        referenceCount: true,
+        vulnerabilityCount: true,
+        successExecCount: true,
+        vulnerabilityPatternId: true,
+      },
+    });
+    
+    console.log(`[SkillFiles] 数据库查询到 ${filteredDbSkills.length} 个激活的 Skills`);
+    console.log(`[SkillFiles] 查询条件: ${JSON.stringify(whereCondition)}`);
+    if (filteredDbSkills.length > 0) {
+      console.log(`[SkillFiles] 查询到的 Skills: ${filteredDbSkills.map(s => s.name).join(', ')}`);
+    }
+    
+    // Step 2: 应用技术栈过滤 + 治理过滤
+    console.log('[SkillFiles] Step 2: 应用技术栈过滤和治理过滤');
+    
+    const skillsToCopy: typeof filteredDbSkills = [];
+    
+    for (const skill of filteredDbSkills) {
+      // 技术栈匹配过滤
+      if (projectTechStack && projectTechStack.length > 0 && skill.techStackId) {
+        if (!projectTechStack.includes(skill.techStackId)) {
+          console.log(`[SkillFiles] 技术栈不匹配，跳过: ${skill.name} (Skill技术栈ID: ${skill.techStackId})`);
+          continue;
+        }
+      }
+      
+      // 检查是否已合并
+      const completedMergeRecords = await prisma.skillMergeRecord.findMany({
+        where: {
+          sourceSkillId: skill.id,
+          status: 'completed',
+        },
+      });
+      
+      if (completedMergeRecords.length > 0) {
+        const mergeRecord = completedMergeRecords[0];
+        const targetSkill = await prisma.skill.findUnique({
+          where: { id: mergeRecord.targetSkillId },
+          select: { name: true, displayName: true },
+        });
+        const targetSkillName = targetSkill?.displayName || targetSkill?.name || '未知';
+        
+        if (!result.filteredSkills) result.filteredSkills = [];
+        result.filteredSkills.push({
+          skillId: skill.id,
+          skillName: skill.name,
+          reason: 'merged',
+          mergedInto: targetSkillName,
+        });
+        console.log(`[SkillFiles] 治理过滤: ${skill.name} 已合并到 ${targetSkillName}`);
+        continue;
+      }
+      
+      // 检查是否有待处理的合并请求
+      const pendingMergeRecords = await prisma.skillMergeRecord.findMany({
+        where: {
+          OR: [
+            { sourceSkillId: skill.id, status: 'pending' },
+            { targetSkillId: skill.id, status: 'pending' },
+          ],
+        },
+      });
+      
+      if (pendingMergeRecords.length > 0) {
+        if (!result.filteredSkills) result.filteredSkills = [];
+        result.filteredSkills.push({
+          skillId: skill.id,
+          skillName: skill.name,
+          reason: 'pending_merge',
+        });
+        console.log(`[SkillFiles] 治理过滤: ${skill.name} 正在合并流程中`);
+        continue;
+      }
+      
+      // 通过所有过滤，加入待拷贝列表
+      skillsToCopy.push(skill);
+    }
+    
+    console.log(`[SkillFiles] 过滤后剩余 ${skillsToCopy.length} 个 Skills 待拷贝`);
+    
+    // Step 3: 检查磁盘文件，不存在则生成
+    console.log('[SkillFiles] Step 3: 检查磁盘文件，按需生成');
+    
+    for (const skill of skillsToCopy) {
+      const skillDir = getSkillDir(skill.name, skill.userId);
+      const metadataPath = path.join(skillDir, 'metadata.json');
+      const skillFile = path.join(skillDir, `SKILL-v${skill.version}.md`);
+      
+      console.log(`[SkillFiles] 检查 Skill ${skill.name}:`);
+      console.log(`  - skillDir: ${skillDir}`);
+      console.log(`  - 目录存在: ${fs.existsSync(skillDir)}`);
+      console.log(`  - metadata.json 存在: ${fs.existsSync(metadataPath)}`);
+      console.log(`  - SKILL-v${skill.version}.md 存在: ${fs.existsSync(skillFile)}`);
+      
+      // 检查磁盘上是否有这个 Skill 的文件
+      const needsGeneration = !fs.existsSync(skillDir) || 
+                              !fs.existsSync(metadataPath) || 
+                              !fs.existsSync(skillFile);
+      
+      if (needsGeneration) {
+        console.log(`[SkillFiles] 磁盘上缺少 Skill 文件，从数据库生成: ${skill.name}`);
+        // 转换为完整的 Skill 对象（包含所有必需字段）
+        const fullSkill: Skill = {
+          ...skill,
+          content: skill.content || '',
+          description: skill.description || '',
+          displayName: skill.displayName || skill.name,
+          severity: skill.severity || 'medium',
+          cwe: skill.cwe || null,
+          parentId: skill.parentId || null,
+          successRate: skill.successRate || null,
+          avgDuration: skill.avgDuration || null,
+          execCount: skill.execCount || 0,
+          isPublic: skill.isPublic ?? false,
+          referenceCount: skill.referenceCount ?? 0,
+          vulnerabilityCount: skill.vulnerabilityCount ?? 0,
+          successExecCount: skill.successExecCount ?? 0,
+          vulnerabilityPatternId: skill.vulnerabilityPatternId ?? null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+        await saveSkillToDisk(fullSkill, skillOutputTemplate);
       }
     }
     
-    const allSkillDirs = [...publicSkillDirs, ...privateSkillDirs];
+    // Step 4: 从磁盘拷贝到项目目录
+    console.log('[SkillFiles] Step 4: 拷贝到项目目录');
     
-    for (const skillDirName of allSkillDirs) {
-      const skillDir = path.join(skillsDataDir, skillDirName);
-      const metadataPath = path.join(skillDir, 'metadata.json');
-      
+    for (const skill of skillsToCopy) {
       try {
-        // 检查 metadata.json
-        if (!fs.existsSync(metadataPath)) {
+        const skillDir = getSkillDir(skill.name, skill.userId);
+        const skillFile = path.join(skillDir, `SKILL-v${skill.version}.md`);
+        const latestFile = path.join(skillDir, 'SKILL.md');
+        
+        // 确定源文件
+        let sourceFile: string | null = null;
+        if (fs.existsSync(skillFile)) {
+          sourceFile = skillFile;
+        } else if (fs.existsSync(latestFile)) {
+          sourceFile = latestFile;
+        }
+        
+        if (!sourceFile) {
           result.failed++;
-          result.errors.push(`Skill ${skillDirName} 缺少 metadata.json`);
+          result.errors.push(`Skill ${skill.name} 缺少 SKILL.md 或 SKILL-v${skill.version}.md`);
           continue;
         }
         
-        // 读取元数据
-        const metadataContent = fs.readFileSync(metadataPath, 'utf-8');
-        const metadata: SkillMetadata = JSON.parse(metadataContent);
+        // 读取内容
+        let content = fs.readFileSync(sourceFile, 'utf-8');
         
-        // 只拷贝激活的 Skills
-        if (!metadata.isActive) {
-          continue;
+        // 追加输出模板（如果提供）
+        if (skillOutputTemplate && skillOutputTemplate.trim()) {
+          content = content + '\n\n' + skillOutputTemplate;
         }
         
-        // 治理过滤：检查 Skill 是否被废弃或合并
-        // 规则：
-        // 1. isLatest = false → Skill 已废弃，跳过
-        // 2. 有 completed SkillMergeRecord → Skill 已合并到其他 Skill，跳过
-        // 3. 有 pending SkillMergeRecord → Skill 正在合并流程中，跳过
-        try {
-          // 查询数据库中的 Skill 记录（包含 techStackId 用于技术栈匹配）
-          const dbSkill = await prisma.skill.findUnique({
-            where: { id: metadata.id },
-            select: { id: true, name: true, displayName: true, isLatest: true, techStackId: true },
-          });
-          
-          if (dbSkill) {
-            // 技术栈匹配过滤（使用数据库中的 techStackId，精确 ID 匹配）
-            // 规则：
-            // 1. 项目无技术栈（null 或空数组） → 拷贝所有 Skill
-            // 2. Skill 无技术栈（techStackId = null） → 适合所有项目，拷贝
-            // 3. 有技术栈 → 需要精确 ID 匹配才拷贝
-            if (projectTechStack && projectTechStack.length > 0 && dbSkill.techStackId) {
-              // Skill 有技术栈限制，检查是否匹配
-              if (!projectTechStack.includes(dbSkill.techStackId)) {
-                console.log(`[SkillFiles] 技术栈不匹配，跳过: ${metadata.name} (Skill技术栈ID: ${dbSkill.techStackId}, 项目技术栈IDs: ${projectTechStack.join(', ')})`);
-                continue;
-              }
-            }
-            
-            // 检查是否废弃
-            if (!dbSkill.isLatest) {
-              if (!result.filteredSkills) result.filteredSkills = [];
-              result.filteredSkills.push({
-                skillId: metadata.id,
-                skillName: metadata.name,
-                reason: 'deprecated',
-              });
-              console.log(`[SkillFiles] 治理过滤: ${metadata.name} 已废弃 (isLatest=false)`);
-              continue;
-            }
-            
-            // 检查是否已合并
-            const completedMergeRecords = await prisma.skillMergeRecord.findMany({
-              where: {
-                sourceSkillId: metadata.id,
-                status: 'completed',
-              },
-            });
-            
-            if (completedMergeRecords.length > 0) {
-              const mergeRecord = completedMergeRecords[0];
-              // 手动查询目标 Skill 名称
-              const targetSkill = await prisma.skill.findUnique({
-                where: { id: mergeRecord.targetSkillId },
-                select: { name: true, displayName: true },
-              });
-              const targetSkillName = targetSkill?.displayName || targetSkill?.name || '未知';
-              
-              if (!result.filteredSkills) result.filteredSkills = [];
-              result.filteredSkills.push({
-                skillId: metadata.id,
-                skillName: metadata.name,
-                reason: 'merged',
-                mergedInto: targetSkillName,
-              });
-              console.log(`[SkillFiles] 治理过滤: ${metadata.name} 已合并到 ${targetSkillName}`);
-              continue;
-            }
-            
-            // 检查是否有待处理的合并请求
-            const pendingMergeRecords = await prisma.skillMergeRecord.findMany({
-              where: {
-                OR: [
-                  { sourceSkillId: metadata.id, status: 'pending' },
-                  { targetSkillId: metadata.id, status: 'pending' },
-                ],
-              },
-            });
-            
-            if (pendingMergeRecords.length > 0) {
-              if (!result.filteredSkills) result.filteredSkills = [];
-              result.filteredSkills.push({
-                skillId: metadata.id,
-                skillName: metadata.name,
-                reason: 'pending_merge',
-              });
-              console.log(`[SkillFiles] 治理过滤: ${metadata.name} 正在合并流程中 (${pendingMergeRecords.length} 个待处理请求)`);
-              continue;
-            }
-          }
-        } catch (governanceError) {
-          // 治理过滤失败不阻断拷贝流程，仅记录日志
-          console.warn(`[SkillFiles] 治理过滤查询失败: ${metadata.name}`, governanceError);
-        }
+        // 为每个 Skill 创建独立子目录
+        const skillTargetDir = path.join(targetDir, skill.name);
+        ensureDir(skillTargetDir);
         
-        // 拷贝最新版本的 SKILL.md
-        const latestSkillFile = path.join(skillDir, `SKILL-v${metadata.latestVersion}.md`);
-        if (!fs.existsSync(latestSkillFile)) {
-          // 尝试使用版本文件
-          const versionedFile = path.join(skillDir, `SKILL-v${metadata.latestVersion}.md`);
-          if (!fs.existsSync(versionedFile)) {
-            result.failed++;
-            result.errors.push(`Skill ${skillDirName} 缺少 SKILL.md 或 SKILL-v${metadata.latestVersion}.md`);
-            continue;
-          }
-          
-          // 读取并合并标准输出模板
-          let content = fs.readFileSync(versionedFile, 'utf-8');
-          if (skillOutputTemplate && skillOutputTemplate.trim()) {
-            content = content + '\n\n' + skillOutputTemplate;
-          }
-          
-          // 写入目标文件
-          const destFile = path.join(targetDir, 'SKILL.md');
-          fs.writeFileSync(destFile, content, 'utf-8');
-          
-          result.success++;
-          result.copiedSkills.push(metadata.name);
-          result.skillIds.push(metadata.id);  // 记录 Skill ID
-          console.log(`[SkillFiles] 拷贝成功: ${metadata.name} v${metadata.latestVersion}（包含标准输出模板）`);
-        } else {
-          // 使用最新版本文件
-          let content = fs.readFileSync(latestSkillFile, 'utf-8');
-          if (skillOutputTemplate && skillOutputTemplate.trim()) {
-            content = content + '\n\n' + skillOutputTemplate;
-          }
-          
-          // 写入目标文件
-          const destFile = path.join(targetDir, 'SKILL.md');
-          fs.writeFileSync(destFile, content, 'utf-8');
-          
-          result.success++;
-          result.copiedSkills.push(metadata.name);
-          result.skillIds.push(metadata.id);  // 记录 Skill ID
-          console.log(`[SkillFiles] 拷贝成功: ${metadata.name}（包含标准输出模板）`);
-        }
+        // 写入目标文件
+        const destFile = path.join(skillTargetDir, 'SKILL.md');
+        fs.writeFileSync(destFile, content, 'utf-8');
+        
+        result.success++;
+        result.copiedSkills.push(skill.name);
+        result.skillIds.push(skill.id);
+        console.log(`[SkillFiles] 拷贝成功: ${skill.name} v${skill.version}`);
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
-        result.errors.push(`Skill ${skillDirName}: ${errorMsg}`);
-        console.error(`[SkillFiles] 拷贝失败: ${skillDirName}`, error);
+        result.errors.push(`Skill ${skill.name}: ${errorMsg}`);
+        console.error(`[SkillFiles] 拷贝失败: ${skill.name}`, error);
       }
     }
     

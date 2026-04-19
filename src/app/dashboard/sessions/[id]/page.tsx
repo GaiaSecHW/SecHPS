@@ -24,6 +24,7 @@ import {
   MessageSquare,
   ChevronUp,
   AlertTriangle,
+  FileSearch,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -123,6 +124,7 @@ function SessionDetailContent({
   const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
+  const [isRalphLoopExpanded, setIsRalphLoopExpanded] = useState(false);
   const [eventSource, setEventSource] = useState<EventSource | null>(null);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
@@ -807,6 +809,16 @@ function SessionDetailContent({
 
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
+              {/* 查看报告按钮 - 评估完成后显示 */}
+              {evaluation.status === 'completed' && (
+                <button
+                  onClick={() => router.push(`/dashboard/evaluations/${evaluationId}/report`)}
+                  className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200"
+                >
+                  <FileSearch size={16} />
+                  <span>查看报告</span>
+                </button>
+              )}
               {/* MCP 服务器管理入口 */}
               {evaluation.status === 'running' && (
                 <>
@@ -1079,69 +1091,77 @@ function SessionDetailContent({
               )}
             </div>
 
-            {/* Iterations with Model Info */}
+            {/* Ralph Loop 迭代记录 */}
             {evaluation?.EvaluationIteration && evaluation.EvaluationIteration.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <Code size={18} className="mr-2 text-green-600" />
-                  迭代记录 ({evaluation.EvaluationIteration.length})
-                </h3>
-                <div className="space-y-2">
-                  {evaluation.EvaluationIteration.map((iteration: any) => (
-                    <div key={iteration.id} className="p-3 bg-white rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-gray-900">
-                              迭代 #{iteration.iterationNumber}
-                            </span>
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              iteration.status === 'completed' ? 'bg-green-100 text-green-700' :
-                              iteration.status === 'running' ? 'bg-blue-100 text-blue-700' :
-                              iteration.status === 'failed' ? 'bg-red-100 text-red-700' :
-                              'bg-gray-100 text-gray-600'
-                            }`}>
-                              {iteration.status === 'completed' ? '已完成' :
-                               iteration.status === 'running' ? '运行中' :
-                               iteration.status === 'failed' ? '失败' : iteration.status}
-                            </span>
+                <button
+                  onClick={() => setIsRalphLoopExpanded(!isRalphLoopExpanded)}
+                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <Code size={18} className="mr-2 text-green-600" />
+                    Ralph Loop 记录 ({evaluation.EvaluationIteration.length})
+                  </div>
+                  {isRalphLoopExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </button>
+                {isRalphLoopExpanded && (
+                  <div className="space-y-2">
+                    {evaluation.EvaluationIteration.map((iteration: any) => (
+                      <div key={iteration.id} className="p-3 bg-white rounded-lg border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-gray-900">
+                                迭代 #{iteration.iterationNumber}
+                              </span>
+                              <span className={`text-xs px-2 py-0.5 rounded ${
+                                iteration.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                iteration.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                                iteration.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                'bg-gray-100 text-gray-600'
+                              }`}>
+                                {iteration.status === 'completed' ? '已完成' :
+                                 iteration.status === 'running' ? '运行中' :
+                                 iteration.status === 'failed' ? '失败' : iteration.status}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
+                              {iteration.modelName && (
+                                <span className="flex items-center gap-1">
+                                  <span className="font-medium text-blue-600">模型:</span>
+                                  {iteration.modelName}
+                                </span>
+                              )}
+                              {iteration.roleId && (
+                                <span className="flex items-center gap-1">
+                                  <span className="font-medium text-purple-600">角色:</span>
+                                  {iteration.roleId}
+                                </span>
+                              )}
+                              {iteration.duration && (
+                                <span className="flex items-center gap-1">
+                                  <Clock size={10} />
+                                  {Math.round(iteration.duration / 1000)}s
+                                </span>
+                              )}
+                              {iteration.inputTokens !== null && iteration.inputTokens !== undefined && (
+                                <span>输入: {formatTokenNumber(iteration.inputTokens)}</span>
+                              )}
+                              {iteration.outputTokens !== null && iteration.outputTokens !== undefined && (
+                                <span>输出: {formatTokenNumber(iteration.outputTokens)}</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
-                            {iteration.modelName && (
-                              <span className="flex items-center gap-1">
-                                <span className="font-medium text-blue-600">模型:</span>
-                                {iteration.modelName}
-                              </span>
-                            )}
-                            {iteration.roleId && (
-                              <span className="flex items-center gap-1">
-                                <span className="font-medium text-purple-600">角色:</span>
-                                {iteration.roleId}
-                              </span>
-                            )}
-                            {iteration.duration && (
-                              <span className="flex items-center gap-1">
-                                <Clock size={10} />
-                                {Math.round(iteration.duration / 1000)}s
-                              </span>
-                            )}
-                            {iteration.inputTokens !== null && iteration.inputTokens !== undefined && (
-                              <span>输入: {formatTokenNumber(iteration.inputTokens)}</span>
-                            )}
-                            {iteration.outputTokens !== null && iteration.outputTokens !== undefined && (
-                              <span>输出: {formatTokenNumber(iteration.outputTokens)}</span>
-                            )}
-                          </div>
+                          {iteration.startedAt && (
+                            <span className="text-xs text-gray-400">
+                              {new Date(iteration.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
                         </div>
-                        {iteration.startedAt && (
-                          <span className="text-xs text-gray-400">
-                            {new Date(iteration.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

@@ -335,6 +335,7 @@ model EvaluationSession {
   totalTokens         Int                   @default(0)
   estimatedCost       Float?
   AgentTeamExecution  AgentTeamExecution[]
+  AnalysisReport      AnalysisReport?
   EvaluationIteration EvaluationIteration[]
   EvaluationResult    EvaluationResult?
   Project             Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -342,6 +343,7 @@ model EvaluationSession {
   ModelConfig         ModelConfig?          @relation(fields: [modelConfigId], references: [id])
   NodeExecution       NodeExecution[]
   SessionMessage      SessionMessage[]
+  SkillExecution      SkillExecution[]      // Skill 执行记录
   TokenUsage          TokenUsage[]
   Vulnerability       Vulnerability[]
   SkillVulnerabilityMapping SkillVulnerabilityMapping[]
@@ -354,6 +356,55 @@ model EvaluationSession {
   @@index([status])
   @@index([provider])
   @@index([lastActivity])
+}
+
+model AnalysisReport {
+  id                String   @id
+  evaluationId      String   @unique
+  projectId         String
+  
+  // 项目概况
+  projectName       String
+  description       String   // SQLite 默认使用 TEXT 类型存储长字符串
+  techStack         String?  // JSON array
+  
+  // 架构分析
+  projectType       String?
+  frontend          String?
+  backend           String?
+  database          String?
+  directoryStructure String?  // JSON object
+  architectureSummary String?
+  
+  // 入口点分析
+  apiEndpoints      String?  // JSON array
+  pageEntries       String?  // JSON array
+  userInputPoints   String?  // JSON array
+  entryPointsSummary String?
+  
+  // 认证鉴权分析
+  authType          String?
+  tokenStorage      String?
+  tokenExpiry       String?
+  refreshMechanism  String?
+  authzModel        String?
+  roles             String?  // JSON array
+  sessionManagement String?  // JSON object
+  securityConfig    String?  // JSON object
+  authSummary       String?
+  
+  // 元数据
+  analyzedAt        DateTime?
+  rawContent        String?  // 大模型原始输出
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  Project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@index([projectId])
+  @@index([createdAt])
 }
 
 model ExpectedOutputTemplate {
@@ -579,6 +630,7 @@ model Project {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime
   techStack         String?
+  AnalysisReport    AnalysisReport[]
   CodeKnowledge     CodeKnowledge[]
   DataFlow          DataFlow[]
   EvaluationSession EvaluationSession[]
@@ -790,30 +842,33 @@ model SkillEvolution {
 }
 
 model SkillExecution {
-  id                 String          @id
+  id                 String            @id
   skillId            String
   projectId          String
+  evaluationId       String?           // 关联评估会话
   scanTaskId         String?
   input              String
   output             String?
-  status             String          @default("pending")
+  status             String            @default("pending")
   startedAt          DateTime?
   completedAt        DateTime?
   duration           Int?
   error              String?
-  findingsCount      Int             @default(0)
-  confirmedCount     Int             @default(0)
-  falsePositiveCount Int             @default(0)
+  findingsCount      Int               @default(0)
+  confirmedCount     Int               @default(0)
+  falsePositiveCount Int               @default(0)
   inputTokens        Int?
   outputTokens       Int?
-  createdAt          DateTime        @default(now())
-  ScanTask           ScanTask?       @relation(fields: [scanTaskId], references: [id])
-  Project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  Skill              Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  createdAt          DateTime          @default(now())
+  ScanTask           ScanTask?         @relation(fields: [scanTaskId], references: [id])
+  Project            Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  Skill              Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
   Vulnerability      Vulnerability[]
 
   @@index([skillId, status])
   @@index([projectId, status])
+  @@index([evaluationId])
   @@index([createdAt])
   @@index([status])
   @@index([projectId])

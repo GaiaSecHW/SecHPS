@@ -51,6 +51,7 @@ interface Skill {
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
+  vulnerabilityCount: number;
   createdAt: string;
   updatedAt: string;
   userId: string | null;
@@ -831,6 +832,26 @@ toast.error(err instanceof Error ? err.message : '删除失败');
                         )}
                       </div>
                       <p className="text-sm text-gray-500">{skill.name}</p>
+                      {/* 统计信息 */}
+                      <div className="flex items-center gap-4 mt-1 text-xs text-gray-500">
+                        <span className="flex items-center gap-1">
+                          <Play size={12} />
+                          执行: {skill.execCount}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <AlertTriangle size={12} />
+                          发现: {skill.vulnerabilityCount || 0}
+                        </span>
+                        {skill.successRate !== null && (
+                          <span className={`flex items-center gap-1 ${
+                            skill.successRate >= 0.8 ? 'text-green-600' :
+                            skill.successRate >= 0.5 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            <CheckCircle size={12} />
+                            成功率: {(skill.successRate * 100).toFixed(0)}%
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center space-x-4">

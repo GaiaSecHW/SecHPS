@@ -14,6 +14,9 @@ import { copySkillsToProject, copySkillsByIds } from '@/services/skill-files';
 import { matchSkillsByCategoryValues } from '@/services/skill-matcher';
 import { registerAgent } from '@/lib/agent-registry';
 import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
+import { createWatchdog, stopWatchdog, recordWatchdogActivity } from '@/lib/stream-watchdog';
+import { createEmptyAnalysisReport } from '@/services/analysis-report';
+import { createSkillExecutionsForEvaluation } from '@/services/skill-execution-tracker';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -261,9 +264,39 @@ export async function POST(
 
     // workflowId 是可选的，如果未提供则不使用工作流
 
-    // 构建初始消息（使用任务描述）
-    const taskDescription = globalConfig?.taskDescription || null;
-    const initialMessage = taskDescription || undefined;
+    // ========================================
+    // 必填检查
+    // ========================================
+
+    // 1. 检查系统提示词（必填）
+    if (!globalConfig?.customSystemPrompt) {
+      return NextResponse.json({ 
+        error: '系统配置缺少系统提示词（customSystemPrompt），无法启动评估' 
+      }, { status: 400 });
+    }
+
+    // 2. 检查 workflowId（必填）
+    if (!workflowId) {
+      return NextResponse.json(
+        { error: '必须指定工作流编排（workflowId），无法启动评估' },
+        { status: 400 }
+      );
+    }
+
+    // 3. 解析 workflowConfig（用于开始/结束节点描述）
+    let workflowConfigParsed: {
+      startNodeLabel?: string;
+      startNodeDescription?: string;
+      endNodeLabel?: string;
+      endNodeDescription?: string;
+    } | null = null;
+    if (globalConfig.workflowConfig) {
+      try {
+        workflowConfigParsed = JSON.parse(globalConfig.workflowConfig);
+      } catch {
+        console.warn('[启动评估] workflowConfig JSON 解析失败');
+      }
+    }
 
     // 构建 SDK 高级配置
     const sdkOptions: {
@@ -274,6 +307,9 @@ export async function POST(
       permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
       allowDangerouslySkipPermissions?: boolean;
     } = {};
+    
+    // 设置系统提示词
+    sdkOptions.systemPrompt = globalConfig.customSystemPrompt;
     
     // 设置权限模式为 bypassPermissions，给予 Claude 所有权限
     // 必须同时设置 allowDangerouslySkipPermissions: true
@@ -360,28 +396,47 @@ export async function POST(
           // 不存在，跳过
         }
       }
+      
+      // 创建评估所需的工作目录
+      const workDirs = [
+        join(project.projectPath, 'vulnerabilities'),
+        join(project.projectPath, 'workspace'),
+        join(project.projectPath, 'workspace', 'decompile_src'),
+        join(project.projectPath, 'workspace', 'extract_zip'),
+      ];
+      for (const dir of workDirs) {
+        try {
+          await mkdir(dir, { recursive: true });
+          console.log(`[启动评估] 已创建目录: ${dir}`);
+        } catch (error) {
+          console.error(`[启动评估] 创建目录失败: ${dir}`, error);
+        }
+      }
     }
 
     // 同步 Skills 到项目目录（按 WorkflowNode 加载）
     // 同时记录使用的 Skills ID 列表
     let skillsUsedJson: string | null = null;
+    let copyResult: { success: number; failed: number; errors: string[]; copiedSkills: string[]; skillIds: string[]; invalidSkills?: any[] } | null = null;
+    let uniqueSkillIds: string[] = []; // 模式 2/3 必须执行的 Skills
+    
+    // 解析项目技术栈（移到更高作用域）
+    let projectTechStack: string[] | null = null;
+    if (project.techStack) {
+      try {
+        projectTechStack = JSON.parse(project.techStack);
+        console.log('[启动评估] 项目技术栈:', projectTechStack?.join(', ') || '无');
+      } catch {
+        console.warn('[启动评估] 项目技术栈解析失败，将拷贝所有 Skills');
+        projectTechStack = null;
+      }
+    } else {
+      console.log('[启动评估] 项目未设置技术栈，将拷贝所有启用的 Skills');
+    }
+    
     if (project.projectPath) {
       try {
         console.log('[启动评估] 开始同步 Skills 到项目目录');
-        
-        // 解析项目技术栈
-        let projectTechStack: string[] | null = null;
-        if (project.techStack) {
-          try {
-            projectTechStack = JSON.parse(project.techStack);
-            console.log('[启动评估] 项目技术栈:', projectTechStack?.join(', ') || '无');
-          } catch {
-            console.warn('[启动评估] 项目技术栈解析失败，将拷贝所有 Skills');
-            projectTechStack = null;
-          }
-        } else {
-          console.log('[启动评估] 项目未设置技术栈，将拷贝所有启用的 Skills');
-        }
         
         // workflowId 必须提供，否则拒绝执行
         if (!workflowId) {
@@ -460,27 +515,28 @@ export async function POST(
             continue;
           }
 
-          // 模式 1：描述匹配 - 由大模型自动加载，需拷贝所有匹配技术栈的 Skills
-          console.log(`[启动评估] Node ${node.id}: 模式 1 - 描述匹配，将拷贝所有技术栈匹配的 Skills`);
+          // 模式 1：自定义描述 - 由大模型根据描述自主加载 Skills
+          // 不预设 Skills，让 Agent 通过 Skill 工具自主选择
+          console.log(`[启动评估] Node ${node.id}: 模式 1 - 自定义描述，由 Agent 自主加载 Skills`);
           hasDescriptionModeNode = true;
         }
 
         // 去重
-        const uniqueSkillIds = [...new Set(allSkillIds)];
-        console.log(`[启动评估] 合并后共 ${uniqueSkillIds.length} 个唯一 Skill IDs`);
+        uniqueSkillIds = [...new Set(allSkillIds)];
+        console.log(`[启动评估] 合并后共 ${uniqueSkillIds.length} 个唯一 Skill IDs（模式2/3）`);
 
-        let copyResult: { success: number; failed: number; errors: string[]; copiedSkills: string[]; skillIds: string[]; invalidSkills?: any[] };
-
+        // 模式 1：拷贝所有技术栈匹配的 Skills，供 Agent 自主选择
         if (hasDescriptionModeNode) {
-          // 有描述匹配节点：拷贝所有技术栈匹配的 Skills（大模型按描述自动选用）
-          console.log('[启动评估] 存在描述匹配节点，拷贝所有技术栈匹配的 Skills');
+          console.log('[启动评估] 存在自定义描述节点，拷贝所有技术栈匹配的 Skills 供 Agent 自主选择');
           copyResult = await copySkillsToProject(
             project.projectPath,
             payload.userId,
             undefined,
             projectTechStack
           );
-          // 同时追加手工/漏洞分类模式指定的 Skills
+          console.log(`[启动评估] 已拷贝 ${copyResult.success} 个 Skills 供模式 1 节点自主选择`);
+          
+          // 同时追加模式 2/3 指定的 Skills（必须执行）
           if (uniqueSkillIds.length > 0) {
             const extra = await copySkillsByIds(project.projectPath, uniqueSkillIds, undefined, projectTechStack);
             
@@ -547,17 +603,39 @@ export async function POST(
         console.log(`  - 失败: ${copyResult.failed}`);
         console.log(`  - 拷贝的 Skills: ${copyResult.copiedSkills.join(', ')}`);
         
-        // 记录使用的 Skills ID 列表
+        // 区分必须执行的 Skills（模式2/3）和可选择的 Skills（模式1）
+        const mandatorySkillIds = uniqueSkillIds; // 模式 2/3 指定的 Skills
+        const availableSkillIds = copyResult.skillIds.filter(id => !mandatorySkillIds.includes(id)); // 模式 1 可选择的 Skills
+        
+        console.log(`[启动评估] 必须执行的 Skills（模式2/3）: ${mandatorySkillIds.length} 个`);
+        console.log(`[启动评估] 可选择的 Skills（模式1）: ${availableSkillIds.length} 个`);
+        
+        // 记录使用的 Skills ID 列表（记录所有拷贝的 Skills）
         if (copyResult.skillIds.length > 0) {
-          // 查询 Skill 名称，构建 skillsUsed JSON
           const skills = await prisma.skill.findMany({
             where: { id: { in: copyResult.skillIds } },
-            select: { id: true, name: true },
+            select: { id: true, name: true, displayName: true, description: true, severity: true },
           });
           const skillsUsed = skills.map(s => ({ skillId: s.id, skillName: s.name }));
           skillsUsedJson = JSON.stringify(skillsUsed);
           console.log(`[启动评估] 使用的 Skills ID: ${copyResult.skillIds.length} 个`);
+          
+          // 构建 Skills 使用说明，区分必须执行和可选择
+          const mandatorySkills = skills.filter(s => mandatorySkillIds.includes(s.id));
+          const availableSkills = skills.filter(s => availableSkillIds.includes(s.id));
+          
+          const skillsPrompt = buildSkillsUsagePromptV2(mandatorySkills, availableSkills);
+          if (skillsPrompt) {
+            const originalPrompt = sdkOptions.systemPrompt || '';
+            sdkOptions.systemPrompt = originalPrompt + '\n\n' + skillsPrompt;
+            console.log(`[启动评估] 已将 Skills 使用说明追加到系统提示词`);
+          }
         }
+        
+        // 追加评估报告分析要求
+        const analysisPrompt = buildAnalysisReportPrompt();
+        sdkOptions.systemPrompt = (sdkOptions.systemPrompt || '') + analysisPrompt;
+        console.log(`[启动评估] 已将评估报告分析要求追加到系统提示词`);
         
         if (copyResult.failed > 0) {
           copyResult.errors.forEach(err => {
@@ -572,6 +650,164 @@ export async function POST(
         }, { status: 500 });
       }
     }
+    
+    // ========================================
+    // 生成用户提示词（从 WorkflowNode 动态生成）
+    // ========================================
+    
+    // 查询 Workflow 的所有节点（包含 type 用于排序）
+    const workflowNodes = await prisma.workflowNode.findMany({
+      where: { workflowId },
+      select: {
+        id: true,
+        type: true,
+        data: true,
+        vulnerabilityCategories: true,
+        skills: true,
+      },
+    });
+    
+    if (workflowNodes.length === 0) {
+      return NextResponse.json({
+        error: '工作流配置缺少节点，无法启动评估',
+      }, { status: 400 });
+    }
+    
+    // 按拓扑顺序排序节点
+    const nodeOrder = new Map<string, number>();
+    let order = 0;
+    const startNode = workflowNodes.find(n => n.type === 'start');
+    if (startNode) {
+      nodeOrder.set(startNode.id, order++);
+      const queue = [startNode.id];
+      const visited = new Set([startNode.id]);
+      // 查询边用于拓扑排序
+      const edges = await prisma.workflowEdge.findMany({
+        where: { workflowId },
+        select: { sourceId: true, targetId: true },
+      });
+      while (queue.length > 0) {
+        const currentId = queue.shift()!;
+        const currentOrder = nodeOrder.get(currentId)!;
+        edges.filter(e => e.sourceId === currentId).forEach(edge => {
+          if (!visited.has(edge.targetId)) {
+            visited.add(edge.targetId);
+            nodeOrder.set(edge.targetId, currentOrder + 1);
+            queue.push(edge.targetId);
+          }
+        });
+      }
+    }
+    workflowNodes.forEach(node => { if (!nodeOrder.has(node.id)) nodeOrder.set(node.id, order++); });
+    const sortedNodes = [...workflowNodes].sort((a, b) => (nodeOrder.get(a.id) ?? 999) - (nodeOrder.get(b.id) ?? 999));
+    
+    // 计算总任务数
+    const totalTasks = sortedNodes.length;
+    
+    // 获取所有 Skills 信息（用于生成用户提示词中的 Skills 列表）
+    const allSkillsMap = new Map<string, { id: string; name: string; displayName: string | null; description: string | null }>();
+    if (uniqueSkillIds.length > 0) {
+      const skillsData = await prisma.skill.findMany({
+        where: { id: { in: uniqueSkillIds } },
+        select: { id: true, name: true, displayName: true, description: true },
+      });
+      skillsData.forEach(s => allSkillsMap.set(s.id, s));
+    }
+    
+    // 生成用户提示词
+    let userPrompt = '';
+    let taskIndex = 0;
+    
+    for (const node of sortedNodes) {
+      // 解析 node.data
+      let nodeData: { label?: string; description?: string; skillLoadingMode?: string; skills?: string; vulnerabilityCategories?: string[] } = {};
+      if (node.data) {
+        try {
+          nodeData = JSON.parse(node.data);
+        } catch {
+          console.warn(`[启动评估] Node ${node.id} data JSON 解析失败`);
+        }
+      }
+      
+      // 开始节点 - 使用系统配置的描述
+      if (node.type === 'start') {
+        userPrompt += `## 任务 1：${workflowConfigParsed?.startNodeLabel || '开始'}\n\n`;
+        if (workflowConfigParsed?.startNodeDescription) {
+          userPrompt += `${workflowConfigParsed.startNodeDescription}\n\n`;
+        }
+        userPrompt += '---\n\n';
+        continue;
+      }
+      
+      // 结束节点 - 使用系统配置的描述
+      if (node.type === 'end') {
+        userPrompt += `## 任务 ${totalTasks}：${workflowConfigParsed?.endNodeLabel || '结束'}\n\n`;
+        if (workflowConfigParsed?.endNodeDescription) {
+          userPrompt += `${workflowConfigParsed.endNodeDescription}\n\n`;
+        }
+        userPrompt += '---\n\n';
+        continue;
+      }
+      
+      // 其他任务节点
+      taskIndex++;
+      userPrompt += `## 任务 ${taskIndex + 1}：${nodeData.label || '未命名任务'}\n\n`;
+      
+      // 节点描述
+      if (nodeData.description) {
+        userPrompt += `${nodeData.description}\n\n`;
+      }
+      
+      // Skill 加载模式
+      const mode = nodeData.skillLoadingMode || 'description';
+      
+      if (mode === 'manual' && nodeData.skills) {
+        // 模式2：手工指定 Skills
+        let skillIds: string[] = [];
+        try { skillIds = JSON.parse(nodeData.skills); } catch { /* ignore */ }
+        if (skillIds.length > 0) {
+          userPrompt += `请执行以下安全检查任务，必须执行所有指定的 Skills：\n\n`;
+          userPrompt += `必须执行的 Skills：\n`;
+          skillIds.forEach((id, i) => {
+            const skill = allSkillsMap.get(id);
+            userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
+          });
+          userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+        }
+      } else if (mode === 'vulnerability' && node.vulnerabilityCategories) {
+        // 模式3：漏洞分类
+        let categoryValues: string[] = [];
+        try { categoryValues = JSON.parse(node.vulnerabilityCategories); } catch { /* ignore */ }
+        if (categoryValues.length > 0) {
+          const matchedIds = await matchSkillsByCategoryValues(categoryValues, projectTechStack);
+          if (matchedIds.length > 0) {
+            userPrompt += `请执行以下安全检查任务，必须执行所有匹配的 Skills：\n\n`;
+            userPrompt += `必须执行的 Skills：\n`;
+            matchedIds.forEach((id, i) => {
+              const skill = allSkillsMap.get(id);
+              userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
+            });
+            userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+          }
+        }
+      }
+      // 模式1：自定义描述 - 只有描述，不需要额外提示
+      
+      userPrompt += '---\n\n';
+    }
+    
+    // 检查用户提示词是否为空
+    if (!userPrompt.trim()) {
+      return NextResponse.json({
+        error: '工作流节点缺少描述，无法启动评估',
+      }, { status: 400 });
+    }
+    
+    const initialMessage = userPrompt;
+    
+    console.log('[启动评估] 系统提示词长度:', globalConfig.customSystemPrompt.length);
+    console.log('[启动评估] 用户提示词长度:', initialMessage.length);
+    console.log('[启动评估] 用户提示词前200字符:', initialMessage.substring(0, 200) + '...');
     
     // 写入 CLAUDE.md 全局模板到项目 .claude 目录
     if (project.projectPath && globalConfig?.claudemdTemplate) {
@@ -637,6 +873,21 @@ export async function POST(
       console.log('[启动评估] 创建新评估记录:', evaluation.id, 'workflowId:', workflowId, 'roleModels:', roleModels?.length || 0, 'skillsUsed:', skillsUsedJson ? JSON.parse(skillsUsedJson).length : 0);
     }
 
+    // 创建 Skill 执行记录（记录所有使用的 Skills）
+    if (copyResult && copyResult.skillIds && copyResult.skillIds.length > 0) {
+      try {
+        await createSkillExecutionsForEvaluation({
+          skillIds: copyResult.skillIds,
+          projectId: id,
+          evaluationId: evaluation.id,
+        });
+        console.log(`[启动评估] 已创建 ${copyResult.skillIds.length} 个 Skill 执行记录`);
+      } catch (error) {
+        console.error('[启动评估] 创建 Skill 执行记录失败:', error);
+        // 不阻止评估启动
+      }
+    }
+
     // 记录经验引用（哪些经验被注入到本次评估）
     if (injectedExperiences.length > 0) {
       await prisma.experienceUsageLog.createMany({
@@ -648,6 +899,60 @@ export async function POST(
         })),
       });
       console.log(`[启动评估] 已记录 ${injectedExperiences.length} 条经验引用`);
+    }
+
+    // 创建空的分析报告（评估过程中由大模型填充）
+    try {
+      await createEmptyAnalysisReport({
+        evaluationId: evaluation.id,
+        projectId: id,
+      });
+      console.log(`[启动评估] 已创建分析报告记录`);
+    } catch (error) {
+      console.error('[启动评估] 创建分析报告记录失败:', error);
+    }
+
+    // 创建 Skill 执行记录文件
+    if (project.projectPath && uniqueSkillIds.length > 0) {
+      try {
+        const workspaceDir = join(project.projectPath, 'workspace');
+        
+        // 确保 workspace 目录存在
+        try {
+          await access(workspaceDir);
+        } catch {
+          await mkdir(workspaceDir, { recursive: true });
+        }
+        
+        // 获取 Skills 详细信息
+        const skillsForLog = await prisma.skill.findMany({
+          where: { id: { in: uniqueSkillIds } },
+          select: { id: true, name: true, displayName: true, description: true },
+        });
+        
+        // 构建执行记录
+        const skillExecutionLog = {
+          evaluationId: evaluation.id,
+          projectId: id,
+          startedAt: new Date().toISOString(),
+          skills: skillsForLog.map(s => ({
+            id: s.id,
+            name: s.name,
+            displayName: s.displayName,
+            description: s.description,
+            status: 'pending',
+            startedAt: null,
+            completedAt: null,
+            findingsCount: 0,
+          })),
+        };
+        
+        const logPath = join(workspaceDir, 'skill-execution-log.json');
+        await writeFile(logPath, JSON.stringify(skillExecutionLog, null, 2), 'utf-8');
+        console.log(`[启动评估] 已创建 Skill 执行记录文件: ${logPath}`);
+      } catch (error) {
+        console.error('[启动评估] 创建 Skill 执行记录文件失败:', error);
+      }
     }
 
     // 创建 Ralph Loop Agent，传递项目目录作为工作目录
@@ -669,10 +974,51 @@ export async function POST(
       // 回退到原有的文本检测
       return securityAuditVerifier(context);
     };
+    
+    // Skill 执行验证器：检查所有必须执行的 Skills 是否都已执行
+    const mandatorySkillIds = copyResult?.skillIds ? 
+      copyResult.skillIds.filter(id => uniqueSkillIds.includes(id)) : 
+      uniqueSkillIds;
+    
+    const skillExecutionVerifier = async (context: any) => {
+      // 如果没有必须执行的 Skills，跳过验证
+      if (mandatorySkillIds.length === 0) {
+        return { complete: true, reason: '无必须执行的 Skills' };
+      }
+      
+      try {
+        // 查询已执行的 Skills
+        const executedSkills = await prisma.skillExecution.findMany({
+          where: {
+            evaluationId: evaluation.id,
+            status: 'completed',
+          },
+          select: { skillId: true },
+        });
+        
+        const executedSkillIds = new Set(executedSkills.map(e => e.skillId));
+        const missingSkillIds = mandatorySkillIds.filter(id => !executedSkillIds.has(id));
+        
+        if (missingSkillIds.length === 0) {
+          console.log(`[Verifier] 所有必须的 Skills 已执行 (${mandatorySkillIds.length}/${mandatorySkillIds.length})`);
+          return { complete: true, reason: '所有必须的 Skills 已执行' };
+        } else {
+          console.log(`[Verifier] 还有 ${missingSkillIds.length} 个 Skills 未执行`);
+          return { 
+            complete: false, 
+            reason: `还有 ${missingSkillIds.length} 个必须的 Skills 未执行` 
+          };
+        }
+      } catch (error) {
+        console.error('[Verifier] Skill 执行验证失败:', error);
+        return { complete: true, reason: '验证失败，跳过 Skill 检查' };
+      }
+    };
 
     const verifier = createCombinedVerifier([
       vulnFileVerifier,
-    ], 'any'); // 任一验证器通过即完成
+      skillExecutionVerifier,
+    ], 'all'); // 全部验证器通过才算完成
     
     const agent = createRalphLoopAgent(
       modelConfig,
@@ -687,6 +1033,9 @@ export async function POST(
         },
         onIterationEnd: async (iteration, duration) => {
           console.log(`[Ralph Loop] 第 ${iteration} 次迭代完成，耗时 ${duration}ms`);
+          
+          // 记录迭代活动到 Watchdog
+          recordWatchdogActivity(evaluation.id, 'iteration', { iteration, duration });
           
           // 保存迭代记录到数据库（包含模型信息）
           try {
@@ -716,10 +1065,27 @@ export async function POST(
     );
     
     console.log('[Ralph Loop] Agent 已创建，准备启动循环');
+    console.log('[Ralph Loop] 系统提示词已传递，长度:', sdkOptions.systemPrompt?.length || 0);
+    console.log('[Ralph Loop] 系统提示词前300字符:', sdkOptions.systemPrompt?.substring(0, 300) || '未设置');
 
     // 注册 agent 到注册表（用于后续中止）
     registerAgent(evaluation.id, agent);
     console.log(`[Evaluation] Agent 已注册: ${evaluation.id}`);
+
+    // 启动 SSE 流健康检查 Watchdog
+    const watchdog = createWatchdog({
+      evaluationId: evaluation.id,
+      projectId: id,
+      idleTimeout: 5 * 60 * 1000,  // 5 分钟空闲超时
+      maxRunTime: 30 * 60 * 1000,  // 30 分钟最大运行时间
+      onTimeout: (reason) => {
+        console.error(`[Watchdog] 评估超时中止: ${reason}`);
+      },
+      onHeartbeat: (stats) => {
+        // 心跳日志由 Watchdog 内部处理
+      },
+    });
+    console.log(`[Evaluation] Watchdog 已启动: ${evaluation.id}`);
 
     // 构建文件列表
     const files = project.ProjectFile.map(f => ({
@@ -748,9 +1114,7 @@ export async function POST(
             : JSON.stringify(sdkOptions.systemPrompt, null, 2).substring(0, 500) + '...')
         : '未配置');
     console.log('[启动评估] ----------------------------------------');
-    console.log('[启动评估] - 任务描述:', taskDescription?.substring(0, 200) || '无');
-    console.log('[启动评估] ----------------------------------------');
-    console.log('[启动评估] - 初始消息(用户提示词):', initialMessage?.substring(0, 300) || '无');
+    console.log('[启动评估] - 用户提示词:', initialMessage?.substring(0, 300) || '无');
     console.log('[启动评估] ========================================');
 
     // 创建 SSE 流
@@ -1206,6 +1570,9 @@ export async function POST(
                 const { removeAgent } = await import('@/lib/agent-registry');
                 removeAgent(evaluation.id);
 
+                // 停止 Watchdog
+                stopWatchdog(evaluation.id);
+
                 // 发送中止事件
                 const data = JSON.stringify({
                   type: 'aborted',
@@ -1467,6 +1834,10 @@ export async function POST(
               removeAgent(evaluation.id);
               console.log(`[Ralph Loop] Agent 完成，已从注册表移除: ${evaluation.id}`);
 
+              // 停止 Watchdog
+              stopWatchdog(evaluation.id);
+              console.log(`[Ralph Loop] Watchdog 已停止: ${evaluation.id}`);
+
               // 处理队列 - 启动下一个排队评估
               const { processQueue } = await import('@/services/evaluation-queue');
               processQueue().catch(err => console.error('[Queue] 处理队列失败:', err));
@@ -1509,7 +1880,6 @@ export async function POST(
               projectDescription: project.description || undefined,
               environmentUrl: project.environmentUrl || undefined,
               files,
-              taskDescription: taskDescription || undefined,
               initialMessage,
             },
             callbacks,
@@ -1548,6 +1918,9 @@ export async function POST(
             where: { id },
             data: { status: 'failed' },
           });
+
+          // 停止 Watchdog
+          stopWatchdog(evaluation.id);
         }
       },
     });
@@ -1679,4 +2052,204 @@ async function getModelConfig(modelId?: string | null, userId?: string | null) {
     },
   });
   return firstModel;
+}
+
+/**
+ * 构建 Skills 使用说明提示词（V2 - 区分必须执行和可选择）
+ * - 必须执行的 Skills：工作流节点明确指定的（模式2/3），Agent 必须调用
+ * - 可选择的 Skills：供自定义描述节点选择（模式1），Agent 根据描述自主决定
+ */
+function buildSkillsUsagePromptV2(
+  mandatorySkills: Array<{ 
+    id: string; 
+    name: string; 
+    displayName: string; 
+    description: string; 
+    severity: string | null;
+  }>,
+  availableSkills: Array<{ 
+    id: string; 
+    name: string; 
+    displayName: string; 
+    description: string; 
+    severity: string | null;
+  }>
+): string {
+  if (mandatorySkills.length === 0 && availableSkills.length === 0) return '';
+  
+  const severityLabels: Record<string, string> = {
+    critical: '严重',
+    high: '高危',
+    medium: '中危',
+    low: '低危',
+    info: '信息',
+  };
+  
+  let prompt = '## 🔧 安全检测技能 (Skills)\n\n';
+  
+  // 必须执行的 Skills（模式 2/3）- 强制执行
+  if (mandatorySkills.length > 0) {
+    prompt += '### ⚠️ 【强制执行】必须完成的技能检测\n\n';
+    prompt += '**以下技能由工作流节点明确指定，你必须逐一执行并完成检测：**\n\n';
+    
+    for (let i = 0; i < mandatorySkills.length; i++) {
+      const skill = mandatorySkills[i];
+      const severityLabel = skill.severity ? severityLabels[skill.severity] || skill.severity : '未分级';
+      prompt += `${i + 1}. **${skill.displayName}** (\`${skill.name}\`)\n`;
+      prompt += `   - 严重程度: ${severityLabel}\n`;
+      prompt += `   - 说明: ${skill.description}\n`;
+      prompt += `   - 执行命令: \`Skill(skill_name="${skill.name}")\`\n\n`;
+    }
+    
+    prompt += '**🔴 强制要求**：\n';
+    prompt += '- 你必须使用 `Skill` 工具依次加载并执行上述每一个技能\n';
+    prompt += '- 不允许跳过任何一项\n';
+    prompt += '- 每个技能执行后，必须输出检测结果\n';
+    prompt += '- 最终报告中必须包含所有技能的检测结果\n\n';
+    
+    // 构建执行清单，便于 Agent 逐项检查
+    prompt += '**执行清单**（完成后请勾选）：\n';
+    for (let i = 0; i < mandatorySkills.length; i++) {
+      prompt += `- [ ] ${mandatorySkills[i].displayName}\n`;
+    }
+    prompt += '\n';
+  }
+  
+  // 可选择的 Skills（模式 1）
+  if (availableSkills.length > 0) {
+    prompt += '### 📋 【可选】根据需要选择的技能\n\n';
+    prompt += '**以下技能已准备就绪，你可以根据任务描述和项目特点自主选择执行：**\n\n';
+    
+    for (const skill of availableSkills) {
+      const severityLabel = skill.severity ? severityLabels[skill.severity] || skill.severity : '未分级';
+      prompt += `- **${skill.displayName}** (\`${skill.name}\`) - ${severityLabel}: ${skill.description}\n`;
+    }
+    
+    prompt += '\n**提示**: 上述可选技能位于 `.claude/skills/` 目录，使用 `Skill(skill_name="技能名称")` 加载执行。\n\n';
+  }
+  
+  // 使用方法
+  prompt += '### Skill 工具使用方法\n\n';
+  prompt += '```\n';
+  prompt += 'Skill(skill_name="技能名称")\n';
+  prompt += '```\n';
+  prompt += '例如：`Skill(skill_name="sql-injection")` 会加载并执行 SQL 注入检测技能。\n\n';
+  prompt += '技能加载后，请仔细阅读 SKILL.md 中的检测方法，然后执行检测并输出结果。\n';
+  
+  return prompt;
+}
+
+/**
+ * 构建 Skills 使用说明提示词（旧版本，保留兼容）
+ */
+function buildSkillsUsagePrompt(skills: Array<{ 
+  id: string; 
+  name: string; 
+  displayName: string; 
+  description: string; 
+  severity: string | null;
+}>): string {
+  return buildSkillsUsagePromptV2(skills, []);
+}
+
+/**
+ * 构建评估报告分析要求提示词
+ * 要求大模型输出项目概况、架构分析、入口点分析、认证鉴权分析
+ */
+function buildAnalysisReportPrompt(): string {
+  let prompt = '\n\n## 📋 评估报告要求\n\n';
+  prompt += '在评估过程中，你需要输出以下分析内容。请在评估完成时，将分析结果以 JSON 格式输出：\n\n';
+  
+  prompt += '### 1. 项目概况\n';
+  prompt += '```json\n';
+  prompt += '{\n';
+  prompt += '  "projectOverview": {\n';
+  prompt += '    "projectName": "项目名称",\n';
+  prompt += '    "description": "项目描述（分析项目的主要功能和用途）",\n';
+  prompt += '    "techStack": ["技术栈1", "技术栈2"]\n';
+  prompt += '  }\n';
+  prompt += '}\n';
+  prompt += '```\n\n';
+  
+  prompt += '### 2. 项目架构分析\n';
+  prompt += '```json\n';
+  prompt += '{\n';
+  prompt += '  "architecture": {\n';
+  prompt += '    "projectType": "Web应用/移动应用/API服务/桌面应用",\n';
+  prompt += '    "frontend": "前端技术栈（如 React, Vue, Angular 等）",\n';
+  prompt += '    "backend": "后端技术栈（如 Express, Spring, Django 等）",\n';
+  prompt += '    "database": "数据库类型（如 MySQL, PostgreSQL, MongoDB 等）",\n';
+  prompt += '    "directoryStructure": {\n';
+  prompt += '      "src/": "源代码目录",\n';
+  prompt += '      "src/components/": "组件目录"\n';
+  prompt += '    },\n';
+  prompt += '    "summary": "架构概述（详细描述项目的整体架构设计）"\n';
+  prompt += '  }\n';
+  prompt += '}\n';
+  prompt += '```\n\n';
+  
+  prompt += '### 3. 入口点分析\n';
+  prompt += '```json\n';
+  prompt += '{\n';
+  prompt += '  "entryPoints": {\n';
+  prompt += '    "apiEndpoints": [\n';
+  prompt += '      { "method": "GET", "path": "/api/users", "auth": "public", "description": "获取用户列表" },\n';
+  prompt += '      { "method": "POST", "path": "/api/auth/login", "auth": "public", "description": "用户登录" }\n';
+  prompt += '    ],\n';
+  prompt += '    "pageEntries": [\n';
+  prompt += '      { "path": "/", "description": "首页", "authRequired": false },\n';
+  prompt += '      { "path": "/dashboard", "description": "仪表盘", "authRequired": true }\n';
+  prompt += '    ],\n';
+  prompt += '    "userInputPoints": [\n';
+  prompt += '      { "location": "登录表单", "fields": ["username", "password"], "type": "form" },\n';
+  prompt += '      { "location": "搜索框", "fields": ["query"], "type": "search" }\n';
+  prompt += '    ],\n';
+  prompt += '    "summary": "入口点分析概述"\n';
+  prompt += '  }\n';
+  prompt += '}\n';
+  prompt += '```\n\n';
+  
+  prompt += '### 4. 认证鉴权分析\n';
+  prompt += '```json\n';
+  prompt += '{\n';
+  prompt += '  "authentication": {\n';
+  prompt += '    "authType": "JWT / Session / OAuth / 其他",\n';
+  prompt += '    "tokenStorage": "Cookie / localStorage / sessionStorage",\n';
+  prompt += '    "tokenExpiry": "Token 过期时间",\n';
+  prompt += '    "refreshMechanism": "刷新机制说明",\n';
+  prompt += '    "authzModel": "RBAC / ACL / ABAC / 其他",\n';
+  prompt += '    "roles": ["admin", "user", "guest"],\n';
+  prompt += '    "sessionManagement": {\n';
+  prompt += '      "login": "POST /api/auth/login",\n';
+  prompt += '      "logout": "POST /api/auth/logout",\n';
+  prompt += '      "refresh": "POST /api/auth/refresh"\n';
+  prompt += '    },\n';
+  prompt += '    "securityConfig": {\n';
+  prompt += '      "https": true,\n';
+  prompt += '      "cors": "允许的来源",\n';
+  prompt += '      "csp": true,\n';
+  prompt += '      "csrf": true\n';
+  prompt += '    },\n';
+  prompt += '    "summary": "认证鉴权分析概述"\n';
+  prompt += '  }\n';
+  prompt += '}\n';
+  prompt += '```\n\n';
+  
+  prompt += '**输出要求**：\n';
+  prompt += '1. 请将上述四个部分合并为一个完整的 JSON 对象输出\n';
+  prompt += '2. JSON 必须使用 ```json 代码块包裹\n';
+  prompt += '3. 确保所有字段都有值，不要省略\n';
+  prompt += '4. 分析内容要基于实际代码，不要猜测\n\n';
+  
+  prompt += '**输出格式示例**：\n';
+  prompt += '```json\n';
+  prompt += '{\n';
+  prompt += '  "projectOverview": { ... },\n';
+  prompt += '  "architecture": { ... },\n';
+  prompt += '  "entryPoints": { ... },\n';
+  prompt += '  "authentication": { ... }\n';
+  prompt += '}\n';
+  prompt += '```\n';
+  
+  return prompt;
 }

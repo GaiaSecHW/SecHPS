@@ -70,8 +70,8 @@ export async function processQueue(): Promise<void> {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              // 内部调用使用密钥验证
-              'X-Internal-Token': process.env.INTERNAL_API_SECRET || '',
+              // 内部调用使用 X-Internal-Call 标记（不需要密钥）
+              'X-Internal-Call': 'true',
             },
           });
           

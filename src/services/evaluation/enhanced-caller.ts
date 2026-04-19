@@ -3,6 +3,9 @@
 import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService, AppMcpServerConfig, ToolPermissionRule } from '@/services/ai';
 import { parseAndSaveResults } from './result-parser';
 import { prisma } from '@/lib/prisma';
+import { recordWatchdogActivity } from '@/lib/stream-watchdog';
+import { completeSkillExecution } from '@/services/skill-execution-tracker';
+import { updateAnalysisReport, parseAnalysisFromOutput } from '@/services/analysis-report';
 
 // ============================================
 // 日志工具
@@ -93,6 +96,8 @@ export class EnhancedEvaluationCaller {
   private agentService: ClaudeAgentService;
   private currentEvaluationId: string | null = null;
   private currentProjectId: string | null = null;
+  private currentSkillExecutionId: string | null = null;  // 当前 Skill 执行记录 ID
+  private currentSkillId: string | null = null;  // 当前执行的 Skill ID
   private aborted: boolean = false;  // 中止标志
 
   constructor(config: EnhancedEvaluationConfig) {
@@ -188,11 +193,94 @@ export class EnhancedEvaluationCaller {
     }
 
     const agentCallbacks: ClaudeAgentCallbacks = {
-      onChunk: callbacks.onChunk,
-      onToolUse: (name, input) => {
+      onChunk: (text) => {
+        // 记录活动到 Watchdog
+        if (this.currentEvaluationId) {
+          recordWatchdogActivity(this.currentEvaluationId, 'message');
+        }
+        callbacks.onChunk(text);
+      },
+      onToolUse: async (name, input) => {
+        // 记录活动到 Watchdog
+        if (this.currentEvaluationId) {
+          recordWatchdogActivity(this.currentEvaluationId, 'tool_call', { name });
+        }
+        
+        // 检测 Skill 工具调用，记录执行次数
+        if (name === 'Skill' && this.currentEvaluationId) {
+          const skillName = (input as any)?.skill_name || (input as any)?.name;
+          if (skillName) {
+            console.log(`[EnhancedCaller] 检测到 Skill 调用: ${skillName}`);
+            try {
+              // 查找 Skill ID
+              const skill = await prisma.skill.findFirst({
+                where: { name: skillName, isLatest: true },
+                select: { id: true },
+              });
+              
+              if (skill) {
+                // 创建执行记录并更新 execCount
+                const executionId = `sklexec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+                await prisma.skillExecution.create({
+                  data: {
+                    id: executionId,
+                    skillId: skill.id,
+                    projectId: this.currentProjectId || '',
+                    evaluationId: this.currentEvaluationId,
+                    input: JSON.stringify(input),
+                    status: 'running',
+                    startedAt: new Date(),
+                  },
+                });
+                
+                // 更新 Skill 的 execCount
+                await prisma.skill.update({
+                  where: { id: skill.id },
+                  data: {
+                    execCount: { increment: 1 },
+                    updatedAt: new Date(),
+                  },
+                });
+                
+                // 存储执行 ID，用于后续更新
+                this.currentSkillExecutionId = executionId;
+                this.currentSkillId = skill.id;
+                
+                console.log(`[EnhancedCaller] Skill 执行记录已创建: ${skillName}, executionId=${executionId}`);
+              }
+            } catch (error) {
+              console.error(`[EnhancedCaller] 记录 Skill 执行失败:`, error);
+            }
+          }
+        }
+        
         callbacks.onToolCall(name, input);
       },
-      onToolResult: (name, result) => {
+      onToolResult: async (name, result) => {
+        // 检测 Skill 工具结果，更新执行状态
+        if (name === 'Skill' && this.currentSkillExecutionId && this.currentSkillId) {
+          try {
+            // 解析结果中的漏洞数量
+            const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+            const findingsMatch = resultStr.match(/发现\s*(\d+)\s*个|found\s*(\d+)\s*vulnerabilit/i);
+            const findingsCount = findingsMatch ? (parseInt(findingsMatch[1]) || parseInt(findingsMatch[2]) || 0) : 0;
+            
+            await completeSkillExecution({
+              executionId: this.currentSkillExecutionId,
+              skillId: this.currentSkillId,
+              output: resultStr,
+              findingsCount,
+            });
+            
+            console.log(`[EnhancedCaller] Skill 执行完成: findings=${findingsCount}`);
+          } catch (error) {
+            console.error(`[EnhancedCaller] 更新 Skill 执行状态失败:`, error);
+          } finally {
+            this.currentSkillExecutionId = null;
+            this.currentSkillId = null;
+          }
+        }
+        
         const toolResult: ToolResult = {
           success: true,
           output: result,
@@ -201,6 +289,12 @@ export class EnhancedEvaluationCaller {
         callbacks.onToolResult(name, toolResult);
       },
       onUsage: (usage) => {
+        // 记录 Token 活动到 Watchdog
+        if (this.currentEvaluationId) {
+          recordWatchdogActivity(this.currentEvaluationId, 'token', { 
+            tokens: usage.inputTokens + usage.outputTokens 
+          });
+        }
         // Token 使用量回调
         console.log('='.repeat(60));
         console.log('[EnhancedCaller] 📊 收到 Token 使用量');
@@ -221,6 +315,48 @@ export class EnhancedEvaluationCaller {
 
         // 会话结束时才保存数据
         if (this.currentEvaluationId && this.currentProjectId && fullResponse.trim()) {
+          // 解析并保存分析报告
+          logInfo('开始解析分析报告...');
+          try {
+            const analysisData = parseAnalysisFromOutput(fullResponse);
+            if (analysisData) {
+              await updateAnalysisReport({
+                evaluationId: this.currentEvaluationId,
+                data: {
+                  projectName: analysisData.projectOverview?.projectName,
+                  description: analysisData.projectOverview?.description,
+                  techStack: analysisData.projectOverview?.techStack,
+                  projectType: analysisData.architecture?.projectType,
+                  frontend: analysisData.architecture?.frontend,
+                  backend: analysisData.architecture?.backend,
+                  database: analysisData.architecture?.database,
+                  directoryStructure: analysisData.architecture?.directoryStructure,
+                  architectureSummary: analysisData.architecture?.summary,
+                  apiEndpoints: analysisData.entryPoints?.apiEndpoints,
+                  pageEntries: analysisData.entryPoints?.pageEntries,
+                  userInputPoints: analysisData.entryPoints?.userInputPoints,
+                  entryPointsSummary: analysisData.entryPoints?.summary,
+                  authType: analysisData.authentication?.authType,
+                  tokenStorage: analysisData.authentication?.tokenStorage,
+                  tokenExpiry: analysisData.authentication?.tokenExpiry,
+                  refreshMechanism: analysisData.authentication?.refreshMechanism,
+                  authzModel: analysisData.authentication?.authzModel,
+                  roles: analysisData.authentication?.roles,
+                  sessionManagement: analysisData.authentication?.sessionManagement,
+                  securityConfig: analysisData.authentication?.securityConfig,
+                  authSummary: analysisData.authentication?.summary,
+                  rawContent: fullResponse,
+                },
+              });
+              logSuccess('分析报告保存成功');
+            } else {
+              logWarn('未从输出中解析到分析报告');
+            }
+          } catch (analysisError) {
+            logError('解析保存分析报告时发生异常:', analysisError);
+          }
+          
+          // 解析并保存漏洞结果
           logInfo('开始解析并保存漏洞结果...');
           try {
             const result = await parseAndSaveResults(this.currentEvaluationId, this.currentProjectId, fullResponse);

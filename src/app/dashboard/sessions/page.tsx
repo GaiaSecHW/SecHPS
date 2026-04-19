@@ -1440,21 +1440,23 @@ toast.error(data.error || '更新项目失败');
                          })()}
                        </>
                      ) : (
-                      <>
-                        {/* 无运行中的会话：显示启动评估 */}
-                        <button
-                          onClick={() => {
-                            setSelectedProject(project);
-                            setSelectedWorkflow(null);
-                            setShowWorkflowModal(true);
-                          }}
-                          disabled={startingProject === project.id}
-                          className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Play size={16} />
-                          <span>启动评估</span>
-                        </button>
-                      </>
+                       <>
+                         {/* 无运行中的会话：显示启动评估 */}
+                         <button
+                           onClick={() => {
+                             // 重置启动状态（防止之前失败遗留的状态）
+                             setStartingProject(null);
+                             setSelectedProject(project);
+                             setSelectedWorkflow(null);
+                             setShowWorkflowModal(true);
+                           }}
+                           disabled={startingProject === project.id}
+                           className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                         >
+                           <Play size={16} />
+                           <span>启动评估</span>
+                         </button>
+                       </>
                     )}
                     <button
                       onClick={() => openEditModal(project)}
