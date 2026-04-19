@@ -309,8 +309,15 @@ function SessionDetailContent({
       });
 
       if (!response.ok) {
-        const data = await response.json();
-        setError(data.error || '获取评估会话失败');
+        // 先获取文本，再尝试解析 JSON
+        const text = await response.text();
+        console.error('[fetchEvaluation] Error response text:', text.substring(0, 500));
+        try {
+          const data = JSON.parse(text);
+          setError(data.error || '获取评估会话失败');
+        } catch {
+          setError(`服务器错误 (${response.status})`);
+        }
         setLoading(false);
         return;
       }
@@ -342,9 +349,15 @@ function SessionDetailContent({
       console.log('[fetchMessages] Response status:', response.status, response.statusText);
 
       if (!response.ok) {
-        const data = await response.json();
-        console.error('[fetchMessages] Error response:', data);
-        setError(data.error || '获取消息失败');
+        // 先获取文本，再尝试解析 JSON
+        const text = await response.text();
+        console.error('[fetchMessages] Error response text:', text.substring(0, 500));
+        try {
+          const data = JSON.parse(text);
+          setError(data.error || '获取消息失败');
+        } catch {
+          setError(`服务器错误 (${response.status})`);
+        }
         setLoading(false);
         return;
       }

@@ -23,6 +23,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    console.log(`[EvaluationReport] 开始获取报告: ${id}`);
     
     // 获取评估会话基本信息
     const evaluation = await prisma.evaluationSession.findUnique({
@@ -47,20 +48,58 @@ export async function GET(
     });
     
     if (!evaluation) {
+      console.log(`[EvaluationReport] 评估会话不存在: ${id}`);
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
     
+    console.log(`[EvaluationReport] 找到评估会话: ${id}, projectId=${evaluation.projectId}`);
+    
     // 1. 获取分析报告
-    const analysisReport = await getAnalysisReport(id);
+    let analysisReport = null;
+    try {
+      analysisReport = await getAnalysisReport(id);
+      console.log(`[EvaluationReport] 分析报告: ${analysisReport ? '已获取' : '不存在'}`);
+    } catch (err) {
+      console.error('[EvaluationReport] 获取分析报告失败:', err);
+    }
     
     // 2. 获取 Skills 执行记录
-    const skillExecutions = await getSkillExecutionsByEvaluation(id);
+    let skillExecutions: any[] = [];
+    try {
+      skillExecutions = await getSkillExecutionsByEvaluation(id);
+      console.log(`[EvaluationReport] Skills 执行记录: ${skillExecutions.length} 条`);
+    } catch (err) {
+      console.error('[EvaluationReport] 获取 Skills 执行记录失败:', err);
+    }
     
     // 3. 获取漏洞分类关联链
-    const vulnerabilityChain = await getVulnerabilityChain(evaluation.projectId, id);
+    let vulnerabilityChain: any[] = [];
+    try {
+      vulnerabilityChain = await getVulnerabilityChain(evaluation.projectId, id);
+      console.log(`[EvaluationReport] 漏洞分类关联链: ${vulnerabilityChain.length} 条`);
+    } catch (err) {
+      console.error('[EvaluationReport] 获取漏洞分类关联链失败:', err);
+    }
     
     // 4. 获取漏洞发现汇总
-    const vulnerabilitySummary = await getVulnerabilitySummary(id);
+    let vulnerabilitySummary = {
+      total: 0,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
+      info: 0,
+      open: 0,
+      confirmed: 0,
+      fixed: 0,
+      falsePositive: 0,
+    };
+    try {
+      vulnerabilitySummary = await getVulnerabilitySummary(id);
+      console.log(`[EvaluationReport] 漏洞发现汇总: ${vulnerabilitySummary.total} 个`);
+    } catch (err) {
+      console.error('[EvaluationReport] 获取漏洞发现汇总失败:', err);
+    }
     
     // 5. 构建 Skills 统计
     const skillsStats = {

@@ -91,7 +91,7 @@ export async function completeSkillExecution(params: {
 }
 
 /**
- * 批量创建 Skill 执行记录
+ * 批量创建 Skill 执行记录（pending 状态）
  * 用于评估开始时记录将要执行的 Skills
  */
 export async function createSkillExecutionsForEvaluation(params: {
@@ -103,11 +103,17 @@ export async function createSkillExecutionsForEvaluation(params: {
 
   for (const skillId of params.skillIds) {
     try {
-      const executionId = await createSkillExecution({
-        skillId,
-        projectId: params.projectId,
-        evaluationId: params.evaluationId,
-        input: JSON.stringify({ mode: 'evaluation' }),
+      // 创建 pending 状态的执行记录，不增加 execCount
+      const executionId = `sklexec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}-${skillId.substring(0, 8)}`;
+      await prisma.skillExecution.create({
+        data: {
+          id: executionId,
+          skillId,
+          projectId: params.projectId,
+          evaluationId: params.evaluationId,
+          input: JSON.stringify({ mode: 'evaluation' }),
+          status: 'pending',  // 初始状态为 pending
+        },
       });
       executionIds.push(executionId);
     } catch (error) {
@@ -115,7 +121,7 @@ export async function createSkillExecutionsForEvaluation(params: {
     }
   }
 
-  console.log(`[SkillExecution] 批量创建 ${executionIds.length} 个执行记录`);
+  console.log(`[SkillExecution] 批量创建 ${executionIds.length} 个 pending 执行记录`);
   return executionIds;
 }
 

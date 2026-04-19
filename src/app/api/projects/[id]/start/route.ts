@@ -871,20 +871,11 @@ export async function POST(
         },
       });
       console.log('[启动评估] 创建新评估记录:', evaluation.id, 'workflowId:', workflowId, 'roleModels:', roleModels?.length || 0, 'skillsUsed:', skillsUsedJson ? JSON.parse(skillsUsedJson).length : 0);
-    }
-
-    // 创建 Skill 执行记录（记录所有使用的 Skills）
-    if (copyResult && copyResult.skillIds && copyResult.skillIds.length > 0) {
-      try {
-        await createSkillExecutionsForEvaluation({
-          skillIds: copyResult.skillIds,
-          projectId: id,
-          evaluationId: evaluation.id,
-        });
-        console.log(`[启动评估] 已创建 ${copyResult.skillIds.length} 个 Skill 执行记录`);
-      } catch (error) {
-        console.error('[启动评估] 创建 Skill 执行记录失败:', error);
-        // 不阻止评估启动
+      
+      // 只在日志中记录拷贝的 Skills，不预先创建执行记录
+      // 执行记录在实际调用时由 enhanced-caller.ts 创建
+      if (copyResult && copyResult.skillIds && copyResult.skillIds.length > 0) {
+        console.log(`[启动评估] 已拷贝 ${copyResult.skillIds.length} 个 Skills 到项目目录`);
       }
     }
 

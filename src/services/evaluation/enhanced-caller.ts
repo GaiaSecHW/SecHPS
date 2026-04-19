@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { recordWatchdogActivity } from '@/lib/stream-watchdog';
 import { completeSkillExecution } from '@/services/skill-execution-tracker';
 import { updateAnalysisReport, parseAnalysisFromOutput } from '@/services/analysis-report';
+import { updateSkillExecutionLog } from '@/services/skill-execution-log';
 
 // ============================================
 // 日志工具
@@ -206,7 +207,7 @@ export class EnhancedEvaluationCaller {
           recordWatchdogActivity(this.currentEvaluationId, 'tool_call', { name });
         }
         
-        // 检测 Skill 工具调用，记录执行次数
+        // 检测 Skill 工具调用，创建执行记录并更新统计
         if (name === 'Skill' && this.currentEvaluationId) {
           const skillName = (input as any)?.skill_name || (input as any)?.name;
           if (skillName) {
@@ -219,7 +220,7 @@ export class EnhancedEvaluationCaller {
               });
               
               if (skill) {
-                // 创建执行记录并更新 execCount
+                // 创建执行记录
                 const executionId = `sklexec-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
                 await prisma.skillExecution.create({
                   data: {
@@ -233,7 +234,7 @@ export class EnhancedEvaluationCaller {
                   },
                 });
                 
-                // 更新 Skill 的 execCount
+                // 更新 Skill 的 execCount（实际执行时才统计）
                 await prisma.skill.update({
                   where: { id: skill.id },
                   data: {
@@ -242,9 +243,14 @@ export class EnhancedEvaluationCaller {
                   },
                 });
                 
-                // 存储执行 ID，用于后续更新
                 this.currentSkillExecutionId = executionId;
                 this.currentSkillId = skill.id;
+                
+                // 更新 skill-execution-log.json 文件
+                const projectPath = this.getWorkingDirectory();
+                if (projectPath) {
+                  await updateSkillExecutionLog(projectPath, skill.id, 'running');
+                }
                 
                 console.log(`[EnhancedCaller] Skill 执行记录已创建: ${skillName}, executionId=${executionId}`);
               }
@@ -271,6 +277,12 @@ export class EnhancedEvaluationCaller {
               output: resultStr,
               findingsCount,
             });
+            
+            // 更新 skill-execution-log.json 文件
+            const projectPath = this.getWorkingDirectory();
+            if (projectPath) {
+              await updateSkillExecutionLog(projectPath, this.currentSkillId, 'completed', findingsCount);
+            }
             
             console.log(`[EnhancedCaller] Skill 执行完成: findings=${findingsCount}`);
           } catch (error) {
