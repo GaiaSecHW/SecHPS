@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, GripVertical, Save, Loader2, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 interface Category {
   value: string;
@@ -12,6 +13,14 @@ interface Category {
 }
 
 export default function CategoriesManagementPage() {
+  return (
+    <AdminGuard>
+      <CategoriesManagementContent />
+    </AdminGuard>
+  );
+}
+
+function CategoriesManagementContent() {
   const router = useRouter();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

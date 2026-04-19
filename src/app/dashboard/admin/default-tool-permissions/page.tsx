@@ -15,6 +15,7 @@ import {
   Loader2,
   Info,
 } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 // Claude Agent SDK 内置工具列表
 const BUILTIN_TOOLS = [
@@ -48,6 +49,14 @@ interface ToolPermission {
 }
 
 export default function DefaultToolPermissionsPage() {
+  return (
+    <AdminGuard>
+      <DefaultToolPermissionsContent />
+    </AdminGuard>
+  );
+}
+
+function DefaultToolPermissionsContent() {
   const router = useRouter();
   const [configId, setConfigId] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<ToolPermission[]>([]);

@@ -19,6 +19,7 @@ import {
   Play,
   Loader2,
 } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 // Types based on API response
 interface ObservationStatsSummary {
@@ -92,6 +93,14 @@ const overlapTypeLabels: Record<string, string> = {
 };
 
 export default function SkillsGovernancePage() {
+  return (
+    <AdminGuard>
+      <SkillsGovernanceContent />
+    </AdminGuard>
+  );
+}
+
+function SkillsGovernanceContent() {
   const router = useRouter();
   const [overview, setOverview] = useState<GovernanceOverview | null>(null);
   const [loading, setLoading] = useState(true);

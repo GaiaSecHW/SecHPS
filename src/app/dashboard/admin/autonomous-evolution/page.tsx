@@ -14,6 +14,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 interface Experience {
   id: string;
@@ -85,6 +86,14 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 export default function AutonomousEvolutionPage() {
+  return (
+    <AdminGuard>
+      <AutonomousEvolutionContent />
+    </AdminGuard>
+  );
+}
+
+function AutonomousEvolutionContent() {
   const router = useRouter();
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);

@@ -1,8 +1,17 @@
 'use client';
 
 import { TrendingUp } from 'lucide-react';
+import { AdminGuard } from '@/components/PermissionGuard';
 
 export default function SkillsEvolutionPage() {
+  return (
+    <AdminGuard>
+      <SkillsEvolutionContent />
+    </AdminGuard>
+  );
+}
+
+function SkillsEvolutionContent() {
   return (
     <div className="space-y-6">
       <div>
