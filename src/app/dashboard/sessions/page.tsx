@@ -1412,8 +1412,23 @@ toast.error(data.error || '更新项目失败');
                 {/* 第二行：启动评估、编辑、文件管理、删除 或 当前会话操作 */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
+                    {/* 启动评估按钮 - 始终显示，运行中时禁用 */}
+                    <button
+                      onClick={() => {
+                        setStartingProject(null);
+                        setSelectedProject(project);
+                        setSelectedWorkflow(null);
+                        setShowWorkflowModal(true);
+                      }}
+                      disabled={project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued')}
+                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Play size={16} />
+                      <span>启动评估</span>
+                    </button>
+                    
+                    {/* 显示最近一次评估状态 */}
                     {(() => {
-                      // 获取最近的评估（运行中优先，否则取最新的）
                       const allEvals = project.evaluations || [];
                       const runningEval = allEvals.find((e: any) => e.status === 'running' || e.status === 'queued');
                       const latestEval = runningEval || allEvals.sort((a: any, b: any) => 
@@ -1442,69 +1457,34 @@ toast.error(data.error || '更新项目失败');
                         const config = statusConfig[latestEval.status] || statusConfig.completed;
                         
                         return (
-                          <>
-                            {/* 评估状态提示 */}
-                            <button
-                              onClick={() => router.push(`/dashboard/sessions/${latestEval.id}?evaluationId=${latestEval.id}`)}
-                              className={`flex items-center space-x-2 px-3 py-1 ${config.bg} border ${config.border} rounded-md hover:opacity-80 transition-opacity`}
-                            >
-                              {isRunning ? (
-                                <Loader2 className={`h-4 w-4 ${config.icon}`} />
-                              ) : latestEval.status === 'completed' ? (
-                                <CheckCircle className={`h-4 w-4 ${config.icon}`} />
-                              ) : latestEval.status === 'failed' ? (
-                                <AlertTriangle className={`h-4 w-4 ${config.icon}`} />
-                              ) : (
-                                <XCircle className={`h-4 w-4 ${config.icon}`} />
-                              )}
-                              <span className={`text-sm font-medium ${config.text}`}>
-                                {config.label}
-                              </span>
-                              {timeStr && (
-                                <span className={`text-xs ${config.text} opacity-75`}>
-                                  启动: {timeStr}
-                                </span>
-                              )}
-                              <span className={`text-xs ${config.text} opacity-75`}>
-                                详情
-                              </span>
-                            </button>
-                            {/* 非运行中时显示启动评估按钮 */}
-                            {!isRunning && (
-                              <button
-                                onClick={() => {
-                                  setStartingProject(null);
-                                  setSelectedProject(project);
-                                  setSelectedWorkflow(null);
-                                  setShowWorkflowModal(true);
-                                }}
-                                disabled={startingProject === project.id}
-                                className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                <Play size={16} />
-                                <span>启动评估</span>
-                              </button>
+                          <button
+                            onClick={() => router.push(`/dashboard/sessions/${latestEval.id}?evaluationId=${latestEval.id}`)}
+                            className={`flex items-center space-x-2 px-3 py-1 ${config.bg} border ${config.border} rounded-md hover:opacity-80 transition-opacity`}
+                          >
+                            {isRunning ? (
+                              <Loader2 className={`h-4 w-4 ${config.icon}`} />
+                            ) : latestEval.status === 'completed' ? (
+                              <CheckCircle className={`h-4 w-4 ${config.icon}`} />
+                            ) : latestEval.status === 'failed' ? (
+                              <AlertTriangle className={`h-4 w-4 ${config.icon}`} />
+                            ) : (
+                              <XCircle className={`h-4 w-4 ${config.icon}`} />
                             )}
-                          </>
+                            <span className={`text-sm font-medium ${config.text}`}>
+                              {config.label}
+                            </span>
+                            {timeStr && (
+                              <span className={`text-xs ${config.text} opacity-75`}>
+                                启动: {timeStr}
+                              </span>
+                            )}
+                            <span className={`text-xs ${config.text} opacity-75`}>
+                              详情
+                            </span>
+                          </button>
                         );
                       }
-                      
-                      // 没有任何评估记录，显示启动评估按钮
-                      return (
-                        <button
-                          onClick={() => {
-                            setStartingProject(null);
-                            setSelectedProject(project);
-                            setSelectedWorkflow(null);
-                            setShowWorkflowModal(true);
-                          }}
-                          disabled={startingProject === project.id}
-                          className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Play size={16} />
-                          <span>启动评估</span>
-                        </button>
-                      );
+                      return null;
                     })()}
                     <button
                       onClick={() => openEditModal(project)}
