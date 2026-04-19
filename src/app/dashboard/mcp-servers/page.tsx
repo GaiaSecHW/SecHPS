@@ -68,7 +68,7 @@ export default function McpServersPage() {
   const pageSize = 10;
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
-  const [filter, setFilter] = useState<'all' | 'mine' | 'shared'>('all');
+  const [filter, setFilter] = useState<'all' | 'mine' | 'shared'>('all');  // 默认显示自己的+共享的
 
   // 表单状态
   const [formData, setFormData] = useState({

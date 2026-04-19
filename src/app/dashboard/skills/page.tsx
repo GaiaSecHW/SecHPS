@@ -181,6 +181,8 @@ function SkillsPageContent() {
       
       // 构建 URL 参数
       const params = new URLSearchParams();
+      // 管理页面：只看自己创建的技能
+      params.append('scope', 'mine');
       if (selectedCategory) params.append('category', selectedCategory);
       if (selectedTechStack) params.append('techStackId', selectedTechStack);
       if (selectedActiveStatus) params.append('isActive', selectedActiveStatus);
