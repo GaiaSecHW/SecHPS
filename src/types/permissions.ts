@@ -332,9 +332,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<Role, Permission[]> = {
     // Agent 团队权限
     PERMISSIONS.AGENT_TEAM_CREATE,
     PERMISSIONS.AGENT_TEAM_READ,
-    // Workflow 权限
+    // Workflow 权限（普通用户可以创建和更新自己的工作流）
     PERMISSIONS.WORKFLOW_CREATE,
     PERMISSIONS.WORKFLOW_READ,
+    PERMISSIONS.WORKFLOW_UPDATE,
+    PERMISSIONS.WORKFLOW_EXECUTE,
   ],
 
   [ROLES.VIEWER]: [
