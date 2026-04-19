@@ -867,6 +867,9 @@ const [showPreview, setShowPreview] = useState(false);
         backgroundColor: '#f9fafb',
         skipAutoScale: false,
         includeQueryParams: true,
+        // 修复 font undefined 错误：设置默认字体
+        fontEmbedCSS: '',
+        skipFonts: true,
       });
 
       // 提取 Base64 部分（去掉 data:image/png;base64, 前缀）
@@ -914,10 +917,8 @@ const [showPreview, setShowPreview] = useState(false);
     }
   };
 
-  // 生成预览内容（Markdown 格式）
+  // 生成预览内容（用户提示词，发送给大模型）
   const generatePreviewContent = () => {
-    let markdown = '# 工作流预览\n\n';
-
     // 按拓扑顺序排序节点
     const nodeOrder = new Map<string, number>();
     let order = 0;
@@ -942,75 +943,83 @@ const [showPreview, setShowPreview] = useState(false);
 
     const sortedNodes = [...nodes].sort((a, b) => (nodeOrder.get(a.id) ?? 999) - (nodeOrder.get(b.id) ?? 999));
 
-    sortedNodes.forEach((node, index) => {
+    // 生成用户提示词
+    let userPrompt = '';
+    
+    // 计算总任务数（所有节点数量）
+    const totalTasks = sortedNodes.length;
+    
+    // 计算任务编号（排除 start 和 end 后的实际任务数）
+    let taskIndex = 0;
+
+    sortedNodes.forEach((node) => {
       const nodeData = node.data as NodeData;
-      const nodeType = NODE_TYPE_MAP[node.type as keyof typeof NODE_TYPE_MAP];
-      markdown += `## ${index + 1}. ${nodeData.label}\n\n`;
-      markdown += `**类型**: ${nodeType?.label || node.type}\n\n`;
+      
+      // 开始节点 - 使用系统配置的描述
+      if (node.type === 'start') {
+        userPrompt += `## 任务 1：${workflowConfig.startNodeLabel || '开始'}\n\n`;
+        if (workflowConfig.startNodeDescription) {
+          userPrompt += `${workflowConfig.startNodeDescription}\n\n`;
+        }
+        userPrompt += '---\n\n';
+        return;
+      }
+      
+      // 结束节点 - 使用系统配置的描述
+      if (node.type === 'end') {
+        userPrompt += `## 任务 ${totalTasks}：${workflowConfig.endNodeLabel || '结束'}\n\n`;
+        if (workflowConfig.endNodeDescription) {
+          userPrompt += `${workflowConfig.endNodeDescription}\n\n`;
+        }
+        userPrompt += '---\n\n';
+        return;
+      }
 
+      // 其他任务节点
+      taskIndex++;
+      userPrompt += `## 任务 ${taskIndex + 1}：${nodeData.label}\n\n`;
+      
+      // 节点描述
       if (nodeData.description) {
-        markdown += `**描述**: ${nodeData.description}\n\n`;
-      }
-
-      // 连接关系
-      const incomingEdges = edges.filter(e => e.target === node.id);
-      const outgoingEdges = edges.filter(e => e.source === node.id);
-      if (incomingEdges.length > 0) {
-        markdown += `**输入来源**: ${incomingEdges.map(e => (nodes.find(n => n.id === e.source)?.data as NodeData)?.label || e.source).join(', ')}\n\n`;
-      }
-      if (outgoingEdges.length > 0) {
-        markdown += `**输出目标**: ${outgoingEdges.map(e => (nodes.find(n => n.id === e.target)?.data as NodeData)?.label || e.target).join(', ')}\n\n`;
+        userPrompt += `${nodeData.description}\n\n`;
       }
 
       // Skill 加载模式
       const mode = nodeData.skillLoadingMode || 'description';
-      if (mode === 'description') {
-        markdown += `**Skill 加载模式**: 描述匹配（运行时自动匹配）\n\n`;
-      } else if (mode === 'vulnerability') {
-        const cats: string[] = nodeData.vulnerabilityCategories || [];
-        markdown += `**Skill 加载模式**: 漏洞分类\n\n`;
-        if (cats.length > 0) {
-          const catLabels = cats.map(v => {
-            const found = vulnCategories.find(c => c.value === v);
-            return found ? found.label : v;
-          });
-          markdown += `**已选漏洞分类**: ${catLabels.join(', ')}\n\n`;
-          const matched = filterMatchedSkills(techStackFilteredSkills, cats);
-          markdown += `**匹配 Skills（${matched.length} 个）**:\n`;
-          matched.forEach(s => { markdown += `- ${s.displayName || s.name}\n`; });
-          markdown += '\n';
-        } else {
-          markdown += `**已选漏洞分类**: 未选择\n\n`;
-        }
-      } else if (mode === 'manual') {
-        markdown += `**Skill 加载模式**: 手工指定\n\n`;
+      
+      if (mode === 'manual') {
+        // 模式2：手工指定 Skills
         const skillIds: string[] = nodeData.skills ? JSON.parse(nodeData.skills) : [];
         if (skillIds.length > 0) {
-          markdown += `**已指定 Skills（${skillIds.length} 个）**:\n`;
-          skillIds.forEach(id => {
+          userPrompt += `请执行以下安全检查任务，必须执行所有指定的 Skills：\n\n`;
+          userPrompt += `必须执行的 Skills：\n`;
+          skillIds.forEach((id, i) => {
             const skill = availableSkills.find(s => s.id === id);
-            markdown += `- ${skill ? (skill.displayName || skill.name) : id}\n`;
+            userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
           });
-          markdown += '\n';
-        } else {
-          markdown += `**已指定 Skills**: 未选择\n\n`;
+          userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+        }
+      } else if (mode === 'vulnerability') {
+        // 模式3：漏洞分类
+        const cats: string[] = nodeData.vulnerabilityCategories || [];
+        if (cats.length > 0) {
+          const matched = filterMatchedSkills(techStackFilteredSkills, cats);
+          if (matched.length > 0) {
+            userPrompt += `请执行以下安全检查任务，必须执行所有匹配的 Skills：\n\n`;
+            userPrompt += `必须执行的 Skills：\n`;
+            matched.forEach((s, i) => {
+              userPrompt += `${i + 1}. ${s.displayName || s.name}\n`;
+            });
+            userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+          }
         }
       }
+      // 模式1：自定义描述 - 只有描述，不需要额外提示
 
-      markdown += '---\n\n';
+      userPrompt += '---\n\n';
     });
 
-    markdown += '## 统计信息\n\n';
-    markdown += `- **节点总数**: ${nodes.length}\n`;
-    markdown += `- **连接总数**: ${edges.length}\n`;
-    const typeCount = new Map<string, number>();
-    nodes.forEach(node => { typeCount.set(node.type, (typeCount.get(node.type) || 0) + 1); });
-    typeCount.forEach((count, type) => {
-      const nodeType = NODE_TYPE_MAP[type as keyof typeof NODE_TYPE_MAP];
-      markdown += `- ${nodeType?.label || type}: ${count}\n`;
-    });
-
-    return markdown;
+    return userPrompt;
   };
 
   // 显示预览
