@@ -325,7 +325,7 @@ export class SkillObservationLogService {
               id: true,
               name: true,
               displayName: true,
-              category: true,
+              vulnerabilityPatternId: true,
             },
           },
         },

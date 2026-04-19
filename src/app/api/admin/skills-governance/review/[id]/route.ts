@@ -35,13 +35,8 @@ export async function GET(request: Request, { params }: RouteParams) {
             name: true,
             displayName: true,
             description: true,
-            category: true,
-            techStack: true,
             techStackId: true,
             vulnerabilityPatternId: true,
-            migrationStatus: true,
-            migrationConfidence: true,
-            migrationNotes: true,
           },
         },
       },
@@ -58,7 +53,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     if (analysis.inferredVulnPatternId) {
       vulnerabilityPattern = await prisma.vulnerabilityPattern.findUnique({
         where: { id: analysis.inferredVulnPatternId },
-        select: { id: true, name: true, displayName: true, category: true },
+        select: { id: true, name: true, displayName: true, categoryId: true, categoryRef: { select: { value: true } } },
       });
     }
 
@@ -142,7 +137,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
           select: {
             id: true,
             name: true,
-            migrationStatus: true,
           },
         },
       },
@@ -175,8 +169,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         data: {
           techStackId: finalLanguageId,
           vulnerabilityPatternId: finalVulnPatternId,
-          migrationStatus: 'migrated',
-          migrationNotes: notes ?? analysis.llmReason ?? '',
           updatedAt: new Date(),
         },
       });
@@ -208,14 +200,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       });
 
     } else if (status === 'rejected') {
-      // 拒绝：将 Skill 状态设为 failed 或保持原状态
       await prisma.skill.update({
         where: { id: analysis.skillId },
-        data: {
-          migrationStatus: 'failed',
-          migrationNotes: notes ?? '审核拒绝',
-          updatedAt: new Date(),
-        },
+        data: { updatedAt: new Date() },
       });
 
       logger.info(LOG_MODULES.SKILL, '审核拒绝', {
@@ -236,7 +223,6 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         },
         skill: {
           id: analysis.skillId,
-          migrationStatus: status === 'approved' ? 'migrated' : 'failed',
         },
       }
     }, { status: 200 });

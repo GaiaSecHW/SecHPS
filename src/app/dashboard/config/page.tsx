@@ -10,12 +10,10 @@ import {
   Loader2,
   FolderOpen,
   FileText,
-  Layers,
   Download,
   Upload,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
-import TechStackSection from './TechStackSection';
 
 interface Config {
   id: string;
@@ -611,17 +609,6 @@ export default function ConfigPage() {
           </div>
         </div>
 
-        {/* Tech Stack Options */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-            <Layers size={20} />
-            技术栈管理
-          </h3>
-          <p className="text-sm text-gray-500">
-            管理可用于 Skill 和 Workflow 的技术栈选项
-          </p>
-          <TechStackSection token={localStorage.getItem('token') || ''} />
-        </div>
       </div>
 
       {/* Save Button (Bottom) */}

@@ -39,7 +39,7 @@ export async function GET(
       where,
       include: {
         Skill: {
-          select: { id: true, name: true, displayName: true, category: true },
+          select: { id: true, name: true, displayName: true, vulnerabilityPatternId: true },
         },
         Project: {
           select: { id: true, name: true },

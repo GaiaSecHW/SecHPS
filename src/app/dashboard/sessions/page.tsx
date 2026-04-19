@@ -1318,33 +1318,6 @@ toast.error(data.error || '更新项目失败');
                             <MessageSquare size={12} />
                             <span>详情</span>
                           </Link>
-                          {runningEval.status === 'running' && (
-                            <button
-                              onClick={async (e) => {
-                                e.preventDefault();
-                                if (!confirm('确定要停止当前评估吗？')) return;
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  const res = await fetch(`/api/evaluations/${runningEval.id}/stop`, {
-                                    method: 'POST',
-                                    headers: { Authorization: `Bearer ${token}` },
-                                  });
-                                  if (res.ok) {
-                                    fetchProjects();
-                                  } else {
-                                    const data = await res.json();
-                                    toast.error(data.error || '停止失败');
-                                  }
-                                } catch (err) {
-                                  toast.error('停止失败');
-                                }
-                              }}
-                              className="text-xs text-orange-600 hover:text-orange-800 flex items-center space-x-1"
-                            >
-                              <Square size={12} />
-                              <span>停止</span>
-                            </button>
-                          )}
                         </div>
                       </div>
                     );
@@ -1454,66 +1427,18 @@ toast.error(data.error || '更新项目失败');
                             second: '2-digit'
                           }) : '';
                           return (
-                            <>
-                              {/* 运行状态提示 - 增强版 */}
-                              <div className="flex items-center space-x-3 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md">
-                                <div className="flex items-center space-x-2">
-                                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                                  <span className="text-sm text-blue-700 font-medium">
-                                    {runningEval?.status === 'queued' ? '📋 排队中' : '🔄 运行中'}
-                                  </span>
-                                </div>
-                                {timeStr && (
-                                  <span className="text-xs text-blue-500 border-l border-blue-200 pl-2">
-                                    启动: {timeStr}
-                                  </span>
-                                )}
-                              </div>
-                              {/* 查看详情按钮 */}
-                              {runningEval && (
-                                <button
-                                  onClick={() => {
-                                    router.push(`/dashboard/sessions/${project.id}?evaluationId=${runningEval.id}`);
-                                  }}
-                                  className="flex items-center space-x-1 px-2 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
-                                  title="查看评估详情"
-                                >
-                                  <MessageSquare size={14} />
-                                  <span>详情</span>
-                                </button>
-                              )}
-                              {/* 停止按钮 */}
-                              {runningEval && runningEval.status === 'running' && (
-                                <button
-                                  onClick={async () => {
-                                    if (!runningEval) return;
-                                    if (!confirm('确定要停止当前评估吗？')) return;
-                                    try {
-                                      const token = localStorage.getItem('token');
-                                      const res = await fetch(`/api/evaluations/${runningEval.id}/stop`, {
-                                        method: 'POST',
-                                        headers: { Authorization: `Bearer ${token}` },
-                                      });
-                                      if (res.ok) {
-                                        fetchProjects();
-                                      } else {
-                                        const data = await res.json();
-                                        toast.error(data.error || '停止失败');
-                                      }
-                                    } catch (err) {
-                                      toast.error('停止失败');
-                                    }
-                                  }}
-                                  className="flex items-center space-x-1 px-2 py-1 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded"
-                                >
-                                  <Square size={14} />
-                                  <span>停止</span>
-                                </button>
-                              )}
-                            </>
-                          );
-                        })()}
-                      </>
+                             <>
+                               {/* 运行状态提示 */}
+                               <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-md">
+                                 <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                                 <span className="text-sm text-blue-700 font-medium">
+                                   {runningEval?.status === 'queued' ? '📋 排队中' : '🔄 运行中'}
+                                 </span>
+                               </div>
+                             </>
+                           );
+                         })()}
+                       </>
                      ) : (
                       <>
                         {/* 无运行中的会话：显示启动评估 */}

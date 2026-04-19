@@ -156,9 +156,7 @@ export async function GET(request: Request) {
         name: true,
         displayName: true,
         description: true,
-        category: true,
         cwe: true,
-        techStack: true,
         content: true,
         techStackId: true,
         vulnerabilityPatternId: true,
@@ -177,8 +175,8 @@ export async function GET(request: Request) {
         const skillA = skills[i];
         const skillB = skills[j];
 
-        // 快速预筛选：同类别才考虑
-        if (skillA.category !== skillB.category) continue;
+        // 快速预筛选：同漏洞类型才考虑
+        if (skillA.vulnerabilityPatternId !== skillB.vulnerabilityPatternId) continue;
 
         // 计算预相似度
         const skillAForSim: SkillForSimilarity = {
@@ -186,8 +184,6 @@ export async function GET(request: Request) {
           name: skillA.name,
           displayName: skillA.displayName,
           description: skillA.description || '',
-          category: skillA.category,
-          techStack: typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : [],
           cwe: skillA.cwe,
           content: skillA.content || undefined,
         };
@@ -197,8 +193,6 @@ export async function GET(request: Request) {
           name: skillB.name,
           displayName: skillB.displayName,
           description: skillB.description || '',
-          category: skillB.category,
-          techStack: typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : [],
           cwe: skillB.cwe,
           content: skillB.content || undefined,
         };
@@ -207,7 +201,7 @@ export async function GET(request: Request) {
         const categoryResult = computeCategorySimilarity(skillAForSim, skillBForSim);
         const preliminarySimilarity = keywordResult.score * 0.4 + categoryResult.overlapScore * 0.35;
 
-        // 全量分析：只要同类别且预相似度 >= 0.2 就保留，让 LLM 来判断
+        // 全量分析：只要同漏洞类型且预相似度 >= 0.2 就保留，让 LLM 来判断
         if (preliminarySimilarity >= 0.2) {
           pairs.push({
             skillA: {
@@ -215,8 +209,6 @@ export async function GET(request: Request) {
               name: skillA.name,
               displayName: skillA.displayName || skillA.name,
               description: skillA.description || '',
-              category: skillA.category,
-              techStack: Array.isArray(skillA.techStack) ? skillA.techStack : (typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : []),
               cwe: skillA.cwe,
               content: skillA.content || undefined,
             },
@@ -225,8 +217,6 @@ export async function GET(request: Request) {
               name: skillB.name,
               displayName: skillB.displayName || skillB.name,
               description: skillB.description || '',
-              category: skillB.category,
-              techStack: Array.isArray(skillB.techStack) ? skillB.techStack : (typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : []),
               cwe: skillB.cwe,
               content: skillB.content || undefined,
             },
@@ -239,7 +229,6 @@ export async function GET(request: Request) {
     // 过滤：同类别 + 预相似度达标即可
     const filteredPairs = filterPairsForLLMAnalysis(pairs, {
       minPreliminarySimilarity: 0.2,
-      skipDifferentCategory: true,
     });
 
     // USD to CNY 汇率（可配置）
@@ -308,9 +297,7 @@ export async function POST(request: Request) {
         name: true,
         displayName: true,
         description: true,
-        category: true,
         cwe: true,
-        techStack: true,
         content: true,
         techStackId: true,
         vulnerabilityPatternId: true,
@@ -337,8 +324,8 @@ export async function POST(request: Request) {
         const skillA = skills[i];
         const skillB = skills[j];
 
-        // 快速预筛选：同类别才考虑
-        if (skillA.category !== skillB.category) continue;
+        // 快速预筛选：同漏洞类型才考虑
+        if (skillA.vulnerabilityPatternId !== skillB.vulnerabilityPatternId) continue;
 
         // 如果跳过已确认的，检查是否已存在合并记录
         if (skipConfirmed) {
@@ -360,8 +347,6 @@ export async function POST(request: Request) {
           name: skillA.name,
           displayName: skillA.displayName,
           description: skillA.description || '',
-          category: skillA.category,
-          techStack: typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : [],
           cwe: skillA.cwe,
           content: skillA.content || undefined,
         };
@@ -371,8 +356,6 @@ export async function POST(request: Request) {
           name: skillB.name,
           displayName: skillB.displayName,
           description: skillB.description || '',
-          category: skillB.category,
-          techStack: typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : [],
           cwe: skillB.cwe,
           content: skillB.content || undefined,
         };
@@ -381,7 +364,7 @@ export async function POST(request: Request) {
         const categoryResult = computeCategorySimilarity(skillAForSim, skillBForSim);
         const preliminarySimilarity = keywordResult.score * 0.4 + categoryResult.overlapScore * 0.35;
 
-        // 全量分析：只要同类别且预相似度 >= 0.2 就保留
+        // 全量分析：只要同漏洞类型且预相似度 >= 0.2 就保留
         if (preliminarySimilarity >= 0.2) {
           pairs.push({
             skillA: {
@@ -389,8 +372,6 @@ export async function POST(request: Request) {
               name: skillA.name,
               displayName: skillA.displayName || skillA.name,
               description: skillA.description || '',
-              category: skillA.category,
-              techStack: Array.isArray(skillA.techStack) ? skillA.techStack : (typeof skillA.techStack === 'string' ? JSON.parse(skillA.techStack || '[]') : []),
               cwe: skillA.cwe,
               content: skillA.content || undefined,
             },
@@ -399,8 +380,6 @@ export async function POST(request: Request) {
               name: skillB.name,
               displayName: skillB.displayName || skillB.name,
               description: skillB.description || '',
-              category: skillB.category,
-              techStack: Array.isArray(skillB.techStack) ? skillB.techStack : (typeof skillB.techStack === 'string' ? JSON.parse(skillB.techStack || '[]') : []),
               cwe: skillB.cwe,
               content: skillB.content || undefined,
             },
@@ -413,7 +392,6 @@ export async function POST(request: Request) {
     // 过滤：同类别 + 预相似度 >= 0.2
     let filteredPairs = filterPairsForLLMAnalysis(pairs, {
       minPreliminarySimilarity: 0.2,
-      skipDifferentCategory: true,
     });
 
     // 应用限制

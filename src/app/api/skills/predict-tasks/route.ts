@@ -173,8 +173,8 @@ async function executePredictionTask(taskId: string) {
         name: true,
         displayName: true,
         description: true,
-        category: true,
-        techStack: true,
+        techStackId: true,
+        vulnerabilityPatternId: true,
         cwe: true,
       },
     });
@@ -204,21 +204,11 @@ async function executePredictionTask(taskId: string) {
 
     // 构建技能列表摘要
     const skillSummaries = skills.map(skill => {
-      let techStackArr: string[] = [];
-      if (skill.techStack) {
-        try {
-          techStackArr = JSON.parse(skill.techStack);
-        } catch {
-          // 忽略解析错误
-        }
-      }
       return {
         id: skill.id,
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
-        techStack: techStackArr,
         cwe: skill.cwe,
       };
     });
@@ -279,8 +269,6 @@ async function executePredictionTask(taskId: string) {
       skillId: match.skillId,
       skillName: match.skillName,
       displayName: match.displayName,
-      category: match.category,
-      techStack: match.techStack || [],
       cwe: match.cwe || null,
       similarity: match.relevance || 0.5,
       overlapType: determineOverlapType(match),
@@ -372,14 +360,12 @@ function buildMatchPrompt(
     name: string;
     displayName: string;
     description: string;
-    category: string;
-    techStack: string[];
     cwe: string | null;
   }>,
   topK: number
 ): string {
   const skillsTable = skills.map(s =>
-    `| ${s.id} | ${s.displayName} | ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''} | ${s.category} | ${s.techStack.join(', ') || '通用'} | ${s.cwe || '-'} |`
+    `| ${s.id} | ${s.displayName} | ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''} | ${s.cwe || '-'} |`
   ).join('\n');
 
   return `你是一个Skill匹配专家。分析以下任务，从可用的Skills中选择最匹配的。
@@ -421,7 +407,7 @@ async function callLLMForMatchWithDefaultModel(
     defaultModel: string;
   },
   prompt: string,
-  skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[]; cwe?: string | null }>,
+  skills: Array<{ id: string; name: string; displayName: string; description: string; cwe?: string | null }>,
   topK: number,
   userId: string,
   taskName: string
@@ -477,8 +463,8 @@ async function callLLMForMatchWithDefaultModel(
           skillId: skill.id,
           skillName: skill.name,
           displayName: skill.displayName,
-          category: skill.category,
-          techStack: skill.techStack,
+          category: null,
+          techStack: [],
           relevance: Math.min(1, Math.max(0, item.relevance || 0.5)),
           reason: item.reason || '匹配成功',
         });
@@ -503,8 +489,6 @@ function simpleKeywordMatch(
     name: string;
     displayName: string;
     description: string;
-    category: string;
-    techStack: string[];
   }>,
   topK: number
 ): any[] {
@@ -529,14 +513,7 @@ function simpleKeywordMatch(
     let score = 0;
     const skillText = `${skill.name} ${skill.displayName} ${skill.description}`.toLowerCase();
 
-    // 1. 类别匹配得分
-    const keywords = categoryKeywords[skill.category] || [];
-    for (const keyword of keywords) {
-      if (searchText.includes(keyword)) {
-        score += 0.3;
-        break;
-      }
-    }
+    // 1. 类别匹配得分（已移除，使用漏洞类型替代）
 
     // 2. 名称/描述相似度
     const skillWords = skillText.split(/\s+/);
@@ -560,8 +537,8 @@ function simpleKeywordMatch(
     skillId: s.skill.id,
     skillName: s.skill.name,
     displayName: s.skill.displayName,
-    category: s.skill.category,
-    techStack: s.skill.techStack,
+    category: null,
+    techStack: [],
     relevance: Math.min(1, s.score),
     reason: `关键词匹配得分: ${(s.score * 100).toFixed(0)}%`,
   }));
@@ -575,7 +552,7 @@ function simpleKeywordMatch(
  * 根据匹配结果确定重叠类型
  */
 function determineOverlapType(
-  match: { category: string; techStack: string[]; relevance: number }
+  match: { relevance: number }
 ): OverlapType {
   // 高相关性视为语义重叠
   if (match.relevance >= 0.85) {

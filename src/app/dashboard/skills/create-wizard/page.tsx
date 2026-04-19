@@ -69,10 +69,10 @@ interface SkillWizardData {
     name: string;
     displayName: string;
     description: string;
-    category: string;
-    techStack: string[];
+    vulnerabilityPatternId?: string;
+    techStackId?: string;
     cwe?: string;
-    content: string;  // 完整的 Markdown 内容
+    content: string;
   };
   
   // 步骤 4: 测试用例
@@ -146,9 +146,9 @@ const initialWizardData: SkillWizardData = {
     name: '',
     displayName: '',
     description: '',
-    category: 'code-audit',
-    techStack: [],
-    content: '',  // 完整的 Markdown 内容
+    vulnerabilityPatternId: undefined,
+    techStackId: undefined,
+    content: '',
   },
   testCases: [],
   evaluation: {

@@ -47,54 +47,39 @@ export async function GET(request: Request) {
       skills = await prisma.skill.findMany({
         where: {
           id: { in: skillIds },
-          migrationStatus: 'pending',
         },
         select: {
           id: true,
           name: true,
           displayName: true,
           description: true,
-          category: true,
-          techStack: true,
           content: true,
           cwe: true,
         },
       });
     } else {
-      // 按条件筛选
       skills = await getSkillsForInference({
         limit,
-        category: category ?? undefined,
         status: 'pending',
       });
     }
 
-    // 4. 获取已迁移统计
-    const migratedCount = await prisma.skill.count({
-      where: { migrationStatus: 'migrated' },
-    });
+    // 4. 获取统计
+    const totalSkills = await prisma.skill.count({ where: { isLatest: true } });
 
-    const pendingReviewCount = await prisma.skill.count({
-      where: { migrationStatus: 'pending_review' },
-    });
-
-    // 5. 组装响应
     const preview = {
       skillsToMigrate: skills.length,
       skills: skills.slice(0, 20).map(s => ({
         id: s.id,
         name: s.name,
         displayName: s.displayName,
-        category: s.category,
-        techStack: s.techStack,
         cwe: s.cwe,
       })),
       stats: {
-        migrated: migratedCount,
-        pendingReview: pendingReviewCount,
+        total: totalSkills,
         pending: skills.length,
       },
-      estimatedTime: `${Math.ceil(skills.length * 3 / 60)} 分钟`, // 约 3 秒/Skill
+      estimatedTime: `${Math.ceil(skills.length * 3 / 60)} 分钟`,
       estimatedCost: `${(skills.length * 0.002).toFixed(2)} USD`,
     };
 
@@ -151,15 +136,12 @@ export async function POST(request: Request) {
       skills = await prisma.skill.findMany({
         where: {
           id: { in: skillIds },
-          migrationStatus: { in: ['pending', 'failed'] },
         },
         select: {
           id: true,
           name: true,
           displayName: true,
           description: true,
-          category: true,
-          techStack: true,
           content: true,
           cwe: true,
         },
@@ -168,7 +150,6 @@ export async function POST(request: Request) {
       // 按条件筛选
       skills = await getSkillsForInference({
         limit,
-        category,
         status: 'pending',
       });
     }
@@ -187,7 +168,6 @@ export async function POST(request: Request) {
             id: s.id,
             name: s.name,
             displayName: s.displayName,
-            category: s.category,
           })),
           estimatedTime: `${Math.ceil(skills.length * 3 / 60)} 分钟`,
           estimatedCost: `${(skills.length * 0.002).toFixed(2)} USD`,

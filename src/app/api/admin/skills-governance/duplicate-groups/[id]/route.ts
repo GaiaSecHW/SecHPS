@@ -35,7 +35,6 @@ export async function GET(request: Request, context: RouteContext) {
                 name: true,
                 displayName: true,
                 description: true,
-                category: true,
                 techStackId: true,
                 vulnerabilityPatternId: true,
                 content: true,
@@ -64,7 +63,7 @@ export async function GET(request: Request, context: RouteContext) {
       }),
       prisma.vulnerabilityPattern.findUnique({
         where: { id: group.vulnerabilityType },
-        select: { id: true, name: true, displayName: true, category: true, cwe: true },
+        select: { id: true, name: true, displayName: true, categoryId: true, cwe: true },
       }),
     ]);
 

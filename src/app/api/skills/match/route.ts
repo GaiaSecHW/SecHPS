@@ -25,8 +25,6 @@ interface SkillMatch {
   skillId: string;
   skillName: string;
   displayName: string;
-  category: string;
-  techStack: string[];
   relevance: number;
   reason: string;
 }
@@ -45,39 +43,19 @@ interface GovernanceWarning {
  * 将 SkillMatch 转换为 SimilarSkill（用于治理分析）
  */
 function convertToSimilarSkill(matches: SkillMatch[]): SimilarSkill[] {
-  return matches.map((match, index) => {
-    // 推断重叠类型：基于类别和技术栈
-    let overlapType: OverlapType = 'trigger-overlap';
-    let overlapScore = match.relevance * 0.8; // 基于相关性估算重叠得分
-    
-    // 检查是否有相同类别的其他技能
-    const sameCategoryCount = matches.filter(m => m.category === match.category).length;
-    if (sameCategoryCount > 1) {
-      overlapType = 'semantic-overlap';
-      overlapScore = Math.min(0.9, match.relevance * 0.9);
-    }
-    
-    // 检查技术栈重叠
-    const techStackOverlap = matches.filter(m => 
-      m.skillId !== match.skillId && 
-      m.techStack.some(ts => match.techStack.includes(ts))
-    ).length;
-    if (techStackOverlap > 0) {
-      overlapType = 'techStack-overlap';
-      overlapScore = Math.min(0.85, match.relevance * 0.85 + techStackOverlap * 0.05);
-    }
-    
+  return matches.map((match) => {
+    const overlapType: OverlapType = 'trigger-overlap';
+    const overlapScore = match.relevance * 0.8;
+
     return {
       skillId: match.skillId,
       skillName: match.skillName,
       displayName: match.displayName,
-      category: match.category,
-      techStack: match.techStack,
-      cwe: null, // SkillMatch 不包含 CWE，设为 null
+      cwe: null,
       similarity: match.relevance,
       overlapType,
       overlapScore,
-      keywordScore: match.relevance * 0.7, // 估算关键词得分
+      keywordScore: match.relevance * 0.7,
       reason: match.reason,
     };
   });
@@ -190,8 +168,8 @@ export async function POST(request: Request) {
         name: true,
         displayName: true,
         description: true,
-        category: true,
-        techStack: true,
+        techStackId: true,
+        vulnerabilityPatternId: true,
         cwe: true,
       },
     });
@@ -206,21 +184,11 @@ export async function POST(request: Request) {
 
     // 构建技能列表摘要
     const skillSummaries = skills.map(skill => {
-      let techStackArr: string[] = [];
-      if (skill.techStack) {
-        try {
-          techStackArr = JSON.parse(skill.techStack);
-        } catch {
-          // 忽略解析错误
-        }
-      }
       return {
         id: skill.id,
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
-        techStack: techStackArr,
         cwe: skill.cwe,
       };
     });
@@ -324,14 +292,12 @@ function buildMatchPrompt(
     name: string;
     displayName: string;
     description: string;
-    category: string;
-    techStack: string[];
     cwe: string | null;
   }>,
   topK: number
 ): string {
-  const skillsTable = skills.map(s => 
-    `| ${s.id} | ${s.displayName} | ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''} | ${s.category} | ${s.techStack.join(', ') || '通用'} | ${s.cwe || '-'} |`
+  const skillsTable = skills.map(s =>
+    `| ${s.id} | ${s.displayName} | ${s.description.substring(0, 100)}${s.description.length > 100 ? '...' : ''} | ${s.cwe || '-'} |`
   ).join('\n');
 
   return `你是一个Skill匹配专家。分析以下任务，从可用的Skills中选择最匹配的。
@@ -375,7 +341,7 @@ async function callLLMForMatchWithDefaultModel(
   prompt: string,
   taskName: string,
   taskDescription: string,
-  skills: Array<{ id: string; name: string; displayName: string; description: string; category: string; techStack: string[]; cwe?: string | null }>,
+  skills: Array<{ id: string; name: string; displayName: string; description: string; cwe?: string | null }>,
   topK: number,
   userId: string,
   username?: string
@@ -436,8 +402,6 @@ async function callLLMForMatchWithDefaultModel(
           skillId: skill.id,
           skillName: skill.name,
           displayName: skill.displayName,
-          category: skill.category,
-          techStack: skill.techStack,
           relevance: Math.min(1, Math.max(0, item.relevance || 0.5)),
           reason: item.reason || '匹配成功',
         });
@@ -462,8 +426,6 @@ function simpleKeywordMatch(
     name: string;
     displayName: string;
     description: string;
-    category: string;
-    techStack: string[];
   }>,
   topK: number
 ): SkillMatch[] {
@@ -488,14 +450,8 @@ function simpleKeywordMatch(
     let score = 0;
     const skillText = `${skill.name} ${skill.displayName} ${skill.description}`.toLowerCase();
     
-    // 1. 类别匹配得分
-    const keywords = categoryKeywords[skill.category] || [];
-    for (const keyword of keywords) {
-      if (searchText.includes(keyword)) {
-        score += 0.3;
-        break;
-      }
-    }
+    // 1. 类别匹配得分（已移除，使用漏洞类型替代）
+    // const keywords = categoryKeywords[skill.category] || [];
 
     // 2. 名称/描述相似度
     const skillWords = skillText.split(/\s+/);
@@ -519,8 +475,6 @@ function simpleKeywordMatch(
     skillId: s.skill.id,
     skillName: s.skill.name,
     displayName: s.skill.displayName,
-    category: s.skill.category,
-    techStack: s.skill.techStack,
     relevance: Math.min(1, s.score),
     reason: `关键词匹配得分: ${(s.score * 100).toFixed(0)}%`,
   }));

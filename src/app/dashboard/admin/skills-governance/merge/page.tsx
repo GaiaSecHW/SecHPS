@@ -22,15 +22,13 @@ import {
   Award,
   Clock,
 } from 'lucide-react';
-import { useSkillCategories } from '@/hooks/useSkillCategories';
-
 // Types based on API response
 interface MergeCandidate {
   skillId: string;
   skillName: string;
   skillDisplayName: string;
-  category: string;
-  techStack: string[];
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   similarSkills: Array<{
     skillId: string;
     skillName: string;
@@ -46,8 +44,8 @@ interface SkillInfo {
   id: string;
   name: string;
   displayName: string;
-  category: string;
-  techStack: string[];
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   version: number;
   isLatest: boolean;
   content?: string;
@@ -124,9 +122,6 @@ export default function SkillMergePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // 分类标签 - 从数据库动态获取
-  const { categoryLabels } = useSkillCategories();
-  
   // Selection state
   const [selectedStrategy, setSelectedStrategy] = useState<string>('content-merge');
   const [targetSkill, setTargetSkill] = useState<SkillInfo | null>(null);
@@ -366,19 +361,17 @@ export default function SkillMergePage() {
       id: candidate.skillId,
       name: candidate.skillName,
       displayName: candidate.skillDisplayName,
-      category: candidate.category,
-      techStack: candidate.techStack,
+      techStackId: candidate.techStackId,
+      vulnerabilityPatternId: candidate.vulnerabilityPatternId,
       version: 1,
       isLatest: true,
     });
-    
+
     // Set source skills from similar skills
     const sources: SkillInfo[] = candidate.similarSkills.map(s => ({
       id: s.skillId,
       name: s.skillName,
       displayName: s.skillDisplayName,
-      category: candidate.category,
-      techStack: [],
       version: 1,
       isLatest: true,
     }));
@@ -622,9 +615,9 @@ export default function SkillMergePage() {
                   <div>
                     <p className="font-medium text-gray-900">{targetSkill.displayName}</p>
                     <p className="text-sm text-gray-500">{targetSkill.name}</p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {categoryLabels[targetSkill.category] || targetSkill.category}
-                    </p>
+                    {targetSkill.techStackId && (
+                      <p className="text-xs text-gray-600 mt-1">{targetSkill.techStackId}</p>
+                    )}
                   </div>
                   <button
                     onClick={() => {
@@ -637,15 +630,6 @@ export default function SkillMergePage() {
                     <XCircle size={20} />
                   </button>
                 </div>
-                {targetSkill.techStack.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {targetSkill.techStack.map((ts) => (
-                      <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                        {ts}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
             ) : (
               <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">

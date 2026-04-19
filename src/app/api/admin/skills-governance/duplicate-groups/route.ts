@@ -58,7 +58,6 @@ export async function GET(request: Request) {
                   id: true,
                   name: true,
                   displayName: true,
-                  category: true,
                   techStackId: true,
                   vulnerabilityPatternId: true,
                   isActive: true,

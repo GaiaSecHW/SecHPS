@@ -16,7 +16,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { useSkillCategories } from '@/hooks/useSkillCategories';
+
 
 // Types from API response
 interface SimilarSkill {
@@ -129,9 +129,6 @@ function MergeCandidatesPageContent() {
   const [searchTerm, setSearchTerm] = useState('');
   const [minOverlapScore, setMinOverlapScore] = useState('0.75');
   const [activeTab, setActiveTab] = useState<'candidates' | 'pending'>('candidates');
-
-  // 分类标签 - 从数据库动态获取
-  const { categoryLabels } = useSkillCategories();
 
   useEffect(() => {
     fetchMergeCandidates();
@@ -394,7 +391,7 @@ function MergeCandidatesPageContent() {
                             <p className="font-medium text-gray-900">{candidate.skillDisplayName}</p>
                             <p className="text-sm text-gray-500">{candidate.skillName}</p>
                             <p className="text-xs text-gray-400">
-                              {categoryLabels[candidate.skillCategory] || candidate.skillCategory}
+                              {candidate.skillCategory}
                             </p>
                           </div>
                         </div>

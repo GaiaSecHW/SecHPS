@@ -27,57 +27,35 @@ export async function GET(request: Request) {
       select: { id: true, value: true, label: true },
     });
 
-    // 获取每个分类的 Skill 数量（通过 VulnerabilityPattern 关联）
+    // 获取每个分类的 Skill 数量（通过 VulnerabilityPattern.categoryId 关联）
     const skillCounts = await prisma.skill.groupBy({
-      by: ['category'],
-      where: { isLatest: true },
+      by: ['vulnerabilityPatternId'],
+      where: { isLatest: true, vulnerabilityPatternId: { not: null } },
       _count: { id: true },
     });
 
-    const countMap = new Map(skillCounts.map(s => [s.category, s._count.id]));
-    
-    // Skill.category 与 VulnerabilityCategory.value 的映射
-    // 这些是匹配的值（两者相同）
-    const matchedValues = new Set(['injection', 'memory', 'other']);
-    
-    // Skill.category 的值需要映射到 VulnerabilityCategory.value
-    const skillToVulnMapping: Record<string, string> = {
-      'auth': 'authentication',
-      'logic': 'business-logic',
-      'crypto': 'cryptography',
-      'file': 'file-ops',
-      'info': 'sensitive',
-      'infra': 'configuration',
-      'traversal': 'input-validation',
-      'deserialization': 'integrity',
-      'supply-chain': 'components',
-      'api': 'access-control',
-      'code-audit': 'other',
-      'methodology': 'other',
-      'mobile': 'other',
-      'ai': 'other',
-      'frontend': 'input-validation',
-    };
-
-    const result = categories.map(c => {
-      // 直接匹配
-      let count = countMap.get(c.value) || 0;
-      
-      // 如果直接匹配为0，检查是否有 Skill.category 映射到这个 value
-      if (count === 0) {
-        for (const [skillCat, vulnValue] of Object.entries(skillToVulnMapping)) {
-          if (vulnValue === c.value && countMap.has(skillCat)) {
-            count += countMap.get(skillCat) || 0;
-          }
-        }
-      }
-      
-      return {
-        name: c.value,        // 使用 value 作为 name（与 Skill.category 匹配）
-        label: c.label,
-        count,
-      };
+    // 获取所有相关 VulnerabilityPattern 的 categoryId
+    const patternIds = skillCounts.map(s => s.vulnerabilityPatternId).filter(Boolean) as string[];
+    const patterns = await prisma.vulnerabilityPattern.findMany({
+      where: { id: { in: patternIds } },
+      select: { id: true, categoryId: true },
     });
+    const patternCategoryMap = new Map(patterns.map(p => [p.id, p.categoryId]));
+
+    // 按 categoryId 汇总 Skill 数量
+    const countMap = new Map<string, number>();
+    for (const s of skillCounts) {
+      const catId = patternCategoryMap.get(s.vulnerabilityPatternId!);
+      if (catId) {
+        countMap.set(catId, (countMap.get(catId) || 0) + s._count.id);
+      }
+    }
+
+    const result = categories.map(c => ({
+      name: c.value,
+      label: c.label,
+      count: countMap.get(c.id) || 0,
+    }));
 
     return NextResponse.json({
       categories: result,

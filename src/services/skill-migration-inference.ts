@@ -19,8 +19,6 @@ export interface SkillForInference {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack?: string | null;        // 原始技术栈（可能不准）
   content?: string | null;
   cwe?: string | null;
 }
@@ -104,7 +102,7 @@ const INFERENCE_SYSTEM_PROMPT = `你是一个代码安全审计专家，负责�
 function buildInferencePrompt(
   skill: SkillForInference,
   languages: Array<{ id: string; name: string; category: string }>,
-  vulnerabilityPatterns: Array<{ id: string; name: string; displayName: string; category: string }>
+  vulnerabilityPatterns: Array<{ id: string; name: string; displayName: string; categoryValue?: string }>
 ): string {
   const truncateContent = (content: string | null | undefined, maxLen: number = 3000): string => {
     if (!content) return '无';
@@ -117,7 +115,7 @@ function buildInferencePrompt(
     .join('\n');
 
   const vulnList = vulnerabilityPatterns
-    .map(v => `- ${v.displayName} (ID: ${v.id}, 类别: ${v.category})`)
+    .map(v => `- ${v.displayName} (ID: ${v.id}, 类别: ${v.categoryValue || ''})`)
     .join('\n');
 
   return `请分析以下 Skill 内容，推断其主要编程语言和漏洞类型：
@@ -126,8 +124,6 @@ function buildInferencePrompt(
 - **名称**: ${skill.name}
 - **显示名**: ${skill.displayName}
 - **描述**: ${skill.description}
-- **类别**: ${skill.category}
-- **原始技术栈**: ${skill.techStack || '无'}
 - **CWE**: ${skill.cwe || '无'}
 
 ## Skill 内容摘要
@@ -182,12 +178,24 @@ export async function getActiveTechStackOptions(): Promise<Array<{ id: string; n
 /**
  * 获取所有活跃的漏洞模式
  */
-export async function getActiveVulnerabilityPatterns(): Promise<Array<{ id: string; name: string; displayName: string; category: string }>> {
-  return prisma.vulnerabilityPattern.findMany({
+export async function getActiveVulnerabilityPatterns(): Promise<Array<{ id: string; name: string; displayName: string; categoryValue?: string }>> {
+  const patterns = await prisma.vulnerabilityPattern.findMany({
     where: { isActive: true },
-    select: { id: true, name: true, displayName: true, category: true },
-    orderBy: [{ category: 'asc' }, { name: 'asc' }],
+    select: {
+      id: true,
+      name: true,
+      displayName: true,
+      categoryId: true,
+      categoryRef: { select: { value: true } },
+    },
+    orderBy: [{ categoryId: 'asc' }, { name: 'asc' }],
   });
+  return patterns.map(p => ({
+    id: p.id,
+    name: p.name,
+    displayName: p.displayName,
+    categoryValue: p.categoryRef?.value,
+  }));
 }
 
 // ============================================================================
@@ -201,7 +209,7 @@ export async function inferSkillMetadata(
   skill: SkillForInference,
   options?: {
     languages?: Array<{ id: string; name: string; category: string }>;
-    vulnerabilityPatterns?: Array<{ id: string; name: string; displayName: string; category: string }>;
+    vulnerabilityPatterns?: Array<{ id: string; name: string; displayName: string; categoryValue?: string }>;
     context?: TokenUsageContext;
   }
 ): Promise<InferenceResult> {
@@ -343,13 +351,16 @@ export async function batchInferSkills(
   const languages = await getActiveTechStackOptions();
   const vulnerabilityPatterns = await getActiveVulnerabilityPatterns();
 
-  // 过滤已分析的 Skill
+  // 过滤已分析的 Skill（已有 techStackId 或 vulnerabilityPatternId 的视为已分析）
   let skillsToAnalyze = skills;
   if (skipAnalyzed) {
     const existingSkills = await prisma.skill.findMany({
       where: {
         id: { in: skills.map(s => s.id) },
-        migrationStatus: { in: ['migrated', 'analyzing'] },
+        OR: [
+          { techStackId: { not: null } },
+          { vulnerabilityPatternId: { not: null } },
+        ],
       },
       select: { id: true },
     });
@@ -379,9 +390,6 @@ export async function batchInferSkills(
               data: {
                 techStackId: result.languageId,
                 vulnerabilityPatternId: result.vulnerabilityPatternId,
-                migrationConfidence: result.confidence,
-                migrationNotes: result.reason,
-                migrationStatus: 'analyzing',
                 updatedAt: new Date(),
               },
             });
@@ -435,18 +443,18 @@ export async function batchInferSkills(
  */
 export async function getSkillsForInference(options?: {
   limit?: number;
-  category?: string;
   status?: string;
 }): Promise<SkillForInference[]> {
-  const { limit, category, status = 'pending' } = options || {};
+  const { limit } = options || {};
 
+  // 获取尚未完成迁移的 Skill（没有 techStackId 或 vulnerabilityPatternId）
   const where: Record<string, unknown> = {
-    migrationStatus: status,
+    isLatest: true,
+    OR: [
+      { techStackId: null },
+      { vulnerabilityPatternId: null },
+    ],
   };
-
-  if (category) {
-    where.category = category;
-  }
 
   return prisma.skill.findMany({
     where,
@@ -456,8 +464,6 @@ export async function getSkillsForInference(options?: {
       name: true,
       displayName: true,
       description: true,
-      category: true,
-      techStack: true,
       content: true,
       cwe: true,
     },
@@ -477,9 +483,6 @@ export async function applyInferenceResult(
     data: {
       techStackId: result.languageId,
       vulnerabilityPatternId: result.vulnerabilityPatternId,
-      migrationConfidence: result.confidence,
-      migrationNotes: result.reason,
-      migrationStatus: status,
       updatedAt: new Date(),
     },
   });

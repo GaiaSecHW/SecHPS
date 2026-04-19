@@ -23,18 +23,19 @@ import {
   ChevronUp,
   Eye,
   History,
+  Plus,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
-import { getCategories, Category } from '@/lib/categories';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
-import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
 import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
 import { SkillRollbackModal } from '@/components/skills/SkillRollbackModal';
+import { SkillNewVersionModal } from '@/components/skills/SkillNewVersionModal';
 import toast from 'react-hot-toast';
 
 interface Skill {
@@ -42,8 +43,8 @@ interface Skill {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack: string | null;
+  techStackId: string | null;
+  techStackName?: string | null;
   cwe: string | null;
   severity: string | null;
   content: string;
@@ -55,13 +56,15 @@ interface Skill {
   successRate: number | null;
   avgDuration: number | null;
   execCount: number;
-  vulnerabilityCount: number;  // 发现问题数
-  successExecCount: number;    // 有发现问题的执行次数
+  vulnerabilityCount: number;
+  successExecCount: number;
   createdAt: string;
   updatedAt: string;
-  userId: string | null;  // 创建者ID
-  isPublic: boolean;  // 是否公开分享
-  vulnerabilityPatternId: string | null;  // 漏洞模式 ID
+  userId: string | null;
+  isPublic: boolean;
+  vulnerabilityPatternId: string | null;
+  vulnerabilityPatternName?: string | null;
+  vulnerabilityPatternCategory?: string | null;
 }
 
 export default function SkillDetailPage() {
@@ -77,13 +80,10 @@ export default function SkillDetailPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editCategory, setEditCategory] = useState('');
-  const [editTechStack, setEditTechStack] = useState<string[]>([]);
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editVulnerabilityPatternId, setEditVulnerabilityPatternId] = useState<string>('');
   const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
@@ -119,6 +119,9 @@ export default function SkillDetailPage() {
   const [showRollbackModal, setShowRollbackModal] = useState(false); // 回滚确认弹窗
   const [rollbackTargetVersionId, setRollbackTargetVersionId] = useState<string>(''); // 回滚目标版本 ID
   const [rollbackTargetVersionNumber, setRollbackTargetVersionNumber] = useState<number>(0); // 回滚目标版本号
+  
+  // 新版本弹窗状态
+  const [showNewVersionModal, setShowNewVersionModal] = useState(false); // 新版本弹窗
   
   // 获取漏洞列表
   const fetchVulnerabilities = async (page: number = 1) => {
@@ -190,6 +193,13 @@ export default function SkillDetailPage() {
     handleCloseVersionView(); // 关闭版本查看
   };
 
+  // 创建新版本成功后刷新
+  const handleNewVersionSuccess = () => {
+    toast.success('新版本创建成功');
+    setIsEditing(false);
+    fetchSkill();
+  };
+
   // 清理定时器
   const clearAiTimers = () => {
     if (aiTimeoutRef.current) { clearTimeout(aiTimeoutRef.current); aiTimeoutRef.current = null; }
@@ -207,11 +217,10 @@ export default function SkillDetailPage() {
   };
 
   // 技术栈选择相关
-  const [techStackSearch, setTechStackSearch] = useState('');
-  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
-  
+  const [editTechStackId, setEditTechStackId] = useState('');
+
   // 使用 Hook 获取技术栈选项
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
   
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -327,14 +336,8 @@ export default function SkillDetailPage() {
   const startEditing = () => {
     if (!skill) return;
     setEditName(skill.displayName);
-    setEditCategory(skill.category);
     setEditVulnerabilityPatternId(skill.vulnerabilityPatternId || '');
-    // 解析技术栈 JSON
-    try {
-      setEditTechStack(skill.techStack ? JSON.parse(skill.techStack) : []);
-    } catch {
-      setEditTechStack([]);
-    }
+    setEditTechStackId(skill.techStackId || '');
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
     setIsEditing(true);
@@ -371,10 +374,9 @@ export default function SkillDetailPage() {
         body: JSON.stringify({
           displayName: editName.trim(),
           description: editName.trim(),
-          category: selectedVulnerabilityPattern?.category || editCategory,
           vulnerabilityPatternId: editVulnerabilityPatternId,
+          techStackId: editTechStackId || null,
           cwe: selectedVulnerabilityPattern?.cwe || null,
-          techStack: editTechStack,
           content: editContent,
           isActive: editIsActive,
         }),
@@ -410,9 +412,8 @@ export default function SkillDetailPage() {
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
       };
-      
+
       const fullContent = buildFullSkill(intent, skill.content || '', outputTemplate, {
         addFrontmatter: true,
         addOutputFormat: !!outputTemplate,
@@ -423,7 +424,6 @@ export default function SkillDetailPage() {
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
         cwe: skill.cwe,
         severity: skill.severity || 'medium',
         content: fullContent,
@@ -464,9 +464,8 @@ export default function SkillDetailPage() {
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
       };
-      
+
       const fullContent = buildFullSkill(intent, skill.content || '', outputTemplate, {
         addFrontmatter: true,
         addOutputFormat: !!outputTemplate,
@@ -477,7 +476,6 @@ export default function SkillDetailPage() {
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
         cwe: skill.cwe,
         severity: skill.severity || 'medium',
         content: fullContent,
@@ -532,12 +530,10 @@ export default function SkillDetailPage() {
             name: skill.name,
             displayName: editName || skill.displayName,
             description: editName || skill.displayName,
-            category: editCategory || skill.category,
-            content: editContent,  // 用户当前完整编辑内容，AI 必须在此基础上优化
+            content: editContent,
             systemPrompt: '',
             userPrompt: '',
             tools: [],
-            techStack: editTechStack.length > 0 ? editTechStack : (skill.techStack ? JSON.parse(skill.techStack) : []),
             cwe: skill.cwe,
           },
         }),
@@ -741,6 +737,14 @@ export default function SkillDetailPage() {
                       取消
                     </button>
                     <button
+                      onClick={() => setShowNewVersionModal(true)}
+                      disabled={saving}
+                      className="inline-flex items-center px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+                    >
+                      <Plus size={16} className="mr-2" />
+                      保存为新版本
+                    </button>
+                    <button
                       onClick={handleSaveEdit}
                       disabled={saving}
                       className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
@@ -768,7 +772,6 @@ export default function SkillDetailPage() {
       {/* Content */}
       <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
         {isEditing ? (
-          /* 编辑模式 */
           <div className="space-y-6">
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -795,7 +798,6 @@ export default function SkillDetailPage() {
                   onChange={(id, pattern) => {
                     setEditVulnerabilityPatternId(id);
                     setSelectedVulnerabilityPattern(pattern);
-                    setEditCategory(pattern.category);
                   }}
                   placeholder="选择漏洞模式"
                 />
@@ -806,79 +808,17 @@ export default function SkillDetailPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   适合的技术栈
                 </label>
-                <div className="relative">
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {editTechStack.map((ts) => (
-                      <span
-                        key={ts}
-                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                      >
-                        {ts}
-                        <button
-                          type="button"
-                          onClick={() => setEditTechStack(editTechStack.filter((t) => t !== ts))}
-                          className="ml-2 text-blue-600 hover:text-blue-800"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={techStackSearch}
-                      onChange={(e) => {
-                        setTechStackSearch(e.target.value);
-                        setShowTechStackDropdown(true);
-                      }}
-                      onFocus={() => setShowTechStackDropdown(true)}
-                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      disabled={loadingTechStack}
-                    />
-                    {showTechStackDropdown && !loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                        {techStackOptions
-                          .filter((option) => 
-                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                            !editTechStack.includes(option)
-                          )
-                          .slice(0, 20)
-                          .map((option) => (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() => {
-                                setEditTechStack([...editTechStack, option]);
-                                setTechStackSearch('');
-                                setShowTechStackDropdown(false);
-                              }}
-                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
-                            >
-                              {option}
-                            </button>
-                          ))}
-                        {techStackOptions.filter((option) => 
-                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !editTechStack.includes(option)
-                        ).length === 0 && (
-                          <div className="px-4 py-2 text-sm text-gray-500">
-                            无匹配选项
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-                        <div className="flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          <span className="text-sm text-gray-500">加载中...</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                <select
+                  value={editTechStackId}
+                  onChange={(e) => setEditTechStackId(e.target.value)}
+                  disabled={loadingTechStack}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">无（通用）</option>
+                  {techStackOptionsWithIds.map((opt) => (
+                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                  ))}
+                </select>
               </div>
             </div>
 
@@ -1056,28 +996,16 @@ export default function SkillDetailPage() {
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">分类</h3>
                 <p className="text-gray-900">
-                  {categories.find(c => c.value === skill.category)?.label || skill.category}
+                  {skill.vulnerabilityPatternCategory || skill.vulnerabilityPatternName || '无'}
                 </p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">所属技术栈</h3>
-                {skill.techStack ? (() => {
-                  try {
-                    const techStacks = JSON.parse(skill.techStack);
-                    if (techStacks.length > 0) {
-                      return (
-                        <div className="flex flex-wrap gap-1">
-                          {techStacks.map((ts: string) => (
-                            <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                              {ts}
-                            </span>
-                          ))}
-                        </div>
-                      );
-                    }
-                  } catch {}
-                  return <p className="text-gray-900">无</p>;
-                })() : <p className="text-gray-900">无</p>}
+                {skill.techStackName ? (
+                  <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                    {skill.techStackName}
+                  </span>
+                ) : <p className="text-gray-900">无</p>}
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">CWE</h3>
@@ -1431,6 +1359,27 @@ export default function SkillDetailPage() {
           targetVersionNumber={rollbackTargetVersionNumber}
           currentVersionNumber={skill.version}
           skillDisplayName={skill.displayName}
+        />
+      )}
+
+      {/* 创建新版本弹窗 */}
+      {showNewVersionModal && skill && (
+        <SkillNewVersionModal
+          isOpen={showNewVersionModal}
+          onClose={() => setShowNewVersionModal(false)}
+          onSuccess={handleNewVersionSuccess}
+          skillId={skill.id}
+          currentVersionNumber={skill.version}
+          skillDisplayName={skill.displayName}
+          editData={{
+            displayName: editName,
+            description: editName,
+            content: editContent,
+            isActive: editIsActive,
+            vulnerabilityPatternId: editVulnerabilityPatternId,
+            techStackId: editTechStackId,
+            cwe: selectedVulnerabilityPattern?.cwe || null,
+          }}
         />
       )}
 

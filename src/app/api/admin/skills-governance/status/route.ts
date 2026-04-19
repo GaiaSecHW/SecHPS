@@ -24,23 +24,7 @@ export async function GET(request: Request) {
       return authErrorResponse(auth);
     }
 
-    // 2. 获取迁移状态统计
-    const migrationStats = await prisma.skill.groupBy({
-      by: ['migrationStatus'],
-      _count: { id: true },
-      where: { isLatest: true },
-    });
-
-    const migration = {
-      total: migrationStats.reduce((sum, s) => sum + s._count.id, 0),
-      pending: migrationStats.find(s => s.migrationStatus === 'pending')?._count.id || 0,
-      analyzing: migrationStats.find(s => s.migrationStatus === 'analyzing')?._count.id || 0,
-      migrated: migrationStats.find(s => s.migrationStatus === 'migrated')?._count.id || 0,
-      pending_review: migrationStats.find(s => s.migrationStatus === 'pending_review')?._count.id || 0,
-      failed: migrationStats.find(s => s.migrationStatus === 'failed')?._count.id || 0,
-    };
-
-    // 3. 获取重复组统计
+    // 2. 获取重复组统计
     const duplicateGroupStats = await prisma.skillDuplicateGroup.groupBy({
       by: ['status'],
       _count: { id: true },
@@ -72,7 +56,6 @@ export async function GET(request: Request) {
 
     // 8. 组装响应
     const statusOverview = {
-      migration,
       duplicateGroups: {
         ...duplicateGroups,
         memberCount: duplicateGroupMemberCount,

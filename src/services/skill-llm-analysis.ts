@@ -18,8 +18,7 @@ export interface SkillForLLMAnalysis {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack: string[];
+  techStackId?: string | null;
   cwe?: string | null;
   content?: string;
   triggers?: string[];
@@ -135,8 +134,6 @@ function buildAnalysisPrompt(skillA: SkillForLLMAnalysis, skillB: SkillForLLMAna
 - **名称**: ${skillA.name}
 - **显示名**: ${skillA.displayName}
 - **描述**: ${skillA.description}
-- **类别**: ${skillA.category}
-- **技术栈**: ${skillA.techStack.join(', ') || '无'}
 - **CWE**: ${skillA.cwe || '无'}
 - **触发词**: ${skillA.triggers?.join(', ') || '无'}
 - **内容摘要**:
@@ -148,8 +145,6 @@ ${truncateContent(skillA.content)}
 - **名称**: ${skillB.name}
 - **显示名**: ${skillB.displayName}
 - **描述**: ${skillB.description}
-- **类别**: ${skillB.category}
-- **技术栈**: ${skillB.techStack.join(', ') || '无'}
 - **CWE**: ${skillB.cwe || '无'}
 - **触发词**: ${skillB.triggers?.join(', ') || '无'}
 - **内容摘要**:
@@ -344,24 +339,16 @@ function createDefaultResult(
   skillA: SkillForLLMAnalysis,
   skillB: SkillForLLMAnalysis
 ): LLMAnalysisResult {
-  // 简单启发式判断
-  const sameCategory = skillA.category === skillB.category;
-  const sameTechStack = skillA.techStack.some(t => skillB.techStack.includes(t));
   const sameCWE = skillA.cwe && skillB.cwe && skillA.cwe === skillB.cwe;
-  
+
   let overlapType: LLMAnalysisResult['overlapType'] = 'distinct';
   let recommendation: LLMAnalysisResult['recommendation'] = 'keep_separate';
-  
+
   if (sameCWE) {
     overlapType = 'related';
     recommendation = 'review';
-  } else if (sameCategory && sameTechStack) {
-    overlapType = 'related';
-    recommendation = 'review';
-  } else if (sameCategory) {
-    overlapType = 'related';
   }
-  
+
   return {
     isDuplicate: false,
     confidence: 0.3,
@@ -471,21 +458,12 @@ export function filterPairsForLLMAnalysis(
       preliminarySimilarity?: number;
     }>,
     options: {
-      minPreliminarySimilarity?: number;  // 最小预相似度，默认 0.2
-      skipDifferentCategory?: boolean;     // 跳过不同类别的，默认 true
+      minPreliminarySimilarity?: number;
     } = {}
   ): Array<{ skillA: SkillForLLMAnalysis; skillB: SkillForLLMAnalysis; preliminarySimilarity?: number }> {
-    const { 
-      minPreliminarySimilarity = 0.2,  // 降低到最低阈值
-      skipDifferentCategory = true 
-    } = options;
+    const { minPreliminarySimilarity = 0.2 } = options;
     
     return pairs.filter(pair => {
-      // 跳过不同类别（可选）
-      if (skipDifferentCategory && pair.skillA.category !== pair.skillB.category) {
-        return false;
-      }
-      
       // 只检查预相似度是否达标
       const prelimSim = pair.preliminarySimilarity ?? 0;
       return prelimSim >= minPreliminarySimilarity;

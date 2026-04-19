@@ -27,7 +27,8 @@ export interface CreateSkillRequest {
   name: string;
   displayName: string;
   description: string;
-  category: string;
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   cwe?: string;
   systemPrompt: string;
   userPrompt: string;
@@ -40,7 +41,8 @@ export interface CreateSkillRequest {
 export interface UpdateSkillRequest {
   displayName?: string;
   description?: string;
-  category?: string;
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   cwe?: string;
   systemPrompt?: string;
   userPrompt?: string;
@@ -78,12 +80,14 @@ export interface SkillResponse {
   name: string;
   displayName: string;
   description: string;
-  category: string;
+  techStackId: string | null;
+  techStackName: string | null;
+  techStackCategory: string | null;
+  vulnerabilityPatternId: string | null;
+  vulnerabilityPatternName: string | null;
+  vulnerabilityPatternCategory: string | null;
+  vulnerabilityPatternCwe: string | null;
   cwe: string | null;
-  systemPrompt: string;
-  userPrompt: string;
-  tools: string[];
-  parameters: Record<string, unknown>;
   isActive: boolean;
   isBuiltin: boolean;
   version: number;

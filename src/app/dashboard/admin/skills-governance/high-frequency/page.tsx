@@ -16,7 +16,6 @@ import {
   Shield,
   XCircle,
 } from 'lucide-react';
-import { useSkillCategories } from '@/hooks/useSkillCategories';
 
 // Types from API response
 interface SkillStatsWithDetails {
@@ -89,9 +88,6 @@ function HighFrequencyPageContent() {
   const [batchOperating, setBatchOperating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [limit, setLimit] = useState(20);
-
-  // 分类标签 - 从数据库动态获取
-  const { categoryLabels } = useSkillCategories();
 
   useEffect(() => {
     fetchHighFrequencyData();
@@ -214,7 +210,7 @@ function HighFrequencyPageContent() {
         skills: skills.map(s => ({
           name: s.skillDisplayName,
           skillId: s.skillId,
-          category: categoryLabels[s.skillCategory] || s.skillCategory,
+          category: s.skillCategory,
           overlapCount: s.overlapCount,
           matchRate: `${(s.matchRate * 100).toFixed(1)}%`,
           warningRate: `${(s.warningRate * 100).toFixed(1)}%`,
@@ -475,7 +471,7 @@ function HighFrequencyPageContent() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
-                          {categoryLabels[skill.skillCategory] || skill.skillCategory}
+                          {skill.skillCategory}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">

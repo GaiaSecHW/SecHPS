@@ -6,7 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
-import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 
 interface Workflow {
   id: string;
@@ -47,7 +47,7 @@ export default function WorkflowsPage() {
   const [updating, setUpdating] = useState(false);
   
   // 使用 Hook 获取技术栈选项
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds();
 
   useEffect(() => {
     // 检查是否是管理员
@@ -758,21 +758,24 @@ export default function WorkflowsPage() {
                 </label>
                 <div className="relative">
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {workflowTechStack.map((ts) => (
+                    {workflowTechStack.map((tsId) => {
+                      const opt = techStackOptions.find(o => o.id === tsId);
+                      return (
                       <span
-                        key={ts}
+                        key={tsId}
                         className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                       >
-                        {ts}
+                        {opt?.name || tsId}
                         <button
                           type="button"
-                          onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== ts))}
+                          onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== tsId))}
                           className="ml-2 text-blue-600 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="relative">
                     <input
@@ -790,28 +793,28 @@ export default function WorkflowsPage() {
                     {showTechStackDropdown && !loadingTechStack && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
-                          .filter((option) => 
-                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                            !workflowTechStack.includes(option)
+                          .filter((option) =>
+                            option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !workflowTechStack.includes(option.id)
                           )
-                          .slice(0, 20)
+
                           .map((option) => (
                             <button
-                              key={option}
+                              key={option.id}
                               type="button"
                               onClick={() => {
-                                setWorkflowTechStack([...workflowTechStack, option]);
+                                setWorkflowTechStack([...workflowTechStack, option.id]);
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
                               className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
                             >
-                              {option}
+                              {option.name}
                             </button>
                           ))}
-                        {techStackOptions.filter((option) => 
-                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !workflowTechStack.includes(option)
+                        {techStackOptions.filter((option) =>
+                          option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !workflowTechStack.includes(option.id)
                         ).length === 0 && (
                           <div className="px-4 py-2 text-sm text-gray-500">
                             无匹配选项
@@ -940,21 +943,24 @@ export default function WorkflowsPage() {
                 </label>
                 <div className="relative">
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {workflowTechStack.map((ts) => (
+                    {workflowTechStack.map((tsId) => {
+                      const opt = techStackOptions.find(o => o.id === tsId);
+                      return (
                       <span
-                        key={ts}
+                        key={tsId}
                         className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                       >
-                        {ts}
+                        {opt?.name || tsId}
                         <button
                           type="button"
-                          onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== ts))}
+                          onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== tsId))}
                           className="ml-2 text-blue-600 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                   <div className="relative">
                     <input
@@ -972,28 +978,28 @@ export default function WorkflowsPage() {
                     {showTechStackDropdown && !loadingTechStack && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
-                          .filter((option) => 
-                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                            !workflowTechStack.includes(option)
+                          .filter((option) =>
+                            option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !workflowTechStack.includes(option.id)
                           )
-                          .slice(0, 20)
+
                           .map((option) => (
                             <button
-                              key={option}
+                              key={option.id}
                               type="button"
                               onClick={() => {
-                                setWorkflowTechStack([...workflowTechStack, option]);
+                                setWorkflowTechStack([...workflowTechStack, option.id]);
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
                               className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
                             >
-                              {option}
+                              {option.name}
                             </button>
                           ))}
-                        {techStackOptions.filter((option) => 
-                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !workflowTechStack.includes(option)
+                        {techStackOptions.filter((option) =>
+                          option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !workflowTechStack.includes(option.id)
                         ).length === 0 && (
                           <div className="px-4 py-2 text-sm text-gray-500">
                             无匹配选项

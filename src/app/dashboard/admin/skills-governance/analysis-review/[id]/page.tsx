@@ -19,7 +19,6 @@ interface SkillInfo {
   name: string;
   displayName: string;
   description: string;
-  category: string;
   techStackId: string | null;
   vulnerabilityPatternId: string | null;
   content: string | null;
@@ -178,10 +177,6 @@ function AnalysisReviewDetailContent() {
               <span className="text-gray-500">漏洞类型:</span>{' '}
               <span>{analysis.skillA.vulnerabilityPatternId || '无'}</span>
             </div>
-            <div>
-              <span className="text-gray-500">类别:</span>{' '}
-              <span>{analysis.skillA.category}</span>
-            </div>
           </div>
           <div className="mt-3">
             <button
@@ -215,10 +210,6 @@ function AnalysisReviewDetailContent() {
                 <div>
                   <span className="text-gray-500">漏洞类型:</span>{' '}
                   <span>{analysis.skillB.vulnerabilityPatternId || '无'}</span>
-                </div>
-                <div>
-                  <span className="text-gray-500">类别:</span>{' '}
-                  <span>{analysis.skillB.category}</span>
                 </div>
               </div>
               <div className="mt-3">

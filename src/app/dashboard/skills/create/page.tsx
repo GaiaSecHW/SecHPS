@@ -72,7 +72,7 @@ export default function CreateSkillPage() {
   };
 
   // 技术栈选项 - 从数据库动态获取
-  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds('language');
+  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
   const techStackOptions = techStackOptionsWithIds;
 
   useEffect(() => {
@@ -145,8 +145,7 @@ try {
             intent: {
               name: name.trim(),
               description: name.trim(),
-              category: selectedVulnerabilityPattern?.category || 'code-audit',
-              vulnerabilityPatternId: vulnerabilityPatternId || undefined,
+              category: selectedVulnerabilityPattern?.categoryId || 'code-audit',
               techStackId: techStackId || undefined,
               whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
               whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
@@ -211,12 +210,8 @@ try {
           name: name.trim(),
           displayName: name.trim(),
           description: name.trim(),
-          // 新字段：ID 形式
           techStackId: techStackId || null,
           vulnerabilityPatternId: vulnerabilityPatternId || null,
-          // 向后兼容：也发送旧字段
-          techStack: selectedTechStack ? [selectedTechStack.name] : [],
-          category: selectedVulnerabilityPattern?.category || 'code-audit',
           content,
           cwe: selectedVulnerabilityPattern?.cwe || null,
           isPublic,
@@ -345,7 +340,7 @@ try {
                       .filter((option) => 
                         option.name.toLowerCase().includes(techStackSearch.toLowerCase())
                       )
-                      .slice(0, 20)
+
                       .map((option) => (
                         <button
                           key={option.id}

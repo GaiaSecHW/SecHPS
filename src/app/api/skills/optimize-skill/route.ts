@@ -68,11 +68,11 @@ ${cleanedUserContent || '（空）'}
 ## Skill 基本信息
 - 名称: ${skillData.name || '未命名'}
 - 显示名称: ${skillData.displayName || '未命名'}
-- 分类: ${skillData.category || 'code-audit'}
+- 分类: ${skillData.vulnerabilityPatternId || 'code-audit'}
 - CWE: ${skillData.cwe || '无'}
-- 技术栈: ${skillData.techStack?.join(', ') || '无'}
+- 技术栈: ${skillData.techStackId || '无'}
 
-⚠️ 重要约束：此 Skill 仅针对 ${skillData.techStack?.join('、') || '通用'} 技术栈。
+⚠️ 重要约束：此 Skill 仅针对 ${skillData.techStackId || '通用'} 技术栈。
 请只补充该技术栈相关的内容，不要添加其他技术栈的示例或方法。
 
 请优化 Skill 内容，保留用户已有内容，补充缺失部分。`;

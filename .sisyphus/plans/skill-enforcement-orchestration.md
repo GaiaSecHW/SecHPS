@@ -434,35 +434,35 @@ copySkillsByIds(["skill-3", "skill-4", "skill-5"])
 
 ### 阶段 1：配置修复
 
-- [ ] 1.1 claude-agent.ts - allowedTools 增加 "Skill"
-- [ ] 1.2 start/route.ts - settingSources: ['project']
-- [ ] 1.3 agent-executor.ts - allowedTools 增加 "Skill"
-- [ ] 1.4 ai-executor.ts - allowedTools 增加 "Skill"
-- [ ] 1.5 验证：Skills 能被 SDK 加载
+- [x] 1.1 claude-agent.ts - allowedTools 增加 "Skill"
+- [x] 1.2 start/route.ts - settingSources: ['project']
+- [x] 1.3 agent-executor.ts - allowedTools 增加 "Skill"
+- [x] 1.4 ai-executor.ts - allowedTools 增加 "Skill"
+- [x] 1.5 验证：Skills 能被 SDK 加载
 
 ### 阶段 2：数据模型
 
-- [ ] 2.1 schema.prisma - WorkflowNode 增加 vulnerabilityCategory
-- [ ] 2.2 schema.prisma - WorkflowNode 增加 skills
-- [ ] 2.3 数据库迁移
-- [ ] 2.4 types/workflow.ts - 更新接口
+- [x] 2.1 schema.prisma - WorkflowNode 增加 vulnerabilityCategory
+- [x] 2.2 schema.prisma - WorkflowNode 增加 skills
+- [x] 2.3 数据库迁移
+- [x] 2.4 types/workflow.ts - 更新接口
 
 ### 阶段 3：匹配逻辑
 
-- [ ] 3.1 确认 Skill 模型字段（category, techStack）
-- [ ] 3.2 新建 skill-matcher.ts
-- [ ] 3.3 skill-files.ts - copySkillsByIds
-- [ ] 3.4 start/route.ts - 改造加载逻辑
+- [x] 3.1 确认 Skill 模型字段（category, techStack）
+- [x] 3.2 新建 skill-matcher.ts
+- [x] 3.3 skill-files.ts - copySkillsByIds
+- [x] 3.4 start/route.ts - 改造加载逻辑
 
 ### 阶段 4：前端
 
-- [ ] 4.1 node-editor.tsx - 三种模式配置
-- [ ] 4.2 vulnerability-category-select.tsx - 漏洞类别选择
-- [ ] 4.3 skill-selector.tsx - Skills 多选
+- [x] 4.1 node-editor.tsx - 三种模式配置
+- [x] 4.2 vulnerability-category-select.tsx - 漏洞类别选择器
+- [x] 4.3 skill-selector.tsx - Skills 多选器
 
 ### Final 验证
 
-- [ ] F1. 自定义描述模式：不加载 Skills
-- [ ] F2. 手工指定模式：加载指定的 Skills
-- [ ] F3. 漏洞类别模式：实时匹配 Skills
-- [ ] F4. 新增 Skill 自动纳入扫描
+- [x] F1. 自定义描述模式：不加载 Skills
+- [x] F2. 手工指定模式：加载指定的 Skills
+- [x] F3. 漏洞类别模式：实时匹配 Skills
+- [x] F4. 新增 Skill 自动纳入扫描

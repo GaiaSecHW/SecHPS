@@ -26,10 +26,8 @@ export interface SkillForQuickCheck {
   id: string;
   name: string;
   displayName: string;
-  category: string;
   techStackId?: string | null;
   vulnerabilityPatternId?: string | null;
-  techStack?: string | null;
   cwe?: string | null;
 }
 
@@ -152,35 +150,12 @@ export function quickDuplicateCheck(
       continue;
     }
 
-    // 4. 兼容旧数据：使用 techStack 字段（字符串）和 CWE 匹配
+    // 4. 兼容旧数据：使用 CWE 匹配
     if (!newSkill.techStackId && !existing.techStackId) {
-      const techStackMatch =
-        newSkill.techStack &&
-        existing.techStack &&
-        normalizeTechStack(newSkill.techStack) === normalizeTechStack(existing.techStack);
-
       const cweMatch =
         newSkill.cwe && existing.cwe && newSkill.cwe === existing.cwe;
 
-      if (techStackMatch && cweMatch) {
-        duplicates.push({
-          skillId: existing.id,
-          skillName: existing.name,
-          displayName: existing.displayName,
-          matchType: 'exact_language_vuln',
-          confidence: 0.85, // 略低置信度（旧数据）
-          reason: `同技术栈(${newSkill.techStack}) + 同CWE(${newSkill.cwe})`,
-        });
-      } else if (techStackMatch) {
-        duplicates.push({
-          skillId: existing.id,
-          skillName: existing.name,
-          displayName: existing.displayName,
-          matchType: 'same_language',
-          confidence: 0.55,
-          reason: `同技术栈(${newSkill.techStack})`,
-        });
-      } else if (cweMatch) {
+      if (cweMatch) {
         duplicates.push({
           skillId: existing.id,
           skillName: existing.name,
@@ -210,13 +185,6 @@ export function quickDuplicateCheck(
     duplicates,
     summary,
   };
-}
-
-/**
- * 标准化技术栈字符串（用于旧数据兼容）
- */
-function normalizeTechStack(techStack: string): string {
-  return techStack.toLowerCase().trim().replace(/\s+/g, '-');
 }
 
 // ============================================================================
@@ -274,17 +242,14 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
  */
 async function findPotentialDuplicates(skill: {
   id: string;
-  category: string;
   techStackId?: string | null;
   vulnerabilityPatternId?: string | null;
-  techStack?: string | null;
   cwe?: string | null;
 }): Promise<Array<{ id: string; name: string }>> {
   // 构建查询条件
   const conditions: Array<{
     techStackId?: string | null;
     vulnerabilityPatternId?: string | null;
-    category?: string;
     cwe?: string | null;
   }> = [];
 
@@ -300,7 +265,6 @@ async function findPotentialDuplicates(skill: {
   if (skill.techStackId) {
     conditions.push({
       techStackId: skill.techStackId,
-      category: skill.category,
     });
   }
 
@@ -308,15 +272,13 @@ async function findPotentialDuplicates(skill: {
   if (skill.vulnerabilityPatternId) {
     conditions.push({
       vulnerabilityPatternId: skill.vulnerabilityPatternId,
-      category: skill.category,
     });
   }
 
-  // 条件 4：同 CWE（兼容旧数据）
+  // 条件 4：同 CWE
   if (skill.cwe) {
     conditions.push({
       cwe: skill.cwe,
-      category: skill.category,
     });
   }
 

@@ -28,19 +28,23 @@ import {
   Globe,
   Lock,
 } from 'lucide-react';
+import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptionsWithIds';
 
 interface Skill {
   id: string;
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack: string | null;  // JSON: ["Java", "Python"] - 适合的技术栈
+  techStackId: string | null;
+  techStackName: string | null;
+  vulnerabilityPatternId: string | null;
+  vulnerabilityPatternName: string | null;
+  vulnerabilityPatternCategory: string | null;
   cwe: string | null;
   content: string;
   isActive: boolean;
   isBuiltin: boolean;
-  isPublic: boolean;  // 是否公开分享
+  isPublic: boolean;
   version: number;
   parentId: string | null;
   isLatest: boolean;
@@ -49,24 +53,11 @@ interface Skill {
   execCount: number;
   createdAt: string;
   updatedAt: string;
-  userId: string | null;  // 创建者ID
-  userName: string | null;  // 创建者姓名
-  userUsername: string | null;  // 创建者用户名
+  userId: string | null;
+  userName: string | null;
+  userUsername: string | null;
 }
 
-// 分类标签映射
-const categoryLabels: Record<string, string> = {
-  'code-audit': '代码安全审计',
-  'auth': '认证与授权',
-  'sensitive': '敏感信息泄露',
-  'api': 'API 安全',
-  'config': '依赖与配置',
-  'crypto': '加密与数据',
-  'web': 'Web 安全',
-  'business': '业务逻辑',
-  'client': '客户端安全',
-  'cloud': '云与容器安全',
-};
 
 function LoadingSpinner() {
   return (
@@ -97,7 +88,7 @@ function SkillsPageContent() {
   // 从 URL 参数初始化状态
   const [searchTerm, setSearchTerm] = useState(searchParams.get('search') || '');
   const [selectedCategory, setSelectedCategory] = useState(searchParams.get('category') || '');
-  const [selectedTechStack, setSelectedTechStack] = useState(searchParams.get('techStack') || '');
+  const [selectedTechStack, setSelectedTechStack] = useState(searchParams.get('techStackId') || '');
   const [selectedActiveStatus, setSelectedActiveStatus] = useState(searchParams.get('isActive') || '');
   
   const [categories, setCategories] = useState<{ name: string; label: string; count: number }[]>([]);
@@ -121,20 +112,7 @@ function SkillsPageContent() {
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
   
   // 技术栈选项
-  const techStackOptions = [
-    { name: 'Java', label: 'Java' },
-    { name: 'Python', label: 'Python' },
-    { name: 'Go', label: 'Go' },
-    { name: 'PHP', label: 'PHP' },
-    { name: 'JavaScript', label: 'JavaScript' },
-    { name: 'Node.js', label: 'Node.js' },
-    { name: 'C#', label: 'C#' },
-    { name: '.NET', label: '.NET' },
-    { name: 'Ruby', label: 'Ruby' },
-    { name: 'Rust', label: 'Rust' },
-    { name: 'C', label: 'C' },
-    { name: 'C++', label: 'C++' },
-  ];
+  const { options: techStackOptions } = useTechStackOptionsWithIds();
 
   // 启用/禁用状态选项
   const activeStatusOptions = [
@@ -203,7 +181,7 @@ function SkillsPageContent() {
       // 构建 URL 参数
       const params = new URLSearchParams();
       if (selectedCategory) params.append('category', selectedCategory);
-      if (selectedTechStack) params.append('techStack', selectedTechStack);
+      if (selectedTechStack) params.append('techStackId', selectedTechStack);
       if (selectedActiveStatus) params.append('isActive', selectedActiveStatus);
       if (searchTerm) params.append('search', searchTerm);
       params.append('page', currentPage.toString());
@@ -737,14 +715,14 @@ toast.error(err instanceof Error ? err.message : '删除失败');
               onChange={(e) => {
                 setSelectedTechStack(e.target.value);
                 setCurrentPage(1);
-                updateUrlParams({ techStack: e.target.value || null, page: null });
+                updateUrlParams({ techStackId: e.target.value || null, page: null });
               }}
               className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">所有技术栈</option>
               {techStackOptions.map((tech) => (
-                <option key={tech.name} value={tech.name}>
-                  {tech.label}
+                <option key={tech.id} value={tech.id}>
+                  {tech.name}
                 </option>
               ))}
             </select>
@@ -858,31 +836,14 @@ toast.error(err instanceof Error ? err.message : '删除失败');
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center gap-2">
                       <span className="text-sm text-gray-500">
-                        {categoryLabels[skill.category] || skill.category}
+                        {skill.vulnerabilityPatternCategory || skill.vulnerabilityPatternName || ''}
                       </span>
                       {/* 技术栈标签 */}
-                      {skill.techStack && (() => {
-                        try {
-                          const techStacks = JSON.parse(skill.techStack);
-                          if (techStacks.length > 0) {
-                            return (
-                              <span className="flex items-center gap-1">
-                                {techStacks.slice(0, 3).map((ts: string) => (
-                                  <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                                    {ts}
-                                  </span>
-                                ))}
-                                {techStacks.length > 3 && (
-                                  <span className="text-xs text-gray-500">
-                                    +{techStacks.length - 3}
-                                  </span>
-                                )}
-                              </span>
-                            );
-                          }
-                        } catch {}
-                        return null;
-                      })()}
+                      {skill.techStackName && (
+                        <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                          {skill.techStackName}
+                        </span>
+                      )}
                     </div>
                     {expandedSkill === skill.id ? (
                       <ChevronUp size={20} className="text-gray-400" />
@@ -902,23 +863,11 @@ toast.error(err instanceof Error ? err.message : '删除失败');
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">所属技术栈</h4>
-                      {skill.techStack ? (() => {
-                        try {
-                          const techStacks = JSON.parse(skill.techStack);
-                          if (techStacks.length > 0) {
-                            return (
-                              <div className="flex flex-wrap gap-1">
-                                {techStacks.map((ts: string) => (
-                                  <span key={ts} className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                                    {ts}
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          }
-                        } catch {}
-                        return <p className="text-sm text-gray-600">无</p>;
-                      })() : <p className="text-sm text-gray-600">无</p>}
+                      {skill.techStackName ? (
+                        <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                          {skill.techStackName}
+                        </span>
+                      ) : <p className="text-sm text-gray-600">无</p>}
                     </div>
                     <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">CWE</h4>

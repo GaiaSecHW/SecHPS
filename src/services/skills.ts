@@ -16,14 +16,15 @@ export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'info';
  */
 export interface LoadedSkill {
   id: string;
-  userId: string | null;  // null = 公共，有值 = 私有
+  userId: string | null;
   name: string;
   displayName: string;
   description: string;
-  category: string;
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   severity: Severity;
   cwe?: string | null;
-  content: string;  // 完整的 Markdown 内容
+  content: string;
   version: number;
   parentId?: string | null;
   isLatest: boolean;
@@ -188,11 +189,12 @@ export async function createSkill(
     name: string;
     displayName: string;
     description: string;
-    category: string;
+    techStackId?: string | null;
+    vulnerabilityPatternId?: string | null;
     cwe?: string | null;
     severity: string;
-    content: string;  // 完整的 Markdown 内容
-    userId?: string | null;  // null = 公共，有值 = 私有
+    content: string;
+    userId?: string | null;
     isBuiltin?: boolean;
   }
 ): Promise<LoadedSkill | null> {
@@ -215,7 +217,8 @@ export async function createSkill(
         name: data.name,
         displayName: data.displayName,
         description: data.description,
-        category: data.category,
+        techStackId: data.techStackId ?? null,
+        vulnerabilityPatternId: data.vulnerabilityPatternId ?? null,
         cwe: data.cwe,
         severity: data.severity,
         content: data.content,
@@ -242,10 +245,11 @@ export async function createSkillVersion(
   updates: {
     displayName?: string;
     description?: string;
-    category?: string;
+    techStackId?: string | null;
+    vulnerabilityPatternId?: string | null;
     cwe?: string | null;
     severity?: string;
-    content?: string;  // 完整的 Markdown 内容
+    content?: string;
   },
   evolutionData: {
     changeType: EvolutionChangeType;
@@ -276,7 +280,8 @@ export async function createSkillVersion(
         name: currentSkill.name,
         displayName: updates.displayName ?? currentSkill.displayName,
         description: updates.description ?? currentSkill.description,
-        category: updates.category ?? currentSkill.category,
+        techStackId: updates.techStackId ?? currentSkill.techStackId,
+        vulnerabilityPatternId: updates.vulnerabilityPatternId ?? currentSkill.vulnerabilityPatternId,
         cwe: updates.cwe ?? currentSkill.cwe,
         severity: updates.severity ?? currentSkill.severity,
         content: updates.content ?? currentSkill.content,
@@ -372,7 +377,8 @@ export async function rollbackSkillVersion(
         name: targetSkill.name,
         displayName: targetSkill.displayName,
         description: targetSkill.description,
-        category: targetSkill.category,
+        techStackId: targetSkill.techStackId,
+        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
         cwe: targetSkill.cwe,
         severity: targetSkill.severity,
         content: targetSkill.content,
@@ -529,7 +535,7 @@ export function filterSkillsByCategory(
   skills: LoadedSkill[],
   categories: string[]
 ): LoadedSkill[] {
-  return skills.filter(skill => categories.includes(skill.category));
+  return skills.filter(skill => skill.vulnerabilityPatternId && categories.includes(skill.vulnerabilityPatternId));
 }
 
 /**
@@ -553,7 +559,8 @@ function parseSkill(skill: Skill): LoadedSkill {
     name: skill.name,
     displayName: skill.displayName,
     description: skill.description,
-    category: skill.category,
+    techStackId: skill.techStackId,
+    vulnerabilityPatternId: skill.vulnerabilityPatternId,
     severity: skill.severity as Severity,
     cwe: skill.cwe,
     content: skill.content || '',
@@ -584,7 +591,6 @@ export function buildSkillsSystemPrompt(skills: LoadedSkill[]): string {
 
   for (const skill of skills) {
     prompt += `### ${skill.displayName} (${skill.name})\n`;
-    prompt += `- **分类**: ${getCategoryLabel(skill.category)}\n`;
     prompt += `- **严重程度**: ${getSeverityLabel(skill.severity)}\n`;
     if (skill.cwe) {
       prompt += `- **CWE**: ${skill.cwe}\n`;
@@ -634,25 +640,6 @@ export function buildSkillUserPrompt(
   }
 
   return prompt;
-}
-
-/**
- * 获取分类标签
- */
-function getCategoryLabel(category: string): string {
-  const labels: Record<string, string> = {
-    'code-audit': '代码审计',
-    'auth': '认证鉴权',
-    'sensitive': '敏感信息',
-    'api': 'API 安全',
-    'config': '配置安全',
-    'crypto': '加密解密',
-    'web': 'Web 安全',
-    'business': '业务逻辑',
-    'client': '客户端安全',
-    'cloud': '云安全',
-  };
-  return labels[category] || category;
 }
 
 /**
@@ -793,8 +780,7 @@ export async function importSkillFromMarkdown(
     name: frontmatter.name || 'unnamed',
     displayName: frontmatter.name || 'Unnamed',
     description: frontmatter.description || content.slice(0, 200),
-    category: inferCategory(frontmatter.description || content),
-    severity: 'medium',  // 默认值
+    severity: 'medium',
     cwe: extractCWE(frontmatter.description || content) ?? null,  // 确保 null 而非 undefined
     content: markdown,  // 保存完整的 Markdown 内容
     userId: userId ?? null,  // 确保 null 而非 undefined

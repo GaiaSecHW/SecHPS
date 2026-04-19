@@ -26,6 +26,7 @@ import {
   Puzzle,
   Server,
   Tags,
+  Layers,
   ChevronLeft,
   ChevronRight,
   Coins,
@@ -220,6 +221,9 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/admin/autonomous-evolution" icon={<Brain size={20} />} collapsed={collapsed}>
                 执行进化管理
+              </NavLink>
+              <NavLink href="/dashboard/tech-stack" icon={<Layers size={20} />} collapsed={collapsed}>
+                技术栈管理
               </NavLink>
               <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
                 工具管理

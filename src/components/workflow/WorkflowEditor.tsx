@@ -22,14 +22,13 @@ import NodePalette from './NodePalette';
 import { nodeTypes } from './CustomNodes';
 import { FlowNode, FlowEdge, NodeData, NodeTypeDefinition, WorkflowData, NODE_TYPE_MAP, WorkflowNodeType } from '@/types/workflow';
 import { useTechStackOptions, useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
-import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
-import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
+import { useVulnerabilityPatterns } from '@/hooks/useVulnerabilityPatterns';
 import toast from 'react-hot-toast';
 
 interface WorkflowEditorProps {
   workflowId?: string;
   initialData?: WorkflowData;
-  workflowTechStack?: string;  // 工作流级别的技术栈（JSON 数组字符串）
+  workflowTechStack?: string | string[];  // 工作流级别的技术栈（JSON 数组字符串或已解析数组）
   onSave?: (data: WorkflowData) => Promise<void>;
   onExecute?: () => Promise<void>;
   readOnly?: boolean;
@@ -62,6 +61,8 @@ const [showPreview, setShowPreview] = useState(false);
   
   // 使用 Hook 获取技术栈选项（带 ID，用于匹配）
   const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
+  // 获取漏洞分类列表（用于 vulnerability 模式多选）
+  const { categories: vulnCategories } = useVulnerabilityPatterns();
 
   /**
    * 匹配 Skills 的逻辑：
@@ -71,47 +72,37 @@ const [showPreview, setShowPreview] = useState(false);
    *    - 工作流有技术栈：Skill 技术栈匹配 OR Skill 没有技术栈
    *    - 工作流没技术栈：所有 Skills 都能匹配
    */
-  const filterMatchedSkills = (skills: typeof availableSkills, vulnPatternId: string | null) => {
-    // 解析工作流技术栈（可能是名称数组或 ID 数组）
+  const filterMatchedSkills = (skills: typeof availableSkills, categoryIds: string[]) => {
+    // 解析工作流技术栈为 ID 数组
     let workflowTechStackIds: string[] = [];
     if (workflowTechStack) {
-      try {
-        const parsed = JSON.parse(workflowTechStack);
-        if (Array.isArray(parsed)) {
-          // 将名称转换为 ID（兼容两种格式）
-          const techStackNameToId = new Map<string, string>();
-          techStackOptionsWithIds.forEach(opt => {
-            techStackNameToId.set(opt.name, opt.id);  // 名称完全匹配，不转小写
-          });
-          
-          workflowTechStackIds = parsed.map((item: string) => {
-            // 如果已经是 ID 格式（以 ts_ 开头），直接使用
-            if (item.startsWith('ts_')) {
-              return item;
-            }
-            // 否则当作名称，转换为 ID（完全匹配）
-            return techStackNameToId.get(item) || item;
-          }).filter((id): id is string => Boolean(id));
+      let rawItems: unknown[];
+      if (Array.isArray(workflowTechStack)) {
+        rawItems = workflowTechStack;
+      } else {
+        try {
+          const parsed = JSON.parse(workflowTechStack as string);
+          rawItems = Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          rawItems = [workflowTechStack];
         }
-      } catch (e) {
-        console.error('解析工作流技术栈失败:', e);
       }
+      workflowTechStackIds = rawItems.map(String).filter(Boolean);
     }
 
     return skills.filter(skill => {
-      // 1. 漏洞类型匹配
-      if (vulnPatternId && skill.vulnerabilityPatternId !== vulnPatternId) {
+      // 1. 漏洞分类匹配（多选）
+      if (categoryIds.length > 0 && !categoryIds.includes(skill.vulnerabilityPatternCategory || '')) {
         return false;
       }
 
-      // 2. 技术栈匹配
+      // 2. 技术栈匹配（编排和 skill 都存 ID，直接比较）
       if (workflowTechStackIds.length > 0) {
-        // 工作流有技术栈：Skill 技术栈必须匹配，或者 Skill 没有设置技术栈
         if (skill.techStackId && !workflowTechStackIds.includes(skill.techStackId)) {
           return false;
         }
+        // skill 无技术栈 = 通用，不过滤
       }
-      // 工作流没技术栈：所有 Skills 都能匹配（不额外过滤）
 
       return true;
     });
@@ -191,17 +182,18 @@ const [showPreview, setShowPreview] = useState(false);
     id: string;
     name: string;
     displayName: string;
-    category: string;
+    vulnerabilityPatternCategory: string | null;
     vulnerabilityPatternId: string | null;
     techStackId: string | null;
   }>>([]);
   const [loadingSkills, setLoadingSkills] = useState(false);
-  const [skillCategories, setSkillCategories] = useState<Array<{ value: string; label: string }>>([]);
+  const [skillCategories, setSkillCategories] = useState<Array<{ value: string; label: string; count: number }>>([]);
   const [loadingSkillCategories, setLoadingSkillCategories] = useState(false);
 
   // Skills 分组展示相关状态
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [skillSearchQuery, setSkillSearchQuery] = useState('');
+  const [skillCategoryFilter, setSkillCategoryFilter] = useState('');
 
   // 加载工作流配置
   useEffect(() => {
@@ -286,7 +278,7 @@ const [showPreview, setShowPreview] = useState(false);
       });
       if (response.ok) {
         const data = await response.json();
-        setSkillCategories(data.categories?.map((c: any) => ({ value: c.name, label: c.label })) || []);
+        setSkillCategories(data.categories?.map((c: any) => ({ value: c.name, label: c.label, count: c.count || 0 })) || []);
       }
     } catch (err) {
       console.error('获取 Skill 分类列表失败:', err);
@@ -301,21 +293,32 @@ const [showPreview, setShowPreview] = useState(false);
     fetchSkillCategories();
   }, []);
 
-  // 按 category 分组 Skills
+  // 按工作流技术栈过滤后的 Skills（不过滤漏洞分类，用于手工模式展示）
+  const techStackFilteredSkills = useMemo(
+    () => filterMatchedSkills(availableSkills, []),
+    [availableSkills, workflowTechStack]
+  );
+
+  // 按 vulnerabilityPatternCategory 分组 Skills（已按技术栈过滤）
   const groupedSkills = useMemo(() => {
-    // 先根据搜索词过滤
+    const base = techStackFilteredSkills;
+    // 先按类别过滤
+    const categoryFiltered = skillCategoryFilter
+      ? base.filter(skill => (skill.vulnerabilityPatternCategory || '') === skillCategoryFilter)
+      : base;
+    // 再根据搜索词过滤
     const filtered = skillSearchQuery.trim()
-      ? availableSkills.filter(skill =>
+      ? categoryFiltered.filter(skill =>
           skill.displayName.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
           skill.name.toLowerCase().includes(skillSearchQuery.toLowerCase()) ||
-          skill.category.toLowerCase().includes(skillSearchQuery.toLowerCase())
+          (skill.vulnerabilityPatternCategory || '').toLowerCase().includes(skillSearchQuery.toLowerCase())
         )
-      : availableSkills;
+      : categoryFiltered;
 
-    // 按 category 分组
+    // 按 vulnerabilityPatternCategory 分组
     const groups: Record<string, typeof availableSkills> = {};
     for (const skill of filtered) {
-      const category = skill.category || 'uncategorized';
+      const category = skill.vulnerabilityPatternCategory || 'uncategorized';
       if (!groups[category]) {
         groups[category] = [];
       }
@@ -329,7 +332,17 @@ const [showPreview, setShowPreview] = useState(false);
       skills: groups[category],
       count: groups[category].length,
     }));
-  }, [availableSkills, skillSearchQuery]);
+  }, [techStackFilteredSkills, skillSearchQuery, skillCategoryFilter]);
+
+  // 按技术栈过滤后的各类别实际数量（用于下拉框括号里的数字）
+  const filteredCategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const skill of techStackFilteredSkills) {
+      const cat = skill.vulnerabilityPatternCategory || '';
+      if (cat) counts[cat] = (counts[cat] || 0) + 1;
+    }
+    return counts;
+  }, [techStackFilteredSkills]);
 
   // 切换分组展开状态
   const toggleCategory = (category: string) => {
@@ -791,6 +804,8 @@ const [showPreview, setShowPreview] = useState(false);
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     setSelectedNode(node as FlowNode);
     setSelectedEdge(null);
+    setSkillCategoryFilter('');
+    setSkillSearchQuery('');
   }, []);
 
   // 处理边选择
@@ -902,109 +917,99 @@ const [showPreview, setShowPreview] = useState(false);
   // 生成预览内容（Markdown 格式）
   const generatePreviewContent = () => {
     let markdown = '# 工作流预览\n\n';
-    
-    // 按拓扑顺序排序节点（基于连接关系）
+
+    // 按拓扑顺序排序节点
     const nodeOrder = new Map<string, number>();
     let order = 0;
-    
-    // 找到开始节点
     const startNode = nodes.find(n => n.type === 'start');
     if (startNode) {
       nodeOrder.set(startNode.id, order++);
-      
-      // BFS 遍历连接
       const queue = [startNode.id];
       const visited = new Set([startNode.id]);
-      
       while (queue.length > 0) {
         const currentId = queue.shift()!;
         const currentOrder = nodeOrder.get(currentId)!;
-        
-        // 找到当前节点的所有出边
-        const outgoingEdges = edges.filter(e => e.source === currentId);
-        
-        for (const edge of outgoingEdges) {
+        edges.filter(e => e.source === currentId).forEach(edge => {
           if (!visited.has(edge.target)) {
             visited.add(edge.target);
             nodeOrder.set(edge.target, currentOrder + 1);
             queue.push(edge.target);
           }
-        }
+        });
       }
     }
-    
-    // 为未连接的节点分配顺序
-    nodes.forEach(node => {
-      if (!nodeOrder.has(node.id)) {
-        nodeOrder.set(node.id, order++);
-      }
-    });
-    
-    // 按顺序输出节点
-    const sortedNodes = [...nodes].sort((a, b) => {
-      const orderA = nodeOrder.get(a.id) ?? 999;
-      const orderB = nodeOrder.get(b.id) ?? 999;
-      return orderA - orderB;
-    });
-    
+    nodes.forEach(node => { if (!nodeOrder.has(node.id)) nodeOrder.set(node.id, order++); });
+
+    const sortedNodes = [...nodes].sort((a, b) => (nodeOrder.get(a.id) ?? 999) - (nodeOrder.get(b.id) ?? 999));
+
     sortedNodes.forEach((node, index) => {
       const nodeData = node.data as NodeData;
       const nodeType = NODE_TYPE_MAP[node.type as keyof typeof NODE_TYPE_MAP];
-      
       markdown += `## ${index + 1}. ${nodeData.label}\n\n`;
-      
+      markdown += `**类型**: ${nodeType?.label || node.type}\n\n`;
+
       if (nodeData.description) {
         markdown += `**描述**: ${nodeData.description}\n\n`;
       }
-      
-      markdown += `**类型**: ${nodeType?.label || node.type}\n\n`;
-      
-      // 显示连接关系
+
+      // 连接关系
       const incomingEdges = edges.filter(e => e.target === node.id);
       const outgoingEdges = edges.filter(e => e.source === node.id);
-      
       if (incomingEdges.length > 0) {
-        markdown += `**输入来源**: \n`;
-        incomingEdges.forEach(edge => {
-          const sourceNode = nodes.find(n => n.id === edge.source);
-          if (sourceNode) {
-            markdown += `- 来自: ${(sourceNode.data as NodeData).label}\n`;
-          }
-        });
-        markdown += '\n';
+        markdown += `**输入来源**: ${incomingEdges.map(e => (nodes.find(n => n.id === e.source)?.data as NodeData)?.label || e.source).join(', ')}\n\n`;
       }
-      
       if (outgoingEdges.length > 0) {
-        markdown += `**输出目标**: \n`;
-        outgoingEdges.forEach(edge => {
-          const targetNode = nodes.find(n => n.id === edge.target);
-          if (targetNode) {
-            markdown += `- 到: ${(targetNode.data as NodeData).label}\n`;
-          }
-        });
-        markdown += '\n';
+        markdown += `**输出目标**: ${outgoingEdges.map(e => (nodes.find(n => n.id === e.target)?.data as NodeData)?.label || e.target).join(', ')}\n\n`;
       }
-      
+
+      // Skill 加载模式
+      const mode = nodeData.skillLoadingMode || 'description';
+      if (mode === 'description') {
+        markdown += `**Skill 加载模式**: 描述匹配（运行时自动匹配）\n\n`;
+      } else if (mode === 'vulnerability') {
+        const cats: string[] = nodeData.vulnerabilityCategories || [];
+        markdown += `**Skill 加载模式**: 漏洞分类\n\n`;
+        if (cats.length > 0) {
+          const catLabels = cats.map(v => {
+            const found = vulnCategories.find(c => c.value === v);
+            return found ? found.label : v;
+          });
+          markdown += `**已选漏洞分类**: ${catLabels.join(', ')}\n\n`;
+          const matched = filterMatchedSkills(techStackFilteredSkills, cats);
+          markdown += `**匹配 Skills（${matched.length} 个）**:\n`;
+          matched.forEach(s => { markdown += `- ${s.displayName || s.name}\n`; });
+          markdown += '\n';
+        } else {
+          markdown += `**已选漏洞分类**: 未选择\n\n`;
+        }
+      } else if (mode === 'manual') {
+        markdown += `**Skill 加载模式**: 手工指定\n\n`;
+        const skillIds: string[] = nodeData.skills ? JSON.parse(nodeData.skills) : [];
+        if (skillIds.length > 0) {
+          markdown += `**已指定 Skills（${skillIds.length} 个）**:\n`;
+          skillIds.forEach(id => {
+            const skill = availableSkills.find(s => s.id === id);
+            markdown += `- ${skill ? (skill.displayName || skill.name) : id}\n`;
+          });
+          markdown += '\n';
+        } else {
+          markdown += `**已指定 Skills**: 未选择\n\n`;
+        }
+      }
+
       markdown += '---\n\n';
     });
-    
-    // 添加统计信息
+
     markdown += '## 统计信息\n\n';
     markdown += `- **节点总数**: ${nodes.length}\n`;
     markdown += `- **连接总数**: ${edges.length}\n`;
-    markdown += `- **节点类型分布**:\n`;
-    
     const typeCount = new Map<string, number>();
-    nodes.forEach(node => {
-      const count = typeCount.get(node.type) || 0;
-      typeCount.set(node.type, count + 1);
-    });
-    
+    nodes.forEach(node => { typeCount.set(node.type, (typeCount.get(node.type) || 0) + 1); });
     typeCount.forEach((count, type) => {
       const nodeType = NODE_TYPE_MAP[type as keyof typeof NODE_TYPE_MAP];
-      markdown += `  - ${nodeType?.label || type}: ${count}\n`;
+      markdown += `- ${nodeType?.label || type}: ${count}\n`;
     });
-    
+
     return markdown;
   };
 
@@ -1307,7 +1312,7 @@ const [showPreview, setShowPreview] = useState(false);
                               ...selectedNode.data,
                               skillLoadingMode: newMode,
                               // 清除其他模式的配置
-                              vulnerabilityCategory: newMode === 'vulnerability' ? selectedNode.data.vulnerabilityCategory : undefined,
+                              vulnerabilityCategories: newMode === 'vulnerability' ? selectedNode.data.vulnerabilityCategories : undefined,
                               skills: newMode === 'manual' ? selectedNode.data.skills : undefined,
                             }
                           };
@@ -1327,88 +1332,76 @@ const [showPreview, setShowPreview] = useState(false);
                       </p>
                     </div>
 
-{/* 漏洞类别模式 - 显示漏洞类别选择器 */}
+{/* 漏洞类别模式 - 多选漏洞分类 */}
                      {(selectedNode.data.skillLoadingMode || 'description') === 'vulnerability' && (
                        <div className="bg-orange-50 border border-orange-200 rounded-md p-3 mt-3">
                          <p className="text-sm text-orange-800 font-medium mb-2">
-                           漏洞类别配置
+                           漏洞分类配置
                          </p>
-                         <div className="space-y-3">
-                           <div>
-                             <label className="block text-xs text-gray-600 mb-1">
-                               漏洞类别
-                             </label>
-                             <VulnerabilityPatternSelector
-                               value={selectedNode.data.vulnerabilityPatternId || ''}
-                               onChange={(patternId, pattern) => {
-                                 // 检查是否需要自动重命名节点
-                                 const currentLabel = selectedNode.data.label || '';
-                                 const isDefaultLabel = !currentLabel || currentLabel === '新节点' || currentLabel === 'Agent' || currentLabel.startsWith('node-');
-                                 const newLabel = isDefaultLabel
-                                   ? `${pattern.displayName}安全排查`
-                                   : selectedNode.data.label;
-                                 const updatedNode = {
-                                   ...selectedNode,
-                                   data: {
-                                     ...selectedNode.data,
-                                     vulnerabilityPatternId: patternId,
-                                     vulnerabilityCategory: pattern.category,
-                                     label: newLabel,
-                                   }
-                                 };
-                                 setNodes((nds) =>
-                                   nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
+                         <div className="space-y-2">
+                           <label className="block text-xs text-gray-600 mb-1">
+                             选择漏洞分类（可多选）
+                           </label>
+                           {vulnCategories.length === 0 ? (
+                             <p className="text-xs text-gray-400">加载中...</p>
+                           ) : (
+                             <div className="bg-white rounded-md border border-gray-200 max-h-48 overflow-y-auto">
+                               {vulnCategories.map((cat) => {
+                                 const selected: string[] = selectedNode.data.vulnerabilityCategories || [];
+                                 const isChecked = selected.includes(cat.value);
+                                 const matchCount = filterMatchedSkills(techStackFilteredSkills, [cat.value]).length;
+                                 if (matchCount === 0 && !isChecked) return null;
+                                 return (
+                                   <label
+                                     key={cat.value}
+                                     className="flex items-center gap-2 px-3 py-2 hover:bg-orange-50 cursor-pointer border-b border-gray-100 last:border-0"
+                                   >
+                                     <input
+                                       type="checkbox"
+                                       checked={isChecked}
+                                       onChange={() => {
+                                         const next = isChecked
+                                           ? selected.filter(v => v !== cat.value)
+                                           : [...selected, cat.value];
+                                         const updatedNode = {
+                                           ...selectedNode,
+                                           data: { ...selectedNode.data, vulnerabilityCategories: next },
+                                         };
+                                         setNodes(nds => nds.map(n => n.id === selectedNode.id ? updatedNode : n));
+                                         setSelectedNode(updatedNode);
+                                       }}
+                                       className="accent-orange-600"
+                                     />
+                                     <span className="text-sm text-gray-700 flex-1">{cat.label}</span>
+                                     <span className="text-xs text-gray-400">{matchCount} skills</span>
+                                   </label>
                                  );
-                                 setSelectedNode(updatedNode);
-                               }}
-                               placeholder="选择漏洞类别..."
-                             />
-                           </div>
-                            {/* 查看此漏洞类型的 Skills 按钮 */}
-                            {selectedNode.data.vulnerabilityPatternId && (
-                              <button
-                                onClick={() => {
-                                  const matchedSkills = filterMatchedSkills(availableSkills, selectedNode.data.vulnerabilityPatternId);
-                                  const skillList = matchedSkills.length > 0
-                                    ? matchedSkills.map(s => `• ${s.displayName}`).join('\n')
-                                    : '该漏洞类型暂无关联的 Skills';
-                                  const patternName = selectedNode.data.label || '此漏洞类型';
-                                  alert(`【${patternName}】关联的 Skills:\n\n${skillList}`);
-                                }}
-                                className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-sm"
-                              >
-                                <Eye size={14} />
-                                查看此漏洞类型的 Skills
-                              </button>
-                            )}
-                           {/* 显示匹配的 Skills */}
-                           {selectedNode.data.vulnerabilityPatternId && (
-                             <div>
-                               <label className="block text-xs text-gray-600 mb-1">
-                                 匹配的 Skills
-                               </label>
-                               <div className="bg-white rounded-md p-2 border border-gray-200 max-h-32 overflow-y-auto">
-                                 {filterMatchedSkills(availableSkills, selectedNode.data.vulnerabilityPatternId)
-                                   .slice(0, 5)
-                                   .map((skill) => (
-                                     <div key={skill.id} className="text-xs text-gray-700 py-1">
-                                       {skill.displayName}
-                                     </div>
-                                   ))}
-                                 {filterMatchedSkills(availableSkills, selectedNode.data.vulnerabilityPatternId).length === 0 && (
-                                   <p className="text-xs text-gray-400">
-                                     该漏洞类型暂无关联的 Skills
-                                   </p>
-                                 )}
-                                 <p className="text-xs text-gray-400 mt-1">
-                                   运行时将根据漏洞类型和技术栈自动匹配 Skills
-                                 </p>
-                               </div>
+                               })}
                              </div>
                            )}
-                        </div>
-                      </div>
-                    )}
+                           {/* 已选分类的匹配 Skills 预览 */}
+                           {(selectedNode.data.vulnerabilityCategories || []).length > 0 && (() => {
+                             const matched = filterMatchedSkills(techStackFilteredSkills, selectedNode.data.vulnerabilityCategories || []);
+                             return (
+                               <div className="mt-2 space-y-1">
+                                 <p className="text-xs text-gray-500">
+                                   共匹配 {matched.length} 个 Skills（已按技术栈过滤）
+                                 </p>
+                                 {matched.length > 0 && (
+                                   <div className="bg-white rounded border border-gray-200 max-h-32 overflow-y-auto">
+                                     {matched.map(s => (
+                                       <div key={s.id} className="px-2 py-1 text-xs text-gray-700 border-b border-gray-100 last:border-0">
+                                         {s.displayName || s.name}
+                                       </div>
+                                     ))}
+                                   </div>
+                                 )}
+                               </div>
+                             );
+                           })()}
+                         </div>
+                       </div>
+                     )}
 
 {/* 手工指定模式 - 显示 Skills 多选器 */}
                     {(selectedNode.data.skillLoadingMode || 'description') === 'manual' && (
@@ -1431,8 +1424,8 @@ const [showPreview, setShowPreview] = useState(false);
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <button
                                     onClick={() => {
-                                      // 全选
-                                      const allSkillIds = availableSkills.map(s => s.id);
+                                      // 全选（仅技术栈匹配的）
+                                      const allSkillIds = techStackFilteredSkills.map(s => s.id);
                                       const updatedNode = {
                                         ...selectedNode,
                                         data: {
@@ -1470,42 +1463,20 @@ const [showPreview, setShowPreview] = useState(false);
                                   </button>
                                   {/* 按类别选择下拉框 */}
                                   <select
+                                    value={skillCategoryFilter}
                                     onChange={(e) => {
-                                      if (e.target.value) {
-                                        // 选择该类别下的所有 Skills
-                                        const categorySkillIds = availableSkills
-                                          .filter(s => s.category === e.target.value)
-                                          .map(s => s.id);
-                                        const currentSkills: string[] = selectedNode.data.skills
-                                          ? JSON.parse(selectedNode.data.skills)
-                                          : [];
-                                        // 合并已选择的和该类别的（去重）
-                                        const newSkills = [...new Set([...currentSkills, ...categorySkillIds])];
-                                        const updatedNode = {
-                                          ...selectedNode,
-                                          data: {
-                                            ...selectedNode.data,
-                                            skills: JSON.stringify(newSkills),
-                                          }
-                                        };
-                                        setNodes((nds) =>
-                                          nds.map((n) => n.id === selectedNode.id ? updatedNode : n)
-                                        );
-                                        setSelectedNode(updatedNode);
-                                        e.target.value = ''; // 重置下拉框
-                                      }
+                                      setSkillCategoryFilter(e.target.value);
                                     }}
                                     className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
                                   >
                                     <option value="">按类别选择...</option>
-                                    {skillCategories.map((cat) => {
-                                      const count = availableSkills.filter(s => s.category === cat.value).length;
-                                      return (
+                                    {skillCategories
+                                      .filter((cat) => (filteredCategoryCounts[cat.value] || 0) > 0)
+                                      .map((cat) => (
                                         <option key={cat.value} value={cat.value}>
-                                          {cat.label} ({count})
+                                          {cat.label} ({filteredCategoryCounts[cat.value] || 0})
                                         </option>
-                                      );
-                                    })}
+                                      ))}
                                   </select>
                                 </div>
                                 {/* Skills 搜索框 */}

@@ -35,9 +35,9 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   
   // 使用 Hook 获取技术栈选项
   const { options: techStackOptions, categories: techStackCategories, loading: loadingTechStack } = useTechStackOptions();
-  
-  // 获取语言列表（从 categories.languages）
-  const languageOptions = techStackCategories?.languages || techStackOptions || [];
+
+  // 获取全部技术栈选项（不限分类）
+  const languageOptions = techStackOptions || [];
 
   // 加载 Skill 标准输出模板（从系统配置）
   useEffect(() => {
@@ -79,8 +79,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   const handlePatternSelect = (patternId: string, pattern: VulnerabilityPatternOption) => {
     onChange({
       ...data,
-      category: pattern.category, // 保持兼容性
-      vulnerabilityPatternId: pattern.id, // 新字段
+      vulnerabilityPatternId: pattern.id,
     });
   };
 
@@ -90,7 +89,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
       data.description.trim() !== '' &&
       data.whatDoesItDo.trim() !== '' &&
       data.whenShouldItTrigger.trim() !== '' &&
-      (data.techStackId || data.techStack?.length > 0) && // 必须选择语言
+      data.techStackId && // 必须选择语言
       data.vulnerabilityPatternId // 必须选择漏洞类型
     );
   };

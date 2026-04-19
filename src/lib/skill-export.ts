@@ -10,10 +10,11 @@ export interface SkillExportData {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  cwe?: string | null;  // 允许 null
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
+  cwe?: string | null;
   severity: string;
-  content: string;  // 完整的 Markdown 内容
+  content: string;
 }
 
 /**

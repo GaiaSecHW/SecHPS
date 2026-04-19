@@ -9,8 +9,8 @@ interface SkillImport {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack?: string | null;
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   severity?: string | null;
   content: string;
   cwe?: string | null;
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     for (const skill of body.skills) {
       try {
         // 检查必填字段
-        if (!skill.name || !skill.displayName || !skill.description || !skill.category || !skill.content) {
+        if (!skill.name || !skill.displayName || !skill.description || !skill.content) {
           results.skipped++;
           results.errors.push(`跳过: 缺少必填字段 - ${skill.name || '未知'}`);
           continue;
@@ -99,8 +99,8 @@ export async function POST(request: Request) {
             name: skill.name,
             displayName: skill.displayName,
             description: skill.description,
-            category: skill.category,
-            techStack: skill.techStack || null,
+            techStackId: skill.techStackId || null,
+            vulnerabilityPatternId: skill.vulnerabilityPatternId || null,
             severity: skill.severity || null,
             content: skill.content,
             cwe: skill.cwe || null,
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
             successRate: skill.successRate || null,
             avgDuration: skill.avgDuration || null,
             execCount: skill.execCount || 0,
-            userId: null, // 导入的 Skills 为公共资源
+            userId: null,
             updatedAt: new Date(),
           },
         });

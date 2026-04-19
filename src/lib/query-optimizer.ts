@@ -71,30 +71,24 @@ export const skillSelectMinimal = {
   name: true,
   displayName: true,
   description: true,
-  category: true,
-  techStack: true,
   isActive: true,
   isBuiltin: true,
-  isPublic: true,  // 是否公开分享
+  isPublic: true,
   version: true,
   parentId: true,
   isLatest: true,
   cwe: true,
-  content: true,  // 完整的 Markdown 内容
+  content: true,
   successRate: true,
   avgDuration: true,
   execCount: true,
-  referenceCount: true,     // 引用次数
-  vulnerabilityCount: true, // 发现漏洞次数
+  referenceCount: true,
+  vulnerabilityCount: true,
   createdAt: true,
   updatedAt: true,
-  userId: true,  // 创建者ID
-  // ===== 新增字段：治理改造 =====
+  userId: true,
   techStackId: true,
   vulnerabilityPatternId: true,
-  migrationStatus: true,
-  migrationNotes: true,
-  migrationConfidence: true,
   User: {
     select: {
       id: true,
@@ -102,7 +96,6 @@ export const skillSelectMinimal = {
       username: true,
     },
   },
-  // ===== 关联查询 =====
   TechStackOption: {
     select: {
       id: true,
@@ -115,7 +108,13 @@ export const skillSelectMinimal = {
       id: true,
       name: true,
       displayName: true,
-      category: true,
+      categoryId: true,
+      categoryRef: {
+        select: {
+          value: true,
+          label: true,
+        },
+      },
       cwe: true,
     },
   },
@@ -129,7 +128,13 @@ export const patternSelectMinimal = {
   name: true,
   displayName: true,
   description: true,
-  category: true,
+  categoryId: true,
+  categoryRef: {
+    select: {
+      value: true,
+      label: true,
+    },
+  },
   isActive: true,
   isBuiltin: true,
 };

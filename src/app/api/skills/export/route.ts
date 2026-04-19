@@ -27,22 +27,21 @@ export async function GET(request: Request) {
       return NextResponse.json({ details: { error: '需要管理员权限' } }, { status: 403 });
     }
 
-    // 获取所有 Skills（包括所有版本）
     const skills = await prisma.skill.findMany({
-      orderBy: [{ category: 'asc' }, { name: 'asc' }],
+      orderBy: [{ displayName: 'asc' }],
     });
 
     // 转换为导出格式
     const exportData = {
-      version: '1.0',
+      version: '2.0',
       exportedAt: new Date().toISOString(),
       totalCount: skills.length,
       skills: skills.map(skill => ({
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
-        techStack: skill.techStack,
+        techStackId: skill.techStackId,
+        vulnerabilityPatternId: skill.vulnerabilityPatternId,
         severity: skill.severity,
         content: skill.content,
         cwe: skill.cwe,

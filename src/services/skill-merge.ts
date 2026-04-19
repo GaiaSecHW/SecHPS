@@ -64,7 +64,7 @@ export interface MergeDetails {
     displayName: string;
     version: number;
     content: string;
-    techStack: string | null;
+    techStackId: string | null;
   };
   originalSourceSkills: Array<{
     id: string;
@@ -72,7 +72,7 @@ export interface MergeDetails {
     displayName: string;
     version: number;
     content: string;
-    techStack: string | null;
+    techStackId: string | null;
   }>;
   mergedContent?: string;  // For content-merge
   techStackAssignments?: Array<{  // For techStack-split
@@ -173,10 +173,7 @@ async function executeContentMerge(
     // 合并描述：取最长的描述或拼接
     const descriptions = [targetSkill.description, ...sourceSkills.map(s => s.description)];
     const mergedDescription = descriptions.reduce((a, b) => a.length >= b.length ? a : b);
-    
-    // 合并分类：取第一个的分类
-    const mergedCategory = targetSkill.category;
-    
+
     // 合并严重程度：取最高的
     const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
     const severities = [targetSkill.severity || 'medium', ...sourceSkills.map(s => s.severity || 'medium')];
@@ -189,14 +186,7 @@ async function executeContentMerge(
     // 合并 CWE：取第一个非空的
     const cwes = [targetSkill.cwe, ...sourceSkills.map(s => s.cwe)].filter(c => c);
     const mergedCwe = cwes[0] || null;
-    
-    // 合并技术栈：取所有技术栈的并集
-    const techStacks = [
-      targetSkill.techStack ? JSON.parse(targetSkill.techStack) : [],
-      ...sourceSkills.map(s => s.techStack ? JSON.parse(s.techStack) : []),
-    ];
-    const mergedTechStack = [...new Set(techStacks.flat())];
-    
+
     // 2. 合并内容：使用分隔符
     const separator = '\n\n---\n\n';
     const contentParts = [
@@ -217,11 +207,11 @@ async function executeContentMerge(
         name: mergedName,
         displayName: mergedDisplayName,
         description: mergedDescription,
-        category: mergedCategory,
         severity: mergedSeverity,
         cwe: mergedCwe,
         content: mergedContent,
-        techStack: JSON.stringify(mergedTechStack),
+        techStackId: targetSkill.techStackId,
+        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
         userId: targetSkill.userId,  // 继承目标 Skill 的所有者
         isBuiltin: false,
         isActive: true,
@@ -266,7 +256,7 @@ async function executeContentMerge(
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStack: targetSkill.techStack,
+        techStackId: targetSkill.techStackId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -274,7 +264,7 @@ async function executeContentMerge(
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStack: s.techStack,
+        techStackId: s.techStackId,
       })),
       mergedContent: mergedContent,
       mergedAt: new Date().toISOString(),
@@ -378,11 +368,11 @@ async function executeReplaceMerge(
         name: targetSkill.name,
         displayName: `${targetSkill.displayName} (合并版)`,
         description: targetSkill.description,
-        category: targetSkill.category,
         severity: targetSkill.severity || 'medium',
         cwe: targetSkill.cwe,
         content: updatedContent,
-        techStack: targetSkill.techStack,
+        techStackId: targetSkill.techStackId,
+        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
         userId: targetSkill.userId,
         isBuiltin: targetSkill.isBuiltin,
         isActive: targetSkill.isActive,
@@ -418,7 +408,7 @@ async function executeReplaceMerge(
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStack: targetSkill.techStack,
+        techStackId: targetSkill.techStackId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -426,12 +416,12 @@ async function executeReplaceMerge(
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStack: s.techStack,
+        techStackId: s.techStackId,
       })),
       mergedAt: new Date().toISOString(),
       mergedBy: options.userId,
     };
-    
+
     // 为每个源 Skill 创建合并记录
     const mergeRecords: SkillMergeRecord[] = [];
     for (const sourceSkill of sourceSkills) {
@@ -502,16 +492,7 @@ async function executeTechStackSplit(
     // 简单策略：基于 Skill 名称推断技术栈
     for (const skill of allSkills) {
       let assignedTechStack: string[] = [];
-      
-      // 如果已有技术栈，保持不变
-      if (skill.techStack) {
-        try {
-          assignedTechStack = JSON.parse(skill.techStack);
-        } catch {
-          assignedTechStack = [];
-        }
-      }
-      
+
       // 如果没有技术栈，尝试从名称推断
       if (assignedTechStack.length === 0) {
         assignedTechStack = inferTechStackFromSkillName(skill.name, skill.displayName);
@@ -547,11 +528,11 @@ async function executeTechStackSplit(
           name: skill.name,
           displayName: skill.displayName,
           description: skill.description,
-          category: skill.category,
           severity: skill.severity || 'medium',
           cwe: skill.cwe,
           content: skill.content || '',
-          techStack: JSON.stringify(assignment.assignedTechStack),
+          techStackId: skill.techStackId,
+          vulnerabilityPatternId: skill.vulnerabilityPatternId,
           userId: skill.userId,
           isBuiltin: skill.isBuiltin,
           isActive: skill.isActive,
@@ -582,7 +563,7 @@ async function executeTechStackSplit(
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStack: targetSkill.techStack,
+        techStackId: targetSkill.techStackId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -590,7 +571,7 @@ async function executeTechStackSplit(
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStack: s.techStack,
+        techStackId: s.techStackId,
       })),
       techStackAssignments,
       mergedAt: new Date().toISOString(),
@@ -710,7 +691,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStack: targetSkill.techStack,
+        techStackId: targetSkill.techStackId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -718,7 +699,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStack: s.techStack,
+        techStackId: s.techStackId,
       })),
       mergedAt: new Date().toISOString(),
       mergedBy: options.userId,

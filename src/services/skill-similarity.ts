@@ -29,8 +29,7 @@ export interface SimilarSkill {
   skillId: string;
   skillName: string;
   displayName: string;
-  category: string;
-  techStack: string[];
+  techStackId?: string | null;
   cwe?: string | null;
   similarity: number;           // 综合相似度 0-1
   overlapType: OverlapType;
@@ -66,8 +65,8 @@ export interface SkillForSimilarity {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack: string[];
+  techStackId?: string | null;
+  vulnerabilityPatternId?: string | null;
   cwe?: string | null;
   content?: string;
 }
@@ -98,31 +97,6 @@ export const DEFAULT_THRESHOLDS: SimilarityThresholds = {
   contentWeight: 0.25,
   enableLLMAnalysis: false,  // 默认关闭，需要显式启用
 };
-
-// ============================================================================
-// 类别关键词映射（参考 route.ts:422-433）
-// ============================================================================
-
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'code-audit': ['sql', '注入', 'injection', 'xss', '漏洞', '漏洞检测', '代码审计', '审计', '安全检测', 'vulnerability', 'security'],
-  'auth': ['认证', '授权', '登录', '密码', 'jwt', 'oauth', '鉴权', 'authentication', 'authorization', 'login', 'password'],
-  'sensitive': ['敏感', '密钥', '泄露', '硬编码', 'password', 'secret', 'key', 'credential', 'sensitive', 'leak'],
-  'api': ['api', '接口', 'rest', 'graphql', 'endpoint', 'swagger', 'openapi'],
-  'config': ['配置', 'config', '设置', 'setting', 'configuration', 'env', 'environment'],
-  'crypto': ['加密', '解密', 'crypto', 'cipher', 'ssl', 'tls', 'encryption', 'decryption', 'hash'],
-  'web': ['web', '网页', '网站', 'http', '请求', 'request', 'response', 'html', 'frontend'],
-  'business': ['业务', '逻辑', '流程', 'workflow', 'business', 'logic', 'process'],
-  'client': ['客户端', 'client', '前端', 'frontend', 'browser', 'ui'],
-  'cloud': ['云', 'cloud', 'aws', 'azure', 'kubernetes', 'docker', 'k8s', 'gcp', 'deployment'],
-};
-
-// 反向映射：关键词 -> 类别
-const KEYWORD_TO_CATEGORY: Map<string, string> = new Map();
-for (const [category, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-  for (const keyword of keywords) {
-    KEYWORD_TO_CATEGORY.set(keyword.toLowerCase(), category);
-  }
-}
 
 // ============================================================================
 // 关键词相似度计算（BM25风格）
@@ -235,17 +209,18 @@ export function computeCategorySimilarity(
 ): { overlapType: OverlapType; overlapScore: number; techStackOverlap: string[] } {
   // 1. 检查完全匹配
   const sameName = skillA.name.toLowerCase() === skillB.name.toLowerCase();
-  const sameCategory = skillA.category === skillB.category;
   const sameCWE = skillA.cwe && skillB.cwe && skillA.cwe === skillB.cwe;
-  
-  if (sameName && sameCategory) {
+  const sameVulnPattern = skillA.vulnerabilityPatternId && skillB.vulnerabilityPatternId &&
+    skillA.vulnerabilityPatternId === skillB.vulnerabilityPatternId;
+
+  if (sameName && sameVulnPattern) {
     return {
       overlapType: 'exact',
       overlapScore: 1.0,
       techStackOverlap: [],
     };
   }
-  
+
   // 2. CWE 匹配（高优先级）
   if (sameCWE) {
     return {
@@ -254,38 +229,17 @@ export function computeCategorySimilarity(
       techStackOverlap: [],
     };
   }
-  
-  // 3. 类别匹配
-  if (sameCategory) {
-    // 检查技术栈重叠
-    const techStackOverlap = computeTechStackOverlap(skillA.techStack, skillB.techStack);
-    
-    if (techStackOverlap.length > 0) {
-      return {
-        overlapType: 'techStack-overlap',
-        overlapScore: 0.7 + (techStackOverlap.length * 0.05), // 每个重叠技术栈加5%
-        techStackOverlap,
-      };
-    }
-    
+
+  // 3. 同漏洞模式匹配
+  if (sameVulnPattern) {
     return {
       overlapType: 'semantic-overlap',
       overlapScore: 0.6,
       techStackOverlap: [],
     };
   }
-  
-  // 4. 技术栈重叠（不同类别）
-  const techStackOverlap = computeTechStackOverlap(skillA.techStack, skillB.techStack);
-  if (techStackOverlap.length > 0) {
-    return {
-      overlapType: 'techStack-overlap',
-      overlapScore: 0.4 + (techStackOverlap.length * 0.05),
-      techStackOverlap,
-    };
-  }
-  
-  // 5. 触发词重叠（检查描述中的关键词）
+
+  // 4. 触发词重叠（检查描述中的关键词）
   const triggerOverlap = computeTriggerOverlap(skillA, skillB);
   if (triggerOverlap.length > 0) {
     return {
@@ -294,7 +248,7 @@ export function computeCategorySimilarity(
       techStackOverlap: [],
     };
   }
-  
+
   // 无明显重叠
   return {
     overlapType: 'trigger-overlap',
@@ -341,17 +295,18 @@ function computeTriggerOverlap(
   skillA: SkillForSimilarity,
   skillB: SkillForSimilarity
 ): string[] {
-  const keywordsA = CATEGORY_KEYWORDS[skillA.category] || [];
+  const textA = `${skillA.name} ${skillA.displayName} ${skillA.description}`.toLowerCase();
   const textB = `${skillB.name} ${skillB.displayName} ${skillB.description}`.toLowerCase();
-  
+  const wordsA = new Set(textA.split(/\W+/).filter(w => w.length > 3));
+
   const overlap: string[] = [];
-  for (const keyword of keywordsA) {
-    if (textB.includes(keyword.toLowerCase())) {
-      overlap.push(keyword);
+  for (const word of wordsA) {
+    if (textB.includes(word)) {
+      overlap.push(word);
     }
   }
-  
-  return overlap;
+
+  return overlap.slice(0, 10);
 }
 
 // ============================================================================
@@ -469,8 +424,7 @@ export async function findSimilarSkills(
         skillId: candidate.id,
         skillName: candidate.name,
         displayName: candidate.displayName,
-        category: candidate.category,
-        techStack: candidate.techStack,
+        techStackId: candidate.techStackId,
         cwe: candidate.cwe,
         similarity: totalScore,
         overlapType: categoryResult.overlapType,

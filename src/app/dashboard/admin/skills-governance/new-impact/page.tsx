@@ -21,7 +21,7 @@ import {
   MinusCircle,
   Layers,
 } from 'lucide-react';
-import { useSkillCategories } from '@/hooks/useSkillCategories';
+
 
 interface SimilarSkill {
   skillId: string;
@@ -108,9 +108,6 @@ export default function NewImpactPage() {
   
   // Selected analysis for detail view
   const [selectedAnalysis, setSelectedAnalysis] = useState<ImpactAnalysis | null>(null);
-
-  // 分类标签 - 从数据库动态获取
-  const { categoryLabels } = useSkillCategories();
 
   useEffect(() => {
     fetchAnalyses();
@@ -340,7 +337,7 @@ export default function NewImpactPage() {
                             {analysis.skillName}
                           </p>
                           <p className="text-xs text-gray-400">
-                            {categoryLabels[analysis.skillCategory] || analysis.skillCategory}
+                            {analysis.skillCategory}
                           </p>
                         </div>
                       </div>
@@ -576,7 +573,7 @@ export default function NewImpactPage() {
                   <div>
                     <span className="text-xs text-gray-500">分类</span>
                     <p className="text-sm font-medium text-gray-900">
-                      {categoryLabels[selectedAnalysis.skillCategory] || selectedAnalysis.skillCategory}
+                      {selectedAnalysis.skillCategory}
                     </p>
                   </div>
                   <div>

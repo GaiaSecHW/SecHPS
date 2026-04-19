@@ -1,12 +1,39 @@
 {
-  "active_plan": "D:\\claude-web-platform\\.sisyphus\\plans\\skill-enforcement-orchestration.md",
-  "started_at": "2026-04-17T19:05:42.934Z",
+  "active_plan": "D:\\claude-web-platform\\.sisyphus\\plans\\unify-data-source.md",
+  "started_at": "2026-04-18T16:30:25.577Z",
   "session_ids": [
-    "ses_2643af47bffeWbWRP2GxN2LAi2"
+    "ses_2653e7013ffeamSN781Crmwx1r",
+    "ses_25e82e457ffeeRaXrGeTFApjeQ",
+    "ses_25e82d876ffe3WkX9QzpnnDVFT",
+    "ses_25e82cd5effeIthg06WcL0G4Of",
+    "ses_25e82c49bffeFaSdCjALpnDswt"
   ],
+  "plan_name": "unify-data-source",
   "session_origins": {
-    "ses_2643af47bffeWbWRP2GxN2LAi2": "direct"
+    "ses_2653e7013ffeamSN781Crmwx1r": "direct",
+    "ses_25e82e457ffeeRaXrGeTFApjeQ": "appended",
+    "ses_25e82d876ffe3WkX9QzpnnDVFT": "appended",
+    "ses_25e82cd5effeIthg06WcL0G4Of": "appended",
+    "ses_25e82c49bffeFaSdCjALpnDswt": "appended"
   },
-  "plan_name": "skill-enforcement-orchestration",
-  "agent": "atlas"
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "删除 `src/lib/techstack-options.ts` 文件",
+      "session_id": "ses_25e87fc94ffeL7AMQ0mGPXGmKo",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-04-18T16:45:35.464Z"
+    },
+    "todo:6": {
+      "task_key": "todo:6",
+      "task_label": "6",
+      "task_title": "创建统一的 VulnerabilityPattern 类型文件",
+      "session_id": "ses_25e82c49bffeFaSdCjALpnDswt",
+      "agent": "Sisyphus-Junior",
+      "category": "quick",
+      "updated_at": "2026-04-18T16:47:12.413Z"
+    }
+  }
 }

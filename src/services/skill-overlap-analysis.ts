@@ -296,14 +296,11 @@ export function extractSharedKeywords(skills: SimilarSkill[]): string[] {
     // 从技能名称提取
     const nameWords = tokenize(skill.skillName);
     nameWords.forEach(w => keywords.add(w.toLowerCase()));
-    
+
     // 从显示名称提取
     const displayWords = tokenize(skill.displayName);
     displayWords.forEach(w => keywords.add(w.toLowerCase()));
-    
-    // 从技术栈提取
-    skill.techStack?.forEach(t => keywords.add(t.toLowerCase()));
-    
+
     // 从原因描述提取关键词
     const reasonWords = tokenize(skill.reason);
     reasonWords.forEach(w => keywords.add(w.toLowerCase()));
@@ -326,15 +323,8 @@ export function extractSharedKeywords(skills: SimilarSkill[]): string[] {
     }
   }
   
-  // 按重要性排序（技术栈关键词优先）
   return sharedKeywords
-    .sort((a, b) => {
-      const aIsTech = skills.some(s => s.techStack?.includes(a));
-      const bIsTech = skills.some(s => s.techStack?.includes(b));
-      if (aIsTech && !bIsTech) return -1;
-      if (!aIsTech && bIsTech) return 1;
-      return a.localeCompare(b);
-    })
+    .sort((a, b) => a.localeCompare(b))
     .slice(0, 15);
 }
 
@@ -393,7 +383,6 @@ export function extractUniquePoints(
     // 收集关键词
     tokenize(other.skillName).forEach(w => otherKeywords.add(w.toLowerCase()));
     tokenize(other.displayName).forEach(w => otherKeywords.add(w.toLowerCase()));
-    other.techStack?.forEach(t => otherTechStack.add(t.toLowerCase()));
     if (other.cwe) {
       otherCwe.add(other.cwe);
     }
@@ -403,32 +392,25 @@ export function extractUniquePoints(
   const skillKeywords = new Set<string>();
   tokenize(skill.skillName).forEach(w => skillKeywords.add(w.toLowerCase()));
   tokenize(skill.displayName).forEach(w => skillKeywords.add(w.toLowerCase()));
-  
+
   const uniqueKeywords = [...skillKeywords].filter(
     k => !otherKeywords.has(k) && k.length > 2
   );
-  
-  // 找出独特技术栈
-  const uniqueTechStack = (skill.techStack || []).filter(
-    t => !otherTechStack.has(t.toLowerCase())
-  );
-  
-  // 检查独特CWE
+
+  // 独特CWE
   const uniqueCwe = skill.cwe && !otherCwe.has(skill.cwe) ? skill.cwe : null;
   
-  // 生成描述
   const description = generateUniqueDescription(
     skill,
     uniqueKeywords,
-    uniqueTechStack,
     uniqueCwe
   );
-  
+
   return {
     skillId: skill.skillId,
     skillName: skill.skillName,
     uniqueKeywords: uniqueKeywords.slice(0, 10),
-    uniqueTechStack,
+    uniqueTechStack: [],
     uniqueCwe,
     description,
   };
@@ -440,27 +422,22 @@ export function extractUniquePoints(
 function generateUniqueDescription(
   skill: SimilarSkill,
   uniqueKeywords: string[],
-  uniqueTechStack: string[],
   uniqueCwe: string | null
 ): string {
   const parts: string[] = [];
-  
-  if (uniqueTechStack.length > 0) {
-    parts.push(`独特技术栈: ${uniqueTechStack.slice(0, 3).join(', ')}`);
-  }
-  
+
   if (uniqueCwe) {
     parts.push(`独特CWE: ${uniqueCwe}`);
   }
-  
+
   if (uniqueKeywords.length > 0) {
     parts.push(`独特关键词: ${uniqueKeywords.slice(0, 5).join(', ')}`);
   }
-  
+
   if (parts.length === 0) {
     return `${skill.displayName} 与组内其他技能高度相似，无明显独特检测点`;
   }
-  
+
   return parts.join(' | ');
 }
 

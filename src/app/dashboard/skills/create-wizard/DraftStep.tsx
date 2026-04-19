@@ -8,8 +8,8 @@ interface SkillDraft {
   name: string;
   displayName: string;
   description: string;
-  category: string;
-  techStack: string[];
+  vulnerabilityPatternId?: string;
+  techStackId?: string;
   cwe?: string;
   content: string;  // 完整的 Markdown 内容
 }
@@ -18,8 +18,8 @@ interface Props {
   intentData: {
     name: string;
     description: string;
-    category: string;
-    techStack: string[];
+    vulnerabilityPatternId?: string;
+    techStackId?: string;
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -88,7 +88,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
       const fallbackContent = defaultTemplate
         .replace(/\[漏洞类型\]/g, intentData.name || '安全漏洞')
         .replace(/\[漏洞名称\]/g, intentData.name || '安全漏洞')
-        .replace(/\[语言列表\]/g, intentData.techStack?.join(', ') || 'Java, Python, PHP, Node.js')
+        .replace(/\[语言列表\]/g, 'Java, Python, PHP, Node.js')
         .replace(/skill-name/g, intentData.name?.toLowerCase().replace(/\s+/g, '-') || 'untitled-skill')
         .replace(/CWE-XXX/g, intentData.cwe || 'CWE-XXX');
       
@@ -96,8 +96,6 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
         name: intentData.name || 'untitled-skill',
         displayName: intentData.name || 'Untitled Skill',
         description: intentData.description || '',
-        category: intentData.category || 'code-audit',
-        techStack: intentData.techStack || [],
         cwe: intentData.cwe,
         content: fallbackContent,
       };
@@ -251,11 +249,11 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            分类
+            漏洞模式
           </label>
           <input
             type="text"
-            value={skillData.category}
+            value={skillData.vulnerabilityPatternId || ''}
             disabled
             className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50"
           />

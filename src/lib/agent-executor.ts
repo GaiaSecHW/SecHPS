@@ -255,7 +255,7 @@ export class AgentExecutor {
    * 构建提示
    */
   private buildPrompt(
-    skill: { content: string; category: string; description?: string | null },
+    skill: { content: string; description?: string | null },
     project: { name: string; description: string | null }
   ): string {
     // skill.content 是完整的 Markdown 内容，作为系统提示

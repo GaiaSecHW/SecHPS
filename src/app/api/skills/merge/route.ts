@@ -267,8 +267,8 @@ export async function GET(request: Request) {
         id: true,
         name: true,
         displayName: true,
-        category: true,
-        techStack: true,
+        techStackId: true,
+        vulnerabilityPatternId: true,
       },
     });
 
@@ -279,8 +279,8 @@ export async function GET(request: Request) {
       skillId: string;
       skillName: string;
       skillDisplayName: string;
-      category: string;
-      techStack: string[];
+      techStackId: string | null;
+      vulnerabilityPatternId: string | null;
       similarSkills: Array<{
         skillId: string;
         skillName: string;
@@ -354,8 +354,8 @@ export async function GET(request: Request) {
         skillId,
         skillName: skill.name,
         skillDisplayName: skill.displayName,
-        category: skill.category,
-        techStack: skill.techStack ? JSON.parse(skill.techStack) : [],
+        techStackId: skill.techStackId || null,
+        vulnerabilityPatternId: skill.vulnerabilityPatternId || null,
         similarSkills,
         overlapScore: avgOverlapScore,
         recommendation,

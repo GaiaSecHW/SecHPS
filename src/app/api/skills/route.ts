@@ -40,9 +40,8 @@ export async function GET(request: Request) {
     const isActive = searchParams.get('isActive');
     const search = searchParams.get('search') || undefined;
     const scope = searchParams.get('scope') || 'all'; // public | mine | all
-    const techStack = searchParams.get('techStack') || undefined; // 技术栈过滤（旧字段，JSON 数组字符串）
-    const techStackId = searchParams.get('techStackId') || undefined; // 新字段：技术栈 ID 过滤
-    const vulnerabilityPatternId = searchParams.get('vulnerabilityPatternId') || undefined; // 新字段：漏洞类型 ID 过滤
+    const techStackId = searchParams.get('techStackId') || undefined;
+    const vulnerabilityPatternId = searchParams.get('vulnerabilityPatternId') || undefined;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
 
@@ -50,19 +49,19 @@ export async function GET(request: Request) {
 
     // 构建查询条件
     const where: Record<string, unknown> = {};
-    if (category) where.category = category;
     if (isActive !== null) where.isActive = isActive === 'true';
-    
-    // 技术栈过滤（旧字段）
-    if (techStack) {
-      // techStack 字段是 JSON 数组字符串，使用 contains 匹配
-      // 例如: ["Java", "Python"] 包含 "Java"
-      where.techStack = { contains: techStack };
-    }
-    
-    // 新字段过滤
     if (techStackId) where.techStackId = techStackId;
     if (vulnerabilityPatternId) where.vulnerabilityPatternId = vulnerabilityPatternId;
+    if (category) {
+      // category 参数可能是 VulnerabilityCategory.value 或 id，统一转为 id
+      const cat = await prisma.vulnerabilityCategory.findFirst({
+        where: { OR: [{ id: category }, { value: category }] },
+        select: { id: true },
+      });
+      if (cat) {
+        where.VulnerabilityPattern = { categoryId: cat.id };
+      }
+    }
     
     // 默认只返回最新版本
     where.isLatest = true;
@@ -86,23 +85,21 @@ export async function GET(request: Request) {
 
     // 添加搜索条件
     if (search) {
+      const searchOR = [
+        { name: { contains: search } },
+        { displayName: { contains: search } },
+        { description: { contains: search } },
+        { content: { contains: search } },
+      ];
       if (where.OR) {
-        // 已有 OR 条件，需要合并
-        const existingOR = where.OR as Record<string, unknown>[];
-        where.OR = existingOR.map(condition => ({
-          ...condition,
-          OR: [
-            { name: { contains: search } },
-            { displayName: { contains: search } },
-            { description: { contains: search } },
-          ],
-        }));
-      } else {
-        where.OR = [
-          { name: { contains: search } },
-          { displayName: { contains: search } },
-          { description: { contains: search } },
+        // 已有 OR 条件（scope），用 AND 组合
+        where.AND = [
+          { OR: where.OR as Record<string, unknown>[] },
+          { OR: searchOR },
         ];
+        delete where.OR;
+      } else {
+        where.OR = searchOR;
       }
     }
 
@@ -110,7 +107,7 @@ export async function GET(request: Request) {
       prisma.skill.findMany({
         where,
         select: skillSelectMinimal,
-        orderBy: [{ category: 'asc' }, { name: 'asc' }],
+      orderBy: [{ displayName: 'asc' }],
         skip,
         take,
       }),
@@ -127,7 +124,7 @@ export async function GET(request: Request) {
       techStackName: skill.TechStackOption?.name || null,
       techStackCategory: skill.TechStackOption?.category || null,
       vulnerabilityPatternName: skill.VulnerabilityPattern?.displayName || skill.VulnerabilityPattern?.name || null,
-      vulnerabilityPatternCategory: skill.VulnerabilityPattern?.category || null,
+      vulnerabilityPatternCategory: skill.VulnerabilityPattern?.categoryRef?.value || null,
       vulnerabilityPatternCwe: skill.VulnerabilityPattern?.cwe || null,
       TechStackOption: undefined, // 移除嵌套对象
       VulnerabilityPattern: undefined, // 移除嵌套对象
@@ -155,19 +152,17 @@ export async function POST(request: Request) {
       name,
       displayName,
       description,
-      category,
-      techStack,  // 技术栈 ["Java", "Spring"] - 旧字段，向后兼容
-      techStackId,  // 新字段：技术栈 ID（优先）
-      vulnerabilityPatternId,  // 新字段：漏洞类型 ID（优先）
+      techStackId,
+      vulnerabilityPatternId,
       cwe,
-      content,  // 完整的 Markdown 内容
-      isPublic = false,  // 是否为公共 Skill，默认为私有
+      content,
+      isPublic = false,
     } = body;
 
     // 验证必填字段
-    if (!name || !displayName || !description || !category || !content) {
+    if (!name || !displayName || !description || !content) {
       return NextResponse.json(
-        { details: { error: '缺少必填字段：名称、显示名称、描述、分类、内容' } },
+        { details: { error: '缺少必填字段：名称、显示名称、描述、内容' } },
         { status: 400 }
       );
     }
@@ -197,12 +192,6 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-    }
-
-    // 处理技术栈数据（向后兼容）
-    let techStackJson: string | null = null;
-    if (techStack && Array.isArray(techStack) && techStack.length > 0) {
-      techStackJson = JSON.stringify(techStack);
     }
 
     // 确定作用域
@@ -242,12 +231,10 @@ export async function POST(request: Request) {
         name,
         displayName,
         description,
-        category,
-        techStack: techStackJson,  // 旧字段，向后兼容
-        techStackId: techStackId || null,  // 新字段
-        vulnerabilityPatternId: vulnerabilityPatternId || null,  // 新字段
+        techStackId: techStackId || null,
+        vulnerabilityPatternId: vulnerabilityPatternId || null,
         cwe: cwe || null,
-        content,  // 保存完整的 Markdown 内容
+        content,
         userId,
         isBuiltin,
         version: 1,
@@ -261,7 +248,7 @@ export async function POST(request: Request) {
       userId: payload.userId,
       action: 'skill_create' as any,
       resource: skill.id,
-      details: { name: skill.name, displayName, category, isPublic },
+      details: { name: skill.name, displayName, isPublic },
     }).catch(err => logger.errorWithUser(LOG_MODULES.SKILL, payload, '记录审计日志失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } }));
 
     // 双写：同步保存到磁盘
@@ -293,10 +280,10 @@ export async function POST(request: Request) {
           name: true,
           displayName: true,
           description: true,
-          category: true,
-          techStack: true,
           cwe: true,
           content: true,
+          techStackId: true,
+          vulnerabilityPatternId: true,
         },
       });
 
@@ -306,8 +293,6 @@ export async function POST(request: Request) {
         name: s.name,
         displayName: s.displayName,
         description: s.description,
-        category: s.category,
-        techStack: s.techStack ? JSON.parse(s.techStack) : [],
         cwe: s.cwe,
         content: s.content,
       }));
@@ -318,8 +303,6 @@ export async function POST(request: Request) {
         name: skill.name,
         displayName: skill.displayName,
         description: skill.description,
-        category: skill.category,
-        techStack: skill.techStack ? JSON.parse(skill.techStack) : [],
         cwe: skill.cwe,
         content: skill.content,
       };

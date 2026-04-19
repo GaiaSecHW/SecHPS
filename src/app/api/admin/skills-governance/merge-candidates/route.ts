@@ -53,7 +53,6 @@ export async function GET(request: Request) {
         id: true,
         name: true,
         displayName: true,
-        category: true,
         userId: true,
       },
     });
@@ -86,8 +85,6 @@ export async function GET(request: Request) {
           skillId: pair.skillId2,
           skillName: pair.skillName2,
           displayName: skill2.displayName || skill2.name,
-          category: skill2.category || 'Unknown',
-          techStack: [], // 从 overlap pairs 无法获取技术栈信息
           similarity: pair.overlapScore,
           overlapType: pair.overlapType.split(',')[0] as SimilarSkill['overlapType'],
           overlapScore: pair.overlapScore,
@@ -100,7 +97,7 @@ export async function GET(request: Request) {
         skillId: pair.skillId1,
         skillName: pair.skillName1,
         skillDisplayName: skill1.displayName || skill1.name,
-        skillCategory: skill1.category || 'Unknown',
+        skillCategory: 'Unknown',
         similarSkills,
         overlapScore: pair.overlapScore,
         recommendation,
@@ -123,7 +120,7 @@ export async function GET(request: Request) {
 
     const mergeSkills = await prisma.skill.findMany({
       where: { id: { in: Array.from(mergeSkillIds) } },
-      select: { id: true, name: true, displayName: true, category: true },
+      select: { id: true, name: true, displayName: true, vulnerabilityPatternId: true },
     });
 
     const mergeSkillMap = new Map(mergeSkills.map(s => [s.id, s]));
