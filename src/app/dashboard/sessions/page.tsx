@@ -1409,7 +1409,7 @@ toast.error(data.error || '更新项目失败');
                     </button>
                   </div>
                 </div>
-                {/* 第二行：启动评估、编辑、文件管理、删除 或 当前会话操作 */}
+                {/* 第二行：启动评估、编辑、文件管理、删除 */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
                     {/* 启动评估按钮 - 始终显示，运行中时禁用 */}
@@ -1426,66 +1426,6 @@ toast.error(data.error || '更新项目失败');
                       <Play size={16} />
                       <span>启动评估</span>
                     </button>
-                    
-                    {/* 显示最近一次评估状态 */}
-                    {(() => {
-                      const allEvals = project.evaluations || [];
-                      const runningEval = allEvals.find((e: any) => e.status === 'running' || e.status === 'queued');
-                      const latestEval = runningEval || allEvals.sort((a: any, b: any) => 
-                        new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-                      )[0];
-                      
-                      if (latestEval) {
-                        const evalTime = latestEval.startedAt ? new Date(latestEval.startedAt) : null;
-                        const timeStr = evalTime ? evalTime.toLocaleString('zh-CN', { 
-                          month: '2-digit', 
-                          day: '2-digit', 
-                          hour: '2-digit', 
-                          minute: '2-digit',
-                          second: '2-digit'
-                        }) : '';
-                        
-                        // 根据状态显示不同样式
-                        const isRunning = latestEval.status === 'running' || latestEval.status === 'queued';
-                        const statusConfig: Record<string, { bg: string; border: string; text: string; icon: string; label: string }> = {
-                          running: { bg: 'bg-blue-50', border: 'border-blue-200', text: 'text-blue-700', icon: 'animate-spin text-blue-600', label: '运行中' },
-                          queued: { bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-700', icon: 'text-yellow-600', label: '排队中' },
-                          completed: { bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-700', icon: 'text-green-600', label: '已完成' },
-                          failed: { bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-700', icon: 'text-red-600', label: '异常' },
-                          cancelled: { bg: 'bg-gray-50', border: 'border-gray-200', text: 'text-gray-700', icon: 'text-gray-600', label: '已中止' },
-                        };
-                        const config = statusConfig[latestEval.status] || statusConfig.completed;
-                        
-                        return (
-                          <button
-                            onClick={() => router.push(`/dashboard/sessions/${latestEval.id}?evaluationId=${latestEval.id}`)}
-                            className={`flex items-center space-x-2 px-3 py-1 ${config.bg} border ${config.border} rounded-md hover:opacity-80 transition-opacity`}
-                          >
-                            {isRunning ? (
-                              <Loader2 className={`h-4 w-4 ${config.icon}`} />
-                            ) : latestEval.status === 'completed' ? (
-                              <CheckCircle className={`h-4 w-4 ${config.icon}`} />
-                            ) : latestEval.status === 'failed' ? (
-                              <AlertTriangle className={`h-4 w-4 ${config.icon}`} />
-                            ) : (
-                              <XCircle className={`h-4 w-4 ${config.icon}`} />
-                            )}
-                            <span className={`text-sm font-medium ${config.text}`}>
-                              {config.label}
-                            </span>
-                            {timeStr && (
-                              <span className={`text-xs ${config.text} opacity-75`}>
-                                启动: {timeStr}
-                              </span>
-                            )}
-                            <span className={`text-xs ${config.text} opacity-75`}>
-                              详情
-                            </span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
                     <button
                       onClick={() => openEditModal(project)}
                       className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
