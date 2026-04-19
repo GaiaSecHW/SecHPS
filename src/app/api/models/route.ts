@@ -71,8 +71,12 @@ export async function GET(request: Request) {
       // 管理员可以看到所有模型
       // 不添加额外的userId过滤
     } else {
-      // 普通用户管理页面：只看到自己创建的
-      where.userId = payload.userId;
+      // 普通用户管理页面：自己的 + 公开的 + 系统级模型
+      where.OR = [
+        { userId: payload.userId },  // 自己创建的
+        { isPublic: true },           // 公开的
+        { userId: null },             // 系统级模型
+      ];
     }
 
     // 获取模型配置（包含创建者信息）

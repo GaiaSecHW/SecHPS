@@ -68,18 +68,25 @@ export async function GET(request: Request) {
 
     // 作用域过滤
     if (scope === 'public') {
+      // 选择模式：公共技能 + 公开分享的技能（用于执行时选择）
       where.OR = [
-        { userId: null },        // 公共 Skills
-        { isPublic: true },      // 公开分享的私有 Skills
+        { userId: null },        // 公共技能（系统内置）
+        { isPublic: true },      // 其他用户公开分享的技能
       ];
     } else if (scope === 'mine') {
-      where.userId = payload.userId;  // 用户私有 Skills
-    } else {
-      // scope === 'all': 用户可用的所有 Skills（公共 + 私有 + 公开分享的）
+      // 管理模式：自己的技能 + 系统内置的 + 公开共享的
       where.OR = [
-        { userId: null },           // 公共 Skills
-        { userId: payload.userId }, // 用户私有 Skills
-        { isPublic: true },         // 其他用户公开分享的 Skills
+        { userId: payload.userId }, // 自己创建的技能
+        { userId: null },           // 系统内置技能
+        { isPublic: true },         // 其他用户公开分享的技能
+      ];
+    } else {
+      // scope === 'all': 选择模式（用于执行时选择技能）
+      // 用户可用的所有 Skills：公共 + 自己的 + 公开分享的
+      where.OR = [
+        { userId: null },           // 公共技能（系统内置）
+        { userId: payload.userId }, // 自己创建的技能
+        { isPublic: true },         // 其他用户公开分享的技能
       ];
     }
 
