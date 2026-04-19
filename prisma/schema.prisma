@@ -622,6 +622,7 @@ model Project {
   description       String?
   projectPath       String?
   status            String              @default("idle")
+  isPublic          Boolean             @default(false)  // 是否公开共享
   environmentUrl    String?
   adminUsername     String?
   adminPassword     String?
