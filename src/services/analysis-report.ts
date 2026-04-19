@@ -206,15 +206,25 @@ export async function getAnalysisReport(evaluationId: string): Promise<AnalysisR
     
     if (!report) return null;
     
+    // 安全解析 JSON 字段
+    const safeParseJson = (str: string | null, defaultValue: any = []) => {
+      if (!str) return defaultValue;
+      try {
+        return JSON.parse(str);
+      } catch {
+        return defaultValue;
+      }
+    };
+    
     return {
       id: report.id,
       evaluationId: report.evaluationId,
       projectId: report.projectId,
       
       projectOverview: {
-        projectName: report.projectName,
-        description: report.description,
-        techStack: report.techStack ? JSON.parse(report.techStack) : [],
+        projectName: report.projectName || '',
+        description: report.description || '',
+        techStack: safeParseJson(report.techStack, []),
       },
       
       architecture: {
@@ -222,14 +232,14 @@ export async function getAnalysisReport(evaluationId: string): Promise<AnalysisR
         frontend: report.frontend || undefined,
         backend: report.backend || undefined,
         database: report.database || undefined,
-        directoryStructure: report.directoryStructure ? JSON.parse(report.directoryStructure) : undefined,
+        directoryStructure: safeParseJson(report.directoryStructure, undefined),
         summary: report.architectureSummary || '',
       },
       
       entryPoints: {
-        apiEndpoints: report.apiEndpoints ? JSON.parse(report.apiEndpoints) : [],
-        pageEntries: report.pageEntries ? JSON.parse(report.pageEntries) : [],
-        userInputPoints: report.userInputPoints ? JSON.parse(report.userInputPoints) : [],
+        apiEndpoints: safeParseJson(report.apiEndpoints, []),
+        pageEntries: safeParseJson(report.pageEntries, []),
+        userInputPoints: safeParseJson(report.userInputPoints, []),
         summary: report.entryPointsSummary || undefined,
       },
       
@@ -239,9 +249,9 @@ export async function getAnalysisReport(evaluationId: string): Promise<AnalysisR
         tokenExpiry: report.tokenExpiry || undefined,
         refreshMechanism: report.refreshMechanism || undefined,
         authzModel: report.authzModel || undefined,
-        roles: report.roles ? JSON.parse(report.roles) : undefined,
-        sessionManagement: report.sessionManagement ? JSON.parse(report.sessionManagement) : undefined,
-        securityConfig: report.securityConfig ? JSON.parse(report.securityConfig) : undefined,
+        roles: safeParseJson(report.roles, undefined),
+        sessionManagement: safeParseJson(report.sessionManagement, undefined),
+        securityConfig: safeParseJson(report.securityConfig, undefined),
         summary: report.authSummary || '',
       },
       
