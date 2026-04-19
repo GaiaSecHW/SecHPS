@@ -45,7 +45,7 @@ export interface NodeData {
   outputs?: NodePort[];
   type?: WorkflowNodeType;
   skillLoadingMode?: 'description' | 'manual' | 'vulnerability';  // Skill 加载模式
-  vulnerabilityCategory?: string;  // 漏洞类别（模式 3）
+  vulnerabilityCategories?: string[];  // 漏洞分类列表（模式 3，category value 数组）
   skills?: string;  // 手工指定的 Skills（模式 2，JSON 数组）
   [key: string]: any; // React Flow Node 类型要求索引签名
 }

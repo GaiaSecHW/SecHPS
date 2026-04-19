@@ -231,6 +231,7 @@ export class ClaudeAgentService {
       console.log('[ClaudeAgentService] - 工作目录:', this.config.cwd);
       console.log('[ClaudeAgentService] - 权限模式:', this.config.permissionMode);
       console.log('[ClaudeAgentService] - 允许跳过权限:', this.config.allowDangerouslySkipPermissions);
+      console.log('[ClaudeAgentService] - 设置源(settingSources):', this.config.settingSources || '未配置');
       console.log('[ClaudeAgentService] - 系统提示词类型:', typeof this.config.systemPrompt);
       console.log('[ClaudeAgentService] - 系统提示词内容:',
         this.config.systemPrompt

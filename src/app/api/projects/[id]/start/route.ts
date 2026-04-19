@@ -11,7 +11,7 @@ import { claudeProjectManager } from '@/lib/claude-project-sync';
 import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
 import { join } from 'path';
 import { copySkillsToProject, copySkillsByIds } from '@/services/skill-files';
-import { matchSkillsByCategory } from '@/services/skill-matcher';
+import { matchSkillsByCategoryValues } from '@/services/skill-matcher';
 import { registerAgent } from '@/lib/agent-registry';
 import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
 
@@ -383,79 +383,163 @@ export async function POST(
           console.log('[启动评估] 项目未设置技术栈，将拷贝所有启用的 Skills');
         }
         
-        let copyResult: { success: number; failed: number; errors: string[]; copiedSkills: string[]; skillIds: string[] };
+        // workflowId 必须提供，否则拒绝执行
+        if (!workflowId) {
+          return NextResponse.json(
+            { error: '必须指定工作流编排（workflowId），无法启动评估' },
+            { status: 400 }
+          );
+        }
+
+        // 按 WorkflowNode 加载 Skills
+
+        // 查询 Workflow 的所有节点
+        const workflowNodes = await prisma.workflowNode.findMany({
+          where: { workflowId },
+          select: {
+            id: true,
+            data: true,
+            vulnerabilityCategories: true,
+            skills: true,
+          },
+        });
+
+        console.log(`[启动评估] 找到 ${workflowNodes.length} 个 WorkflowNode`);
+
+        // 遍历每个节点，收集 Skill IDs
+        const allSkillIds: string[] = [];
+        let hasDescriptionModeNode = false;
         
-        // 如果有 workflowId，按 WorkflowNode 加载 Skills
-        if (workflowId) {
-          console.log('[启动评估] 检测到 workflowId，按 WorkflowNode 加载 Skills');
-          
-          // 查询 Workflow 的所有节点
-          const workflowNodes = await prisma.workflowNode.findMany({
-            where: { workflowId },
-            select: {
-              id: true,
-              data: true,
-              vulnerabilityCategory: true,
-              skills: true,
-            },
-          });
-          
-          console.log(`[启动评估] 找到 ${workflowNodes.length} 个 WorkflowNode`);
-          
-          // 遍历每个节点，收集 Skill IDs
-          const allSkillIds: string[] = [];
-          
-          for (const node of workflowNodes) {
-            // 模式 3：漏洞类别
-            if (node.vulnerabilityCategory) {
-              console.log(`[启动评估] Node ${node.id}: 模式 3 - 漏洞类别 ${node.vulnerabilityCategory}`);
-              const matchedIds = await matchSkillsByCategory(
-                node.vulnerabilityCategory,
-                projectTechStack
-              );
+        // 记录每个节点的漏洞分类匹配结果（用于错误提示）
+        const nodeCategoryMatchResults: { nodeId: string; categories: string[]; matchedCount: number }[] = [];
+
+        for (const node of workflowNodes) {
+          // 模式 3：漏洞分类（多选）
+          if (node.vulnerabilityCategories) {
+            let categoryValues: string[] = [];
+            try { categoryValues = JSON.parse(node.vulnerabilityCategories); } catch { /* ignore */ }
+            if (categoryValues.length > 0) {
+              console.log(`[启动评估] Node ${node.id}: 模式 3 - 漏洞分类 ${categoryValues.join(', ')}`);
+              const matchedIds = await matchSkillsByCategoryValues(categoryValues, projectTechStack);
+              
+              // 记录匹配结果
+              nodeCategoryMatchResults.push({
+                nodeId: node.id,
+                categories: categoryValues,
+                matchedCount: matchedIds.length,
+              });
+              
+              // 模式3：如果筛选结果为空，直接返回错误
+              if (matchedIds.length === 0) {
+                const techStackMsg = projectTechStack && projectTechStack.length > 0 
+                  ? `，技术栈: ${projectTechStack.join(', ')}` 
+                  : '';
+                return NextResponse.json({
+                  error: `工作流节点 [${node.id}] 指定的漏洞分类 [${categoryValues.join(', ')}]${techStackMsg} 没有匹配到任何满足条件的 Skill（技术栈匹配 + 启用状态）。请检查漏洞分类是否正确，或联系管理员添加相关 Skills。`,
+                }, { status: 400 });
+              }
+              
               allSkillIds.push(...matchedIds);
               console.log(`[启动评估] Node ${node.id}: 匹配到 ${matchedIds.length} 个 Skills`);
               continue;
             }
-            
-            // 模式 2：手工指定
-            if (node.skills) {
-              console.log(`[启动评估] Node ${node.id}: 模式 2 - 手工指定 Skills`);
-              try {
-                const skillIds = JSON.parse(node.skills);
-                if (Array.isArray(skillIds)) {
-                  allSkillIds.push(...skillIds);
-                  console.log(`[启动评估] Node ${node.id}: 指定了 ${skillIds.length} 个 Skills`);
-                }
-              } catch {
-                console.warn(`[启动评估] Node ${node.id}: skills 字段 JSON 解析失败`);
-              }
-              continue;
-            }
-            
-            // 模式 1：自定义描述（无 vulnerabilityCategory 和 skills）
-            console.log(`[启动评估] Node ${node.id}: 模式 1 - 自定义描述，不加载 Skills`);
           }
-          
-          // 去重
-          const uniqueSkillIds = [...new Set(allSkillIds)];
-          console.log(`[启动评估] 合并后共 ${uniqueSkillIds.length} 个唯一 Skill IDs`);
-          
-          // 使用 copySkillsByIds 拷贝
-          copyResult = await copySkillsByIds(
-            project.projectPath,
-            uniqueSkillIds,
-            undefined  // skillOutputTemplate（可选，后续可从 globalConfig 获取）
-          );
-        } else {
-          // 没有 workflowId，保持现有逻辑（按项目技术栈过滤）
-          console.log('[启动评估] 无 workflowId，按项目技术栈过滤 Skills');
+
+          // 模式 2：手工指定
+          if (node.skills) {
+            console.log(`[启动评估] Node ${node.id}: 模式 2 - 手工指定 Skills`);
+            try {
+              const skillIds = JSON.parse(node.skills);
+              if (Array.isArray(skillIds)) {
+                allSkillIds.push(...skillIds);
+                console.log(`[启动评估] Node ${node.id}: 指定了 ${skillIds.length} 个 Skills`);
+              }
+            } catch {
+              console.warn(`[启动评估] Node ${node.id}: skills 字段 JSON 解析失败`);
+            }
+            continue;
+          }
+
+          // 模式 1：描述匹配 - 由大模型自动加载，需拷贝所有匹配技术栈的 Skills
+          console.log(`[启动评估] Node ${node.id}: 模式 1 - 描述匹配，将拷贝所有技术栈匹配的 Skills`);
+          hasDescriptionModeNode = true;
+        }
+
+        // 去重
+        const uniqueSkillIds = [...new Set(allSkillIds)];
+        console.log(`[启动评估] 合并后共 ${uniqueSkillIds.length} 个唯一 Skill IDs`);
+
+        let copyResult: { success: number; failed: number; errors: string[]; copiedSkills: string[]; skillIds: string[]; invalidSkills?: any[] };
+
+        if (hasDescriptionModeNode) {
+          // 有描述匹配节点：拷贝所有技术栈匹配的 Skills（大模型按描述自动选用）
+          console.log('[启动评估] 存在描述匹配节点，拷贝所有技术栈匹配的 Skills');
           copyResult = await copySkillsToProject(
             project.projectPath,
             payload.userId,
-            undefined,  // skillOutputTemplate（可选，后续可从 globalConfig 获取）
-            projectTechStack  // 项目技术栈
+            undefined,
+            projectTechStack
           );
+          // 同时追加手工/漏洞分类模式指定的 Skills
+          if (uniqueSkillIds.length > 0) {
+            const extra = await copySkillsByIds(project.projectPath, uniqueSkillIds, undefined, projectTechStack);
+            
+            // 模式2：检查验证失败的 Skills
+            if (extra.invalidSkills && extra.invalidSkills.length > 0) {
+              const invalidDetails = extra.invalidSkills.map((s: any) => {
+                const reasonMap: Record<string, string> = {
+                  'not_found': '不存在',
+                  'not_active': '未启用',
+                  'not_latest': '已废弃',
+                  'tech_stack_mismatch': `技术栈不匹配(需要: ${s.techStackId || '无'})`,
+                };
+                return `${s.skillName || s.skillId}(${reasonMap[s.reason] || s.reason})`;
+              }).join(', ');
+              
+              const techStackMsg = projectTechStack && projectTechStack.length > 0 
+                ? `，项目技术栈: ${projectTechStack.join(', ')}` 
+                : '';
+              
+              return NextResponse.json({
+                error: `手工指定的 Skills 验证失败: ${invalidDetails}${techStackMsg}。请检查 Skills 是否存在、已启用、且技术栈匹配。`,
+              }, { status: 400 });
+            }
+            
+            copyResult.success += extra.success;
+            copyResult.failed += extra.failed;
+            copyResult.errors.push(...extra.errors);
+            copyResult.copiedSkills.push(...extra.copiedSkills);
+            copyResult.skillIds.push(...extra.skillIds);
+          }
+        } else {
+          // 全部节点都是手工/漏洞分类模式，按 ID 精确拷贝
+          copyResult = await copySkillsByIds(
+            project.projectPath,
+            uniqueSkillIds,
+            undefined,
+            projectTechStack
+          );
+          
+          // 模式2：检查验证失败的 Skills
+          if (copyResult.invalidSkills && copyResult.invalidSkills.length > 0) {
+            const invalidDetails = copyResult.invalidSkills.map((s: any) => {
+              const reasonMap: Record<string, string> = {
+                'not_found': '不存在',
+                'not_active': '未启用',
+                'not_latest': '已废弃',
+                'tech_stack_mismatch': `技术栈不匹配(需要: ${s.techStackId || '无'})`,
+              };
+              return `${s.skillName || s.skillId}(${reasonMap[s.reason] || s.reason})`;
+            }).join(', ');
+            
+            const techStackMsg = projectTechStack && projectTechStack.length > 0 
+              ? `，项目技术栈: ${projectTechStack.join(', ')}` 
+              : '';
+            
+            return NextResponse.json({
+              error: `手工指定的 Skills 验证失败: ${invalidDetails}${techStackMsg}。请检查 Skills 是否存在、已启用、且技术栈匹配。`,
+            }, { status: 400 });
+          }
         }
         
         console.log(`[启动评估] Skills 同步完成:`);
@@ -482,7 +566,10 @@ export async function POST(
         }
       } catch (error) {
         console.error('[启动评估] Skills 同步失败:', error);
-        // 继续执行，不阻止评估启动
+        // Skills 同步失败应该阻止评估启动
+        return NextResponse.json({
+          error: `Skills 同步失败: ${error instanceof Error ? error.message : String(error)}`,
+        }, { status: 500 });
       }
     }
     
@@ -1356,6 +1443,10 @@ export async function POST(
                 where: { id: evaluation.id },
                 data: {
                   status: 'completed',
+                  endReason: 'completed',
+                  endMessage: result.completionReason === 'verified' 
+                    ? '评估任务已完成，结果已验证' 
+                    : `评估结束: ${result.reason || '达到迭代上限'}`,
                   completedAt: new Date(),
                   summary: `[Ralph Loop] ${summaryLabel}。共迭代 ${result.iterations} 次。${result.reason || ''}`,
                   // Token 统计
@@ -1446,6 +1537,8 @@ export async function POST(
             where: { id: evaluation.id },
             data: {
               status: 'failed',
+              endReason: 'error',
+              endMessage: errorMessage,
               errorMessage,
               completedAt: new Date(),
             },

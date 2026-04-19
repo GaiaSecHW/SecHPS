@@ -36,6 +36,12 @@ export async function GET(request: Request) {
           },
         },
         EvaluationSession: {
+          where: {
+            OR: [
+              { status: 'running' },
+              { status: 'queued' },
+            ],
+          },
           orderBy: {
             startedAt: 'desc',
           },
@@ -53,10 +59,12 @@ export async function GET(request: Request) {
       },
     });
 
-    // 转换数据格式，添加漏洞数量
+    // 转换数据格式，添加漏洞数量和运行状态
     const projectsWithVulnCount = projects.map(project => ({
       ...project,
+      evaluations: project.EvaluationSession || [],  // 映射字段名给前端
       vulnerabilityCount: project._count?.Vulnerability || 0,
+      hasRunningEvaluation: project.EvaluationSession && project.EvaluationSession.length > 0,
     }));
 
     return NextResponse.json({ projects: projectsWithVulnCount });

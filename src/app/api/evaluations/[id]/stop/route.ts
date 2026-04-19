@@ -63,6 +63,8 @@ export async function POST(
       where: { id },
       data: {
         status: 'cancelled',
+        endReason: 'stopped',
+        endMessage: '用户手动中止评估',
         completedAt: new Date(),
         errorMessage: '用户手动中止',
       },

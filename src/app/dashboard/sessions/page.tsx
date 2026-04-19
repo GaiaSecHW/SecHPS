@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy } from 'lucide-react';
-import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 
 // 格式化漏洞描述 - 按语义分行
 function formatDescription(text: string): string {
@@ -55,6 +55,8 @@ interface EvaluationRecord {
   startedAt: string;
   completedAt: string | null;
   errorMessage: string | null;
+  endReason?: 'completed' | 'stopped' | 'error' | null;
+  endMessage?: string | null;
 }
 
 interface Project {
@@ -75,6 +77,8 @@ interface Project {
   adminPassword?: string;
   normalUsername?: string;
   normalPassword?: string;
+  // 运行状态
+  hasRunningEvaluation?: boolean;
   // 漏洞数量
   vulnerabilityCount?: number;
 }
@@ -100,7 +104,7 @@ export default function SessionsPage() {
   const [projectTechStack, setProjectTechStack] = useState<string[]>([]);
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptions();
+  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds();
   // 环境配置表单状态
   const [environmentUrl, setEnvironmentUrl] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
@@ -172,7 +176,7 @@ export default function SessionsPage() {
         .filter((w: any) => w.status === 'published')
         .map((w: any) => ({
           ...w,
-          nodeCount: w._count?.nodes || 0,
+          nodeCount: w._count?.WorkflowNode || 0,
         }));
       setWorkflows(publishedWorkflows);
     } catch (err) {
@@ -245,7 +249,10 @@ export default function SessionsPage() {
       }
 
       const data = await response.json();
-      const roles = data.roles || [];
+      let roles = data.roles || [];
+      
+      // 过滤掉没有节点的角色（不需要为空角色配置模型）
+      roles = roles.filter((r: any) => r.nodes && r.nodes.length > 0);
       
       // 检查是否有未分配角色的节点
       // 如果有，添加"默认角色"
@@ -266,6 +273,7 @@ export default function SessionsPage() {
             description: '未分配角色的节点将使用此模型',
             color: '#gray',
             nodeCount: nodesWithoutRole.length,
+            nodes: nodesWithoutRole,  // 添加节点信息
           });
         }
       }
@@ -667,8 +675,11 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || '启动项目失败');
         setStartingProject(null);
+        
+        // 显示详细的错误弹窗
+        alert(`启动评估失败\n\n${data.error || '未知错误'}`);
+        toast.error(data.error || '启动项目失败');
         return;
       }
 
@@ -1271,29 +1282,69 @@ toast.error(data.error || '更新项目失败');
               </div>
 
               {/* 当前运行中的评估会话信息 */}
-              {project.evaluations?.some((e: any) => e.status === 'running') && (
+              {project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued') && (
                 <div className="bg-blue-50 px-6 py-2 border-t border-blue-100">
                   {(() => {
-                    const runningEval = project.evaluations.find((e: any) => e.status === 'running');
+                    const runningEval = project.evaluations.find((e: any) => e.status === 'running' || e.status === 'queued');
                     if (!runningEval) return null;
+                    const runningTime = runningEval.startedAt ? new Date(runningEval.startedAt) : null;
+                    const timeStr = runningTime ? runningTime.toLocaleString('zh-CN', { 
+                      month: '2-digit', 
+                      day: '2-digit', 
+                      hour: '2-digit', 
+                      minute: '2-digit',
+                      second: '2-digit'
+                    }) : '';
                     return (
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                          <span className="text-sm text-blue-700">
-                            评估运行中
-                          </span>
-                          <span className="text-xs text-blue-600">
-                            开始于 {new Date(runningEval.startedAt).toLocaleString('zh-CN')}
-                          </span>
+                        <div className="flex items-center space-x-3">
+                          <div className="flex items-center space-x-2">
+                            <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                            <span className="text-sm text-blue-700 font-medium">
+                              {runningEval.status === 'queued' ? '📋 排队中' : '🔄 运行中'}
+                            </span>
+                          </div>
+                          {timeStr && (
+                            <span className="text-xs text-blue-500">
+                              启动: {timeStr}
+                            </span>
+                          )}
                         </div>
-                        <div className="flex space-x-2">
+                        <div className="flex items-center space-x-2">
                           <Link
                             href={`/dashboard/sessions/${project.id}?evaluationId=${runningEval.id}`}
-                            className="text-xs text-blue-600 hover:text-blue-800"
+                            className="text-xs text-blue-600 hover:text-blue-800 flex items-center space-x-1"
                           >
-                            查看详情
+                            <MessageSquare size={12} />
+                            <span>详情</span>
                           </Link>
+                          {runningEval.status === 'running' && (
+                            <button
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                if (!confirm('确定要停止当前评估吗？')) return;
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  const res = await fetch(`/api/evaluations/${runningEval.id}/stop`, {
+                                    method: 'POST',
+                                    headers: { Authorization: `Bearer ${token}` },
+                                  });
+                                  if (res.ok) {
+                                    fetchProjects();
+                                  } else {
+                                    const data = await res.json();
+                                    toast.error(data.error || '停止失败');
+                                  }
+                                } catch (err) {
+                                  toast.error('停止失败');
+                                }
+                              }}
+                              className="text-xs text-orange-600 hover:text-orange-800 flex items-center space-x-1"
+                            >
+                              <Square size={12} />
+                              <span>停止</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1301,7 +1352,7 @@ toast.error(data.error || '更新项目失败');
                 </div>
               )}
 
-              {/* 最新完成的评估会话信息 */}
+              {/* 最新完成的评估会话信息 - 仅在没有运行中的评估时显示 */}
               {!project.evaluations?.some((e: any) => e.status === 'running') && 
                (project.evaluations?.length ?? 0) > 0 && (
                 <div className="bg-gray-50 px-6 py-2 border-t border-gray-100">
@@ -1389,57 +1440,95 @@ toast.error(data.error || '更新项目失败');
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
                     {/* 检查是否有运行中的评估 */}
-                    {project.evaluations?.some((e: any) => e.status === 'running') ? (
+                    {project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued') ? (
                       <>
                         {/* 运行中的会话操作 */}
                         {(() => {
-                          const runningEval = project.evaluations.find((e: any) => e.status === 'running');
+                          const runningEval = project.evaluations?.find((e: any) => e.status === 'running' || e.status === 'queued');
+                          const runningTime = runningEval?.startedAt ? new Date(runningEval.startedAt) : null;
+                          const timeStr = runningTime ? runningTime.toLocaleString('zh-CN', { 
+                            month: '2-digit', 
+                            day: '2-digit', 
+                            hour: '2-digit', 
+                            minute: '2-digit',
+                            second: '2-digit'
+                          }) : '';
                           return (
                             <>
-                            <button
-                              onClick={async () => {
-                                  if (!runningEval) return;
-                                  if (!confirm('确定要停止当前评估吗？')) return;
-                                  try {
-                                    const token = localStorage.getItem('token');
-                                    const res = await fetch(`/api/evaluations/${runningEval.id}/stop`, {
-                                      method: 'POST',
-                                      headers: { Authorization: `Bearer ${token}` },
-                                    });
-                                    if (res.ok) {
-                                       fetchProjects();
-                                     } else {
-                                       const data = await res.json();
-                                       toast.error(data.error || '停止失败');
-                                     }
-                                   } catch (err) {
-                                     toast.error('停止失败');
-                                   }
-                                }}
-                                className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-orange-600 hover:text-orange-800"
-                              >
-                                <Square size={16} />
-                                <span>停止</span>
-                              </button>
+                              {/* 运行状态提示 - 增强版 */}
+                              <div className="flex items-center space-x-3 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md">
+                                <div className="flex items-center space-x-2">
+                                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                                  <span className="text-sm text-blue-700 font-medium">
+                                    {runningEval?.status === 'queued' ? '📋 排队中' : '🔄 运行中'}
+                                  </span>
+                                </div>
+                                {timeStr && (
+                                  <span className="text-xs text-blue-500 border-l border-blue-200 pl-2">
+                                    启动: {timeStr}
+                                  </span>
+                                )}
+                              </div>
+                              {/* 查看详情按钮 */}
+                              {runningEval && (
+                                <button
+                                  onClick={() => {
+                                    router.push(`/dashboard/sessions/${project.id}?evaluationId=${runningEval.id}`);
+                                  }}
+                                  className="flex items-center space-x-1 px-2 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded"
+                                  title="查看评估详情"
+                                >
+                                  <MessageSquare size={14} />
+                                  <span>详情</span>
+                                </button>
+                              )}
+                              {/* 停止按钮 */}
+                              {runningEval && runningEval.status === 'running' && (
+                                <button
+                                  onClick={async () => {
+                                    if (!runningEval) return;
+                                    if (!confirm('确定要停止当前评估吗？')) return;
+                                    try {
+                                      const token = localStorage.getItem('token');
+                                      const res = await fetch(`/api/evaluations/${runningEval.id}/stop`, {
+                                        method: 'POST',
+                                        headers: { Authorization: `Bearer ${token}` },
+                                      });
+                                      if (res.ok) {
+                                        fetchProjects();
+                                      } else {
+                                        const data = await res.json();
+                                        toast.error(data.error || '停止失败');
+                                      }
+                                    } catch (err) {
+                                      toast.error('停止失败');
+                                    }
+                                  }}
+                                  className="flex items-center space-x-1 px-2 py-1 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded"
+                                >
+                                  <Square size={14} />
+                                  <span>停止</span>
+                                </button>
+                              )}
                             </>
                           );
                         })()}
                       </>
                      ) : (
                       <>
-{/* 无运行中的会话：显示启动评估 */}
-                          <button
-                            onClick={() => {
-                              setSelectedProject(project);
-                              setSelectedWorkflow(null);
-                              setShowWorkflowModal(true);
-                            }}
-                            disabled={startingProject === project.id}
-                            className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Play size={16} />
-                            <span>启动评估</span>
-                          </button>
+                        {/* 无运行中的会话：显示启动评估 */}
+                        <button
+                          onClick={() => {
+                            setSelectedProject(project);
+                            setSelectedWorkflow(null);
+                            setShowWorkflowModal(true);
+                          }}
+                          disabled={startingProject === project.id}
+                          className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Play size={16} />
+                          <span>启动评估</span>
+                        </button>
                       </>
                     )}
                     <button
@@ -1541,21 +1630,24 @@ toast.error(data.error || '更新项目失败');
                 <div className="relative">
                   {/* 已选择的技术栈标签 */}
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {projectTechStack.map((ts) => (
+                    {projectTechStack.map((tsId) => {
+                      const opt = techStackOptions.find(o => o.id === tsId);
+                      return (
                       <span
-                        key={ts}
+                        key={tsId}
                         className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                       >
-                        {ts}
+                        {opt?.name || tsId}
                         <button
                           type="button"
-                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== ts))}
+                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== tsId))}
                           className="ml-2 text-blue-600 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                   {/* 技术栈搜索和选择 */}
                   <div className="relative">
@@ -1575,28 +1667,28 @@ toast.error(data.error || '更新项目失败');
                     {showTechStackDropdown && !loadingTechStack && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
-                          .filter((option) => 
-                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                            !projectTechStack.includes(option)
+                          .filter((option) =>
+                            option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !projectTechStack.includes(option.id)
                           )
-                          .slice(0, 20)
+
                           .map((option) => (
                             <button
-                              key={option}
+                              key={option.id}
                               type="button"
                               onClick={() => {
-                                setProjectTechStack([...projectTechStack, option]);
+                                setProjectTechStack([...projectTechStack, option.id]);
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
                               className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
                             >
-                              {option}
+                              {option.name}
                             </button>
                           ))}
-                        {techStackOptions.filter((option) => 
-                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !projectTechStack.includes(option)
+                        {techStackOptions.filter((option) =>
+                          option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !projectTechStack.includes(option.id)
                         ).length === 0 && (
                           <div className="px-4 py-2 text-sm text-gray-500">
                             无匹配选项
@@ -1815,21 +1907,24 @@ toast.error(data.error || '更新项目失败');
                 <div className="relative">
                   {/* 已选择的技术栈标签 */}
                   <div className="flex flex-wrap gap-2 mb-2">
-                    {projectTechStack.map((ts) => (
+                    {projectTechStack.map((tsId) => {
+                      const opt = techStackOptions.find(o => o.id === tsId);
+                      return (
                       <span
-                        key={ts}
+                        key={tsId}
                         className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                       >
-                        {ts}
+                        {opt?.name || tsId}
                         <button
                           type="button"
-                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== ts))}
+                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== tsId))}
                           className="ml-2 text-blue-600 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
                       </span>
-                    ))}
+                      );
+                    })}
                   </div>
                   {/* 技术栈搜索和选择 */}
                   <div className="relative">
@@ -1849,28 +1944,28 @@ toast.error(data.error || '更新项目失败');
                     {showTechStackDropdown && !loadingTechStack && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
-                          .filter((option) => 
-                            option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                            !projectTechStack.includes(option)
+                          .filter((option) =>
+                            option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                            !projectTechStack.includes(option.id)
                           )
-                          .slice(0, 20)
+
                           .map((option) => (
                             <button
-                              key={option}
+                              key={option.id}
                               type="button"
                               onClick={() => {
-                                setProjectTechStack([...projectTechStack, option]);
+                                setProjectTechStack([...projectTechStack, option.id]);
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
                               className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
                             >
-                              {option}
+                              {option.name}
                             </button>
                           ))}
-                        {techStackOptions.filter((option) => 
-                          option.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !projectTechStack.includes(option)
+                        {techStackOptions.filter((option) =>
+                          option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
+                          !projectTechStack.includes(option.id)
                         ).length === 0 && (
                           <div className="px-4 py-2 text-sm text-gray-500">
                             无匹配选项
@@ -2121,76 +2216,113 @@ toast.error(data.error || '更新项目失败');
                         setSelectedProject(null);
                       }}
                     >
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="text-sm font-medium text-gray-900">
-                          评估 #{index + 1}
-                        </h4>
-                        <div className="flex items-center space-x-2">
-                          <span
-                            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              evaluation.status === 'running'
-                                ? 'bg-blue-100 text-blue-800'
-                                : evaluation.status === 'completed'
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {evaluation.status === 'running'
-                              ? '运行中'
-                              : evaluation.status === 'completed'
-                              ? '已完成'
-                              : '失败'}
-                          </span>
-                          {evaluation.status !== 'running' && (
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (!confirm('确定要删除此评估吗？')) return;
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  const res = await fetch(`/api/evaluations/${evaluation.id}`, {
-                                    method: 'DELETE',
-                                    headers: { Authorization: `Bearer ${token}` },
-                                  });
-                                  if (res.ok) {
-                                    await fetchProjects();
-                                    // 重新获取项目详情以更新评估列表
-                                    const detailResponse = await fetch(`/api/projects/${selectedProject.id}`, {
-                                      headers: { Authorization: `Bearer ${token}` },
-                                    });
-                                    if (detailResponse.ok) {
-                                      const detailData = await detailResponse.json();
-                                      setSelectedProject(detailData.project);
+                       <div className="flex items-center justify-between mb-2">
+                         <h4 className="text-sm font-medium text-gray-900">
+                           评估 #{index + 1}
+                         </h4>
+                         <div className="flex items-center space-x-2">
+                           <span
+                             className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                               evaluation.status === 'running'
+                                 ? 'bg-blue-100 text-blue-800'
+                                 : evaluation.status === 'completed'
+                                 ? 'bg-green-100 text-green-800'
+                                 : evaluation.status === 'cancelled'
+                                 ? 'bg-yellow-100 text-yellow-800'
+                                 : 'bg-red-100 text-red-800'
+                             }`}
+                           >
+                             {evaluation.status === 'running'
+                               ? '运行中'
+                               : evaluation.status === 'completed'
+                               ? '已完成'
+                               : evaluation.status === 'cancelled'
+                               ? '已停止'
+                               : '失败'}
+                           </span>
+                           {evaluation.status !== 'running' && (
+                             <button
+                               onClick={async (e) => {
+                                 e.stopPropagation();
+                                 if (!confirm('确定要删除此评估吗？')) return;
+                                 try {
+                                   const token = localStorage.getItem('token');
+                                   const res = await fetch(`/api/evaluations/${evaluation.id}`, {
+                                     method: 'DELETE',
+                                     headers: { Authorization: `Bearer ${token}` },
+                                   });
+                                   if (res.ok) {
+                                     await fetchProjects();
+                                     // 重新获取项目详情以更新评估列表
+                                     const detailResponse = await fetch(`/api/projects/${selectedProject.id}`, {
+                                       headers: { Authorization: `Bearer ${token}` },
+                                     });
+                                     if (detailResponse.ok) {
+                                       const detailData = await detailResponse.json();
+                                       setSelectedProject(detailData.project);
+                                     }
+                                    } else {
+                                      const data = await res.json();
+                                      toast.error(data.error || '删除失败');
                                     }
-                                   } else {
-                                     const data = await res.json();
-                                     toast.error(data.error || '删除失败');
-                                   }
-                                 } catch (err) {
-                                   toast.error('删除失败');
-                                 }
-                              }}
-                              className="p-1 text-red-600 hover:text-red-800"
-                              title="删除评估"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                          <span className="text-xs text-blue-600 hover:text-blue-800">查看详情 →</span>
-                        </div>
-                      </div>
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <p>开始时间: {new Date(evaluation.startedAt).toLocaleString()}</p>
-                        {evaluation.completedAt && (
-                          <p>完成时间: {new Date(evaluation.completedAt).toLocaleString()}</p>
-                        )}
-                        {evaluation.opencodeSessionId && (
-                          <p>会话ID: {evaluation.opencodeSessionId}</p>
-                        )}
-                        {evaluation.errorMessage && (
-                          <p className="text-red-600">错误: {evaluation.errorMessage}</p>
-                        )}
-                      </div>
+                                  } catch (err) {
+                                    toast.error('删除失败');
+                                  }
+                               }}
+                               className="p-1 text-red-600 hover:text-red-800"
+                               title="删除评估"
+                             >
+                               <Trash2 size={16} />
+                             </button>
+                           )}
+                           <span className="text-xs text-blue-600 hover:text-blue-800">查看详情 →</span>
+                         </div>
+                       </div>
+                       <div className="text-sm text-gray-600 space-y-1">
+                         <p>开始时间: {new Date(evaluation.startedAt).toLocaleString()}</p>
+                         {evaluation.completedAt && (
+                           <p>完成时间: {new Date(evaluation.completedAt).toLocaleString()}</p>
+                         )}
+                         {/* 显示结束原因 */}
+                         {evaluation.status !== 'running' && evaluation.endReason && (
+                           <div className={`mt-2 p-2 rounded ${
+                             evaluation.endReason === 'completed' 
+                               ? 'bg-green-50 border border-green-200' 
+                               : evaluation.endReason === 'stopped'
+                               ? 'bg-yellow-50 border border-yellow-200'
+                               : 'bg-red-50 border border-red-200'
+                           }`}>
+                             <p className={`font-medium ${
+                               evaluation.endReason === 'completed' 
+                                 ? 'text-green-700' 
+                                 : evaluation.endReason === 'stopped'
+                                 ? 'text-yellow-700'
+                                 : 'text-red-700'
+                             }`}>
+                               {evaluation.endReason === 'completed' && '✅ 正常结束'}
+                               {evaluation.endReason === 'stopped' && '⏹️ 手工停止'}
+                               {evaluation.endReason === 'error' && '❌ 异常结束'}
+                             </p>
+                             {evaluation.endMessage && (
+                               <p className={`text-xs mt-1 ${
+                                 evaluation.endReason === 'completed' 
+                                   ? 'text-green-600' 
+                                   : evaluation.endReason === 'stopped'
+                                   ? 'text-yellow-600'
+                                   : 'text-red-600'
+                               }`}>
+                                 {evaluation.endMessage}
+                               </p>
+                             )}
+                           </div>
+                         )}
+                         {evaluation.opencodeSessionId && (
+                           <p>会话ID: {evaluation.opencodeSessionId}</p>
+                         )}
+                         {evaluation.errorMessage && !evaluation.endReason && (
+                           <p className="text-red-600">错误: {evaluation.errorMessage}</p>
+                         )}
+                       </div>
                     </div>
                   ))}
                 </div>
@@ -2430,19 +2562,33 @@ toast.error(data.error || '更新项目失败');
                       <div
                         key={workflow.id}
                         onClick={() => setSelectedWorkflow(workflow.id)}
-                        className={`border-2 rounded-lg p-4 cursor-pointer transition-all relative ${
+                        className={`border-2 rounded-lg p-4 cursor-pointer transition-all relative group ${
                           selectedWorkflow === workflow.id
-                            ? 'border-blue-600 bg-blue-100 shadow-md'
-                            : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50'
+                            ? 'border-blue-600 bg-blue-50 shadow-lg ring-2 ring-blue-200'
+                            : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50 hover:shadow'
                         }`}
                       >
-                        {/* 选中标记 */}
-                        {selectedWorkflow === workflow.id && (
-                          <div className="absolute top-2 right-2">
-                            <CheckCircle className="h-5 w-5 text-blue-600" />
+                        {/* 选中标记 - 更明显 */}
+                        <div className={`absolute top-3 right-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
+                          selectedWorkflow === workflow.id
+                            ? 'border-blue-600 bg-blue-600'
+                            : 'border-gray-300 group-hover:border-blue-400'
+                        }`}>
+                          {selectedWorkflow === workflow.id && (
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          )}
+                        </div>
+                        
+                        {/* 点击提示 - 未选中时显示 */}
+                        {selectedWorkflow !== workflow.id && (
+                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                            <span className="bg-blue-600 text-white text-xs px-3 py-1 rounded-full shadow">
+                              点击选择
+                            </span>
                           </div>
                         )}
-                        <div className="flex items-start justify-between">
+                        
+                        <div className="flex items-start justify-between pr-8">
                           <div className="flex-1">
                             <h4 className={`text-sm font-semibold ${
                               selectedWorkflow === workflow.id ? 'text-blue-700' : 'text-gray-900'
@@ -2455,9 +2601,6 @@ toast.error(data.error || '更新项目失败');
                               </p>
                             )}
                           </div>
-                          {!selectedWorkflow && (
-                            <Workflow className="h-5 w-5 text-gray-400 flex-shrink-0 ml-2" />
-                          )}
                         </div>
                         <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
                           <span>节点数: {workflow.nodeCount || 0}</span>

@@ -49,7 +49,8 @@ export interface DiskSkill {
   name: string;
   displayName: string;
   description: string;
-  category: string;
+  techStackId: string | null;
+  vulnerabilityPatternId: string | null;
   severity: string;
   cwe: string | null;
   content: string;  // 完整的 Markdown 内容
@@ -168,7 +169,8 @@ export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string
       name: skill.name,
       displayName: skill.displayName,
       description: skill.description,
-      category: skill.category,
+      techStackId: skill.techStackId,
+      vulnerabilityPatternId: skill.vulnerabilityPatternId,
       severity: skill.severity || 'medium',
       cwe: skill.cwe || '',
       content: skill.content || '',
@@ -194,13 +196,15 @@ export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string
     
     // 更新 metadata.json（只保存最新版本的元数据）
     if (skill.isLatest) {
-      // 解析 techStack JSON 字符串
-      let techStackArray: string[] | undefined;
-      if (skill.techStack) {
-        try {
-          techStackArray = JSON.parse(skill.techStack);
-        } catch {
-          techStackArray = undefined;
+      // 查询技术栈名称
+      let techStackNames: string[] = [];
+      if (skill.techStackId) {
+        const techStackOption = await prisma.techStackOption.findUnique({
+          where: { id: skill.techStackId },
+          select: { name: true },
+        });
+        if (techStackOption) {
+          techStackNames = [techStackOption.name];
         }
       }
       
@@ -211,7 +215,7 @@ export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string
         userId: skill.userId,
         latestVersion: skill.version,
         isActive: skill.isActive,
-        techStack: techStackArray,  // 技术栈列表
+        techStack: techStackNames,
         updatedAt: new Date().toISOString(),
       };
       
@@ -358,47 +362,32 @@ export async function copySkillsToProject(
           continue;
         }
         
-        // 技术栈匹配过滤
-        // 规则：
-        // 1. 项目无技术栈（null 或空数组） → 拷贝所有 Skill
-        // 2. Skill 无技术栈（undefined 或空数组） → 适合所有项目，拷贝
-        // 3. 有技术栈 → 需要匹配才拷贝
-        if (projectTechStack && projectTechStack.length > 0) {
-          const skillTechStack = metadata.techStack || [];
-          
-          // Skill 无技术栈 = 通用 Skill，适合所有项目
-          if (skillTechStack.length === 0) {
-            // 通用 Skill，继续拷贝
-          } else {
-            // 检查是否有匹配
-            const hasMatch = skillTechStack.some(skillTech =>
-              projectTechStack.some(projectTech =>
-                skillTech.toLowerCase() === projectTech.toLowerCase() ||
-                skillTech.toLowerCase().includes(projectTech.toLowerCase()) ||
-                projectTech.toLowerCase().includes(skillTech.toLowerCase())
-              )
-            );
-            
-            if (!hasMatch) {
-              console.log(`[SkillFiles] 技术栈不匹配，跳过: ${metadata.name} (Skill技术栈: ${skillTechStack.join(', ')}, 项目技术栈: ${projectTechStack.join(', ')})`);
-              continue;
-            }
-          }
-        }
-        
         // 治理过滤：检查 Skill 是否被废弃或合并
         // 规则：
         // 1. isLatest = false → Skill 已废弃，跳过
         // 2. 有 completed SkillMergeRecord → Skill 已合并到其他 Skill，跳过
         // 3. 有 pending SkillMergeRecord → Skill 正在合并流程中，跳过
         try {
-          // 查询数据库中的 Skill 记录
+          // 查询数据库中的 Skill 记录（包含 techStackId 用于技术栈匹配）
           const dbSkill = await prisma.skill.findUnique({
             where: { id: metadata.id },
-            select: { id: true, name: true, displayName: true, isLatest: true },
+            select: { id: true, name: true, displayName: true, isLatest: true, techStackId: true },
           });
           
           if (dbSkill) {
+            // 技术栈匹配过滤（使用数据库中的 techStackId，精确 ID 匹配）
+            // 规则：
+            // 1. 项目无技术栈（null 或空数组） → 拷贝所有 Skill
+            // 2. Skill 无技术栈（techStackId = null） → 适合所有项目，拷贝
+            // 3. 有技术栈 → 需要精确 ID 匹配才拷贝
+            if (projectTechStack && projectTechStack.length > 0 && dbSkill.techStackId) {
+              // Skill 有技术栈限制，检查是否匹配
+              if (!projectTechStack.includes(dbSkill.techStackId)) {
+                console.log(`[SkillFiles] 技术栈不匹配，跳过: ${metadata.name} (Skill技术栈ID: ${dbSkill.techStackId}, 项目技术栈IDs: ${projectTechStack.join(', ')})`);
+                continue;
+              }
+            }
+            
             // 检查是否废弃
             if (!dbSkill.isLatest) {
               if (!result.filteredSkills) result.filteredSkills = [];
@@ -704,24 +693,37 @@ export async function importSkillFromDisk(
 }
 
 /**
+ * 验证失败的 Skill 信息
+ */
+export interface InvalidSkillInfo {
+  skillId: string;
+  skillName?: string;
+  reason: 'not_found' | 'not_active' | 'not_latest' | 'tech_stack_mismatch';
+  techStackId?: string | null;
+}
+
+/**
  * 按 Skill ID 列表拷贝 Skills 到项目目录
  *
  * @param projectPath - 项目路径
  * @param skillIds - Skill ID 数组
  * @param skillOutputTemplate - 可选的输出模板
- * @returns 拷贝结果
+ * @param projectTechStack - 可选的项目技术栈，用于验证
+ * @returns 拷贝结果（包含验证失败的 Skills）
  */
 export async function copySkillsByIds(
   projectPath: string,
   skillIds: string[],
-  skillOutputTemplate?: string
-): Promise<CopyResult> {
-  const result: CopyResult = {
+  skillOutputTemplate?: string,
+  projectTechStack?: string[] | null
+): Promise<CopyResult & { invalidSkills?: InvalidSkillInfo[] }> {
+  const result: CopyResult & { invalidSkills?: InvalidSkillInfo[] } = {
     success: 0,
     failed: 0,
     errors: [],
     copiedSkills: [],
     skillIds: [],
+    invalidSkills: [],
   };
 
   // 安全验证：防止路径遍历攻击
@@ -740,12 +742,10 @@ export async function copySkillsByIds(
     // 确保 targetDir 存在
     ensureDir(targetDir);
 
-    // 查询数据库获取 Skill 信息
-    const skills = await prisma.skill.findMany({
+    // 查询数据库获取所有指定的 Skill 信息（不过滤，用于验证）
+    const allSkills = await prisma.skill.findMany({
       where: {
         id: { in: skillIds },
-        isLatest: true,
-        isActive: true,
       },
       select: {
         id: true,
@@ -753,20 +753,74 @@ export async function copySkillsByIds(
         userId: true,
         version: true,
         displayName: true,
+        isActive: true,
+        isLatest: true,
+        techStackId: true,
       },
     });
 
     // 构建 ID 到 Skill 的映射
-    const skillMap = new Map(skills.map((s) => [s.id, s]));
+    const skillMap = new Map(allSkills.map((s) => [s.id, s]));
 
+    // 先验证所有 Skill ID
     for (const skillId of skillIds) {
       const skill = skillMap.get(skillId);
 
       if (!skill) {
-        result.failed++;
-        result.errors.push(`Skill ${skillId} 不存在、未激活或不是最新版本`);
+        // Skill 不存在
+        result.invalidSkills?.push({
+          skillId,
+          reason: 'not_found',
+        });
         continue;
       }
+
+      if (!skill.isActive) {
+        // Skill 未激活
+        result.invalidSkills?.push({
+          skillId,
+          skillName: skill.name,
+          reason: 'not_active',
+        });
+        continue;
+      }
+
+      if (!skill.isLatest) {
+        // Skill 不是最新版本（已废弃）
+        result.invalidSkills?.push({
+          skillId,
+          skillName: skill.name,
+          reason: 'not_latest',
+        });
+        continue;
+      }
+
+      // 技术栈验证
+      if (projectTechStack && projectTechStack.length > 0 && skill.techStackId) {
+        // Skill 有技术栈限制，检查是否匹配
+        if (!projectTechStack.includes(skill.techStackId)) {
+          result.invalidSkills?.push({
+            skillId,
+            skillName: skill.name,
+            reason: 'tech_stack_mismatch',
+            techStackId: skill.techStackId,
+          });
+          continue;
+        }
+      }
+    }
+
+    // 如果有验证失败的 Skills，直接返回（不执行拷贝）
+    if (result.invalidSkills && result.invalidSkills.length > 0) {
+      return result;
+    }
+
+    // 所有验证通过，执行拷贝
+    const validSkills = allSkills.filter(s => 
+      s.isActive && s.isLatest && skillIds.includes(s.id)
+    );
+
+    for (const skill of validSkills) {
 
       try {
         // 获取 Skill 目录
@@ -824,8 +878,8 @@ export async function copySkillsByIds(
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
-        result.errors.push(`Skill ${skill.name} (${skillId}): ${errorMsg}`);
-        console.error(`[SkillFiles] 按 ID 拷贝失败: ${skillId}`, error);
+        result.errors.push(`Skill ${skill.name} (${skill.id}): ${errorMsg}`);
+        console.error(`[SkillFiles] 按 ID 拷贝失败: ${skill.id}`, error);
       }
     }
 

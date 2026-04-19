@@ -61,6 +61,7 @@ export async function GET(
     const nodes = workflow.WorkflowNode.map((node) => ({
       id: node.id,
       type: node.type,
+      roleId: node.roleId,  // 添加 roleId 字段
       position: {
         x: node.positionX,
         y: node.positionY,
@@ -176,10 +177,13 @@ export async function PUT(
             data: {
               workflowId: id,
               type: node.type,
+              roleId: node.data?.roleId || node.roleId || null,  // 保存角色关联
               positionX: node.position.x,
               positionY: node.position.y,
               data: JSON.stringify(node.data),
-              vulnerabilityCategory: node.data.vulnerabilityCategory || null,
+              vulnerabilityCategories: Array.isArray(node.data.vulnerabilityCategories)
+                ? JSON.stringify(node.data.vulnerabilityCategories)
+                : null,
               skills: typeof node.data.skills === 'string'
                 ? node.data.skills
                 : (node.data.skills ? JSON.stringify(node.data.skills) : null),
