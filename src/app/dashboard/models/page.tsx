@@ -41,20 +41,11 @@ interface ModelConfig {
   updatedAt: string;
 }
 
-// 代理类型标签
+// API类型标签
 const PROVIDER_TYPE_LABELS: Record<string, string> = {
-  claude: 'Claude API',
-  openai: 'OpenAI API',
+  claude: 'Claude',
+  openai: 'OpenAI',
 };
-
-// 路由类型映射
-const ROUTE_TYPE_OPTIONS = [
-  { value: 'default', label: '默认路由' },
-  { value: 'think', label: '思考模型' },
-  { value: 'background', label: '后台任务' },
-  { value: 'longContext', label: '长上下文' },
-  { value: 'webSearch', label: '网络搜索' },
-];
 
 // 表单数据类型
 interface ModelFormData {
@@ -63,7 +54,6 @@ interface ModelFormData {
   apiBaseUrl: string;
   apiKey: string;
   models: string;
-  routeType: string;
   isActive: boolean;
   isPublic: boolean;
   isSystemModel: boolean;  // 系统模型（仅管理员可设置）
@@ -106,7 +96,6 @@ export default function ModelsPage() {
     apiBaseUrl: '',
     apiKey: '',
     models: '',
-    routeType: '',
     isActive: true,
     isPublic: false,
     isSystemModel: false,
@@ -161,7 +150,6 @@ export default function ModelsPage() {
       apiBaseUrl: '',
       apiKey: '',
       models: '',
-      routeType: '',
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -186,7 +174,6 @@ export default function ModelsPage() {
       apiBaseUrl: model.apiBaseUrl,
       apiKey: '',  // 编辑时不显示原有 API Key，需要确认才能修改
       models: Array.isArray(model.models) ? (model.models[0] || '') : model.models,
-      routeType: model.routeType || '',
       isActive: model.isActive,
       isPublic: model.isPublic,
       isSystemModel: model.userId === null,  // userId为null表示系统模型
@@ -205,7 +192,6 @@ export default function ModelsPage() {
       apiBaseUrl: '',
       apiKey: '',
       models: '',
-      routeType: '',
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -253,7 +239,6 @@ export default function ModelsPage() {
         // 只有新建或确认修改时才发送 apiKey
         apiKey: !editingModel || formData.changeApiKey ? formData.apiKey : undefined,
         models: [formData.models],
-        routeType: formData.providerType === 'openai' ? formData.routeType || undefined : undefined,
         isActive: formData.isActive,
         isPublic: formData.isPublic,
         // 管理员专属字段
@@ -733,10 +718,10 @@ export default function ModelsPage() {
                 />
               </div>
 
-              {/* 代理类型 */}
+              {/* API类型 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  代理类型 <span className="text-red-500">*</span>
+                  API类型 <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.providerType}
@@ -749,8 +734,8 @@ export default function ModelsPage() {
                   }}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="openai">OpenAI API（内部大模型）</option>
-                  <option value="claude">Claude API（原生）</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="claude">Claude</option>
                 </select>
                 <p className="text-xs text-gray-500 mt-1">
                   {formData.providerType === 'claude'
@@ -758,30 +743,6 @@ export default function ModelsPage() {
                     : '调用内部大模型，需要 Anthropic ↔ OpenAI 格式转换'}
                 </p>
               </div>
-
-              {/* 路由类型 - 仅 OpenAI 类型显示 */}
-              {formData.providerType === 'openai' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    路由类型
-                  </label>
-                  <select
-                    value={formData.routeType}
-                    onChange={(e) => setFormData({ ...formData, routeType: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">-- 不指定（使用默认路由）--</option>
-                    {ROUTE_TYPE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    选择此模型用于哪种路由场景。不指定则使用默认路由。
-                  </p>
-                </div>
-              )}
 
               {/* API 地址 */}
               <div>
