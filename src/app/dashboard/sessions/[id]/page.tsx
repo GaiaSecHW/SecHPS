@@ -321,7 +321,7 @@ function SessionDetailContent({
 
     // 如果没有 SSE 连接，则使用轮询作为后备
     const interval = setInterval(() => {
-      if (!eventSource) {
+      if (!abortController) {
         fetchMessages(); // 添加消息轮询
         fetchTodos();
         fetchSessionDetail();

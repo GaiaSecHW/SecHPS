@@ -282,10 +282,14 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
   // OpenAI 格式：系统提示词放入 messages 数组
   let messages = request.messages || [];
   if (request.system) {
+    console.log(`[ModelClient] OpenAI: 检测到系统提示词，长度: ${request.system.length} 字符`);
     messages = [
       { role: 'system', content: request.system },
       ...messages
     ];
+    console.log(`[ModelClient] OpenAI: 系统提示词已添加到 messages 数组开头`);
+  } else {
+    console.log(`[ModelClient] OpenAI: 未检测到系统提示词`);
   }
   
   // 构建 OpenAI 请求体（不包含 system 字段）
@@ -305,6 +309,9 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
   console.log(`[ModelClient] Model: ${request.model || 'unknown'}`);
   console.log(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
   console.log(`[ModelClient] Request body size: ${JSON.stringify(openaiRequest).length} bytes`);
+  console.log(`[ModelClient] Messages count: ${messages.length}`);
+  console.log(`[ModelClient] First message role: ${messages[0]?.role}`);
+  console.log(`[ModelClient] First message content length: ${messages[0]?.content?.length || 0}`);
   console.log(`[ModelClient] Timeout: ${timeout}ms`);
   console.log(`[ModelClient] ========================================`);
 
