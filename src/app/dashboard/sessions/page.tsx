@@ -1410,28 +1410,33 @@ toast.error(data.error || '更新项目失败');
                 {/* 第二行：启动评估、编辑、文件管理、删除 */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
-                    {/* 启动评估按钮 - 始终显示，运行中时禁用 */}
-                    <button
-                      onClick={() => {
-                        setStartingProject(null);
-                        setSelectedProject(project);
-                        setSelectedWorkflow(null);
-                        setShowWorkflowModal(true);
-                      }}
-                      disabled={project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued')}
-                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Play size={16} />
-                      <span>启动评估</span>
-                    </button>
-                    <button
-                      onClick={() => openEditModal(project)}
-                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
-                      title="编辑"
-                    >
-                      <Edit2 size={14} />
-                      <span>编辑</span>
-                    </button>
+                    {/* 启动评估按钮 - 只有项目所有者和管理员可见 */}
+                    {(user?.id === project.userId || user?.roles?.includes('admin')) && (
+                      <button
+                        onClick={() => {
+                          setStartingProject(null);
+                          setSelectedProject(project);
+                          setSelectedWorkflow(null);
+                          setShowWorkflowModal(true);
+                        }}
+                        disabled={project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued')}
+                        className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Play size={16} />
+                        <span>启动评估</span>
+                      </button>
+                    )}
+                    {/* 编辑按钮 - 只有项目所有者和管理员可见 */}
+                    {(user?.id === project.userId || user?.roles?.includes('admin')) && (
+                      <button
+                        onClick={() => openEditModal(project)}
+                        className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
+                        title="编辑"
+                      >
+                        <Edit2 size={14} />
+                        <span>编辑</span>
+                      </button>
+                    )}
                     <button
                       onClick={() => openFilesModal(project)}
                       className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
@@ -1448,14 +1453,17 @@ toast.error(data.error || '更新项目失败');
                       <History size={14} />
                       <span>历史</span>
                     </button>
-                    <button
-                      onClick={() => deleteProject(project.id)}
-                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
-                      title="删除"
-                    >
-                      <Trash2 size={14} />
-                      <span>删除</span>
-                    </button>
+                    {/* 删除按钮 - 只有项目所有者和管理员可见 */}
+                    {(user?.id === project.userId || user?.roles?.includes('admin')) && (
+                      <button
+                        onClick={() => deleteProject(project.id)}
+                        className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                        title="删除"
+                      >
+                        <Trash2 size={14} />
+                        <span>删除</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
