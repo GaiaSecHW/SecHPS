@@ -839,8 +839,8 @@ export default function SessionsPage() {
         id: session.id,
         opencodeSessionId: session.id,
         status: session.status || 'completed',
-        startedAt: session.createdAt || new Date().toISOString(),
-        completedAt: session.updatedAt || new Date().toISOString(),
+        startedAt: session.startedAt || session.createdAt || new Date().toISOString(),
+        completedAt: session.completedAt || session.updatedAt || new Date().toISOString(),
         title: session.title || `评估 #${index + 1}`,
       }));
       
