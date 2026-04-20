@@ -1319,7 +1319,10 @@ toast.error(data.error || '更新项目失败');
                 if (!latestEval) return null;
                 
                 const isRunning = latestEval.status === 'running' || latestEval.status === 'queued';
-                const evalTime = latestEval.startedAt ? new Date(latestEval.startedAt) : null;
+                // 评估中显示启动时间，非评估中显示完成时间
+                const evalTime = isRunning 
+                  ? (latestEval.startedAt ? new Date(latestEval.startedAt) : null)
+                  : (latestEval.completedAt ? new Date(latestEval.completedAt) : null);
                 const timeStr = evalTime ? evalTime.toLocaleString('zh-CN', { 
                   month: '2-digit', 
                   day: '2-digit', 
@@ -1327,6 +1330,7 @@ toast.error(data.error || '更新项目失败');
                   minute: '2-digit',
                   second: '2-digit'
                 }) : '';
+                const timeLabel = isRunning ? '启动' : '完成';
                 
                 const statusConfig: Record<string, { bg: string; border: string; text: string; label: string }> = {
                   running: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', label: '运行中' },
@@ -1349,7 +1353,7 @@ toast.error(data.error || '更新项目失败');
                         </div>
                         {timeStr && (
                           <span className={`text-xs opacity-75 ${config.text}`}>
-                            启动: {timeStr}
+                            {timeLabel}: {timeStr}
                           </span>
                         )}
                       </div>
