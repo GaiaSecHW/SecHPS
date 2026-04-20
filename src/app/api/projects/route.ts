@@ -76,7 +76,7 @@ export async function GET(request: Request) {
       ...project,
       evaluations: project.EvaluationSession || [],  // 映射字段名给前端
       vulnerabilityCount: project._count?.Vulnerability || 0,
-      hasRunningEvaluation: project.EvaluationSession && project.EvaluationSession.length > 0,
+      hasRunningEvaluation: project.EvaluationSession?.some((e: any) => e.status === 'running' || e.status === 'queued') || false,
       userName: project.User?.name || null,
       userUsername: project.User?.username || null,
       User: undefined,  // 移除嵌套的 User 对象
