@@ -1191,57 +1191,81 @@ function SessionDetailContent({
                   {isRalphLoopExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 </button>
                 {isRalphLoopExpanded && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {evaluation.EvaluationIteration.map((iteration: any) => (
-                      <div key={iteration.id} className="p-3 bg-white rounded-lg border border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-gray-900">
-                                迭代 #{iteration.iterationNumber}
-                              </span>
+                      <div key={iteration.id} className="p-4 bg-white rounded-lg border border-gray-200">
+                        {/* 第一行：迭代编号 + 状态 + 时间 */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-gray-900">
+                              迭代 #{iteration.iterationNumber}
+                            </span>
+                            <span className={`text-xs px-2 py-0.5 rounded ${
+                              iteration.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              iteration.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                              iteration.status === 'failed' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
+                            }`}>
+                              {iteration.status === 'completed' ? '已完成' :
+                               iteration.status === 'running' ? '运行中' :
+                               iteration.status === 'failed' ? '失败' : iteration.status}
+                            </span>
+                            {iteration.verificationComplete !== null && iteration.verificationComplete !== undefined && (
                               <span className={`text-xs px-2 py-0.5 rounded ${
-                                iteration.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                iteration.status === 'running' ? 'bg-blue-100 text-blue-700' :
-                                iteration.status === 'failed' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-600'
+                                iteration.verificationComplete ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                               }`}>
-                                {iteration.status === 'completed' ? '已完成' :
-                                 iteration.status === 'running' ? '运行中' :
-                                 iteration.status === 'failed' ? '失败' : iteration.status}
+                                {iteration.verificationComplete ? '验证通过' : '验证失败'}
                               </span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
-                              {iteration.modelName && (
-                                <span className="flex items-center gap-1">
-                                  <span className="font-medium text-blue-600">模型:</span>
-                                  {iteration.modelName}
-                                </span>
-                              )}
-                              {iteration.roleId && (
-                                <span className="flex items-center gap-1">
-                                  <span className="font-medium text-purple-600">角色:</span>
-                                  {iteration.roleId}
-                                </span>
-                              )}
-                              {iteration.duration && (
-                                <span className="flex items-center gap-1">
-                                  <Clock size={10} />
-                                  {Math.round(iteration.duration / 1000)}s
-                                </span>
-                              )}
-                              {iteration.inputTokens !== null && iteration.inputTokens !== undefined && (
-                                <span>输入: {formatTokenNumber(iteration.inputTokens)}</span>
-                              )}
-                              {iteration.outputTokens !== null && iteration.outputTokens !== undefined && (
-                                <span>输出: {formatTokenNumber(iteration.outputTokens)}</span>
-                              )}
-                            </div>
+                            )}
                           </div>
                           {iteration.startedAt && (
                             <span className="text-xs text-gray-400">
                               {new Date(iteration.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
                             </span>
+                          )}
+                        </div>
+                        
+                        {/* 第二行：验证原因或错误信息 */}
+                        {(iteration.verificationReason || iteration.errorMessage) && (
+                          <div className={`text-sm p-2 rounded mb-2 ${
+                            iteration.errorMessage ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
+                          }`}>
+                            <span className="font-medium">{iteration.errorMessage ? '错误: ' : '验证结果: '}</span>
+                            {iteration.errorMessage || iteration.verificationReason}
+                          </div>
+                        )}
+                        
+                        {/* 第三行：详细统计 */}
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
+                          {iteration.modelName && (
+                            <span className="flex items-center gap-1">
+                              <span className="font-medium text-blue-600">模型:</span>
+                              {iteration.modelName}
+                            </span>
+                          )}
+                          {iteration.roleId && (
+                            <span className="flex items-center gap-1">
+                              <span className="font-medium text-purple-600">角色:</span>
+                              {iteration.roleId}
+                            </span>
+                          )}
+                          {iteration.toolCallCount > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span className="font-medium text-orange-600">工具调用:</span>
+                              {iteration.toolCallCount} 次
+                            </span>
+                          )}
+                          {iteration.duration && (
+                            <span className="flex items-center gap-1">
+                              <Clock size={10} />
+                              {Math.round(iteration.duration / 1000)}s
+                            </span>
+                          )}
+                          {iteration.inputTokens !== null && iteration.inputTokens !== undefined && (
+                            <span>输入: {formatTokenNumber(iteration.inputTokens)}</span>
+                          )}
+                          {iteration.outputTokens !== null && iteration.outputTokens !== undefined && (
+                            <span>输出: {formatTokenNumber(iteration.outputTokens)}</span>
                           )}
                         </div>
                       </div>
