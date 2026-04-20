@@ -483,6 +483,8 @@ model ModelConfig {
   apiKey            String
   models            String
   routeType         String?
+  maxTokens         Int                 @default(4096)      // 最大输出 token 数
+  temperature       Float               @default(0.7)       // 温度参数
   isActive          Boolean             @default(true)
   isDefault         Boolean             @default(false)
   isPublic          Boolean             @default(false)

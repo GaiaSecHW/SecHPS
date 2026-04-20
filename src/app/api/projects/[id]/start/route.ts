@@ -91,6 +91,7 @@ export async function POST(
     let enableMcp = true;
     let enableToolPermissions = true;
     let queuedEvaluationId: string | null = null; // 队列启动时复用的评估ID
+    let reconnectEvaluationId: string | null = null; // 重连已存在的评估
     try {
       const body = await request.json();
       workflowId = body.workflowId || null;
@@ -100,6 +101,7 @@ export async function POST(
       enableMcp = body.enableMcp !== false;
       enableToolPermissions = body.enableToolPermissions !== false;
       queuedEvaluationId = body.queuedEvaluationId || null;
+      reconnectEvaluationId = body.evaluationId || null; // 用于重连 SSE
     } catch {
       // 如果没有请求体，继续执行
     }
@@ -246,6 +248,39 @@ export async function POST(
 
     // 检查是否有运行中的评估会话
     const runningEvaluations = project.EvaluationSession || [];
+    
+    // 如果是 SSE 重连（提供了 evaluationId），且该评估正在运行
+    if (reconnectEvaluationId) {
+      const targetEvaluation = runningEvaluations.find(e => e.id === reconnectEvaluationId);
+      if (targetEvaluation) {
+        console.log('[启动评估] SSE 重连到现有评估:', reconnectEvaluationId);
+        // 返回 SSE 格式，告知前端评估仍在运行
+        // 前端会通过其他方式（轮询）获取实时状态
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+          start(controller) {
+            // 发送评估状态
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
+              type: 'reconnect', 
+              evaluationId: reconnectEvaluationId,
+              status: 'running',
+              message: '已连接到运行中的评估'
+            })}\n\n`));
+            // 保持连接打开，不立即关闭
+            // 实际事件会通过其他机制发送
+          }
+        });
+        
+        return new Response(stream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        });
+      }
+    }
+    
     if (runningEvaluations.length > 0) {
       return NextResponse.json({ 
         error: '项目已在运行中', 

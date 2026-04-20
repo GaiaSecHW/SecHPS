@@ -48,6 +48,8 @@ interface ModelConfig {
   apiBaseUrl: string;
   apiKey: string;
   models: string[];
+  maxTokens: number;
+  temperature: number;
   isActive: boolean;
 }
 
@@ -68,6 +70,8 @@ async function getModelConfig(modelId: string): Promise<ModelConfig | null> {
     apiBaseUrl: config.apiBaseUrl,
     apiKey: config.apiKey || '',
     models: Array.isArray(config.models) ? config.models : JSON.parse(config.models || '[]'),
+    maxTokens: config.maxTokens ?? 32000,
+    temperature: config.temperature ?? 0.7,
     isActive: config.isActive,
   };
 }
@@ -91,6 +95,8 @@ async function findModelByName(modelName: string): Promise<ModelConfig | null> {
         apiBaseUrl: config.apiBaseUrl,
         apiKey: config.apiKey || '',
         models,
+        maxTokens: config.maxTokens ?? 32000,
+        temperature: config.temperature ?? 0.7,
         isActive: config.isActive,
       };
     }
@@ -121,6 +127,8 @@ export async function getDefaultModelConfig(): Promise<ModelConfig | null> {
     apiBaseUrl: config.apiBaseUrl,
     apiKey: config.apiKey || '',
     models,
+    maxTokens: config.maxTokens ?? 32000,
+    temperature: config.temperature ?? 0.7,
     isActive: config.isActive,
   };
 }
@@ -133,6 +141,8 @@ export interface DefaultModelInfo {
   apiKey: string;
   apiBaseUrl: string;
   defaultModel: string;
+  maxTokens: number;
+  temperature: number;
 }
 
 /**
@@ -142,12 +152,14 @@ export interface DefaultModelInfo {
 export async function getDefaultModelInfo(): Promise<DefaultModelInfo | null> {
   const config = await getDefaultModelConfig();
   if (!config) return null;
-
+ 
   return {
     providerType: config.providerType,
     apiKey: config.apiKey,
     apiBaseUrl: config.apiBaseUrl,
     defaultModel: config.models[0] || 'default',
+    maxTokens: config.maxTokens,
+    temperature: config.temperature,
   };
 }
 
@@ -247,14 +259,18 @@ async function recordTokenUsage(
 
 /**
  * 调用 OpenAI 格式的 API
-  * URL: http://xxx/v1/chat/completions
-  */
+ * URL: http://xxx/v1/chat/completions
+ * 系统提示词：放在 messages 数组的第一个，role: "system"
+ */
 async function callOpenAI(config: ModelConfig, request: any, timeout: number = DEFAULT_TIMEOUT_MS): Promise<any> {
   const startTime = Date.now();
   let apiUrl = config.apiBaseUrl;
   
-  // 确保 URL 正确
-  if (!apiUrl.includes('/chat/completions')) {
+  // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
+  if (apiUrl.endsWith('#')) {
+    apiUrl = apiUrl.slice(0, -1);
+  } else if (!apiUrl.includes('/chat/completions')) {
+    // 确保 URL 正确
     apiUrl = apiUrl.replace(/\/$/, '');
     // 如果 URL 不包含 /v1，先添加 /v1
     if (!apiUrl.includes('/v1')) {
@@ -263,12 +279,32 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
     apiUrl = `${apiUrl}/chat/completions`;
   }
 
+  // OpenAI 格式：系统提示词放入 messages 数组
+  let messages = request.messages || [];
+  if (request.system) {
+    messages = [
+      { role: 'system', content: request.system },
+      ...messages
+    ];
+  }
+  
+  // 构建 OpenAI 请求体（不包含 system 字段）
+  const openaiRequest = {
+    model: request.model,
+    messages,
+    max_tokens: request.max_tokens,
+    temperature: request.temperature,
+    stream: request.stream,
+    tools: request.tools,
+    tool_choice: request.tool_choice,
+  };
+
   // 详细日志：请求信息
   console.log(`[ModelClient] ========== OpenAI API 调用 ==========`);
   console.log(`[ModelClient] URL: ${apiUrl}`);
   console.log(`[ModelClient] Model: ${request.model || 'unknown'}`);
   console.log(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
-  console.log(`[ModelClient] Request body size: ${JSON.stringify(request).length} bytes`);
+  console.log(`[ModelClient] Request body size: ${JSON.stringify(openaiRequest).length} bytes`);
   console.log(`[ModelClient] Timeout: ${timeout}ms`);
   console.log(`[ModelClient] ========================================`);
 
@@ -283,7 +319,7 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.apiKey}`,
       },
-      body: JSON.stringify(request),
+      body: JSON.stringify(openaiRequest),
       signal: controller.signal,
     });
 
@@ -328,8 +364,11 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
   const startTime = Date.now();
   let apiUrl = config.apiBaseUrl;
   
-  // 确保 URL 正确
-  if (!apiUrl.includes('/v1/messages') && !apiUrl.includes('/messages')) {
+  // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
+  if (apiUrl.endsWith('#')) {
+    apiUrl = apiUrl.slice(0, -1);
+  } else if (!apiUrl.includes('/v1/messages') && !apiUrl.includes('/messages')) {
+    // 确保 URL 正确
     apiUrl = apiUrl.replace(/\/$/, '');
     if (apiUrl.includes('/chat/completions')) {
       // 从 OpenAI 格式转换
@@ -463,7 +502,7 @@ export async function routeRequest(request: any): Promise<any> {
     const internalRequest = {
       model: modelName,
       messages: request.messages || [],
-      max_tokens: request.max_tokens || 4096,
+      max_tokens: request.max_tokens || 32000,
       temperature: request.temperature ?? 0.7,
       stream: false,
       tools: request.tools,
@@ -516,21 +555,38 @@ export async function routeStreamRequest(
     console.log(`[ModelClient] Stream Routing: ${config.name} (${config.providerType}) -> ${modelName}`);
 
     // 构建请求体
-    const internalRequest = {
+    let messages = request.messages || [];
+    
+    // OpenAI 格式：系统提示词放入 messages 数组
+    if (config.providerType === 'openai' && request.system) {
+      messages = [
+        { role: 'system', content: request.system },
+        ...messages
+      ];
+    }
+
+    const internalRequest: any = {
       model: modelName,
-      messages: request.messages || [],
-      max_tokens: request.max_tokens || 4096,
+      messages,
+      max_tokens: request.max_tokens || 32000,
       temperature: request.temperature ?? 0.7,
       stream: true,
       tools: request.tools,
       tool_choice: request.tool_choice,
-      system: request.system,
     };
+
+    // Claude 格式：系统提示词单独传
+    if (config.providerType === 'claude' && request.system) {
+      internalRequest.system = request.system;
+    }
 
     // 确定 API URL
     let apiUrl = config.apiBaseUrl;
     if (config.providerType === 'claude') {
-      if (!apiUrl.includes('/v1/messages') && !apiUrl.includes('/messages')) {
+      // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
+      if (apiUrl.endsWith('#')) {
+        apiUrl = apiUrl.slice(0, -1);
+      } else if (!apiUrl.includes('/v1/messages') && !apiUrl.includes('/messages')) {
         apiUrl = apiUrl.replace(/\/$/, '');
         if (apiUrl.includes('/chat/completions')) {
           const urlObj = new URL(apiUrl);
@@ -540,7 +596,10 @@ export async function routeStreamRequest(
         }
       }
     } else {
-      if (!apiUrl.includes('/chat/completions')) {
+      // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
+      if (apiUrl.endsWith('#')) {
+        apiUrl = apiUrl.slice(0, -1);
+      } else if (!apiUrl.includes('/chat/completions')) {
         apiUrl = apiUrl.replace(/\/$/, '');
         apiUrl = `${apiUrl}/chat/completions`;
       }
@@ -638,13 +697,19 @@ export async function routeRequestWithDefaultModel(
   const model = config.models[0] || 'default';
   const startTime = Date.now();
   
+  // 使用配置中的值，如果 options 中没有指定
+  const finalMaxTokens = options.max_tokens ?? config.maxTokens ?? 32000;
+  const finalTemperature = options.temperature ?? config.temperature ?? 0.7;
+  
   console.log(`[ModelClient] Using default model: ${config.name} (${config.providerType}) -> ${model}`);
+  console.log(`[ModelClient] Config: maxTokens=${config.maxTokens}, temperature=${config.temperature}`);
+  console.log(`[ModelClient] Final: maxTokens=${finalMaxTokens}, temperature=${finalTemperature}`);
 
   const request = {
     model,
     messages,
-    max_tokens: options.max_tokens || 4096,
-    temperature: options.temperature ?? 0.7,
+    max_tokens: finalMaxTokens,
+    temperature: finalTemperature,
     system: options.system,
     stream: false,
   };
@@ -720,9 +785,15 @@ export async function testModelConnection(modelConfig: {
   let body: any;
   
   if (providerType === 'claude') {
-    url = apiBaseUrl.replace(/\/$/, '');
-    if (!url.includes('/v1/messages') && !url.includes('/messages')) {
-      url = `${url}/v1/messages`;
+    url = apiBaseUrl;
+    // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
+    if (url.endsWith('#')) {
+      url = url.slice(0, -1);
+    } else {
+      url = url.replace(/\/$/, '');
+      if (!url.includes('/v1/messages') && !url.includes('/messages')) {
+        url = `${url}/v1/messages`;
+      }
     }
     headers = {
       'Content-Type': 'application/json',
@@ -735,13 +806,19 @@ export async function testModelConnection(modelConfig: {
       messages: [{ role: 'user', content: '1+1' }],
     };
   } else {
-    url = apiBaseUrl.replace(/\/$/, '');
-    if (!url.includes('/chat/completions')) {
-      // 如果 URL 不包含 /v1，先添加 /v1
-      if (!url.includes('/v1')) {
-        url = `${url}/v1`;
+    url = apiBaseUrl;
+    // 如果 URL 以 # 结尾，不拼接路径，直接去掉 #
+    if (url.endsWith('#')) {
+      url = url.slice(0, -1);
+    } else {
+      url = url.replace(/\/$/, '');
+      if (!url.includes('/chat/completions')) {
+        // 如果 URL 不包含 /v1，先添加 /v1
+        if (!url.includes('/v1')) {
+          url = `${url}/v1`;
+        }
+        url = `${url}/chat/completions`;
       }
-      url = `${url}/chat/completions`;
     }
     headers = {
       'Content-Type': 'application/json',

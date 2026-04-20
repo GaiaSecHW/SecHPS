@@ -126,7 +126,7 @@ function SessionDetailContent({
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
   const [isRalphLoopExpanded, setIsRalphLoopExpanded] = useState(false);
-  const [eventSource, setEventSource] = useState<EventSource | null>(null);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
   const [showAllChildMessages, setShowAllChildMessages] = useState(false);
@@ -159,14 +159,14 @@ function SessionDetailContent({
     
     return () => {
       // 清理 SSE 连接
-      if (eventSource) {
-        eventSource.close();
+      if (abortController) {
+        abortController.abort();
       }
     };
   }, [evaluation?.opencodeSessionId]);
 
-  // 连接评估实时事件流
-  const connectToEvaluationStream = () => {
+  // 连接评估实时事件流（使用 fetch 替代 EventSource，支持 Authorization header）
+  const connectToEvaluationStream = async () => {
     if (!evaluationId || !evaluation?.projectId) return;
     
     // 只有在评估运行中时才连接 SSE
@@ -176,33 +176,67 @@ function SessionDetailContent({
     }
     
     const token = localStorage.getItem('token');
-    const url = `/api/projects/${evaluation.projectId}/start?evaluationId=${evaluationId}&token=${encodeURIComponent(token || '')}`;
+    const controller = new AbortController();
+    setAbortController(controller);
     
     try {
-      const es = new EventSource(url);
+      const response = await fetch(`/api/projects/${evaluation.projectId}/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ evaluationId }),
+        signal: controller.signal,
+      });
       
-      es.onopen = () => {
-        console.log('[SSE] Connected to evaluation stream');
-      };
+      if (!response.ok) {
+        console.warn('[SSE] Connection failed:', response.status);
+        return;
+      }
       
-      es.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          handleStreamEvent(data);
-        } catch (e) {
-          // 忽略解析错误
+      console.log('[SSE] Connected to evaluation stream');
+      
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      
+      if (!reader) {
+        console.warn('[SSE] No response body');
+        return;
+      }
+      
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') continue;
+            try {
+              const event = JSON.parse(data);
+              handleStreamEvent(event);
+            } catch {
+              // 忽略解析错误
+            }
+          }
         }
-      };
+      }
       
-      es.onerror = (error) => {
-        console.warn('[SSE] Connection closed or failed');
-        es.close();
-        setEventSource(null);
-      };
-      
-      setEventSource(es);
-    } catch (error) {
-      console.warn('[SSE] Failed to connect:', error);
+      console.log('[SSE] Stream ended');
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        console.log('[SSE] Connection aborted');
+      } else {
+        console.warn('[SSE] Connection error:', error);
+      }
+    } finally {
+      setAbortController(null);
     }
   };
 
@@ -231,8 +265,8 @@ function SessionDetailContent({
         console.log('[Evaluation] Audit completed:', data.message);
         fetchEvaluation(); // 刷新评估状态
         fetchMessages(); // 刷新消息列表
-        if (eventSource) {
-          eventSource.close();
+        if (abortController) {
+          abortController.abort();
         }
         break;
         
@@ -296,7 +330,7 @@ function SessionDetailContent({
     }, 10000); // 10秒轮询一次
 
     return () => clearInterval(interval);
-  }, [evaluation?.opencodeSessionId, evaluation?.status, eventSource]);
+  }, [evaluation?.opencodeSessionId, evaluation?.status, abortController]);
 
   const fetchEvaluation = async () => {
     if (!evaluationId) return;

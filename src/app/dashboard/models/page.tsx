@@ -34,6 +34,8 @@ interface ModelConfig {
   hasApiKey: boolean;  // 是否有 API Key
   models: string[];
   routeType: string | null;
+  maxTokens: number;      // 最大输出 token 数
+  temperature: number;    // 温度参数
   isActive: boolean;
   isDefault: boolean;
   isPublic: boolean;
@@ -54,6 +56,8 @@ interface ModelFormData {
   apiBaseUrl: string;
   apiKey: string;
   models: string;
+  maxTokens: number;      // 最大输出 token 数
+  temperature: number;    // 温度参数
   isActive: boolean;
   isPublic: boolean;
   isSystemModel: boolean;  // 系统模型（仅管理员可设置）
@@ -96,6 +100,8 @@ export default function ModelsPage() {
     apiBaseUrl: '',
     apiKey: '',
     models: '',
+    maxTokens: 32000,
+    temperature: 0.7,
     isActive: true,
     isPublic: false,
     isSystemModel: false,
@@ -150,6 +156,8 @@ export default function ModelsPage() {
       apiBaseUrl: '',
       apiKey: '',
       models: '',
+      maxTokens: 32000,
+      temperature: 0.7,
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -174,6 +182,8 @@ export default function ModelsPage() {
       apiBaseUrl: model.apiBaseUrl,
       apiKey: '',  // 编辑时不显示原有 API Key，需要确认才能修改
       models: Array.isArray(model.models) ? (model.models[0] || '') : model.models,
+      maxTokens: model.maxTokens || 4096,
+      temperature: model.temperature ?? 0.7,
       isActive: model.isActive,
       isPublic: model.isPublic,
       isSystemModel: model.userId === null,  // userId为null表示系统模型
@@ -192,6 +202,8 @@ export default function ModelsPage() {
       apiBaseUrl: '',
       apiKey: '',
       models: '',
+      maxTokens: 32000,
+      temperature: 0.7,
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -239,6 +251,8 @@ export default function ModelsPage() {
         // 只有新建或确认修改时才发送 apiKey
         apiKey: !editingModel || formData.changeApiKey ? formData.apiKey : undefined,
         models: [formData.models],
+        maxTokens: formData.maxTokens,
+        temperature: formData.temperature,
         isActive: formData.isActive,
         isPublic: formData.isPublic,
         // 管理员专属字段
@@ -834,6 +848,47 @@ export default function ModelsPage() {
                 <p className="text-xs text-gray-500 mt-1">
                   输入单个模型名称
                 </p>
+              </div>
+
+              {/* 高级参数 */}
+              <div className="grid grid-cols-2 gap-4">
+                {/* 最大输出 Token */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    最大输出 Token
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.maxTokens}
+                    onChange={(e) => setFormData({ ...formData, maxTokens: parseInt(e.target.value) || 32000 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min={256}
+                    max={128000}
+                    step={256}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    默认 4096，建议 4096-32000
+                  </p>
+                </div>
+
+                {/* 温度参数 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    温度 (Temperature)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.temperature}
+                    onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) || 0.7 })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    min={0}
+                    max={2}
+                    step={0.1}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    默认 0.7，越高越随机
+                  </p>
+                </div>
               </div>
 
               {/* 开关 */}

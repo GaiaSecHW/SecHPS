@@ -68,11 +68,11 @@ export async function POST(request: NextRequest) {
     logger.debug(LOG_MODULES.SKILL, '发送的提示词', { details: { promptLength: prompt.length, promptPreview: prompt.substring(0, 200) } });
 
     // 调用大模型（使用统一的 model-client，自动统计 Token）
+    // max_tokens 和 temperature 从模型配置中读取
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
       {
-        max_tokens: 32000,
-        temperature: 0.7,
+        // max_tokens 和 temperature 从模型配置中读取，不再硬编码
         context: {
           userId: payload.userId,
           username: payload.username,

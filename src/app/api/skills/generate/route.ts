@@ -71,13 +71,13 @@ export async function POST(request: NextRequest) {
     }
 
     // 调用大模型（使用统一的 model-client，自动统计 Token）
+    // max_tokens 和 temperature 从模型配置中读取
     logger.debug(LOG_MODULES.SKILL, '开始调用大模型');
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: userPrompt }],
       {
         system: systemPrompt,
-        max_tokens: 32000,
-        temperature: 0.7,
+        // max_tokens 和 temperature 从模型配置中读取，不再硬编码
         context: {
           userId: payload.userId,
           username: payload.username,

@@ -18,6 +18,8 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     hasApiKey: !!model.apiKey,  // 仅返回是否有 API Key 的标识
     models: JSON.parse(model.models),
     routeType: model.routeType,
+    maxTokens: model.maxTokens ?? 4096,
+    temperature: model.temperature ?? 0.7,
     isActive: model.isActive,
     isDefault: model.isDefault,
     isPublic: model.isPublic,
@@ -127,7 +129,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isPublic, isSystemModel, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
 
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
@@ -159,6 +161,22 @@ export async function POST(request: Request) {
     if (!Array.isArray(models)) {
       return NextResponse.json(
         { error: 'models 必须是数组' },
+        { status: 400 }
+      );
+    }
+
+    // 验证 maxTokens 和 temperature 范围
+    const finalMaxTokens = maxTokens ?? 4096;
+    const finalTemperature = temperature ?? 0.7;
+    if (finalMaxTokens < 256 || finalMaxTokens > 128000) {
+      return NextResponse.json(
+        { error: 'maxTokens 必须在 256-128000 之间' },
+        { status: 400 }
+      );
+    }
+    if (finalTemperature < 0 || finalTemperature > 2) {
+      return NextResponse.json(
+        { error: 'temperature 必须在 0-2 之间' },
         { status: 400 }
       );
     }
@@ -200,6 +218,8 @@ export async function POST(request: Request) {
         apiKey,
         models: JSON.stringify(models),
         routeType: providerType === 'openai' ? routeType || 'default' : null,
+        maxTokens: finalMaxTokens,
+        temperature: finalTemperature,
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isSystemModel && isDefault ? isDefault : false,  // 只有系统模型可设默认
         isPublic: isSystemModel ? true : (isPublic || false),  // 系统模型默认公开

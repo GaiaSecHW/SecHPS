@@ -131,6 +131,7 @@ ${cleanedUserContent || '（空）'}
     userPrompt += `\n\n请根据以上信息，优化 Skill 内容。保留用户已有内容，补充缺失部分（如示例、检查要点等），使 Skill 更完整、更专业。`;
 
     // 调用大模型（使用统一的 model-client，自动统计 Token）
+    // max_tokens 和 temperature 从模型配置中读取
     console.log('[optimize-skill] 开始调用大模型...');
     console.log(`[optimize-skill] System Prompt 长度: ${systemPrompt.length} 字符`);
     console.log(`[optimize-skill] User Prompt 长度: ${userPrompt.length} 字符`);
@@ -139,8 +140,7 @@ ${cleanedUserContent || '（空）'}
       [{ role: 'user', content: userPrompt }],
       {
         system: systemPrompt,
-        max_tokens: 32000,
-        temperature: 0.7,
+        // max_tokens 和 temperature 从模型配置中读取，不再硬编码
         context: {
           userId: payload.userId,
           username: payload.username,

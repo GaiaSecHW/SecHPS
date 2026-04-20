@@ -15,6 +15,8 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     hasApiKey: !!model.apiKey,
     models: JSON.parse(model.models),
     routeType: model.routeType,
+    maxTokens: model.maxTokens ?? 4096,
+    temperature: model.temperature ?? 0.7,
     isActive: model.isActive,
     isDefault: model.isDefault,
     isPublic: model.isPublic,
@@ -138,7 +140,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isPublic, isSystemModel, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
 
     // 验证 providerType
     const validProviderTypes = ['claude', 'openai'];
@@ -166,6 +168,20 @@ export async function PUT(
       );
     }
 
+    // 验证 maxTokens 和 temperature 范围
+    if (maxTokens !== undefined && (maxTokens < 256 || maxTokens > 128000)) {
+      return NextResponse.json(
+        { error: 'maxTokens 必须在 256-128000 之间' },
+        { status: 400 }
+      );
+    }
+    if (temperature !== undefined && (temperature < 0 || temperature > 2)) {
+      return NextResponse.json(
+        { error: 'temperature 必须在 0-2 之间' },
+        { status: 400 }
+      );
+    }
+
     // 验证管理员专属字段
     if (isSystemModel !== undefined && !isAdmin) {
       return NextResponse.json(
@@ -182,6 +198,8 @@ export async function PUT(
     if (apiKey !== undefined) updateData.apiKey = apiKey;
     if (models !== undefined) updateData.models = JSON.stringify(models);
     if (routeType !== undefined) updateData.routeType = providerType === 'openai' ? routeType : null;
+    if (maxTokens !== undefined) updateData.maxTokens = maxTokens;
+    if (temperature !== undefined) updateData.temperature = temperature;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isPublic !== undefined) updateData.isPublic = isPublic;
 
