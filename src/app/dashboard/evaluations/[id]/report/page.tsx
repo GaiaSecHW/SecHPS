@@ -102,15 +102,36 @@ interface VulnerabilityChain {
 
 interface VulnerabilitySummary {
   total: number;
-  critical: number;
-  high: number;
-  medium: number;
-  low: number;
-  info: number;
-  open: number;
-  confirmed: number;
-  fixed: number;
-  falsePositive: number;
+  byType: Array<{
+    categoryId: string;
+    categoryName: string;
+    count: number;
+  }>;
+  byStatus: {
+    open: number;
+    confirmed: number;
+    fixed: number;
+    falsePositive: number;
+  };
+  details: Array<{
+    id: string;
+    title: string;
+    type: string;           // 映射后的标准分类名称
+    patternName: string;    // 具体的漏洞模式名称
+    originalType: string;   // 原始类型（AI 生成的）
+    status: string;
+    cwe?: string | null;
+    filePath?: string | null;
+    lineStart?: number | null;
+    lineEnd?: number | null;
+    description?: string | null;
+  }>;
+  pagination: {
+    page: number;
+    pageSize: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
 interface EvaluationReport {
@@ -154,10 +175,15 @@ export default function EvaluationReportPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'skills']));
+  
+  // 分页和筛选状态
+  const [vulnPage, setVulnPage] = useState(1);
+  const [vulnFilterType, setVulnFilterType] = useState('');
+  const [vulnFilterStatus, setVulnFilterStatus] = useState('');
 
   useEffect(() => {
     fetchReport();
-  }, [evaluationId]);
+  }, [evaluationId, vulnPage, vulnFilterType, vulnFilterStatus]);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -165,7 +191,13 @@ export default function EvaluationReportPage({
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/evaluations/${evaluationId}/report`, {
+      const params = new URLSearchParams();
+      params.append('page', String(vulnPage));
+      params.append('pageSize', '10');
+      if (vulnFilterType) params.append('type', vulnFilterType);
+      if (vulnFilterStatus) params.append('status', vulnFilterStatus);
+      
+      const response = await fetch(`/api/evaluations/${evaluationId}/report?${params.toString()}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -219,6 +251,46 @@ export default function EvaluationReportPage({
         return 'bg-gray-100 text-gray-800 border-gray-200';
       default:
         return 'bg-gray-100 text-gray-600 border-gray-200';
+    }
+  };
+
+  const getStatusColor = (status?: string | null) => {
+    switch (status?.toLowerCase()) {
+      case 'new':
+      case 'open':
+        return 'bg-orange-100 text-orange-800';
+      case 'confirmed':
+        return 'bg-green-100 text-green-800';
+      case 'fixed':
+      case 'verified':
+        return 'bg-blue-100 text-blue-800';
+      case 'false-positive':
+        return 'bg-gray-100 text-gray-600';
+      case 'closed':
+        return 'bg-gray-100 text-gray-500';
+      default:
+        return 'bg-gray-100 text-gray-600';
+    }
+  };
+
+  const getStatusLabel = (status?: string | null) => {
+    switch (status?.toLowerCase()) {
+      case 'new':
+        return '新建';
+      case 'open':
+        return '待处理';
+      case 'confirmed':
+        return '已确认';
+      case 'fixed':
+        return '已修复';
+      case 'verified':
+        return '已验证';
+      case 'false-positive':
+        return '误报';
+      case 'closed':
+        return '已关闭';
+      default:
+        return status || '未知';
     }
   };
 
@@ -629,31 +701,161 @@ export default function EvaluationReportPage({
           expanded={expandedSections.has('vuln')}
           onToggle={() => toggleSection('vuln')}
         >
-          <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
-            <StatCard label="严重" value={vulnerabilitySummary.critical} color="red" />
-            <StatCard label="高危" value={vulnerabilitySummary.high} color="orange" />
-            <StatCard label="中危" value={vulnerabilitySummary.medium} color="yellow" />
-            <StatCard label="低危" value={vulnerabilitySummary.low} color="blue" />
-            <StatCard label="信息" value={vulnerabilitySummary.info} color="gray" />
-            <StatCard label="总计" value={vulnerabilitySummary.total} color="purple" />
-          </div>
-
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex items-center space-x-4 text-sm">
-              <span className="text-gray-600">
-                待处理: <span className="font-medium text-orange-600">{vulnerabilitySummary.open}</span>
-              </span>
-              <span className="text-gray-600">
-                已确认: <span className="font-medium text-green-600">{vulnerabilitySummary.confirmed}</span>
-              </span>
-              <span className="text-gray-600">
-                已修复: <span className="font-medium text-blue-600">{vulnerabilitySummary.fixed}</span>
-              </span>
-              <span className="text-gray-600">
-                误报: <span className="font-medium text-gray-500">{vulnerabilitySummary.falsePositive}</span>
-              </span>
+          {/* 按漏洞类型统计 */}
+          {vulnerabilitySummary.byType.length > 0 ? (
+            <div className="space-y-3">
+              <h4 className="text-sm font-medium text-gray-700">按漏洞类型统计</h4>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {vulnerabilitySummary.byType.map((item, index) => (
+                  <div 
+                    key={index} 
+                    className={`bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors ${vulnFilterType === item.categoryId ? 'ring-2 ring-blue-500' : ''}`}
+                    onClick={() => setVulnFilterType(vulnFilterType === item.categoryId ? '' : item.categoryId)}
+                  >
+                    <div className="text-xs text-gray-500 truncate" title={item.categoryName}>{item.categoryName}</div>
+                    <div className="text-2xl font-bold text-gray-900">{item.count}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <p className="text-gray-500 text-sm">暂未发现漏洞</p>
+          )}
+
+          {/* 状态统计 */}
+          {vulnerabilitySummary.total > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center flex-wrap gap-4 text-sm">
+                <span className="text-gray-600">
+                  待处理: <span className="font-medium text-orange-600">{vulnerabilitySummary.byStatus.open}</span>
+                </span>
+                <span className="text-gray-600">
+                  已确认: <span className="font-medium text-green-600">{vulnerabilitySummary.byStatus.confirmed}</span>
+                </span>
+                <span className="text-gray-600">
+                  已修复: <span className="font-medium text-blue-600">{vulnerabilitySummary.byStatus.fixed}</span>
+                </span>
+                <span className="text-gray-600">
+                  误报: <span className="font-medium text-gray-500">{vulnerabilitySummary.byStatus.falsePositive}</span>
+                </span>
+                <span className="text-gray-600 ml-auto">
+                  总计: <span className="font-medium text-purple-600">{vulnerabilitySummary.total}</span>
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* 漏洞明细表格 */}
+          {vulnerabilitySummary.total > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-medium text-gray-700">漏洞明细</h4>
+                {/* 筛选控件 */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={vulnFilterStatus}
+                    onChange={(e) => { setVulnFilterStatus(e.target.value); setVulnPage(1); }}
+                    className="text-xs border border-gray-300 rounded px-2 py-1"
+                  >
+                    <option value="">全部状态</option>
+                    <option value="new">新建</option>
+                    <option value="confirmed">已确认</option>
+                    <option value="fixed">已修复</option>
+                    <option value="false-positive">误报</option>
+                  </select>
+                  {(vulnFilterType || vulnFilterStatus) && (
+                    <button
+                      onClick={() => { setVulnFilterType(''); setVulnFilterStatus(''); setVulnPage(1); }}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      清除筛选
+                    </button>
+                  )}
+                </div>
+              </div>
+              
+              {vulnerabilitySummary.details.length > 0 ? (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-2 px-2 font-medium text-gray-600">漏洞类型</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-600">标题</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-600">状态</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-600">CWE</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-600">位置</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vulnerabilitySummary.details.map((vuln, index) => (
+                          <tr key={vuln.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-2 px-2">
+                              <div className="text-gray-900">{vuln.type}</div>
+                              {vuln.patternName !== vuln.type && (
+                                <div className="text-xs text-gray-500">{vuln.patternName}</div>
+                              )}
+                            </td>
+                            <td className="py-2 px-2">
+                              <div className="text-gray-700 max-w-xs truncate" title={vuln.title}>{vuln.title}</div>
+                              {vuln.description && (
+                                <div className="text-xs text-gray-500 max-w-xs truncate" title={vuln.description}>
+                                  {vuln.description}
+                                </div>
+                              )}
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(vuln.status)}`}>
+                                {getStatusLabel(vuln.status)}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-xs text-gray-500">
+                              {vuln.cwe || '-'}
+                            </td>
+                            <td className="py-2 px-2 text-xs text-gray-500">
+                              {vuln.filePath ? (
+                                <span title={vuln.filePath}>
+                                  {vuln.filePath.split('/').pop()}
+                                  {vuln.lineStart && `:${vuln.lineStart}`}
+                                </span>
+                              ) : '-'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  
+                  {/* 分页控件 */}
+                  {vulnerabilitySummary.pagination.totalPages > 1 && (
+                    <div className="flex items-center justify-between mt-3 text-sm">
+                      <span className="text-gray-500">
+                        共 {vulnerabilitySummary.pagination.total} 条，第 {vulnerabilitySummary.pagination.page} / {vulnerabilitySummary.pagination.totalPages} 页
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setVulnPage(p => Math.max(1, p - 1))}
+                          disabled={vulnerabilitySummary.pagination.page <= 1}
+                          className="px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          上一页
+                        </button>
+                        <button
+                          onClick={() => setVulnPage(p => Math.min(vulnerabilitySummary.pagination.totalPages, p + 1))}
+                          disabled={vulnerabilitySummary.pagination.page >= vulnerabilitySummary.pagination.totalPages}
+                          className="px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        >
+                          下一页
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-gray-500 text-sm">没有符合筛选条件的漏洞</p>
+              )}
+            </div>
+          )}
         </Section>
       </div>
     </div>
