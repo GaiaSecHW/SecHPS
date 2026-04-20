@@ -247,9 +247,10 @@ async function recordTokenUsage(
 
 /**
  * 调用 OpenAI 格式的 API
- * URL: http://xxx/v1/chat/completions
- */
+  * URL: http://xxx/v1/chat/completions
+  */
 async function callOpenAI(config: ModelConfig, request: any, timeout: number = DEFAULT_TIMEOUT_MS): Promise<any> {
+  const startTime = Date.now();
   let apiUrl = config.apiBaseUrl;
   
   // 确保 URL 正确
@@ -262,7 +263,14 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
     apiUrl = `${apiUrl}/chat/completions`;
   }
 
-  console.log(`[ModelClient] OpenAI request URL: ${apiUrl}`);
+  // 详细日志：请求信息
+  console.log(`[ModelClient] ========== OpenAI API 调用 ==========`);
+  console.log(`[ModelClient] URL: ${apiUrl}`);
+  console.log(`[ModelClient] Model: ${request.model || 'unknown'}`);
+  console.log(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+  console.log(`[ModelClient] Request body size: ${JSON.stringify(request).length} bytes`);
+  console.log(`[ModelClient] Timeout: ${timeout}ms`);
+  console.log(`[ModelClient] ========================================`);
 
   // 创建超时控制器
   const controller = new AbortController();
@@ -279,6 +287,8 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
       signal: controller.signal,
     });
 
+    console.log(`[ModelClient] OpenAI response status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[ModelClient] OpenAI API Error:', response.status, errorText);
@@ -291,6 +301,16 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
 
     return await response.json();
   } catch (error) {
+    // 详细错误日志
+    if (error instanceof Error) {
+      console.error(`[ModelClient] ========== OpenAI API 调用失败 ==========`);
+      console.error(`[ModelClient] Error name: ${error.name}`);
+      console.error(`[ModelClient] Error message: ${error.message}`);
+      console.error(`[ModelClient] URL: ${apiUrl}`);
+      console.error(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+      console.error(`[ModelClient] ==============================================`);
+    }
+    
     if (error instanceof Error && error.name === 'AbortError') {
       throw new RouteError(`请求超时 (${timeout}ms)`, 408);
     }
@@ -305,6 +325,7 @@ async function callOpenAI(config: ModelConfig, request: any, timeout: number = D
  * URL: http://xxx/v1/messages
  */
 async function callClaude(config: ModelConfig, request: any, timeout: number = DEFAULT_TIMEOUT_MS): Promise<any> {
+  const startTime = Date.now();
   let apiUrl = config.apiBaseUrl;
   
   // 确保 URL 正确
@@ -318,6 +339,34 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
       apiUrl = `${apiUrl}/v1/messages`;
     }
   }
+
+  // 详细日志：请求信息
+  console.log(`[ModelClient] ========== Claude API 调用 ==========`);
+  console.log(`[ModelClient] URL: ${apiUrl}`);
+  console.log(`[ModelClient] Model: ${request.model || 'unknown'}`);
+  console.log(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+  console.log(`[ModelClient] Request body size: ${JSON.stringify(request).length} bytes`);
+  console.log(`[ModelClient] Timeout: ${timeout}ms`);
+  console.log(`[ModelClient] Request keys: ${Object.keys(request).join(', ')}`);
+  console.log(`[ModelClient] Has system prompt: ${!!request.system}`);
+  console.log(`[ModelClient] System prompt length: ${request.system?.length || 0}`);
+  console.log(`[ModelClient] Messages count: ${request.messages?.length || 0}`);
+  console.log(`[ModelClient] First message length: ${request.messages?.[0]?.content?.length || 0}`);
+  
+  // 打印请求体结构（不含完整内容）
+  console.log(`[ModelClient] Request structure:`, JSON.stringify({
+    model: request.model,
+    max_tokens: request.max_tokens,
+    temperature: request.temperature,
+    stream: request.stream,
+    system: request.system ? `[${request.system.length} chars]` : undefined,
+    messages: request.messages?.map((m: any, i: number) => ({
+      index: i,
+      role: m.role,
+      contentLength: m.content?.length || 0
+    }))
+  }, null, 2));
+  console.log(`[ModelClient] ========================================`);
 
   // 创建超时控制器
   const controller = new AbortController();
@@ -335,6 +384,8 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
       signal: controller.signal,
     });
 
+    console.log(`[ModelClient] Claude response status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error('[ModelClient] Claude API Error:', response.status, errorText);
@@ -347,6 +398,38 @@ async function callClaude(config: ModelConfig, request: any, timeout: number = D
 
     return await response.json();
   } catch (error) {
+    // 详细错误日志
+    const duration = Date.now() - startTime;
+    console.error(`[ModelClient] ========== Claude API 调用失败 ==========`);
+    console.error(`[ModelClient] Error type: ${error?.constructor?.name || typeof error}`);
+    console.error(`[ModelClient] Error name: ${error instanceof Error ? error.name : 'N/A'}`);
+    console.error(`[ModelClient] Error message: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[ModelClient] URL: ${apiUrl}`);
+    console.error(`[ModelClient] API Key (前8位): ${config.apiKey?.substring(0, 8)}...`);
+    console.error(`[ModelClient] Request body size: ${JSON.stringify(request).length} bytes`);
+    console.error(`[ModelClient] Error duration: ${duration}ms`);
+    
+    // 尝试获取更详细的错误原因
+    if (error instanceof Error && (error as any).cause) {
+      console.error(`[ModelClient] Error cause:`, (error as any).cause);
+    }
+    
+    // 如果是 AggregateError，打印所有错误
+    if (error instanceof AggregateError) {
+      console.error(`[ModelClient] AggregateError errors:`, error.errors);
+    }
+    
+    // 如果是网络错误，打印可能的原因
+    if (error instanceof Error && (error.message.includes('fetch failed') || error.message.includes('ECONN'))) {
+      console.error(`[ModelClient] ⚠️ 网络错误可能原因:`);
+      console.error(`[ModelClient]   1. 目标服务器不可达`);
+      console.error(`[ModelClient]   2. 请求体过大被拒绝`);
+      console.error(`[ModelClient]   3. 代理服务器不支持某些字段 (如 system)`);
+      console.error(`[ModelClient]   4. 连接被防火墙中断`);
+      console.error(`[ModelClient]   5. 服务器处理超时并关闭连接`);
+    }
+    console.error(`[ModelClient] ==============================================`);
+    
     if (error instanceof Error && error.name === 'AbortError') {
       throw new RouteError(`请求超时 (${timeout}ms)`, 408);
     }
@@ -537,7 +620,7 @@ export async function routeStreamRequest(
  * @param messages 消息数组
  * @param options 可选参数 + 用户上下文
  * @returns API 响应
- */
+  */
 export async function routeRequestWithDefaultModel(
   messages: Array<{ role: string; content: string }>,
   options: {

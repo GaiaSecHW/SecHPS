@@ -57,6 +57,8 @@ interface EvaluationRecord {
   errorMessage: string | null;
   endReason?: 'completed' | 'stopped' | 'error' | null;
   endMessage?: string | null;
+  totalInputTokens?: number;
+  totalOutputTokens?: number;
 }
 
 interface Project {
@@ -842,6 +844,10 @@ export default function SessionsPage() {
         startedAt: session.startedAt || session.createdAt || new Date().toISOString(),
         completedAt: session.completedAt || session.updatedAt || new Date().toISOString(),
         title: session.title || `评估 #${index + 1}`,
+        totalInputTokens: session.totalInputTokens || 0,
+        totalOutputTokens: session.totalOutputTokens || 0,
+        endReason: session.endReason,
+        endMessage: session.endMessage,
       }));
       
       setSelectedProject({
@@ -1332,6 +1338,25 @@ toast.error(data.error || '更新项目失败');
                 }) : '';
                 const timeLabel = isRunning ? '启动' : '完成';
                 
+                // 计算耗时（已完成时显示）
+                let durationStr = '';
+                if (!isRunning && latestEval.startedAt && latestEval.completedAt) {
+                  const startTime = new Date(latestEval.startedAt).getTime();
+                  const endTime = new Date(latestEval.completedAt).getTime();
+                  const durationMs = endTime - startTime;
+                  const durationSeconds = Math.floor(durationMs / 1000);
+                  const durationMinutes = Math.floor(durationSeconds / 60);
+                  const durationHours = Math.floor(durationMinutes / 60);
+                  
+                  if (durationHours > 0) {
+                    durationStr = `${durationHours}小时${durationMinutes % 60}分钟`;
+                  } else if (durationMinutes > 0) {
+                    durationStr = `${durationMinutes}分钟${durationSeconds % 60}秒`;
+                  } else {
+                    durationStr = `${durationSeconds}秒`;
+                  }
+                }
+                
                 const statusConfig: Record<string, { bg: string; border: string; text: string; label: string }> = {
                   running: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', label: '运行中' },
                   queued: { bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-700', label: '排队中' },
@@ -1354,6 +1379,7 @@ toast.error(data.error || '更新项目失败');
                         {timeStr && (
                           <span className={`text-xs opacity-75 ${config.text}`}>
                             {timeLabel}: {timeStr}
+                            {durationStr && ` · 耗时 ${durationStr}`}
                           </span>
                         )}
                       </div>
@@ -2183,12 +2209,18 @@ toast.error(data.error || '更新项目失败');
                            <span className="text-xs text-blue-600 hover:text-blue-800">查看详情 →</span>
                          </div>
                        </div>
-                       <div className="text-sm text-gray-600 space-y-1">
-                         <p>开始时间: {new Date(evaluation.startedAt).toLocaleString()}</p>
-                         {evaluation.completedAt && (
-                           <p>完成时间: {new Date(evaluation.completedAt).toLocaleString()}</p>
-                         )}
-                         {/* 显示结束原因 */}
+                        <div className="text-sm text-gray-600 space-y-1">
+                          <p>开始时间: {new Date(evaluation.startedAt).toLocaleString()}</p>
+                          {evaluation.completedAt && (
+                            <p>完成时间: {new Date(evaluation.completedAt).toLocaleString()}</p>
+                          )}
+                          {/* Token 使用量 */}
+                          {(evaluation.totalInputTokens || evaluation.totalOutputTokens) && (
+                            <p className="text-xs text-gray-500">
+                              Token: 输入 {evaluation.totalInputTokens?.toLocaleString() || 0} / 输出 {evaluation.totalOutputTokens?.toLocaleString() || 0}
+                            </p>
+                          )}
+                          {/* 显示结束原因 */}
                          {evaluation.status !== 'running' && evaluation.endReason && (
                            <div className={`mt-2 p-2 rounded ${
                              evaluation.endReason === 'completed' 

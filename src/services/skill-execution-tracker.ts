@@ -58,7 +58,16 @@ export async function completeSkillExecution(params: {
   outputTokens?: number;
   error?: string;
 }): Promise<void> {
-  const startTime = Date.now();
+  // 先获取原记录的 startedAt 时间
+  const existing = await prisma.skillExecution.findUnique({
+    where: { id: params.executionId },
+    select: { startedAt: true },
+  });
+  
+  const completedAt = new Date();
+  const duration = existing?.startedAt 
+    ? completedAt.getTime() - new Date(existing.startedAt).getTime()
+    : 0;
   
   // 更新执行记录
   await prisma.skillExecution.update({
@@ -71,8 +80,8 @@ export async function completeSkillExecution(params: {
       inputTokens: params.inputTokens,
       outputTokens: params.outputTokens,
       error: params.error,
-      completedAt: new Date(),
-      duration: Date.now() - startTime,
+      completedAt,
+      duration,
     },
   });
 
@@ -87,7 +96,7 @@ export async function completeSkillExecution(params: {
     });
   }
 
-  console.log(`[SkillExecution] 完成执行记录: execution=${params.executionId}, findings=${params.findingsCount || 0}`);
+  console.log(`[SkillExecution] 完成执行记录: execution=${params.executionId}, findings=${params.findingsCount || 0}, duration=${duration}ms`);
 }
 
 /**
@@ -127,9 +136,11 @@ export async function createSkillExecutionsForEvaluation(params: {
 
 /**
  * 获取评估会话的 Skill 执行记录
+ * 按 skillId 去重，只保留每个 skill 的最新记录
  */
 export async function getSkillExecutionsByEvaluation(evaluationId: string) {
-  return prisma.skillExecution.findMany({
+  // 获取所有执行记录
+  const allExecutions = await prisma.skillExecution.findMany({
     where: { evaluationId },
     include: {
       Skill: {
@@ -141,8 +152,21 @@ export async function getSkillExecutionsByEvaluation(evaluationId: string) {
         },
       },
     },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' }, // 按时间倒序，最新的在前
   });
+  
+  // 按 skillId 去重，只保留最新的记录
+  const seenSkillIds = new Set<string>();
+  const uniqueExecutions = allExecutions.filter(exec => {
+    if (seenSkillIds.has(exec.skillId)) {
+      return false; // 已存在，跳过
+    }
+    seenSkillIds.add(exec.skillId);
+    return true;
+  });
+  
+  // 按创建时间正序返回（保持原有顺序）
+  return uniqueExecutions.reverse();
 }
 
 /**
@@ -223,4 +247,52 @@ export async function updateSkillExecutionFindings(params: {
   }
 
   console.log(`[SkillExecution] 更新 ${params.skillFindings.length} 个 Skill 的发现数`);
+}
+
+/**
+ * 完成所有未完成的 Skill 执行记录
+ * 用于评估结束时清理残留的 running/pending 状态
+ */
+export async function completeAllPendingSkillExecutions(params: {
+  evaluationId: string;
+  status?: 'completed' | 'failed' | 'cancelled';
+  reason?: string;
+}): Promise<number> {
+  const status = params.status || 'completed';
+  const reason = params.reason || '评估结束';
+  
+  // 查找所有未完成的执行记录
+  const pendingExecutions = await prisma.skillExecution.findMany({
+    where: {
+      evaluationId: params.evaluationId,
+      status: { in: ['pending', 'running'] },
+    },
+    select: { id: true, startedAt: true, skillId: true },
+  });
+  
+  if (pendingExecutions.length === 0) {
+    return 0;
+  }
+  
+  const completedAt = new Date();
+  
+  // 批量更新
+  for (const exec of pendingExecutions) {
+    const duration = exec.startedAt 
+      ? completedAt.getTime() - new Date(exec.startedAt).getTime()
+      : 0;
+    
+    await prisma.skillExecution.update({
+      where: { id: exec.id },
+      data: {
+        status,
+        completedAt,
+        duration,
+        error: status !== 'completed' ? reason : undefined,
+      },
+    });
+  }
+  
+  console.log(`[SkillExecution] 已将 ${pendingExecutions.length} 个未完成的执行记录标记为 ${status}`);
+  return pendingExecutions.length;
 }

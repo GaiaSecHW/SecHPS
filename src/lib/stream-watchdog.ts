@@ -28,10 +28,12 @@ export interface WatchdogConfig {
   /** 心跳检查间隔（毫秒），默认 30 秒 */
   heartbeatInterval?: number;
   
-  /** 超时回调 */
+  /** 超时回调（仅用于 session_not_found 和 manual_abort） */
   onTimeout?: (reason: TimeoutReason) => void;
   /** 心跳回调 */
   onHeartbeat?: (stats: WatchdogStats) => void;
+  /** 进展询问回调（空闲超时或运行时间较长时触发） */
+  onProgressInquiry?: (reason: 'idle_timeout' | 'max_runtime', stats: WatchdogStats) => void;
 }
 
 export interface WatchdogStats {
@@ -104,6 +106,7 @@ export class StreamWatchdog {
       heartbeatInterval: config.heartbeatInterval ?? DEFAULT_HEARTBEAT_INTERVAL,
       onTimeout: config.onTimeout ?? (() => {}),
       onHeartbeat: config.onHeartbeat ?? (() => {}),
+      onProgressInquiry: config.onProgressInquiry ?? (() => {}),
     };
     
     this.startTime = Date.now();
@@ -245,8 +248,15 @@ export class StreamWatchdog {
       
       const stats = this.getStats();
       if (stats.idleTime >= this.config.idleTimeout) {
-        this.handleTimeout('idle_timeout', 
-          `SSE 流空闲超时 (${Math.round(stats.idleTime / 1000)}秒无消息)`);
+        // 空闲超时：不中止评估，改为发送进展询问
+        console.warn(`[Watchdog] 空闲超时: ${this.config.evaluationId} (${Math.round(stats.idleTime / 1000)}秒无消息)`);
+        console.log(`[Watchdog] 触发进展询问，不中止评估`);
+        
+        // 调用进展询问回调
+        this.config.onProgressInquiry('idle_timeout', stats);
+        
+        // 重置活动时间，避免频繁触发
+        this.lastActivityTime = Date.now();
       }
     }, Math.min(this.config.idleTimeout / 2, 60000)); // 每分钟或超时时间的一半检查一次
   }
@@ -260,8 +270,12 @@ export class StreamWatchdog {
       if (!this.isRunning) return;
       
       const stats = this.getStats();
-      this.handleTimeout('max_runtime', 
-        `评估运行时间超限 (${Math.round(stats.runTime / 60000)}分钟)`);
+      // 最大运行时间：不中止评估，改为发送进展询问
+      console.warn(`[Watchdog] 运行时间较长: ${this.config.evaluationId} (${Math.round(stats.runTime / 60000)}分钟)`);
+      console.log(`[Watchdog] 触发进展询问，不中止评估`);
+      
+      // 调用进展询问回调
+      this.config.onProgressInquiry('max_runtime', stats);
     }, this.config.maxRunTime);
   }
 
@@ -307,8 +321,19 @@ export class StreamWatchdog {
       console.log(`[Watchdog] 已中止 Agent: ${this.config.evaluationId}`);
     }
     
-    // 更新数据库状态
+    // 更新数据库状态（保留已累加的 Token）
     try {
+      // 先获取当前 Token 值
+      const currentTokens = await prisma.evaluationSession.findUnique({
+        where: { id: this.config.evaluationId },
+        select: {
+          totalInputTokens: true,
+          totalOutputTokens: true,
+          totalTokens: true,
+          estimatedCost: true,
+        },
+      });
+
       await prisma.evaluationSession.update({
         where: { id: this.config.evaluationId },
         data: {
@@ -317,6 +342,11 @@ export class StreamWatchdog {
           endMessage: message,
           errorMessage: message,
           completedAt: new Date(),
+          // 保留已累加的 Token
+          totalInputTokens: currentTokens?.totalInputTokens ?? 0,
+          totalOutputTokens: currentTokens?.totalOutputTokens ?? 0,
+          totalTokens: currentTokens?.totalTokens ?? 0,
+          estimatedCost: currentTokens?.estimatedCost ?? 0,
         },
       });
       
@@ -325,7 +355,7 @@ export class StreamWatchdog {
         data: { status: 'failed' },
       });
       
-      console.log(`[Watchdog] 已更新评估状态为 failed`);
+      console.log(`[Watchdog] 已更新评估状态为 failed, tokens: input=${currentTokens?.totalInputTokens}, output=${currentTokens?.totalOutputTokens}`);
     } catch (error) {
       console.error('[Watchdog] 更新数据库失败:', error);
     }

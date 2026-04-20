@@ -620,7 +620,6 @@ export default function EvaluationReportPage({
                   <tr>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">状态</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">技能名称</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">严重程度</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">发现数</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">耗时</th>
                   </tr>
@@ -628,14 +627,19 @@ export default function EvaluationReportPage({
                 <tbody className="divide-y divide-gray-200">
                   {skillExecutions.map((exec) => (
                     <tr key={exec.id}>
-                      <td className="px-3 py-2">{getStatusIcon(exec.status)}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center space-x-1">
+                          {getStatusIcon(exec.status)}
+                          <span className="text-xs text-gray-500">
+                            {exec.status === 'completed' ? '完成' : 
+                             exec.status === 'failed' ? '失败' : 
+                             exec.status === 'running' ? '运行中' : 
+                             exec.status === 'pending' ? '待执行' : exec.status}
+                          </span>
+                        </div>
+                      </td>
                       <td className="px-3 py-2 font-medium text-gray-900">
                         {exec.skillDisplayName || exec.skillName || '未知'}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`px-2 py-0.5 rounded text-xs ${getSeverityColor(exec.skillSeverity)}`}>
-                          {exec.skillSeverity || '未分级'}
-                        </span>
                       </td>
                       <td className="px-3 py-2">
                         <span className={`font-medium ${exec.findingsCount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
@@ -680,9 +684,6 @@ export default function EvaluationReportPage({
                           <div className="h-3 w-3 rounded-full border border-gray-300" />
                         )}
                         <span className="text-gray-700">{skill.skillDisplayName}</span>
-                        <span className={`px-1.5 py-0.5 rounded ${getSeverityColor(skill.skillSeverity)}`}>
-                          {skill.skillSeverity || '未分级'}
-                        </span>
                       </div>
                     ))}
                   </div>

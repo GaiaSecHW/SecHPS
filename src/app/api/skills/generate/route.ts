@@ -43,11 +43,20 @@ export async function POST(request: NextRequest) {
     // 获取模型配置
     const modelInfo = await getDefaultModelInfo();
     if (!modelInfo) {
+      logger.errorNoUser(LOG_MODULES.SKILL, '模型配置不存在');
       return NextResponse.json(
         { details: { error: '模型配置不存在，请先在系统设置中配置 AI 模型' } },
         { status: 500 }
       );
     }
+
+    // 详细日志：模型配置信息
+    logger.debug(LOG_MODULES.SKILL, '========== Skill 生成模型配置 ==========');
+    logger.debug(LOG_MODULES.SKILL, 'Provider Type', { details: { providerType: modelInfo.providerType } });
+    logger.debug(LOG_MODULES.SKILL, 'API Base URL', { details: { apiBaseUrl: modelInfo.apiBaseUrl } });
+    logger.debug(LOG_MODULES.SKILL, 'Default Model', { details: { defaultModel: modelInfo.defaultModel } });
+    logger.debug(LOG_MODULES.SKILL, 'API Key (前8位)', { details: { apiKeyPrefix: modelInfo.apiKey?.substring(0, 8) + '...' } });
+    logger.debug(LOG_MODULES.SKILL, '=========================================');
 
     logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelInfo.defaultModel } });
 
@@ -116,19 +125,38 @@ export async function POST(request: NextRequest) {
     logger.logNoUser(LOG_MODULES.SKILL, 'Skill 生成成功', { details: { name: skill.name } });
     return NextResponse.json({ skill });
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.SKILL, '生成 Skill 失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    // 详细错误日志
+    logger.errorNoUser(LOG_MODULES.SKILL, '========== Skill 生成失败 ==========');
+    if (error instanceof Error) {
+      logger.errorNoUser(LOG_MODULES.SKILL, 'Error name', { details: { name: error.name } });
+      logger.errorNoUser(LOG_MODULES.SKILL, 'Error message', { details: { message: error.message } });
+      logger.errorNoUser(LOG_MODULES.SKILL, 'Error stack', { details: { stack: error.stack?.substring(0, 500) } });
+    } else {
+      logger.errorNoUser(LOG_MODULES.SKILL, 'Unknown error', { details: { error: String(error) } });
+    }
+    logger.errorNoUser(LOG_MODULES.SKILL, '====================================');
     
     let errorMessage = '生成失败';
+    let errorDetails: any = {};
+    
     if (error instanceof Error) {
+      errorDetails.name = error.name;
+      errorDetails.message = error.message;
+      
       if (error.name === 'AbortError') {
         errorMessage = '大模型响应超时，请稍后重试';
       } else if (error.message.includes('fetch failed')) {
         errorMessage = '大模型连接失败，请检查网络或 API 配置';
+        errorDetails.hint = '请检查：1) API Base URL 是否正确 2) API Key 是否有效 3) 网络是否能访问模型服务';
+      } else if (error.message.includes('ECONNREFUSED')) {
+        errorMessage = '无法连接到模型服务，请检查 API 地址是否正确';
+      } else if (error.message.includes('ETIMEDOUT') || error.message.includes('timeout')) {
+        errorMessage = '连接模型服务超时，请检查网络或重试';
       } else {
         errorMessage = `生成失败: ${error.message}`;
       }
     }
     
-    return NextResponse.json({ details: { error: errorMessage } }, { status: 500 });
+    return NextResponse.json({ details: { error: errorMessage, ...errorDetails } }, { status: 500 });
   }
 }

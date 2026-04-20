@@ -116,6 +116,11 @@ export async function PATCH(
       },
     });
 
+    console.log('[Config] Updated config:', { 
+      id: config.id, 
+      progressQuestion: config.progressQuestion ? `${config.progressQuestion.substring(0, 30)}...` : null 
+    });
+
     // Record audit log
     await prisma.auditLog.create({
       data: {

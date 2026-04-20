@@ -54,7 +54,7 @@ export async function POST(
       return NextResponse.json({ error: '评估会话不在运行中' }, { status: 400 });
     }
 
-    // 获取用户的配置中的进展询问消息
+    // 获取进展询问消息（全局配置，不区分用户）
     let progressQuestion = '';
     
     // 方法1: 从项目的关联配置中获取 progressQuestion
@@ -63,24 +63,23 @@ export async function POST(
       console.log('[AskProgress] 使用项目关联配置的进展询问消息');
     }
     
-    // 方法2: 如果项目没有关联配置或配置没有 progressQuestion，尝试从用户默认配置获取
+    // 方法2: 如果项目没有关联配置或配置没有 progressQuestion，从全局激活配置获取
     if (!progressQuestion || !progressQuestion.trim()) {
       try {
-        // 获取用户的默认配置（isActive: true）
-        const userDefaultConfig = await prisma.opencodeConfig.findFirst({
+        // 获取全局激活配置（不按用户过滤）
+        const globalConfig = await prisma.opencodeConfig.findFirst({
           where: {
-            userId: evaluation.Project.User.id,
             isActive: true,
           },
           select: { progressQuestion: true },
         });
         
-        if (userDefaultConfig?.progressQuestion && userDefaultConfig.progressQuestion.trim()) {
-          progressQuestion = userDefaultConfig.progressQuestion;
-          console.log('[AskProgress] 使用用户默认配置的进展询问消息');
+        if (globalConfig?.progressQuestion && globalConfig.progressQuestion.trim()) {
+          progressQuestion = globalConfig.progressQuestion;
+          console.log('[AskProgress] 使用全局激活配置的进展询问消息');
         }
       } catch (e) {
-        console.warn('获取用户默认配置失败:', e);
+        console.warn('获取全局配置失败:', e);
       }
     }
 

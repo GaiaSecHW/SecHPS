@@ -135,7 +135,8 @@ export async function getOrSet<T>(
 // Invalidate related caches
 export function invalidateUserCaches(userId: string): void {
   userCache.delete(cacheKeys.user(userId));
-  userCache.delete(cacheKeys.userPermissions(userId));
+  // permissionCache stores user:perms:${userId}, not userCache
+  permissionCache.delete(cacheKeys.userPermissions(userId));
 }
 
 export function clearAllCaches(): void {

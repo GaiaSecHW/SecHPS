@@ -5,7 +5,7 @@ import { validateJsonField, validateJsonObject } from '@/lib/validation';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
-// GET /api/config - Get all configs for authenticated user
+// GET /api/config - Get all configs (global, not user-specific)
 export async function GET(request: Request) {
   try {
     // Authenticate and check permission
@@ -15,15 +15,17 @@ export async function GET(request: Request) {
     }
     const { payload } = auth;
 
-    // Get configs for user
+    console.log('[Config GET] Fetching configs (global) for user:', payload.userId);
+
+    // Get all configs (global, not filtered by userId)
+    // 系统配置是全局的，不按用户过滤
     const configs = await prisma.opencodeConfig.findMany({
-      where: {
-        userId: payload.userId,
-      },
       orderBy: {
         createdAt: 'desc',
       },
     });
+
+    console.log('[Config GET] Found configs:', configs.length, configs.map(c => ({ id: c.id, name: c.name, isActive: c.isActive, hasProgressQuestion: !!c.progressQuestion })));
 
     return NextResponse.json({ configs });
   } catch (error) {

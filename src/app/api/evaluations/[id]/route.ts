@@ -48,6 +48,13 @@ export async function GET(
             description: true,
             environmentUrl: true,
             userId: true,
+            User: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+              },
+            },
           },
         },
         // 添加迭代记录（包含模型信息）

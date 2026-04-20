@@ -25,6 +25,7 @@ import {
   ChevronUp,
   AlertTriangle,
   FileSearch,
+  User,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
@@ -519,22 +520,30 @@ function SessionDetailContent({
       });
 
       if (!response.ok) {
-        console.error('[Config] Failed to fetch config');
-        setProgressQuestion('');
+        console.error('[Config] Failed to fetch config, status:', response.status);
         return;
       }
 
       const data = await response.json();
+      console.log('[Config] Fetched configs:', data.configs?.length || 0);
+      
       const activeConfig = data.configs?.find((c: any) => c.isActive);
+      console.log('[Config] Active config:', activeConfig ? { 
+        id: activeConfig.id, 
+        name: activeConfig.name,
+        isActive: activeConfig.isActive,
+        hasProgressQuestion: !!activeConfig.progressQuestion,
+        progressQuestionLength: activeConfig.progressQuestion?.length || 0
+      } : 'not found');
       
       if (activeConfig?.progressQuestion && activeConfig.progressQuestion.trim()) {
+        console.log('[Config] Setting progressQuestion:', activeConfig.progressQuestion.substring(0, 50) + '...');
         setProgressQuestion(activeConfig.progressQuestion);
+      } else {
+        console.log('[Config] No progressQuestion found in active config');
       }
-      // 如果没有配置，保持为空，不设置空字符串
-      // 这样按钮会显示为"请先在系统配置中设置自定义进展询问消息"
     } catch (err) {
       console.error('[Config] Error fetching progress question:', err);
-      setProgressQuestion('');
     }
   };
 
@@ -785,11 +794,17 @@ function SessionDetailContent({
             </button>
             <div>
               <h1 className="text-xl font-semibold text-gray-900">
-                {evaluation.project?.name || '评估会话详情'}
+                {evaluation.Project?.name || '评估会话详情'}
               </h1>
-              <p className="text-sm text-gray-500">
-                ID: {evaluation.id}
-              </p>
+              <div className="flex items-center space-x-4 text-sm text-gray-500">
+                <span>ID: {evaluation.id}</span>
+                {evaluation.Project?.User && (
+                  <span className="flex items-center space-x-1">
+                    <User size={12} />
+                    <span>创建者: {evaluation.Project.User.name || evaluation.Project.User.username || '未知'}</span>
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center space-x-2">
               {evaluation.status && (
@@ -815,6 +830,18 @@ function SessionDetailContent({
                     : evaluation.status === 'cancelled'
                     ? '已取消'
                     : evaluation.status}
+                </span>
+              )}
+              {/* 显示结束原因 */}
+              {evaluation.endReason && evaluation.status !== 'running' && (
+                <span className="text-xs text-gray-500" title={evaluation.endMessage || ''}>
+                  ({evaluation.endReason === 'stopped' ? '用户中止' :
+                    evaluation.endReason === 'error' ? '执行错误' :
+                    evaluation.endReason === 'idle_timeout' ? '空闲超时' :
+                    evaluation.endReason === 'max_runtime' ? '超过最大运行时间' :
+                    evaluation.endReason === 'completed' ? '正常完成' :
+                    evaluation.endReason === 'manual_abort' ? '手动中止' :
+                    evaluation.endReason})
                 </span>
               )}
             </div>
@@ -843,10 +870,13 @@ function SessionDetailContent({
                         ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-50 border-blue-200'
                         : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
                     }`}
-                    title={!progressQuestion ? '请先在系统配置中设置"进展询问消息"' : ''}
+                    title={!progressQuestion ? '请先在"系统配置"中设置"进展询问消息"' : '询问当前评估进展'}
                   >
                     <MessageSquare size={16} />
                     <span>询问进展</span>
+                    {!progressQuestion && (
+                      <span className="text-xs text-gray-400 ml-1">(未配置)</span>
+                    )}
                   </button>
                   <button
                     onClick={handleStopEvaluation}
@@ -912,19 +942,19 @@ function SessionDetailContent({
           <div>
             <h3 className="text-xs font-medium text-gray-500 mb-1">输入 Token</h3>
             <p className="text-sm text-gray-900">
-              {evaluation.totalInputTokens ? formatTokenNumber(evaluation.totalInputTokens) : '-'}
+              {evaluation.totalInputTokens != null ? formatTokenNumber(evaluation.totalInputTokens) : '-'}
             </p>
           </div>
           <div>
             <h3 className="text-xs font-medium text-gray-500 mb-1">输出 Token</h3>
             <p className="text-sm text-gray-900">
-              {evaluation.totalOutputTokens ? formatTokenNumber(evaluation.totalOutputTokens) : '-'}
+              {evaluation.totalOutputTokens != null ? formatTokenNumber(evaluation.totalOutputTokens) : '-'}
             </p>
           </div>
           <div>
             <h3 className="text-xs font-medium text-gray-500 mb-1">总 Token</h3>
             <p className="text-sm text-gray-900">
-              {evaluation.totalTokens ? formatTokenNumber(evaluation.totalTokens) : '-'}
+              {evaluation.totalTokens != null ? formatTokenNumber(evaluation.totalTokens) : '-'}
             </p>
           </div>
           <div>
@@ -942,6 +972,15 @@ function SessionDetailContent({
             </p>
           </div>
         </div>
+        {/* 结束详情（失败或取消时显示详细信息） */}
+        {evaluation.endMessage && evaluation.status !== 'running' && (
+          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-xs font-medium text-gray-500 mb-1">结束详情</h3>
+            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+              {evaluation.endMessage}
+            </p>
+          </div>
+        )}
       </div>
       
       {/* Main Content */}

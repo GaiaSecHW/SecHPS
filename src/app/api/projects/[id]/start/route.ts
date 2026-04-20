@@ -16,7 +16,7 @@ import { registerAgent } from '@/lib/agent-registry';
 import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
 import { createWatchdog, stopWatchdog, recordWatchdogActivity } from '@/lib/stream-watchdog';
 import { createEmptyAnalysisReport } from '@/services/analysis-report';
-import { createSkillExecutionsForEvaluation } from '@/services/skill-execution-tracker';
+import { createSkillExecutionsForEvaluation, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -1075,6 +1075,30 @@ export async function POST(
       onHeartbeat: (stats) => {
         // 心跳日志由 Watchdog 内部处理
       },
+      onProgressInquiry: async (reason, stats) => {
+        // 空闲超时或运行时间较长时，自动发送进展询问消息
+        console.log(`[Watchdog] 自动发送进展询问: reason=${reason}, idleTime=${Math.round(stats.idleTime / 1000)}s, runTime=${Math.round(stats.runTime / 1000)}s`);
+        
+        // 获取进展询问消息配置
+        const progressQuestionMessage = globalConfig?.progressQuestion || '请简要说明当前进展情况，以及预计还需要多长时间完成。';
+        
+        try {
+          // 通过 Agent 注入进展询问消息
+          // RalphLoopAgent 的 caller (EnhancedEvaluationCaller) 可能支持直接发送消息
+          const caller = (agent as any).caller;
+          if (caller && typeof caller.injectUserMessage === 'function') {
+            await caller.injectUserMessage(progressQuestionMessage);
+            console.log(`[Watchdog] 已通过 caller.injectUserMessage 注入进展询问消息`);
+          } else if (caller && caller.agent && typeof caller.agent.sendMessage === 'function') {
+            await caller.agent.sendMessage(progressQuestionMessage);
+            console.log(`[Watchdog] 已通过 agent.sendMessage 发送进展询问消息`);
+          } else {
+            console.warn(`[Watchdog] Agent 不支持消息注入，无法自动发送进展询问`);
+          }
+        } catch (err) {
+          console.error(`[Watchdog] 发送进展询问失败:`, err);
+        }
+      },
     });
     console.log(`[Evaluation] Watchdog 已启动: ${evaluation.id}`);
 
@@ -1552,6 +1576,13 @@ export async function POST(
                   },
                 });
                 
+                // 完成所有未完成的 Skill 执行记录
+                await completeAllPendingSkillExecutions({
+                  evaluationId: evaluation.id,
+                  status: 'cancelled',
+                  reason: '评估被中止',
+                });
+                
                 await prisma.project.update({
                   where: { id },
                   data: { status: 'idle' },
@@ -1815,6 +1846,13 @@ export async function POST(
                 },
               });
 
+              // 完成所有未完成的 Skill 执行记录
+              await completeAllPendingSkillExecutions({
+                evaluationId: evaluation.id,
+                status: 'completed',
+                reason: '评估正常完成',
+              });
+
               await prisma.project.update({
                 where: { id },
                 data: { status: 'completed' },
@@ -1893,7 +1931,17 @@ export async function POST(
           safeEnqueue(`data: ${data}\n\n`);
           safeClose();
 
-          // 更新状态
+          // 更新状态（保留已累加的 Token）
+          const currentTokens = await prisma.evaluationSession.findUnique({
+            where: { id: evaluation.id },
+            select: {
+              totalInputTokens: true,
+              totalOutputTokens: true,
+              totalTokens: true,
+              estimatedCost: true,
+            },
+          });
+
           await prisma.evaluationSession.update({
             where: { id: evaluation.id },
             data: {
@@ -1902,7 +1950,19 @@ export async function POST(
               endMessage: errorMessage,
               errorMessage,
               completedAt: new Date(),
+              // 保留已累加的 Token
+              totalInputTokens: currentTokens?.totalInputTokens ?? 0,
+              totalOutputTokens: currentTokens?.totalOutputTokens ?? 0,
+              totalTokens: currentTokens?.totalTokens ?? 0,
+              estimatedCost: currentTokens?.estimatedCost ?? 0,
             },
+          });
+
+          // 完成所有未完成的 Skill 执行记录
+          await completeAllPendingSkillExecutions({
+            evaluationId: evaluation.id,
+            status: 'failed',
+            reason: `评估失败: ${errorMessage}`,
           });
 
           await prisma.project.update({

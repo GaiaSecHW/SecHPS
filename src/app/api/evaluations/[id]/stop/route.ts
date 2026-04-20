@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { hasPermission } from '@/lib/permissions';
 import { PERMISSIONS } from '@/types/permissions';
 import { abortAgent } from '@/lib/agent-registry';
+import { completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
 
 // POST /api/evaluations/[id]/stop - 停止评估会话
 export async function POST(
@@ -58,7 +59,18 @@ export async function POST(
       // 即使 agent 不在注册表中，也需要检查数据库状态
     }
 
-    // 更新状态为已取消（确保在任何情况下都更新）
+    // 获取当前已累加的 Token（实时累加通过 onUsage 回调）
+    const currentTokens = await prisma.evaluationSession.findUnique({
+      where: { id },
+      select: {
+        totalInputTokens: true,
+        totalOutputTokens: true,
+        totalTokens: true,
+        estimatedCost: true,
+      },
+    });
+
+    // 更新状态为已取消，同时保留已累加的 Token
     const updatedEvaluation = await prisma.evaluationSession.update({
       where: { id },
       data: {
@@ -67,9 +79,14 @@ export async function POST(
         endMessage: '用户手动中止评估',
         completedAt: new Date(),
         errorMessage: '用户手动中止',
+        // 保留已累加的 Token（确保不为 null）
+        totalInputTokens: currentTokens?.totalInputTokens ?? 0,
+        totalOutputTokens: currentTokens?.totalOutputTokens ?? 0,
+        totalTokens: currentTokens?.totalTokens ?? 0,
+        estimatedCost: currentTokens?.estimatedCost ?? 0,
       },
     });
-    console.log(`[Stop Evaluation] 评估状态已更新为 cancelled: ${id}`);
+    console.log(`[Stop Evaluation] 评估状态已更新为 cancelled: ${id}, tokens: input=${currentTokens?.totalInputTokens}, output=${currentTokens?.totalOutputTokens}`);
 
     // 更新项目状态（如果有正在运行的评估）
     await prisma.project.updateMany({
