@@ -258,13 +258,14 @@ export async function POST(request: Request) {
       details: { name: skill.name, displayName, isPublic },
     }).catch(err => logger.errorWithUser(LOG_MODULES.SKILL, payload, '记录审计日志失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } }));
 
-    // 双写：同步保存到磁盘
-    getSkillOutputTemplate().then(template => {
-      saveSkillToDisk(skill, template).catch(err => {
-        logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存到磁盘失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
-        // 不阻塞响应，仅记录错误
-      });
-    });
+    // 双写：同步保存到磁盘（等待完成）
+    try {
+      const template = await getSkillOutputTemplate();
+      await saveSkillToDisk(skill, template);
+    } catch (err) {
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存到磁盘失败', skill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
+      // 不阻塞响应，仅记录错误
+    }
 
     // ===== 触发治理分析（非阻塞） =====
     triggerGovernanceAnalysis(skill.id).catch(err => {

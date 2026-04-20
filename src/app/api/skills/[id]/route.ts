@@ -210,13 +210,14 @@ export async function PUT(
         },
       });
 
-      // 双写：同步保存新版本到磁盘
+      // 双写：同步保存新版本到磁盘（等待完成）
       if (updatedSkill) {
-        getSkillOutputTemplate().then(template => {
-          saveSkillToDisk(updatedSkill!, template).catch(err => {
-            logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存新版本到磁盘失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
-          });
-        });
+        try {
+          const template = await getSkillOutputTemplate();
+          await saveSkillToDisk(updatedSkill, template);
+        } catch (err) {
+          logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存新版本到磁盘失败', updatedSkill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
+        }
       }
     } else {
       // 直接更新模式
@@ -238,28 +239,24 @@ export async function PUT(
         data: updateData,
       });
 
-      // 双写：根据 isActive 状态同步磁盘文件
-      if (updates.isActive !== undefined) {
-        if (updatedSkill!.isActive) {
-          // 启用：保存到磁盘
-          getSkillOutputTemplate().then(template => {
-            saveSkillToDisk(updatedSkill!, template).catch(err => {
-logger.errorWithUser(LOG_MODULES.SKILL, payload, '更新磁盘文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
-            });
-          });
+      // 双写：根据 isActive 状态同步磁盘文件（等待完成）
+      try {
+        if (updates.isActive !== undefined) {
+          if (updatedSkill!.isActive) {
+            // 启用：保存到磁盘
+            const template = await getSkillOutputTemplate();
+            await saveSkillToDisk(updatedSkill!, template);
+          } else {
+            // 禁用：从磁盘删除
+            await deleteSkillFromDisk(updatedSkill!.name, updatedSkill!.userId);
+          }
         } else {
-          // 禁用：从磁盘删除
-          deleteSkillFromDisk(updatedSkill!.name, updatedSkill!.userId).catch(err => {
-            logger.errorWithUser(LOG_MODULES.SKILL, payload, '删除磁盘文件失败', updatedSkill!.id, { details: { skillName: updatedSkill!.name, error: err instanceof Error ? err.message : String(err) } });
-          });
+          // 其他更新：直接保存
+          const template = await getSkillOutputTemplate();
+          await saveSkillToDisk(updatedSkill!, template);
         }
-      } else {
-        // 其他更新：直接保存
-        getSkillOutputTemplate().then(template => {
-          saveSkillToDisk(updatedSkill!, template).catch(err => {
-            logger.errorWithUser(LOG_MODULES.SKILL, payload, '更新磁盘文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
-          });
-        });
+      } catch (err) {
+        logger.errorWithUser(LOG_MODULES.SKILL, payload, '同步磁盘文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
       }
     }
 
