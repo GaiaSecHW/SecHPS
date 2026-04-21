@@ -71,7 +71,7 @@ async function getModelConfig(modelId: string): Promise<ModelConfig | null> {
     apiKey: config.apiKey || '',
     models: Array.isArray(config.models) ? config.models : JSON.parse(config.models || '[]'),
     maxTokens: config.maxTokens ?? 32000,
-    temperature: config.temperature ?? 0.7,
+    temperature: config.temperature ?? 0.3,
     isActive: config.isActive,
   };
 }
@@ -96,7 +96,7 @@ async function findModelByName(modelName: string): Promise<ModelConfig | null> {
         apiKey: config.apiKey || '',
         models,
         maxTokens: config.maxTokens ?? 32000,
-        temperature: config.temperature ?? 0.7,
+        temperature: config.temperature ?? 0.3,
         isActive: config.isActive,
       };
     }
@@ -128,7 +128,7 @@ export async function getDefaultModelConfig(): Promise<ModelConfig | null> {
     apiKey: config.apiKey || '',
     models,
     maxTokens: config.maxTokens ?? 32000,
-    temperature: config.temperature ?? 0.7,
+    temperature: config.temperature ?? 0.3,
     isActive: config.isActive,
   };
 }
@@ -505,12 +505,12 @@ export async function routeRequest(request: any): Promise<any> {
 
     console.log(`[ModelClient] Routing: ${config.name} (${config.providerType}) -> ${modelName}`);
 
-    // 构建请求体
+    // 构建请求体（使用 ModelConfig 中的 maxTokens 和 temperature）
     const internalRequest = {
       model: modelName,
       messages: request.messages || [],
-      max_tokens: request.max_tokens || 32000,
-      temperature: request.temperature ?? 0.7,
+      max_tokens: request.max_tokens ?? config.maxTokens ?? 32000,
+      temperature: request.temperature ?? config.temperature ?? 0.3,
       stream: false,
       tools: request.tools,
       tool_choice: request.tool_choice,
@@ -575,8 +575,8 @@ export async function routeStreamRequest(
     const internalRequest: any = {
       model: modelName,
       messages,
-      max_tokens: request.max_tokens || 32000,
-      temperature: request.temperature ?? 0.7,
+      max_tokens: request.max_tokens ?? config.maxTokens ?? 32000,
+      temperature: request.temperature ?? config.temperature ?? 0.3,
       stream: true,
       tools: request.tools,
       tool_choice: request.tool_choice,
@@ -706,7 +706,7 @@ export async function routeRequestWithDefaultModel(
   
   // 使用配置中的值，如果 options 中没有指定
   const finalMaxTokens = options.max_tokens ?? config.maxTokens ?? 32000;
-  const finalTemperature = options.temperature ?? config.temperature ?? 0.7;
+  const finalTemperature = options.temperature ?? config.temperature ?? 0.3;
   
   console.log(`[ModelClient] Using default model: ${config.name} (${config.providerType}) -> ${model}`);
   console.log(`[ModelClient] Config: maxTokens=${config.maxTokens}, temperature=${config.temperature}`);

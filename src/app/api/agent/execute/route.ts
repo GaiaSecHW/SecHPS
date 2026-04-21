@@ -65,6 +65,8 @@ export async function POST(request: Request) {
             apiKey: modelConfig.apiKey,
             apiBaseUrl: modelConfig.apiBaseUrl,
             model: JSON.parse(modelConfig.models)[0] || 'claude-sonnet-4-20250514',
+            maxTokens: modelConfig.maxTokens ?? 32000,
+            temperature: modelConfig.temperature ?? 0.3,
           },
         };
 

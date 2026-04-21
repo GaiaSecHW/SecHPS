@@ -12,6 +12,8 @@ export interface AgentExecutionContext {
     apiKey: string;
     apiBaseUrl: string;
     model: string;
+    maxTokens?: number;      // 最大输出 token 数
+    temperature?: number;    // 温度参数
   };
   maxToolCalls?: number;
   maxIterations?: number;
@@ -59,11 +61,12 @@ export class AgentExecutor {
     this.context = context;
     this.callbacks = callbacks;
 
-    // 创建 Claude Agent Service
+    // 创建 Claude Agent Service（使用 ModelConfig 中的 maxTokens 和 temperature）
     this.agentService = createClaudeAgentService({
       apiKey: context.modelConfig.apiKey,
       model: context.modelConfig.model,
-      maxTokens: 4096,
+      maxTokens: context.modelConfig.maxTokens ?? 32000,
+      temperature: context.modelConfig.temperature ?? 0.3,
       cwd: context.cwd,
       allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'],
     });

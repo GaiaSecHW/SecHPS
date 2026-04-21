@@ -155,11 +155,11 @@ export async function POST(request: Request) {
     }
 
     // 验证 maxTokens 和 temperature 范围
-    const finalMaxTokens = maxTokens ?? 4096;
-    const finalTemperature = temperature ?? 0.7;
-    if (finalMaxTokens < 256 || finalMaxTokens > 128000) {
+    const finalMaxTokens = maxTokens ?? 32000;
+    const finalTemperature = temperature ?? 0.3;
+    if (finalMaxTokens < 256 || finalMaxTokens > 192000) {
       return NextResponse.json(
-        { error: 'maxTokens 必须在 256-128000 之间' },
+        { error: 'maxTokens 必须在 256-192000 之间' },
         { status: 400 }
       );
     }

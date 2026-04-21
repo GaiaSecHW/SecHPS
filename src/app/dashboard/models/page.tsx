@@ -101,7 +101,7 @@ export default function ModelsPage() {
     apiKey: '',
     models: '',
     maxTokens: 32000,
-    temperature: 0.7,
+    temperature: 0.3,  // 默认温度 0.3
     isActive: true,
     isPublic: false,
     isSystemModel: false,
@@ -157,7 +157,7 @@ export default function ModelsPage() {
       apiKey: '',
       models: '',
       maxTokens: 32000,
-      temperature: 0.7,
+      temperature: 0.3,
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -203,7 +203,7 @@ export default function ModelsPage() {
       apiKey: '',
       models: '',
       maxTokens: 32000,
-      temperature: 0.7,
+      temperature: 0.3,
       isActive: true,
       isPublic: false,
       isSystemModel: false,
@@ -863,11 +863,11 @@ export default function ModelsPage() {
                     onChange={(e) => setFormData({ ...formData, maxTokens: parseInt(e.target.value) || 32000 })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     min={256}
-                    max={128000}
+                    max={192000}
                     step={256}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    默认 4096，建议 4096-32000
+                    默认 32000，建议 4096-32000
                   </p>
                 </div>
 
@@ -886,7 +886,7 @@ export default function ModelsPage() {
                     step={0.1}
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    默认 0.7，越高越随机
+                    默认 0.3，越高越随机
                   </p>
                 </div>
               </div>

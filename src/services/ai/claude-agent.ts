@@ -52,6 +52,7 @@ export interface ClaudeAgentConfig {
   settingSources?: ('project' | 'user' | 'local')[];  // 设置源
   resumeSession?: string;  // 恢复会话 ID
   settings?: { context_management?: boolean };  // 通过 settings 对象配置 context_management
+  temperature?: number;  // 模型温度，默认 0.3
 }
 
 export interface ClaudeAgentCallbacks {
@@ -167,6 +168,12 @@ export class ClaudeAgentService {
       
       // 扩展思考（Extended Thinking）- 让 Claude 深度推理
       thinking: { type: 'enabled', budgetTokens: 10000 },
+      
+      // 最大输出 token 数，默认 32000
+      maxTokens: this.config.maxTokens ?? 32000,
+      
+      // 模型温度，默认 0.3
+      temperature: this.config.temperature ?? 0.3,
     } as any;
     
     // 配置 MCP 服务器

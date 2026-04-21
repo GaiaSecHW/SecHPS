@@ -275,14 +275,13 @@ model EvaluationIteration {
   verificationComplete Boolean?
   verificationReason   String?
   errorMessage         String?
-  // ===== 新增字段：模型信息 =====
-  modelConfigId        String? // 本次迭代使用的模型配置ID
-  modelName            String? // 本次迭代使用的模型名称
-  roleId               String? // 本次迭代对应的角色ID
+  modelConfigId        String?
+  modelName            String?
+  roleId               String?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime
-  EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
   ModelConfig          ModelConfig?      @relation(fields: [modelConfigId], references: [id])
+  EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
   @@unique([evaluationSessionId, iterationNumber])
   @@index([iterationNumber])
@@ -307,37 +306,34 @@ model EvaluationResult {
 }
 
 model EvaluationSession {
-  id                String    @id
-  projectId         String
-  workflowId        String?
-  agentTeamId       String?
-  modelConfigId     String?
-  roleModels        String? // JSON: [{ roleId, modelId }]
-  skillsUsed        String? // JSON: [{ skillId, skillName }] 本次评估使用的 Skill 列表
-  opencodeSessionId String?   @unique
-  provider          String    @default("claude")
-  title             String?
-  summary           String?
-  messageCount      Int       @default(0)
-  lastActivity      DateTime? @default(now())
-  port              Int?
-  status            String    @default("running")
-  endReason         String? // 结束原因: "completed" | "stopped" | "error"
-  endMessage        String? // 结束详细信息（错误信息等）
-  startedAt         DateTime  @default(now())
-  completedAt       DateTime?
-  errorMessage      String?
-  modelName         String?
-  providerType      String?
-  todoList          String?
-  totalInputTokens  Int       @default(0)
-  totalOutputTokens Int       @default(0)
-  totalTokens       Int       @default(0)
-  estimatedCost     Float?
-
-  // FSM 工作流扩展
-  workflowType String? // "dag" | "fsm"
-
+  id                        String                      @id
+  projectId                 String
+  workflowId                String?
+  agentTeamId               String?
+  modelConfigId             String?
+  opencodeSessionId         String?                     @unique
+  provider                  String                      @default("claude")
+  title                     String?
+  summary                   String?
+  messageCount              Int                         @default(0)
+  lastActivity              DateTime?                   @default(now())
+  port                      Int?
+  status                    String                      @default("running")
+  startedAt                 DateTime                    @default(now())
+  completedAt               DateTime?
+  errorMessage              String?
+  modelName                 String?
+  providerType              String?
+  todoList                  String?
+  totalInputTokens          Int                         @default(0)
+  totalOutputTokens         Int                         @default(0)
+  totalTokens               Int                         @default(0)
+  estimatedCost             Float?
+  roleModels                String?
+  skillsUsed                String?
+  endMessage                String?
+  endReason                 String?
+  workflowType              String?
   AgentTeamExecution        AgentTeamExecution[]
   AnalysisReport            AnalysisReport?
   EvaluationIteration       EvaluationIteration[]
@@ -346,15 +342,13 @@ model EvaluationSession {
   AgentTeam                 AgentTeam?                  @relation(fields: [agentTeamId], references: [id])
   ModelConfig               ModelConfig?                @relation(fields: [modelConfigId], references: [id])
   NodeExecution             NodeExecution[]
+  PhaseOutput               PhaseOutput[]
+  Report                    Report?
   SessionMessage            SessionMessage[]
-  SkillExecution            SkillExecution[] // Skill 执行记录
+  SkillExecution            SkillExecution[]
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   TokenUsage                TokenUsage[]
   Vulnerability             Vulnerability[]
-  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
-
-  // 新增关联
-  Report      Report?
-  PhaseOutput PhaseOutput[]
 
   @@index([projectId])
   @@index([agentTeamId])
@@ -368,48 +362,37 @@ model EvaluationSession {
 }
 
 model AnalysisReport {
-  id           String @id
-  evaluationId String @unique
-  projectId    String
-
-  // 项目概况
-  projectName String
-  description String // SQLite 默认使用 TEXT 类型存储长字符串
-  techStack   String? // JSON array
-
-  // 架构分析
+  id                  String            @id
+  evaluationId        String            @unique
+  projectId           String
+  projectName         String
+  description         String
+  techStack           String?
   projectType         String?
   frontend            String?
   backend             String?
   database            String?
-  directoryStructure  String? // JSON object
+  directoryStructure  String?
   architectureSummary String?
-
-  // 入口点分析
-  apiEndpoints       String? // JSON array
-  pageEntries        String? // JSON array
-  userInputPoints    String? // JSON array
-  entryPointsSummary String?
-
-  // 认证鉴权分析
-  authType          String?
-  tokenStorage      String?
-  tokenExpiry       String?
-  refreshMechanism  String?
-  authzModel        String?
-  roles             String? // JSON array
-  sessionManagement String? // JSON object
-  securityConfig    String? // JSON object
-  authSummary       String?
-
-  // 元数据
-  analyzedAt DateTime?
-  rawContent String? // 大模型原始输出
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
-
-  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
-  Project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  apiEndpoints        String?
+  pageEntries         String?
+  userInputPoints     String?
+  entryPointsSummary  String?
+  authType            String?
+  tokenStorage        String?
+  tokenExpiry         String?
+  refreshMechanism    String?
+  authzModel          String?
+  roles               String?
+  sessionManagement   String?
+  securityConfig      String?
+  authSummary         String?
+  analyzedAt          DateTime?
+  rawContent          String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  Project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  EvaluationSession   EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
   @@index([evaluationId])
   @@index([projectId])
@@ -492,18 +475,18 @@ model ModelConfig {
   apiKey              String
   models              String
   routeType           String?
-  maxTokens           Int                   @default(4096) // 最大输出 token 数
-  temperature         Float                 @default(0.7) // 温度参数
+  maxTokens           Int                   @default(32000)
+  temperature         Float                 @default(0.3)
   isActive            Boolean               @default(true)
   isDefault           Boolean               @default(false)
   isPublic            Boolean               @default(false)
   createdAt           DateTime              @default(now())
   updatedAt           DateTime
   AgentDefinition     AgentDefinition[]
+  EvaluationIteration EvaluationIteration[]
   EvaluationSession   EvaluationSession[]
-  EvaluationIteration EvaluationIteration[] // 新增：迭代关联
-  NodeExecution       NodeExecution[] // 新增：节点执行关联
   User                User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  NodeExecution       NodeExecution[]
 
   @@index([routeType])
   @@index([providerType])
@@ -523,14 +506,13 @@ model NodeExecution {
   startedAt           DateTime?
   completedAt         DateTime?
   order               Int               @default(0)
-  // ===== 新增字段：模型信息 =====
-  modelConfigId       String? // 节点使用的模型配置ID
-  modelName           String? // 节点使用的模型名称
-  roleId              String? // 节点关联的角色ID
+  modelConfigId       String?
+  modelName           String?
+  roleId              String?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime
-  EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
   ModelConfig         ModelConfig?      @relation(fields: [modelConfigId], references: [id])
+  EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
   @@unique([evaluationSessionId, workflowNodeId])
   @@index([status])
@@ -592,7 +574,7 @@ model Permission {
   resource    String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime
-  Role        Role[]
+  Role        Role[]   @relation("PermissionToRole")
 
   @@unique([module, action])
   @@index([module])
@@ -633,7 +615,7 @@ model Project {
   description               String?
   projectPath               String?
   status                    String                      @default("idle")
-  isPublic                  Boolean                     @default(false) // 是否公开共享
+  isPublic                  Boolean                     @default(false)
   environmentUrl            String?
   adminUsername             String?
   adminPassword             String?
@@ -647,19 +629,17 @@ model Project {
   DataFlow                  DataFlow[]
   EvaluationSession         EvaluationSession[]
   McpServerConfig           McpServerConfig[]
-  OpencodeConfig            OpencodeConfig?             @relation(fields: [configId], references: [id])
   User                      User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  OpencodeConfig            OpencodeConfig?             @relation(fields: [configId], references: [id])
   ProjectFile               ProjectFile[]
   ProjectStructure          ProjectStructure?
+  Report                    Report[]
   ScanTask                  ScanTask[]
   SessionMeta               SessionMeta?
   SkillExecution            SkillExecution[]
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   ToolPermission            ToolPermission[]
   Vulnerability             Vulnerability[]
-  SkillVulnerabilityMapping SkillVulnerabilityMapping[] // 新增：Skill漏洞映射关联
-
-  // 新增关联
-  Report Report[]
 
   @@index([name])
   @@index([status])
@@ -704,7 +684,7 @@ model Role {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime
   UserRole    UserRole[]
-  Permission  Permission[]
+  Permission  Permission[] @relation("PermissionToRole")
 
   @@index([name])
 }
@@ -756,13 +736,16 @@ model ScanTask {
 model SessionMessage {
   id                  String            @id
   evaluationSessionId String
+  workflowNodeId      String?
   role                String
   content             String
   metadata            String?
   createdAt           DateTime          @default(now())
+  WorkflowNode        WorkflowNode?     @relation(fields: [workflowNodeId], references: [id])
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
   @@index([evaluationSessionId])
+  @@index([workflowNodeId])
 }
 
 model SessionMeta {
@@ -784,49 +767,47 @@ model SessionMeta {
 }
 
 model Skill {
-  id                     String   @id
-  userId                 String?
-  name                   String
-  displayName            String
-  description            String
-  severity               String?
-  content                String
-  cwe                    String?
-  isActive               Boolean  @default(true)
-  isBuiltin              Boolean  @default(false)
-  isPublic               Boolean  @default(false)
-  version                Int      @default(1)
-  parentId               String?
-  isLatest               Boolean  @default(true)
-  successRate            Float?
-  avgDuration            Int?
-  execCount              Int      @default(0)
-  referenceCount         Int      @default(0)
-  vulnerabilityCount     Int      @default(0)
-  successExecCount       Int      @default(0)
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime
-  techStackId            String?
-  vulnerabilityPatternId String?
-
-  // ===== 关联关系 =====
-  User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                                                     String                      @id
+  userId                                                 String?
+  name                                                   String
+  displayName                                            String
+  description                                            String
+  severity                                               String?
+  content                                                String
+  cwe                                                    String?
+  isActive                                               Boolean                     @default(true)
+  isBuiltin                                              Boolean                     @default(false)
+  isPublic                                               Boolean                     @default(false)
+  version                                                Int                         @default(1)
+  parentId                                               String?
+  isLatest                                               Boolean                     @default(true)
+  successRate                                            Float?
+  avgDuration                                            Int?
+  execCount                                              Int                         @default(0)
+  referenceCount                                         Int                         @default(0)
+  vulnerabilityCount                                     Int                         @default(0)
+  successExecCount                                       Int                         @default(0)
+  createdAt                                              DateTime                    @default(now())
+  updatedAt                                              DateTime
+  techStackId                                            String?
+  vulnerabilityPatternId                                 String?
+  VulnerabilityPattern                                   VulnerabilityPattern?       @relation(fields: [vulnerabilityPatternId], references: [id])
+  TechStackOption                                        TechStackOption?            @relation(fields: [techStackId], references: [id])
   Skill                                                  Skill?                      @relation("SkillToSkill", fields: [parentId], references: [id])
   other_Skill                                            Skill[]                     @relation("SkillToSkill")
-  TechStackOption                                        TechStackOption?            @relation(fields: [techStackId], references: [id])
-  VulnerabilityPattern                                   VulnerabilityPattern?       @relation(fields: [vulnerabilityPatternId], references: [id])
+  User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  SkillAnalysis                                          SkillAnalysis[]
+  SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
   SkillEvolution                                         SkillEvolution[]
+  SkillEvolutionTasks                                    SkillEvolutionTask[]
   SkillExecution                                         SkillExecution[]
+  SkillImprovements                                      SkillImprovement[]
   SkillMergeRecord_SkillMergeRecord_sourceSkillIdToSkill SkillMergeRecord[]          @relation("SkillMergeRecord_sourceSkillIdToSkill")
   SkillMergeRecord_SkillMergeRecord_targetSkillIdToSkill SkillMergeRecord[]          @relation("SkillMergeRecord_targetSkillIdToSkill")
   SkillNewImpactAnalysis                                 SkillNewImpactAnalysis[]
   SkillObservationLog                                    SkillObservationLog[]
   SkillObservationStats                                  SkillObservationStats?
-  SkillAnalysis                                          SkillAnalysis[]
-  SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
   SkillVulnerabilityMapping                              SkillVulnerabilityMapping[]
-  SkillEvolutionTasks                                    SkillEvolutionTask[]
-  SkillImprovements                                      SkillImprovement[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -862,7 +843,7 @@ model SkillExecution {
   id                 String             @id
   skillId            String
   projectId          String
-  evaluationId       String? // 关联评估会话
+  evaluationId       String?
   scanTaskId         String?
   input              String
   output             String?
@@ -877,10 +858,10 @@ model SkillExecution {
   inputTokens        Int?
   outputTokens       Int?
   createdAt          DateTime           @default(now())
-  ScanTask           ScanTask?          @relation(fields: [scanTaskId], references: [id])
-  Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id])
   Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: SetNull)
+  Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  ScanTask           ScanTask?          @relation(fields: [scanTaskId], references: [id])
   Vulnerability      Vulnerability[]
 
   @@index([skillId, status])
@@ -1077,16 +1058,14 @@ model SystemMetric {
 }
 
 model VulnerabilityCategory {
-  id          String   @id
-  value       String   @unique // 英文标识，如 injection, authentication
-  label       String // 中文标签，如 注入攻击, 身份认证
-  description String? // 描述
-  sortOrder   Int      @default(0)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
-
-  // 关联关系
+  id                    String                 @id
+  value                 String                 @unique
+  label                 String
+  description           String?
+  sortOrder             Int                    @default(0)
+  isActive              Boolean                @default(true)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime
   VulnerabilityPatterns VulnerabilityPattern[]
 
   @@index([isActive])
@@ -1103,9 +1082,7 @@ model TechStackOption {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime
-
-  // 关联关系
-  Skills Skill[]
+  Skills      Skill[]
 
   @@index([isActive])
   @@index([category])
@@ -1114,8 +1091,6 @@ model TechStackOption {
 
 model TokenUsage {
   id                 String             @id
-  userId             String? // 用户 ID
-  username           String? // 用户名
   evaluationId       String?
   projectId          String?
   apiProvider        String
@@ -1134,6 +1109,8 @@ model TokenUsage {
   status             String             @default("success")
   errorMessage       String?
   createdAt          DateTime           @default(now())
+  userId             String?
+  username           String?
   EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
@@ -1251,10 +1228,10 @@ model Vulnerability {
   notes                     String?
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   SkillExecution            SkillExecution?             @relation(fields: [skillExecutionId], references: [id])
   EvaluationSession         EvaluationSession?          @relation(fields: [evaluationId], references: [id])
   Project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
 
   @@index([severity, status])
   @@index([projectId, status])
@@ -1272,7 +1249,6 @@ model VulnerabilityPattern {
   displayName       String
   description       String
   categoryId        String
-  categoryRef       VulnerabilityCategory @relation(fields: [categoryId], references: [id])
   cwe               String?
   cve               String?
   patterns          String
@@ -1284,56 +1260,37 @@ model VulnerabilityPattern {
   isBuiltin         Boolean               @default(true)
   createdAt         DateTime              @default(now())
   updatedAt         DateTime
-
-  // 关联关系
-  Skills Skill[]
+  Skills            Skill[]
+  categoryRef       VulnerabilityCategory @relation(fields: [categoryId], references: [id])
 
   @@index([isActive])
   @@index([categoryId])
 }
 
-// ============================================
-// Skill Governance Models
-// ============================================
-
 /// Skill 分析结果表 - 存储 LLM 分析过程
 model SkillAnalysis {
-  id             String  @id @default(cuid())
-  skillId        String // 被分析的 Skill
-  relatedSkillId String? // 相关的另一个 Skill（两两比较时）
-
-  // 分析类型
-  analysisType String // 'duplication_check' | 'full_analysis' | 'migration_inference'
-
-  // 分析结果
-  isDuplicate Boolean @default(false)
-  overlapType String? // 'exact' | 'subset' | 'related' | 'distinct'
-  confidence  Float   @default(0) // 0-1
-
-  // LLM 详细分析过程
-  llmReason            String? // LLM 给出的判断理由
-  keyDifferences       String? // JSON: 主要差异点列表
-  sharedFunctionality  String? // JSON: 共享功能列表
-  recommendation       String? // 'merge' | 'keep_separate' | 'review'
-  entryPointComparison String? // JSON: 入口点对比信息（新增）
-
-  // 迁移推断结果（用于存量数据迁移）
-  inferredLanguage      String? // LLM 推断的语言
-  inferredVulnPatternId String? // LLM 推断的漏洞类型 ID
-
-  // 审核状态
-  reviewStatus String    @default("pending") // 'pending' | 'approved' | 'rejected'
-  reviewedBy   String? // 审核人
-  reviewedAt   DateTime?
-  reviewNotes  String? // 审核备注
-
-  // 元数据
-  analyzedAt DateTime @default(now())
-  analyzedBy String   @default("system") // 'system' | 'manual' | 'llm'
-
-  createdAt DateTime @default(now())
-
-  skill Skill @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  id                    String    @id @default(cuid())
+  skillId               String
+  relatedSkillId        String?
+  analysisType          String
+  isDuplicate           Boolean   @default(false)
+  overlapType           String?
+  confidence            Float     @default(0)
+  llmReason             String?
+  keyDifferences        String?
+  sharedFunctionality   String?
+  recommendation        String?
+  inferredLanguage      String?
+  inferredVulnPatternId String?
+  reviewStatus          String    @default("pending")
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  reviewNotes           String?
+  analyzedAt            DateTime  @default(now())
+  analyzedBy            String    @default("system")
+  createdAt             DateTime  @default(now())
+  entryPointComparison  String?
+  skill                 Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@index([skillId])
   @@index([reviewStatus])
@@ -1343,25 +1300,19 @@ model SkillAnalysis {
 
 /// Skill 重复组 - 管理重复 Skill 分组
 model SkillDuplicateGroup {
-  id                String  @id @default(cuid())
-  name              String? // 组名（可选）
-  language          String // 共同语言
-  vulnerabilityType String // 共同漏洞类型
-
-  // 组状态
-  status          String    @default("pending_review") // 'pending_review' | 'resolved'
-  resolution      String? // 'merged' | 'keep_all' | 'deleted_duplicates'
-  resolvedBy      String?
-  resolvedAt      DateTime?
-  resolutionNotes String?
-
-  // 统计
-  skillCount Int @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  members SkillDuplicateGroupMember[]
+  id                String                      @id @default(cuid())
+  name              String?
+  language          String
+  vulnerabilityType String
+  status            String                      @default("pending_review")
+  resolution        String?
+  resolvedBy        String?
+  resolvedAt        DateTime?
+  resolutionNotes   String?
+  skillCount        Int                         @default(0)
+  createdAt         DateTime                    @default(now())
+  updatedAt         DateTime                    @updatedAt
+  members           SkillDuplicateGroupMember[]
 
   @@index([status])
   @@index([language])
@@ -1370,48 +1321,37 @@ model SkillDuplicateGroup {
 
 /// Skill 重复组成员
 model SkillDuplicateGroupMember {
-  id      String @id @default(cuid())
-  groupId String
-  skillId String
-
-  // 在组中的角色
-  role            String @default("member") // 'primary' | 'member' | 'duplicate'
-  similarityScore Float  @default(0)
-
-  joinedAt DateTime @default(now())
-
-  group SkillDuplicateGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  skill Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  id              String              @id @default(cuid())
+  groupId         String
+  skillId         String
+  role            String              @default("member")
+  similarityScore Float               @default(0)
+  joinedAt        DateTime            @default(now())
+  skill           Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  group           SkillDuplicateGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, skillId])
   @@index([groupId])
   @@index([skillId])
 }
 
-// ============================================
-// Workflow Models (Restored + Enhanced)
-// ============================================
-
 model Workflow {
-  id          String  @id @default(cuid())
-  userId      String
-  name        String
-  description String?
-  thumbnail   String?
-  techStack   String?
-  version     Int     @default(1)
-  status      String  @default("draft")
-  isActive    Boolean @default(false)
-  isPublic    Boolean @default(false)
-
-  // FSM 工作流类型扩展
-  workflowType  String       @default("dag") // "dag" | "fsm"
-  fsmTemplateId String? // FSM 模板 ID
-  FSMTemplate   FSMTemplate? @relation(fields: [fsmTemplateId], references: [id])
-
+  id                String              @id @default(cuid())
+  userId            String
+  name              String
+  description       String?
+  thumbnail         String?
+  techStack         String?
+  version           Int                 @default(1)
+  status            String              @default("draft")
+  isActive          Boolean             @default(false)
+  isPublic          Boolean             @default(false)
+  workflowType      String              @default("dag")
+  fsmTemplateId     String?
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   User              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  FSMTemplate       FSMTemplate?        @relation(fields: [fsmTemplateId], references: [id])
   WorkflowEdge      WorkflowEdge[]
   WorkflowExecution WorkflowExecution[]
   WorkflowNode      WorkflowNode[]
@@ -1437,35 +1377,33 @@ model WorkflowRole {
   order       Int            @default(0)
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
-  workflow    Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   nodes       WorkflowNode[]
+  workflow    Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId])
 }
 
 model WorkflowNode {
-  id                      String  @id @default(cuid())
-  workflowId              String
-  roleId                  String?
-  type                    String // 增加 "fsm_phase" | "agent-zone"
-  positionX               Float
-  positionY               Float
-  data                    String
-  vulnerabilityCategories String? // 漏洞分类列表（模式 3，JSON 数组，category value 数组）
-  skills                  String? // 手工指定的 Skills（模式 2，JSON 数组）
-
-  // FSM 节点扩展
-  fsmPhase  Int? // FSM 阶段编号 (1-4)
-  fsmFixed  Boolean? @default(false) // 是否固定节点（不可删除）
-  fsmOrder  Int? // 强制执行顺序
-  skillPath String? // 阶段对应的 Skill 文件路径
-
-  createdAt                                        DateTime       @default(now())
-  updatedAt                                        DateTime       @updatedAt
-  role                                             WorkflowRole?  @relation(fields: [roleId], references: [id], onDelete: SetNull)
-  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_targetIdToWorkflowNode")
-  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_sourceIdToWorkflowNode")
-  Workflow                                         Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id                                               String           @id @default(cuid())
+  workflowId                                       String
+  roleId                                           String?
+  type                                             String
+  positionX                                        Float
+  positionY                                        Float
+  data                                             String
+  vulnerabilityCategories                          String?
+  skills                                           String?
+  createdAt                                        DateTime         @default(now())
+  updatedAt                                        DateTime         @updatedAt
+  fsmFixed                                         Boolean?         @default(false)
+  fsmOrder                                         Int?
+  fsmPhase                                         Int?
+  skillPath                                        String?
+  SessionMessage                                   SessionMessage[]
+  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[]   @relation("WorkflowEdge_sourceIdToWorkflowNode")
+  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[]   @relation("WorkflowEdge_targetIdToWorkflowNode")
+  Workflow                                         Workflow         @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  role                                             WorkflowRole?    @relation(fields: [roleId], references: [id])
 
   @@index([type])
   @@index([workflowId])
@@ -1484,9 +1422,9 @@ model WorkflowEdge {
   label                                            String?
   data                                             String?
   createdAt                                        DateTime     @default(now())
-  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
-  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
   Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
 
   @@unique([sourceId, targetId, sourceHandle])
   @@index([targetId])
@@ -1506,12 +1444,10 @@ model WorkflowExecution {
   result                String?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
-  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  PhaseOutput           PhaseOutput[]
   Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   WorkflowExecutionStep WorkflowExecutionStep[]
-
-  // 新增关联
-  PhaseOutput PhaseOutput[]
 
   @@index([workflowId, status])
   @@index([startedAt])
@@ -1547,9 +1483,9 @@ model WorkflowShare {
   permission                          String    @default("read")
   expiresAt                           DateTime?
   createdAt                           DateTime  @default(now())
-  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
-  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
   Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
+  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
 
   @@unique([workflowId, sharedWith])
   @@index([sharedWith])
@@ -1557,21 +1493,19 @@ model WorkflowShare {
   @@index([workflowId])
 }
 
-// Skill-漏洞关联表：记录哪个 Skill 发现了哪个漏洞
 model SkillVulnerabilityMapping {
-  id                String   @id @default(cuid())
-  skillId           String // Skill ID（匹配后）
-  vulnerabilityId   String // Vulnerability ID
-  evaluationId      String // 评估会话 ID
-  projectId         String // 项目 ID
-  skillNameReported String? // AI 报告的原始 Skill 名称（vulnerabilities.json 中的 skill 字段）
-  matchType         String   @default("exact") // exact | fuzzy | unmatched
-  matchedAt         DateTime @default(now())
-
-  Skill             Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  Vulnerability     Vulnerability     @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
-  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  id                String            @id @default(cuid())
+  skillId           String
+  vulnerabilityId   String
+  evaluationId      String
+  projectId         String
+  skillNameReported String?
+  matchType         String            @default("exact")
+  matchedAt         DateTime          @default(now())
   Project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  Vulnerability     Vulnerability     @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
+  Skill             Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@unique([skillId, vulnerabilityId])
   @@index([skillId])
@@ -1581,62 +1515,45 @@ model SkillVulnerabilityMapping {
   @@index([matchType])
 }
 
-// ============================================
-// FSM 工作流模板
-// ============================================
 model FSMTemplate {
-  id           String   @id @default(cuid())
-  name         String   @unique // "threat-modeling" | "code-audit"
-  displayName  String
-  description  String?
-  nodeCount    Int // 固定节点数量
-  nodes        String // JSON: 节点定义 [{id, label, phase, skillPath, ...}]
-  agentZone    String? // JSON: Agent 区配置 {position, allowAdd, parallel, defaultAgents}
-  skillPath    String? // Skill 目录路径: "skills/threat-modeling"
-  version      String   @default("1.0.0")
-  isActive     Boolean  @default(true)
-  isBuiltin    Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  Workflow Workflow[]
+  id          String     @id @default(cuid())
+  name        String     @unique
+  displayName String
+  description String?
+  nodeCount   Int
+  nodes       String
+  agentZone   String?
+  skillPath   String?
+  version     String     @default("1.0.0")
+  isActive    Boolean    @default(true)
+  isBuiltin   Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  Workflow    Workflow[]
 
   @@index([name])
   @@index([isActive])
   @@index([isBuiltin])
 }
 
-// ============================================
-// 阶段输出 (FSM 专用)
-// ============================================
 model PhaseOutput {
-  id          String  @id @default(cuid())
-  sessionId   String // 关联 EvaluationSession
-  executionId String? // 关联 WorkflowExecution (可选)
-  nodeId      String? // 关联 WorkflowNode (可选)
-
-  // 阶段信息
-  phaseNumber Int // 1-4
-  phaseName   String // "system-understanding" | "security-assessment" | ...
-  phases      String? // JSON: ["P1", "P2"]
-
-  // 输出数据
-  outputYaml String // YAML 内容 (结构化数据)
-  outputPath String // 文件路径: .claude/phases/1-.../P1.yaml
-
-  // 验证状态
-  status       String    @default("pending") // "pending" | "validated" | "failed"
-  validatedAt  DateTime?
-  errorMessage String?
-
-  // 统计
-  findingsCount Int? @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  EvaluationSession EvaluationSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  id                String             @id @default(cuid())
+  sessionId         String
+  executionId       String?
+  nodeId            String?
+  phaseNumber       Int
+  phaseName         String
+  phases            String?
+  outputYaml        String
+  outputPath        String
+  status            String             @default("pending")
+  validatedAt       DateTime?
+  errorMessage      String?
+  findingsCount     Int?               @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   WorkflowExecution WorkflowExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  EvaluationSession EvaluationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
   @@index([sessionId])
   @@index([executionId])
@@ -1644,60 +1561,36 @@ model PhaseOutput {
   @@index([status])
 }
 
-// ============================================
-// 报告模型 (统一重构)
-// ============================================
 model Report {
-  id        String @id @default(cuid())
-  sessionId String @unique // 关联 EvaluationSession (一对一)
-  projectId String
-
-  // 报告类型
-  reportType   String // "dag" | "fsm" | "analysis" | "scan"
-  workflowType String? // "dag" | "fsm"
-  fsmTemplate  String? // FSM 模板名称: "threat-modeling"
-
-  // 报告元数据
-  title       String
-  description String?
-
-  // 主报告
-  mainReportPath    String? // 文件路径: .claude/reports/xxx/MAIN.md
-  mainReportContent String? // 或直接存储内容 (小报告)
-
-  // 子报告列表
-  subReports String? // JSON: [{filename, title, path}]
-
-  // 统计信息
-  totalFindings Int @default(0)
-  criticalCount Int @default(0)
-  highCount     Int @default(0)
-  mediumCount   Int @default(0)
-  lowCount      Int @default(0)
-  infoCount     Int @default(0)
-
-  // 数据来源追踪
-  dataSources String? // JSON: {phaseOutputs: [], agentResults: [], workspaceReports: []}
-
-  // 集成的外部报告
-  integratedReports String? // JSON: [{source, type, findingsCount}]
-
-  // 原始数据 (兼容旧字段)
-  rawContent String? // 大模型原始输出
-  skillsUsed String? // JSON: [{skillId, skillName}]
-
-  // 状态
-  status String @default("generated") // "generating" | "generated" | "failed"
-
-  // 时间
-  generatedAt DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  EvaluationSession EvaluationSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ReportSection     ReportSection[]
+  id                String             @id @default(cuid())
+  sessionId         String             @unique
+  projectId         String
+  reportType        String
+  workflowType      String?
+  fsmTemplate       String?
+  title             String
+  description       String?
+  mainReportPath    String?
+  mainReportContent String?
+  subReports        String?
+  totalFindings     Int                @default(0)
+  criticalCount     Int                @default(0)
+  highCount         Int                @default(0)
+  mediumCount       Int                @default(0)
+  lowCount          Int                @default(0)
+  infoCount         Int                @default(0)
+  dataSources       String?
+  integratedReports String?
+  rawContent        String?
+  skillsUsed        String?
+  status            String             @default("generated")
+  generatedAt       DateTime           @default(now())
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
   IntegratedReport  IntegratedReport[]
+  Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  EvaluationSession EvaluationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  ReportSection     ReportSection[]
 
   @@index([sessionId])
   @@index([projectId])
@@ -1706,129 +1599,93 @@ model Report {
   @@index([status])
 }
 
-// ============================================
-// 报告章节 (细粒度存储)
-// ============================================
 model ReportSection {
-  id       String @id @default(cuid())
-  reportId String
-
-  sectionId String // "section-0" | "section-1" | ... | "appendix-a"
-  title     String
-  order     Int
-
-  // 内容存储
-  contentPath String? // 文件路径
-  content     String? // 或直接存储
-
-  // 元数据
-  metadata String? // JSON: {findingsCount, type}
-
-  createdAt DateTime @default(now())
-
-  Report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  reportId    String
+  sectionId   String
+  title       String
+  order       Int
+  contentPath String?
+  content     String?
+  metadata    String?
+  createdAt   DateTime @default(now())
+  Report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@unique([reportId, sectionId])
   @@index([reportId])
   @@index([order])
 }
 
-// ============================================
-// 外部报告集成
-// ============================================
 model IntegratedReport {
-  id       String @id @default(cuid())
-  reportId String
-
-  // 来源信息
-  sourcePath String // "vulnerabilities/sast-report.json"
-  sourceType String // "sast" | "secret" | "dependency" | "owasp-zap" | "burp" | "manual"
-  format     String // "json" | "html" | "xml" | "md"
-
-  // 解析结果
+  id            String   @id @default(cuid())
+  reportId      String
+  sourcePath    String
+  sourceType    String
+  format        String
   title         String?
   summary       String?
-  findingsCount Int     @default(0)
-  findings      String? // JSON: 提取的漏洞列表
-
-  // 原始内容
-  rawContent String? // 原始文件内容
-
-  createdAt DateTime @default(now())
-
-  Report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  findingsCount Int      @default(0)
+  findings      String?
+  rawContent    String?
+  createdAt     DateTime @default(now())
+  Report        Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@index([reportId])
   @@index([sourceType])
 }
 
-// ============================================
-// Skill Evolution Models
-// ============================================
-
 model SkillEvolutionConfig {
-  id                    String   @id @default("default")
-  
-  // 触发条件
-  precisionThreshold    Float    @default(0.7)
-  minFalsePositives     Int      @default(5)
-  minConfirmed          Int      @default(3)
-  
-  // 案例数量
-  falsePositiveLimit    Int      @default(10)
-  confirmedLimit        Int      @default(10)
-  
-  // 调度设置
-  scheduleCron          String   @default("0 3 * * *")
-  maxDailyTasks         Int      @default(10)
-  
-  // 内容精简
-  maxDescriptionLength  Int      @default(200)
-  codeSnippetLines      Int      @default(6)
-  
-  isActive              Boolean  @default(true)
-  updatedAt             DateTime @updatedAt
+  id                   String   @id @default("default")
+  precisionThreshold   Float    @default(0.7)
+  minFalsePositives    Int      @default(5)
+  minConfirmed         Int      @default(3)
+  falsePositiveLimit   Int      @default(10)
+  confirmedLimit       Int      @default(10)
+  scheduleCron         String   @default("0 3 * * *")
+  maxDailyTasks        Int      @default(10)
+  maxDescriptionLength Int      @default(200)
+  codeSnippetLines     Int      @default(6)
+  isActive             Boolean  @default(true)
+  updatedAt            DateTime @updatedAt
 }
 
 model SkillEvolutionTask {
-  id                String    @id @default(cuid())
-  skillId           String
-  triggerReason     String    // "low_precision" | "high_false_positive" | "manual"
-  falsePositiveCount Int      @default(0)
-  confirmedCount    Int       @default(0)
-  precisionBefore   Float?
-  status            String    @default("pending") // pending/analyzing/completed/rejected
-  analysisResult    String?
-  improvementId     String?
-  newVersionId      String?
-  precisionAfter    Float?
-  recallAfter       Float?
-  createdAt         DateTime  @default(now())
-  completedAt       DateTime?
-  
-  Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  SkillImprovement  SkillImprovement?
-  
+  id                 String            @id @default(cuid())
+  skillId            String
+  triggerReason      String
+  falsePositiveCount Int               @default(0)
+  confirmedCount     Int               @default(0)
+  precisionBefore    Float?
+  status             String            @default("pending")
+  analysisResult     String?
+  improvementId      String?
+  newVersionId       String?
+  precisionAfter     Float?
+  recallAfter        Float?
+  createdAt          DateTime          @default(now())
+  completedAt        DateTime?
+  Skill              Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  SkillImprovement   SkillImprovement?
+
   @@index([skillId])
   @@index([status])
   @@index([createdAt])
 }
 
 model SkillImprovement {
-  id                String    @id @default(cuid())
-  skillId           String
-  taskId            String?   @unique
-  falsePositiveCases String?   // JSON
-  confirmedCases    String?    // JSON
-  analysis          String?    // LLM 分析结果
-  suggestions       String?    // JSON: 改进建议列表
-  improvedContent   String?    // 改进后的 Skill 内容
-  status            String    @default("pending") // pending/applied/rejected
-  createdAt         DateTime  @default(now())
-  
-  Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  id                 String              @id @default(cuid())
+  skillId            String
+  taskId             String?             @unique
+  falsePositiveCases String?
+  confirmedCases     String?
+  analysis           String?
+  suggestions        String?
+  improvedContent    String?
+  status             String              @default("pending")
+  createdAt          DateTime            @default(now())
   SkillEvolutionTask SkillEvolutionTask? @relation(fields: [taskId], references: [id])
-  
+  Skill              Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
   @@index([skillId])
   @@index([status])
   @@index([createdAt])
