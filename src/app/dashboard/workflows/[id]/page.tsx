@@ -227,6 +227,7 @@ export default function WorkflowEditPage() {
           nodes: nodesToSave,
           edges: data.edges,
           viewport: data.viewport,
+          thumbnail: data.thumbnail,
         }),
       });
 
