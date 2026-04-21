@@ -13,29 +13,36 @@ export interface ValidationResult {
  * @param nodes 节点数组
  * @param edges 边数组
  * @param strict 是否严格模式（启用编排时使用）
+ * @param isFSM 是否是 FSM 工作流（FSM 使用固定阶段节点，不需要 start/end）
  * @returns 验证结果
  */
-export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: boolean = false): ValidationResult {
+export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: boolean = false, isFSM: boolean = false): ValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // 1. 检查是否有开始节点
+  // 1. 检查是否有开始节点（FSM 工作流不需要）
   const startNodes = nodes.filter(n => n.type === 'start');
-  if (startNodes.length === 0) {
-    errors.push('编排必须有一个开始节点');
-  } else if (startNodes.length > 1) {
-    errors.push('编排只能有一个开始节点');
+  if (!isFSM) {
+    if (startNodes.length === 0) {
+      errors.push('编排必须有一个开始节点');
+    } else if (startNodes.length > 1) {
+      errors.push('编排只能有一个开始节点');
+    }
   }
 
-  // 2. 检查是否有结束节点
+  // 2. 检查是否有结束节点（FSM 工作流不需要）
   const endNodes = nodes.filter(n => n.type === 'end');
-  if (endNodes.length === 0) {
-    errors.push('编排必须有一个结束节点');
-  } else if (endNodes.length > 1) {
-    errors.push('编排只能有一个结束节点');
+  if (!isFSM) {
+    if (endNodes.length === 0) {
+      errors.push('编排必须有一个结束节点');
+    } else if (endNodes.length > 1) {
+      errors.push('编排只能有一个结束节点');
+    }
   }
 
-  // 3. 检查所有节点是否都有连接（除了开始和结束节点）
+  // 3. 检查所有节点是否都有连接
+  // FSM 工作流：只检查非阶段节点（用户添加的自定义节点），阶段节点（P1-P6）跳过
+  // 普通工作流：检查所有节点
   const nodeIds = new Set(nodes.map(n => n.id));
   const connectedNodeIds = new Set<string>();
 
@@ -54,18 +61,37 @@ export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: b
     connectedNodeIds.add(node.id);
   });
 
-  // 检查未连接的节点
-  nodes.forEach(node => {
-    if (!connectedNodeIds.has(node.id)) {
-      if (strict) {
-        // 严格模式：未连接的节点是错误
-        errors.push(`节点 "${node.data.label}" 没有任何连接，所有节点必须连接`);
-      } else {
-        // 普通模式：未连接的节点是警告
-        warnings.push(`节点 "${node.data.label}" 没有任何连接`);
+  // FSM 工作流：收集未连接的非阶段节点
+  if (isFSM) {
+    const unconnectedNonPhaseNodes: FlowNode[] = [];
+    nodes.forEach(node => {
+      // 跳过阶段节点（P1-P6）
+      if (node.data?.phase) {
+        return;
       }
+      if (!connectedNodeIds.has(node.id)) {
+        unconnectedNonPhaseNodes.push(node);
+      }
+    });
+    
+    // 只有两个以上未连接的非阶段节点才报错（单个节点可以独立执行）
+    if (unconnectedNonPhaseNodes.length >= 2) {
+      unconnectedNonPhaseNodes.forEach(node => {
+        errors.push(`节点 "${node.data.label}" 没有任何连接，多个节点必须连接以定义执行顺序`);
+      });
     }
-  });
+  } else {
+    // 普通工作流：检查所有节点
+    nodes.forEach(node => {
+      if (!connectedNodeIds.has(node.id)) {
+        if (strict) {
+          errors.push(`节点 "${node.data.label}" 没有任何连接，所有节点必须连接`);
+        } else {
+          warnings.push(`节点 "${node.data.label}" 没有任何连接`);
+        }
+      }
+    });
+  }
 
   // 4. 检查连接规则
   for (const edge of edges) {
@@ -109,8 +135,8 @@ export function validateWorkflow(nodes: FlowNode[], edges: FlowEdge[], strict: b
     errors.push('编排中存在循环依赖，请检查连接关系');
   }
 
-  // 6. 检查从开始节点到结束节点的路径
-  if (startNodes.length > 0 && endNodes.length > 0) {
+  // 6. 检查从开始节点到结束节点的路径（FSM 工作流跳过）
+  if (!isFSM && startNodes.length > 0 && endNodes.length > 0) {
     const hasPath = checkPathExists(startNodes[0].id, endNodes[0].id, edges);
     if (!hasPath) {
       errors.push('编排中不存在从开始节点到结束节点的路径');

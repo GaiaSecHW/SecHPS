@@ -34,6 +34,8 @@ interface WorkflowEditorProps {
   readOnly?: boolean;
   isEnabled?: boolean;
   onToggleEnabled?: () => void;
+  hideTriggers?: boolean;  // 隐藏触发器节点（用于 FSM 渗透测试区）
+  onRolesChange?: () => void;  // 角色列表变化时的回调
 }
 
 function WorkflowEditorContent({
@@ -45,6 +47,8 @@ function WorkflowEditorContent({
   readOnly = false,
   isEnabled = true,
   onToggleEnabled,
+  hideTriggers = false,
+  onRolesChange,
 }: WorkflowEditorProps) {
   const { zoomIn, zoomOut, fitView, screenToFlowPosition, setViewport, getViewport } = useReactFlow();
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(initialData?.nodes || []);
@@ -1034,7 +1038,7 @@ const [showPreview, setShowPreview] = useState(false);
       {/* 左侧节点面板 */}
       {!readOnly && (
         <div className="w-72 flex-shrink-0">
-          <NodePalette onNodeDragStart={handleNodeDragStart} />
+          <NodePalette onNodeDragStart={handleNodeDragStart} hideTriggers={hideTriggers} />
         </div>
       )}
 
@@ -2166,16 +2170,17 @@ return (
                         <span className="text-xs text-gray-500">({role.nodes?.length || 0} 个节点)</span>
                       </div>
                       <button
-                        onClick={async () => {
-                          const token = localStorage.getItem('token');
-                          await fetch(`/api/workflows/${workflowId}/roles/${role.id}`, {
-                            method: 'DELETE',
-                            headers: { Authorization: `Bearer ${token}` },
-                          });
-                          fetchRoles();
-                        }}
-                        className="text-red-600 hover:text-red-800"
-                      >
+                         onClick={async () => {
+                           const token = localStorage.getItem('token');
+                           await fetch(`/api/workflows/${workflowId}/roles/${role.id}`, {
+                             method: 'DELETE',
+                             headers: { Authorization: `Bearer ${token}` },
+                           });
+                           fetchRoles();
+                           onRolesChange?.();
+                         }}
+                         className="text-red-600 hover:text-red-800"
+                       >
                         <Trash2 size={16} />
                       </button>
                     </div>
@@ -2252,9 +2257,10 @@ return (
                         body: JSON.stringify({ name: newRoleName, color: newRoleColor }),
                       });
                       setNewRoleName('');
-                      setNewRoleColor('#3B82F6');
-                      fetchRoles();
-                      toast.success('角色创建成功');
+                       setNewRoleColor('#3B82F6');
+                       fetchRoles();
+                       onRolesChange?.();
+                       toast.success('角色创建成功');
                     }}
                     disabled={!newRoleName.trim()}
                     className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"

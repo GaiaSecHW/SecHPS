@@ -6,6 +6,7 @@ import { buildSearchFilter, combineWhereClauses } from '@/lib/query-optimizer';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { AuditLogger } from '@/lib/audit/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 格式化工作流数据
 function formatWorkflow(workflow: any) {
@@ -22,6 +23,7 @@ function formatWorkflow(workflow: any) {
     version: workflow.version,
     isActive: workflow.isActive,
     isPublic: workflow.isPublic,
+    workflowType: workflow.workflowType || 'dag',
     createdAt: workflow.createdAt,
     updatedAt: workflow.updatedAt,
     _count: workflow._count,
@@ -95,15 +97,16 @@ export async function GET(request: Request) {
           version: true,
           isActive: true,
           isPublic: true,
+          workflowType: true,
           createdAt: true,
           updatedAt: true,
-User: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
+          User: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+            },
           },
-        },
           _count: {
             select: {
               WorkflowNode: true,
@@ -144,7 +147,7 @@ export async function POST(request: Request) {
 
     // 解析请求体
     const body = await request.json();
-    const { name, description, techStack, isPublic } = body;
+    const { name, description, techStack, isPublic, workflowType } = body;
 
     // 验证必填字段
     if (!name || !name.trim()) {
@@ -160,6 +163,20 @@ export async function POST(request: Request) {
 
     if (trimmedName.length > 100) {
       return NextResponse.json({ error: '工作流名称不能超过100个字符' }, { status: 400 });
+    }
+
+    // FSM 工作流使用默认的 threat-modeling 模板
+    let fsmTemplateId: string | undefined;
+    let fsmTemplateData: any = null;
+    if (workflowType === 'fsm') {
+      const defaultTemplate = await prisma.fSMTemplate.findFirst({
+        where: { name: 'threat-modeling' },
+      });
+      if (!defaultTemplate) {
+        return NextResponse.json({ error: 'FSM 模板不存在，请先运行 db:seed' }, { status: 400 });
+      }
+      fsmTemplateId = defaultTemplate.id;
+      fsmTemplateData = defaultTemplate;
     }
 
     // 处理技术栈数据
@@ -178,6 +195,8 @@ export async function POST(request: Request) {
         status: 'draft',
         version: 1,
         isPublic: isPublic || false,
+        workflowType: workflowType || 'dag',
+        fsmTemplateId: workflowType === 'fsm' ? fsmTemplateId : undefined,
       },
       include: {
         WorkflowNode: true,
@@ -190,11 +209,11 @@ export async function POST(request: Request) {
       userId: payload.userId,
       action: 'workflow_create',
       resource: workflow.id,
-      details: { after: { name, description, isPublic } },
+      details: { after: { name, description, isPublic, workflowType } },
     });
 
     // 记录创建成功日志
-    logger.create(LOG_MODULES.WORKFLOW, payload, workflow.id, { name, isPublic });
+    logger.create(LOG_MODULES.WORKFLOW, payload, workflow.id, { name, isPublic, workflowType });
 
     return NextResponse.json(
       {

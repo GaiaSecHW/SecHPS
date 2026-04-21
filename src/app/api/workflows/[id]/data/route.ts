@@ -123,8 +123,9 @@ export async function PUT(
       );
     }
 
-    // 验证工作流结构（始终使用严格验证）
-    const validation = validateWorkflow(nodes, edges, true);
+    // 验证工作流结构（FSM 工作流跳过开始/结束节点检查）
+    const isFSM = existingWorkflow.workflowType === 'fsm';
+    const validation = validateWorkflow(nodes, edges, true, isFSM);
     if (!validation.valid) {
       return NextResponse.json(
         {
