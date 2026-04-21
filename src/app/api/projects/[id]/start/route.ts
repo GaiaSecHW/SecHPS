@@ -5,19 +5,21 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, createCombinedVerifier } from '@/services/evaluation';
+import { createRalphLoopAgent } from '@/services/evaluation';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
 import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
 import { join } from 'path';
 import { copySkillsToProject, copySkillsByIds } from '@/services/skill-files';
 import { matchSkillsByCategoryValues } from '@/services/skill-matcher';
-import { registerAgent } from '@/lib/agent-registry';
 import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
 import { createWatchdog, stopWatchdog, recordWatchdogActivity } from '@/lib/stream-watchdog';
 import { createEmptyAnalysisReport } from '@/services/analysis-report';
 import { createSkillExecutionsForEvaluation, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
 import { generateId, generateIndexedId } from '@/lib/id-generator';
+import { UnifiedWorkflowExecutionEngine, createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
+import { topologicalSortDAG } from '@/lib/workflow/topology-sort';
+import type { UnifiedExecutionCallbacks, NodeExecutionResult, WorkflowExecutionResult, ModelConfigForExecution, UnifiedNodeDefinition } from '@/lib/workflow/types';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -89,8 +91,6 @@ export async function POST(
     let agentTeamId: string | null = null;
     let modelId: string | null = null;
     let roleModels: { roleId: string; modelId: string }[] | null = null;
-    let enableMcp = true;
-    let enableToolPermissions = true;
     let queuedEvaluationId: string | null = null; // 队列启动时复用的评估ID
     let reconnectEvaluationId: string | null = null; // 重连已存在的评估
     try {
@@ -99,8 +99,6 @@ export async function POST(
       agentTeamId = body.agentTeamId || null;
       modelId = body.modelId || null;
       roleModels = body.roleModels || null;
-      enableMcp = body.enableMcp !== false;
-      enableToolPermissions = body.enableToolPermissions !== false;
       queuedEvaluationId = body.queuedEvaluationId || null;
       reconnectEvaluationId = body.evaluationId || null; // 用于重连 SSE
     } catch {
@@ -200,50 +198,44 @@ export async function POST(
     }
 
     // 加载 MCP 服务器配置（用户私有 + 共享 + 项目级别）
-    let mcpServers: any[] = [];
-    if (enableMcp) {
-      // 加载共享的 MCP 配置（isShared=true，管理员设置的共享 MCP）
-      const sharedMcpServers = await prisma.mcpServerConfig.findMany({
-        where: { 
-          isShared: true, 
-          isEnabled: true,
-        },
-      });
-      
-      // 加载用户私有的 MCP 配置
-      const userMcpServers = await prisma.mcpServerConfig.findMany({
-        where: { 
-          userId: payload.userId, 
-          projectId: null,
-          isEnabled: true,
-        },
-      });
-      
-      // 加载项目级别 MCP 配置
-      const projectMcpServers = await prisma.mcpServerConfig.findMany({
-        where: { projectId: id, isEnabled: true },
-      });
-      
-      // 合并配置（项目级别 > 用户私有 > 共享）
-      const allServers = [...sharedMcpServers, ...userMcpServers];
-      const allNames = new Set(allServers.map(s => s.name));
-      const projectNames = new Set(projectMcpServers.map(s => s.name));
-      
-      // 添加共享和用户配置（不在项目配置中的）
-      mcpServers = [...allServers.filter(s => !projectNames.has(s.name))];
-      // 添加项目配置（优先级最高）
-      mcpServers = [...mcpServers, ...projectMcpServers];
-      
-      logger.debug(LOG_MODULES.MCP, '加载 MCP 服务器', { shared: sharedMcpServers.length, userPrivate: userMcpServers.length, project: projectMcpServers.length, merged: mcpServers.length });
-    }
+    // 加载共享的 MCP 配置（isShared=true，管理员设置的共享 MCP）
+    const sharedMcpServers = await prisma.mcpServerConfig.findMany({
+      where: { 
+        isShared: true, 
+        isEnabled: true,
+      },
+    });
+    
+    // 加载用户私有的 MCP 配置
+    const userMcpServers = await prisma.mcpServerConfig.findMany({
+      where: { 
+        userId: payload.userId, 
+        projectId: null,
+        isEnabled: true,
+      },
+    });
+    
+    // 加载项目级别 MCP 配置
+    const projectMcpServers = await prisma.mcpServerConfig.findMany({
+      where: { projectId: id, isEnabled: true },
+    });
+    
+    // 合并配置（项目级别 > 用户私有 > 共享）
+    const allServers = [...sharedMcpServers, ...userMcpServers];
+    const allNames = new Set(allServers.map(s => s.name));
+    const projectNames = new Set(projectMcpServers.map(s => s.name));
+    
+    // 添加共享和用户配置（不在项目配置中的）
+    let mcpServers = [...allServers.filter(s => !projectNames.has(s.name))];
+    // 添加项目配置（优先级最高）
+    mcpServers = [...mcpServers, ...projectMcpServers];
+    
+    logger.debug(LOG_MODULES.MCP, '加载 MCP 服务器', { shared: sharedMcpServers.length, userPrivate: userMcpServers.length, project: projectMcpServers.length, merged: mcpServers.length });
 
     // 加载工具权限配置
-    let toolPermissions: any[] = [];
-    if (enableToolPermissions) {
-      toolPermissions = await prisma.toolPermission.findMany({
-        where: { projectId: id },
-      });
-    }
+    const toolPermissions = await prisma.toolPermission.findMany({
+      where: { projectId: id },
+    });
 
     // 检查是否有运行中的评估会话
     const runningEvaluations = project.EvaluationSession || [];
@@ -253,20 +245,76 @@ export async function POST(
       const targetEvaluation = runningEvaluations.find(e => e.id === reconnectEvaluationId);
       if (targetEvaluation) {
         logger.debug(LOG_MODULES.EVALUATION, 'SSE 重连到现有评估', { evaluationId: reconnectEvaluationId });
-        // 返回 SSE 格式，告知前端评估仍在运行
-        // 前端会通过其他方式（轮询）获取实时状态
+        
+        // 导入事件总线订阅函数
+        const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');
+        
         const encoder = new TextEncoder();
+        let unsubscribe: (() => void) | null = null;
+        let isControllerClosed = false;
+        
         const stream = new ReadableStream({
           start(controller) {
-            // 发送评估状态
+            // 发送 reconnect 事件
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
               type: 'reconnect', 
               evaluationId: reconnectEvaluationId,
               status: 'running',
               message: '已连接到运行中的评估'
             })}\n\n`));
-            // 保持连接打开，不立即关闭
-            // 实际事件会通过其他机制发送
+            
+            // 订阅事件总线的评估事件，转发到 SSE 流
+            unsubscribe = subscribeToEvaluationEvents(reconnectEvaluationId, (event: any) => {
+              if (isControllerClosed) {
+                // 控制器已关闭，取消订阅
+                if (unsubscribe) {
+                  unsubscribe();
+                  unsubscribe = null;
+                }
+                return;
+              }
+              
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                logger.debug(LOG_MODULES.EVALUATION, 'SSE 转发事件', { 
+                  evaluationId: reconnectEvaluationId, 
+                  eventType: event.type 
+                });
+                
+                // 如果是评估完成事件，关闭连接
+                if (event.type === 'evaluation_complete') {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                    type: 'done',
+                    evaluationId: reconnectEvaluationId,
+                    message: '评估已完成',
+                    timestamp: Date.now(),
+                  })}\n\n`));
+                  controller.close();
+                  isControllerClosed = true;
+                  if (unsubscribe) {
+                    unsubscribe();
+                    unsubscribe = null;
+                  }
+                }
+              } catch (e) {
+                // 控制器已关闭或写入失败
+                logger.warn(LOG_MODULES.EVALUATION, 'SSE 写入失败，取消订阅', { error: e });
+                isControllerClosed = true;
+                if (unsubscribe) {
+                  unsubscribe();
+                  unsubscribe = null;
+                }
+              }
+            });
+          },
+          cancel() {
+            // 连接关闭时取消订阅
+            isControllerClosed = true;
+            if (unsubscribe) {
+              unsubscribe();
+              unsubscribe = null;
+            }
+            logger.debug(LOG_MODULES.EVALUATION, 'SSE 连接关闭，已取消订阅', { evaluationId: reconnectEvaluationId });
           }
         });
         
@@ -443,6 +491,81 @@ export async function POST(
           logger.errorNoUser(LOG_MODULES.EVALUATION, '创建目录失败', { dir, error });
         }
       }
+
+      // ========================================
+      // 调用 AI4Java MCP 的 decompileProject 工具
+      // 在创建目录后、评估开始前执行
+      // 适用于 FSM 和 DAG 两种流程
+      // ========================================
+      logger.info(LOG_MODULES.EVALUATION, '[MCP] 开始检查 AI4Java MCP 服务器配置', {
+        mcpServersCount: mcpServers.length,
+        mcpServerNames: mcpServers.map(s => s.name),
+      });
+      
+      try {
+        // 查找 AI4Java MCP 服务器配置（优先项目级别，其次共享）
+        const ai4javaMcp = mcpServers.find(s => s.name === 'ai4java' && s.isEnabled);
+        
+        if (ai4javaMcp && ai4javaMcp.type === 'local' && ai4javaMcp.command) {
+          logger.info(LOG_MODULES.EVALUATION, '[MCP] 检测到 AI4Java MCP 本地服务器，准备执行 decompileProject', {
+            serverId: ai4javaMcp.id,
+            serverName: ai4javaMcp.name,
+            command: ai4javaMcp.command,
+            args: ai4javaMcp.args,
+            projectPath: project.projectPath,
+          });
+          
+          const { callAi4JavaDecompile } = await import('@/lib/mcp-client');
+          
+          const startTime = Date.now();
+          logger.info(LOG_MODULES.EVALUATION, '[MCP] 开始调用 decompileProject 工具...');
+          
+          const decompileResult = await callAi4JavaDecompile(
+            {
+              command: ai4javaMcp.command,
+              args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : [],
+              env: ai4javaMcp.env ? JSON.parse(ai4javaMcp.env) : {},
+              timeout: 10 * 60 * 1000, // 10 分钟超时（反编译可能较慢）
+            },
+            project.projectPath
+          );
+          
+          const duration = Date.now() - startTime;
+          
+          if (decompileResult.success) {
+            logger.info(LOG_MODULES.EVALUATION, '[MCP] decompileProject 执行成功', {
+              duration: `${duration}ms`,
+              durationSeconds: (duration / 1000).toFixed(2),
+              contentLength: decompileResult.content ? JSON.stringify(decompileResult.content).length : 0,
+              contentPreview: decompileResult.content ? JSON.stringify(decompileResult.content).substring(0, 500) : null,
+            });
+          } else {
+            logger.warn(LOG_MODULES.EVALUATION, '[MCP] decompileProject 执行失败', {
+              duration: `${duration}ms`,
+              error: decompileResult.error,
+              isError: decompileResult.isError,
+            });
+          }
+        } else if (ai4javaMcp && ai4javaMcp.type === 'remote') {
+          // 远程 MCP 服务器暂不支持直接调用
+          logger.warn(LOG_MODULES.EVALUATION, '[MCP] AI4Java MCP 配置为远程服务器，暂不支持启动前调用 decompileProject', {
+            serverId: ai4javaMcp.id,
+            serverName: ai4javaMcp.name,
+            url: ai4javaMcp.url,
+          });
+        } else {
+          logger.info(LOG_MODULES.EVALUATION, '[MCP] 未检测到 AI4Java MCP 服务器配置，跳过 decompileProject', {
+            availableServers: mcpServers.map(s => s.name),
+            hint: '请在 MCP 服务器管理中添加名为 "ai4java" 的本地 MCP 服务器',
+          });
+        }
+      } catch (error) {
+        // 反编译失败不应阻止评估启动
+        logger.errorNoUser(LOG_MODULES.EVALUATION, '[MCP] 调用 AI4Java decompileProject 异常', {
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      }
     }
 
     // 同步 Skills 到项目目录（按 WorkflowNode 加载）
@@ -477,16 +600,264 @@ export async function POST(
           );
         }
 
-        // 按 WorkflowNode 加载 Skills
+        // ========================================
+        // 检查是否是 FSM 工作流
+        // ========================================
+        const workflow = await prisma.workflow.findUnique({
+          where: { id: workflowId },
+          select: { 
+            id: true, 
+            name: true, 
+            workflowType: true, 
+            fsmTemplateId: true,
+          },
+        });
+        
+        if (workflow?.workflowType === 'fsm') {
+          logger.info(LOG_MODULES.EVALUATION, '检测到 FSM 工作流，切换到 FSM 执行模式');
+          
+          // FSM 模式：调用 FSM 执行服务
+          // 创建评估记录
+          const evaluation = await prisma.evaluationSession.create({
+            data: {
+              id: generateId('eval'),
+              projectId: id,
+              workflowId: workflowId,
+              modelConfigId: modelId,
+              roleModels: roleModels ? JSON.stringify(roleModels) : null,
+              status: 'running',
+              providerType: modelConfig.providerType,
+              workflowType: 'fsm',
+            },
+          });
+          
+          // 调用 FSM 启动逻辑
+          const { createFSMWorkflowExecutionService } = await import('@/lib/fsm');
+          
+          const fsmService = createFSMWorkflowExecutionService(
+            {
+              evaluationSessionId: evaluation.id,
+              projectId: id,
+              workflowId: workflowId,
+              fsmTemplateId: workflow.fsmTemplateId || 'threat-modeling',
+              workspacePath: project.projectPath,
+              maxIterationsPerPhase: 10,
+              maxCostPerPhase: 2.0,
+              modelConfig,
+              systemPrompt: sdkOptions.systemPrompt,  // 传递系统提示词
+              roleModels: roleModels || undefined,  // 传递角色模型配置
+            },
+            {
+              onPhaseStart: async (phase, phaseName) => {
+                logger.debug(LOG_MODULES.FSM, `Phase ${phase} (${phaseName}) 开始`);
+              },
+              onPhaseChunk: (phase, text) => {},
+              onPhaseToolCall: (phase, tool, args) => {
+                logger.debug(LOG_MODULES.FSM, `Phase ${phase} 工具调用: ${tool}`);
+              },
+              onPhaseComplete: async (phase, result) => {
+                logger.info(LOG_MODULES.FSM, `Phase ${phase} 完成`, {
+                  details: { iterations: result.iterations, duration: result.duration, status: result.status },
+                });
+              },
+              onPhaseError: (phase, error) => {
+                logger.errorNoUser(LOG_MODULES.FSM, `Phase ${phase} 错误: ${error.message}`);
+              },
+              onAgentZoneStart: async (agents) => {
+                logger.info(LOG_MODULES.FSM, `Agent Zone 启动: ${agents.join(', ')}`);
+              },
+              onAgentZoneProgress: (agent, status) => {
+                logger.debug(LOG_MODULES.FSM, `Agent ${agent} 状态: ${status}`);
+              },
+              onAgentZoneComplete: async (results) => {
+                logger.info(LOG_MODULES.FSM, `Agent Zone 完成`, { details: { total: results.length } });
+              },
+              onWorkflowComplete: async (result) => {
+                logger.info(LOG_MODULES.FSM, `FSM 工作流完成`, {
+                  details: { 
+                    status: result.status, 
+                    duration: result.totalDuration,
+                    totalTokens: result.totalTokens,
+                    totalCost: result.totalCost,
+                    phaseCount: result.phaseResults.length,
+                    completedPhases: result.phaseResults.filter(p => p.status === 'completed').length,
+                    failedPhases: result.phaseResults.filter(p => p.status === 'failed').map(p => ({
+                      phase: p.phaseNumber,
+                      name: p.phaseName,
+                    })),
+                  },
+                });
+                
+                // 收集失败阶段的错误信息
+                const failedPhasesInfo = result.phaseResults
+                  .filter(p => p.status === 'failed')
+                  .map(p => `Phase ${p.phaseNumber} (${p.phaseName})`)
+                  .join(', ');
+                
+                const errorMessage = result.status !== 'completed' 
+                  ? `工作流未完成。失败阶段: ${failedPhasesInfo || '未知'}` 
+                  : null;
+                
+                await prisma.evaluationSession.update({
+                  where: { id: evaluation.id },
+                  data: {
+                    status: result.status === 'completed' ? 'completed' : 'failed',
+                    completedAt: new Date(),
+                    totalInputTokens: result.totalTokens > 0 ? result.totalTokens : undefined,
+                    totalOutputTokens: 0,
+                    endReason: result.status === 'completed' ? 'completed' : 'error',
+                    endMessage: errorMessage,
+                    errorMessage: errorMessage,
+                  },
+                });
+              },
+              onWorkflowError: (error) => {
+                logger.errorNoUser(LOG_MODULES.FSM, `FSM 工作流错误: ${error.message}`);
+                prisma.evaluationSession.update({
+                  where: { id: evaluation.id },
+                  data: { 
+                    status: 'failed', 
+                    errorMessage: error.message, 
+                    completedAt: new Date(),
+                    endReason: 'error',
+                    endMessage: error.message,
+                  },
+                }).catch(() => {});
+              },
+              // 实时推送 token 使用量和模型信息
+              onTokenUsage: (data) => {
+                logger.debug(LOG_MODULES.FSM, `[SSE] Token 使用推送:`, data);
+                // 通过全局事件发送（由 SSE 流处理）
+                // 这里我们使用一个简单的方式：存储到全局状态，让 SSE 轮询获取
+                // 或者使用更复杂的 SSE 控制器引用
+              },
+            }
+          );
+          
+          // 返回 SSE 流 - FSM 模式需要支持实时推送
+          const encoder = new TextEncoder();
+          let sseController: ReadableStreamDefaultController | null = null;
+          
+          // 创建一个事件队列，用于 FSM 后台执行和 SSE 流之间的通信
+          const eventQueue: any[] = [];
+          
+          // 设置 onTokenUsage 回调，推送事件到队列
+          const originalOnTokenUsage = fsmService['callbacks'].onTokenUsage;
+          fsmService['callbacks'].onTokenUsage = (data) => {
+            // 调用原始回调
+            if (originalOnTokenUsage) {
+              originalOnTokenUsage(data);
+            }
+            // 推送事件到队列
+            const event = {
+              type: 'token_usage',
+              ...data,
+            };
+            eventQueue.push(event);
+            // 如果 SSE 控制器可用，立即发送
+            if (sseController) {
+              sseController.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            }
+          };
+          
+          // 修改 onPhaseComplete 回调，推送阶段完成事件
+          const originalOnPhaseComplete = fsmService['callbacks'].onPhaseComplete;
+          fsmService['callbacks'].onPhaseComplete = async (phase, result) => {
+            if (originalOnPhaseComplete) {
+              await originalOnPhaseComplete(phase, result);
+            }
+            // 推送阶段完成事件
+            const event = {
+              type: 'phase_complete',
+              phase: result.phaseNumber,
+              phaseName: result.phaseName,
+              status: result.status,
+              totalTokens: result.totalTokens,
+              iterations: result.iterations,
+              duration: result.duration,
+            };
+            if (sseController) {
+              sseController.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+            }
+          };
+          
+          // 修改 onWorkflowComplete 回调
+          const originalOnWorkflowComplete = fsmService['callbacks'].onWorkflowComplete;
+          fsmService['callbacks'].onWorkflowComplete = async (result) => {
+            if (originalOnWorkflowComplete) {
+              await originalOnWorkflowComplete(result);
+            }
+            // 推送工作流完成事件
+            if (sseController) {
+              sseController.enqueue(encoder.encode(`data: ${JSON.stringify({
+                type: 'done',
+                status: result.status,
+                totalTokens: result.totalTokens,
+                totalCost: result.totalCost,
+                totalDuration: result.totalDuration,
+                message: 'FSM 工作流执行完成',
+              })}\n\n`));
+              sseController.close();
+            }
+          };
+          
+          const stream = new ReadableStream({
+            start(controller) {
+              sseController = controller;
+              // 发送启动事件
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                type: 'started',
+                evaluationId: evaluation.id,
+                workflowType: 'fsm',
+                message: 'FSM 工作流已启动',
+              })}\n\n`));
+              
+              // 后台执行 FSM
+              fsmService.execute().catch(async (error) => {
+                logger.errorNoUser(LOG_MODULES.FSM, `FSM 执行失败: ${error.message}`);
+                await prisma.evaluationSession.update({
+                  where: { id: evaluation.id },
+                  data: { status: 'failed', errorMessage: error.message, completedAt: new Date() },
+                });
+                // 发送错误事件
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                  type: 'error',
+                  error: error.message,
+                })}\n\n`));
+                controller.close();
+              });
+            },
+            cancel() {
+              sseController = null;
+            }
+          });
+          
+          return new Response(stream, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+            },
+          });
+        }
 
-        // 查询 Workflow 的所有节点
+        // ========================================
+        // DAG 模式：按 WorkflowNode 加载 Skills
+        // ========================================
+
+        // 查询 Workflow 的所有节点（包含 roleId 用于统一执行引擎）
         const workflowNodes = await prisma.workflowNode.findMany({
           where: { workflowId },
           select: {
             id: true,
+            roleId: true,
+            type: true,
             data: true,
             vulnerabilityCategories: true,
             skills: true,
+            fsmPhase: true,
+            fsmOrder: true,
+            skillPath: true,
           },
         });
 
@@ -680,374 +1051,43 @@ export async function POST(
     }
     
     // ========================================
-    // 检查是否是 FSM 工作流
+    // 使用统一执行引擎执行 DAG 工作流
     // ========================================
-    const workflow = await prisma.workflow.findUnique({
-      where: { id: workflowId },
-      select: { 
-        id: true, 
-        name: true, 
-        workflowType: true, 
-        fsmTemplateId: true,
-      },
-    });
     
-    if (workflow?.workflowType === 'fsm') {
-      logger.info(LOG_MODULES.EVALUATION, '检测到 FSM 工作流，切换到 FSM 执行模式');
-      
-      // FSM 模式：调用 FSM 执行服务
-      // 创建评估记录
-      const evaluation = await prisma.evaluationSession.create({
-        data: {
-          id: generateId('eval'),
-          projectId: id,
-          workflowId: workflowId,
-          modelConfigId: modelId,
-          roleModels: roleModels ? JSON.stringify(roleModels) : null,
-          status: 'running',
-          providerType: modelConfig.providerType,
-          workflowType: 'fsm',
-        },
-      });
-      
-      // 调用 FSM 启动逻辑
-      const { createFSMWorkflowExecutionService } = await import('@/lib/fsm');
-      
-      const fsmService = createFSMWorkflowExecutionService(
-        {
-          evaluationSessionId: evaluation.id,
-          projectId: id,
-          workflowId: workflowId,
-          fsmTemplateId: workflow.fsmTemplateId || 'threat-modeling',
-          workspacePath: project.projectPath || '',
-          maxIterationsPerPhase: 10,
-          maxCostPerPhase: 2.0,
-          modelConfig,
-          systemPrompt: sdkOptions.systemPrompt,
-          roleModels: roleModels || undefined,
-        },
-        {
-          onPhaseStart: async (phase, phaseName) => {
-            logger.debug(LOG_MODULES.FSM, `Phase ${phase} (${phaseName}) 开始`);
-          },
-          onPhaseChunk: (phase, text) => {},
-          onPhaseToolCall: (phase, tool, args) => {
-            logger.debug(LOG_MODULES.FSM, `Phase ${phase} 工具调用: ${tool}`);
-          },
-          onPhaseComplete: async (phase, result) => {
-            logger.info(LOG_MODULES.FSM, `Phase ${phase} 完成`, {
-              details: { iterations: result.iterations, duration: result.duration, status: result.status },
-            });
-          },
-          onPhaseError: (phase, error) => {
-            logger.errorNoUser(LOG_MODULES.FSM, `Phase ${phase} 错误: ${error.message}`);
-          },
-          onAgentZoneStart: async (agents) => {
-            logger.info(LOG_MODULES.FSM, `Agent Zone 启动: ${agents.join(', ')}`);
-          },
-          onAgentZoneProgress: (agent, status) => {
-            logger.debug(LOG_MODULES.FSM, `Agent ${agent} 状态: ${status}`);
-          },
-          onAgentZoneComplete: async (results) => {
-            logger.info(LOG_MODULES.FSM, `Agent Zone 完成`, { details: { total: results.length } });
-          },
-          onWorkflowComplete: async (result) => {
-            logger.info(LOG_MODULES.FSM, `FSM 工作流完成`, {
-              details: { 
-                status: result.status, 
-                duration: result.totalDuration,
-                totalTokens: result.totalTokens,
-                totalCost: result.totalCost,
-                phaseCount: result.phaseResults.length,
-                completedPhases: result.phaseResults.filter(p => p.status === 'completed').length,
-              },
-            });
-            
-            const failedPhasesInfo = result.phaseResults
-              .filter(p => p.status === 'failed')
-              .map(p => `Phase ${p.phaseNumber} (${p.phaseName})`)
-              .join(', ');
-            
-            const errorMessage = result.status !== 'completed' 
-              ? `工作流未完成。失败阶段: ${failedPhasesInfo || '未知'}` 
-              : null;
-            
-            await prisma.evaluationSession.update({
-              where: { id: evaluation.id },
-              data: {
-                status: result.status === 'completed' ? 'completed' : 'failed',
-                completedAt: new Date(),
-                totalInputTokens: result.totalTokens > 0 ? result.totalTokens : undefined,
-                totalOutputTokens: 0,
-                endReason: result.status === 'completed' ? 'completed' : 'error',
-                endMessage: errorMessage,
-                errorMessage: errorMessage,
-              },
-            });
-          },
-          onWorkflowError: (error) => {
-            logger.errorNoUser(LOG_MODULES.FSM, `FSM 工作流错误: ${error.message}`);
-            prisma.evaluationSession.update({
-              where: { id: evaluation.id },
-              data: { 
-                status: 'failed', 
-                errorMessage: error.message, 
-                completedAt: new Date(),
-                endReason: 'error',
-                endMessage: error.message,
-              },
-            }).catch(() => {});
-          },
-          onTokenUsage: (data) => {
-            logger.debug(LOG_MODULES.FSM, `[SSE] Token 使用推送:`, data);
-          },
-        }
-      );
-      
-      // 返回 SSE 流
-      const encoder = new TextEncoder();
-      let sseController: ReadableStreamDefaultController | null = null;
-      const eventQueue: any[] = [];
-      
-      // 设置回调推送事件
-      const originalOnTokenUsage = fsmService['callbacks'].onTokenUsage;
-      fsmService['callbacks'].onTokenUsage = (data) => {
-        if (originalOnTokenUsage) originalOnTokenUsage(data);
-        const event = { type: 'token_usage', ...data };
-        eventQueue.push(event);
-        if (sseController) {
-          sseController.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-        }
-      };
-      
-      const originalOnPhaseComplete = fsmService['callbacks'].onPhaseComplete;
-      fsmService['callbacks'].onPhaseComplete = async (phase, result) => {
-        if (originalOnPhaseComplete) await originalOnPhaseComplete(phase, result);
-        const event = {
-          type: 'phase_complete',
-          phase: result.phaseNumber,
-          phaseName: result.phaseName,
-          status: result.status,
-          totalTokens: result.totalTokens,
-          iterations: result.iterations,
-          duration: result.duration,
-        };
-        if (sseController) {
-          sseController.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-        }
-      };
-      
-      const originalOnWorkflowComplete = fsmService['callbacks'].onWorkflowComplete;
-      fsmService['callbacks'].onWorkflowComplete = async (result) => {
-        if (originalOnWorkflowComplete) await originalOnWorkflowComplete(result);
-        if (sseController) {
-          sseController.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'done',
-            status: result.status,
-            totalTokens: result.totalTokens,
-            totalCost: result.totalCost,
-            totalDuration: result.totalDuration,
-            message: 'FSM 工作流执行完成',
-          })}\n\n`));
-          sseController.close();
-        }
-      };
-      
-      const stream = new ReadableStream({
-        start(controller) {
-          sseController = controller;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-            type: 'started',
-            evaluationId: evaluation.id,
-            workflowType: 'fsm',
-            message: 'FSM 工作流已启动',
-          })}\n\n`));
-          
-          fsmService.execute().catch(async (error) => {
-            logger.errorNoUser(LOG_MODULES.FSM, `FSM 执行失败: ${error.message}`);
-            await prisma.evaluationSession.update({
-              where: { id: evaluation.id },
-              data: { status: 'failed', errorMessage: error.message, completedAt: new Date() },
-            });
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
-              type: 'error',
-              error: error.message,
-            })}\n\n`));
-            controller.close();
-          });
-        },
-        cancel() {
-          sseController = null;
-        }
-      });
-      
-      return new Response(stream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-        },
-      });
+    // 使用 topologicalSortDAG 获取拓扑排序后的节点
+    let sortedNodes: UnifiedNodeDefinition[];
+    try {
+      sortedNodes = await topologicalSortDAG(workflowId);
+      logger.debug(LOG_MODULES.EVALUATION, '拓扑排序完成', { nodeCount: sortedNodes.length });
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '拓扑排序失败', { error: errMsg });
+      return NextResponse.json({
+        error: `工作流拓扑排序失败: ${errMsg}`,
+      }, { status: 400 });
     }
     
-    // ========================================
-    // DAG 模式：生成用户提示词（从 WorkflowNode 动态生成）
-    // ========================================
-    
-    // 查询 Workflow 的所有节点（包含 type 用于排序）
-    const workflowNodes = await prisma.workflowNode.findMany({
-      where: { workflowId },
-      select: {
-        id: true,
-        type: true,
-        data: true,
-        vulnerabilityCategories: true,
-        skills: true,
-      },
-    });
-    
-    if (workflowNodes.length === 0) {
+    if (sortedNodes.length === 0) {
       return NextResponse.json({
         error: '工作流配置缺少节点，无法启动评估',
       }, { status: 400 });
     }
     
-    // 按拓扑顺序排序节点
-    const nodeOrder = new Map<string, number>();
-    let order = 0;
-    const startNode = workflowNodes.find(n => n.type === 'start');
-    if (startNode) {
-      nodeOrder.set(startNode.id, order++);
-      const queue = [startNode.id];
-      const visited = new Set([startNode.id]);
-      // 查询边用于拓扑排序
-      const edges = await prisma.workflowEdge.findMany({
-        where: { workflowId },
-        select: { sourceId: true, targetId: true },
-      });
-      while (queue.length > 0) {
-        const currentId = queue.shift()!;
-        const currentOrder = nodeOrder.get(currentId)!;
-        edges.filter(e => e.sourceId === currentId).forEach(edge => {
-          if (!visited.has(edge.targetId)) {
-            visited.add(edge.targetId);
-            nodeOrder.set(edge.targetId, currentOrder + 1);
-            queue.push(edge.targetId);
-          }
-        });
-      }
-    }
-    workflowNodes.forEach(node => { if (!nodeOrder.has(node.id)) nodeOrder.set(node.id, order++); });
-    const sortedNodes = [...workflowNodes].sort((a, b) => (nodeOrder.get(a.id) ?? 999) - (nodeOrder.get(b.id) ?? 999));
+    // 计算总任务数（排除 start/end 节点）
+    const totalTasks = sortedNodes.filter(n => n.type !== 'start' && n.type !== 'end').length;
     
-    // 计算总任务数
-    const totalTasks = sortedNodes.length;
+    logger.debug(LOG_MODULES.EVALUATION, 'DAG 工作流节点信息', {
+      totalNodes: sortedNodes.length,
+      taskNodes: totalTasks,
+      nodes: sortedNodes.map(n => ({ id: n.id, label: n.label, roleId: n.roleId })),
+    });
     
-    // 获取所有 Skills 信息（用于生成用户提示词中的 Skills 列表）
-    const allSkillsMap = new Map<string, { id: string; name: string; displayName: string | null; description: string | null }>();
-    if (uniqueSkillIds.length > 0) {
-      const skillsData = await prisma.skill.findMany({
-        where: { id: { in: uniqueSkillIds } },
-        select: { id: true, name: true, displayName: true, description: true },
-      });
-      skillsData.forEach(s => allSkillsMap.set(s.id, s));
-    }
+    // 统一执行引擎将根据节点信息动态生成提示词
+    // 不再需要外部生成 userPrompt
     
-    // 生成用户提示词
-    let userPrompt = '';
-    let taskIndex = 0;
-    
-    for (const node of sortedNodes) {
-      // 解析 node.data
-      let nodeData: { label?: string; description?: string; skillLoadingMode?: string; skills?: string; vulnerabilityCategories?: string[] } = {};
-      if (node.data) {
-        try {
-          nodeData = JSON.parse(node.data);
-        } catch {
-          logger.warn(LOG_MODULES.EVALUATION, 'Node data JSON 解析失败', { nodeId: node.id });
-        }
-      }
-      
-      // 开始节点 - 使用系统配置的描述
-      if (node.type === 'start') {
-        userPrompt += `## 任务 1：${workflowConfigParsed?.startNodeLabel || '开始'}\n\n`;
-        if (workflowConfigParsed?.startNodeDescription) {
-          userPrompt += `${workflowConfigParsed.startNodeDescription}\n\n`;
-        }
-        userPrompt += '---\n\n';
-        continue;
-      }
-      
-      // 结束节点 - 使用系统配置的描述
-      if (node.type === 'end') {
-        userPrompt += `## 任务 ${totalTasks}：${workflowConfigParsed?.endNodeLabel || '结束'}\n\n`;
-        if (workflowConfigParsed?.endNodeDescription) {
-          userPrompt += `${workflowConfigParsed.endNodeDescription}\n\n`;
-        }
-        userPrompt += '---\n\n';
-        continue;
-      }
-      
-      // 其他任务节点
-      taskIndex++;
-      userPrompt += `## 任务 ${taskIndex + 1}：${nodeData.label || '未命名任务'}\n\n`;
-      
-      // 节点描述
-      if (nodeData.description) {
-        userPrompt += `${nodeData.description}\n\n`;
-      }
-      
-      // Skill 加载模式
-      const mode = nodeData.skillLoadingMode || 'description';
-      
-      if (mode === 'manual' && nodeData.skills) {
-        // 模式2：手工指定 Skills
-        let skillIds: string[] = [];
-        try { skillIds = JSON.parse(nodeData.skills); } catch { /* ignore */ }
-        if (skillIds.length > 0) {
-          userPrompt += `请执行以下安全检查任务，必须执行所有指定的 Skills：\n\n`;
-          userPrompt += `必须执行的 Skills：\n`;
-          skillIds.forEach((id, i) => {
-            const skill = allSkillsMap.get(id);
-            userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
-          });
-          userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
-        }
-      } else if (mode === 'vulnerability' && node.vulnerabilityCategories) {
-        // 模式3：漏洞分类
-        let categoryValues: string[] = [];
-        try { categoryValues = JSON.parse(node.vulnerabilityCategories); } catch { /* ignore */ }
-        if (categoryValues.length > 0) {
-          const matchedIds = await matchSkillsByCategoryValues(categoryValues, projectTechStack);
-          if (matchedIds.length > 0) {
-            userPrompt += `请执行以下安全检查任务，必须执行所有匹配的 Skills：\n\n`;
-            userPrompt += `必须执行的 Skills：\n`;
-            matchedIds.forEach((id, i) => {
-              const skill = allSkillsMap.get(id);
-              userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
-            });
-            userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
-          }
-        }
-      }
-      // 模式1：自定义描述 - 只有描述，不需要额外提示
-      
-      userPrompt += '---\n\n';
-    }
-    
-    // 检查用户提示词是否为空
-    if (!userPrompt.trim()) {
-      return NextResponse.json({
-        error: '工作流节点缺少描述，无法启动评估',
-      }, { status: 400 });
-    }
-    
-    const initialMessage = userPrompt;
-    
-    logger.debug(LOG_MODULES.EVALUATION, '系统提示词和用户提示词信息', {
-      systemPromptLength: globalConfig.customSystemPrompt.length,
-      userPromptLength: initialMessage.length,
-      userPromptPreview: initialMessage.substring(0, 200) + '...',
+    logger.debug(LOG_MODULES.EVALUATION, 'DAG 工作流准备完成，将使用统一执行引擎', {
+      totalNodes: sortedNodes.length,
+      taskNodes: totalTasks,
     });
     
     // 写入 CLAUDE.md 全局模板到项目 .claude 目录
@@ -1109,6 +1149,7 @@ export async function POST(
           status: 'running',
           modelName: modelConfig.name, // 保存模型名称
           providerType: modelConfig.providerType, // 保存提供商类型
+          workflowType: 'dag',
         },
       });
       logger.debug(LOG_MODULES.EVALUATION, '创建新评估记录', { evaluationId: evaluation.id, workflowId, roleModelsCount: roleModels?.length || 0, skillsUsedCount: skillsUsedJson ? JSON.parse(skillsUsedJson).length : 0 });
@@ -1187,120 +1228,63 @@ export async function POST(
       }
     }
 
-    // 创建 Ralph Loop Agent，传递项目目录作为工作目录
-    // Ralph Loop Agent 会在任务未完成时自动迭代
+    // ========================================
+    // 创建统一执行引擎（DAG 模式）
+    // ========================================
     
-    // 创建组合验证器：优先检测 vulnerabilities.json 文件，其次用安全审计关键词
-    const projectPath = project.projectPath;
-    const vulnFileVerifier = async (context: any) => {
-      // 检查项目目录下是否存在 vulnerabilities.json
-      if (projectPath) {
-        try {
-          await access(join(projectPath, 'vulnerabilities.json'));
-          logger.debug(LOG_MODULES.EVALUATION, 'Verifier 检测到 vulnerabilities.json，任务完成');
-          return { complete: true, reason: '检测到 vulnerabilities.json 文件，审计完成' };
-        } catch {
-          // 文件不存在，继续其他检测
-        }
-      }
-      // 回退到原有的文本检测
-      return securityAuditVerifier(context);
+    // 构建默认模型配置
+    const defaultModelConfig: ModelConfigForExecution = {
+      id: modelConfig.id,
+      name: modelConfig.name,
+      providerType: modelConfig.providerType,
+      apiKey: modelConfig.apiKey,
+      apiBaseUrl: modelConfig.apiBaseUrl || '',
+      models: modelConfig.models,
     };
     
-    // Skill 执行验证器：检查所有必须执行的 Skills 是否都已执行
-    const mandatorySkillIds = copyResult?.skillIds ? 
-      copyResult.skillIds.filter(id => uniqueSkillIds.includes(id)) : 
-      uniqueSkillIds;
-    
-    const skillExecutionVerifier = async (context: any) => {
-      // 如果没有必须执行的 Skills，跳过验证
-      if (mandatorySkillIds.length === 0) {
-        return { complete: true, reason: '无必须执行的 Skills' };
-      }
-      
-      try {
-        // 查询已执行的 Skills
-        const executedSkills = await prisma.skillExecution.findMany({
-          where: {
-            evaluationId: evaluation.id,
-            status: 'completed',
-          },
-          select: { skillId: true },
-        });
-        
-        const executedSkillIds = new Set(executedSkills.map(e => e.skillId));
-        const missingSkillIds = mandatorySkillIds.filter(id => !executedSkillIds.has(id));
-        
-        if (missingSkillIds.length === 0) {
-          logger.debug(LOG_MODULES.EVALUATION, 'Verifier 所有必须的 Skills 已执行', { executedCount: mandatorySkillIds.length, totalCount: mandatorySkillIds.length });
-          return { complete: true, reason: '所有必须的 Skills 已执行' };
-        } else {
-          logger.debug(LOG_MODULES.EVALUATION, 'Verifier 还有 Skills 未执行', { missingCount: missingSkillIds.length });
-          return { 
-            complete: false, 
-            reason: `还有 ${missingSkillIds.length} 个必须的 Skills 未执行` 
-          };
-        }
-      } catch (error) {
-        logger.errorNoUser(LOG_MODULES.EVALUATION, 'Verifier Skill 执行验证失败', { error });
-        return { complete: true, reason: '验证失败，跳过 Skill 检查' };
-      }
+    // 创建统一执行引擎配置
+    const engineConfig = {
+      evaluationSessionId: evaluation.id,
+      projectId: id,
+      projectName: project.name,
+      workflowId: workflowId,
+      workflowType: 'custom' as const,
+      workspacePath: project.projectPath || '',
+      systemPrompt: sdkOptions.systemPrompt,
+      roleModels: roleModels || undefined,
+      defaultModelConfig,
+      maxIterationsPerNode: 15,
+      maxRetries: 15,
+      retryDelayMs: 60000,
+      workflowConfig: workflowConfigParsed || undefined,
     };
-
-    const verifier = createCombinedVerifier([
-      vulnFileVerifier,
-      skillExecutionVerifier,
-    ], 'all'); // 全部验证器通过才算完成
     
-    const agent = createRalphLoopAgent(
-      modelConfig,
-      project.projectPath || undefined,
-      {
-        maxIterations: 15,  // 最大迭代次数
-        maxTokens: 100000,  // 最大 token 数
-        maxCost: 5.00,      // 最大成本 $5
-        verifyCompletion: verifier, // 使用组合验证器判断任务完成
-        onIterationStart: (iteration) => {
-          logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 开始迭代', { iteration });
-        },
-        onIterationEnd: async (iteration, duration) => {
-          logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 迭代完成', { iteration, duration });
-          
-          // 记录迭代活动到 Watchdog
-          recordWatchdogActivity(evaluation.id, 'iteration', { iteration, duration });
-          
-          // 保存迭代记录到数据库（包含模型信息）
-          try {
-            await prisma.evaluationIteration.create({
-              data: {
-                id: generateIndexedId('iter', iteration),
-                evaluationSessionId: evaluation.id,
-                iterationNumber: iteration,
-                status: 'completed',
-                duration,
-                completedAt: new Date(),
-                updatedAt: new Date(),
-                // 添加模型信息
-                modelConfigId: modelConfig.id,
-                modelName: modelConfig.name,
-              },
-            });
-            logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 迭代记录已保存到数据库');
-          } catch (err) {
-            // 表不存在时忽略
-            logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 保存迭代记录失败（可能表不存在）', { error: err });
-          }
-        },
-      },
-      // SDK 高级配置
-      sdkOptions
-    );
-    
-    logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop Agent 已创建，准备启动循环', { systemPromptLength: sdkOptions.systemPrompt?.length || 0, systemPromptPreview: sdkOptions.systemPrompt?.substring(0, 300) || '未设置' });
+    logger.debug(LOG_MODULES.EVALUATION, '统一执行引擎配置', {
+      evaluationSessionId: evaluation.id,
+      projectId: id,
+      workflowId,
+      nodeCount: sortedNodes.length,
+      roleModelsCount: roleModels?.length || 0,
+    });
 
-    // 注册 agent 到注册表（用于后续中止）
-    registerAgent(evaluation.id, agent);
-    logger.debug(LOG_MODULES.AGENT, 'Agent 已注册', { evaluationId: evaluation.id });
+    // 创建统一执行引擎实例（SSE 回调将在 SSE 流中设置）
+    const engine = createUnifiedExecutionEngine(engineConfig, {
+      // 占位回调，将在 SSE 流中重新设置
+      onNodeStart: () => {},
+      onNodeChunk: () => {},
+      onNodeToolCall: () => {},
+      onTokenUsage: () => {},
+      onNodeRetry: () => {},
+      onNodeComplete: () => {},
+      onNodeError: () => {},
+      onWorkflowComplete: () => {},
+      onWorkflowError: () => {},
+    });
+    
+    // 设置节点列表
+    engine.setNodes(sortedNodes);
+    
+    logger.debug(LOG_MODULES.EVALUATION, '统一执行引擎已创建', { nodeCount: sortedNodes.length });
 
     // 启动 SSE 流健康检查 Watchdog
     const watchdog = createWatchdog({
@@ -1310,33 +1294,15 @@ export async function POST(
       maxRunTime: 30 * 60 * 1000,  // 30 分钟最大运行时间
       onTimeout: (reason) => {
         logger.errorNoUser(LOG_MODULES.EVALUATION, 'Watchdog 评估超时中止', { reason });
+        // 中止统一执行引擎
+        engine.abort();
       },
       onHeartbeat: (stats) => {
         // 心跳日志由 Watchdog 内部处理
       },
       onProgressInquiry: async (reason, stats) => {
-        // 空闲超时或运行时间较长时，自动发送进展询问消息
-        logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 自动发送进展询问', { reason, idleTime: Math.round(stats.idleTime / 1000), runTime: Math.round(stats.runTime / 1000) });
-        
-        // 获取进展询问消息配置
-        const progressQuestionMessage = globalConfig?.progressQuestion || '请简要说明当前进展情况，以及预计还需要多长时间完成。';
-        
-        try {
-          // 通过 Agent 注入进展询问消息
-          // RalphLoopAgent 的 caller (EnhancedEvaluationCaller) 可能支持直接发送消息
-          const caller = (agent as any).caller;
-          if (caller && typeof caller.injectUserMessage === 'function') {
-            await caller.injectUserMessage(progressQuestionMessage);
-            logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 已通过 caller.injectUserMessage 注入进展询问消息');
-          } else if (caller && caller.agent && typeof caller.agent.sendMessage === 'function') {
-            await caller.agent.sendMessage(progressQuestionMessage);
-            logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 已通过 agent.sendMessage 发送进展询问消息');
-          } else {
-            logger.warn(LOG_MODULES.EVALUATION, 'Watchdog Agent 不支持消息注入，无法自动发送进展询问');
-          }
-        } catch (err) {
-          logger.errorNoUser(LOG_MODULES.EVALUATION, 'Watchdog 发送进展询问失败', { error: err });
-        }
+        // 空闲超时或运行时间较长时，记录状态
+        logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 进展询问', { reason, idleTime: Math.round(stats.idleTime / 1000), runTime: Math.round(stats.runTime / 1000) });
       },
     });
     logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 已启动', { evaluationId: evaluation.id });
@@ -1355,6 +1321,8 @@ export async function POST(
       projectId: id,
       projectName: project.name,
       projectPath: project.projectPath || '未设置',
+      workflowType: 'dag',
+      totalNodes: sortedNodes.length,
       sdkConfig: {
         permissionMode: sdkOptions.permissionMode,
         allowDangerouslySkipPermissions: sdkOptions.allowDangerouslySkipPermissions,
@@ -1365,7 +1333,6 @@ export async function POST(
               : JSON.stringify(sdkOptions.systemPrompt, null, 2).substring(0, 500) + '...')
           : '未配置',
       },
-      userPromptPreview: initialMessage?.substring(0, 300) || '无',
     });
 
     // 创建 SSE 流
@@ -1374,6 +1341,7 @@ export async function POST(
         let fullResponse = '';
         let isControllerClosed = false; // 跟踪 controller 状态
         let lastTodoSnapshot = ''; // 上次保存的 TODO 快照（JSON 字符串）
+        let currentNodeId: string | null = null; // 当前执行的节点 ID（用于 TODO 关联）
         let evaluationResult: {
           total: number;
           critical: number;
@@ -1455,754 +1423,275 @@ export async function POST(
           }
         };
 
-        // 提取并解析评估完成结果
-        const parseEvaluationResult = (text: string) => {
-          let match;
-          EVAL_COMPLETE_REGEX.lastIndex = 0;
-          while ((match = EVAL_COMPLETE_REGEX.exec(text)) !== null) {
-            const params = match[1];
-            const result: any = {};
-            const paramMatches = params.matchAll(/(\w+)=(\d+)/g);
-            for (const m of paramMatches) {
-              result[m[1]] = parseInt(m[2], 10);
-            }
-            if (result.total !== undefined) {
-              evaluationResult = {
-                ...result,
-                vulnerabilities: [],
-              };
-              logger.debug(LOG_MODULES.EVALUATION, '检测到完成结果', { result });
-            }
-          }
-        };
-
-        // 发送自主进化经验注入信息
-        if (injectedExperiences.length > 0) {
-          safeEnqueue(`data: ${JSON.stringify({
-            type: 'experience_injected',
-            count: injectedExperiences.length,
-            experiences: injectedExperiences,
-            timestamp: Date.now(),
-          })}\n\n`);
-        } else {
-          safeEnqueue(`data: ${JSON.stringify({
-            type: 'experience_injected',
-            count: 0,
-            experiences: [],
-            timestamp: Date.now(),
-          })}\n\n`);
-        }
-
-        try {
-          // 使用 Ralph Loop Agent 进行迭代评估
-          // Ralph Loop 会在任务未完成时自动进行下一轮迭代
-          logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 开始执行 loop() 方法');
+        // 累计 Token 使用量（用于 SSE 推送）
+        let cumulativeTokens = { input: 0, output: 0 };
+        
+        // 设置统一执行引擎的 SSE 回调
+        const engineCallbacks: UnifiedExecutionCallbacks = {
+          onNodeStart: async (nodeIndex, nodeId, nodeName) => {
+            logger.debug(LOG_MODULES.EVALUATION, `节点 ${nodeIndex + 1}/${sortedNodes.length} 开始: ${nodeName}`);
+            
+            // 设置当前节点 ID（用于 TODO 关联）
+            currentNodeId = nodeId;
+            
+            // 获取节点模型配置
+            const node = sortedNodes[nodeIndex];
+            const modelConfigForNode = await getModelConfigForRole(node.roleId ?? undefined, roleModels, defaultModelConfig);
+            
+            // 发送节点开始事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'phase_start',
+              nodeIndex: nodeIndex + 1,
+              totalNodes: sortedNodes.length,
+              nodeName: nodeName,
+              nodeId: nodeId,
+              modelName: modelConfigForNode.name,
+            })}\n\n`);
+          },
           
-          const callbacks: RalphLoopAgentCallbacks = {
-            onChunk: (text) => {
-              fullResponse += text;
-
-              // 检测节点完成标记
-              let match;
-              NODE_COMPLETE_REGEX.lastIndex = 0;
-              while ((match = NODE_COMPLETE_REGEX.exec(text)) !== null) {
-                const nodeId = match[1].trim();
-                updateNodeStatus(nodeId, 'completed');
-                // 发送节点完成事件
-                const eventData = JSON.stringify({
-                  type: 'node_complete',
-                  nodeId,
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${eventData}\n\n`);
-              }
-
-              // 检测评估完成标记并提取结果
-              parseEvaluationResult(text);
-              if (text.includes('[EVALUATION_COMPLETE:')) {
-                const eventData = JSON.stringify({
-                  type: 'evaluation_complete_marker',
-                  result: evaluationResult,
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${eventData}\n\n`);
-              }
-
-              const data = JSON.stringify({
-                type: 'message',
-                content: text,
-                timestamp: Date.now(),
-              });
-              safeEnqueue(`data: ${data}\n\n`);
-            },
-            onToolCall: (name, parameters) => {
-              // 检测 TodoWrite 工具调用，提取 TODO 列表
-              if (name === 'TodoWrite' && parameters?.todos && Array.isArray(parameters.todos)) {
-                const todos = parameters.todos;
-                const todoEvent = JSON.stringify({
-                  type: 'todo_update',
-                  todos,
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${todoEvent}\n\n`);
-                logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop TODO 更新', { todoCount: todos.length });
-
-                // 通过事件总线广播 TODO 更新
-                const { emitTodoUpdate } = require('@/lib/event-bus');
-                emitTodoUpdate(evaluation.id, todos);
-
-                // 对比变化：只有内容有变化时才写数据库
-                const newSnapshot = JSON.stringify(todos);
-                if (newSnapshot !== lastTodoSnapshot && todos.length > 0) {
-                  lastTodoSnapshot = newSnapshot;
-                  prisma.evaluationSession.update({
-                    where: { id: evaluation.id },
-                    data: { todoList: newSnapshot },
-                  }).catch(err => console.error('[Ralph Loop] 保存 TODO 到数据库失败:', err));
-                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop TODO 有变化，已保存到数据库');
-                }
-              }
-
-              // 发送工具调用事件
-              const data = JSON.stringify({
-                type: 'tool_call',
-                name,
-                parameters,
-                timestamp: Date.now(),
-              });
-              safeEnqueue(`data: ${data}\n\n`);
-            },
-            onToolResult: (name, result) => {
-              // 发送工具结果事件
-              const data = JSON.stringify({
-                type: 'tool_result',
-                name,
-                success: result.success,
-                output: result.output,
-                error: result.error,
-                duration: result.duration,
-                timestamp: Date.now(),
-              });
-              safeEnqueue(`data: ${data}\n\n`);
-            },
-            onUsage: async (usage) => {
-              // 记录每次 API 调用的 token 使用量到数据库
-              logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop 收到 Token 使用量', { usage });
+          onNodeChunk: (nodeIndex, text) => {
+            // 发送文本流事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'message',
+              nodeIndex,
+              content: text,
+              timestamp: Date.now(),
+            })}\n\n`);
+          },
+          
+          onNodeToolCall: (nodeIndex, tool, args) => {
+            // 发送工具调用事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'tool_call',
+              nodeIndex,
+              name: tool,
+              parameters: args,
+              timestamp: Date.now(),
+            })}\n\n`);
+            
+            // 检测 TodoWrite 工具调用
+            if (tool === 'TodoWrite' && args?.todos && Array.isArray(args.todos)) {
+              // 为每个 TODO 关联当前节点 ID
+              const todosWithNodeId = args.todos.map(todo => ({
+                ...todo,
+                workflowNodeId: currentNodeId, // 关联到当前执行的节点
+              }));
               
-              try {
-                // 计算本次调用费用
-                const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
-                const modelId = modelConfig?.models || 'claude-sonnet-4-20250514';
-                const pricing = getModelPricingOrDefault(modelId);
-                const callCost = calculateCost({
-                  inputTokens: usage.inputTokens,
-                  outputTokens: usage.outputTokens,
-                  totalTokens: usage.inputTokens + usage.outputTokens,
-                }, pricing);
-                
-                // 保存到 TokenUsage 表（单次调用记录）
-                await prisma.tokenUsage.create({
-                  data: {
-                    id: generateId('token'),
-                    evaluationId: evaluation.id,
-                    projectId: id,
-                    apiProvider: modelConfig?.providerType || 'claude',
-                    modelName: modelConfig?.models ? 
-                      (Array.isArray(JSON.parse(modelConfig.models)) ? JSON.parse(modelConfig.models)[0] : modelConfig.models) :
-                      'claude-sonnet-4',
-                    callType: 'chat',
-                    inputTokens: usage.inputTokens || 0,
-                    outputTokens: usage.outputTokens || 0,
-                    totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
-                    cachedTokens: usage.cacheReadInputTokens || 0,
-                    requestStartedAt: new Date(),
-                    requestCompletedAt: new Date(),
-                    estimatedCost: callCost,
-                    status: 'success',
-                  },
-                });
-                
-                // 实时更新 EvaluationSession 的累计 token 值
-                // 注意：inputTokens 包含历史上下文，不应累加（只保存最后一次的值）
-                // outputTokens 是新增的，可以累加
-                const currentSession = await prisma.evaluationSession.findUnique({
+              safeEnqueue(`data: ${JSON.stringify({
+                type: 'todo_update',
+                todos: todosWithNodeId,
+                nodeId: currentNodeId,
+                timestamp: Date.now(),
+              })}\n\n`);
+              
+              // 广播 TODO 更新
+              const { emitTodoUpdate } = require('@/lib/event-bus');
+              emitTodoUpdate(evaluation.id, todosWithNodeId);
+              
+              // 保存到数据库（包含节点关联）
+              const newSnapshot = JSON.stringify(todosWithNodeId);
+              if (newSnapshot !== lastTodoSnapshot && todosWithNodeId.length > 0) {
+                lastTodoSnapshot = newSnapshot;
+                prisma.evaluationSession.update({
                   where: { id: evaluation.id },
-                  select: { totalOutputTokens: true, estimatedCost: true },
-                });
-                
-                // inputTokens 用最后一次的值（包含整个历史上下文）
-                const newInputTokens = usage.inputTokens || 0;
-                // outputTokens 累加
-                const newOutputTokens = (currentSession?.totalOutputTokens || 0) + (usage.outputTokens || 0);
-                const newTotalTokens = newInputTokens + newOutputTokens;
-                // 费用累加（如果自部署模型，费用为 0）
-                const newEstimatedCost = (currentSession?.estimatedCost || 0) + callCost;
-                
-                await prisma.evaluationSession.update({
-                  where: { id: evaluation.id },
-                  data: {
-                    totalInputTokens: newInputTokens,
-                    totalOutputTokens: newOutputTokens,
-                    totalTokens: newTotalTokens,
-                    estimatedCost: newEstimatedCost,
-                  },
-                });
-                
-                logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop 实时更新 Token', {
-                  本次: { input: usage.inputTokens, output: usage.outputTokens },
-                  当前累计: { input: newInputTokens, output: newOutputTokens },
-                  说明: 'input=最后一次值(含历史), output=累加值',
-                });
-                
-                // 发送 token 使用事件（包含累计值）
-                const tokenEvent = JSON.stringify({
-                  type: 'token_usage',
-                  usage: {
-                    // 本次调用
-                    inputTokens: usage.inputTokens,
-                    outputTokens: usage.outputTokens,
-                    totalTokens: usage.inputTokens + usage.outputTokens,
-                    estimatedCost: callCost,
-                    // 累计值
-                    accumulatedInputTokens: newInputTokens,
-                    accumulatedOutputTokens: newOutputTokens,
-                    accumulatedTotalTokens: newTotalTokens,
-                    accumulatedCost: newEstimatedCost,
-                  },
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${tokenEvent}\n\n`);
-              } catch (err) {
-                logger.errorNoUser(LOG_MODULES.TOKEN, 'Ralph Loop 保存 Token 使用记录失败', { error: err });
+                  data: { todoList: newSnapshot },
+                }).catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '保存 TODO 失败', { error: err }));
               }
-            },
-            onComplete: (fullResponseText) => {
-              logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 单次迭代完成', { textLength: fullResponseText.length });
-            },
-            onError: async (error) => {
-              // 检查是否为中止错误
-              const isAborted = error.name === 'AbortError' || 
-                error.message.includes('abort') || 
-                error.message.includes('cancelled') ||
-                error.message.includes('中止');
-
-              if (isAborted) {
-                logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 检测到中止信号', { message: error.message });
-                // 检查数据库状态确认是否已被中止
-                const currentEval = await prisma.evaluationSession.findUnique({
-                  where: { id: evaluation.id },
-                  select: { status: true },
-                });
-                if (currentEval?.status === 'cancelled') {
-                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 评估已被外部中止，停止工作流');
-                  // 不触发后续的队列处理
-                  safeClose();
-                  return;
-                }
-              }
-
-              // 判断是否为致命错误（需要终止评估）
-              const isFatal =
-                error.message.includes('error_max_turns') ||
-                error.message.includes('error_max_budget_usd') ||
-                error.message.includes('error_max_structured_output_retries');
-
-              if (!isFatal && !isAborted) {
-                // 非致命错误（如 error_during_execution）：记录日志，不终止评估
-                logger.warn(LOG_MODULES.EVALUATION, 'Ralph Loop 非致命错误，评估继续', { message: error.message });
-                const data = JSON.stringify({
-                  type: 'error',
-                  error: error.message,
-                  fatal: false,
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${data}\n\n`);
-                return;
-              }
-
-              logger.errorNoUser(LOG_MODULES.EVALUATION, 'Ralph Loop 致命错误，终止评估', { error });
-
-              // 从注册表移除 agent
-              try {
-                const { removeAgent } = await import('@/lib/agent-registry');
-                removeAgent(evaluation.id);
-              } catch (e) {
-                logger.errorNoUser(LOG_MODULES.AGENT, '移除 agent 注册失败', { error: e });
-              }
-
-              // 保存错误消息
-              await prisma.sessionMessage.create({
-                data: {
-                  id: generateId('msg'),
-                  evaluationSessionId: evaluation.id,
-                  role: 'assistant',
-                  content: `评估失败: ${error.message}`,
-                },
-              }).catch(err => console.error('保存错误消息失败:', err));
-
-              // 更新状态
-              await prisma.evaluationSession.update({
-                where: { id: evaluation.id },
-                data: {
-                  status: 'failed',
-                  errorMessage: error.message,
-                  completedAt: new Date(),
-                },
-              });
-
-              await prisma.project.update({
-                where: { id },
-                data: { status: 'failed' },
-              });
-
-              // 处理队列 - 启动下一个排队评估
-              const { processQueue } = await import('@/services/evaluation-queue');
-              processQueue().catch(err => console.error('[Queue] 处理队列失败:', err));
-
-              // 发送错误事件
-              try {
-                const data = JSON.stringify({
-                  type: 'error',
-                  error: error.message,
-                  fatal: true,
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${data}\n\n`);
-                safeClose();
-              } catch {
-                // Controller 可能已关闭，忽略错误
-              }
-            },
-            onRalphComplete: async (result) => {
-              logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 任务完成', {
+            }
+          },
+          
+          onTokenUsage: (data) => {
+            // 更新累计 Token
+            cumulativeTokens.input = data.cumulativeInputTokens;
+            cumulativeTokens.output = data.cumulativeOutputTokens;
+            
+            // 发送 Token 使用事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'phase_token_usage',
+              nodeIndex: data.nodeIndex + 1,
+              modelName: data.modelName,
+              inputTokens: data.inputTokens,
+              outputTokens: data.outputTokens,
+              cumulativeInputTokens: data.cumulativeInputTokens,
+              cumulativeOutputTokens: data.cumulativeOutputTokens,
+            })}\n\n`);
+          },
+          
+          onNodeRetry: (nodeIndex, nodeId, nodeName, retryCount, maxRetries, error) => {
+            logger.warn(LOG_MODULES.EVALUATION, `节点 ${nodeName} 重试 ${retryCount}/${maxRetries}`, { error: error.message });
+            
+            // 发送重试事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'node_retry',
+              nodeIndex,
+              nodeName,
+              retryCount,
+              maxRetries,
+              error: error.message,
+              timestamp: Date.now(),
+            })}\n\n`);
+          },
+          
+          onNodeComplete: async (nodeIndex, result) => {
+            logger.debug(LOG_MODULES.EVALUATION, `节点 ${result.nodeName} 完成`, {
+              status: result.status,
+              duration: result.duration,
               iterations: result.iterations,
-              completionReason: result.completionReason,
-              reason: result.reason || '无',
-              totalUsage: result.totalUsage,
             });
-
-              // 检查是否为中止完成，如果是则不触发队列
-              if (result.completionReason === 'aborted') {
-                logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 任务被中止，不触发队列处理');
-                
-                // 计算 token 费用（中止时也有 token 使用）
-                const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
-                const modelId = modelConfig?.models || 'claude-sonnet-4-20250514';
-                const pricing = getModelPricingOrDefault(modelId);
-                const estimatedCost = calculateCost(result.totalUsage, pricing);
-                
-                logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop 中止时的 Token 统计', {
-                inputTokens: result.totalUsage.inputTokens,
-                outputTokens: result.totalUsage.outputTokens,
-                totalTokens: result.totalUsage.totalTokens,
-              });
-                
-                // 更新状态为 cancelled（同时保存 token 统计）
-                await prisma.evaluationSession.update({
-                  where: { id: evaluation.id },
-                  data: {
-                    status: 'cancelled',
-                    completedAt: new Date(),
-                    errorMessage: result.reason || '用户手动中止',
-                    // Token 统计（中止时也记录）
-                    totalInputTokens: result.totalUsage.inputTokens || 0,
-                    totalOutputTokens: result.totalUsage.outputTokens || 0,
-                    totalTokens: result.totalUsage.totalTokens || 0,
-                    estimatedCost,
-                  },
-                });
-                
-                // 完成所有未完成的 Skill 执行记录
-                await completeAllPendingSkillExecutions({
-                  evaluationId: evaluation.id,
-                  status: 'cancelled',
-                  reason: '评估被中止',
-                });
-                
-                await prisma.project.update({
-                  where: { id },
-                  data: { status: 'idle' },
-                });
-
-                // 从注册表移除 agent
-                const { removeAgent } = await import('@/lib/agent-registry');
-                removeAgent(evaluation.id);
-
-                // 停止 Watchdog
-                stopWatchdog(evaluation.id);
-
-                // 发送中止事件
-                const data = JSON.stringify({
-                  type: 'aborted',
-                  evaluationId: evaluation.id,
-                  message: '评估已被中止',
-                  timestamp: Date.now(),
-                });
-                safeEnqueue(`data: ${data}\n\n`);
-                safeClose();
-                return;
-              }
-
-              // 从项目目录读取 vulnerabilities.json 文件
-              if (project.projectPath) {
-                try {
-                  const vulnFilePath = join(project.projectPath, 'vulnerabilities.json');
-                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 读取漏洞文件', { path: vulnFilePath });
-                  const fileContent = await readFile(vulnFilePath, 'utf-8');
-                  const jsonReport = JSON.parse(fileContent);
-
-                  if (jsonReport.summary) {
-                    const summary = jsonReport.summary;
-                    const toInt = (v: any) => typeof v === 'string' ? parseInt(v) || 0 : (v || 0);
-                    const vulns = Array.isArray(jsonReport.vulnerabilities) ? jsonReport.vulnerabilities : [];
-                    const isVulnerable = (v: any) => v.vulnerable === true || v.vulnerable === 'true';
-                    evaluationResult = {
-                      total: toInt(summary.total) || vulns.filter(isVulnerable).length,
-                      critical: 0,
-                      high: 0,
-                      medium: 0,
-                      low: 0,
-                      info: 0,
-                      skills_used: [],
-                      vulnerabilities: vulns,
-                    };
-                    logger.debug(LOG_MODULES.VULNERABILITY, 'Ralph Loop 从 vulnerabilities.json 读取到漏洞', { totalCount: vulns.length, vulnerableCount: vulns.filter(isVulnerable).length });
-                  }
-                } catch (e: any) {
-                  if (e.code === 'ENOENT') {
-                    logger.warn(LOG_MODULES.VULNERABILITY, 'Ralph Loop vulnerabilities.json 不存在，跳过漏洞导入');
-                  } else {
-                    logger.errorNoUser(LOG_MODULES.VULNERABILITY, 'Ralph Loop 读取 vulnerabilities.json 失败', { error: e });
-                  }
-                }
-              }
-
-              // 保存评估结果到数据库
-              if (evaluationResult) {
-                try {
-                  await prisma.evaluationResult.upsert({
-                    where: { evaluationId: evaluation.id },
-                    update: {
-                      totalVulns: evaluationResult.total || 0,
-                      criticalCount: evaluationResult.critical || 0,
-                      highCount: evaluationResult.high || 0,
-                      mediumCount: evaluationResult.medium || 0,
-                      lowCount: evaluationResult.low || 0,
-                      infoCount: evaluationResult.info || 0,
-                      skillsUsed: JSON.stringify(evaluationResult.skills_used || []),
-                      rawReport: JSON.stringify(evaluationResult),
-                    },
-                    create: {
-                      id: generateId('result'),
-                      evaluationId: evaluation.id,
-                      totalVulns: evaluationResult.total || 0,
-                      criticalCount: evaluationResult.critical || 0,
-                      highCount: evaluationResult.high || 0,
-                      mediumCount: evaluationResult.medium || 0,
-                      lowCount: evaluationResult.low || 0,
-                      infoCount: evaluationResult.info || 0,
-                      skillsUsed: JSON.stringify(evaluationResult.skills_used || []),
-                      rawReport: JSON.stringify(evaluationResult),
-                    },
-                  });
-                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 评估结果已保存到数据库');
-
-                  // 只保存 vulnerable: true 的漏洞（兼容布尔和字符串 "true"）
-                  const isVulnerable = (v: any) => v.vulnerable === true || v.vulnerable === 'true';
-                  const vulnsToSave = evaluationResult.vulnerabilities.filter(isVulnerable);
-                  logger.debug(LOG_MODULES.VULNERABILITY, 'Ralph Loop 漏洞统计', { totalCount: evaluationResult.vulnerabilities.length, vulnerableCount: vulnsToSave.length });
-
-                  for (const vuln of vulnsToSave) {
-                    await prisma.vulnerability.create({
-                      data: {
-                        id: generateId('vuln'),
-                        projectId: id,
-                        evaluationId: evaluation.id,
-                        title: vuln.title || '未命名漏洞',
-                        type: vuln.type || 'unknown',       // 漏洞类型字段
-                        severity: vuln.severity || 'info',
-                        description: vuln.description || '',
-                        filePath: vuln.location || null,
-                        codeSnippet: vuln.POC || null,
-                        fixSuggestion: null,
-                        aiAnalysis: vuln.description || null,
-                        cwe: vuln.cwe_id || null,
-                        skill: vuln.skill || null,          // 发现工具/skill字段
-                        status: 'new',
-                        updatedAt: new Date(),
-                      },
-                    });
-                  }
-                  if (vulnsToSave.length > 0) {
-                    logger.debug(LOG_MODULES.VULNERABILITY, 'Ralph Loop 保存了漏洞详情', { count: vulnsToSave.length });
-                    
-                    // ===== 新增：Skill 匹配和 Mapping 创建 =====
-                    // 根据 vulnerabilities.json 的 skill 字段匹配 Skill 并创建 Mapping 记录
-                    try {
-                      // 1. 获取本次评估使用的 Skill 列表
-                      let usedSkills: { skillId: string; skillName: string }[] = [];
-                      if (evaluation.skillsUsed) {
-                        usedSkills = JSON.parse(evaluation.skillsUsed);
-                      }
-                      
-                      // 2. 构建 Skill 名称 -> ID 映射
-                      const skillNameToId = new Map<string, string>();
-                      for (const s of usedSkills) {
-                        skillNameToId.set(s.skillName, s.skillId);
-                        // 也添加小写版本用于模糊匹配
-                        skillNameToId.set(s.skillName.toLowerCase(), s.skillId);
-                      }
-                      
-                      // 3. 统计每个 Skill 发现的漏洞数量
-                      const skillFindings = new Map<string, { skillId: string; count: number; matchType: string }>();
-                      
-                      for (const vuln of vulnsToSave) {
-                        if (vuln.skill) {
-                          const reportedSkillName = vuln.skill;
-                          let matchedSkillId: string | null = null;
-                          let matchType = 'unmatched';
-                          
-                          // 精确匹配
-                          if (skillNameToId.has(reportedSkillName)) {
-                            matchedSkillId = skillNameToId.get(reportedSkillName)!;
-                            matchType = 'exact';
-                          }
-                          // 模糊匹配（小写）
-                          else if (skillNameToId.has(reportedSkillName.toLowerCase())) {
-                            matchedSkillId = skillNameToId.get(reportedSkillName.toLowerCase())!;
-                            matchType = 'fuzzy';
-                          }
-                          // 尝试从数据库查询
-                          else {
-                            const dbSkill = await prisma.skill.findFirst({
-                              where: { name: reportedSkillName, isLatest: true, isActive: true },
-                              select: { id: true },
-                            });
-                            if (dbSkill) {
-                              matchedSkillId = dbSkill.id;
-                              matchType = 'exact';
-                            }
-                          }
-                          
-                          if (matchedSkillId) {
-                            const existing = skillFindings.get(matchedSkillId);
-                            if (existing) {
-                              existing.count++;
-                            } else {
-                              skillFindings.set(matchedSkillId, { skillId: matchedSkillId, count: 1, matchType });
-                            }
-                          }
-                        }
-                      }
-                      
-                      // 4. 更新 Skill 统计并创建 Mapping 记录
-                      for (const [skillId, info] of skillFindings) {
-                        // 更新 vulnerabilityCount
-                        await prisma.skill.update({
-                          where: { id: skillId },
-                          data: { vulnerabilityCount: { increment: info.count } },
-                        });
-                        
-                        // 为每个漏洞创建 Mapping 记录
-                        const relatedVulns = vulnsToSave.filter(v => v.skill && 
-                          (skillNameToId.get(v.skill) === skillId || 
-                           skillNameToId.get(v.skill?.toLowerCase()) === skillId));
-                        
-                        for (const vuln of relatedVulns) {
-                          // 查找刚创建的漏洞记录
-                          const dbVuln = await prisma.vulnerability.findFirst({
-                            where: {
-                              projectId: id,
-                              evaluationId: evaluation.id,
-                              title: vuln.title || '未命名漏洞',
-                            },
-                            orderBy: { createdAt: 'desc' },
-                            select: { id: true },
-                          });
-                          
-                          if (dbVuln) {
-                            await prisma.skillVulnerabilityMapping.create({
-                              data: {
-                                skillId,
-                                vulnerabilityId: dbVuln.id,
-                                evaluationId: evaluation.id,
-                                projectId: id,
-                                skillNameReported: vuln.skill,
-                                matchType: info.matchType,
-                              },
-                            }).catch(() => {
-                              // 忽略唯一约束冲突
-                            });
-                          }
-                        }
-                        
-                        logger.debug(LOG_MODULES.SKILL, 'Ralph Loop Skill 发现漏洞', { skillId, count: info.count, matchType: info.matchType });
-                      }
-                    } catch (mappingError) {
-                      logger.errorNoUser(LOG_MODULES.SKILL, 'Ralph Loop Skill 匹配失败', { error: mappingError });
-                    }
-                  }
-                } catch (e) {
-                  logger.errorNoUser(LOG_MODULES.EVALUATION, 'Ralph Loop 保存评估结果失败', { error: e });
-                }
-              }
-
-              // 更新评估状态
-              // verified = 检测到完成信号；max-iterations = 跑完所有迭代（视为完成）
-              const summaryLabel =
-                result.completionReason === 'verified' ? '验证完成' : '迭代完成';
-              
-              // 计算 token 费用
-              const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
-              const modelId = modelConfig?.models || 'claude-sonnet-4-20250514';
-              const pricing = getModelPricingOrDefault(modelId);
-              const estimatedCost = calculateCost(result.totalUsage, pricing);
-              
-              logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop Token 统计', {
-                inputTokens: result.totalUsage.inputTokens,
-                outputTokens: result.totalUsage.outputTokens,
-                totalTokens: result.totalUsage.totalTokens,
-                estimatedCost: `$${estimatedCost.toFixed(4)}`,
-              });
-              
-              await prisma.evaluationSession.update({
-                where: { id: evaluation.id },
-                data: {
-                  status: 'completed',
-                  endReason: 'completed',
-                  endMessage: result.completionReason === 'verified' 
-                    ? '评估任务已完成，结果已验证' 
-                    : `评估结束: ${result.reason || '达到迭代上限'}`,
-                  completedAt: new Date(),
-                  summary: `[Ralph Loop] ${summaryLabel}。共迭代 ${result.iterations} 次。${result.reason || ''}`,
-                  // Token 统计
-                  totalInputTokens: result.totalUsage.inputTokens || 0,
-                  totalOutputTokens: result.totalUsage.outputTokens || 0,
-                  totalTokens: result.totalUsage.totalTokens || 0,
-                  estimatedCost,
-                },
-              });
-
-              // 完成所有未完成的 Skill 执行记录
-              await completeAllPendingSkillExecutions({
-                evaluationId: evaluation.id,
-                status: 'completed',
-                reason: '评估正常完成',
-              });
-
-              await prisma.project.update({
-                where: { id },
-                data: { status: 'completed' },
-              });
-
-              // 从注册表移除 agent
-              const { removeAgent } = await import('@/lib/agent-registry');
-              removeAgent(evaluation.id);
-              logger.debug(LOG_MODULES.AGENT, 'Ralph Loop Agent 完成，已从注册表移除', { evaluationId: evaluation.id });
-
-              // 停止 Watchdog
-              stopWatchdog(evaluation.id);
-              logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop Watchdog 已停止', { evaluationId: evaluation.id });
-
-              // 处理队列 - 启动下一个排队评估
-              const { processQueue } = await import('@/services/evaluation-queue');
-              processQueue().catch(err => console.error('[Queue] 处理队列失败:', err));
-
-              // 发送审计完成事件
-              const { emitEvaluationComplete } = require('@/lib/event-bus');
-              emitEvaluationComplete(evaluation.id, evaluationResult);
-              
-              // 发送完成事件（SSE）
-              const data = JSON.stringify({
-                type: 'done',
-                evaluationId: evaluation.id,
-                result: evaluationResult,
-                ralphResult: {
-                  iterations: result.iterations,
-                  completionReason: result.completionReason,
-                  reason: result.reason,
-                },
-                message: '评估工作已完成',
-                timestamp: Date.now(),
-              });
-              safeEnqueue(`data: ${data}\n\n`);
-              safeClose();
-            },
-          };
-
-          // 启动 Ralph Loop
-          logger.debug(LOG_MODULES.EVALUATION, 'Evaluation 启动 Ralph Loop 评估', { evaluationId: evaluation.id, projectId: id, workDir: project.projectPath || '未设置' });
+            
+            // 清除当前节点 ID（节点已完成）
+            currentNodeId = null;
+            
+            // 发送节点完成事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'phase_complete',
+              nodeIndex: nodeIndex + 1,
+              nodeId: result.nodeId,
+              nodeName: result.nodeName,
+              status: result.status,
+              outputYamlPath: result.outputYamlPath,
+              iterations: result.iterations,
+              duration: result.duration,
+            })}\n\n`);
+            
+            // 更新节点状态到数据库
+            await updateNodeStatus(result.nodeId, result.status === 'completed' ? 'completed' : 'failed');
+          },
           
-          await agent.loop({
-            evaluationId: evaluation.id,
-            projectId: id,
-            context: {
-              projectName: project.name,
-              projectDescription: project.description || undefined,
-              environmentUrl: project.environmentUrl || undefined,
-              files,
-              initialMessage,
-            },
-            callbacks,
-          });
+          onNodeError: (nodeIndex, nodeId, nodeName, error) => {
+            logger.errorNoUser(LOG_MODULES.EVALUATION, `节点 ${nodeName} 错误`, { error: error.message });
+            
+            // 清除当前节点 ID（节点已出错）
+            currentNodeId = null;
+            
+            // 发送节点错误事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'node_error',
+              nodeIndex,
+              nodeId,
+              nodeName,
+              error: error.message,
+              timestamp: Date.now(),
+            })}\n\n`);
+          },
           
-          logger.debug(LOG_MODULES.EVALUATION, 'Evaluation Ralph Loop 完成');
+          onWorkflowComplete: async (result) => {
+            logger.debug(LOG_MODULES.EVALUATION, '工作流完成', {
+              status: result.status,
+              totalDuration: result.totalDuration,
+              totalInputTokens: result.totalInputTokens,
+              totalOutputTokens: result.totalOutputTokens,
+            });
+            
+            // 停止 Watchdog
+            stopWatchdog(evaluation.id);
+            
+            // 完成所有未完成的 Skill 执行记录
+            await completeAllPendingSkillExecutions({
+              evaluationId: evaluation.id,
+              status: result.status === 'completed' ? 'completed' : 'failed',
+              reason: result.endReason || '工作流完成',
+            });
+            
+            // 更新项目状态
+            await prisma.project.update({
+              where: { id },
+              data: { status: result.status === 'completed' ? 'completed' : 'failed' },
+            });
+            
+            // 处理队列
+            const { processQueue } = await import('@/services/evaluation-queue');
+            processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '处理队列失败', { error: err }));
+            
+            // 发送工作流完成事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'workflow_complete',
+              status: result.status,
+              totalDuration: result.totalDuration,
+              totalInputTokens: result.totalInputTokens,
+              totalOutputTokens: result.totalOutputTokens,
+              endReason: result.endReason,
+              nodeResults: result.nodeResults.map(r => ({
+                nodeName: r.nodeName,
+                status: r.status,
+                duration: r.duration,
+              })),
+            })}\n\n`);
+            
+            // 发送最终完成事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'done',
+              evaluationId: evaluation.id,
+              message: result.endMessage || '工作流执行完成',
+              timestamp: Date.now(),
+            })}\n\n`);
+            
+            safeClose();
+          },
           
-        } catch (error) {
-          logger.errorNoUser(LOG_MODULES.EVALUATION, 'Evaluation 启动失败', { error });
-          const errorMessage = error instanceof Error ? error.message : '未知错误';
-
-          // 发送错误事件
-          const data = JSON.stringify({
-            type: 'error',
-            error: errorMessage,
-            timestamp: Date.now(),
-          });
-          safeEnqueue(`data: ${data}\n\n`);
-          safeClose();
-
-          // 更新状态（保留已累加的 Token）
-          const currentTokens = await prisma.evaluationSession.findUnique({
-            where: { id: evaluation.id },
-            select: {
-              totalInputTokens: true,
-              totalOutputTokens: true,
-              totalTokens: true,
-              estimatedCost: true,
-            },
-          });
-
+          onWorkflowError: (error) => {
+            logger.errorNoUser(LOG_MODULES.EVALUATION, '工作流错误', { error: error.message });
+            
+            // 停止 Watchdog
+            stopWatchdog(evaluation.id);
+            
+            // 发送错误事件
+            safeEnqueue(`data: ${JSON.stringify({
+              type: 'error',
+              error: error.message,
+              fatal: true,
+              timestamp: Date.now(),
+            })}\n\n`);
+            
+            safeClose();
+          },
+        };
+        
+        // 更新引擎回调
+        (engine as any).callbacks = engineCallbacks;
+        
+        // 发送启动事件
+        safeEnqueue(`data: ${JSON.stringify({
+          type: 'started',
+          evaluationId: evaluation.id,
+          workflowType: 'dag',
+          totalNodes: sortedNodes.length,
+          message: 'DAG 工作流已启动',
+          timestamp: Date.now(),
+        })}\n\n`);
+        
+        // 后台执行统一引擎
+        engine.execute().catch(async (error) => {
+          logger.errorNoUser(LOG_MODULES.EVALUATION, '统一引擎执行失败', { error });
+          
+          // 更新状态
           await prisma.evaluationSession.update({
             where: { id: evaluation.id },
             data: {
               status: 'failed',
-              endReason: 'error',
-              endMessage: errorMessage,
-              errorMessage,
+              errorMessage: error.message,
               completedAt: new Date(),
-              // 保留已累加的 Token
-              totalInputTokens: currentTokens?.totalInputTokens ?? 0,
-              totalOutputTokens: currentTokens?.totalOutputTokens ?? 0,
-              totalTokens: currentTokens?.totalTokens ?? 0,
-              estimatedCost: currentTokens?.estimatedCost ?? 0,
             },
           });
-
-          // 完成所有未完成的 Skill 执行记录
-          await completeAllPendingSkillExecutions({
-            evaluationId: evaluation.id,
-            status: 'failed',
-            reason: `评估失败: ${errorMessage}`,
-          });
-
+          
           await prisma.project.update({
             where: { id },
             data: { status: 'failed' },
           });
-
+          
           // 停止 Watchdog
           stopWatchdog(evaluation.id);
-        }
+          
+          // 发送错误事件
+          safeEnqueue(`data: ${JSON.stringify({
+            type: 'error',
+            error: error.message,
+            fatal: true,
+            timestamp: Date.now(),
+          })}\n\n`);
+          
+          safeClose();
+        });
       },
     });
 
@@ -2333,6 +1822,57 @@ async function getModelConfig(modelId?: string | null, userId?: string | null) {
     },
   });
   return firstModel;
+}
+
+/**
+ * 根据 roleId 获取模型配置（用于统一执行引擎）
+ * @param roleId 角色 ID
+ * @param roleModels 角色模型配置映射
+ * @param defaultModelConfig 默认模型配置
+ */
+async function getModelConfigForRole(
+  roleId: string | undefined,
+  roleModels: { roleId: string; modelId: string }[] | null | undefined,
+  defaultModelConfig: ModelConfigForExecution
+): Promise<ModelConfigForExecution> {
+  // 如果没有 roleModels 配置，使用默认模型
+  if (!roleModels || roleModels.length === 0) {
+    return defaultModelConfig;
+  }
+  
+  // 查找角色对应的模型 ID
+  const targetRoleId = roleId || 'default';
+  const roleModel = roleModels.find(rm => rm.roleId === targetRoleId);
+  
+  if (!roleModel) {
+    return defaultModelConfig;
+  }
+  
+  const modelId = roleModel.modelId;
+  
+  // 从数据库加载模型配置
+  try {
+    const modelConfig = await prisma.modelConfig.findUnique({
+      where: { id: modelId },
+    });
+    
+    if (!modelConfig) {
+      logger.warn(LOG_MODULES.MODEL, '模型配置不存在', { modelId });
+      return defaultModelConfig;
+    }
+    
+    return {
+      id: modelConfig.id,
+      name: modelConfig.name,
+      providerType: modelConfig.providerType,
+      apiKey: modelConfig.apiKey,
+      apiBaseUrl: modelConfig.apiBaseUrl || '',
+      models: modelConfig.models,
+    };
+  } catch (error) {
+    logger.errorNoUser(LOG_MODULES.MODEL, '加载模型配置失败', { modelId, error });
+    return defaultModelConfig;
+  }
 }
 
 /**
