@@ -25,9 +25,123 @@ import { useTechStackOptions, useTechStackOptionsWithIds } from '@/hooks/useTech
 import { useVulnerabilityPatterns } from '@/hooks/useVulnerabilityPatterns';
 import toast from 'react-hot-toast';
 
-// FSM 工作流固定缩略图（预编码的 Base64 SVG）
-// 展示 P1→P2→P3→P4→P5→P6 的流程
-const FSM_THUMBNAIL_BASE64 = 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA0MDAgMjAwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImJnIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojZjhzYWZjIi8+PHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjojZTJlOGYwIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjQwMCIgaGVpZ2h0PSIyMDAiIGZpbGw9InVybCgjYmcpIi8+PHRleHQgeD0iMjAwIiB5PSIyNSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzQ3NTU2OSI+5a6H6aG55bu6566h5a6D5a6M5YWo57uT5p2fPC90ZXh0PjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDMwLCA1MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI1MCIgaGVpZ2h0PSI0MCIgcng9IjYiIGZpbGw9IiMzYjgyZjYiLz48dGV4dCB4PSIyNSIgeT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZmlsbD0id2hpdGUiIGZvbnQtd2VpZ2h0PSJib2xkIj5QMTwvdGV4dD48dGV4dCB4PSIyNSIgeT0iMzIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI3IiBmaWxsPSJ3aGl0ZSI+6aG555uu556s5a6YPC90ZXh0PjwvZz48cGF0aCBkPSJNODUgNzAgTDk1IDcwIiBzdHJva2U9IiM5NGEzYjgiIHN0cm9rZS13aWR0aD0iMiIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDEwMCwgNTApIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iNTAiIGhlaWdodD0iNDAiIHJ4PSI2IiBmaWxsPSIjM2I4MmY2Ii8+PHRleHQgeD0iMjUiIHk9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IndoaXRlIiBmb250LXdlaWdodD0iYm9sZCI+UDI8L3RleHQ+PHRleHQgeD0iMjUiIHk9IjMyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNyIgZmlsbD0id2hpdGUiPkRGROWIhu+8jDwvdGV4dD48L2c+PHBhdGggZD0iTTE1NSA3MCBMMTY1IDcwIiBzdHJva2U9IiM5NGEzYjgiIHN0cm9rZS13aWR0aD0iMiIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDE3MCwgNTApIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iNTAiIGhlaWdodD0iNDAiIHJ4PSI2IiBmaWxsPSIjM2I4MmY2Ii8+PHRleHQgeD0iMjUiIHk9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IndoaXRlIiBmb250LXdlaWdodD0iYm9sZCI+UDM8L3RleHQ+PHRleHQgeD0iMjUiIHk9IjMyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNyIgZmlsbD0id2hpdGUiPuihj+iur+W4uOeQizwvdGV4dD48L2c+PHBhdGggZD0iTTIyNSA3MCBMMjM1IDcwIiBzdHJva2U9IiM5NGEzYjgiIHN0cm9rZS13aWR0aD0iMiIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDI0MCwgNTApIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iNTAiIGhlaWdodD0iNDAiIHJ4PSI2IiBmaWxsPSIjM2I4MmY2Ii8+PHRleHQgeD0iMjUiIHk9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IndoaXRlIiBmb250LXdlaWdodD0iYm9sZCI+UDQ8L3RleHQ+PHRleHQgeD0iMjUiIHk9IjMyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNyIgZmlsbD0id2hpdGUiPuaAuOWuouafpeaLrTwvdGV4dD48L2c+PHBhdGggZD0iTTI5NSA3MCBMMzA1IDcwIiBzdHJva2U9IiM5NGEzYjgiIHN0cm9rZS13aWR0aD0iMiIvPjxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDMxMCwgNTApIj48cmVjdCB4PSIwIiB5PSIwIiB3aWR0aD0iNTAiIGhlaWdodD0iNDAiIHJ4PSI2IiBmaWxsPSIjM2I4MmY2Ii8+PHRleHQgeD0iMjUiIHk9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTAiIGZpbGw9IndoaXRlIiBmb250LXdlaWdodD0iYm9sZCI+UDU8L3RleHQ+PHRleHQgeD0iMjUiIHk9IjMyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iNyIgZmlsbD0id2hpdGUiPlNUUklERTwvdGV4dD48L2c+PHBhdGggZD0iTTM0MCA5NSBMMzQwIDExNSBMNjAgMTE1IEw2MCAxNDAiIHN0cm9rZT0iIzk0YTNiOCIgc3Ryb2tlLXdpZHRoPSIyIi8+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMzAsIDE0MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI2MCIgaGVpZ2h0PSI0MCIgcng9IjYiIGZpbGw9IiM4YjVjZjYiLz48dGV4dCB4PSIzMCIgeT0iMTgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgZmlsbD0id2hpdGUiIGZvbnQtd2VpZ2h0PSJib2xkIj5QNjwvdGV4dD48dGV4dCB4PSIzMCIgeT0iMzIiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI3IiBmaWxsPSJ3aGl0ZSI+5q2M5b2i55Sf5ZGjPC90ZXh0PjwvZz48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSgxMjAsIDE0MCkiPjxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSI4MCIgaGVpZ2h0PSI0MCIgcng9IjYiIGZpbGw9IiNmNTllMGIiIHN0cm9rZT0iI2ZiYmYyNCIgc3Ryb2tlLXdpZHRoPSIxIiBzdHJva2UtZGFzaGFycmF5PSI0LDIiLz48dGV4dCB4PSI0MCIgeT0iMjUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSI5IiBmaWxsPSJ3aGl0ZSI+56eA5p+l5rWL6K+V5YyWPC90ZXh0PjwvZz48L3N2Zz4=';
+// FSM 阶段标签
+const FSM_PHASE_LABELS: Record<string, string> = {
+  'P1': '项目理解',
+  'P2': 'DFD分析',
+  'P3': '信任边界',
+  'P4': '安全评估',
+  'P5': 'STRIDE',
+  'P6': '报告生成',
+};
+
+// 生成 FSM 工作流缩略图（SVG）
+function generateFSMThumbnail(nodes: FlowNode[]): string {
+  // 提取阶段节点和自定义节点
+  const phaseNodes: { phase: string; label: string }[] = [];
+  const customNodes: { label: string }[] = [];
+  
+  nodes.forEach(node => {
+    if (node.data?.phase) {
+      phaseNodes.push({
+        phase: node.data.phase,
+        label: node.data.label || FSM_PHASE_LABELS[node.data.phase] || node.data.phase,
+      });
+    } else if (node.type === 'task') {
+      customNodes.push({
+        label: node.data?.label || 'Agent',
+      });
+    }
+  });
+  
+  // 按 P1-P6 排序
+  phaseNodes.sort((a, b) => {
+    const order = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
+    return order.indexOf(a.phase) - order.indexOf(b.phase);
+  });
+  
+  // 计算 SVG 尺寸 - 更小的节点
+  const nodeWidth = 50;
+  const nodeHeight = 26;
+  const padding = 12;
+  const spacing = 6;
+  
+  // 布局：P1-P5 一行，P6 + 自定义节点第二行
+  const row1Nodes = phaseNodes.filter(n => n.phase !== 'P6');
+  const row2Nodes = [...phaseNodes.filter(n => n.phase === 'P6'), ...customNodes];
+  
+  const row1Width = row1Nodes.length * (nodeWidth + spacing) - spacing;
+  const row2Width = row2Nodes.length * (nodeWidth + spacing) - spacing;
+  const maxRowWidth = Math.max(row1Width, row2Width, 150);
+  
+  const svgWidth = maxRowWidth + padding * 2;
+  const svgHeight = row2Nodes.length > 0 ? 80 : 50;
+  
+  // 生成节点 SVG
+  const row1Y = 12;
+  const row2Y = 44;
+  
+  let row1X = (svgWidth - row1Width) / 2;
+  let row2X = (svgWidth - row2Width) / 2;
+  
+  let nodesSvg = '';
+  let arrowsSvg = '';
+  
+  // 第一行节点 (P1-P5)
+  let prevX = 0;
+  row1Nodes.forEach((node, i) => {
+    const x = row1X + i * (nodeWidth + spacing);
+    nodesSvg += `
+      <rect x="${x}" y="${row1Y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" fill="#3b82f6"/>
+      <text x="${x + nodeWidth/2}" y="${row1Y + 10}" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">${node.phase}</text>
+      <text x="${x + nodeWidth/2}" y="${row1Y + 20}" text-anchor="middle" font-family="Arial, sans-serif" font-size="5" fill="#dbeafe">${node.label.length > 4 ? node.label.substring(0, 4) : node.label}</text>
+    `;
+    if (i > 0) {
+      arrowsSvg += `<path d="M${prevX + nodeWidth} ${row1Y + nodeHeight/2} L${x} ${row1Y + nodeHeight/2}" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrow)"/>`;
+    }
+    prevX = x;
+  });
+  
+  // 连接线从第一行到第二行
+  if (row1Nodes.length > 0 && row2Nodes.length > 0) {
+    const lastRow1X = row1X + (row1Nodes.length - 1) * (nodeWidth + spacing);
+    arrowsSvg += `<path d="M${lastRow1X + nodeWidth/2} ${row1Y + nodeHeight} L${lastRow1X + nodeWidth/2} ${row1Y + nodeHeight + 4} L${row2X + nodeWidth/2} ${row1Y + nodeHeight + 4} L${row2X + nodeWidth/2} ${row2Y}" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrow)"/>`;
+  }
+  
+  // 第二行节点 (P6 + 自定义)
+  prevX = 0;
+  row2Nodes.forEach((node, i) => {
+    const x = row2X + i * (nodeWidth + spacing);
+    const isCustom = !('phase' in node);
+    const fillColor = isCustom ? '#f59e0b' : '#8b5cf6';
+    const phaseLabel = 'phase' in node ? node.phase : '';
+    
+    nodesSvg += `
+      <rect x="${x}" y="${row2Y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" fill="${fillColor}" ${isCustom ? 'stroke="#fbbf24" stroke-dasharray="2,1"' : ''}/>
+      ${phaseLabel ? `<text x="${x + nodeWidth/2}" y="${row2Y + 10}" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">${phaseLabel}</text>` : ''}
+      <text x="${x + nodeWidth/2}" y="${phaseLabel ? row2Y + 20 : row2Y + 16}" text-anchor="middle" font-family="Arial, sans-serif" font-size="5" fill="${isCustom ? 'white' : '#ede9fe'}">${node.label.length > 4 ? node.label.substring(0, 4) : node.label}</text>
+    `;
+    if (i > 0) {
+      arrowsSvg += `<path d="M${prevX + nodeWidth} ${row2Y + nodeHeight/2} L${x} ${row2Y + nodeHeight/2}" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrow)"/>`;
+    }
+    prevX = x;
+  });
+  
+  // 完整 SVG
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}">
+    <defs>
+      <marker id="arrow" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
+        <path d="M0,0 L4,2 L0,4 Z" fill="#94a3b8"/>
+      </marker>
+    </defs>
+    <rect width="${svgWidth}" height="${svgHeight}" fill="#f8fafc"/>
+    ${arrowsSvg}
+    ${nodesSvg}
+  </svg>`;
+  
+  // 转换为 Base64
+  return Buffer.from(svg).toString('base64');
+}
 
 interface WorkflowEditorProps {
   workflowId?: string;
@@ -898,8 +1012,8 @@ const [showPreview, setShowPreview] = useState(false);
     try {
       setSaving(true);
       
-      // 生成缩略图（FSM 工作流使用固定缩略图）
-      const thumbnail = isFSM ? FSM_THUMBNAIL_BASE64 : await generateThumbnail();
+      // 生成缩略图（FSM 工作流使用动态生成的流程图）
+      const thumbnail = isFSM ? generateFSMThumbnail(nodes) : await generateThumbnail();
       
       // 处理 Subtask 的 roleId - Subtask 不存储 roleId，运行时动态继承
       const processedNodes = nodes.map(node => {
