@@ -825,6 +825,8 @@ model Skill {
   SkillAnalysis                                          SkillAnalysis[]
   SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
   SkillVulnerabilityMapping                              SkillVulnerabilityMapping[]
+  SkillEvolutionTasks                                    SkillEvolutionTask[]
+  SkillImprovements                                      SkillImprovement[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -1758,4 +1760,76 @@ model IntegratedReport {
 
   @@index([reportId])
   @@index([sourceType])
+}
+
+// ============================================
+// Skill Evolution Models
+// ============================================
+
+model SkillEvolutionConfig {
+  id                    String   @id @default("default")
+  
+  // 触发条件
+  precisionThreshold    Float    @default(0.7)
+  minFalsePositives     Int      @default(5)
+  minConfirmed          Int      @default(3)
+  
+  // 案例数量
+  falsePositiveLimit    Int      @default(10)
+  confirmedLimit        Int      @default(10)
+  
+  // 调度设置
+  scheduleCron          String   @default("0 3 * * *")
+  maxDailyTasks         Int      @default(10)
+  
+  // 内容精简
+  maxDescriptionLength  Int      @default(200)
+  codeSnippetLines      Int      @default(6)
+  
+  isActive              Boolean  @default(true)
+  updatedAt             DateTime @updatedAt
+}
+
+model SkillEvolutionTask {
+  id                String    @id @default(cuid())
+  skillId           String
+  triggerReason     String    // "low_precision" | "high_false_positive" | "manual"
+  falsePositiveCount Int      @default(0)
+  confirmedCount    Int       @default(0)
+  precisionBefore   Float?
+  status            String    @default("pending") // pending/analyzing/completed/rejected
+  analysisResult    String?
+  improvementId     String?
+  newVersionId      String?
+  precisionAfter    Float?
+  recallAfter       Float?
+  createdAt         DateTime  @default(now())
+  completedAt       DateTime?
+  
+  Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  SkillImprovement  SkillImprovement?
+  
+  @@index([skillId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SkillImprovement {
+  id                String    @id @default(cuid())
+  skillId           String
+  taskId            String?   @unique
+  falsePositiveCases String?   // JSON
+  confirmedCases    String?    // JSON
+  analysis          String?    // LLM 分析结果
+  suggestions       String?    // JSON: 改进建议列表
+  improvedContent   String?    // 改进后的 Skill 内容
+  status            String    @default("pending") // pending/applied/rejected
+  createdAt         DateTime  @default(now())
+  
+  Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  SkillEvolutionTask SkillEvolutionTask? @relation(fields: [taskId], references: [id])
+  
+  @@index([skillId])
+  @@index([status])
+  @@index([createdAt])
 }
