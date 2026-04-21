@@ -37,49 +37,46 @@ const FSM_PHASE_LABELS: Record<string, string> = {
 
 // 生成 FSM 工作流缩略图（SVG）
 function generateFSMThumbnail(nodes: FlowNode[]): string {
-  // 提取阶段节点和自定义节点
-  const phaseNodes: { phase: string; label: string }[] = [];
-  const customNodes: { label: string }[] = [];
+  // P1-P6 固定阶段节点（完整名称）
+  const phaseNodes: { phase: string; label: string }[] = [
+    { phase: 'P1', label: '项目理解' },
+    { phase: 'P2', label: 'DFD分析' },
+    { phase: 'P3', label: '信任边界' },
+    { phase: 'P4', label: '安全评审' },
+    { phase: 'P5', label: 'STRIDE' },
+    { phase: 'P6', label: '报告生成' },
+  ];
   
+  // 提取用户添加的自定义节点（非阶段节点）
+  const customNodes: { label: string }[] = [];
   nodes.forEach(node => {
-    if (node.data?.phase) {
-      phaseNodes.push({
-        phase: node.data.phase,
-        label: node.data.label || FSM_PHASE_LABELS[node.data.phase] || node.data.phase,
-      });
-    } else if (node.type === 'task') {
+    if (!node.data?.phase && node.type === 'task') {
       customNodes.push({
         label: node.data?.label || 'Agent',
       });
     }
   });
   
-  // 按 P1-P6 排序
-  phaseNodes.sort((a, b) => {
-    const order = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6'];
-    return order.indexOf(a.phase) - order.indexOf(b.phase);
-  });
+  // 节点尺寸（框小，文字小）
+  const nodeWidth = 44;
+  const nodeHeight = 14;
+  const padding = 10;
+  const spacing = 3;
   
-  // 计算 SVG 尺寸 - 更小的节点
-  const nodeWidth = 50;
-  const nodeHeight = 26;
-  const padding = 12;
-  const spacing = 6;
-  
-  // 布局：P1-P5 一行，P6 + 自定义节点第二行
+  // 布局：P1-P5 一行，自定义节点 + P6 第二行
   const row1Nodes = phaseNodes.filter(n => n.phase !== 'P6');
-  const row2Nodes = [...phaseNodes.filter(n => n.phase === 'P6'), ...customNodes];
+  const row2Nodes = [...customNodes.map(n => ({ label: n.label })), { phase: 'P6', label: '报告生成' }];
   
   const row1Width = row1Nodes.length * (nodeWidth + spacing) - spacing;
   const row2Width = row2Nodes.length * (nodeWidth + spacing) - spacing;
-  const maxRowWidth = Math.max(row1Width, row2Width, 150);
+  const maxRowWidth = Math.max(row1Width, row2Width, 180);
   
   const svgWidth = maxRowWidth + padding * 2;
-  const svgHeight = row2Nodes.length > 0 ? 80 : 50;
+  const svgHeight = 64;  // 画布大一点
   
   // 生成节点 SVG
-  const row1Y = 12;
-  const row2Y = 44;
+  const row1Y = 10;
+  const row2Y = 38;
   
   let row1X = (svgWidth - row1Width) / 2;
   let row2X = (svgWidth - row2Width) / 2;
@@ -91,13 +88,10 @@ function generateFSMThumbnail(nodes: FlowNode[]): string {
   let prevX = 0;
   row1Nodes.forEach((node, i) => {
     const x = row1X + i * (nodeWidth + spacing);
-    nodesSvg += `
-      <rect x="${x}" y="${row1Y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" fill="#3b82f6"/>
-      <text x="${x + nodeWidth/2}" y="${row1Y + 10}" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">${node.phase}</text>
-      <text x="${x + nodeWidth/2}" y="${row1Y + 20}" text-anchor="middle" font-family="Arial, sans-serif" font-size="5" fill="#dbeafe">${node.label.length > 4 ? node.label.substring(0, 4) : node.label}</text>
-    `;
+    nodesSvg += `<rect x="${x}" y="${row1Y}" width="${nodeWidth}" height="${nodeHeight}" rx="2" fill="#3b82f6"/>`;
+    nodesSvg += `<text x="${x + nodeWidth/2}" y="${row1Y + 10}" text-anchor="middle" font-family="sans-serif" font-size="4" fill="white">${node.phase}-${node.label}</text>`;
     if (i > 0) {
-      arrowsSvg += `<path d="M${prevX + nodeWidth} ${row1Y + nodeHeight/2} L${x} ${row1Y + nodeHeight/2}" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrow)"/>`;
+      arrowsSvg += `<line x1="${prevX + nodeWidth}" y1="${row1Y + nodeHeight/2}" x2="${x}" y2="${row1Y + nodeHeight/2}" stroke="#cbd5e1" stroke-width="0.5"/>`;
     }
     prevX = x;
   });
@@ -105,41 +99,32 @@ function generateFSMThumbnail(nodes: FlowNode[]): string {
   // 连接线从第一行到第二行
   if (row1Nodes.length > 0 && row2Nodes.length > 0) {
     const lastRow1X = row1X + (row1Nodes.length - 1) * (nodeWidth + spacing);
-    arrowsSvg += `<path d="M${lastRow1X + nodeWidth/2} ${row1Y + nodeHeight} L${lastRow1X + nodeWidth/2} ${row1Y + nodeHeight + 4} L${row2X + nodeWidth/2} ${row1Y + nodeHeight + 4} L${row2X + nodeWidth/2} ${row2Y}" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrow)"/>`;
+    arrowsSvg += `<path d="M${lastRow1X + nodeWidth/2} ${row1Y + nodeHeight} L${lastRow1X + nodeWidth/2} ${row1Y + nodeHeight + 6} L${row2X + nodeWidth/2} ${row1Y + nodeHeight + 6} L${row2X + nodeWidth/2} ${row2Y}" stroke="#cbd5e1" stroke-width="0.5" fill="none"/>`;
   }
   
-  // 第二行节点 (P6 + 自定义)
+  // 第二行节点 (自定义 + P6)
   prevX = 0;
   row2Nodes.forEach((node, i) => {
     const x = row2X + i * (nodeWidth + spacing);
-    const isCustom = !('phase' in node);
-    const fillColor = isCustom ? '#f59e0b' : '#8b5cf6';
-    const phaseLabel = 'phase' in node ? node.phase : '';
+    const isP6 = 'phase' in node && node.phase === 'P6';
+    const fillColor = isP6 ? '#8b5cf6' : '#f59e0b';
+    const text = isP6 ? `${node.phase}-${node.label}` : node.label;
     
-    nodesSvg += `
-      <rect x="${x}" y="${row2Y}" width="${nodeWidth}" height="${nodeHeight}" rx="3" fill="${fillColor}" ${isCustom ? 'stroke="#fbbf24" stroke-dasharray="2,1"' : ''}/>
-      ${phaseLabel ? `<text x="${x + nodeWidth/2}" y="${row2Y + 10}" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" font-weight="bold" fill="white">${phaseLabel}</text>` : ''}
-      <text x="${x + nodeWidth/2}" y="${phaseLabel ? row2Y + 20 : row2Y + 16}" text-anchor="middle" font-family="Arial, sans-serif" font-size="5" fill="${isCustom ? 'white' : '#ede9fe'}">${node.label.length > 4 ? node.label.substring(0, 4) : node.label}</text>
-    `;
+    nodesSvg += `<rect x="${x}" y="${row2Y}" width="${nodeWidth}" height="${nodeHeight}" rx="2" fill="${fillColor}"/>`;
+    nodesSvg += `<text x="${x + nodeWidth/2}" y="${row2Y + 10}" text-anchor="middle" font-family="sans-serif" font-size="4" fill="white">${text}</text>`;
     if (i > 0) {
-      arrowsSvg += `<path d="M${prevX + nodeWidth} ${row2Y + nodeHeight/2} L${x} ${row2Y + nodeHeight/2}" stroke="#94a3b8" stroke-width="1" marker-end="url(#arrow)"/>`;
+      arrowsSvg += `<line x1="${prevX + nodeWidth}" y1="${row2Y + nodeHeight/2}" x2="${x}" y2="${row2Y + nodeHeight/2}" stroke="#cbd5e1" stroke-width="0.5"/>`;
     }
     prevX = x;
   });
   
   // 完整 SVG
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgWidth} ${svgHeight}">
-    <defs>
-      <marker id="arrow" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
-        <path d="M0,0 L4,2 L0,4 Z" fill="#94a3b8"/>
-      </marker>
-    </defs>
-    <rect width="${svgWidth}" height="${svgHeight}" fill="#f8fafc"/>
+    <rect width="${svgWidth}" height="${svgHeight}" fill="#f1f5f9"/>
     ${arrowsSvg}
     ${nodesSvg}
   </svg>`;
   
-  // 转换为 Base64
   return Buffer.from(svg).toString('base64');
 }
 

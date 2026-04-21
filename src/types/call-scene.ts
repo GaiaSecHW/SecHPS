@@ -10,6 +10,7 @@ export type CallScene =
   | 'skill-optimize'      // Skill 优化
   | 'skill-predict'       // 任务预测
   | 'skill-test'          // Skill 测试
+  | 'skill-evolution'     // Skill 进化
   // 模型相关
   | 'model-test'          // 模型连接测试
   // 自主进化
@@ -43,6 +44,7 @@ export const CALL_SCENE_LABELS: Record<CallScene, string> = {
   'skill-optimize': 'Skill 优化',
   'skill-predict': '任务预测',
   'skill-test': 'Skill 测试',
+  'skill-evolution': 'Skill 进化',
   'model-test': '模型测试',
   'experience-gen': '经验生成',
   'evaluation': '评估调用',
