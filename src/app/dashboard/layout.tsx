@@ -225,6 +225,12 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={20} />} collapsed={collapsed}>
                 默认工具权限
               </NavLink>
+              <NavLink href="/dashboard/admin/fsm-templates" icon={<Layers size={20} />} collapsed={collapsed}>
+                威胁建模配置
+              </NavLink>
+              <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />} collapsed={collapsed}>
+                漏洞分类管理
+              </NavLink>
             </>
           )}
         </nav>

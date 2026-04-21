@@ -269,30 +269,7 @@ export default function SessionsPage() {
       // 过滤掉没有节点的角色（不需要为空角色配置模型）
       roles = roles.filter((r: any) => r.nodes && r.nodes.length > 0);
       
-      // 检查是否有未分配角色的节点
-      // 如果有，添加"默认角色"
-      const workflowResponse = await fetch(`/api/workflows/${workflowId}/data`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      
-      if (workflowResponse.ok) {
-        const workflowData = await workflowResponse.json();
-        const nodes = workflowData.nodes || [];
-        const nodesWithoutRole = nodes.filter((n: any) => !n.roleId && n.type !== 'subtask');
-        
-        if (nodesWithoutRole.length > 0) {
-          // 添加默认角色
-          roles.push({
-            id: 'default',
-            name: '默认角色',
-            description: '未分配角色的节点将使用此模型',
-            color: '#gray',
-            nodeCount: nodesWithoutRole.length,
-            nodes: nodesWithoutRole,  // 添加节点信息
-          });
-        }
-      }
-      
+      console.log('[WorkflowRoles] Loaded roles:', roles.length, roles.map((r: any) => r.name));
       setWorkflowRoles(roles);
       
       // 初始化 roleModels 状态
@@ -730,6 +707,16 @@ export default function SessionsPage() {
 
                 try {
                   const event = JSON.parse(data);
+
+                  if (event.type === 'started') {
+                    // 评估已启动，跳转到详情页
+                    console.log('[评估启动]', event.evaluationId);
+                    setStartingProject(null);
+
+                    // 跳转到评估详情页
+                    router.push(`/dashboard/sessions/${projectId}?evaluationId=${event.evaluationId}`);
+                    return;
+                  }
 
                   if (event.type === 'message') {
                     // 实时显示评估内容
@@ -2443,7 +2430,9 @@ toast.error(data.error || '更新项目失败');
             <img
               src={previewImage.src}
               alt={previewImage.alt}
-              className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+              className={`max-w-full max-h-[90vh] rounded-lg shadow-2xl ${
+                previewImage.src?.startsWith('data:image/svg') ? 'min-w-[400px] min-h-[200px] object-contain bg-gray-100 p-4' : 'object-contain'
+              }`}
               onClick={(e) => e.stopPropagation()}
             />
             <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-50 text-white px-4 py-2 rounded-lg">
@@ -2547,20 +2536,29 @@ toast.error(data.error || '更新项目失败');
                           </span>
                         </div>
 {/* 缩略图预览 */}
-                         {workflow.thumbnail && (
-                           <div className="mt-3">
-                             <img
-                               src={`data:image/png;base64,${workflow.thumbnail}`}
-                               alt={`${workflow.name} 缩略图`}
-                               className="w-full h-24 object-cover rounded border border-gray-200"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 setPreviewImage({ src: `data:image/png;base64,${workflow.thumbnail}`, alt: workflow.name });
-                                 setShowImagePreview(true);
-                               }}
-                             />
-                           </div>
-                         )}
+                          {workflow.thumbnail && (
+                            <div className="mt-3">
+                              <img
+                                src={workflow.thumbnail.startsWith('data:') ? workflow.thumbnail : 
+                                     (workflow.thumbnail.startsWith('PHN2Z') || workflow.thumbnail.startsWith('<svg') ? 
+                                      `data:image/svg+xml;base64,${workflow.thumbnail}` : 
+                                      `data:image/png;base64,${workflow.thumbnail}`)}
+                                alt={`${workflow.name} 缩略图`}
+                                className="w-full h-24 object-cover rounded border border-gray-200 cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  console.log('[Thumbnail Click] workflow.thumbnail:', workflow.thumbnail?.substring(0, 50));
+                                  const imgSrc = workflow.thumbnail.startsWith('data:') ? workflow.thumbnail : 
+                                     (workflow.thumbnail.startsWith('PHN2Z') || workflow.thumbnail.startsWith('<svg') ? 
+                                      `data:image/svg+xml;base64,${workflow.thumbnail}` : 
+                                      `data:image/png;base64,${workflow.thumbnail}`);
+                                  console.log('[Thumbnail Click] imgSrc:', imgSrc?.substring(0, 100));
+                                  setPreviewImage({ src: imgSrc, alt: workflow.name });
+                                  setShowImagePreview(true);
+                                }}
+                              />
+                            </div>
+                          )}
                       </div>
                     ))}
                   </div>
@@ -2735,22 +2733,25 @@ toast.error(data.error || '更新项目失败');
                   onClick={async () => {
                     if (!selectedProject || !selectedWorkflow) return;
                     
-                    // 验证所有角色都有模型
+                    // 验证所有角色都有模型（"default" 也是有效选择）
                     const allConfigured = roleModels.every(rm => rm.modelId);
                     if (!allConfigured) {
                       toast.error('请为所有角色配置模型');
                       return;
                     }
                     
-                    // 关闭对话框
+                    // 保存 roleModels 的副本，因为后面会清空状态
+                    const roleModelsToSubmit = [...roleModels];
+                    
+                    // 启动评估，传递 roleModels
+                    await startProject(selectedProject.id, selectedWorkflow, roleModelsToSubmit);
+                    
+                    // 启动后再关闭对话框和清空状态
                     setShowRoleModelModal(false);
                     setSelectedProject(null);
                     setSelectedWorkflow(null);
                     setWorkflowRoles([]);
                     setRoleModels([]);
-                    
-                    // 启动评估，传递 roleModels
-                    await startProject(selectedProject.id, selectedWorkflow, roleModels);
                   }}
                   disabled={!roleModels.every(rm => rm.modelId) || !!startingProject}
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"

@@ -15,6 +15,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:seed-techstack": "tsx prisma/seed-techstack.ts",
     "db:seed-agents": "tsx prisma/seed-agent-definitions.ts",
+    "db:seed-fsm": "tsx prisma/seed-fsm-templates.ts",
     "migrate:workflow-to-agent-team": "tsx scripts/migrate-workflow-to-agent-team.ts",
     "rollback:agent-team": "tsx scripts/rollback-agent-team-migration.ts",
     "clean": "rmdir /s .next &&  rmdir /s node_modules && del package-lock.json && npm install",
@@ -60,7 +61,8 @@
     "tiktoken": "^1.0.21",
     "undici": "^7.10.0",
     "uuid": "^11.1.0",
-    "ws": "^8.20.0"
+    "ws": "^8.20.0",
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",

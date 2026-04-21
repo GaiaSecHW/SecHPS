@@ -52,6 +52,7 @@ export interface EnhancedEvaluationConfig {
   permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
   allowDangerouslySkipPermissions?: boolean;
   resumeSession?: string;
+  temperature?: number;  // 模型温度，默认 0.3
 }
 
 export interface EnhancedEvaluationCallbacks {
@@ -130,6 +131,7 @@ export class EnhancedEvaluationCaller {
       permissionMode: config.permissionMode,
       allowDangerouslySkipPermissions: config.allowDangerouslySkipPermissions,
       resumeSession: config.resumeSession,
+      temperature: config.temperature ?? 0.7,  // 传递温度参数
     });
     logInfo(`ClaudeAgentService 初始化完成`);
     logInfo(`Base URL: ${agentBaseUrl}`);

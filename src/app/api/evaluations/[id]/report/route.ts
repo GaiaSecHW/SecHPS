@@ -256,6 +256,7 @@ export async function GET(
       projectId: evaluation.projectId,
       projectName: evaluation.Project?.displayName || evaluation.Project?.name || '未知项目',
       workflowName: evaluation.AgentTeam?.name || '未指定',
+      workflowType: evaluation.workflowType || 'dag',  // FSM 报告类型标识
       status: evaluation.status,
       startedAt: evaluation.startedAt,
       completedAt: evaluation.completedAt,

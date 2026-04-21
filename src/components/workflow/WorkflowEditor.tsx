@@ -125,7 +125,8 @@ function generateFSMThumbnail(nodes: FlowNode[]): string {
     ${nodesSvg}
   </svg>`;
   
-  return Buffer.from(svg).toString('base64');
+  // 使用浏览器端的 base64 编码
+  return btoa(unescape(encodeURIComponent(svg)));
 }
 
 interface WorkflowEditorProps {

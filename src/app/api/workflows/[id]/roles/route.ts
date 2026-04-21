@@ -46,7 +46,7 @@ export async function GET(
     // 检查工作流是否存在且有权限访问
     const workflow = await prisma.workflow.findFirst({
       where,
-      select: { id: true, userId: true, name: true },
+      select: { id: true, userId: true, name: true, workflowType: true, fsmTemplateId: true },
     });
 
     if (!workflow) {
@@ -59,10 +59,71 @@ export async function GET(
       orderBy: { order: 'asc' },
       include: {
         nodes: {
-          select: { id: true, type: true },
+          select: { id: true, type: true, data: true, fsmPhase: true },
         },
       },
     });
+
+    // 如果是 FSM 工作流，还需要从 FSMTemplate 获取 P1-P6 节点的角色信息
+    if (workflow.workflowType === 'fsm' && workflow.fsmTemplateId) {
+      const fsmTemplate = await prisma.fSMTemplate.findUnique({
+        where: { id: workflow.fsmTemplateId },
+        select: { nodes: true },
+      });
+      
+      if (fsmTemplate) {
+        const fsmNodes = JSON.parse(fsmTemplate.nodes);
+        
+        // 收集 FSM 节点的角色 ID
+        const fsmRoleIds = new Set<string>();
+        const fsmNodesWithoutRole: any[] = [];
+        
+        fsmNodes.forEach((node: any) => {
+          if (node.roleId) {
+            fsmRoleIds.add(node.roleId);
+          } else {
+            fsmNodesWithoutRole.push(node);
+          }
+        });
+        
+        // 对于每个有角色的 FSM 节点，添加到对应角色的 nodes 列表
+        for (const role of roles) {
+          const fsmNodesForRole = fsmNodes.filter((n: any) => n.roleId === role.id);
+          if (fsmNodesForRole.length > 0) {
+            // 确保 role.nodes 存在
+            if (!role.nodes) role.nodes = [];
+            // 添加 FSM 节点信息
+            fsmNodesForRole.forEach((n: any) => {
+              const nodeData = n.data ? JSON.parse(n.data) : {};
+              const label = nodeData.label || n.id;
+              (role.nodes as any[]).push({ id: n.id, type: 'fsm-phase', label, fsmPhase: n.fsmPhase });
+            });
+          }
+        }
+        
+        // 如果有未分配角色的 FSM 节点，添加"默认角色"
+        if (fsmNodesWithoutRole.length > 0) {
+          roles.push({
+            id: 'default',
+            name: '默认角色',
+            description: '未分配角色的 FSM 阶段节点将使用此模型',
+            color: '#gray',
+            order: 999,
+            nodes: fsmNodesWithoutRole.map((n: any) => {
+              const nodeData = n.data ? JSON.parse(n.data) : {};
+              const label = nodeData.label || n.id;
+              return {
+                id: n.id,
+                type: 'fsm-phase',
+                label,
+                fsmPhase: n.fsmPhase,
+              };
+            }) as any[],
+            nodeCount: fsmNodesWithoutRole.length,
+          } as any);
+        }
+      }
+    }
 
     logger.read(LOG_MODULES.WORKFLOW, payload, 'workflow-roles', id, { count: roles.length });
 

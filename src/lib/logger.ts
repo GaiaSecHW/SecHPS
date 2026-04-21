@@ -46,6 +46,8 @@ export const LOG_MODULES = {
   AGENT: 'AGENT',
   FILE: 'FILE',
   CODE: 'CODE',
+  FSM: 'FSM',
+  REPORT: 'REPORT',
 };
 
 // 格式化用户信息

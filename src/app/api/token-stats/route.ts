@@ -403,9 +403,11 @@ async function getTrendData(tokenWhereClause: any, period: string) {
       callCount: 0,
     };
     
-    existing.inputTokens += usage.inputTokens || 0;
+    // inputTokens 包含历史上下文，不应累加，取最大值代表最终上下文大小
+    // outputTokens 是新增的输出，可以累加
+    existing.inputTokens = Math.max(existing.inputTokens, usage.inputTokens || 0);
     existing.outputTokens += usage.outputTokens || 0;
-    existing.totalTokens += usage.totalTokens || 0;
+    existing.totalTokens = existing.inputTokens + existing.outputTokens;  // 重新计算，避免重复
     existing.estimatedCost += usage.estimatedCost || 0;
     existing.callCount += 1;
     

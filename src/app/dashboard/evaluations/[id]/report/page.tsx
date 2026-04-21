@@ -20,6 +20,13 @@ import {
   Globe,
   Lock,
   Unlock,
+  Layers,
+  Activity,
+  BookOpen,
+  Target,
+  Settings,
+  BarChart3,
+  FileSearch,
 } from 'lucide-react';
 
 interface AnalysisReport {
@@ -134,12 +141,40 @@ interface VulnerabilitySummary {
   };
 }
 
+// FSM 报告章节
+interface FSMReportSection {
+  section: string;
+  title: string;
+  content: string;
+  path?: string;
+}
+
+// FSM 报告数据
+interface FSMReport {
+  id: string;
+  sessionId: string;
+  projectId: string;
+  reportType: string;
+  workflowType: string;
+  fsmTemplate: string;
+  title: string;
+  totalFindings: number;
+  criticalCount: number;
+  highCount: number;
+  mediumCount: number;
+  lowCount: number;
+  status: string;
+  generatedAt: string;
+  integratedReports: Record<string, string>;
+}
+
 interface EvaluationReport {
   evaluation: {
     id: string;
     projectId: string;
     projectName: string;
     workflowName: string;
+    workflowType?: string;  // FSM 报告类型标识
     status: string;
     startedAt: string;
     completedAt?: string;
@@ -176,14 +211,39 @@ export default function EvaluationReportPage({
   const [error, setError] = useState<string | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['overview', 'skills']));
   
+  // FSM 报告状态
+  const [fsmReport, setFsmReport] = useState<FSMReport | null>(null);
+  const [fsmSection, setFsmSection] = useState<FSMReportSection | null>(null);
+  const [fsmActiveTab, setFsmActiveTab] = useState('risk-assessment');
+  const [fsmSectionLoading, setFsmSectionLoading] = useState(false);
+  
   // 分页和筛选状态
   const [vulnPage, setVulnPage] = useState(1);
   const [vulnFilterType, setVulnFilterType] = useState('');
   const [vulnFilterStatus, setVulnFilterStatus] = useState('');
 
+  // FSM 报告标签定义
+  const FSM_TABS = [
+    { id: 'risk-assessment', label: '风险评估', icon: <AlertTriangle className="h-4 w-4" /> },
+    { id: 'risk-inventory', label: '风险清单', icon: <FileSearch className="h-4 w-4" /> },
+    { id: 'mitigation', label: '缓解措施', icon: <Shield className="h-4 w-4" /> },
+    { id: 'pen-test', label: '渗透测试', icon: <Target className="h-4 w-4" /> },
+    { id: 'architecture', label: '架构分析', icon: <Server className="h-4 w-4" /> },
+    { id: 'dfd', label: 'DFD 图', icon: <GitBranch className="h-4 w-4" /> },
+    { id: 'compliance', label: '合规报告', icon: <BookOpen className="h-4 w-4" /> },
+    { id: 'attack-path', label: '攻击路径', icon: <Activity className="h-4 w-4" /> },
+  ];
+
   useEffect(() => {
     fetchReport();
   }, [evaluationId, vulnPage, vulnFilterType, vulnFilterStatus]);
+
+  // FSM 标签切换时加载章节
+  useEffect(() => {
+    if (fsmReport && fsmActiveTab) {
+      fetchFsmSection(fsmActiveTab);
+    }
+  }, [fsmActiveTab, fsmReport]);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -209,11 +269,63 @@ export default function EvaluationReportPage({
 
       const data = await response.json();
       setReport(data);
+      
+      // 检查是否是 FSM 报告
+      if (data.evaluation?.workflowType === 'fsm') {
+        // 获取 FSM 报告详情
+        const fsmResponse = await fetch(`/api/evaluations/${evaluationId}/report/download?format=json`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        if (fsmResponse.ok) {
+          const fsmData = await fsmResponse.json();
+          setFsmReport(fsmData.report);
+          
+          // 获取第一个章节内容
+          fetchFsmSection('risk-assessment');
+        }
+      }
     } catch (err) {
       console.error('Fetch report error:', err);
       setError(err instanceof Error ? err.message : '获取报告失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFsmSection = async (sectionId: string) => {
+    setFsmSectionLoading(true);
+    setFsmSection(null);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/evaluations/${evaluationId}/report/sections/${sectionId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFsmSection(data);
+      } else {
+        setFsmSection({
+          section: sectionId,
+          title: FSM_TABS.find(t => t.id === sectionId)?.label || sectionId,
+          content: '*章节内容暂不可用*',
+        });
+      }
+    } catch (err) {
+      console.error('Fetch FSM section error:', err);
+      setFsmSection({
+        section: sectionId,
+        title: FSM_TABS.find(t => t.id === sectionId)?.label || sectionId,
+        content: '*章节加载失败*',
+      });
+    } finally {
+      setFsmSectionLoading(false);
     }
   };
 
@@ -335,6 +447,9 @@ export default function EvaluationReportPage({
 
   const { evaluation, analysisReport, skillExecutions, skillsStats, vulnerabilityChain, vulnerabilitySummary } = report;
 
+  // 检查是否是 FSM 报告
+  const isFSMReport = evaluation?.workflowType === 'fsm' || fsmReport !== null;
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -349,14 +464,48 @@ export default function EvaluationReportPage({
             </button>
             <div>
               <h1 className="text-xl font-semibold text-gray-900 flex items-center">
-                <FileText className="mr-2" size={24} />
-                评估报告
+                {isFSMReport ? (
+                  <Layers className="mr-2" size={24} />
+                ) : (
+                  <FileText className="mr-2" size={24} />
+                )}
+                {isFSMReport ? '威胁建模报告' : '评估报告'}
               </h1>
-              <p className="text-sm text-gray-500">{evaluation.projectName}</p>
+              <p className="text-sm text-gray-500">
+                {evaluation.projectName}
+                {isFSMReport && fsmReport && (
+                  <span className="ml-2 text-xs text-purple-600">({fsmReport.fsmTemplate})</span>
+                )}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center space-x-2">
+            {isFSMReport && (
+              <button 
+                onClick={() => {
+                  const token = localStorage.getItem('token');
+                  fetch(`/api/evaluations/${evaluationId}/report/download`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                  })
+                    .then(res => res.text())
+                    .then(content => {
+                      const blob = new Blob([content], { type: 'text/markdown' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `threat-modeling-report-${evaluation.projectName}.md`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    })
+                    .catch(console.error);
+                }}
+                className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded border border-gray-200"
+              >
+                <Download size={16} />
+                <span>下载 Markdown</span>
+              </button>
+            )}
             <button className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded border border-gray-200">
               <Download size={16} />
               <span>下载 JSON</span>
@@ -365,8 +514,96 @@ export default function EvaluationReportPage({
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
+      {/* FSM 报告标签页 */}
+      {isFSMReport && fsmReport && (
+        <div className="max-w-7xl mx-auto px-6 pt-4">
+          {/* FSM 报告统计摘要 */}
+          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <BarChart3 className="h-5 w-5 text-purple-600" />
+                <h3 className="text-lg font-semibold text-gray-900">风险摘要</h3>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                fsmReport.criticalCount > 0 ? 'bg-red-100 text-red-800' :
+                fsmReport.highCount > 3 ? 'bg-orange-100 text-orange-800' :
+                fsmReport.highCount > 0 ? 'bg-yellow-100 text-yellow-800' :
+                'bg-green-100 text-green-800'
+              }`}>
+                {fsmReport.criticalCount > 0 ? '严重风险' :
+                 fsmReport.highCount > 3 ? '高风险' :
+                 fsmReport.highCount > 0 ? '中风险' : '低风险'}
+              </span>
+            </div>
+            <div className="grid grid-cols-5 gap-4 mt-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{fsmReport.criticalCount}</div>
+                <div className="text-xs text-gray-500">严重</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">{fsmReport.highCount}</div>
+                <div className="text-xs text-gray-500">高危</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">{fsmReport.mediumCount}</div>
+                <div className="text-xs text-gray-500">中危</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{fsmReport.lowCount}</div>
+                <div className="text-xs text-gray-500">低危</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-purple-600">{fsmReport.totalFindings}</div>
+                <div className="text-xs text-gray-500">总计</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 标签页导航 */}
+          <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-4">
+            {FSM_TABS.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setFsmActiveTab(tab.id)}
+                className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  fsmActiveTab === tab.id
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* 标签页内容 */}
+          <div className="bg-white rounded-lg border border-gray-200 min-h-[400px]">
+            {fsmSectionLoading ? (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              </div>
+            ) : fsmSection ? (
+              <div className="p-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">{fsmSection.title}</h2>
+                <div className="prose prose-sm max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans bg-gray-50 p-4 rounded-lg">
+                    {fsmSection.content}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-64 text-gray-500">
+                选择一个标签页查看报告内容
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* DAG 报告内容 */}
+      {!isFSMReport && (
+        <div className="max-w-7xl mx-auto p-6 space-y-6">
         {/* 1. 项目概况 */}
         <Section
           title="项目概况"
@@ -858,7 +1095,8 @@ export default function EvaluationReportPage({
             </div>
           )}
         </Section>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

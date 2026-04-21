@@ -127,6 +127,43 @@ function SessionDetailContent({
   const [expandedChildMessages, setExpandedChildMessages] = useState<Set<string>>(new Set());
   const [injectedExperiences, setInjectedExperiences] = useState<{ id: string; title: string; errorCategory: string; hitCount: number }[]>([]);
   const [experienceInjectionChecked, setExperienceInjectionChecked] = useState(false);
+  
+  // 实时 token 使用量和模型信息
+  const [realtimeTokenUsage, setRealtimeTokenUsage] = useState<{
+    phase: number;
+    phaseName: string;
+    modelName: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    cumulativeInputTokens: number;
+    cumulativeOutputTokens: number;
+    cumulativeTotalTokens: number;
+  } | null>(null);
+  
+  // FSM 阶段进度
+  const [fsmPhaseProgress, setFsmPhaseProgress] = useState<{
+    currentPhase: number;
+    phaseName: string;
+    status: string;
+    totalPhases: number;
+    completedPhases: number[];
+  } | null>(null);
+  
+  // 工作流节点列表（合并配置和执行状态）
+  const [workflowNodes, setWorkflowNodes] = useState<any[]>([]);
+  const [nodeProgress, setNodeProgress] = useState<{
+    total: number;
+    completed: number;
+    running: number;
+    pending: number;
+    failed: number;
+    currentRunningNode: { id: string; label: string; modelName: string } | null;
+  } | null>(null);
+  const [isNodesExpanded, setIsNodesExpanded] = useState(true);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [nodeMessages, setNodeMessages] = useState<any[]>([]);
+  const [loadingNodeMessages, setLoadingNodeMessages] = useState(false);
 
   // 用 ref 持久保存子任务的 startedAt，防止轮询覆盖
   const childStartedAtRef = useRef<Record<string, string>>({});
@@ -136,6 +173,7 @@ function SessionDetailContent({
       fetchEvaluation();
       fetchMessages();
       fetchProgressQuestion();
+      fetchWorkflowNodes();
     }
   }, [evaluationId]);
 
@@ -253,6 +291,121 @@ function SessionDetailContent({
         console.log('[Vuln] Received vulnerability summary:', data.summary);
         break;
         
+      case 'token_usage':
+        // 实时 token 使用量和模型信息
+        setRealtimeTokenUsage({
+          phase: data.phase,
+          phaseName: data.phaseName,
+          modelName: data.modelName,
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          totalTokens: data.totalTokens,
+          cumulativeInputTokens: data.cumulativeInputTokens,
+          cumulativeOutputTokens: data.cumulativeOutputTokens,
+          cumulativeTotalTokens: data.cumulativeTotalTokens,
+        });
+        console.log(`[Token] Phase ${data.phase}: ${data.modelName} - 累计 ${data.cumulativeTotalTokens} tokens`);
+        break;
+
+      case 'phase_start':
+        // DAG 节点开始
+        setFsmPhaseProgress(prev => ({
+          currentPhase: data.nodeIndex,
+          phaseName: data.nodeName,
+          status: 'running',
+          totalPhases: data.totalNodes,
+          completedPhases: prev?.completedPhases || [],
+        }));
+        setRealtimeTokenUsage(prev => prev ? {
+          ...prev,
+          phase: data.nodeIndex,
+          phaseName: data.nodeName,
+          modelName: data.modelName,
+        } : null);
+        // 更新节点状态为 running
+        setWorkflowNodes(prev => {
+          const nodeIndex = data.nodeIndex - 1; // nodeIndex 是 1-based
+          if (nodeIndex >= 0 && nodeIndex < prev.length) {
+            const updated = [...prev];
+            updated[nodeIndex] = {
+              ...updated[nodeIndex],
+              status: 'running',
+              modelName: data.modelName || updated[nodeIndex].modelName,
+              startedAt: new Date().toISOString(),
+            };
+            return updated;
+          }
+          return prev;
+        });
+        // 更新进度
+        setNodeProgress(prev => {
+          if (!prev) return null;
+          const nodeIndex = data.nodeIndex - 1;
+          return {
+            ...prev,
+            running: prev.running + 1,
+            pending: prev.pending - 1,
+            currentRunningNode: {
+              id: workflowNodes[nodeIndex]?.id || '',
+              label: data.nodeName,
+              modelName: data.modelName,
+            },
+          };
+        });
+        console.log(`[Phase] Node ${data.nodeIndex}/${data.totalNodes} started: ${data.nodeName} (Model: ${data.modelName})`);
+        break;
+
+      case 'started':
+        // 评估启动，记录信息
+        console.log(`[Evaluation] Started: ${data.evaluationId}, type: ${data.workflowType}, nodes: ${data.totalNodes}`);
+        // 刷新评估信息
+        fetchEvaluation();
+        break;
+
+      case 'phase_complete':
+        // FSM 阶段完成
+        setFsmPhaseProgress(prev => {
+          const completedPhases = prev?.completedPhases || [];
+          return {
+            currentPhase: data.phase,
+            phaseName: data.phaseName,
+            status: data.status,
+            totalPhases: 6, // FSM 固定 6 个阶段
+            completedPhases: data.status === 'completed' 
+              ? [...completedPhases, data.phase] 
+              : completedPhases,
+          };
+        });
+        // 更新节点状态为 completed 或 failed
+        setWorkflowNodes(prev => {
+          const nodeIndex = data.phase - 1; // phase 是 1-based
+          if (nodeIndex >= 0 && nodeIndex < prev.length) {
+            const updated = [...prev];
+            updated[nodeIndex] = {
+              ...updated[nodeIndex],
+              status: data.status === 'completed' ? 'completed' : 'failed',
+              completedAt: new Date().toISOString(),
+            };
+            return updated;
+          }
+          return prev;
+        });
+        // 更新进度
+        setNodeProgress(prev => {
+          if (!prev) return null;
+          const newCompleted = data.status === 'completed' ? prev.completed + 1 : prev.completed;
+          const newFailed = data.status === 'failed' ? prev.failed + 1 : prev.failed;
+          return {
+            ...prev,
+            completed: newCompleted,
+            running: prev.running - 1,
+            failed: newFailed,
+            currentRunningNode: null,
+          };
+        });
+        console.log(`[Phase] Phase ${data.phase} (${data.phaseName}) ${data.status}`);
+        break;
+        
       case 'done':
         // 审计完成
         console.log('[Evaluation] Audit completed:', data.message);
@@ -270,6 +423,30 @@ function SessionDetailContent({
       case 'node_complete':
         // 节点完成（工作流相关）
         console.log('[Node] Completed:', data.nodeId);
+        // 更新节点状态
+        setWorkflowNodes(prev => {
+          const nodeIdx = prev.findIndex(n => n.id === data.nodeId || n.workflowNodeId === data.nodeId);
+          if (nodeIdx >= 0) {
+            const updated = [...prev];
+            updated[nodeIdx] = {
+              ...updated[nodeIdx],
+              status: 'completed',
+              completedAt: new Date().toISOString(),
+            };
+            return updated;
+          }
+          return prev;
+        });
+        // 更新进度
+        setNodeProgress(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            completed: prev.completed + 1,
+            running: Math.max(0, prev.running - 1),
+            currentRunningNode: null,
+          };
+        });
         break;
 
       case 'experience_injected':
@@ -319,6 +496,7 @@ function SessionDetailContent({
         fetchTodos();
         fetchSessionDetail();
         fetchChildrenSessions();
+        fetchWorkflowNodes(); // 添加节点轮询
       }
     }, 10000); // 10秒轮询一次
 
@@ -404,6 +582,79 @@ function SessionDetailContent({
       console.error('[fetchMessages] Error:', err);
       setError('网络错误，请重试');
       setLoading(false);
+    }
+  };
+
+  // 获取节点消息（按 nodeId 过滤）
+  const fetchNodeMessages = async (nodeId: string) => {
+    if (!evaluationId) return;
+
+    setLoadingNodeMessages(true);
+    try {
+      const token = localStorage.getItem('token');
+      console.log('[fetchNodeMessages] Fetching messages for nodeId:', nodeId);
+
+      const response = await fetch(`/api/evaluations/${evaluationId}/messages?nodeId=${nodeId}&source=db`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('[fetchNodeMessages] Failed:', response.status);
+        setNodeMessages([]);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('[fetchNodeMessages] Received:', data.messages?.length || 0, 'messages');
+      
+      setNodeMessages(data.messages || []);
+    } catch (err) {
+      console.error('[fetchNodeMessages] Error:', err);
+      setNodeMessages([]);
+    } finally {
+      setLoadingNodeMessages(false);
+    }
+  };
+
+  // 处理节点点击
+  const handleNodeClick = (nodeId: string) => {
+    if (selectedNodeId === nodeId) {
+      // 取消选择
+      setSelectedNodeId(null);
+      setNodeMessages([]);
+    } else {
+      // 选择节点
+      setSelectedNodeId(nodeId);
+      fetchNodeMessages(nodeId);
+    }
+  };
+
+  // 获取工作流节点列表（合并配置和执行状态）
+  const fetchWorkflowNodes = async () => {
+    if (!evaluationId) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/evaluations/${evaluationId}/nodes`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        console.error('[Nodes] Failed to fetch nodes:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+      console.log('[Nodes] Received:', data.nodes?.length || 0, 'nodes, progress:', data.progress);
+      
+      setWorkflowNodes(data.nodes || []);
+      setNodeProgress(data.progress || null);
+    } catch (err) {
+      console.error('[Nodes] Error fetching:', err);
     }
   };
 
@@ -872,6 +1123,33 @@ function SessionDetailContent({
                 </span>
               )}
             </div>
+            
+            {/* 实时 Token 使用量和模型信息 - 仅运行中显示 */}
+            {evaluation.status === 'running' && realtimeTokenUsage && (
+              <div className="flex items-center space-x-4 ml-4 pl-4 border-l border-gray-200">
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">模型:</span>
+                  <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                    {realtimeTokenUsage.modelName}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-xs text-gray-500">Token:</span>
+                  <span className="text-xs font-medium text-gray-700">
+                    输入 {formatTokenNumber(realtimeTokenUsage.cumulativeInputTokens)} / 
+                    输出 {formatTokenNumber(realtimeTokenUsage.cumulativeOutputTokens)}
+                  </span>
+                </div>
+                {fsmPhaseProgress && (
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-500">阶段:</span>
+                    <span className="text-xs font-medium text-gray-700">
+                      {fsmPhaseProgress.phaseName} ({fsmPhaseProgress.currentPhase}/{fsmPhaseProgress.totalPhases})
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center space-x-4">
@@ -1121,8 +1399,8 @@ function SessionDetailContent({
               </div>
             )}
             
-            {/* TODO List */}
-            <div className="mb-6">
+            {/* TODO List - 已隐藏：现在每个节点单独执行 Agent，用户应通过点击节点查看任务 */}
+            {/* <div className="mb-6">
               <button
                 onClick={() => setIsTodosExpanded(!isTodosExpanded)}
                 className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
@@ -1168,7 +1446,7 @@ function SessionDetailContent({
                   </div>
                 )
               )}
-            </div>
+            </div> */}
 
             {/* Ralph Loop 迭代记录 */}
             {evaluation?.EvaluationIteration && evaluation.EvaluationIteration.length > 0 && (
@@ -1268,57 +1546,244 @@ function SessionDetailContent({
               </div>
             )}
 
-            {/* Node Executions with Model Info */}
-            {evaluation?.NodeExecution && evaluation.NodeExecution.length > 0 && (
+            {/* Workflow Nodes - 显示所有节点（从工作流配置）合并执行状态 */}
+            {workflowNodes.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-                  <GitBranch size={18} className="mr-2 text-orange-600" />
-                  节点执行 ({evaluation.NodeExecution.length})
-                </h3>
-                <div className="space-y-2">
-                  {evaluation.NodeExecution.map((node: any) => (
-                    <div key={node.id} className="p-3 bg-white rounded-lg border border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-gray-900">
-                              {node.nodeLabel || node.nodeType || `节点 ${node.workflowNodeId?.substring(0, 8)}`}
-                            </span>
-                            <span className={`text-xs px-2 py-0.5 rounded ${
-                              node.status === 'completed' ? 'bg-green-100 text-green-700' :
-                              node.status === 'running' ? 'bg-blue-100 text-blue-700' :
-                              node.status === 'failed' ? 'bg-red-100 text-red-700' :
-                              'bg-gray-100 text-gray-600'
-                            }`}>
-                              {node.status === 'completed' ? '已完成' :
-                               node.status === 'running' ? '运行中' :
-                               node.status === 'failed' ? '失败' : node.status}
-                            </span>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1 text-xs text-gray-500">
-                            {node.modelName && (
-                              <span className="flex items-center gap-1">
-                                <span className="font-medium text-blue-600">模型:</span>
-                                {node.modelName}
-                              </span>
-                            )}
-                            {node.roleId && (
-                              <span className="flex items-center gap-1">
-                                <span className="font-medium text-purple-600">角色:</span>
-                                {node.roleId}
-                              </span>
-                            )}
+                <button
+                  onClick={() => setIsNodesExpanded(!isNodesExpanded)}
+                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <GitBranch size={18} className="mr-2 text-orange-600" />
+                    节点列表 ({workflowNodes.length})
+                    <span className="ml-2 text-xs text-gray-400 font-normal">点击节点查看消息</span>
+                  </div>
+                  {isNodesExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </button>
+                
+                {/* 执行进度 */}
+                {nodeProgress && (
+                  <div className="mb-3 p-3 bg-gradient-to-r from-orange-50 to-blue-50 rounded-lg border border-orange-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-sm font-medium text-gray-700">
+                          执行进度: 
+                          <span className="text-orange-600 ml-1">{nodeProgress.completed}</span>
+                          <span className="text-gray-400"> / </span>
+                          <span className="text-gray-900">{nodeProgress.total}</span>
+                          <span className="text-gray-500 ml-1">节点</span>
+                        </span>
+                        {/* 进度条 */}
+                        <div className="flex-1 max-w-xs">
+                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-300"
+                              style={{ width: `${(nodeProgress.completed / nodeProgress.total) * 100}%` }}
+                            />
                           </div>
                         </div>
-                        {node.startedAt && (
-                          <span className="text-xs text-gray-400">
-                            {new Date(node.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        )}
                       </div>
+                      {/* 当前运行节点 */}
+                      {nodeProgress.currentRunningNode && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <Loader2 size={14} className="text-blue-500 animate-spin" />
+                          <span className="text-gray-600">当前:</span>
+                          <span className="font-medium text-blue-700">{nodeProgress.currentRunningNode.label}</span>
+                          {nodeProgress.currentRunningNode.modelName && (
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                              {nodeProgress.currentRunningNode.modelName}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  ))}
+                    {/* 统计信息 */}
+                    <div className="flex items-center gap-3 mt-2 text-xs">
+                      <span className="flex items-center gap-1">
+                        <CheckCircle2 size={12} className="text-green-500" />
+                        <span className="text-green-700">{nodeProgress.completed} 完成</span>
+                      </span>
+                      {nodeProgress.running > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Loader2 size={12} className="text-blue-500 animate-spin" />
+                          <span className="text-blue-700">{nodeProgress.running} 运行中</span>
+                        </span>
+                      )}
+                      {nodeProgress.pending > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Circle size={12} className="text-gray-400" />
+                          <span className="text-gray-500">{nodeProgress.pending} 等待</span>
+                        </span>
+                      )}
+                      {nodeProgress.failed > 0 && (
+                        <span className="flex items-center gap-1">
+                          <X size={12} className="text-red-500" />
+                          <span className="text-red-700">{nodeProgress.failed} 失败</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {isNodesExpanded && (
+                  <div className="space-y-2">
+                    {workflowNodes.map((node: any, index: number) => {
+                      // 计算执行时长
+                      const duration = node.startedAt && node.completedAt
+                        ? new Date(node.completedAt).getTime() - new Date(node.startedAt).getTime()
+                        : null;
+                      
+                      // 状态图标和颜色
+                      const statusConfig = {
+                        completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' },
+                        running: { icon: Loader2, color: 'text-blue-500 animate-spin', bg: 'bg-blue-50', border: 'border-blue-200' },
+                        pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200' },
+                        failed: { icon: X, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
+                      };
+                      const config = statusConfig[node.status as keyof typeof statusConfig] || statusConfig.pending;
+                      const StatusIcon = config.icon;
+                      
+                      return (
+                        <div 
+                          key={node.id || `node-${index}`} 
+                          className={`p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                            selectedNodeId === node.id 
+                              ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300' 
+                              : `${config.bg} ${config.border}`
+                          }`}
+                          onClick={() => handleNodeClick(node.id)}
+                          title="点击查看该节点的消息"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {/* 状态图标 */}
+                              <StatusIcon size={18} className={config.color} />
+                              
+                              {/* 节点信息 */}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {node.label || `节点 ${index + 1}`}
+                                  </span>
+                                  {/* FSM 阶段编号 */}
+                                  {node.fsmPhase && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                      Phase {node.fsmPhase}
+                                    </span>
+                                  )}
+                                  {/* 角色标签 */}
+                                  {node.roleName && (
+                                    <span 
+                                      className="text-xs px-2 py-0.5 rounded"
+                                      style={{ 
+                                        backgroundColor: node.roleColor ? `${node.roleColor}20` : '#f3f4f6',
+                                        color: node.roleColor || '#6b7280',
+                                        borderColor: node.roleColor || '#d1d5db',
+                                      }}
+                                    >
+                                      {node.roleName}
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* 详细信息 */}
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-gray-500">
+                                  {/* 模型 */}
+                                  {node.modelName && (
+                                    <span className="flex items-center gap-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
+                                      {node.modelName}
+                                    </span>
+                                  )}
+                                  {/* Skills */}
+                                  {node.skills && node.skills.length > 0 && (
+                                    <span className="text-gray-400">
+                                      Skills: {node.skills.length}
+                                    </span>
+                                  )}
+                                  {/* 执行时长 */}
+                                  {duration && (
+                                    <span className="flex items-center gap-1">
+                                      <Clock size={10} />
+                                      {Math.round(duration / 1000)}s
+                                    </span>
+                                  )}
+                                  {/* Token 信息 */}
+                                  {node.inputTokens != null && (
+                                    <span>输入: {formatTokenNumber(node.inputTokens)}</span>
+                                  )}
+                                  {node.outputTokens != null && (
+                                    <span>输出: {formatTokenNumber(node.outputTokens)}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* 时间信息 */}
+                            <div className="flex items-center gap-2 text-xs text-gray-400">
+                              {node.startedAt && (
+                                <span>
+                                  {new Date(node.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                              {node.completedAt && (
+                                <span className="text-green-500">
+                                  → {new Date(node.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 节点消息显示区域 */}
+            {selectedNodeId && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <MessageSquare size={18} className="mr-2 text-blue-600" />
+                    节点消息: {workflowNodes.find(n => n.id === selectedNodeId)?.label || '未知节点'}
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setSelectedNodeId(null);
+                      setNodeMessages([]);
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    取消选择
+                  </button>
                 </div>
+                
+                {loadingNodeMessages ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 size={24} className="animate-spin text-blue-500" />
+                    <span className="ml-2 text-gray-500">加载消息中...</span>
+                  </div>
+                ) : nodeMessages.length > 0 ? (
+                  <div className="space-y-2 max-h-96 overflow-y-auto bg-white rounded-lg border border-gray-200 p-3">
+                    {nodeMessages.map((msg: any, idx: number) => (
+                      <div key={msg.id || idx} className={`p-2 rounded ${msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'}`}>
+                        <div className="text-xs text-gray-500 mb-1">
+                          {msg.role === 'user' ? '👤 用户' : '🤖 助手'}
+                          {msg.createdAt && ` · ${new Date(msg.createdAt).toLocaleTimeString('zh-CN')}`}
+                        </div>
+                        <div className="text-sm text-gray-700 whitespace-pre-wrap">
+                          {msg.content?.substring(0, 500)}
+                          {msg.content?.length > 500 && '...'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    该节点暂无消息记录
+                  </div>
+                )}
               </div>
             )}
 
@@ -1603,8 +2068,67 @@ function SessionDetailContent({
               </div>
             )}
 
-            {/* Messages */}
-            <div className="mb-6">
+            {/* Node Messages - 当选中节点时显示 */}
+            {selectedNodeId && (
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center">
+                    <MessageSquare size={18} className="mr-2 text-blue-600" />
+                    <span className="text-lg font-semibold text-gray-900">
+                      节点消息
+                    </span>
+                    <span className="ml-2 text-sm text-gray-500">
+                      ({nodeMessages.length} 条)
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedNodeId(null);
+                      setNodeMessages([]);
+                    }}
+                    className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="取消选择"
+                  >
+                    <X size={14} />
+                    <span>取消选择</span>
+                  </button>
+                </div>
+                
+                {loadingNodeMessages ? (
+                  <div className="flex items-center justify-center py-8 bg-white rounded-lg border border-gray-200">
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
+                    <span className="ml-2 text-sm text-gray-500">加载节点消息...</span>
+                  </div>
+                ) : nodeMessages.length > 0 ? (
+                  <div className="space-y-3 bg-white rounded-lg border border-blue-200 p-4">
+                    {nodeMessages.map((message, index) => (
+                      <div key={`${message.id}-${index}`} className="rounded-lg border border-gray-200">
+                        <MessageBubble
+                          message={message}
+                          isSelected={selectedMessage?.id === message.id}
+                          onClick={() => handleMessageClick(message)}
+                          onCopy={() =>
+                            handleCopy(
+                              typeof message.content === 'string'
+                                ? message.content
+                                : JSON.stringify(message.content, null, 2)
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
+                    <p className="text-gray-500">该节点暂无消息记录</p>
+                    <p className="text-xs text-gray-400 mt-1">消息可能尚未保存到数据库</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Messages - 已隐藏：现在每个节点单独执行 Agent，用户应通过点击节点查看消息 */}
+            {/* <div className="mb-6">
               <button
                 onClick={() => setIsMessagesExpanded(!isMessagesExpanded)}
                 className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-4 hover:text-gray-700 transition-colors"
@@ -1641,7 +2165,7 @@ function SessionDetailContent({
                   </div>
                 )
               )}
-            </div>
+            </div> */}
           </div>
         </div>
 

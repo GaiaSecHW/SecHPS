@@ -119,10 +119,11 @@ function AnalysisReviewListContent() {
       }
 
       const data: ApiResponse = await response.json();
-      setAnalyses(data.analyses);
-      setPagination(data.pagination);
+      setAnalyses(data.analyses || []);
+      setPagination(data.pagination || { page: 1, limit: 20, total: 0, totalPages: 0 });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '获取数据失败');
+      setAnalyses([]);
     } finally {
       setLoading(false);
     }
@@ -175,7 +176,7 @@ function AnalysisReviewListContent() {
         <div className="flex items-center justify-center py-12">
           <LoadingSpinner size="lg" />
         </div>
-      ) : analyses.length === 0 ? (
+      ) : !analyses || analyses.length === 0 ? (
         <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
           <FileText className="mx-auto text-gray-400 mb-4" size={48} />
           <p className="text-gray-600">暂无{statusLabels[status] || ''}分析结果</p>

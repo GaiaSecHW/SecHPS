@@ -9,6 +9,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/nodes - 获取评估会话的节点执行状态
 // 数据隔离：普通用户只能查看自己项目评估的节点，管理员可以查看所有
+// 返回所有工作流节点（从 WorkflowNode 配置）合并执行状态（从 NodeExecution）
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -53,20 +54,190 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 返回节点执行状态
-    const nodesWithStatus = evaluation.NodeExecution.map(exec => ({
-      id: exec.workflowNodeId || exec.id,
-      label: exec.nodeLabel,
-      type: exec.nodeType,
-      status: exec.status,
-      startedAt: exec.startedAt,
-      completedAt: exec.completedAt,
-      order: exec.order,
-    }));
+    // 获取工作流节点配置（如果有 workflowId）
+    let workflowNodes: any[] = [];
+    let roleModels: any[] = [];
+    
+    if (evaluation.workflowId) {
+      // 获取工作流
+      const workflow = await prisma.workflow.findUnique({
+        where: { id: evaluation.workflowId },
+        include: {
+          WorkflowNode: {
+            include: {
+              role: true, // 包含角色信息
+            },
+            orderBy: { fsmOrder: 'asc' },
+          },
+          WorkflowRole: true,
+          FSMTemplate: true, // 包含 FSM 模板
+        },
+      });
+      
+      if (workflow) {
+        // 检查是否是 FSM 工作流（有 FSMTemplate）
+        if (workflow.FSMTemplate && workflow.FSMTemplate.nodes) {
+          // FSM 工作流：从 FSMTemplate.nodes JSON 解析节点
+          try {
+            const fsmNodes = JSON.parse(workflow.FSMTemplate.nodes);
+            workflowNodes = fsmNodes.map((node: any, index: number) => ({
+              id: node.id,
+              label: node.label || `Phase ${node.fsmPhase}`,
+              type: 'fsm_phase',
+              roleId: node.roleId || null,
+              roleName: null,
+              roleColor: null,
+              fsmPhase: node.fsmPhase,
+              fsmOrder: node.fsmOrder || node.fsmPhase || index,
+              fsmFixed: node.fsmFixed,
+              skills: node.skills || [],
+              vulnerabilityCategories: [],
+              description: node.description || null,
+              skillPath: node.skillPath || null,
+              data: node,
+            }));
+            
+            logger.debug(LOG_MODULES.EVALUATION, 'FSM 节点加载完成', { 
+              nodeCount: workflowNodes.length,
+              phases: workflowNodes.map((n: any) => n.fsmPhase)
+            });
+          } catch (e) {
+            logger.error(LOG_MODULES.EVALUATION, '解析 FSMTemplate.nodes 失败', { error: String(e) });
+          }
+        } else if (workflow.WorkflowNode && workflow.WorkflowNode.length > 0) {
+          // DAG 工作流：从 WorkflowNode 表获取节点
+          workflowNodes = workflow.WorkflowNode.map(node => {
+            const nodeData = node.data ? JSON.parse(node.data) : {};
+            return {
+              id: node.id,
+              label: nodeData.label || nodeData.name || `节点 ${node.id.substring(0, 8)}`,
+              type: node.type,
+              roleId: node.roleId,
+              roleName: node.role?.name || null,
+              roleColor: node.role?.color || null,
+              fsmPhase: node.fsmPhase,
+              fsmOrder: node.fsmOrder,
+              skills: node.skills ? JSON.parse(node.skills) : [],
+              vulnerabilityCategories: node.vulnerabilityCategories ? JSON.parse(node.vulnerabilityCategories) : [],
+              data: nodeData,
+            };
+          });
+        }
+        
+        // 获取工作流角色列表
+        roleModels = workflow.WorkflowRole.map(role => ({
+          id: role.id,
+          name: role.name,
+          description: role.description,
+          color: role.color,
+          order: role.order,
+        }));
+      }
+    }
+    
+    // 解析 roleModels 配置（从 evaluation.roleModels JSON）
+    let roleModelConfig: Record<string, string> = {}; // roleId -> modelId/modelName
+    if (evaluation.roleModels) {
+      try {
+        const parsed = JSON.parse(evaluation.roleModels);
+        if (Array.isArray(parsed)) {
+          parsed.forEach((rm: any) => {
+            if (rm.roleId && rm.modelId) {
+              roleModelConfig[rm.roleId] = rm.modelId;
+            } else if (rm.roleId && rm.modelName) {
+              roleModelConfig[rm.roleId] = rm.modelName;
+            }
+          });
+        }
+      } catch (e) {
+        logger.warn(LOG_MODULES.EVALUATION, '解析 roleModels 失败:', { details: { error: String(e) } });
+      }
+    }
+
+    // 合并节点配置和执行状态
+    // 如果有 workflowNodes，则基于 workflowNodes 显示所有节点
+    // 否则，只显示 NodeExecution 记录
+    let mergedNodes: any[];
+    
+    if (workflowNodes.length > 0) {
+      // 创建执行记录映射
+      const executionMap = new Map<string, any>();
+      evaluation.NodeExecution.forEach(exec => {
+        executionMap.set(exec.workflowNodeId, exec);
+      });
+      
+      // 合并所有工作流节点
+      mergedNodes = workflowNodes.map((wn, index) => {
+        const exec = executionMap.get(wn.id);
+        const modelFromRole = roleModelConfig[wn.roleId] || null;
+        
+        return {
+          id: wn.id,
+          workflowNodeId: wn.id,
+          label: wn.label,
+          type: wn.type,
+          roleId: wn.roleId,
+          roleName: wn.roleName,
+          roleColor: wn.roleColor,
+          fsmPhase: wn.fsmPhase,
+          fsmOrder: wn.fsmOrder ?? index,
+          skills: wn.skills,
+          vulnerabilityCategories: wn.vulnerabilityCategories,
+          // 执行状态
+          status: exec?.status || 'pending',
+          startedAt: exec?.startedAt || null,
+          completedAt: exec?.completedAt || null,
+          order: exec?.order ?? wn.fsmOrder ?? index,
+          // 模型信息
+          modelName: exec?.modelName || modelFromRole || null,
+          modelConfigId: exec?.modelConfigId || null,
+        };
+      });
+    } else {
+      // 没有工作流配置，只显示执行记录
+      mergedNodes = evaluation.NodeExecution.map(exec => ({
+        id: exec.workflowNodeId || exec.id,
+        workflowNodeId: exec.workflowNodeId,
+        label: exec.nodeLabel,
+        type: exec.nodeType,
+        status: exec.status,
+        startedAt: exec.startedAt,
+        completedAt: exec.completedAt,
+        order: exec.order,
+        modelName: exec.modelName,
+        modelConfigId: exec.modelConfigId,
+      }));
+    }
+
+    // 计算进度统计
+    const totalNodes = mergedNodes.length;
+    const completedNodes = mergedNodes.filter(n => n.status === 'completed').length;
+    const runningNodes = mergedNodes.filter(n => n.status === 'running').length;
+    const pendingNodes = mergedNodes.filter(n => n.status === 'pending').length;
+    const failedNodes = mergedNodes.filter(n => n.status === 'failed').length;
+    
+    // 找到当前运行的节点
+    const currentRunningNode = mergedNodes.find(n => n.status === 'running');
 
     return NextResponse.json({
-      nodes: nodesWithStatus,
+      nodes: mergedNodes,
       executions: evaluation.NodeExecution,
+      workflowNodes,
+      roleModels,
+      roleModelConfig,
+      // 进度统计
+      progress: {
+        total: totalNodes,
+        completed: completedNodes,
+        running: runningNodes,
+        pending: pendingNodes,
+        failed: failedNodes,
+        currentRunningNode: currentRunningNode ? {
+          id: currentRunningNode.id,
+          label: currentRunningNode.label,
+          modelName: currentRunningNode.modelName,
+        } : null,
+      },
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估节点错误:', { details: { error: String(error) } });

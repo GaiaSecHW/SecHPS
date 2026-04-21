@@ -680,7 +680,218 @@ export async function POST(
     }
     
     // ========================================
-    // 生成用户提示词（从 WorkflowNode 动态生成）
+    // 检查是否是 FSM 工作流
+    // ========================================
+    const workflow = await prisma.workflow.findUnique({
+      where: { id: workflowId },
+      select: { 
+        id: true, 
+        name: true, 
+        workflowType: true, 
+        fsmTemplateId: true,
+      },
+    });
+    
+    if (workflow?.workflowType === 'fsm') {
+      logger.info(LOG_MODULES.EVALUATION, '检测到 FSM 工作流，切换到 FSM 执行模式');
+      
+      // FSM 模式：调用 FSM 执行服务
+      // 创建评估记录
+      const evaluation = await prisma.evaluationSession.create({
+        data: {
+          id: generateId('eval'),
+          projectId: id,
+          workflowId: workflowId,
+          modelConfigId: modelId,
+          roleModels: roleModels ? JSON.stringify(roleModels) : null,
+          status: 'running',
+          providerType: modelConfig.providerType,
+          workflowType: 'fsm',
+        },
+      });
+      
+      // 调用 FSM 启动逻辑
+      const { createFSMWorkflowExecutionService } = await import('@/lib/fsm');
+      
+      const fsmService = createFSMWorkflowExecutionService(
+        {
+          evaluationSessionId: evaluation.id,
+          projectId: id,
+          workflowId: workflowId,
+          fsmTemplateId: workflow.fsmTemplateId || 'threat-modeling',
+          workspacePath: project.projectPath || '',
+          maxIterationsPerPhase: 10,
+          maxCostPerPhase: 2.0,
+          modelConfig,
+          systemPrompt: sdkOptions.systemPrompt,
+          roleModels: roleModels || undefined,
+        },
+        {
+          onPhaseStart: async (phase, phaseName) => {
+            logger.debug(LOG_MODULES.FSM, `Phase ${phase} (${phaseName}) 开始`);
+          },
+          onPhaseChunk: (phase, text) => {},
+          onPhaseToolCall: (phase, tool, args) => {
+            logger.debug(LOG_MODULES.FSM, `Phase ${phase} 工具调用: ${tool}`);
+          },
+          onPhaseComplete: async (phase, result) => {
+            logger.info(LOG_MODULES.FSM, `Phase ${phase} 完成`, {
+              details: { iterations: result.iterations, duration: result.duration, status: result.status },
+            });
+          },
+          onPhaseError: (phase, error) => {
+            logger.errorNoUser(LOG_MODULES.FSM, `Phase ${phase} 错误: ${error.message}`);
+          },
+          onAgentZoneStart: async (agents) => {
+            logger.info(LOG_MODULES.FSM, `Agent Zone 启动: ${agents.join(', ')}`);
+          },
+          onAgentZoneProgress: (agent, status) => {
+            logger.debug(LOG_MODULES.FSM, `Agent ${agent} 状态: ${status}`);
+          },
+          onAgentZoneComplete: async (results) => {
+            logger.info(LOG_MODULES.FSM, `Agent Zone 完成`, { details: { total: results.length } });
+          },
+          onWorkflowComplete: async (result) => {
+            logger.info(LOG_MODULES.FSM, `FSM 工作流完成`, {
+              details: { 
+                status: result.status, 
+                duration: result.totalDuration,
+                totalTokens: result.totalTokens,
+                totalCost: result.totalCost,
+                phaseCount: result.phaseResults.length,
+                completedPhases: result.phaseResults.filter(p => p.status === 'completed').length,
+              },
+            });
+            
+            const failedPhasesInfo = result.phaseResults
+              .filter(p => p.status === 'failed')
+              .map(p => `Phase ${p.phaseNumber} (${p.phaseName})`)
+              .join(', ');
+            
+            const errorMessage = result.status !== 'completed' 
+              ? `工作流未完成。失败阶段: ${failedPhasesInfo || '未知'}` 
+              : null;
+            
+            await prisma.evaluationSession.update({
+              where: { id: evaluation.id },
+              data: {
+                status: result.status === 'completed' ? 'completed' : 'failed',
+                completedAt: new Date(),
+                totalInputTokens: result.totalTokens > 0 ? result.totalTokens : undefined,
+                totalOutputTokens: 0,
+                endReason: result.status === 'completed' ? 'completed' : 'error',
+                endMessage: errorMessage,
+                errorMessage: errorMessage,
+              },
+            });
+          },
+          onWorkflowError: (error) => {
+            logger.errorNoUser(LOG_MODULES.FSM, `FSM 工作流错误: ${error.message}`);
+            prisma.evaluationSession.update({
+              where: { id: evaluation.id },
+              data: { 
+                status: 'failed', 
+                errorMessage: error.message, 
+                completedAt: new Date(),
+                endReason: 'error',
+                endMessage: error.message,
+              },
+            }).catch(() => {});
+          },
+          onTokenUsage: (data) => {
+            logger.debug(LOG_MODULES.FSM, `[SSE] Token 使用推送:`, data);
+          },
+        }
+      );
+      
+      // 返回 SSE 流
+      const encoder = new TextEncoder();
+      let sseController: ReadableStreamDefaultController | null = null;
+      const eventQueue: any[] = [];
+      
+      // 设置回调推送事件
+      const originalOnTokenUsage = fsmService['callbacks'].onTokenUsage;
+      fsmService['callbacks'].onTokenUsage = (data) => {
+        if (originalOnTokenUsage) originalOnTokenUsage(data);
+        const event = { type: 'token_usage', ...data };
+        eventQueue.push(event);
+        if (sseController) {
+          sseController.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        }
+      };
+      
+      const originalOnPhaseComplete = fsmService['callbacks'].onPhaseComplete;
+      fsmService['callbacks'].onPhaseComplete = async (phase, result) => {
+        if (originalOnPhaseComplete) await originalOnPhaseComplete(phase, result);
+        const event = {
+          type: 'phase_complete',
+          phase: result.phaseNumber,
+          phaseName: result.phaseName,
+          status: result.status,
+          totalTokens: result.totalTokens,
+          iterations: result.iterations,
+          duration: result.duration,
+        };
+        if (sseController) {
+          sseController.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        }
+      };
+      
+      const originalOnWorkflowComplete = fsmService['callbacks'].onWorkflowComplete;
+      fsmService['callbacks'].onWorkflowComplete = async (result) => {
+        if (originalOnWorkflowComplete) await originalOnWorkflowComplete(result);
+        if (sseController) {
+          sseController.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'done',
+            status: result.status,
+            totalTokens: result.totalTokens,
+            totalCost: result.totalCost,
+            totalDuration: result.totalDuration,
+            message: 'FSM 工作流执行完成',
+          })}\n\n`));
+          sseController.close();
+        }
+      };
+      
+      const stream = new ReadableStream({
+        start(controller) {
+          sseController = controller;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+            type: 'started',
+            evaluationId: evaluation.id,
+            workflowType: 'fsm',
+            message: 'FSM 工作流已启动',
+          })}\n\n`));
+          
+          fsmService.execute().catch(async (error) => {
+            logger.errorNoUser(LOG_MODULES.FSM, `FSM 执行失败: ${error.message}`);
+            await prisma.evaluationSession.update({
+              where: { id: evaluation.id },
+              data: { status: 'failed', errorMessage: error.message, completedAt: new Date() },
+            });
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: 'error',
+              error: error.message,
+            })}\n\n`));
+            controller.close();
+          });
+        },
+        cancel() {
+          sseController = null;
+        }
+      });
+      
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        },
+      });
+    }
+    
+    // ========================================
+    // DAG 模式：生成用户提示词（从 WorkflowNode 动态生成）
     // ========================================
     
     // 查询 Workflow 的所有节点（包含 type 用于排序）

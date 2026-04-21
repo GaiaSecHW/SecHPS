@@ -191,4 +191,62 @@ export function subscribeToEvaluation(
   };
 }
 
+/**
+ * 订阅特定评估的所有事件（简化版 - 单回调）
+ * 用于 SSE 重连场景，将所有事件转发到 SSE 流
+ * @param evaluationId 评估 ID
+ * @param callback 事件回调函数，接收所有类型的事件
+ * @returns 取消订阅函数
+ */
+export function subscribeToEvaluationEvents(
+  evaluationId: string,
+  callback: (event: any) => void
+): () => void {
+  const unsubscribers: (() => void)[] = [];
+
+  // 订阅 TODO 更新事件
+  const todoHandler = (event: TodoUpdateEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({ type: 'todo_update', ...event });
+    }
+  };
+  eventBus.on(EventType.TODO_UPDATE, todoHandler);
+  unsubscribers.push(() => eventBus.off(EventType.TODO_UPDATE, todoHandler));
+
+  // 订阅节点完成事件
+  const nodeHandler = (event: NodeCompleteEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({ type: 'node_complete', ...event });
+    }
+  };
+  eventBus.on(EventType.NODE_COMPLETE, nodeHandler);
+  unsubscribers.push(() => eventBus.off(EventType.NODE_COMPLETE, nodeHandler));
+
+  // 订阅评估完成事件
+  const evalHandler = (event: EvaluationCompleteEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({ type: 'evaluation_complete', ...event });
+    }
+  };
+  eventBus.on(EventType.EVALUATION_COMPLETE, evalHandler);
+  unsubscribers.push(() => eventBus.off(EventType.EVALUATION_COMPLETE, evalHandler));
+
+  // 订阅消息块事件
+  const msgHandler = (event: MessageChunkEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({ type: 'message_chunk', ...event });
+    }
+  };
+  eventBus.on(EventType.MESSAGE_CHUNK, msgHandler);
+  unsubscribers.push(() => eventBus.off(EventType.MESSAGE_CHUNK, msgHandler));
+
+  console.log(`[EventBus] SSE subscribed to evaluation ${evaluationId}`);
+
+  // 返回取消订阅函数
+  return () => {
+    unsubscribers.forEach(unsub => unsub());
+    console.log(`[EventBus] SSE unsubscribed from evaluation ${evaluationId}`);
+  };
+}
+
 export default eventBus;

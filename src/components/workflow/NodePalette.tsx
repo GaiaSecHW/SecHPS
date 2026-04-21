@@ -18,12 +18,13 @@ const iconMap: Record<string, any> = {
 
 interface NodePaletteProps {
   onNodeDragStart: (nodeType: NodeTypeDefinition) => void;
+  hideTriggers?: boolean;  // 隐藏触发器节点（用于 FSM 渗透测试区）
 }
 
-export default function NodePalette({ onNodeDragStart }: NodePaletteProps) {
-  // 按类别分组节点，过滤掉 subtask 类型（用户不应手动创建）
+export default function NodePalette({ onNodeDragStart, hideTriggers = false }: NodePaletteProps) {
+  // 按类别分组节点，过滤掉 subtask 类型、控制流类型，以及触发器（如果 hideTriggers=true）
   const nodesByCategory = NODE_TYPES
-    .filter(node => node.type !== 'subtask')
+    .filter(node => node.type !== 'subtask' && node.category !== 'control' && (!hideTriggers || node.category !== 'trigger'))
     .reduce((acc, node) => {
       if (!acc[node.category]) {
         acc[node.category] = [];
@@ -34,14 +35,12 @@ export default function NodePalette({ onNodeDragStart }: NodePaletteProps) {
 
   const categoryLabels: Record<string, string> = {
     trigger: '触发器',
-    control: '控制流',
     action: '动作',
     data: '数据',
   };
 
   const categoryIcons: Record<string, any> = {
     trigger: Play,
-    control: GitBranch,
     action: Cog,
     data: Variable,
   };

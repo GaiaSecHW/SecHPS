@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PERMISSIONS, ROLES, DEFAULT_ROLE_PERMISSIONS } from '../src/types/permissions';
+import { generateId } from '../src/lib/id-generator';
 
 const prisma = new PrismaClient();
 
@@ -15,9 +16,11 @@ async function main() {
       where: { name: value },
       update: {},
       create: {
+        id: generateId('perm'),
         name: value,
         module,
         action,
+        updatedAt: new Date(),
       },
     });
   }
@@ -31,9 +34,11 @@ async function main() {
       where: { name: value },
       update: {},
       create: {
+        id: generateId('role'),
         name: value,
         description: `${value} role`,
         isSystem: true,
+        updatedAt: new Date(),
       },
     });
     createdRoles[value] = role;
@@ -99,11 +104,13 @@ async function main() {
     const passwordHash = await bcrypt.hash(adminPassword, 10);
     const admin = await prisma.user.create({
       data: {
+        id: generateId('user'),
         email: adminEmail,
         username: 'admin',
         passwordHash,
         name: 'Administrator',
         isActive: true,
+        updatedAt: new Date(),
       },
     });
 
@@ -112,6 +119,7 @@ async function main() {
     if (adminRole) {
       await prisma.userRole.create({
         data: {
+          id: generateId('ur'),
           userId: admin.id,
           roleId: adminRole.id,
         },
@@ -121,11 +129,13 @@ async function main() {
     // 创建默认 AI4WEB 配置
     await prisma.opencodeConfig.create({
       data: {
+        id: generateId('cfg'),
         userId: admin.id,
         name: 'Default',
         baseURL: 'http://localhost:54321',
         description: 'Default AI4WEB configuration',
         isActive: true,
+        updatedAt: new Date(),
       },
     });
 
@@ -145,6 +155,7 @@ async function main() {
   console.log('📝 创建默认期望输出模板...');
   const expectedOutputTemplates = [
     {
+      id: generateId('eot'),
       name: 'security-audit-report',
       displayName: '安全审计报告',
       description: '完整的安全审计报告输出格式，包含漏洞列表、严重性评级、修复建议等',
@@ -207,8 +218,10 @@ const result = await db.query(query, [userId]);
 `,
       isBuiltin: true,
       sortOrder: 1,
+      updatedAt: new Date(),
     },
     {
+      id: generateId('eot'),
       name: 'vulnerability-list',
       displayName: '漏洞列表',
       description: '简洁的漏洞列表格式，适合快速查看',
@@ -230,8 +243,10 @@ const result = await db.query(query, [userId]);
 `,
       isBuiltin: true,
       sortOrder: 2,
+      updatedAt: new Date(),
     },
     {
+      id: generateId('eot'),
       name: 'code-review-report',
       displayName: '代码审查报告',
       description: '代码审查报告格式，包含代码质量、最佳实践、潜在问题等',
@@ -292,8 +307,10 @@ try {
 `,
       isBuiltin: true,
       sortOrder: 3,
+      updatedAt: new Date(),
     },
     {
+      id: generateId('eot'),
       name: 'api-audit-report',
       displayName: 'API审计报告',
       description: 'API接口审计报告，包含认证、授权、输入验证等问题',
@@ -331,8 +348,10 @@ try {
 `,
       isBuiltin: true,
       sortOrder: 4,
+      updatedAt: new Date(),
     },
     {
+      id: generateId('eot'),
       name: 'dependency-check',
       displayName: '依赖检查报告',
       description: '第三方依赖安全检查报告',
@@ -375,6 +394,7 @@ try {
 `,
       isBuiltin: true,
       sortOrder: 5,
+      updatedAt: new Date(),
     },
   ];
 
@@ -386,6 +406,181 @@ try {
     });
   }
   console.log(`✅ 已创建 ${expectedOutputTemplates.length} 个期望输出模板`);
+
+  // 8. 创建 FSM 模板
+  console.log('📋 创建 FSM 模板...');
+  
+  // 威胁建模模板的默认角色
+  const THREAT_MODELING_DEFAULT_ROLES = JSON.stringify([
+    { id: 'role-analyst', name: '分析师', description: '负责系统理解和安全评估', color: '#3B82F6', order: 1 },
+    { id: 'role-threat-analyst', name: '威胁分析师', description: '负责STRIDE威胁分析', color: '#F59E0B', order: 2 },
+    { id: 'role-penetration', name: '渗透测试师', description: '负责渗透测试执行', color: '#EF4444', order: 3 },
+    { id: 'role-reporter', name: '报告生成师', description: '负责生成威胁建模报告', color: '#10B981', order: 4 }
+  ]);
+  
+  // 固定流程：P1 → P2 → P3 → P4 → P5 → 渗透测试 → P6
+  // 每个 P 阶段单独一个节点，各自配置角色
+  const THREAT_MODELING_NODES = JSON.stringify([
+    {
+      id: 'fsm-node-p1',
+      label: 'P1-项目理解',
+      phase: 'P1',
+      fsmPhase: 1,
+      fsmFixed: true,
+      fsmOrder: 1,
+      skillPath: 'threat-modeling/phases/P1-PROJECT-UNDERSTANDING.md',
+      description: '理解项目结构、技术栈、模块划分、入口点',
+      roleId: 'role-analyst'
+    },
+    {
+      id: 'fsm-node-p2',
+      label: 'P2-DFD分析',
+      phase: 'P2',
+      fsmPhase: 2,
+      fsmFixed: true,
+      fsmOrder: 2,
+      skillPath: 'threat-modeling/phases/P2-DFD-ANALYSIS.md',
+      description: '绘制数据流图(DFD)，识别数据流向和存储',
+      roleId: 'role-analyst'
+    },
+    {
+      id: 'fsm-node-p3',
+      label: 'P3-信任边界',
+      phase: 'P3',
+      fsmPhase: 3,
+      fsmFixed: true,
+      fsmOrder: 3,
+      skillPath: 'threat-modeling/phases/P3-TRUST-BOUNDARY.md',
+      description: '定义信任边界，识别跨边界数据流',
+      roleId: 'role-analyst'
+    },
+    {
+      id: 'fsm-node-p4',
+      label: 'P4-安全设计评审',
+      phase: 'P4',
+      fsmPhase: 4,
+      fsmFixed: true,
+      fsmOrder: 4,
+      skillPath: 'threat-modeling/phases/P4-SECURITY-DESIGN-REVIEW.md',
+      description: '安全设计评审，识别安全缺口',
+      roleId: 'role-analyst'
+    },
+    {
+      id: 'fsm-node-p5',
+      label: 'P5-STRIDE分析',
+      phase: 'P5',
+      fsmPhase: 5,
+      fsmFixed: true,
+      fsmOrder: 5,
+      skillPath: 'threat-modeling/phases/P5-STRIDE-ANALYSIS.md',
+      description: 'STRIDE威胁分析，识别潜在威胁',
+      roleId: 'role-threat-analyst'
+    },
+    {
+      id: 'fsm-node-penetration',
+      label: '渗透测试',
+      phase: null,
+      fsmPhase: 6,
+      fsmFixed: false,  // 用户自由编排区
+      fsmOrder: 6,
+      skillPath: null,
+      description: '用户自定义渗透测试Agent（自由编排）',
+      roleId: 'role-penetration'
+    },
+    {
+      id: 'fsm-node-p6',
+      label: 'P6-报告生成',
+      phase: 'P6',
+      fsmPhase: 7,
+      fsmFixed: true,
+      fsmOrder: 7,
+      skillPath: 'threat-modeling/phases/P6-REPORT-GENERATION.md',
+      description: '生成完整威胁建模报告',
+      roleId: 'role-reporter'
+    }
+  ]);
+
+  const THREAT_MODELING_AGENT_ZONE = JSON.stringify({
+    position: 6,  // 渗透测试阶段 (fsmPhase=6)
+    allowAdd: true,
+    allowDelete: true,
+    allowReorder: true,
+    parallel: true,
+    defaultAgents: [
+      { id: 'sast-agent', name: 'SAST Agent', tool: 'Semgrep', output: 'vulnerabilities/sast-report.json' },
+      { id: 'secret-scanner', name: 'Secret Scanner', tool: 'truffleHog', output: 'vulnerabilities/secrets-report.json' },
+      { id: 'dep-scanner', name: 'Dependency Scanner', tool: 'Snyk', output: 'vulnerabilities/dependency-report.json' }
+    ]
+  });
+
+  await prisma.fSMTemplate.upsert({
+    where: { name: 'threat-modeling' },
+    update: {
+      displayName: '威胁建模分析',
+      description: '固定流程：P1(项目理解) → P2(DFD分析) → P3(信任边界) → P4(安全评审) → P5(STRIDE) → 渗透测试 → P6(报告)',
+      nodeCount: 7,
+      nodes: THREAT_MODELING_NODES,
+      agentZone: THREAT_MODELING_AGENT_ZONE,
+      defaultRoles: THREAT_MODELING_DEFAULT_ROLES,
+      skillPath: 'skills/threat-modeling',
+      version: '3.0.0',
+      isActive: true,
+      isBuiltin: true,
+    },
+    create: {
+      id: 'fsm-threat-modeling',
+      name: 'threat-modeling',
+      displayName: '威胁建模分析',
+      description: '固定流程：P1(项目理解) → P2(DFD分析) → P3(信任边界) → P4(安全评审) → P5(STRIDE) → 渗透测试 → P6(报告)',
+      nodeCount: 7,
+      nodes: THREAT_MODELING_NODES,
+      agentZone: THREAT_MODELING_AGENT_ZONE,
+      defaultRoles: THREAT_MODELING_DEFAULT_ROLES,
+      skillPath: 'skills/threat-modeling',
+      version: '3.0.0',
+      isActive: true,
+      isBuiltin: true,
+    },
+  });
+  console.log('✅ 已创建 threat-modeling FSM 模板');
+
+  // 创建代码审计模板
+  await prisma.fSMTemplate.upsert({
+    where: { name: 'code-audit' },
+    update: {
+      displayName: '代码审计',
+      description: '3阶段FSM代码审计工作流',
+      nodeCount: 3,
+      nodes: JSON.stringify([
+        { id: 'fsm-node-1', label: '代码理解', phases: ['P1'], fsmPhase: 1, fsmFixed: true, fsmOrder: 1, description: '代码结构分析' },
+        { id: 'fsm-node-2', label: '漏洞扫描', phases: ['P2'], fsmPhase: 2, fsmFixed: true, fsmOrder: 2, description: '静态分析' },
+        { id: 'fsm-node-3', label: '报告生成', phases: ['P3'], fsmPhase: 3, fsmFixed: true, fsmOrder: 3, description: '审计报告' }
+      ]),
+      agentZone: JSON.stringify({ position: 2, allowAdd: true, parallel: true, defaultAgents: [{ id: 'semgrep', name: 'Semgrep', tool: 'Semgrep' }] }),
+      skillPath: 'data/skills/code-audit',
+      version: '1.0.0',
+      isActive: true,
+      isBuiltin: true,
+    },
+    create: {
+      id: 'fsm-code-audit',
+      name: 'code-audit',
+      displayName: '代码审计',
+      description: '3阶段FSM代码审计工作流',
+      nodeCount: 3,
+      nodes: JSON.stringify([
+        { id: 'fsm-node-1', label: '代码理解', phases: ['P1'], fsmPhase: 1, fsmFixed: true, fsmOrder: 1, description: '代码结构分析' },
+        { id: 'fsm-node-2', label: '漏洞扫描', phases: ['P2'], fsmPhase: 2, fsmFixed: true, fsmOrder: 2, description: '静态分析' },
+        { id: 'fsm-node-3', label: '报告生成', phases: ['P3'], fsmPhase: 3, fsmFixed: true, fsmOrder: 3, description: '审计报告' }
+      ]),
+      agentZone: JSON.stringify({ position: 2, allowAdd: true, parallel: true, defaultAgents: [{ id: 'semgrep', name: 'Semgrep', tool: 'Semgrep' }] }),
+      skillPath: 'data/skills/code-audit',
+      version: '1.0.0',
+      isActive: true,
+      isBuiltin: true,
+    },
+  });
+  console.log('✅ 已创建 code-audit FSM 模板');
 
   console.log('🎉 数据库初始化完成！');
 }

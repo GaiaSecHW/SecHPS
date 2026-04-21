@@ -9,6 +9,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/messages - 获取评估会话的消息列表
 // 数据隔离：普通用户只能查看自己项目评估的消息，管理员可以查看所有
+// 支持按 workflowNodeId 过滤（从数据库查询）
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -56,6 +57,26 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // 解析 URL 参数获取分页信息和过滤参数
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get('limit');
+    const offsetParam = url.searchParams.get('offset');
+    const startTimeParam = url.searchParams.get('startTime');
+    const endTimeParam = url.searchParams.get('endTime');
+    const nodeIdParam = url.searchParams.get('nodeId'); // 用于节点过滤
+    const sourceParam = url.searchParams.get('source'); // 'db' | 'sdk' | 'auto'
+    
+    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+    const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
+    const startTime = startTimeParam ? new Date(startTimeParam) : null;
+    const endTime = endTimeParam ? new Date(endTimeParam) : null;
+
+    // 如果指定了 nodeId 或 source=db，从数据库查询
+    if (nodeIdParam || sourceParam === 'db') {
+      return await getMessagesFromDB(id, nodeIdParam, limit, offset);
+    }
+
+    // 否则从 SDK 获取消息（原有逻辑）
     if (!evaluation.opencodeSessionId) {
       logger.debug(LOG_MODULES.EVALUATION, '评估会话没有 opencodeSessionId:', { details: { id } });
       return NextResponse.json({
@@ -66,13 +87,6 @@ export async function GET(
         limit: null,
       });
     }
-
-    // 解析 URL 参数获取分页信息
-    const url = new URL(request.url);
-    const limitParam = url.searchParams.get('limit');
-    const offsetParam = url.searchParams.get('offset');
-    const limit = limitParam ? parseInt(limitParam, 10) : undefined;
-    const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
 
     const sessionId = evaluation.opencodeSessionId;
     const projectPath = evaluation.Project?.projectPath;
@@ -159,11 +173,28 @@ export async function GET(
       };
     });
 
+    // 应用时间范围过滤（用于节点关联）
+    let filteredMessages = formattedMessages;
+    
+    if (startTime && endTime) {
+      filteredMessages = formattedMessages.filter((msg: any) => {
+        const msgTime = new Date(msg.createdAt);
+        return msgTime >= startTime && msgTime <= endTime;
+      });
+      logger.debug(LOG_MODULES.EVALUATION, '时间范围过滤:', { details: {
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        beforeCount: formattedMessages.length,
+        afterCount: filteredMessages.length,
+        nodeId: nodeIdParam,
+      } });
+    }
+    
     // 应用分页
-    const total = formattedMessages.length;
+    const total = filteredMessages.length;
     const paginatedMessages = limit
-      ? formattedMessages.slice(offset, offset + limit)
-      : formattedMessages.slice(offset);
+      ? filteredMessages.slice(offset, offset + limit)
+      : filteredMessages.slice(offset);
     const hasMore = limit ? offset + limit < total : false;
 
     logger.debug(LOG_MODULES.EVALUATION, '返回格式化消息:', { details: {
@@ -179,9 +210,74 @@ export async function GET(
       hasMore,
       offset,
       limit: limit || null,
+      source: 'sdk',
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估消息错误:', { details: { error: String(error) } });
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+  }
+}
+
+/**
+ * 从数据库查询消息（支持按 nodeId 过滤）
+ */
+async function getMessagesFromDB(
+  evaluationId: string,
+  nodeId: string | null,
+  limit: number | undefined,
+  offset: number
+): Promise<Response> {
+  try {
+    // 构建查询条件
+    const where: any = {
+      evaluationSessionId: evaluationId,
+    };
+    
+    if (nodeId) {
+      where.workflowNodeId = nodeId;
+    }
+
+    // 查询总数
+    const total = await prisma.sessionMessage.count({ where });
+
+    // 查询消息列表
+    const messages = await prisma.sessionMessage.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      skip: offset,
+      take: limit,
+    });
+
+    // 格式化消息
+    const formattedMessages = messages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      createdAt: msg.createdAt.toISOString(),
+      workflowNodeId: msg.workflowNodeId,
+      metadata: msg.metadata ? JSON.parse(msg.metadata) : null,
+    }));
+
+    const hasMore = limit ? offset + limit < total : false;
+
+    logger.debug(LOG_MODULES.EVALUATION, '从数据库返回消息:', { details: {
+      nodeId,
+      total,
+      count: formattedMessages.length,
+      source: 'db',
+    } });
+
+    return NextResponse.json({
+      messages: formattedMessages,
+      total,
+      hasMore,
+      offset,
+      limit: limit || null,
+      source: 'db',
+      nodeId,
+    });
+  } catch (error) {
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '从数据库获取消息错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
