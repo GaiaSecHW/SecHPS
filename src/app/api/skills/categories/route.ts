@@ -2,24 +2,18 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/skills/categories - 获取 Skills 分类列表（从 VulnerabilityCategory 表）
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
     // 从 VulnerabilityCategory 表获取分类列表
     const categories = await prisma.vulnerabilityCategory.findMany({
       where: { isActive: true },

@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 加载项目配置
@@ -75,7 +76,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('删除项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '删除项目错误:', { details: error });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }
@@ -114,7 +115,7 @@ export async function GET(
       config: projectConfig,
     });
   } catch (error) {
-    console.error('获取项目详情错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '获取项目详情错误:', { details: error });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }

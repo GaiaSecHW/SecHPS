@@ -3,26 +3,21 @@
  */
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { ProjectDiscovery } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ project: string }> }
 ) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     const { project: projectName } = await params;
     const decodedProjectName = decodeURIComponent(projectName);
 
@@ -31,7 +26,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('删除项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '删除项目错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

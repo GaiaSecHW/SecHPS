@@ -2,32 +2,23 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // GET /api/admin/notifications/[id] - 获取单个通知渠道
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
     const { id } = await params;
 
     const channel = await prisma.notificationChannel.findUnique({
@@ -51,23 +42,13 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
     const { id } = await params;
     const body = await request.json();
     const { name, config, enabled } = body;
@@ -83,7 +64,7 @@ export async function PUT(
 
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'notification_channel_update',
         resource: id,
@@ -107,23 +88,13 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_DELETE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
     const { id } = await params;
 
     await prisma.notificationChannel.delete({
@@ -132,7 +103,7 @@ export async function DELETE(
 
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'notification_channel_delete',
         resource: id,

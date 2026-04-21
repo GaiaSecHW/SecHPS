@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/vulnerabilities/:id/false-positive - 标记误报
@@ -12,26 +12,20 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证所有权
     let where: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       where.Project = { userId: payload.userId };
     }
 

@@ -1,29 +1,24 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
+import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取项目 Token 使用明细
 export async function GET(request: Request) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const { payload } = auth;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
     // 检查权限 - 管理员直接允许，或检查 TOKEN_DETAIL 权限
-    const isAdmin = payload.roles?.includes('admin');
-    if (!isAdmin && !hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL)) {
+    const userIsAdmin = isAdmin(payload);
+    if (!userIsAdmin && !hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL)) {
       return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
     }
 
@@ -42,7 +37,7 @@ export async function GET(request: Request) {
 
     // 检查用户是否有权限访问该项目（管理员可以访问任何项目）
     const project = await prisma.project.findFirst({
-      where: isAdmin
+      where: userIsAdmin
         ? { id: projectId }
         : {
             id: projectId,

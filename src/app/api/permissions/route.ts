@@ -1,30 +1,20 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 获取所有权限
 export async function GET(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PERMISSION_READ });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PERMISSION_READ)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     // 获取所有权限
     const permissions = await prisma.permission.findMany({
       include: {
@@ -42,25 +32,14 @@ export async function GET(request: Request) {
 
 // 创建权限
 export async function POST(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PERMISSION_CREATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PERMISSION_CREATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, module, action, resource, description } = body;
 
@@ -87,7 +66,7 @@ export async function POST(request: Request) {
     // 创建权限
     const permission = await prisma.permission.create({
       data: {
-        id: `perm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('perm'),
         name,
         module,
         action,
@@ -100,7 +79,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'permission_create',
         resource: permission.id,

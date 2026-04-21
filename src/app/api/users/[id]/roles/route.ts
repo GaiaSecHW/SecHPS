@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { invalidateUserCaches } from '@/lib/cache';
+import { generateIndexedId, generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 为用户分配角色
 export async function POST(
@@ -10,23 +12,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_ASSIGN_ROLE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.USER_ASSIGN_ROLE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const body = await request.json();
     const { roleIds } = body;
@@ -64,7 +55,7 @@ export async function POST(
       if (roleIds.length > 0) {
         await tx.userRole.createMany({
           data: roleIds.map((roleId, index) => ({
-            id: `userrole-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateIndexedId('userrole', index),
             userId: id,
             roleId,
           })),
@@ -78,7 +69,7 @@ export async function POST(
     // 记录审计日志
     await prisma.auditLog.create({
           data: {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('audit'),
             userId: payload.userId,
             action: 'user_assign_role',
             resource: id,
@@ -91,7 +82,7 @@ export async function POST(
       roleIds,
     });
   } catch (error) {
-    console.error('Assign roles error:', error);
+    logger.errorNoUser(LOG_MODULES.USER, '分配角色错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

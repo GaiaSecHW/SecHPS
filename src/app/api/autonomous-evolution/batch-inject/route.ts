@@ -3,19 +3,16 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-
-  // 检查权限
-  if (!hasPermission(payload.permissions, PERMISSIONS.AUTONOMOUS_EVOLUTION_INJECT)) {
-    return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AUTONOMOUS_EVOLUTION_INJECT });
+  if (!auth.success) {
+    return authErrorResponse(auth);
   }
+  const payload = auth.payload;
 
   const body = await request.json() as { ids: string[]; action: 'enable' | 'disable' };
   const { ids, action } = body;

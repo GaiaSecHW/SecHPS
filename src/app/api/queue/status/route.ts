@@ -1,8 +1,8 @@
-﻿// src/app/api/queue/status/route.ts
+// src/app/api/queue/status/route.ts
 // 获取队列状态 API
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { getQueueStatus } from '@/services/evaluation-queue';
 import { logger } from '@/lib/logger';
 
@@ -13,17 +13,11 @@ import { logger } from '@/lib/logger';
 export async function GET(request: Request) {
   try {
     // 验证登录状态
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const queueStatus = await getQueueStatus();
     

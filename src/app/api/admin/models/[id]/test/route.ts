@@ -2,8 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { testModelConnection } from '@/lib/model-client';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 测试模型连通性（管理员接口）
@@ -13,20 +14,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     const { id } = await params;
 
     // 获取模型配置
@@ -83,9 +77,9 @@ export async function POST(
     }, { status: 200 });
     
   } catch (error) {
-    console.error('测试模型连接错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, '测试模型连接错误:', { details: error });
     return NextResponse.json(
-      { error: '服务器内部错误', details: String(error) },
+      { error: '服务器内部错误' },
       { status: 500 }
     );
   }

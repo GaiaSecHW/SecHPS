@@ -1,30 +1,21 @@
 ﻿// src/app/api/admin/cache/clear/route.ts
 
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { clearAllCaches, invalidateUserCaches } from '@/lib/cache';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 
 export async function POST(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     const body = await request.json().catch(() => ({}));
     const { cacheType, userId } = body;
 
@@ -39,7 +30,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'cache_clear',
         details: JSON.stringify({ cacheType: cacheType || 'all' }),

@@ -7,7 +7,7 @@
  */
 
 import type { AgentTeamEvent } from '@/types/agent-team-events';
-import { formatEventForSSE } from '@/types/agent-team-events';
+import { formatEventForSSE, createExecutionStartedEvent, createAgentInvokedEvent, createMessageDeltaEvent, createAgentCompletedEvent, createExecutionCompletedEvent, createIterationStartedEvent, createIterationCompletedEvent, createExperienceQueriedEvent } from '@/types/agent-team-events';
 
 // ============ Client Connection Types ============
 
@@ -329,18 +329,12 @@ export function emitExecutionStarted(
     memberCount?: number;
   }
 ): void {
-  const event = {
-    type: 'execution_started',
+  const event = createExecutionStartedEvent(executionId, teamId, {
     executionId,
     teamId,
-    timestamp: new Date(),
-    data: {
-      executionId,
-      teamId,
-      ...data,
-    },
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+    ...data,
+  } as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -357,14 +351,8 @@ export function emitAgentInvoked(
     memberId?: string;
   }
 ): void {
-  const event = {
-    type: 'agent_invoked',
-    executionId,
-    teamId,
-    timestamp: new Date(),
-    data,
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+  const event = createAgentInvokedEvent(executionId, teamId, data as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -379,14 +367,8 @@ export function emitMessageDelta(
     memberId?: string;
   }
 ): void {
-  const event = {
-    type: 'message_delta',
-    executionId,
-    teamId,
-    timestamp: new Date(),
-    data,
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+  const event = createMessageDeltaEvent(executionId, teamId, data as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -403,14 +385,8 @@ export function emitAgentCompleted(
     memberId?: string;
   }
 ): void {
-  const event = {
-    type: 'agent_completed',
-    executionId,
-    teamId,
-    timestamp: new Date(),
-    data,
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+  const event = createAgentCompletedEvent(executionId, teamId, data as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -426,17 +402,11 @@ export function emitExecutionCompleted(
     status: 'completed' | 'failed' | 'cancelled';
   }
 ): void {
-  const event = {
-    type: 'execution_completed',
+  const event = createExecutionCompletedEvent(executionId, teamId, {
     executionId,
-    teamId,
-    timestamp: new Date(),
-    data: {
-      executionId,
-      ...data,
-    },
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+    ...data,
+  } as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -452,17 +422,11 @@ export function emitIterationStarted(
     totalCostUsdSoFar?: number;
   }
 ): void {
-  const event = {
-    type: 'iteration_started',
+  const event = createIterationStartedEvent(executionId, teamId, {
     executionId,
-    teamId,
-    timestamp: new Date(),
-    data: {
-      executionId,
-      ...data,
-    },
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+    ...data,
+  } as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -481,17 +445,11 @@ export function emitIterationCompleted(
     totalCostUsdSoFar: number;
   }
 ): void {
-  const event = {
-    type: 'iteration_completed',
+  const event = createIterationCompletedEvent(executionId, teamId, {
     executionId,
-    teamId,
-    timestamp: new Date(),
-    data: {
-      executionId,
-      ...data,
-    },
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+    ...data,
+  } as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }
 
 /**
@@ -507,15 +465,9 @@ export function emitExperienceQueried(
     guidanceInjected: string;
   }
 ): void {
-  const event = {
-    type: 'experience_queried',
+  const event = createExperienceQueriedEvent(executionId, teamId, {
     executionId,
-    teamId,
-    timestamp: new Date(),
-    data: {
-      executionId,
-      ...data,
-    },
-  };
-  agentTeamEventBroadcaster.broadcast(event as any);
+    ...data,
+  } as any);
+  agentTeamEventBroadcaster.broadcast(event);
 }

@@ -5,6 +5,7 @@
 import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { SessionManager } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(
   request: Request,
@@ -32,7 +33,7 @@ export async function POST(
 
     return NextResponse.json({ session });
   } catch (error) {
-    console.error('创建会话错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '创建会话错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

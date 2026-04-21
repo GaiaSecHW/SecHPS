@@ -16,6 +16,7 @@ import {
   Shield,
   XCircle,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // Types from API response
 interface SkillStatsWithDetails {
@@ -60,14 +61,6 @@ const riskLevelConfig: Record<string, { bg: string; text: string; label: string 
   high: { bg: 'bg-orange-100', text: 'text-orange-800', label: '高风险' },
   critical: { bg: 'bg-red-100', text: 'text-red-800', label: '严重' },
 };
-
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
-}
 
 export default function HighFrequencyPage() {
   return (
@@ -248,7 +241,7 @@ function HighFrequencyPageContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { validateJsonField, validateJsonObject } from '@/lib/validation';
 import { PERMISSIONS } from '@/types/permissions';
+import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // PATCH /api/config/[id] - Update a config
 export async function PATCH(
@@ -116,15 +118,17 @@ export async function PATCH(
       },
     });
 
-    console.log('[Config] Updated config:', { 
-      id: config.id, 
-      progressQuestion: config.progressQuestion ? `${config.progressQuestion.substring(0, 30)}...` : null 
+    logger.debug(LOG_MODULES.CONFIG, '更新配置:', { 
+      details: { 
+        id: config.id, 
+        progressQuestion: config.progressQuestion ? `${config.progressQuestion.substring(0, 30)}...` : null 
+      } 
     });
 
     // Record audit log
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'config_update',
         resource: config.id,
@@ -134,7 +138,7 @@ export async function PATCH(
 
     return NextResponse.json({ config });
   } catch (error) {
-    console.error('Update config error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '更新配置错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -187,7 +191,7 @@ export async function DELETE(
     // Record audit log
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'config_delete',
         resource: id,
@@ -197,7 +201,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '配置删除成功' });
   } catch (error) {
-    console.error('Delete config error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '删除配置错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

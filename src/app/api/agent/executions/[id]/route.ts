@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/agent/executions/:id - 获取执行状态
 export async function GET(
@@ -26,11 +28,11 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 构建查询条件
     let where: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：通过 SkillExecution.Project.userId 验证所有权
       where.Project = { userId: payload.userId };
     }
@@ -59,7 +61,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('获取执行状态错误:', error);
+    logger.errorNoUser(LOG_MODULES.AGENT, '获取执行状态错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

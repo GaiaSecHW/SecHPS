@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { NODE_TYPE_MAP } from '@/types/workflow';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取工作流预览（Markdown 格式）
 export async function GET(
@@ -10,34 +11,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 查询工作流及其节点和边
     const workflow = await prisma.workflow.findFirst({
       where: {
         id,
-        ...(isAdmin ? {} : {
+        ...(userIsAdmin ? {} : {
           OR: [
             { userId: payload.userId },
             { isPublic: true },
@@ -107,7 +97,7 @@ export async function GET(
       markdown,
     });
   } catch (error) {
-    console.error('Get workflow preview error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, '获取工作流预览错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -2,9 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id] - 获取评估会话详情
 // 数据隔离：普通用户只能查看自己项目的评估，管理员可以查看所有
@@ -33,7 +34,7 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 基础查询（使用 findFirst 支持条件过滤）
     let where: any = { id };
@@ -98,7 +99,7 @@ export async function GET(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -136,7 +137,7 @@ export async function GET(
           };
         }
       } catch (err) {
-        console.warn('获取模型配置信息失败:', err);
+        logger.warn(LOG_MODULES.MODEL, '获取模型配置信息失败:', { details: { error: String(err) } });
       }
     }
 
@@ -153,7 +154,7 @@ export async function GET(
 
     return NextResponse.json({ evaluation: response });
   } catch (error) {
-    console.error('Get evaluation error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -185,7 +186,7 @@ export async function DELETE(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查评估会话是否存在并获取项目归属（使用 findFirst 支持条件过滤）
     let where: any = { id };
@@ -200,7 +201,7 @@ export async function DELETE(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -217,7 +218,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '评估会话已删除' });
   } catch (error) {
-    console.error('Delete evaluation error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '删除评估错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -1,26 +1,20 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // POST /api/config/import — 导入配置，覆盖当前用户的活跃配置
 export async function POST(request: Request) {
+  // 使用统一认证中间件（需要 CONFIG_UPDATE 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
 
     const body = await request.json();
 
@@ -83,7 +77,7 @@ export async function POST(request: Request) {
             sortOrder: opt.sortOrder !== undefined ? Number(opt.sortOrder) : 0,
           },
           create: {
-            id: `techstack-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateId('techstack'),
             name: String(opt.name),
             category: String(opt.category),
             description: opt.description ? String(opt.description) : null,
@@ -100,7 +94,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'config_import',
         resource: updated.id,

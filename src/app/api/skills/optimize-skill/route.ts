@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import {
   extractModelResponse,
   buildFullSkill,
@@ -19,19 +19,13 @@ import { logger, LOG_MODULES } from '@/lib/logger';
  * 让大模型优化 Skill 内容，使用公共模块构建最终格式
  */
 export async function POST(request: NextRequest) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-    
-    if (!payload) {
-      return NextResponse.json({ error: '无效的 token' }, { status: 401 });
-    }
-
     const body = await request.json();
     const { skillData, testCases, evaluationData, iterations } = body;
 
@@ -42,8 +36,8 @@ export async function POST(request: NextRequest) {
     // 获取模型配置
     const modelInfo = await getDefaultModelInfo();
     if (!modelInfo) {
-      console.error('[optimize-skill] ❌ 未找到默认模型配置');
-      console.error('[optimize-skill] 请检查 ModelConfig 表中是否有 isActive=true 且 isDefault=true 的记录');
+      logger.errorNoUser(LOG_MODULES.MODEL, '未找到默认模型配置');
+      logger.errorNoUser(LOG_MODULES.MODEL, '请检查 ModelConfig 表中是否有 isActive=true 且 isDefault=true 的记录');
       return NextResponse.json(
         { error: '模型配置不存在，请先在系统设置中配置 AI 模型' },
         { status: 500 }
@@ -51,12 +45,12 @@ export async function POST(request: NextRequest) {
     }
 
     // 详细日志：模型配置信息
-    console.log('[optimize-skill] ========== 模型配置 ==========');
-    console.log(`[optimize-skill] Provider: ${modelInfo.providerType}`);
-    console.log(`[optimize-skill] Model: ${modelInfo.defaultModel}`);
-    console.log(`[optimize-skill] API URL: ${modelInfo.apiBaseUrl}`);
-    console.log(`[optimize-skill] API Key (前8位): ${modelInfo.apiKey?.substring(0, 8)}...`);
-    console.log('[optimize-skill] ==================================');
+    logger.debug(LOG_MODULES.MODEL, '模型配置:', { details: {
+      provider: modelInfo.providerType,
+      model: modelInfo.defaultModel,
+      apiUrl: modelInfo.apiBaseUrl,
+      apiKeyPrefix: modelInfo.apiKey?.substring(0, 8) + '...'
+    } });
     
     logger.debug(LOG_MODULES.SKILL, '用户使用模型', { userId: payload.userId, details: { model: modelInfo.defaultModel } });
 
@@ -132,9 +126,7 @@ ${cleanedUserContent || '（空）'}
 
     // 调用大模型（使用统一的 model-client，自动统计 Token）
     // max_tokens 和 temperature 从模型配置中读取
-    console.log('[optimize-skill] 开始调用大模型...');
-    console.log(`[optimize-skill] System Prompt 长度: ${systemPrompt.length} 字符`);
-    console.log(`[optimize-skill] User Prompt 长度: ${userPrompt.length} 字符`);
+    logger.debug(LOG_MODULES.SKILL, '开始调用大模型...', { details: { systemPromptLength: systemPrompt.length, userPromptLength: userPrompt.length } });
     
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: userPrompt }],
@@ -150,7 +142,7 @@ ${cleanedUserContent || '（空）'}
       }
     );
     
-    console.log('[optimize-skill] ✅ 大模型响应完成');
+    logger.debug(LOG_MODULES.SKILL, '大模型响应完成');
     logger.debug(LOG_MODULES.SKILL, '大模型响应完成');
     
     // 检查截断
@@ -203,23 +195,16 @@ ${cleanedUserContent || '（空）'}
     });
   } catch (error) {
     // 详细错误日志
-    console.error('[optimize-skill] ========== 优化失败 ==========');
-    console.error('[optimize-skill] Error type:', error?.constructor?.name || typeof error);
-    console.error('[optimize-skill] Error name:', error instanceof Error ? error.name : 'N/A');
-    console.error('[optimize-skill] Error message:', error instanceof Error ? error.message : String(error));
-    console.error('[optimize-skill] Error stack:', error instanceof Error ? error.stack?.substring(0, 500) : 'N/A');
+    logger.errorNoUser(LOG_MODULES.SKILL, '优化失败:', { details: {
+      errorType: error?.constructor?.name || typeof error,
+      errorName: error instanceof Error ? error.name : 'N/A',
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorStack: error instanceof Error ? error.stack?.substring(0, 500) : 'N/A'
+    } });
     
-    // 如果是 fetch 相关错误，打印更多网络信息
     if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('network') || error.message.includes('ECONNREFUSED'))) {
-      console.error('[optimize-skill] ========== 网络错误详情 ==========');
-      console.error('[optimize-skill] 这通常是以下原因之一:');
-      console.error('[optimize-skill] 1. API URL 配置错误（检查 apiBaseUrl）');
-      console.error('[optimize-skill] 2. 网络不通（防火墙/代理）');
-      console.error('[optimize-skill] 3. DNS 解析失败');
-      console.error('[optimize-skill] 4. SSL/TLS 证书问题');
-      console.error('[optimize-skill] 5. 服务端点不可用');
+      logger.errorNoUser(LOG_MODULES.MODEL, '网络错误详情: API URL 配置错误、网络不通、DNS 解析失败、SSL/TLS 证书问题或服务端点不可用');
     }
-    console.error('[optimize-skill] ==================================');
     
     logger.errorNoUser(LOG_MODULES.SKILL, '优化失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     

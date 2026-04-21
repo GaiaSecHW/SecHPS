@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { readFile, unlink, stat } from 'fs/promises';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 下载项目文件
 export async function GET(
@@ -10,17 +11,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string; fileId: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { id, fileId } = await params;
 
@@ -55,7 +51,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('下载文件错误:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '下载文件错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -66,17 +62,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; fileId: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { id, fileId } = await params;
 
@@ -99,7 +90,7 @@ export async function DELETE(
       try {
         await unlink(file.filePath);
       } catch (unlinkError) {
-        console.error('删除物理文件失败:', unlinkError);
+        logger.errorNoUser(LOG_MODULES.FILE, '删除物理文件失败:', { details: { error: String(unlinkError) } });
         // 继续删除数据库记录，即使物理文件删除失败
       }
     }
@@ -111,7 +102,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '文件已删除' });
   } catch (error) {
-    console.error('删除文件错误:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '删除文件错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

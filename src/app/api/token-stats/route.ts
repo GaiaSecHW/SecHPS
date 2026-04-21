@@ -1,29 +1,24 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
+import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getBeijingPeriodStart, getBeijingNow } from '@/lib/beijing-time';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取 Token 统计汇总数据
 export async function GET(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
     // 检查权限 - 所有登录用户都可以访问，但只能查看自己的数据
     // 管理员可以查看所有数据
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
     // TOKEN_DETAIL 权限可以查看用户级别的统计（仅管理员可见部分）
     const hasTokenDetail = hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL);
 
@@ -55,7 +50,7 @@ export async function GET(request: Request) {
       evalWhereClause.projectId = projectId;
       tokenWhereClause.projectId = projectId;
     } else {
-      if (isAdmin) {
+      if (userIsAdmin) {
         // 管理员：查询所有数据（不过滤用户）
         // evalWhereClause 保持不变（查询所有项目）
         // tokenWhereClause 也不需要额外过滤
@@ -236,7 +231,7 @@ export async function GET(request: Request) {
 
     // 用户统计（仅管理员可见）
     let userStats: any[] = [];
-    if (isAdmin) {
+    if (userIsAdmin) {
       // 查询每个用户的 token 使用量
       const userProjects = await prisma.project.findMany({
         select: {

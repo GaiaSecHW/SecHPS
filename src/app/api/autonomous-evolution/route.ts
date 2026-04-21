@@ -4,22 +4,19 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-
-  // 检查权限
-  if (!hasPermission(payload.permissions, PERMISSIONS.AUTONOMOUS_EVOLUTION_READ)) {
-    return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AUTONOMOUS_EVOLUTION_READ });
+  if (!auth.success) {
+    return authErrorResponse(auth);
   }
+  const payload = auth.payload;
 
   // 检查是否是管理员
-  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+  const userIsAdmin = isAdmin(payload);
 
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') || '1');
@@ -32,7 +29,7 @@ export async function GET(request: Request) {
   const where: Record<string, unknown> = {};
   
   // 数据隔离：普通用户只能查看自己的进化经验
-  if (!isAdmin) {
+  if (!userIsAdmin) {
     where.userId = payload.userId;
   }
   

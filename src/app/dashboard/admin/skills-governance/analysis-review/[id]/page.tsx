@@ -13,6 +13,7 @@ import {
   Code,
   GitMerge,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface SkillInfo {
   id: string;
@@ -46,14 +47,6 @@ interface AnalysisDetail {
   reviewedAt: string | null;
   reviewNotes: string | null;
   createdAt: string;
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
 }
 
 function AnalysisReviewDetailContent() {

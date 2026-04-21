@@ -4,6 +4,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { hashPassword } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 密码复杂度验证
 function validatePassword(password: string): { valid: boolean; error?: string } {
@@ -81,7 +82,7 @@ export async function POST(
     // 记录审计日志
     await prisma.auditLog.create({
           data: {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('audit'),
             userId: payload.userId,
             action: 'admin_reset_password',
             resource: id,

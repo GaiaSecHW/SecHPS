@@ -3,28 +3,24 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // GET /api/mcp-servers - 获取用户可访问的 MCP 服务器列表
 // 普通用户：自己的 MCP + 共享的 MCP
 // 管理员：所有 MCP
 export async function GET(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 解析分页参数
     const { searchParams } = new URL(request.url);
@@ -39,7 +35,7 @@ export async function GET(request: Request) {
     // 构建 where 条件
     let where: any = { projectId: null }; // 排除项目级 MCP
 
-    if (isAdmin) {
+    if (userIsAdmin) {
       // 管理员：查看所有全局 MCP
       if (search) {
         where.name = { contains: search };
@@ -101,20 +97,15 @@ export async function GET(request: Request) {
 // POST /api/mcp-servers - 创建 MCP 服务器配置
 // 所有用户都可以创建自己的 MCP
 export async function POST(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     const body = await request.json();
     const {
@@ -161,7 +152,7 @@ export async function POST(request: Request) {
     }
 
     // 非管理员不能创建共享 MCP
-    if (isShared && !isAdmin) {
+    if (isShared && !userIsAdmin) {
       return NextResponse.json(
         { error: '只有管理员可以创建共享 MCP' },
         { status: 403 }
@@ -187,7 +178,7 @@ export async function POST(request: Request) {
     // 创建 MCP 配置（绑定到当前用户）
     const mcpServer = await prisma.mcpServerConfig.create({
       data: {
-        id: `mcp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('mcp'),
         name,
         type,
         command: command || null,
@@ -196,7 +187,7 @@ export async function POST(request: Request) {
         env: env ? JSON.stringify(env) : null,
         isEnabled,
         autoStart,
-        isShared: isAdmin ? isShared : false, // 非管理员强制为 false
+        isShared: userIsAdmin ? isShared : false, // 非管理员强制为 false
         userId: payload.userId,
         projectId: null,
         updatedAt: new Date(),

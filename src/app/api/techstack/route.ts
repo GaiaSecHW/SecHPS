@@ -1,9 +1,10 @@
 ﻿// src/app/api/techstack/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * GET /api/techstack
@@ -40,27 +41,14 @@ export async function GET(request: Request) {
  * 创建新的技术栈选项（需要管理员权限）
  */
 export async function POST(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查管理员权限
-    const hasConfigUpdate = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
-    
-    if (!hasConfigUpdate) {
-      return NextResponse.json({ details: { error: '禁止访问 - 需要管理员权限' } }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, category, description, sortOrder } = body;
 
@@ -85,7 +73,7 @@ export async function POST(request: Request) {
 
     const option = await prisma.techStackOption.create({
       data: {
-        id: `techstack-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('techstack'),
         name,
         category,
         description: description || null,

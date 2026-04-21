@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import * as fs from 'fs';
@@ -48,33 +48,14 @@ async function extractTarGz(tarPath: string, targetDir: string): Promise<void> {
  * 上传并安装插件
  */
 export async function POST(request: Request) {
+  // 使用统一认证中间件（需要 PLUGIN_CREATE 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PLUGIN_CREATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json(
-        { error: '无效的 Token' },
-        { status: 401 }
-      );
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_CREATE)) {
-      return NextResponse.json(
-        { error: '没有安装插件的权限' },
-        { status: 403 }
-      );
-    }
 
     // 解析 multipart/form-data
     const formData = await request.formData();

@@ -89,7 +89,7 @@ export function authenticateRequest(
 }
 
 /**
- * 将认证失败结果转换为 NextResponse
+ * 将认证失败结果转换为 NextResponse（格式 A: { error: 'message' }）
  * 
  * @param authResult - 失败的认证结果
  * @returns NextResponse 错误响应
@@ -105,4 +105,102 @@ export function authErrorResponse(authResult: { success: false; error: string; s
     { error: authResult.error },
     { status: authResult.statusCode }
   );
+}
+
+/**
+ * 将认证失败结果转换为 NextResponse（格式 B: { details: { error: 'message' } }）
+ * 用于保持与现有 API 的向后兼容
+ * 
+ * @param authResult - 失败的认证结果
+ * @returns NextResponse 错误响应
+ * 
+ * @example
+ * const auth = authenticateRequest(request);
+ * if (!auth.success) {
+ *   return authErrorResponseNested(auth);
+ * }
+ */
+export function authErrorResponseNested(authResult: { success: false; error: string; statusCode: number }): NextResponse {
+  return NextResponse.json(
+    { details: { error: authResult.error } },
+    { status: authResult.statusCode }
+  );
+}
+
+/**
+ * 检查用户是否是管理员
+ * 
+ * @param payload - JWT payload
+ * @returns 是否是管理员
+ * 
+ * @example
+ * const auth = authenticateRequest(request);
+ * if (!auth.success) return authErrorResponse(auth);
+ * 
+ * if (isAdmin(auth.payload)) {
+ *   // 管理员可以查看所有数据
+ * } else {
+ *   // 普通用户只能查看自己的数据
+ * }
+ */
+export function isAdmin(payload: JWTPayload): boolean {
+  return Array.isArray(payload.roles) && payload.roles.includes('admin');
+}
+
+/**
+ * 检查用户是否拥有指定角色
+ * 
+ * @param payload - JWT payload
+ * @param role - 角色名称
+ * @returns 是否拥有该角色
+ */
+export function hasRole(payload: JWTPayload, role: string): boolean {
+  return Array.isArray(payload.roles) && payload.roles.includes(role);
+}
+
+/**
+ * 获取用户 ID
+ * 类型安全的获取用户 ID，避免重复的类型检查
+ * 
+ * @param payload - JWT payload
+ * @returns 用户 ID
+ */
+export function getUserId(payload: JWTPayload): string {
+  return payload.userId;
+}
+
+/**
+ * 认证结果扩展类型（包含便捷方法）
+ */
+export interface AuthSuccessResult {
+  success: true;
+  payload: JWTPayload;
+  /** 检查是否是管理员 */
+  isAdmin: boolean;
+  /** 获取用户 ID */
+  userId: string;
+}
+
+/**
+ * 增强版认证请求（返回更多便捷属性）
+ * 
+ * @param request - Next.js Request 对象
+ * @param options - 认证选项
+ * @returns 认证结果
+ */
+export function authenticateRequestEnhanced(
+  request: Request,
+  options?: AuthenticateOptions
+): AuthResult | AuthSuccessResult {
+  const result = authenticateRequest(request, options);
+  
+  if (result.success) {
+    return {
+      ...result,
+      isAdmin: isAdmin(result.payload),
+      userId: result.payload.userId,
+    };
+  }
+  
+  return result;
 }

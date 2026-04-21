@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/projects/:id/tool-permissions/:permId - 获取单个工具权限规则
 export async function GET(
@@ -9,18 +10,12 @@ export async function GET(
 ) {
   try {
     const { id: projectId, permId } = await params;
-    const authHeader = request.headers.get('authorization');
-
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 验证项目是否存在且属于用户
     const project = await prisma.project.findFirst({
@@ -48,7 +43,7 @@ export async function GET(
 
     return NextResponse.json({ permission });
   } catch (error) {
-    console.error('Get tool permission error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取工具权限错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -63,18 +58,12 @@ export async function PUT(
 ) {
   try {
     const { id: projectId, permId } = await params;
-    const authHeader = request.headers.get('authorization');
-
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 验证项目是否存在且属于用户
     const project = await prisma.project.findFirst({
@@ -142,7 +131,7 @@ export async function PUT(
 
     return NextResponse.json({ permission: updatedPerm });
   } catch (error) {
-    console.error('Update tool permission error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '更新工具权限错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -157,18 +146,12 @@ export async function DELETE(
 ) {
   try {
     const { id: projectId, permId } = await params;
-    const authHeader = request.headers.get('authorization');
-
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 验证项目是否存在且属于用户
     const project = await prisma.project.findFirst({
@@ -201,7 +184,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'Tool permission deleted successfully' });
   } catch (error) {
-    console.error('Delete tool permission error:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '删除工具权限错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

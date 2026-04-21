@@ -3,25 +3,27 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
 
   const { id } = await params;
 
   // 检查是否是管理员
-  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+  const userIsAdmin = isAdmin(payload);
 
   // 构建查询条件
   let where: any = { id };
-  if (!isAdmin) {
+  if (!userIsAdmin) {
     where.userId = payload.userId;
   }
 
@@ -34,19 +36,21 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
 
   const { id } = await params;
 
   // 检查是否是管理员
-  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+  const userIsAdmin = isAdmin(payload);
 
   // 验证所有权
   let where: any = { id };
-  if (!isAdmin) {
+  if (!userIsAdmin) {
     where.userId = payload.userId;
   }
 
@@ -68,19 +72,21 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
 
   const { id } = await params;
 
   // 检查是否是管理员
-  const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+  const userIsAdmin = isAdmin(payload);
 
   // 验证所有权
   let where: any = { id };
-  if (!isAdmin) {
+  if (!userIsAdmin) {
     where.userId = payload.userId;
   }
 

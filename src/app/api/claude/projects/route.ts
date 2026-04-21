@@ -86,8 +86,9 @@ async function validateWorkspacePath(requestedPath: string): Promise<{
           error: '路径存在但不是目录',
         };
       }
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      const nodeError = error as NodeJS.ErrnoException | null;
+      if (nodeError?.code === 'ENOENT') {
         return {
           valid: false,
           error: '项目路径不存在',
@@ -100,10 +101,10 @@ async function validateWorkspacePath(requestedPath: string): Promise<{
       valid: true,
       resolvedPath: absolutePath,
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       valid: false,
-      error: `路径验证失败: ${error.message}`,
+      error: `路径验证失败: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
 }

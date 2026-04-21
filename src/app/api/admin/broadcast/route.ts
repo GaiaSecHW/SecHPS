@@ -2,8 +2,10 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const BROADCAST_KEY = 'broadcast_content';
 
@@ -23,23 +25,13 @@ const VALID_COLORS = ['blue', 'yellow', 'red', 'green'];
 
 // GET /api/admin/broadcast - 获取广播配置
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
     const config = await prisma.systemConfig.findUnique({
       where: { key: BROADCAST_KEY },
     });
@@ -51,30 +43,20 @@ export async function GET(request: Request) {
     const broadcastConfig: BroadcastConfig = JSON.parse(config.value);
     return NextResponse.json({ config: broadcastConfig });
   } catch (error) {
-    console.error('获取广播配置失败:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取广播配置失败:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
 
 // PUT /api/admin/broadcast - 更新广播配置
 export async function PUT(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
     const body = await request.json();
     const { content, enabled, color } = body;
 
@@ -104,7 +86,7 @@ export async function PUT(request: Request) {
     } else {
       await prisma.systemConfig.create({
         data: {
-          id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('config'),
           key: BROADCAST_KEY,
           value: JSON.stringify(broadcastConfig),
           description: '广播通知配置',
@@ -116,7 +98,7 @@ export async function PUT(request: Request) {
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'broadcast_config_update',
         resource: BROADCAST_KEY,
@@ -129,7 +111,7 @@ export async function PUT(request: Request) {
       config: broadcastConfig,
     });
   } catch (error) {
-    console.error('更新广播配置失败:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '更新广播配置失败:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

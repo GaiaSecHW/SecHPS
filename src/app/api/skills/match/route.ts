@@ -1,13 +1,14 @@
 // src/app/api/skills/match/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { routeRequestWithDefaultModel, getDefaultModelInfo } from '@/lib/model-client';
 import { analyzeSkillOverlap, type OverlapGroup } from '@/services/skill-overlap-analysis';
 import { predictImpact, type ImpactPrediction } from '@/services/skill-impact-prediction';
 import { generateRecommendations, type Recommendation } from '@/services/skill-recommendations';
 import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * Skill 匹配请求
@@ -127,20 +128,13 @@ function generateGovernanceWarning(matches: SkillMatch[]): GovernanceWarning | n
  * 根据任务信息匹配相关 Skills
  */
 export async function POST(request: Request) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     // 解析请求体
     const body: MatchRequest = await request.json();
     const { taskName, taskDescription, topK = 5 } = body;
@@ -212,7 +206,7 @@ export async function POST(request: Request) {
       try {
         await prisma.skillPrediction.create({
           data: {
-            id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateId('pred'),
             userId: payload.userId,
             taskName,
             taskDescription,
@@ -252,7 +246,7 @@ export async function POST(request: Request) {
     try {
       await prisma.skillPrediction.create({
         data: {
-          id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('pred'),
           userId: payload.userId,
           taskName,
           taskDescription,

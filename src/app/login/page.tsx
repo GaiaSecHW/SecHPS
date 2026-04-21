@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { extractErrorMessage } from '@/lib/api-client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || '认证失败');
+        setError(extractErrorMessage(data, '认证失败'));
         setLoading(false);
         return;
       }

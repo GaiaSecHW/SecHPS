@@ -7,7 +7,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取项目的会话列表
 export async function GET(
@@ -15,26 +16,20 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证项目所有权
     let projectWhere: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：只能查看自己项目的会话
       projectWhere.userId = payload.userId;
     }
@@ -110,7 +105,7 @@ export async function GET(
       limit,
     });
   } catch (error) {
-    console.error('获取会话列表错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取会话列表错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

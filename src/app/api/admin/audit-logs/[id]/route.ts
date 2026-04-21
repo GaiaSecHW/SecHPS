@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/admin/audit-logs/[id] - 获取单条审计日志详情
 export async function GET(
@@ -78,7 +79,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Get audit log detail error:', error);
+    logger.errorNoUser(LOG_MODULES.AUDIT, '获取审计日志详情错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

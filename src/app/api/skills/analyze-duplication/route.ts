@@ -7,6 +7,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
 import { analyzeSkillDuplication, type SkillForLLMAnalysis } from '@/services/skill-llm-analysis';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * POST /api/skills/analyze-duplication
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
       try {
         await prisma.skillNewImpactAnalysis.create({
           data: {
-            id: `llm-pair-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('llm-pair'),
             skillId: skillA.id,
             similarSkills: JSON.stringify([{
               skillId: skillB.id,

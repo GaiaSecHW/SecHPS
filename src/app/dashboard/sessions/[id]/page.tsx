@@ -28,6 +28,7 @@ import {
   User,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // 辅助函数：获取消息内容预览
 function getContentPreview(content: any): string {
@@ -73,14 +74,6 @@ function formatTokenNumber(num: number): string {
     return `${(num / 1000).toFixed(1)}K`;
   }
   return num.toString();
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
 }
 
 export default function SessionDetailPage({
@@ -227,10 +220,10 @@ function SessionDetailContent({
           }
         }
       }
-      
+        
       console.log('[SSE] Stream ended');
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === 'AbortError') {
         console.log('[SSE] Connection aborted');
       } else {
         console.warn('[SSE] Connection error:', error);

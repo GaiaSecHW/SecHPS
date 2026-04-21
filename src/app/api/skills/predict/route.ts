@@ -1,27 +1,21 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * POST /api/skills/predict
  * 保存 Skill 预测结果
  */
 export async function POST(request: Request) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
     const body = await request.json();
     const { taskName, taskDescription, matches, method } = body;
 
@@ -36,7 +30,7 @@ export async function POST(request: Request) {
     // 保存预测结果
     const prediction = await prisma.skillPrediction.create({
       data: {
-        id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('pred'),
         userId: payload.userId,
         taskName,
         taskDescription,
@@ -61,20 +55,13 @@ export async function POST(request: Request) {
  * 查询预测历史
  */
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '20', 10);

@@ -15,6 +15,7 @@ import {
   Users,
   BarChart3,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface GovernanceStatus {
   migration: {
@@ -30,14 +31,6 @@ interface GovernanceStatus {
     resolved: number;
   };
   pendingReviews: number;
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
 }
 
 export default function GovernancePage() {

@@ -92,7 +92,11 @@ async function main() {
   });
 
   if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash('admin123', 10);
+    // 使用环境变量或生成随机密码
+    const adminPassword = process.env.ADMIN_SEED_PASSWORD || 
+      require('crypto').randomBytes(12).toString('base64').slice(0, 16);
+    
+    const passwordHash = await bcrypt.hash(adminPassword, 10);
     const admin = await prisma.user.create({
       data: {
         email: adminEmail,
@@ -127,7 +131,12 @@ async function main() {
 
     console.log('✅ 测试管理员账户已创建');
     console.log(`   邮箱: ${adminEmail}`);
-    console.log(`   密码: admin123`);
+    if (process.env.ADMIN_SEED_PASSWORD) {
+      console.log(`   密码: (使用 ADMIN_SEED_PASSWORD 环境变量)`);
+    } else {
+      console.log(`   密码: ${adminPassword}`);
+      console.log(`   ⚠️  请保存此密码，或使用 ADMIN_SEED_PASSWORD 环境变量设置自定义密码`);
+    }
   } else {
     console.log('ℹ️  测试管理员账户已存在');
   }

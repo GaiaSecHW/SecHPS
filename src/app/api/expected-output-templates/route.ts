@@ -1,27 +1,23 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * GET /api/expected-output-templates
  * 获取所有期望输出模板
  */
 export async function GET(request: NextRequest) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category');
 
@@ -47,24 +43,14 @@ export async function GET(request: NextRequest) {
  * 创建新的期望输出模板（需要管理员权限）
  */
 export async function POST(request: NextRequest) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
-    }
-
-    // 检查权限 - 只有管理员可以创建模板
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, displayName, description, category, template, example, sortOrder } = body;
 
@@ -83,7 +69,7 @@ export async function POST(request: NextRequest) {
 
     const newTemplate = await prisma.expectedOutputTemplate.create({
       data: {
-        id: `template-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('template'),
         name,
         displayName,
         description: description || '',

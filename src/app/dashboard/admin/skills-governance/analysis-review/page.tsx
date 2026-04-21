@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Filter,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface SkillInfo {
   id: string;
@@ -73,10 +74,10 @@ const recommendationLabels: Record<string, string> = {
   review: '需人工判断',
 };
 
-function LoadingSpinner() {
+function LoadingFallback() {
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+      <LoadingSpinner size="xl" />
     </div>
   );
 }
@@ -172,7 +173,7 @@ function AnalysisReviewListContent() {
       {/* 列表 */}
       {loading ? (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <LoadingSpinner size="lg" />
         </div>
       ) : analyses.length === 0 ? (
         <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
@@ -256,9 +257,9 @@ function AnalysisReviewListContent() {
 }
 
 export default function AnalysisReviewListPage() {
-  return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <AnalysisReviewListContent />
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <AnalysisReviewListContent />
     </Suspense>
   );
 }

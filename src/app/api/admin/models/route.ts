@@ -1,30 +1,19 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 获取所有模型配置
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.MODEL_READ });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.MODEL_READ)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const isActiveParam = searchParams.get('isActive');
@@ -68,25 +57,13 @@ export async function GET(request: Request) {
 
 // 创建新的模型配置
 export async function POST(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.MODEL_CREATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.MODEL_CREATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, providerType, apiBaseUrl, apiKey, models, routeType, isActive, isDefault } = body;
 
@@ -135,7 +112,7 @@ export async function POST(request: Request) {
     // 创建模型配置
     const model = await prisma.modelConfig.create({
       data: {
-        id: `model-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('model'),
         name,
         providerType: providerType || 'openai',
         apiBaseUrl,
@@ -169,9 +146,9 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.MODEL, '创建模型配置失败', { details: { error: String(error) } });
+    logger.errorNoUser(LOG_MODULES.MODEL, '创建模型配置失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { details: { error: '服务器内部错误', details: String(error) } },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }

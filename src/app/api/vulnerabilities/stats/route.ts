@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/vulnerabilities/stats - 获取漏洞统计
@@ -10,29 +10,23 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 // 管理员：统计所有漏洞
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
 
     // 检查是否是管理员 - roles 是 string[]
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
     
     // 构建查询条件
     const where: Record<string, unknown> = {};
     
     // 管理员可以看到所有漏洞；普通用户只能看到自己项目的漏洞
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       if (projectId) {
         // 指定了项目ID，需要验证用户是否有权限访问该项目
         const project = await prisma.project.findUnique({

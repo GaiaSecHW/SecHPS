@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { User, Lock, Save, Eye, EyeOff } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function ProfilePage() {
   const [user, setUser] = useState<any>(null);
@@ -138,7 +139,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

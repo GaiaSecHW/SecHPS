@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { rm, stat } from 'fs/promises';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取单个项目详情
 // 普通用户：只能查看自己的项目
@@ -22,11 +23,11 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 构建查询条件
     let where: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：只能查看自己的项目
       where.userId = payload.userId;
     }
@@ -49,7 +50,7 @@ export async function GET(
 
     return NextResponse.json({ project });
   } catch (error) {
-    console.error('获取项目详情错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '获取项目详情错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -72,7 +73,7 @@ export async function PUT(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查项目是否存在及所有权
     const existingProject = await prisma.project.findUnique({
@@ -84,7 +85,7 @@ export async function PUT(
     }
 
     // 检查权限：只能更新自己的项目，管理员可以更新所有
-    if (!isAdmin && existingProject.userId !== payload.userId) {
+    if (!userIsAdmin && existingProject.userId !== payload.userId) {
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
@@ -103,7 +104,7 @@ export async function PUT(
 
     return NextResponse.json({ project });
   } catch (error) {
-    console.error('更新项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '更新项目错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -126,7 +127,7 @@ export async function PATCH(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查项目是否存在及所有权
     const existingProject = await prisma.project.findUnique({
@@ -138,7 +139,7 @@ export async function PATCH(
     }
 
     // 检查权限：只能更新自己的项目，管理员可以更新所有
-    if (!isAdmin && existingProject.userId !== payload.userId) {
+    if (!userIsAdmin && existingProject.userId !== payload.userId) {
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
@@ -186,11 +187,11 @@ export async function DELETE(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 构建查询条件
     let where: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：只能删除自己的项目
       where.userId = payload.userId;
     }
@@ -217,7 +218,7 @@ export async function DELETE(
         }
       } catch (err) {
         // 目录不存在或无法访问，忽略错误
-        console.warn(`项目目录不存在或无法删除: ${project.projectPath}`, err);
+        logger.warn(LOG_MODULES.PROJECT, '项目目录不存在或无法删除:', { details: { path: project.projectPath, error: String(err) } });
       }
     }
 
@@ -245,7 +246,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '项目已删除' });
   } catch (error) {
-    console.error('删除项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.PROJECT, '删除项目错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误', details: String(error) }, { status: 500 });
   }
 }

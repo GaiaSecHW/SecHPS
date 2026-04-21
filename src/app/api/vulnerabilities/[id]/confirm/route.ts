@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/vulnerabilities/:id/confirm - 确认漏洞
@@ -27,11 +28,11 @@ export async function POST(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证所有权
     let where: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       where.Project = { userId: payload.userId };
     }
 

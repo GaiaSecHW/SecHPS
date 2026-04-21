@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { writeFile, stat, mkdir, rename, unlink } from 'fs/promises';
 import { join, extname, basename, dirname } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 最大文件大小（2MB）
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
@@ -118,7 +119,7 @@ export async function POST(
         await writeFile(backupWithPath, originalContent);
       } catch {
         // 如果备份失败，继续写入但记录警告
-        console.warn(`Failed to create backup for ${fullPath}`);
+        logger.warn(LOG_MODULES.FILE, '创建备份失败:', { details: { path: fullPath } });
       }
     }
 
@@ -147,7 +148,7 @@ export async function POST(
       message: fileExists ? '文件已更新' : '文件已创建',
     });
   } catch (error) {
-    console.error('Write file error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '写入文件错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
@@ -238,7 +239,7 @@ export async function DELETE(
       const originalContent = await readFile(fullPath);
       await writeFile(backupPath, originalContent);
     } catch {
-      console.warn(`Failed to create backup for deleted file ${fullPath}`);
+      logger.warn(LOG_MODULES.FILE, '创建删除备份失败:', { details: { path: fullPath } });
     }
 
     // 删除文件
@@ -251,7 +252,7 @@ export async function DELETE(
       message: '文件已删除',
     });
   } catch (error) {
-    console.error('Delete file error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '删除文件错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

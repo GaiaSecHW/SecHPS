@@ -6,6 +6,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { createClaudeAgentService, ClaudeAgentService } from '@/services/ai';
 import { trackSystemTokenUsage, calculateSystemCost } from '@/lib/system-token-tracker';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 全局 AI Service 用于测试（懒加载）
 let globalTestService: ClaudeAgentService | null = null;
@@ -202,7 +203,7 @@ export async function POST(
       });
     }
   } catch (error) {
-    console.error('测试 Skill 错误:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '测试 Skill 错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

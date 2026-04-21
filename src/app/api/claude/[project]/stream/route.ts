@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { SessionManager } from '@/services/session-manager';
 import { ClaudeAgentService } from '@/services/ai/claude-agent';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -86,7 +87,7 @@ export async function POST(
             },
           });
         } catch (error) {
-          console.error('SSE error:', error);
+          logger.errorNoUser(LOG_MODULES.SESSION, 'SSE错误:', { details: error });
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', message: '处理失败' })}\n\n`));
           controller.close();
         }
@@ -101,7 +102,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('发送消息错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '发送消息错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

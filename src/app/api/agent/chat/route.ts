@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { createEvaluationCaller } from '@/services/evaluation';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -10,22 +10,12 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 // POST /api/agent/chat - 与 Agent 对话
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // Authenticate and check permission
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AGENT_CHAT });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.AGENT_CHAT)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const { payload } = auth;
 
     const body = await request.json();
     const { executionId, message } = body;

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { PermissionGuard } from '@/components/PermissionGuard';
 import { PERMISSIONS } from '@/types/permissions';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function UsersPage() {
   return (
@@ -141,7 +142,7 @@ function UsersPageContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

@@ -1,24 +1,17 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
-import { PERMISSIONS } from '@/types/permissions';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/workflows/config - Get workflow default configuration
 export async function GET(request: Request) {
   try {
-    // Verify Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // Get user's active config
     const config = await prisma.opencodeConfig.findFirst({

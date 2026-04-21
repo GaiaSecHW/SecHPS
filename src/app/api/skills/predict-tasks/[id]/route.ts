@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * GET /api/skills/predict-tasks/[id]
@@ -60,7 +61,7 @@ export async function GET(
 
     return NextResponse.json({ task: formattedTask });
   } catch (error) {
-    console.error('查询预测任务失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '查询预测任务失败:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -120,7 +121,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '任务已取消' });
   } catch (error) {
-    console.error('取消预测任务失败:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '取消预测任务失败:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

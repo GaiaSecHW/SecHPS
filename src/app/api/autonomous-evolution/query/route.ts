@@ -2,32 +2,24 @@
 // POST 接口 - Claude Tool 调用知识库查询
 
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
+import { generateIndexedId } from '@/lib/id-generator';
 import {
   queryRelevantExperiences,
   type ErrorContext,
 } from '@/services/autonomous-evolution/experience-query-service';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(request: Request) {
   try {
-    // 1. 验证认证
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AUTONOMOUS_EVOLUTION_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 2. 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.AUTONOMOUS_EVOLUTION_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     // 3. 解析请求体
     const body = await request.json();
@@ -78,16 +70,14 @@ export async function POST(request: Request) {
       const experienceIds = experiences.map((e) => e.id);
       await prisma.experienceUsageLog.createMany({
         data: experienceIds.map((expId, index) => ({
-          id: `explog-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateIndexedId('explog', index),
           experienceId: expId,
           evaluationId: `tool_call_${Date.now()}`, // 使用特殊标识区分 tool_call 来源
           projectId: null,
         })),
       });
 
-      console.log(
-        `[ExperienceQueryAPI] 记录了 ${experienceIds.length} 条查询日志 (source: tool_call)`
-      );
+      logger.debug(LOG_MODULES.EVALUATION, `记录了 ${experienceIds.length} 条查询日志 (source: tool_call)`);
     }
 
     // 7. 返回结果
@@ -96,7 +86,7 @@ export async function POST(request: Request) {
       count: experiences.length,
     });
   } catch (error) {
-    console.error('[ExperienceQueryAPI] 查询失败:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '查询失败:', { details: error });
     return NextResponse.json(
       { error: '内部服务器错误' },
       { status: 500 }

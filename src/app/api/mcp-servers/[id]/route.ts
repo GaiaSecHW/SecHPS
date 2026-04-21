@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 检查用户是否有权限操作此 MCP
@@ -26,20 +26,15 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
     const { id } = await params;
 
     const mcpServer = await prisma.mcpServerConfig.findFirst({
@@ -59,7 +54,7 @@ export async function GET(
     }
 
     // 检查查看权限
-    if (!canViewMcp(payload.userId, isAdmin, mcpServer)) {
+    if (!canViewMcp(payload.userId, userIsAdmin, mcpServer)) {
       return NextResponse.json({ error: '无权限访问此 MCP' }, { status: 403 });
     }
 
@@ -76,20 +71,15 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
     const { id } = await params;
     const body = await request.json();
 
@@ -106,12 +96,12 @@ export async function PATCH(
     }
 
     // 检查管理权限
-    if (!canManageMcp(payload.userId, isAdmin, existing)) {
+    if (!canManageMcp(payload.userId, userIsAdmin, existing)) {
       return NextResponse.json({ error: '无权限修改此 MCP' }, { status: 403 });
     }
 
     // 非管理员不能修改 isShared
-    if (body.isShared !== undefined && !isAdmin) {
+    if (body.isShared !== undefined && !userIsAdmin) {
       return NextResponse.json({ error: '只有管理员可以设置共享状态' }, { status: 403 });
     }
 
@@ -155,7 +145,7 @@ export async function PATCH(
     if (body.env !== undefined) updateData.env = body.env ? JSON.stringify(body.env) : null;
     if (body.isEnabled !== undefined) updateData.isEnabled = body.isEnabled;
     if (body.autoStart !== undefined) updateData.autoStart = body.autoStart;
-    if (body.isShared !== undefined && isAdmin) updateData.isShared = body.isShared;
+    if (body.isShared !== undefined && userIsAdmin) updateData.isShared = body.isShared;
 
     // 更新
     const mcpServer = await prisma.mcpServerConfig.update({
@@ -176,20 +166,15 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
     const { id } = await params;
 
     // 检查是否存在
@@ -205,7 +190,7 @@ export async function DELETE(
     }
 
     // 检查删除权限
-    if (!canManageMcp(payload.userId, isAdmin, existing)) {
+    if (!canManageMcp(payload.userId, userIsAdmin, existing)) {
       return NextResponse.json({ error: '无权限删除此 MCP' }, { status: 403 });
     }
 

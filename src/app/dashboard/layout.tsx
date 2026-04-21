@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
 import { BroadcastMarquee } from '@/components/BroadcastMarquee';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import {
   LayoutDashboard,
   Users,
@@ -33,6 +34,7 @@ import {
   GitBranch,
   Megaphone,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 export default function DashboardLayout({
   children,
@@ -43,14 +45,6 @@ export default function DashboardLayout({
     <Suspense fallback={<LoadingSpinner />}>
       <DashboardLayoutContent>{children}</DashboardLayoutContent>
     </Suspense>
-  );
-}
-
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
   );
 }
 
@@ -101,7 +95,7 @@ function DashboardLayoutContent({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }
@@ -279,7 +273,9 @@ function DashboardLayoutContent({
 
         {/* 页面内容 */}
         <main className="flex-1 overflow-auto p-6">
-          {children}
+          <ErrorBoundary>
+            {children}
+          </ErrorBoundary>
         </main>
       </div>
 

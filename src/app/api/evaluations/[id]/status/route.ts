@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/status - 获取评估会话状态
 export async function GET(
@@ -69,7 +69,7 @@ export async function GET(
 
     return NextResponse.json({ evaluation });
   } catch (error) {
-    console.error('Get evaluation status error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估状态错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

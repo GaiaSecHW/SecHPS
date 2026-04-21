@@ -16,6 +16,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getAnalysisReport } from '@/services/analysis-report';
 import { getSkillExecutionsByEvaluation } from '@/services/skill-execution-tracker';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 缓存漏洞模式映射表
 let vulnerabilityPatternMap: Map<string, { categoryId: string; categoryName: string; patternName: string }> | null = null;
@@ -167,7 +168,7 @@ export async function GET(
     const filterType = searchParams.get('type') || '';
     const filterStatus = searchParams.get('status') || '';
     
-    console.log(`[EvaluationReport] 开始获取报告: ${id}, page=${page}, pageSize=${pageSize}`);
+    logger.debug(LOG_MODULES.EVALUATION, '开始获取报告:', { details: { id, page, pageSize } });
     
     // 获取评估会话基本信息
     const evaluation = await prisma.evaluationSession.findUnique({
@@ -192,37 +193,37 @@ export async function GET(
     });
     
     if (!evaluation) {
-      console.log(`[EvaluationReport] 评估会话不存在: ${id}`);
+      logger.debug(LOG_MODULES.EVALUATION, '评估会话不存在:', { details: { id } });
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
     
-    console.log(`[EvaluationReport] 找到评估会话: ${id}, projectId=${evaluation.projectId}`);
+    logger.debug(LOG_MODULES.EVALUATION, '找到评估会话:', { details: { id, projectId: evaluation.projectId } });
     
     // 1. 获取分析报告
     let analysisReport = null;
     try {
       analysisReport = await getAnalysisReport(id);
-      console.log(`[EvaluationReport] 分析报告: ${analysisReport ? '已获取' : '不存在'}`);
+      logger.debug(LOG_MODULES.EVALUATION, '分析报告:', { details: { status: analysisReport ? '已获取' : '不存在' } });
     } catch (err) {
-      console.error('[EvaluationReport] 获取分析报告失败:', err);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '获取分析报告失败:', { details: { error: String(err) } });
     }
     
     // 2. 获取 Skills 执行记录
     let skillExecutions: any[] = [];
     try {
       skillExecutions = await getSkillExecutionsByEvaluation(id);
-      console.log(`[EvaluationReport] Skills 执行记录: ${skillExecutions.length} 条`);
+      logger.debug(LOG_MODULES.EVALUATION, 'Skills 执行记录:', { details: { count: skillExecutions.length } });
     } catch (err) {
-      console.error('[EvaluationReport] 获取 Skills 执行记录失败:', err);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '获取 Skills 执行记录失败:', { details: { error: String(err) } });
     }
     
     // 3. 获取漏洞分类关联链
     let vulnerabilityChain: any[] = [];
     try {
       vulnerabilityChain = await getVulnerabilityChain(evaluation.projectId, id);
-      console.log(`[EvaluationReport] 漏洞分类关联链: ${vulnerabilityChain.length} 条`);
+      logger.debug(LOG_MODULES.EVALUATION, '漏洞分类关联链:', { details: { count: vulnerabilityChain.length } });
     } catch (err) {
-      console.error('[EvaluationReport] 获取漏洞分类关联链失败:', err);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '获取漏洞分类关联链失败:', { details: { error: String(err) } });
     }
     
     // 4. 获取漏洞发现汇总（带分页和筛选）
@@ -235,9 +236,9 @@ export async function GET(
     };
     try {
       vulnerabilitySummary = await getVulnerabilitySummary(id, { page, pageSize, filterType, filterStatus });
-      console.log(`[EvaluationReport] 漏洞发现汇总: ${vulnerabilitySummary.total} 个`);
+      logger.debug(LOG_MODULES.EVALUATION, '漏洞发现汇总:', { details: { total: vulnerabilitySummary.total } });
     } catch (err) {
-      console.error('[EvaluationReport] 获取漏洞发现汇总失败:', err);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '获取漏洞发现汇总失败:', { details: { error: String(err) } });
     }
     
     // 5. 构建 Skills 统计
@@ -289,7 +290,7 @@ export async function GET(
     });
     
   } catch (error) {
-    console.error('[EvaluationReport] 获取报告失败:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取报告失败:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       { error: `获取报告失败: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 }

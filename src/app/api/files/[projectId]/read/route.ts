@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { readFile, stat } from 'fs/promises';
 import { join, extname, basename } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 语言扩展名映射
 const LANGUAGE_MAP: Record<string, string> = {
@@ -237,7 +238,7 @@ export async function GET(
       isBinary: false,
     });
   } catch (error) {
-    console.error('Read file error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '读取文件错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

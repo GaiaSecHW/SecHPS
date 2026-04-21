@@ -1,10 +1,24 @@
-﻿// src/app/api/admin/health/route.ts
+// src/app/api/admin/health/route.ts
 
 import { NextResponse } from 'next/server';
 import { runHealthChecks } from '@/lib/monitoring/health-check';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { PERMISSIONS } from '@/types/permissions';
 
-export async function GET() {
+/**
+ * GET /api/admin/health
+ * 获取系统健康报告（需要管理员权限）
+ * 
+ * 安全修复：添加认证和权限检查
+ */
+export async function GET(request: Request) {
+  // 认证检查
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+
   try {
     const healthReport = await runHealthChecks();
 

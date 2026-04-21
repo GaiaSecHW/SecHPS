@@ -4,6 +4,8 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/skills/:id/rollback - 回滚 Skill 到指定版本
 export async function POST(
@@ -81,7 +83,7 @@ export async function POST(
     // 创建新版本（基于目标版本）
     const newSkill = await prisma.skill.create({
       data: {
-        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('skill'),
         name: targetSkill.name,
         displayName: targetSkill.displayName,
         description: targetSkill.description,
@@ -105,7 +107,7 @@ export async function POST(
     // 记录进化历史
     await prisma.skillEvolution.create({
       data: {
-        id: `evol-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('evol'),
         skillId: newSkill.id,
         fromVersion: currentLatest.version,
         toVersion: newSkill.version,
@@ -132,7 +134,7 @@ export async function POST(
       message: `成功回滚到版本 ${targetSkill.version}`,
     });
   } catch (error) {
-    console.error('回滚 Skill 版本错误:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '回滚 Skill 版本错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

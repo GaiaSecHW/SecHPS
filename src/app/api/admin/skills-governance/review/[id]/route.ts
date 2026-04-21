@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -179,7 +180,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         if (analysis.relatedSkillId) {
           await prisma.skillMergeRecord.create({
             data: {
-              id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              id: generateId('merge'),
               sourceSkillId: analysis.skillId,
               targetSkillId: analysis.relatedSkillId,
               mergeReason: analysis.llmReason ?? 'LLM 分析判定为重复',

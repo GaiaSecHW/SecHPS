@@ -4,6 +4,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 获取单个用户
 export async function GET(
@@ -118,7 +119,7 @@ export async function PATCH(
     // 记录审计日志
     await prisma.auditLog.create({
           data: {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('audit'),
             userId: payload.userId,
             action: 'user_update',
             resource: id,
@@ -183,7 +184,7 @@ export async function DELETE(
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'user_delete',
         resource: id,

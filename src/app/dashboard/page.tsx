@@ -18,6 +18,7 @@ import {
   Users,
 } from 'lucide-react';
 import { formatBeijingTime } from '@/lib/beijing-time';
+import { extractErrorMessage } from '@/lib/api-client';
 
 interface Session {
   id: string;
@@ -110,7 +111,7 @@ export default function DashboardPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || '获取项目失败');
+        setError(extractErrorMessage(data, '获取项目失败'));
         setLoading(false);
         return;
       }

@@ -4,25 +4,19 @@
  */
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { SessionManager, ProjectDiscovery } from '@/services/session-manager';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 搜索会话消息
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     const url = new URL(request.url);
     const query = url.searchParams.get('query') || '';
     const projectPath = url.searchParams.get('projectPath');

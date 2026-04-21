@@ -3,8 +3,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { createEvaluationCaller } from '@/services/evaluation';
 import { loadActiveSkills } from '@/services/skills';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 interface ChatRequest {
   message: string;
@@ -37,7 +39,7 @@ export async function POST(
     }
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 获取评估会话并验证所有权
     let where: any = { id };
@@ -59,7 +61,7 @@ export async function POST(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -83,11 +85,11 @@ export async function POST(
 
     // 加载激活的 Skills
     const skills = await loadActiveSkills();
-    console.log(`[Chat] 加载了 ${skills.length} 个激活的 Skills`);
+    logger.debug(LOG_MODULES.SKILL, `加载了 ${skills.length} 个激活的 Skills`);
 
     // Skill 不再包含工具定义，直接使用空数组
     const allowedTools: string[] = [];
-    console.log(`[Chat] Skills 不包含工具定义，使用默认工具`);
+    logger.debug(LOG_MODULES.SKILL, 'Skills 不包含工具定义，使用默认工具');
 
     // 创建评估调用器，传递项目目录作为工作目录和允许的工具
     const caller = createEvaluationCaller(modelConfig, project.projectPath || undefined, allowedTools);
@@ -155,7 +157,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('继续对话错误:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '继续对话错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }

@@ -3,6 +3,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
+import { generateId, generateIndexedId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/nodes - 获取评估会话的节点执行状态
 // 数据隔离：普通用户只能查看自己项目评估的节点，管理员可以查看所有
@@ -26,7 +29,7 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 获取评估会话并验证所有权
     let where: any = { id };
@@ -46,7 +49,7 @@ export async function GET(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -66,7 +69,7 @@ export async function GET(
       executions: evaluation.NodeExecution,
     });
   } catch (error) {
-    console.error('Get evaluation nodes error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估节点错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -100,7 +103,7 @@ export async function POST(
     }
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证评估会话存在并验证所有权
     let where: any = { id };
@@ -115,7 +118,7 @@ export async function POST(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -143,7 +146,7 @@ export async function POST(
         })
       : await prisma.nodeExecution.create({
           data: {
-            id: `nodeexec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateId('nodeexec'),
             evaluationSessionId: id,
             workflowNodeId: nodeId,
             nodeLabel: nodeLabel || '',
@@ -158,7 +161,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, execution });
   } catch (error) {
-    console.error('Update node execution error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '更新节点执行错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -192,7 +195,7 @@ export async function PUT(
     }
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证评估会话存在并验证所有权
     let where: any = { id };
@@ -207,7 +210,7 @@ export async function PUT(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -216,7 +219,7 @@ export async function PUT(
       nodes.map((node, index) =>
         prisma.nodeExecution.create({
           data: {
-            id: `nodeexec-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateIndexedId('nodeexec', index),
             evaluationSessionId: id,
             workflowNodeId: node.nodeId,
             nodeLabel: node.nodeLabel,
@@ -231,7 +234,7 @@ export async function PUT(
 
     return NextResponse.json({ success: true, count: executions.length });
   } catch (error) {
-    console.error('Initialize node executions error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '初始化节点执行错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

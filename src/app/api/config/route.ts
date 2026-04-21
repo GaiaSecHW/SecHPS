@@ -4,6 +4,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { validateJsonField, validateJsonObject } from '@/lib/validation';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // GET /api/config - Get all configs (global, not user-specific)
 export async function GET(request: Request) {
@@ -15,7 +16,7 @@ export async function GET(request: Request) {
     }
     const { payload } = auth;
 
-    console.log('[Config GET] Fetching configs (global) for user:', payload.userId);
+    logger.debug(LOG_MODULES.CONFIG, '获取配置列表 (全局)', { details: { userId: payload.userId } });
 
     // Get all configs (global, not filtered by userId)
     // 系统配置是全局的，不按用户过滤
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
       },
     });
 
-    console.log('[Config GET] Found configs:', configs.length, configs.map(c => ({ id: c.id, name: c.name, isActive: c.isActive, hasProgressQuestion: !!c.progressQuestion })));
+    logger.debug(LOG_MODULES.CONFIG, '找到配置:', { details: { count: configs.length, configs: configs.map(c => ({ id: c.id, name: c.name, isActive: c.isActive, hasProgressQuestion: !!c.progressQuestion })) } });
 
     return NextResponse.json({ configs });
   } catch (error) {
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
     // Create config
     const config = await prisma.opencodeConfig.create({
       data: {
-        id: `config-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('config'),
         userId: payload.userId,
         name,
         baseURL: baseURL || '',
@@ -121,7 +122,7 @@ export async function POST(request: Request) {
     // Record audit log
     await prisma.auditLog.create({
           data: {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('audit'),
             userId: payload.userId,
             action: 'config_create',
             resource: config.id,

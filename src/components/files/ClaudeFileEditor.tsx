@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Save,
   X,
@@ -307,18 +308,37 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
     return SYNTAX_HIGHLIGHTS[language] || { keywords: [], color: 'text-gray-600' };
   }, [language]);
 
+  // HTML 转义函数 - 防止 XSS 攻击
+  const escapeHtml = useCallback((str: string) => {
+    const htmlEntities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return str.replace(/[&<>"']/g, (char) => htmlEntities[char] || char);
+  }, []);
+
   // 简单的语法高亮（用于显示）
   const getHighlightedLine = useCallback((line: string) => {
     if (!isEditing) {
-      let highlighted = line;
+      // 首先对原始内容进行 HTML 转义，防止 XSS
+      let highlighted = escapeHtml(line);
+      
+      // 高亮关键字
       syntaxConfig.keywords.forEach((keyword) => {
         const regex = new RegExp(`\\b(${keyword})\\b`, 'g');
         highlighted = highlighted.replace(regex, `<span class="${syntaxConfig.color} font-medium">$1</span>`);
       });
 
+      // 高亮字符串
       highlighted = highlighted.replace(/(["'`])(?:(?!\1)[^\\]|\\.)*?\1/g, '<span class="text-green-600">$&</span>');
+      
+      // 高亮数字
       highlighted = highlighted.replace(/\b(\d+\.?\d*)\b/g, '<span class="text-orange-500">$1</span>');
 
+      // 高亮注释
       const commentPattern = COMMENT_PATTERNS[language];
       if (commentPattern?.single) {
         const commentIndex = highlighted.indexOf(commentPattern.single);
@@ -332,7 +352,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
       return highlighted;
     }
     return line;
-  }, [isEditing, language, syntaxConfig]);
+  }, [isEditing, language, syntaxConfig, escapeHtml]);
 
   // 加载状态
   if (loading) {
@@ -525,9 +545,9 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
               {lines.map((line, i) => (
                 <div
                   key={i}
-                  className="hover:bg-gray-50"
-                  dangerouslySetInnerHTML={{ __html: getHighlightedLine(line) || '&nbsp;' }}
-                />
+                    className="hover:bg-gray-50"
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getHighlightedLine(line) || '&nbsp;') }}
+                  />
               ))}
             </pre>
           </div>

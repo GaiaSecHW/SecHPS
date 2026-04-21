@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 import { 
   batchAnalyzeSkills, 
   filterPairsForLLMAnalysis,
@@ -469,7 +470,7 @@ export async function POST(request: Request) {
         // 创建 SkillAnalysis 记录
         await prisma.skillAnalysis.create({
           data: {
-            id: `analysis-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('analysis'),
             skillId: result.skillA,
             relatedSkillId: result.skillB,
             analysisType: 'full_analysis',

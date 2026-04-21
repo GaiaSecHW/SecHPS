@@ -2,16 +2,18 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
 
   const { id } = await params;
 

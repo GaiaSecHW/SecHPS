@@ -1,26 +1,19 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/config/export — 导出当前用户的活跃配置为 JSON 文件
 export async function GET(request: Request) {
+  // 使用统一认证中间件（需要 CONFIG_READ 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
 
     // 获取用户的活跃配置 + 技术栈选项（并行）
     const [config, techStackOptions] = await Promise.all([

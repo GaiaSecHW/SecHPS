@@ -5,7 +5,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { getSessionInfo, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -37,8 +37,8 @@ export async function GET(
       }
     });
 
-    // 用户归属校验：检查项目是否属于当前用户
-    if (evaluation?.Project && evaluation.Project.userId !== payload.userId) {
+    // 用户归属校验：检查项目是否属于当前用户（管理员可访问所有会话）
+    if (evaluation?.Project && evaluation.Project.userId !== payload.userId && !isAdmin(payload)) {
       return NextResponse.json({ error: '无权限访问此会话' }, { status: 403 });
     }
 
@@ -112,8 +112,8 @@ export async function DELETE(
       }
     });
 
-    // 用户归属校验：检查项目是否属于当前用户
-    if (evaluation?.Project && evaluation.Project.userId !== payload.userId) {
+    // 用户归属校验：检查项目是否属于当前用户（管理员可删除所有会话）
+    if (evaluation?.Project && evaluation.Project.userId !== payload.userId && !isAdmin(payload)) {
       return NextResponse.json({ error: '无权限删除此会话' }, { status: 403 });
     }
 

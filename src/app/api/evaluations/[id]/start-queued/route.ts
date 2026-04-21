@@ -3,6 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * POST /api/evaluations/[id]/start-queued
@@ -16,7 +17,7 @@ export async function POST(
 ) {
   const { id } = await params;
   
-  console.log('[StartQueued] 收到启动请求, evaluationId:', id);
+  logger.debug(LOG_MODULES.EVALUATION, '收到启动请求:', { details: { evaluationId: id } });
   
   // 检查是否为内部调用（支持两种方式：X-Internal-Token 或 X-Internal-Call）
   const internalToken = request.headers.get('X-Internal-Token');
@@ -24,7 +25,7 @@ export async function POST(
   const isValidInternal = internalToken === process.env.INTERNAL_API_SECRET || internalCall;
   
   if (!isValidInternal) {
-    console.log('[StartQueued] 拒绝非内部调用');
+    logger.debug(LOG_MODULES.EVALUATION, '拒绝非内部调用');
     return NextResponse.json({ error: '仅允许内部调用' }, { status: 403 });
   }
   
@@ -42,16 +43,16 @@ export async function POST(
     });
     
     if (!evaluation) {
-      console.log('[StartQueued] 评估不存在:', id);
+      logger.debug(LOG_MODULES.EVALUATION, '评估不存在:', { details: { id } });
       return NextResponse.json({ error: '评估不存在' }, { status: 404 });
     }
     
     if (evaluation.status !== 'queued') {
-      console.log('[StartQueued] 评估状态不是 queued:', evaluation.status);
+      logger.debug(LOG_MODULES.EVALUATION, '评估状态不是 queued:', { details: { status: evaluation.status } });
       return NextResponse.json({ error: '评估不在排队状态' }, { status: 400 });
     }
     
-    console.log('[StartQueued] 启动排队评估:', id, 'projectId:', evaluation.projectId);
+    logger.debug(LOG_MODULES.EVALUATION, '启动排队评估:', { details: { id, projectId: evaluation.projectId } });
     
     // 更新评估状态为 running
     await prisma.evaluationSession.update({
@@ -84,7 +85,7 @@ export async function POST(
     });
     
     if (!modelConfig) {
-      console.log('[StartQueued] 没有可用的模型配置');
+      logger.debug(LOG_MODULES.EVALUATION, '没有可用的模型配置');
       await prisma.evaluationSession.update({
         where: { id },
         data: {
@@ -112,7 +113,7 @@ export async function POST(
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('[StartQueued] 启动评估失败:', errorData);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '启动评估失败:', { details: { error: errorData } });
       
       // 恢复排队状态
       await prisma.evaluationSession.update({
@@ -133,7 +134,7 @@ export async function POST(
     }
     
     const result = await response.json();
-    console.log('[StartQueued] 评估启动成功:', result);
+    logger.debug(LOG_MODULES.EVALUATION, '评估启动成功:', { details: { result } });
     
     return NextResponse.json({
       message: '排队评估已启动',
@@ -142,7 +143,7 @@ export async function POST(
     });
     
   } catch (error) {
-    console.error('[StartQueued] 异常:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '启动排队评估异常:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

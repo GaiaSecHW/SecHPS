@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -63,7 +63,7 @@ export async function GET(
 
     return NextResponse.json({ vulnerabilities });
   } catch (error) {
-    console.error('Get vulnerabilities error:', error);
+    logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

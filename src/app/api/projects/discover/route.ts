@@ -4,24 +4,19 @@
  */
 
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { ProjectDiscovery } from '@/services/session-manager';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 发现所有 Claude Code 项目
 export async function GET(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 使用 ProjectDiscovery 发现项目
     const projectDiscovery = new ProjectDiscovery();
@@ -40,17 +35,12 @@ export async function GET(request: Request) {
 // 手动添加项目
 export async function POST(request: Request) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const body = await request.json();
     const { projectPath, displayName } = body;

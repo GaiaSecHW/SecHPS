@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 const BROADCAST_KEY = 'broadcast_content';
 
@@ -31,7 +32,7 @@ export async function GET() {
     const broadcastConfig: BroadcastConfig = JSON.parse(config.value);
     return NextResponse.json({ config: broadcastConfig });
   } catch (error) {
-    console.error('获取广播内容失败:', error);
+    logger.errorNoUser(LOG_MODULES.CONFIG, '获取广播内容失败:', { details: error });
     // 返回默认配置，避免影响用户体验
     return NextResponse.json({ config: DEFAULT_CONFIG });
   }

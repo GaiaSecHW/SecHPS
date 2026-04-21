@@ -3,7 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/skills/:id/vulnerabilities - 获取 Skill 发现的漏洞列表
 export async function GET(
@@ -23,11 +24,11 @@ export async function GET(
     const skip = (page - 1) * limit;
 
     // 验证 Skill 存在并检查所有权
-    const isAdmin = Array.isArray(auth.payload?.roles) && auth.payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(auth.payload);
     const skill = await prisma.skill.findFirst({
       where: {
         id,
-        ...(isAdmin ? {} : {
+        ...(userIsAdmin ? {} : {
           OR: [
             { userId: auth.payload?.userId },
             { isPublic: true },
@@ -106,7 +107,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('[API] 获取 Skill 漏洞列表错误:', error);
+    logger.errorNoUser(LOG_MODULES.SKILL, '获取 Skill 漏洞列表错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

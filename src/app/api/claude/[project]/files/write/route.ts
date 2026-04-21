@@ -7,6 +7,7 @@ import { verifyToken } from '@/lib/auth';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(
   request: Request,
@@ -67,7 +68,7 @@ export async function POST(
       size: content.length,
     });
   } catch (error) {
-    console.error('Write file error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '写入文件错误:', { details: error });
     return NextResponse.json({ error: '写入失败' }, { status: 500 });
   }
 }

@@ -11,6 +11,7 @@ import {
 import { ROLES, DEFAULT_ROLE_PERMISSIONS, PERMISSIONS } from '@/types/permissions';
 import type { Permission } from '@prisma/client';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 export async function POST(request: Request) {
   try {
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     // 创建用户
     const user = await prisma.user.create({
       data: {
-        id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('user'),
         username,
         passwordHash,
         name: name || username,
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
     if (defaultRole) {
       await prisma.userRole.create({
         data: {
-          id: `ur-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('ur'),
           userId: user.id,
           roleId: defaultRole.id,
         },

@@ -2,13 +2,14 @@
 // POST 触发提取（SSE 流式进度）
 
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { extractSequences } from '@/services/autonomous-evolution/log-parser';
 import { isAlreadyProcessed, markProcessed, clearAllRecords } from '@/services/autonomous-evolution/log-hash-tracker';
 import { generateExperience, saveExperience } from '@/services/autonomous-evolution/experience-generator';
 import { recordLastAutoExtract } from '@/services/autonomous-evolution/idle-trigger';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 import { readdir, stat } from 'fs/promises';
 import { join } from 'path';
 import os from 'os';
@@ -39,15 +40,12 @@ function sseEvent(data: Record<string, unknown>): string {
 }
 
 export async function POST(request: Request) {
-  const authHeader = request.headers.get('authorization');
-  if (!authHeader) return NextResponse.json({ error: '未授权' }, { status: 401 });
-  const payload = verifyToken(authHeader.replace('Bearer ', ''));
-  if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-
-  // 检查权限
-  if (!hasPermission(payload.permissions, PERMISSIONS.AUTONOMOUS_EVOLUTION_EXTRACT)) {
-    return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AUTONOMOUS_EVOLUTION_EXTRACT });
+  if (!auth.success) {
+    return authErrorResponse(auth);
   }
+  const payload = auth.payload;
 
   const body = await request.json() as { mode?: 'incremental' | 'full'; maxSequences?: number };
   const mode = body.mode || 'incremental';
@@ -67,7 +65,7 @@ export async function POST(request: Request) {
       // 创建运行记录
       const runLog = await prisma.autonomousEvolutionRunLog.create({
         data: {
-          id: `runlog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('runlog'),
           mode,
           trigger: 'manual',
           status: 'running',
@@ -178,7 +176,7 @@ export async function POST(request: Request) {
         await prisma.autonomousEvolutionRunLog.update({
           where: { id: runLog.id },
           data: { status: 'error', errorMessage: String(err).slice(0, 500), finishedAt: new Date() },
-        }).catch(() => {});
+        }).catch((updateErr) => console.error('[Extract] Failed to update run log:', updateErr));
         send({ type: 'error', message: String(err) });
       } finally {
         controller.close();

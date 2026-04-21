@@ -4,7 +4,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { buildSearchFilter, combineWhereClauses } from '@/lib/query-optimizer';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { AuditLogger } from '@/lib/audit/logger';
 
 // 格式化工作流数据
@@ -49,7 +49,7 @@ export async function GET(request: Request) {
     const forEvaluation = searchParams.get('forEvaluation') === 'true';
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
 
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
         { userId: payload.userId },
         { isPublic: true },
       ];
-    } else if (isAdmin) {
+    } else if (userIsAdmin) {
       // 管理员可以看到所有
       // 不添加用户过滤
     } else {

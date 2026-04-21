@@ -1,23 +1,19 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, verifyPassword, hashPassword } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
+import { verifyPassword, hashPassword } from '@/lib/auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 修改密码
 export async function POST(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // Authenticate
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
+    const { payload } = auth;
 
     const body = await request.json();
     const { currentPassword, newPassword } = body;
@@ -66,7 +62,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     await prisma.auditLog.create({
           data: {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId('audit'),
             userId: payload.userId,
             action: 'password_change',
             resource: payload.userId,

@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import { createRalphLoopAgent, RalphLoopAgentCallbacks, securityAuditVerifier, createCombinedVerifier } from '@/services/evaluation';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
@@ -17,6 +17,7 @@ import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/s
 import { createWatchdog, stopWatchdog, recordWatchdogActivity } from '@/lib/stream-watchdog';
 import { createEmptyAnalysisReport } from '@/services/analysis-report';
 import { createSkillExecutionsForEvaluation, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
+import { generateId, generateIndexedId } from '@/lib/id-generator';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -106,7 +107,7 @@ export async function POST(
       // 如果没有请求体，继续执行
     }
 
-    console.log('[启动评估] workflowId:', workflowId, 'modelId:', modelId, 'roleModels:', roleModels?.length || 0);
+    logger.debug(LOG_MODULES.EVALUATION, '启动评估参数', { workflowId, modelId, roleModelsCount: roleModels?.length || 0 });
 
     // 获取项目信息（包括运行中的评估）
     const project = await prisma.project.findUnique({
@@ -140,7 +141,7 @@ export async function POST(
       });
       
       if (firstConfig) {
-        console.log('[启动评估] 没有激活配置，自动激活第一个:', firstConfig.id);
+        logger.debug(LOG_MODULES.CONFIG, '没有激活配置，自动激活第一个', { configId: firstConfig.id });
         await prisma.opencodeConfig.update({
           where: { id: firstConfig.id },
           data: { isActive: true },
@@ -155,16 +156,16 @@ export async function POST(
       where: { status: 'running' },
     });
     
-    console.log('[启动评估] 并发限制检查: 当前运行', runningCount, ', 最大允许', maxConcurrent);
+    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { runningCount, maxConcurrent });
     
     // 如果超出并发限制且不是队列启动，创建排队状态的评估
     if (!isQueuedStart && runningCount >= maxConcurrent) {
-      console.log('[启动评估] 超出并发限制，创建排队评估');
+      logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
       
       // 创建排队状态的评估会话
       const queuedEvaluation = await prisma.evaluationSession.create({
         data: {
-          id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('eval'),
           projectId: id,
           workflowId: workflowId,
           agentTeamId: agentTeamId,
@@ -185,19 +186,17 @@ export async function POST(
     }
 
     // 日志：检查全局配置
-    console.log('[启动评估] 项目信息:');
-    console.log('[启动评估] - 项目ID:', project.id);
-    console.log('[启动评估] - 项目名称:', project.name);
-    console.log('[启动评估] - 全局配置:', globalConfig ? '存在' : '不存在');
-    if (globalConfig) {
-      console.log('[启动评估] - config.id:', globalConfig.id);
-      console.log('[启动评估] - config.name:', globalConfig.name);
-      console.log('[启动评估] - customSystemPrompt:', globalConfig.customSystemPrompt ? `存在(${globalConfig.customSystemPrompt.length}字符)` : '不存在');
-      if (globalConfig.customSystemPrompt) {
-        console.log('[启动评估] - customSystemPrompt 前200字符:', globalConfig.customSystemPrompt.substring(0, 200) + '...');
-      }
-    } else {
-      console.log('[启动评估] ⚠️  未找到激活的全局配置');
+    logger.debug(LOG_MODULES.EVALUATION, '项目信息', {
+      projectId: project.id,
+      projectName: project.name,
+      globalConfigExists: !!globalConfig,
+      configId: globalConfig?.id,
+      configName: globalConfig?.name,
+      customSystemPromptExists: !!globalConfig?.customSystemPrompt,
+      customSystemPromptLength: globalConfig?.customSystemPrompt?.length || 0,
+    });
+    if (!globalConfig) {
+      logger.warn(LOG_MODULES.EVALUATION, '未找到激活的全局配置');
     }
 
     // 加载 MCP 服务器配置（用户私有 + 共享 + 项目级别）
@@ -235,7 +234,7 @@ export async function POST(
       // 添加项目配置（优先级最高）
       mcpServers = [...mcpServers, ...projectMcpServers];
       
-      console.log(`[启动评估] 加载 MCP 服务器: 共享 ${sharedMcpServers.length} 个, 用户私有 ${userMcpServers.length} 个, 项目 ${projectMcpServers.length} 个, 合并后 ${mcpServers.length} 个`);
+      logger.debug(LOG_MODULES.MCP, '加载 MCP 服务器', { shared: sharedMcpServers.length, userPrivate: userMcpServers.length, project: projectMcpServers.length, merged: mcpServers.length });
     }
 
     // 加载工具权限配置
@@ -253,7 +252,7 @@ export async function POST(
     if (reconnectEvaluationId) {
       const targetEvaluation = runningEvaluations.find(e => e.id === reconnectEvaluationId);
       if (targetEvaluation) {
-        console.log('[启动评估] SSE 重连到现有评估:', reconnectEvaluationId);
+        logger.debug(LOG_MODULES.EVALUATION, 'SSE 重连到现有评估', { evaluationId: reconnectEvaluationId });
         // 返回 SSE 格式，告知前端评估仍在运行
         // 前端会通过其他方式（轮询）获取实时状态
         const encoder = new TextEncoder();
@@ -329,7 +328,7 @@ export async function POST(
       try {
         workflowConfigParsed = JSON.parse(globalConfig.workflowConfig);
       } catch {
-        console.warn('[启动评估] workflowConfig JSON 解析失败');
+        logger.warn(LOG_MODULES.EVALUATION, 'workflowConfig JSON 解析失败');
       }
     }
 
@@ -350,7 +349,7 @@ export async function POST(
     // 必须同时设置 allowDangerouslySkipPermissions: true
     sdkOptions.permissionMode = 'bypassPermissions';
     sdkOptions.allowDangerouslySkipPermissions = true;
-    console.log('[启动评估] 权限配置: permissionMode =', sdkOptions.permissionMode, ', allowDangerouslySkipPermissions =', sdkOptions.allowDangerouslySkipPermissions);
+    logger.debug(LOG_MODULES.EVALUATION, '权限配置', { permissionMode: sdkOptions.permissionMode, allowDangerouslySkipPermissions: sdkOptions.allowDangerouslySkipPermissions });
 
     // 加载 MCP 服务器配置
     if (mcpServers.length > 0) {
@@ -375,19 +374,19 @@ export async function POST(
     }
 
     // 加载系统提示词配置（使用全局配置中的 customSystemPrompt）
-    console.log('[启动评估] 检查全局配置:');
-    console.log('[启动评估] - globalConfig 存在:', !!globalConfig);
-    console.log('[启动评估] - globalConfig.id:', globalConfig?.id);
-    console.log('[启动评估] - globalConfig.isActive:', globalConfig?.isActive);
-    console.log('[启动评估] - customSystemPrompt 存在:', !!globalConfig?.customSystemPrompt);
-    console.log('[启动评估] - customSystemPrompt 长度:', globalConfig?.customSystemPrompt?.length || 0);
+    logger.debug(LOG_MODULES.EVALUATION, '检查全局配置', {
+      globalConfigExists: !!globalConfig,
+      configId: globalConfig?.id,
+      isActive: globalConfig?.isActive,
+      customSystemPromptExists: !!globalConfig?.customSystemPrompt,
+      customSystemPromptLength: globalConfig?.customSystemPrompt?.length || 0,
+    });
     
     if (globalConfig?.customSystemPrompt) {
       sdkOptions.systemPrompt = globalConfig.customSystemPrompt;
-      console.log('[启动评估] 使用全局配置中的自定义系统提示词');
-      console.log('[启动评估] 系统提示词内容:', globalConfig.customSystemPrompt.substring(0, 200) + '...');
+      logger.debug(LOG_MODULES.EVALUATION, '使用全局配置中的自定义系统提示词', { promptLength: globalConfig.customSystemPrompt.length });
     } else {
-      console.log('[启动评估] ⚠️  未配置系统提示词 - globalConfig:', globalConfig ? '存在但customSystemPrompt为空' : '不存在');
+      logger.warn(LOG_MODULES.EVALUATION, '未配置系统提示词', { globalConfigStatus: globalConfig ? '存在但customSystemPrompt为空' : '不存在' });
     }
 
     // 注入自主进化经验到 System Prompt（预注入在开头，高关注度位置）
@@ -399,15 +398,12 @@ export async function POST(
         const originalPrompt = sdkOptions.systemPrompt || '';
         sdkOptions.systemPrompt = expResult.prompt + '\n\n' + originalPrompt;
         injectedExperiences = expResult.experiences;
-        console.log(`[启动评估] 已预注入自主进化经验到 System Prompt 开头，共 ${expResult.count} 条（Top 3 限制）:`);
-        expResult.experiences.forEach((e, i) => {
-          console.log(`[启动评估]   ${i + 1}. [${e.errorCategory}] ${e.title} (命中${e.hitCount}次)`);
-        });
+        logger.debug(LOG_MODULES.EVALUATION, '已预注入自主进化经验到 System Prompt 开头', { count: expResult.count, experiences: expResult.experiences.map(e => ({ id: e.id, title: e.title, errorCategory: e.errorCategory, hitCount: e.hitCount })) });
       } else {
-        console.log('[启动评估] 无已启用的自主进化经验（isInjected=true 的记录为空）');
+        logger.debug(LOG_MODULES.EVALUATION, '无已启用的自主进化经验（isInjected=true 的记录为空）');
       }
     } catch (err) {
-      console.warn('[启动评估] 注入自主进化经验失败:', err);
+      logger.warn(LOG_MODULES.EVALUATION, '注入自主进化经验失败', { error: err });
     }
 
     // 设置源（加载 CLAUDE.md 和 Skills）
@@ -426,7 +422,7 @@ export async function POST(
         try {
           await access(target.path);
           await rm(target.path, { recursive: true, force: true });
-          console.log(`[启动评估] 已清理: ${target.path}`);
+          logger.debug(LOG_MODULES.EVALUATION, '已清理目录', { path: target.path });
         } catch {
           // 不存在，跳过
         }
@@ -442,9 +438,9 @@ export async function POST(
       for (const dir of workDirs) {
         try {
           await mkdir(dir, { recursive: true });
-          console.log(`[启动评估] 已创建目录: ${dir}`);
+          logger.debug(LOG_MODULES.EVALUATION, '已创建目录', { dir });
         } catch (error) {
-          console.error(`[启动评估] 创建目录失败: ${dir}`, error);
+          logger.errorNoUser(LOG_MODULES.EVALUATION, '创建目录失败', { dir, error });
         }
       }
     }
@@ -460,18 +456,18 @@ export async function POST(
     if (project.techStack) {
       try {
         projectTechStack = JSON.parse(project.techStack);
-        console.log('[启动评估] 项目技术栈:', projectTechStack?.join(', ') || '无');
+        logger.debug(LOG_MODULES.EVALUATION, '项目技术栈', { techStack: projectTechStack?.join(', ') || '无' });
       } catch {
-        console.warn('[启动评估] 项目技术栈解析失败，将拷贝所有 Skills');
+        logger.warn(LOG_MODULES.EVALUATION, '项目技术栈解析失败，将拷贝所有 Skills');
         projectTechStack = null;
       }
     } else {
-      console.log('[启动评估] 项目未设置技术栈，将拷贝所有启用的 Skills');
+      logger.debug(LOG_MODULES.EVALUATION, '项目未设置技术栈，将拷贝所有启用的 Skills');
     }
     
     if (project.projectPath) {
       try {
-        console.log('[启动评估] 开始同步 Skills 到项目目录');
+        logger.debug(LOG_MODULES.EVALUATION, '开始同步 Skills 到项目目录');
         
         // workflowId 必须提供，否则拒绝执行
         if (!workflowId) {
@@ -494,7 +490,7 @@ export async function POST(
           },
         });
 
-        console.log(`[启动评估] 找到 ${workflowNodes.length} 个 WorkflowNode`);
+        logger.debug(LOG_MODULES.EVALUATION, '找到 WorkflowNode', { count: workflowNodes.length });
 
         // 遍历每个节点，收集 Skill IDs
         const allSkillIds: string[] = [];
@@ -509,7 +505,7 @@ export async function POST(
             let categoryValues: string[] = [];
             try { categoryValues = JSON.parse(node.vulnerabilityCategories); } catch { /* ignore */ }
             if (categoryValues.length > 0) {
-              console.log(`[启动评估] Node ${node.id}: 模式 3 - 漏洞分类 ${categoryValues.join(', ')}`);
+              logger.debug(LOG_MODULES.EVALUATION, 'Node 模式 3 - 漏洞分类', { nodeId: node.id, categories: categoryValues.join(', ') });
               const matchedIds = await matchSkillsByCategoryValues(categoryValues, projectTechStack);
               
               // 记录匹配结果
@@ -530,46 +526,46 @@ export async function POST(
               }
               
               allSkillIds.push(...matchedIds);
-              console.log(`[启动评估] Node ${node.id}: 匹配到 ${matchedIds.length} 个 Skills`);
+              logger.debug(LOG_MODULES.EVALUATION, 'Node 匹配到 Skills', { nodeId: node.id, matchedCount: matchedIds.length });
               continue;
             }
           }
 
           // 模式 2：手工指定
           if (node.skills) {
-            console.log(`[启动评估] Node ${node.id}: 模式 2 - 手工指定 Skills`);
+            logger.debug(LOG_MODULES.EVALUATION, 'Node 模式 2 - 手工指定 Skills', { nodeId: node.id });
             try {
               const skillIds = JSON.parse(node.skills);
               if (Array.isArray(skillIds)) {
                 allSkillIds.push(...skillIds);
-                console.log(`[启动评估] Node ${node.id}: 指定了 ${skillIds.length} 个 Skills`);
+                logger.debug(LOG_MODULES.EVALUATION, 'Node 指定了 Skills', { nodeId: node.id, skillCount: skillIds.length });
               }
             } catch {
-              console.warn(`[启动评估] Node ${node.id}: skills 字段 JSON 解析失败`);
+              logger.warn(LOG_MODULES.EVALUATION, 'Node skills 字段 JSON 解析失败', { nodeId: node.id });
             }
             continue;
           }
 
           // 模式 1：自定义描述 - 由大模型根据描述自主加载 Skills
           // 不预设 Skills，让 Agent 通过 Skill 工具自主选择
-          console.log(`[启动评估] Node ${node.id}: 模式 1 - 自定义描述，由 Agent 自主加载 Skills`);
+          logger.debug(LOG_MODULES.EVALUATION, 'Node 模式 1 - 自定义描述，由 Agent 自主加载 Skills', { nodeId: node.id });
           hasDescriptionModeNode = true;
         }
 
         // 去重
         uniqueSkillIds = [...new Set(allSkillIds)];
-        console.log(`[启动评估] 合并后共 ${uniqueSkillIds.length} 个唯一 Skill IDs（模式2/3）`);
+        logger.debug(LOG_MODULES.EVALUATION, '合并后共唯一 Skill IDs（模式2/3）', { count: uniqueSkillIds.length });
 
         // 模式 1：拷贝所有技术栈匹配的 Skills，供 Agent 自主选择
         if (hasDescriptionModeNode) {
-          console.log('[启动评估] 存在自定义描述节点，拷贝所有技术栈匹配的 Skills 供 Agent 自主选择');
+          logger.debug(LOG_MODULES.EVALUATION, '存在自定义描述节点，拷贝所有技术栈匹配的 Skills 供 Agent 自主选择');
           copyResult = await copySkillsToProject(
             project.projectPath,
             payload.userId,
             undefined,
             projectTechStack
           );
-          console.log(`[启动评估] 已拷贝 ${copyResult.success} 个 Skills 供模式 1 节点自主选择`);
+          logger.debug(LOG_MODULES.EVALUATION, '已拷贝 Skills 供模式 1 节点自主选择', { successCount: copyResult.success });
           
           // 同时追加模式 2/3 指定的 Skills（必须执行）
           if (uniqueSkillIds.length > 0) {
@@ -633,17 +629,14 @@ export async function POST(
           }
         }
         
-        console.log(`[启动评估] Skills 同步完成:`);
-        console.log(`  - 成功: ${copyResult.success}`);
-        console.log(`  - 失败: ${copyResult.failed}`);
-        console.log(`  - 拷贝的 Skills: ${copyResult.copiedSkills.join(', ')}`);
+        logger.debug(LOG_MODULES.SKILL, 'Skills 同步完成', { success: copyResult.success, failed: copyResult.failed, copiedSkills: copyResult.copiedSkills.join(', ') });
         
         // 区分必须执行的 Skills（模式2/3）和可选择的 Skills（模式1）
         const mandatorySkillIds = uniqueSkillIds; // 模式 2/3 指定的 Skills
         const availableSkillIds = copyResult.skillIds.filter(id => !mandatorySkillIds.includes(id)); // 模式 1 可选择的 Skills
         
-        console.log(`[启动评估] 必须执行的 Skills（模式2/3）: ${mandatorySkillIds.length} 个`);
-        console.log(`[启动评估] 可选择的 Skills（模式1）: ${availableSkillIds.length} 个`);
+        logger.debug(LOG_MODULES.EVALUATION, '必须执行的 Skills（模式2/3）', { count: mandatorySkillIds.length });
+        logger.debug(LOG_MODULES.EVALUATION, '可选择的 Skills（模式1）', { count: availableSkillIds.length });
         
         // 记录使用的 Skills ID 列表（记录所有拷贝的 Skills）
         if (copyResult.skillIds.length > 0) {
@@ -653,7 +646,7 @@ export async function POST(
           });
           const skillsUsed = skills.map(s => ({ skillId: s.id, skillName: s.name }));
           skillsUsedJson = JSON.stringify(skillsUsed);
-          console.log(`[启动评估] 使用的 Skills ID: ${copyResult.skillIds.length} 个`);
+          logger.debug(LOG_MODULES.SKILL, '使用的 Skills ID', { count: copyResult.skillIds.length });
           
           // 构建 Skills 使用说明，区分必须执行和可选择
           const mandatorySkills = skills.filter(s => mandatorySkillIds.includes(s.id));
@@ -663,22 +656,22 @@ export async function POST(
           if (skillsPrompt) {
             const originalPrompt = sdkOptions.systemPrompt || '';
             sdkOptions.systemPrompt = originalPrompt + '\n\n' + skillsPrompt;
-            console.log(`[启动评估] 已将 Skills 使用说明追加到系统提示词`);
+            logger.debug(LOG_MODULES.EVALUATION, '已将 Skills 使用说明追加到系统提示词');
           }
         }
         
         // 追加评估报告分析要求
         const analysisPrompt = buildAnalysisReportPrompt();
         sdkOptions.systemPrompt = (sdkOptions.systemPrompt || '') + analysisPrompt;
-        console.log(`[启动评估] 已将评估报告分析要求追加到系统提示词`);
+        logger.debug(LOG_MODULES.EVALUATION, '已将评估报告分析要求追加到系统提示词');
         
         if (copyResult.failed > 0) {
           copyResult.errors.forEach(err => {
-            console.error(`    - ${err}`);
+            logger.errorNoUser(LOG_MODULES.SKILL, 'Skills 同步错误', { error: err });
           });
         }
       } catch (error) {
-        console.error('[启动评估] Skills 同步失败:', error);
+        logger.errorNoUser(LOG_MODULES.SKILL, 'Skills 同步失败', { error });
         // Skills 同步失败应该阻止评估启动
         return NextResponse.json({
           error: `Skills 同步失败: ${error instanceof Error ? error.message : String(error)}`,
@@ -760,7 +753,7 @@ export async function POST(
         try {
           nodeData = JSON.parse(node.data);
         } catch {
-          console.warn(`[启动评估] Node ${node.id} data JSON 解析失败`);
+          logger.warn(LOG_MODULES.EVALUATION, 'Node data JSON 解析失败', { nodeId: node.id });
         }
       }
       
@@ -840,9 +833,11 @@ export async function POST(
     
     const initialMessage = userPrompt;
     
-    console.log('[启动评估] 系统提示词长度:', globalConfig.customSystemPrompt.length);
-    console.log('[启动评估] 用户提示词长度:', initialMessage.length);
-    console.log('[启动评估] 用户提示词前200字符:', initialMessage.substring(0, 200) + '...');
+    logger.debug(LOG_MODULES.EVALUATION, '系统提示词和用户提示词信息', {
+      systemPromptLength: globalConfig.customSystemPrompt.length,
+      userPromptLength: initialMessage.length,
+      userPromptPreview: initialMessage.substring(0, 200) + '...',
+    });
     
     // 写入 CLAUDE.md 全局模板到项目 .claude 目录
     if (project.projectPath && globalConfig?.claudemdTemplate) {
@@ -859,9 +854,9 @@ export async function POST(
         
         // 写入 CLAUDE.md 文件（覆盖已存在的文件）
         await writeFile(claudeMdPath, globalConfig.claudemdTemplate, 'utf-8');
-        console.log(`[启动评估] 已写入 CLAUDE.md 模板到: ${claudeMdPath}`);
+        logger.debug(LOG_MODULES.EVALUATION, '已写入 CLAUDE.md 模板', { path: claudeMdPath });
       } catch (error) {
-        console.error('[启动评估] 写入 CLAUDE.md 失败:', error);
+        logger.errorNoUser(LOG_MODULES.EVALUATION, '写入 CLAUDE.md 失败', { error });
         // 继续执行，不阻止评估启动
       }
     }
@@ -888,12 +883,12 @@ export async function POST(
           providerType: modelConfig.providerType,
         },
       });
-      console.log('[启动评估] 复用排队评估记录:', evaluation.id);
+      logger.debug(LOG_MODULES.EVALUATION, '复用排队评估记录', { evaluationId: evaluation.id });
     } else {
       // 正常启动：创建新的评估记录
       evaluation = await prisma.evaluationSession.create({
         data: {
-          id: `eval-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('eval'),
           projectId: id,
           workflowId: workflowId,
           agentTeamId: agentTeamId, // 关联 Agent Team
@@ -905,12 +900,12 @@ export async function POST(
           providerType: modelConfig.providerType, // 保存提供商类型
         },
       });
-      console.log('[启动评估] 创建新评估记录:', evaluation.id, 'workflowId:', workflowId, 'roleModels:', roleModels?.length || 0, 'skillsUsed:', skillsUsedJson ? JSON.parse(skillsUsedJson).length : 0);
+      logger.debug(LOG_MODULES.EVALUATION, '创建新评估记录', { evaluationId: evaluation.id, workflowId, roleModelsCount: roleModels?.length || 0, skillsUsedCount: skillsUsedJson ? JSON.parse(skillsUsedJson).length : 0 });
       
       // 只在日志中记录拷贝的 Skills，不预先创建执行记录
       // 执行记录在实际调用时由 enhanced-caller.ts 创建
       if (copyResult && copyResult.skillIds && copyResult.skillIds.length > 0) {
-        console.log(`[启动评估] 已拷贝 ${copyResult.skillIds.length} 个 Skills 到项目目录`);
+        logger.debug(LOG_MODULES.SKILL, '已拷贝 Skills 到项目目录', { count: copyResult.skillIds.length });
       }
     }
 
@@ -918,13 +913,13 @@ export async function POST(
     if (injectedExperiences.length > 0) {
       await prisma.experienceUsageLog.createMany({
         data: injectedExperiences.map((e, index) => ({
-          id: `explog-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateIndexedId('explog', index),
           experienceId: e.id,
           evaluationId: evaluation.id,
           projectId: id,
         })),
       });
-      console.log(`[启动评估] 已记录 ${injectedExperiences.length} 条经验引用`);
+      logger.debug(LOG_MODULES.EVALUATION, '已记录经验引用', { count: injectedExperiences.length });
     }
 
     // 创建空的分析报告（评估过程中由大模型填充）
@@ -933,9 +928,9 @@ export async function POST(
         evaluationId: evaluation.id,
         projectId: id,
       });
-      console.log(`[启动评估] 已创建分析报告记录`);
+      logger.debug(LOG_MODULES.EVALUATION, '已创建分析报告记录');
     } catch (error) {
-      console.error('[启动评估] 创建分析报告记录失败:', error);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '创建分析报告记录失败', { error });
     }
 
     // 创建 Skill 执行记录文件
@@ -975,9 +970,9 @@ export async function POST(
         
         const logPath = join(workspaceDir, 'skill-execution-log.json');
         await writeFile(logPath, JSON.stringify(skillExecutionLog, null, 2), 'utf-8');
-        console.log(`[启动评估] 已创建 Skill 执行记录文件: ${logPath}`);
+        logger.debug(LOG_MODULES.SKILL, '已创建 Skill 执行记录文件', { path: logPath });
       } catch (error) {
-        console.error('[启动评估] 创建 Skill 执行记录文件失败:', error);
+        logger.errorNoUser(LOG_MODULES.SKILL, '创建 Skill 执行记录文件失败', { error });
       }
     }
 
@@ -991,7 +986,7 @@ export async function POST(
       if (projectPath) {
         try {
           await access(join(projectPath, 'vulnerabilities.json'));
-          console.log('[Verifier] 检测到 vulnerabilities.json，任务完成');
+          logger.debug(LOG_MODULES.EVALUATION, 'Verifier 检测到 vulnerabilities.json，任务完成');
           return { complete: true, reason: '检测到 vulnerabilities.json 文件，审计完成' };
         } catch {
           // 文件不存在，继续其他检测
@@ -1026,17 +1021,17 @@ export async function POST(
         const missingSkillIds = mandatorySkillIds.filter(id => !executedSkillIds.has(id));
         
         if (missingSkillIds.length === 0) {
-          console.log(`[Verifier] 所有必须的 Skills 已执行 (${mandatorySkillIds.length}/${mandatorySkillIds.length})`);
+          logger.debug(LOG_MODULES.EVALUATION, 'Verifier 所有必须的 Skills 已执行', { executedCount: mandatorySkillIds.length, totalCount: mandatorySkillIds.length });
           return { complete: true, reason: '所有必须的 Skills 已执行' };
         } else {
-          console.log(`[Verifier] 还有 ${missingSkillIds.length} 个 Skills 未执行`);
+          logger.debug(LOG_MODULES.EVALUATION, 'Verifier 还有 Skills 未执行', { missingCount: missingSkillIds.length });
           return { 
             complete: false, 
             reason: `还有 ${missingSkillIds.length} 个必须的 Skills 未执行` 
           };
         }
       } catch (error) {
-        console.error('[Verifier] Skill 执行验证失败:', error);
+        logger.errorNoUser(LOG_MODULES.EVALUATION, 'Verifier Skill 执行验证失败', { error });
         return { complete: true, reason: '验证失败，跳过 Skill 检查' };
       }
     };
@@ -1055,10 +1050,10 @@ export async function POST(
         maxCost: 5.00,      // 最大成本 $5
         verifyCompletion: verifier, // 使用组合验证器判断任务完成
         onIterationStart: (iteration) => {
-          console.log(`[Ralph Loop] ========== 开始第 ${iteration} 次迭代 ==========`);
+          logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 开始迭代', { iteration });
         },
         onIterationEnd: async (iteration, duration) => {
-          console.log(`[Ralph Loop] 第 ${iteration} 次迭代完成，耗时 ${duration}ms`);
+          logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 迭代完成', { iteration, duration });
           
           // 记录迭代活动到 Watchdog
           recordWatchdogActivity(evaluation.id, 'iteration', { iteration, duration });
@@ -1067,7 +1062,7 @@ export async function POST(
           try {
             await prisma.evaluationIteration.create({
               data: {
-                id: `iter-${Date.now()}-${iteration}-${Math.random().toString(36).substr(2, 9)}`,
+                id: generateIndexedId('iter', iteration),
                 evaluationSessionId: evaluation.id,
                 iterationNumber: iteration,
                 status: 'completed',
@@ -1079,10 +1074,10 @@ export async function POST(
                 modelName: modelConfig.name,
               },
             });
-            console.log(`[Ralph Loop] 迭代记录已保存到数据库`);
+            logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 迭代记录已保存到数据库');
           } catch (err) {
             // 表不存在时忽略
-            console.log(`[Ralph Loop] 保存迭代记录失败（可能表不存在）:`, err);
+            logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 保存迭代记录失败（可能表不存在）', { error: err });
           }
         },
       },
@@ -1090,13 +1085,11 @@ export async function POST(
       sdkOptions
     );
     
-    console.log('[Ralph Loop] Agent 已创建，准备启动循环');
-    console.log('[Ralph Loop] 系统提示词已传递，长度:', sdkOptions.systemPrompt?.length || 0);
-    console.log('[Ralph Loop] 系统提示词前300字符:', sdkOptions.systemPrompt?.substring(0, 300) || '未设置');
+    logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop Agent 已创建，准备启动循环', { systemPromptLength: sdkOptions.systemPrompt?.length || 0, systemPromptPreview: sdkOptions.systemPrompt?.substring(0, 300) || '未设置' });
 
     // 注册 agent 到注册表（用于后续中止）
     registerAgent(evaluation.id, agent);
-    console.log(`[Evaluation] Agent 已注册: ${evaluation.id}`);
+    logger.debug(LOG_MODULES.AGENT, 'Agent 已注册', { evaluationId: evaluation.id });
 
     // 启动 SSE 流健康检查 Watchdog
     const watchdog = createWatchdog({
@@ -1105,14 +1098,14 @@ export async function POST(
       idleTimeout: 5 * 60 * 1000,  // 5 分钟空闲超时
       maxRunTime: 30 * 60 * 1000,  // 30 分钟最大运行时间
       onTimeout: (reason) => {
-        console.error(`[Watchdog] 评估超时中止: ${reason}`);
+        logger.errorNoUser(LOG_MODULES.EVALUATION, 'Watchdog 评估超时中止', { reason });
       },
       onHeartbeat: (stats) => {
         // 心跳日志由 Watchdog 内部处理
       },
       onProgressInquiry: async (reason, stats) => {
         // 空闲超时或运行时间较长时，自动发送进展询问消息
-        console.log(`[Watchdog] 自动发送进展询问: reason=${reason}, idleTime=${Math.round(stats.idleTime / 1000)}s, runTime=${Math.round(stats.runTime / 1000)}s`);
+        logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 自动发送进展询问', { reason, idleTime: Math.round(stats.idleTime / 1000), runTime: Math.round(stats.runTime / 1000) });
         
         // 获取进展询问消息配置
         const progressQuestionMessage = globalConfig?.progressQuestion || '请简要说明当前进展情况，以及预计还需要多长时间完成。';
@@ -1123,19 +1116,19 @@ export async function POST(
           const caller = (agent as any).caller;
           if (caller && typeof caller.injectUserMessage === 'function') {
             await caller.injectUserMessage(progressQuestionMessage);
-            console.log(`[Watchdog] 已通过 caller.injectUserMessage 注入进展询问消息`);
+            logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 已通过 caller.injectUserMessage 注入进展询问消息');
           } else if (caller && caller.agent && typeof caller.agent.sendMessage === 'function') {
             await caller.agent.sendMessage(progressQuestionMessage);
-            console.log(`[Watchdog] 已通过 agent.sendMessage 发送进展询问消息`);
+            logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 已通过 agent.sendMessage 发送进展询问消息');
           } else {
-            console.warn(`[Watchdog] Agent 不支持消息注入，无法自动发送进展询问`);
+            logger.warn(LOG_MODULES.EVALUATION, 'Watchdog Agent 不支持消息注入，无法自动发送进展询问');
           }
         } catch (err) {
-          console.error(`[Watchdog] 发送进展询问失败:`, err);
+          logger.errorNoUser(LOG_MODULES.EVALUATION, 'Watchdog 发送进展询问失败', { error: err });
         }
       },
     });
-    console.log(`[Evaluation] Watchdog 已启动: ${evaluation.id}`);
+    logger.debug(LOG_MODULES.EVALUATION, 'Watchdog 已启动', { evaluationId: evaluation.id });
 
     // 构建文件列表
     const files = project.ProjectFile.map(f => ({
@@ -1147,25 +1140,22 @@ export async function POST(
     // 系统提示词已设置（customSystemPrompt），评估指令由用户在 customSystemPrompt 中自行维护
 
     // 日志：启动评估前的完整信息
-    console.log('[启动评估] ========================================');
-    console.log('[启动评估] 启动评估前检查:');
-    console.log('[启动评估] - 项目ID:', id);
-    console.log('[启动评估] - 项目名称:', project.name);
-    console.log('[启动评估] - 项目路径:', project.projectPath || '未设置');
-    console.log('[启动评估] ----------------------------------------');
-    console.log('[启动评估] - SDK 配置:');
-    console.log('[启动评估]   - permissionMode:', sdkOptions.permissionMode);
-    console.log('[启动评估]   - allowDangerouslySkipPermissions:', sdkOptions.allowDangerouslySkipPermissions);
-    console.log('[启动评估]   - systemPrompt 类型:', typeof sdkOptions.systemPrompt);
-    console.log('[启动评估]   - systemPrompt 内容:',
-      sdkOptions.systemPrompt
-        ? (typeof sdkOptions.systemPrompt === 'string'
-            ? sdkOptions.systemPrompt.substring(0, 300) + '...'
-            : JSON.stringify(sdkOptions.systemPrompt, null, 2).substring(0, 500) + '...')
-        : '未配置');
-    console.log('[启动评估] ----------------------------------------');
-    console.log('[启动评估] - 用户提示词:', initialMessage?.substring(0, 300) || '无');
-    console.log('[启动评估] ========================================');
+    logger.debug(LOG_MODULES.EVALUATION, '启动评估前检查', {
+      projectId: id,
+      projectName: project.name,
+      projectPath: project.projectPath || '未设置',
+      sdkConfig: {
+        permissionMode: sdkOptions.permissionMode,
+        allowDangerouslySkipPermissions: sdkOptions.allowDangerouslySkipPermissions,
+        systemPromptType: typeof sdkOptions.systemPrompt,
+        systemPromptPreview: sdkOptions.systemPrompt
+          ? (typeof sdkOptions.systemPrompt === 'string'
+              ? sdkOptions.systemPrompt.substring(0, 300) + '...'
+              : JSON.stringify(sdkOptions.systemPrompt, null, 2).substring(0, 500) + '...')
+          : '未配置',
+      },
+      userPromptPreview: initialMessage?.substring(0, 300) || '无',
+    });
 
     // 创建 SSE 流
     const stream = new ReadableStream({
@@ -1194,7 +1184,7 @@ export async function POST(
             try {
               controller.enqueue(new TextEncoder().encode(data));
             } catch (error) {
-              console.warn('[Evaluation] Controller already closed, skip enqueue');
+              logger.warn(LOG_MODULES.EVALUATION, 'Evaluation Controller already closed, skip enqueue');
               isControllerClosed = true;
             }
           }
@@ -1207,7 +1197,7 @@ export async function POST(
               controller.close();
               isControllerClosed = true;
             } catch (error) {
-              console.warn('[Evaluation] Controller already closed');
+              logger.warn(LOG_MODULES.EVALUATION, 'Evaluation Controller already closed');
               isControllerClosed = true;
             }
           }
@@ -1236,7 +1226,7 @@ export async function POST(
             } else {
               await prisma.nodeExecution.create({
                 data: {
-                  id: `nodeexec-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  id: generateId('nodeexec'),
                   evaluationSessionId: evaluation.id,
                   workflowNodeId: nodeId,
                   nodeLabel: nodeId,
@@ -1248,9 +1238,9 @@ export async function POST(
                 },
               });
             }
-            console.log(`[Evaluation] Node ${nodeId} status updated to ${status}`);
+            logger.debug(LOG_MODULES.EVALUATION, 'Node 状态更新', { nodeId, status });
           } catch (e) {
-            console.error(`[Evaluation] Failed to update node ${nodeId} status:`, e);
+            logger.errorNoUser(LOG_MODULES.EVALUATION, 'Node 状态更新失败', { nodeId, error: e });
           }
         };
 
@@ -1270,7 +1260,7 @@ export async function POST(
                 ...result,
                 vulnerabilities: [],
               };
-              console.log('[Evaluation] Detected completion result:', result);
+              logger.debug(LOG_MODULES.EVALUATION, '检测到完成结果', { result });
             }
           }
         };
@@ -1295,7 +1285,7 @@ export async function POST(
         try {
           // 使用 Ralph Loop Agent 进行迭代评估
           // Ralph Loop 会在任务未完成时自动进行下一轮迭代
-          console.log('[Ralph Loop] 开始执行 loop() 方法');
+          logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 开始执行 loop() 方法');
           
           const callbacks: RalphLoopAgentCallbacks = {
             onChunk: (text) => {
@@ -1344,7 +1334,7 @@ export async function POST(
                   timestamp: Date.now(),
                 });
                 safeEnqueue(`data: ${todoEvent}\n\n`);
-                console.log('[Ralph Loop] TODO 更新:', todos.length, '项');
+                logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop TODO 更新', { todoCount: todos.length });
 
                 // 通过事件总线广播 TODO 更新
                 const { emitTodoUpdate } = require('@/lib/event-bus');
@@ -1358,7 +1348,7 @@ export async function POST(
                     where: { id: evaluation.id },
                     data: { todoList: newSnapshot },
                   }).catch(err => console.error('[Ralph Loop] 保存 TODO 到数据库失败:', err));
-                  console.log('[Ralph Loop] TODO 有变化，已保存到数据库');
+                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop TODO 有变化，已保存到数据库');
                 }
               }
 
@@ -1386,7 +1376,7 @@ export async function POST(
             },
             onUsage: async (usage) => {
               // 记录每次 API 调用的 token 使用量到数据库
-              console.log('[Ralph Loop] 收到 Token 使用量:', usage);
+              logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop 收到 Token 使用量', { usage });
               
               try {
                 // 计算本次调用费用
@@ -1402,7 +1392,7 @@ export async function POST(
                 // 保存到 TokenUsage 表（单次调用记录）
                 await prisma.tokenUsage.create({
                   data: {
-                    id: `token-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    id: generateId('token'),
                     evaluationId: evaluation.id,
                     projectId: id,
                     apiProvider: modelConfig?.providerType || 'claude',
@@ -1447,7 +1437,7 @@ export async function POST(
                   },
                 });
                 
-                console.log('[Ralph Loop] 实时更新 Token:', {
+                logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop 实时更新 Token', {
                   本次: { input: usage.inputTokens, output: usage.outputTokens },
                   当前累计: { input: newInputTokens, output: newOutputTokens },
                   说明: 'input=最后一次值(含历史), output=累加值',
@@ -1472,11 +1462,11 @@ export async function POST(
                 });
                 safeEnqueue(`data: ${tokenEvent}\n\n`);
               } catch (err) {
-                console.error('[Ralph Loop] 保存 Token 使用记录失败:', err);
+                logger.errorNoUser(LOG_MODULES.TOKEN, 'Ralph Loop 保存 Token 使用记录失败', { error: err });
               }
             },
             onComplete: (fullResponseText) => {
-              console.log('[Ralph Loop] 单次迭代完成，文本长度:', fullResponseText.length);
+              logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 单次迭代完成', { textLength: fullResponseText.length });
             },
             onError: async (error) => {
               // 检查是否为中止错误
@@ -1486,14 +1476,14 @@ export async function POST(
                 error.message.includes('中止');
 
               if (isAborted) {
-                console.log('[Ralph Loop] 检测到中止信号:', error.message);
+                logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 检测到中止信号', { message: error.message });
                 // 检查数据库状态确认是否已被中止
                 const currentEval = await prisma.evaluationSession.findUnique({
                   where: { id: evaluation.id },
                   select: { status: true },
                 });
                 if (currentEval?.status === 'cancelled') {
-                  console.log('[Ralph Loop] 评估已被外部中止，停止工作流');
+                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 评估已被外部中止，停止工作流');
                   // 不触发后续的队列处理
                   safeClose();
                   return;
@@ -1508,7 +1498,7 @@ export async function POST(
 
               if (!isFatal && !isAborted) {
                 // 非致命错误（如 error_during_execution）：记录日志，不终止评估
-                console.warn('[Ralph Loop] 非致命错误，评估继续:', error.message);
+                logger.warn(LOG_MODULES.EVALUATION, 'Ralph Loop 非致命错误，评估继续', { message: error.message });
                 const data = JSON.stringify({
                   type: 'error',
                   error: error.message,
@@ -1519,20 +1509,20 @@ export async function POST(
                 return;
               }
 
-              console.error('[Ralph Loop] 致命错误，终止评估:', error);
+              logger.errorNoUser(LOG_MODULES.EVALUATION, 'Ralph Loop 致命错误，终止评估', { error });
 
               // 从注册表移除 agent
               try {
                 const { removeAgent } = await import('@/lib/agent-registry');
                 removeAgent(evaluation.id);
               } catch (e) {
-                console.error('移除 agent 注册失败:', e);
+                logger.errorNoUser(LOG_MODULES.AGENT, '移除 agent 注册失败', { error: e });
               }
 
               // 保存错误消息
               await prisma.sessionMessage.create({
                 data: {
-                  id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  id: generateId('msg'),
                   evaluationSessionId: evaluation.id,
                   role: 'assistant',
                   content: `评估失败: ${error.message}`,
@@ -1573,17 +1563,16 @@ export async function POST(
               }
             },
             onRalphComplete: async (result) => {
-              console.log('[Ralph Loop] ========================================');
-              console.log('[Ralph Loop] 任务完成!');
-              console.log('[Ralph Loop] - 迭代次数:', result.iterations);
-              console.log('[Ralph Loop] - 完成原因:', result.completionReason);
-              console.log('[Ralph Loop] - 原因:', result.reason || '无');
-              console.log('[Ralph Loop] - Token 使用:', result.totalUsage);
-              console.log('[Ralph Loop] ========================================');
+              logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 任务完成', {
+              iterations: result.iterations,
+              completionReason: result.completionReason,
+              reason: result.reason || '无',
+              totalUsage: result.totalUsage,
+            });
 
               // 检查是否为中止完成，如果是则不触发队列
               if (result.completionReason === 'aborted') {
-                console.log('[Ralph Loop] 任务被中止，不触发队列处理');
+                logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 任务被中止，不触发队列处理');
                 
                 // 计算 token 费用（中止时也有 token 使用）
                 const { calculateCost, getModelPricingOrDefault } = await import('@/services/evaluation/ralph-loop-agent');
@@ -1591,10 +1580,11 @@ export async function POST(
                 const pricing = getModelPricingOrDefault(modelId);
                 const estimatedCost = calculateCost(result.totalUsage, pricing);
                 
-                console.log('[Ralph Loop] 中止时的 Token 统计:');
-                console.log('  - 输入 Token:', result.totalUsage.inputTokens);
-                console.log('  - 输出 Token:', result.totalUsage.outputTokens);
-                console.log('  - 总 Token:', result.totalUsage.totalTokens);
+                logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop 中止时的 Token 统计', {
+                inputTokens: result.totalUsage.inputTokens,
+                outputTokens: result.totalUsage.outputTokens,
+                totalTokens: result.totalUsage.totalTokens,
+              });
                 
                 // 更新状态为 cancelled（同时保存 token 统计）
                 await prisma.evaluationSession.update({
@@ -1646,7 +1636,7 @@ export async function POST(
               if (project.projectPath) {
                 try {
                   const vulnFilePath = join(project.projectPath, 'vulnerabilities.json');
-                  console.log('[Ralph Loop] 读取漏洞文件:', vulnFilePath);
+                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 读取漏洞文件', { path: vulnFilePath });
                   const fileContent = await readFile(vulnFilePath, 'utf-8');
                   const jsonReport = JSON.parse(fileContent);
 
@@ -1665,13 +1655,13 @@ export async function POST(
                       skills_used: [],
                       vulnerabilities: vulns,
                     };
-                    console.log('[Ralph Loop] 从 vulnerabilities.json 读取到漏洞:', vulns.length, '条，其中 vulnerable=true:', vulns.filter(isVulnerable).length, '条');
+                    logger.debug(LOG_MODULES.VULNERABILITY, 'Ralph Loop 从 vulnerabilities.json 读取到漏洞', { totalCount: vulns.length, vulnerableCount: vulns.filter(isVulnerable).length });
                   }
                 } catch (e: any) {
                   if (e.code === 'ENOENT') {
-                    console.warn('[Ralph Loop] vulnerabilities.json 不存在，跳过漏洞导入');
+                    logger.warn(LOG_MODULES.VULNERABILITY, 'Ralph Loop vulnerabilities.json 不存在，跳过漏洞导入');
                   } else {
-                    console.error('[Ralph Loop] 读取 vulnerabilities.json 失败:', e);
+                    logger.errorNoUser(LOG_MODULES.VULNERABILITY, 'Ralph Loop 读取 vulnerabilities.json 失败', { error: e });
                   }
                 }
               }
@@ -1692,7 +1682,7 @@ export async function POST(
                       rawReport: JSON.stringify(evaluationResult),
                     },
                     create: {
-                      id: `result-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                      id: generateId('result'),
                       evaluationId: evaluation.id,
                       totalVulns: evaluationResult.total || 0,
                       criticalCount: evaluationResult.critical || 0,
@@ -1704,17 +1694,17 @@ export async function POST(
                       rawReport: JSON.stringify(evaluationResult),
                     },
                   });
-                  console.log('[Ralph Loop] 评估结果已保存到数据库');
+                  logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop 评估结果已保存到数据库');
 
                   // 只保存 vulnerable: true 的漏洞（兼容布尔和字符串 "true"）
                   const isVulnerable = (v: any) => v.vulnerable === true || v.vulnerable === 'true';
                   const vulnsToSave = evaluationResult.vulnerabilities.filter(isVulnerable);
-                  console.log(`[Ralph Loop] 共 ${evaluationResult.vulnerabilities.length} 条，其中 vulnerable=true: ${vulnsToSave.length} 条`);
+                  logger.debug(LOG_MODULES.VULNERABILITY, 'Ralph Loop 漏洞统计', { totalCount: evaluationResult.vulnerabilities.length, vulnerableCount: vulnsToSave.length });
 
                   for (const vuln of vulnsToSave) {
                     await prisma.vulnerability.create({
                       data: {
-                        id: `vuln-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        id: generateId('vuln'),
                         projectId: id,
                         evaluationId: evaluation.id,
                         title: vuln.title || '未命名漏洞',
@@ -1733,7 +1723,7 @@ export async function POST(
                     });
                   }
                   if (vulnsToSave.length > 0) {
-                    console.log(`[Ralph Loop] 保存了 ${vulnsToSave.length} 个漏洞详情`);
+                    logger.debug(LOG_MODULES.VULNERABILITY, 'Ralph Loop 保存了漏洞详情', { count: vulnsToSave.length });
                     
                     // ===== 新增：Skill 匹配和 Mapping 创建 =====
                     // 根据 vulnerabilities.json 的 skill 字段匹配 Skill 并创建 Mapping 记录
@@ -1835,14 +1825,14 @@ export async function POST(
                           }
                         }
                         
-                        console.log(`[Ralph Loop] Skill ${skillId} 发现 ${info.count} 个漏洞 (${info.matchType} 匹配)`);
+                        logger.debug(LOG_MODULES.SKILL, 'Ralph Loop Skill 发现漏洞', { skillId, count: info.count, matchType: info.matchType });
                       }
                     } catch (mappingError) {
-                      console.error('[Ralph Loop] Skill 匹配失败:', mappingError);
+                      logger.errorNoUser(LOG_MODULES.SKILL, 'Ralph Loop Skill 匹配失败', { error: mappingError });
                     }
                   }
                 } catch (e) {
-                  console.error('[Ralph Loop] 保存评估结果失败:', e);
+                  logger.errorNoUser(LOG_MODULES.EVALUATION, 'Ralph Loop 保存评估结果失败', { error: e });
                 }
               }
 
@@ -1857,11 +1847,12 @@ export async function POST(
               const pricing = getModelPricingOrDefault(modelId);
               const estimatedCost = calculateCost(result.totalUsage, pricing);
               
-              console.log('[Ralph Loop] Token 统计:');
-              console.log('  - 输入 Token:', result.totalUsage.inputTokens);
-              console.log('  - 输出 Token:', result.totalUsage.outputTokens);
-              console.log('  - 总 Token:', result.totalUsage.totalTokens);
-              console.log('  - 预估费用:', `$${estimatedCost.toFixed(4)}`);
+              logger.debug(LOG_MODULES.TOKEN, 'Ralph Loop Token 统计', {
+                inputTokens: result.totalUsage.inputTokens,
+                outputTokens: result.totalUsage.outputTokens,
+                totalTokens: result.totalUsage.totalTokens,
+                estimatedCost: `$${estimatedCost.toFixed(4)}`,
+              });
               
               await prisma.evaluationSession.update({
                 where: { id: evaluation.id },
@@ -1896,11 +1887,11 @@ export async function POST(
               // 从注册表移除 agent
               const { removeAgent } = await import('@/lib/agent-registry');
               removeAgent(evaluation.id);
-              console.log(`[Ralph Loop] Agent 完成，已从注册表移除: ${evaluation.id}`);
+              logger.debug(LOG_MODULES.AGENT, 'Ralph Loop Agent 完成，已从注册表移除', { evaluationId: evaluation.id });
 
               // 停止 Watchdog
               stopWatchdog(evaluation.id);
-              console.log(`[Ralph Loop] Watchdog 已停止: ${evaluation.id}`);
+              logger.debug(LOG_MODULES.EVALUATION, 'Ralph Loop Watchdog 已停止', { evaluationId: evaluation.id });
 
               // 处理队列 - 启动下一个排队评估
               const { processQueue } = await import('@/services/evaluation-queue');
@@ -1929,12 +1920,7 @@ export async function POST(
           };
 
           // 启动 Ralph Loop
-          console.log('='.repeat(60));
-          console.log('[Evaluation] 🚀 启动 Ralph Loop 评估');
-          console.log('[Evaluation] 评估ID:', evaluation.id);
-          console.log('[Evaluation] 项目ID:', id);
-          console.log('[Evaluation] 工作目录:', project.projectPath || '未设置');
-          console.log('='.repeat(60));
+          logger.debug(LOG_MODULES.EVALUATION, 'Evaluation 启动 Ralph Loop 评估', { evaluationId: evaluation.id, projectId: id, workDir: project.projectPath || '未设置' });
           
           await agent.loop({
             evaluationId: evaluation.id,
@@ -1949,12 +1935,10 @@ export async function POST(
             callbacks,
           });
           
-          console.log('='.repeat(60));
-          console.log('[Evaluation] ✅ Ralph Loop 完成');
-          console.log('='.repeat(60));
+          logger.debug(LOG_MODULES.EVALUATION, 'Evaluation Ralph Loop 完成');
           
         } catch (error) {
-          console.error('[Evaluation] 启动失败:', error);
+          logger.errorNoUser(LOG_MODULES.EVALUATION, 'Evaluation 启动失败', { error });
           const errorMessage = error instanceof Error ? error.message : '未知错误';
 
           // 发送错误事件
@@ -2019,7 +2003,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('启动项目错误:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '启动项目错误', { error });
     return NextResponse.json({ error: '服务器内部错误', details: String(error) }, { status: 500 });
   }
 }
@@ -2104,9 +2088,9 @@ async function getModelConfig(modelId?: string | null, userId?: string | null) {
       if (hasAccess) {
         return selectedModel;
       }
-      console.warn(`[getModelConfig] 用户 ${userId} 无权使用模型 ${modelId}`);
+      logger.warn(LOG_MODULES.MODEL, '用户无权使用模型', { userId: userId ?? undefined, modelId });
     }
-    console.warn(`[getModelConfig] 指定的模型 ${modelId} 不存在或未激活，将使用默认模型`);
+    logger.warn(LOG_MODULES.MODEL, '指定的模型不存在或未激活，将使用默认模型', { modelId });
   }
   
   // 使用数据库配置（优先默认模型）

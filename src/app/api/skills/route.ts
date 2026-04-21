@@ -12,6 +12,7 @@ import { saveSkillToDisk } from '@/services/skill-files';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { findSimilarSkills, SkillForSimilarity, SimilarSkill } from '@/services/skill-similarity';
 import { triggerGovernanceAnalysis } from '@/services/skill-governance';
+import { generateId } from '@/lib/id-generator';
 
 // 获取 skillOutputTemplate 的辅助函数
 async function getSkillOutputTemplate(): Promise<string | undefined> {
@@ -234,7 +235,7 @@ export async function POST(request: Request) {
 
     const skill = await prisma.skill.create({
       data: {
-        id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('skill'),
         name,
         displayName,
         description,

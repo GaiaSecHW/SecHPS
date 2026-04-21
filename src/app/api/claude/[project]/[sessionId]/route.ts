@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { SessionManager, ProjectDiscovery } from '@/services/session-manager';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function DELETE(
   request: Request,
@@ -33,7 +34,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('删除会话错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '删除会话错误:', { details: error });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }
@@ -81,7 +82,7 @@ export async function GET(
       cwd: firstMessage.cwd,
     });
   } catch (error) {
-    console.error('获取会话详情错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取会话详情错误:', { details: error });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }

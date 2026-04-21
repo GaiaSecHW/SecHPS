@@ -2,35 +2,26 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { combineWhereClauses, buildDateRangeFilter, buildStatusFilter } from '@/lib/query-optimizer';
+import { generateId } from '@/lib/id-generator';
 
 // GET /api/vulnerabilities - 获取漏洞列表
 // 数据隔离：普通用户只能看到自己项目的漏洞，管理员可以看到所有漏洞
 export async function GET(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.VULNERABILITY_READ });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查 VULNERABILITY_READ 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.VULNERABILITY_READ)) {
-      return NextResponse.json({ details: { error: '权限不足' } }, { status: 403 });
-    }
-
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId') || undefined;
@@ -47,7 +38,7 @@ export async function GET(request: Request) {
 
     // 数据隔离：普通用户只能查看自己项目的漏洞
     let projectFilter: any = undefined;
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       const userProjects = await prisma.project.findMany({
         where: { userId: payload.userId },
         select: { id: true },
@@ -127,24 +118,14 @@ export async function GET(request: Request) {
 // POST /api/vulnerabilities - 创建漏洞（内部使用）
 // 数据隔离：普通用户只能在自己项目中创建漏洞，管理员可以在任意项目创建
 export async function POST(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.VULNERABILITY_CREATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    // 检查 VULNERABILITY_CREATE 权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.VULNERABILITY_CREATE)) {
-      return NextResponse.json({ details: { error: '权限不足' } }, { status: 403 });
-    }
-
     const body = await request.json();
     const {
       projectId,
@@ -171,11 +152,11 @@ export async function POST(request: Request) {
     }
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 数据隔离：验证项目所有权
     let projectWhere: any = { id: projectId };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       projectWhere.userId = payload.userId;
     }
 
@@ -189,7 +170,7 @@ export async function POST(request: Request) {
 
     const vulnerability = await prisma.vulnerability.create({
       data: {
-        id: `vuln-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('vuln'),
         projectId,
         skillExecutionId,
         title,
@@ -212,7 +193,7 @@ export async function POST(request: Request) {
     // 记录审计日志
     prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'vulnerability_create',
         resource: vulnerability.id,

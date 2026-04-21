@@ -3,7 +3,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
@@ -12,18 +12,14 @@ import { logger, LOG_MODULES } from '@/lib/logger';
  * 获取全局默认工具权限配置
  */
 export async function GET(request: Request) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
 
     // 获取激活的全局配置
     const globalConfig = await prisma.opencodeConfig.findFirst({
@@ -67,26 +63,16 @@ export async function GET(request: Request) {
  * 更新全局默认工具权限配置
  */
 export async function PUT(request: Request) {
-  let payload: any = null;  // 在函数开头声明，以便在 catch 中可用
   let configId: string | undefined;
   
+  // 使用统一认证中间件（需要 CONFIG_UPDATE 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+  
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查管理员权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问 - 需要管理员权限' }, { status: 403 });
-    }
 
     const body = await request.json();
     configId = body.configId;

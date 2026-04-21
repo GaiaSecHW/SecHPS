@@ -5,6 +5,7 @@ import {
   Folder, FolderOpen, File, FileCode, ChevronRight, ChevronDown,
   Search, RefreshCw, Loader2, X,
 } from 'lucide-react';
+import { extractErrorMessage } from '@/lib/api-client';
 
 interface FileTreeNode {
   name: string;
@@ -45,8 +46,8 @@ export default function ClaudeFileBrowser({
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: '获取文件列表失败' }));
-        setError(data.error || '获取文件列表失败');
+        const data = await response.json().catch(() => ({}));
+        setError(extractErrorMessage(data, '获取文件列表失败'));
         return;
       }
 

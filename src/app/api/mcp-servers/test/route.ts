@@ -2,29 +2,20 @@
 // MCP 服务器测试 API - 验证连通性并获取工具列表
 
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/mcp-servers/test - 测试 MCP 服务器连接
 export async function POST(request: Request) {
+  // 使用统一认证中间件（需要 CONFIG_READ 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ error: '无权限' }, { status: 403 });
-    }
 
     const body = await request.json();
     const { type, command, args, url, env } = body;

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus, MessageSquare, Share2, RotateCcw, Trash2, Upload, X, File, AlertCircle, AlertTriangle, CheckCircle, Play, Edit2, Download, History, Settings, Shield, Square, Zap, Bug, Loader2, Workflow, ChevronLeft, ChevronRight, Search, RefreshCw, Copy, XCircle, User } from 'lucide-react';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // 格式化漏洞描述 - 按语义分行
 function formatDescription(text: string): string {
@@ -1186,7 +1187,7 @@ toast.error(data.error || '更新项目失败');
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

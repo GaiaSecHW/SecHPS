@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 格式化模型数据 - 不返回 apiKey 以保护安全
@@ -30,21 +30,15 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
     const { id } = await params;
-    
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
 
     // 获取模型
     const model = await prisma.modelConfig.findUnique({
@@ -65,8 +59,8 @@ export async function GET(
     // 2. 用户可以查看公开的模型
     // 3. 用户可以查看系统级模型（userId为null）
     // 4. 管理员可以查看所有模型
-    const isAdmin = payload.roles?.includes('admin');
-    const canAccess = isAdmin || 
+    const userIsAdmin = isAdmin(payload);
+    const canAccess = userIsAdmin || 
       model.userId === payload.userId || 
       model.isPublic === true || 
       model.userId === null;
@@ -101,21 +95,15 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
     const { id } = await params;
-    
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
 
     // 获取模型
     const existingModel = await prisma.modelConfig.findUnique({
@@ -132,8 +120,8 @@ export async function PUT(
     }
 
     // 检查权限：只能更新自己创建的模型，管理员可以更新所有模型
-    const isAdmin = payload.roles?.includes('admin');
-    if (!isAdmin && existingModel.userId !== payload.userId) {
+    const userIsAdmin = isAdmin(payload);
+    if (!userIsAdmin && existingModel.userId !== payload.userId) {
       // 权限拒绝日志
       logger.permissionDenied(LOG_MODULES.MODEL, payload, 'MODEL_UPDATE', id, { modelName: existingModel.name });
       return NextResponse.json({ error: '禁止访问：只能更新自己创建的模型' }, { status: 403 });
@@ -183,7 +171,7 @@ export async function PUT(
     }
 
     // 验证管理员专属字段
-    if (isSystemModel !== undefined && !isAdmin) {
+    if (isSystemModel !== undefined && !userIsAdmin) {
       return NextResponse.json(
         { error: '只有管理员可以修改系统模型属性' },
         { status: 403 }
@@ -204,7 +192,7 @@ export async function PUT(
     if (isPublic !== undefined) updateData.isPublic = isPublic;
 
     // 管理员专属字段
-    if (isAdmin) {
+    if (userIsAdmin) {
       // 系统模型属性
       if (isSystemModel !== undefined) {
         updateData.userId = isSystemModel ? null : payload.userId;
@@ -265,21 +253,15 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
     const { id } = await params;
-    
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
 
     // 获取模型
     const existingModel = await prisma.modelConfig.findUnique({
@@ -296,8 +278,8 @@ export async function DELETE(
     }
 
     // 检查权限：只能删除自己创建的模型，管理员可以删除所有模型
-    const isAdmin = payload.roles?.includes('admin');
-    if (!isAdmin && existingModel.userId !== payload.userId) {
+    const userIsAdmin = isAdmin(payload);
+    if (!userIsAdmin && existingModel.userId !== payload.userId) {
       // 权限拒绝日志
       logger.permissionDenied(LOG_MODULES.MODEL, payload, 'MODEL_DELETE', id, { modelName: existingModel.name });
       return NextResponse.json({ error: '禁止访问：只能删除自己创建的模型' }, { status: 403 });

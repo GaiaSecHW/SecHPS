@@ -13,6 +13,7 @@
 import { NextResponse } from 'next/server';
 import { ClaudeCodeReader } from '@/services/claude-code-reader';
 import type { ClaudeCodeSession, ProviderSource } from '@/types/claude-code';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -58,7 +59,7 @@ export async function GET(
       limit: result.limit,
     });
   } catch (error) {
-    console.error('获取项目会话列表错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取项目会话列表错误:', { details: error });
     return NextResponse.json(
       { error: '服务器内部错误' },
       { status: 500 }

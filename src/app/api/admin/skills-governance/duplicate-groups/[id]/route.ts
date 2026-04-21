@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -184,7 +185,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         for (const member of otherMembers) {
           await prisma.skillMergeRecord.create({
             data: {
-              id: `merge-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              id: generateId('merge'),
               sourceSkillId: member.skillId,
               targetSkillId: primarySkillId,
               mergeReason: `重复组 ${group.id} 合并处理`,

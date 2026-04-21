@@ -7,6 +7,7 @@ import {
   Plus, MessageSquare, Trash2, X, RefreshCw, FolderOpen,
   ExternalLink, Terminal, Play, ChevronDown, ChevronRight, Search, Zap
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // Claude 会话类型
 interface ClaudeSession {
@@ -176,7 +177,7 @@ export default function ClaudePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

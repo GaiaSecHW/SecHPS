@@ -3,7 +3,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { createClaudeAgentService, ClaudeAgentCallbacks } from '@/services/ai';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/evaluations/[id]/ask-progress - 询问评估进展
 // 数据隔离：普通用户只能询问自己项目评估的进展，管理员可以询问所有
@@ -27,7 +29,7 @@ export async function POST(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 获取评估会话并验证所有权
     let where: any = { id };
@@ -46,7 +48,7 @@ export async function POST(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -60,7 +62,7 @@ export async function POST(
     // 方法1: 从项目的关联配置中获取 progressQuestion
     if (evaluation.Project?.OpencodeConfig?.progressQuestion) {
       progressQuestion = evaluation.Project.OpencodeConfig.progressQuestion;
-      console.log('[AskProgress] 使用项目关联配置的进展询问消息');
+      logger.debug(LOG_MODULES.EVALUATION, '使用项目关联配置的进展询问消息');
     }
     
     // 方法2: 如果项目没有关联配置或配置没有 progressQuestion，从全局激活配置获取
@@ -76,10 +78,10 @@ export async function POST(
         
         if (globalConfig?.progressQuestion && globalConfig.progressQuestion.trim()) {
           progressQuestion = globalConfig.progressQuestion;
-          console.log('[AskProgress] 使用全局激活配置的进展询问消息');
+          logger.debug(LOG_MODULES.EVALUATION, '使用全局激活配置的进展询问消息');
         }
       } catch (e) {
-        console.warn('获取全局配置失败:', e);
+        logger.warn(LOG_MODULES.CONFIG, '获取全局配置失败:', { details: { error: String(e) } });
       }
     }
 
@@ -127,7 +129,7 @@ export async function POST(
                 data: { lastActivity: new Date() },
               });
             } catch (e) {
-              console.error('更新评估会话失败:', e);
+              logger.errorNoUser(LOG_MODULES.EVALUATION, '更新评估会话失败:', { details: { error: String(e) } });
             }
 
             const data = JSON.stringify({
@@ -150,11 +152,11 @@ export async function POST(
 
         try {
           // 只发送配置的进展询问消息，不附加历史消息
-          console.log('[AskProgress] 发送询问进展消息');
+          logger.debug(LOG_MODULES.EVALUATION, '发送询问进展消息');
           await agentService.sendPrompt(progressQuestion, callbacks);
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : '未知错误';
-          console.error('[AskProgress] 发送失败:', errorMessage);
+          logger.errorNoUser(LOG_MODULES.EVALUATION, '发送失败:', { details: { error: errorMessage } });
           const data = JSON.stringify({
             type: 'error',
             error: errorMessage,
@@ -174,7 +176,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('Ask progress error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '询问进展错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -7,6 +7,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 获取 skillOutputTemplate 的辅助函数
 async function getSkillOutputTemplate(): Promise<string | undefined> {
@@ -160,7 +161,7 @@ export async function PUT(
       // 创建新版本
       updatedSkill = await prisma.skill.create({
         data: {
-          id: `skill-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('skill'),
           name: skill.name,
           displayName: (updateData.displayName as string) ?? skill.displayName,
           description: (updateData.description as string) ?? skill.description,
@@ -196,7 +197,7 @@ export async function PUT(
 
       await prisma.skillEvolution.create({
         data: {
-          id: `evol-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('evol'),
           skillId: updatedSkill.id,
           fromVersion: skill.version,
           toVersion: updatedSkill.version,

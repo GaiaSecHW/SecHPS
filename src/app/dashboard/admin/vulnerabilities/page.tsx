@@ -17,6 +17,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { AdminGuard } from '@/components/PermissionGuard';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface Vulnerability {
   id: string;
@@ -271,13 +272,13 @@ ${vuln.codeSnippet ? '```\n' + vuln.codeSnippet + '\n```' : '无'}
       vuln.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading && vulnerabilities.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
+    if (loading && vulnerabilities.length === 0) {
+      return (
+        <div className="flex items-center justify-center h-64">
+          <LoadingSpinner size="xl" />
+        </div>
+      );
+    }
 
   return (
     <div className="space-y-6">

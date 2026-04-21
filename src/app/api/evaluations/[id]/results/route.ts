@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -70,9 +70,9 @@ export async function GET(
           todos = rawReport.tasks;
         }
         
-        console.log('[评估结果] 提取到 TODO 数量:', todos.length);
+        logger.debug(LOG_MODULES.EVALUATION, '提取到 TODO 数量:', { details: { count: todos.length } });
       } catch (error) {
-        console.error('[评估结果] 解析 rawReport 失败:', error);
+        logger.errorNoUser(LOG_MODULES.EVALUATION, '解析 rawReport 失败:', { details: { error: String(error) } });
       }
     }
  
@@ -84,7 +84,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Get evaluation result error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估结果错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

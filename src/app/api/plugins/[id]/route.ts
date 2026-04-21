@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PluginManager } from '@/services/plugin-manager';
 import { PERMISSIONS } from '@/types/permissions';
 import type { UpdatePluginConfigRequest } from '@/types/plugin';
@@ -16,35 +16,15 @@ interface RouteParams {
  * 获取单个插件详情
  */
 export async function GET(request: Request, { params }: RouteParams) {
+  // 使用统一认证中间件（需要 PLUGIN_READ 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PLUGIN_READ });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
     const { id } = await params;
-
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json(
-        { error: '无效的 Token' },
-        { status: 401 }
-      );
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_READ)) {
-      return NextResponse.json(
-        { error: '没有查看插件的权限' },
-        { status: 403 }
-      );
-    }
 
     // 获取插件详情
     const plugin = await PluginManager.getPlugin(id);
@@ -72,35 +52,15 @@ export async function GET(request: Request, { params }: RouteParams) {
  * 更新插件配置
  */
 export async function PATCH(request: Request, { params }: RouteParams) {
+  // 使用统一认证中间件（需要 PLUGIN_UPDATE 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PLUGIN_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
     const { id } = await params;
-
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json(
-        { error: '无效的 Token' },
-        { status: 401 }
-      );
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_UPDATE)) {
-      return NextResponse.json(
-        { error: '没有更新插件的权限' },
-        { status: 403 }
-      );
-    }
 
     // 解析请求体
     const body: UpdatePluginConfigRequest = await request.json();
@@ -138,35 +98,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
  * 卸载插件
  */
 export async function DELETE(request: Request, { params }: RouteParams) {
+  // 使用统一认证中间件（需要 PLUGIN_DELETE 权限）
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PLUGIN_DELETE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const { payload } = auth;
+
   try {
     const { id } = await params;
-
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json(
-        { error: '未授权访问' },
-        { status: 401 }
-      );
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json(
-        { error: '无效的 Token' },
-        { status: 401 }
-      );
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.PLUGIN_DELETE)) {
-      return NextResponse.json(
-        { error: '没有卸载插插件的权限' },
-        { status: 403 }
-      );
-    }
 
     // 卸载插件
     await PluginManager.uninstallPlugin(id);

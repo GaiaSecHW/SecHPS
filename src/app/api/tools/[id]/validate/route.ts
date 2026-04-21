@@ -2,8 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/tools/:id/validate - 验证工具参数
 export async function POST(
@@ -11,22 +12,12 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.AGENT_EXECUTE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 权限检查：需要 AGENT_EXECUTE 权限才能验证工具参数
-    if (!hasPermission(payload.permissions, PERMISSIONS.AGENT_EXECUTE)) {
-      return NextResponse.json({ error: '无权验证工具参数' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
     const body = await request.json();
@@ -67,7 +58,7 @@ export async function POST(
       message: '参数验证通过',
     });
   } catch (error) {
-    console.error('验证参数错误:', error);
+    logger.errorNoUser(LOG_MODULES.AGENT, '验证参数错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

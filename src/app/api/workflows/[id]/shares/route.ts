@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { generateId } from '@/lib/id-generator';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取工作流的分享列表
 export async function GET(
@@ -9,34 +11,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_READ });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_READ)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查工作流是否存在且用户有访问权限
     const workflow = await prisma.workflow.findFirst({
       where: {
         id,
-        ...(isAdmin ? {} : {
+        ...(userIsAdmin ? {} : {
           OR: [
             { userId: payload.userId },
             { isPublic: true },
@@ -82,7 +73,7 @@ export async function GET(
 
     return NextResponse.json({ shares });
   } catch (error) {
-    console.error('Get workflow shares error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, '获取工作流分享列表错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -93,34 +84,23 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 验证 Token 和权限
+    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_SHARE });
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.WORKFLOW_SHARE)) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查工作流是否存在且属于当前用户（管理员可分享所有）
     const workflow = await prisma.workflow.findFirst({
       where: {
         id,
-        ...(isAdmin ? {} : { userId: payload.userId }),
+        ...(userIsAdmin ? {} : { userId: payload.userId }),
       },
     });
 
@@ -208,7 +188,7 @@ export async function POST(
     // 记录审计日志
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'workflow_share',
         resource: id,
@@ -225,7 +205,7 @@ export async function POST(
       share,
     });
   } catch (error) {
-    console.error('Share workflow error:', error);
+    logger.errorNoUser(LOG_MODULES.WORKFLOW, '分享工作流错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { generateId } from '@/lib/id-generator';
 import { mkdir, writeFile } from 'fs/promises';
 import { join } from 'path';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 上传文件到项目
 // 数据隔离：普通用户只能向自己的项目上传文件，管理员可以向任何项目上传
@@ -11,26 +13,21 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证项目所有权
     let projectWhere: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：只能向自己的项目上传文件
       projectWhere.userId = payload.userId;
     }
@@ -84,7 +81,7 @@ export async function POST(
         // 创建文件记录
         const projectFile = await prisma.projectFile.create({
           data: {
-            id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateId('file'),
             projectId: project.id,
             fileName: file.name,
             filePath: filePath,
@@ -108,7 +105,7 @@ export async function POST(
       count: savedFiles.length,
     });
   } catch (error) {
-    console.error('上传文件错误:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '上传文件错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误', details: String(error) }, { status: 500 });
   }
 }

@@ -1,5 +1,5 @@
 ﻿import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { routeRequestWithDefaultModel, getDefaultModelInfo } from '@/lib/model-client';
 
@@ -11,17 +11,12 @@ import { routeRequestWithDefaultModel, getDefaultModelInfo } from '@/lib/model-c
  */
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // Authenticate
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
-    }
+    const { payload } = auth;
 
     const body = await request.json();
     const { testCase, skillData, runType } = body;
@@ -130,17 +125,12 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
+    // Authenticate
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponseNested(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的 token' } }, { status: 401 });
-    }
+    const { payload } = auth;
 
     // TODO: 未来可从数据库读取用户的历史评估记录
     return NextResponse.json({

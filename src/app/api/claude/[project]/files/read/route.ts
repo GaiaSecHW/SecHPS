@@ -8,6 +8,7 @@ import { readFile } from 'fs/promises';
 import { stat } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(
   request: Request,
@@ -91,7 +92,7 @@ export async function GET(
       isBinary: false,
     });
   } catch (error) {
-    console.error('Read file error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '读取文件错误:', { details: error });
     return NextResponse.json({ error: '读取失败' }, { status: 500 });
   }
 }

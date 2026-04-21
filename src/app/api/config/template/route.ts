@@ -3,25 +3,21 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 全局配置的特殊 userId（用于存储系统级配置）
 const SYSTEM_USER_ID = 'system';
 
 export async function GET(request: Request) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const { payload } = auth;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
 
     // skillOutputTemplate 是全局共享的模板，所有登录用户都可以获取
     // 查询策略：优先用户配置 -> 全局系统配置 -> 任何一个有模板的配置

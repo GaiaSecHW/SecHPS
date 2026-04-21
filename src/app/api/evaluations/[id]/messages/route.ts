@@ -3,7 +3,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/messages - 获取评估会话的消息列表
 // 数据隔离：普通用户只能查看自己项目评估的消息，管理员可以查看所有
@@ -27,7 +29,7 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查评估会话是否存在，并验证所有权
     let where: any = { id };
@@ -50,12 +52,12 @@ export async function GET(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
     if (!evaluation.opencodeSessionId) {
-      console.log('[API Messages] No opencodeSessionId for evaluation:', id);
+      logger.debug(LOG_MODULES.EVALUATION, '评估会话没有 opencodeSessionId:', { details: { id } });
       return NextResponse.json({
         messages: [],
         total: 0,
@@ -75,14 +77,14 @@ export async function GET(
     const sessionId = evaluation.opencodeSessionId;
     const projectPath = evaluation.Project?.projectPath;
 
-    console.log(`[API Messages] Using SDK getSessionMessages for session:`, sessionId);
+    logger.debug(LOG_MODULES.EVALUATION, '使用 SDK getSessionMessages:', { details: { sessionId } });
 
     // 使用 SDK 获取消息
     const sdkMessages = await getSessionMessages(sessionId, {
       dir: projectPath ?? undefined,
     });
 
-    console.log(`[API Messages] SDK returned:`, {
+    logger.debug(LOG_MODULES.EVALUATION, 'SDK 返回结果:', { details: {
       sessionId,
       messagesCount: sdkMessages.length,
       firstThreeMessages: sdkMessages.slice(0, 3).map((msg: any) => ({
@@ -94,13 +96,13 @@ export async function GET(
         contentKeys: msg.content ? Object.keys(msg.content) : null,
         messageKeys: msg.message ? Object.keys(msg.message) : null,
       })),
-    });
+    } });
 
     // 转换消息格式为前端期望的统一格式
     const formattedMessages = sdkMessages.map((msg: any, index: number) => {
       // 详细日志前3条消息
       if (index < 3) {
-        console.log(`[API Messages] Message ${index}:`, {
+        logger.debug(LOG_MODULES.EVALUATION, `消息 ${index}:`, { details: {
           type: msg.type,
           role: msg.role,
           uuid: msg.uuid,
@@ -108,7 +110,7 @@ export async function GET(
           hasMessage: !!msg.message,
           hasContent: !!msg.message?.content,
           contentLength: Array.isArray(msg.message?.content) ? msg.message.content.length : 0,
-        });
+        } });
       }
 
       // SDK返回的消息格式：
@@ -164,12 +166,12 @@ export async function GET(
       : formattedMessages.slice(offset);
     const hasMore = limit ? offset + limit < total : false;
 
-    console.log(`[API Messages] Returning formatted messages:`, {
+    logger.debug(LOG_MODULES.EVALUATION, '返回格式化消息:', { details: {
       formattedCount: paginatedMessages.length,
       total,
       firstMessageId: paginatedMessages[0]?.id,
       lastMessageId: paginatedMessages[paginatedMessages.length - 1]?.id,
-    });
+    } });
 
     return NextResponse.json({
       messages: paginatedMessages,
@@ -179,7 +181,7 @@ export async function GET(
       limit: limit || null,
     });
   } catch (error) {
-    console.error('Get evaluation messages error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取评估消息错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

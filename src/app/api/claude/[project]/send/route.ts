@@ -6,6 +6,7 @@ import { NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { SessionManager } from '@/services/session-manager';
 import { ClaudeAgentService } from '@/services/ai/claude-agent';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function POST(
   request: Request,
@@ -60,7 +61,7 @@ export async function POST(
       response: response,
     });
   } catch (error) {
-    console.error('发送消息错误:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '发送消息错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

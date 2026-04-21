@@ -3,9 +3,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { promises as fs } from 'fs';
 import path from 'path';
 import os from 'os';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * 从会话目录的 JSONL 文件中解析 TODO 列表
@@ -33,7 +35,7 @@ async function getTodosFromSession(sessionId: string): Promise<any[]> {
           try {
             const record = JSON.parse(lines[i]);
             if (record.type === 'tool_use' && record.tool_name === 'TodoWrite' && record.tool_input?.todos) {
-              console.log('[TODO] Found TodoWrite with', record.tool_input.todos.length, 'todos');
+              logger.debug(LOG_MODULES.EVALUATION, '找到 TodoWrite:', { details: { count: record.tool_input.todos.length } });
               return record.tool_input.todos;
             }
           } catch {
@@ -45,7 +47,7 @@ async function getTodosFromSession(sessionId: string): Promise<any[]> {
       }
     }
   } catch (error) {
-    console.error('[TODO] Error reading session directory:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '读取会话目录错误:', { details: { error: String(error) } });
   }
   
   return [];
@@ -73,7 +75,7 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 获取评估会话并验证所有权
     let where: any = { id };
@@ -93,23 +95,23 @@ export async function GET(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
     if (!evaluation.opencodeSessionId) {
-      console.log('[TODO] No opencodeSessionId for evaluation:', id);
+      logger.debug(LOG_MODULES.EVALUATION, '评估会话没有 opencodeSessionId:', { details: { id } });
       return NextResponse.json({ todos: [] });
     }
 
-    console.log('[TODO] Fetching todos for session:', evaluation.opencodeSessionId);
+    logger.debug(LOG_MODULES.EVALUATION, '获取会话 TODO:', { details: { sessionId: evaluation.opencodeSessionId } });
 
     // 优先从数据库读取快照
     if (evaluation.todoList) {
       try {
         const todos = JSON.parse(evaluation.todoList);
         if (Array.isArray(todos) && todos.length > 0) {
-          console.log('[TODO] Returning', todos.length, 'todos from DB snapshot');
+          logger.debug(LOG_MODULES.EVALUATION, '从数据库快照返回 TODO:', { details: { count: todos.length } });
           return NextResponse.json({ todos, source: 'db' });
         }
       } catch {
@@ -120,11 +122,11 @@ export async function GET(
     // 数据库没有快照时，从会话文件中解析 TODO
     const todos = await getTodosFromSession(evaluation.opencodeSessionId);
 
-    console.log('[TODO] Returning', todos.length, 'todos from session file');
+    logger.debug(LOG_MODULES.EVALUATION, '从会话文件返回 TODO:', { details: { count: todos.length } });
 
     return NextResponse.json({ todos });
   } catch (error) {
-    console.error('Get todos error:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '获取 TODO 错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

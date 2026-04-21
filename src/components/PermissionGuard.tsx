@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasPermission } from '@/lib/permissions';
+import { useAuth } from '@/hooks/useAuth';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { AlertCircle } from 'lucide-react';
 
 interface PermissionGuardProps {
@@ -14,12 +14,6 @@ interface PermissionGuardProps {
   children: React.ReactNode;
   /** 自定义无权限时显示的内容 */
   fallback?: React.ReactNode;
-}
-
-interface UserInfo {
-  id: string;
-  roles?: string[];
-  permissions?: string[];
 }
 
 /**
@@ -41,51 +35,31 @@ interface UserInfo {
  */
 export function PermissionGuard({ permission, role, children, fallback }: PermissionGuardProps) {
   const router = useRouter();
-  const [user, setUser] = useState<UserInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const { isAuthenticated, loading, hasPermission, hasRole } = useAuth();
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
+  // 未认证时跳转登录页
+  if (!loading && !isAuthenticated) {
+    router.push('/login');
+    return null;
+  }
 
-    if (!token || !userStr) {
-      router.push('/login');
-      return;
-    }
-
-    try {
-      const userData = JSON.parse(userStr);
-      setUser(userData);
-    } catch (e) {
-      router.push('/login');
-      return;
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
+  // 加载中
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
 
   // 检查权限
-  if (permission) {
-    const hasAccess = hasPermission(user?.permissions, permission);
-    if (!hasAccess) {
-      return fallback || <AccessDenied />;
-    }
+  if (permission && !hasPermission(permission)) {
+    return fallback || <AccessDenied />;
   }
 
   // 检查角色
-  if (role) {
-    const hasRole = user?.roles?.includes(role);
-    if (!hasRole) {
-      return fallback || <AccessDenied />;
-    }
+  if (role && !hasRole(role)) {
+    return fallback || <AccessDenied />;
   }
 
   return <>{children}</>;
@@ -121,42 +95,18 @@ export function AccessDenied({ message = '您没有权限访问此页面' }: { m
 
 /**
  * 检查用户是否是管理员
+ * @deprecated 请使用 useAuth hook 替代：const { isAdmin } = useAuth()
  */
 export function useIsAdmin(): boolean {
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setIsAdmin(user.roles?.includes('admin') || false);
-      } catch (e) {
-        setIsAdmin(false);
-      }
-    }
-  }, []);
-
+  const { isAdmin } = useAuth();
   return isAdmin;
 }
 
 /**
  * 检查用户是否有指定权限
+ * @deprecated 请使用 useAuth hook 替代：const { hasPermission } = useAuth()
  */
 export function useHasPermission(permission: string): boolean {
-  const [hasAccess, setHasAccess] = useState(false);
-
-  useEffect(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      try {
-        const user = JSON.parse(userStr);
-        setHasAccess(hasPermission(user.permissions, permission));
-      } catch (e) {
-        setHasAccess(false);
-      }
-    }
-  }, [permission]);
-
-  return hasAccess;
+  const { hasPermission: checkPermission } = useAuth();
+  return checkPermission(permission);
 }

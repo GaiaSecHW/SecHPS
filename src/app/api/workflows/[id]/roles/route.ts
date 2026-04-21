@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { AuditLogger } from '@/lib/audit/logger';
 
 // 获取工作流的角色列表
@@ -23,12 +23,12 @@ export async function GET(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 构建查询条件
     let where: any = { id };
     
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：可以查看自己的 + 公开的 + 被分享的
       where.OR = [
         { userId: payload.userId },
@@ -90,7 +90,7 @@ export async function POST(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查工作流是否存在
     const workflow = await prisma.workflow.findUnique({
@@ -103,7 +103,7 @@ export async function POST(
     }
 
     // 检查权限：只能更新自己的，管理员可以更新所有
-    if (!isAdmin && workflow.userId !== payload.userId) {
+    if (!userIsAdmin && workflow.userId !== payload.userId) {
       logger.permissionDenied(LOG_MODULES.WORKFLOW, payload, 'WORKFLOW_UPDATE', id, { workflowName: workflow.name });
       return NextResponse.json({ error: '禁止访问：只能更新自己创建的工作流' }, { status: 403 });
     }

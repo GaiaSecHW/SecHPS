@@ -3,6 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/code/:projectId/knowledge - 获取代码知识
 export async function GET(
@@ -25,11 +27,11 @@ export async function GET(
     const { projectId } = await params;
 
     // 验证项目所有权
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        ...(isAdmin ? {} : { userId: payload.userId }),
+        ...(userIsAdmin ? {} : { userId: payload.userId }),
       },
     });
 
@@ -70,7 +72,7 @@ export async function GET(
       pageSize,
     });
   } catch (error) {
-    console.error('获取代码知识错误:', error);
+    logger.errorNoUser(LOG_MODULES.CODE, '获取代码知识错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

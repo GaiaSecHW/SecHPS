@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
@@ -13,6 +13,11 @@ import {
   Power,
 } from 'lucide-react';
 import { AdminGuard } from '@/components/PermissionGuard';
+import { useAuth } from '@/hooks/useAuth';
+import { useApiFetch } from '@/hooks/useApiFetch';
+import { apiDelete } from '@/lib/api-client';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { ErrorAlert } from '@/components/ui/Alert';
 
 interface Tool {
   id: string;
@@ -26,6 +31,10 @@ interface Tool {
   requiresPermission: boolean;
   timeout: number;
   createdAt: string;
+}
+
+interface ToolsResponse {
+  tools: Tool[];
 }
 
 const categoryLabels: Record<string, string> = {
@@ -46,42 +55,11 @@ export default function ToolsPage() {
 
 function ToolsPageContent() {
   const router = useRouter();
-  const [tools, setTools] = useState<Tool[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [user, setUser] = useState<{ roles?: string[] } | null>(null);
-
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      setUser(JSON.parse(userData));
-    }
-    fetchTools();
-  }, []);
-
-  const fetchTools = async () => {
-    try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await fetch('/api/tools', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('获取工具列表失败');
-      }
-
-      const data = await response.json();
-      setTools(data.tools || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '获取数据失败');
-    } finally {
-      setLoading(false);
-    }
-  };
+  
+  const { data, loading, error, refetch } = useApiFetch<ToolsResponse>('/api/tools');
+  const tools = data?.tools || [];
 
   const filteredTools = tools.filter(
     (tool) =>
@@ -90,38 +68,25 @@ function ToolsPageContent() {
       tool.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const isAdmin = user?.roles?.includes('admin');
-
   const handleDelete = async (toolId: string, toolName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm(`确定要删除工具「${toolName}」吗？此操作不可恢复。`)) {
       return;
     }
 
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/tools/${toolId}`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || '删除失败');
-      }
-
-      fetchTools();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : '删除失败');
+    const result = await apiDelete(`/api/tools/${toolId}`);
+    if (result.error) {
+      toast.error(result.error);
+    } else {
+      toast.success('删除成功');
+      refetch();
     }
   };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }
@@ -173,9 +138,7 @@ function ToolsPageContent() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
+        <ErrorAlert>{error}</ErrorAlert>
       )}
 
       {/* Tools List */}

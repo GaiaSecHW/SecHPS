@@ -17,6 +17,7 @@ import {
   Code,
   Shield,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 // Types from API response
 interface DuplicateGroupMember {
@@ -83,14 +84,6 @@ const resolutionLabels: Record<string, string> = {
   keep_all: '保留全部',
   deleted_duplicates: '已删除重复',
 };
-
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
-}
 
 export default function DuplicateGroupsPage() {
   return (
@@ -167,7 +160,7 @@ function DuplicateGroupsPageContent() {
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

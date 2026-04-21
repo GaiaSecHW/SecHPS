@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import {
   Save,
   X,
@@ -307,11 +308,25 @@ export default function FileEditor({ projectId, filePath, language, onClose, onS
     return SYNTAX_HIGHLIGHTS[language] || { keywords: [], color: 'text-gray-600' };
   }, [language]);
 
+  // HTML 转义函数 - 防止 XSS 攻击
+  const escapeHtml = useCallback((str: string) => {
+    const htmlEntities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return str.replace(/[&<>"']/g, (char) => htmlEntities[char] || char);
+  }, []);
+
   // 简单的语法高亮（用于显示）
   const getHighlightedLine = useCallback((line: string) => {
     if (!isEditing) {
+      // 首先对原始内容进行 HTML 转义，防止 XSS
+      let highlighted = escapeHtml(line);
+      
       // 高亮关键字
-      let highlighted = line;
       syntaxConfig.keywords.forEach((keyword) => {
         const regex = new RegExp(`\\b(${keyword})\\b`, 'g');
         highlighted = highlighted.replace(regex, `<span class="${syntaxConfig.color} font-medium">$1</span>`);
@@ -337,7 +352,7 @@ export default function FileEditor({ projectId, filePath, language, onClose, onS
       return highlighted;
     }
     return line;
-  }, [isEditing, language, syntaxConfig]);
+  }, [isEditing, language, syntaxConfig, escapeHtml]);
 
   // 加载状态
   if (loading) {
@@ -533,7 +548,7 @@ export default function FileEditor({ projectId, filePath, language, onClose, onS
                 <div
                   key={i}
                   className="hover:bg-gray-50"
-                  dangerouslySetInnerHTML={{ __html: getHighlightedLine(line) || '&nbsp;' }}
+                  dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getHighlightedLine(line) || '&nbsp;') }}
                 />
               ))}
             </pre>

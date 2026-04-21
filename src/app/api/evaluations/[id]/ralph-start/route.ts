@@ -8,35 +8,34 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { createRalphLoopAgent, parseAndSaveResults } from '@/services/evaluation';
+import { generateIndexedId } from '@/lib/id-generator';
 import type { RalphLoopAgentConfig, RalphLoopAgentCallbacks } from '@/services/evaluation';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // ============================================
 // 日志工具
 // ============================================
 
-const LOG_PREFIX = '[RalphStart]';
-
 function logInfo(message: string, ...args: unknown[]) {
-  console.log(`${LOG_PREFIX} [INFO] ${new Date().toISOString()} - ${message}`, ...args);
+  logger.debug(LOG_MODULES.EVALUATION, message, { details: args.length > 0 ? args : undefined });
 }
 
 function logWarn(message: string, ...args: unknown[]) {
-  console.warn(`${LOG_PREFIX} [WARN] ${new Date().toISOString()} - ${message}`, ...args);
+  logger.warn(LOG_MODULES.EVALUATION, message, { details: args.length > 0 ? args : undefined });
 }
 
 function logError(message: string, ...args: unknown[]) {
-  console.error(`${LOG_PREFIX} [ERROR] ${new Date().toISOString()} - ${message}`, ...args);
+  logger.errorNoUser(LOG_MODULES.EVALUATION, message, { details: args.length > 0 ? args : undefined });
 }
 
 function logSuccess(message: string, ...args: unknown[]) {
-  console.log(`${LOG_PREFIX} [SUCCESS] ${new Date().toISOString()} - ${message}`, ...args);
+  logger.info(LOG_MODULES.EVALUATION, message, { details: args.length > 0 ? args : undefined });
 }
 
 function logSeparator(title: string) {
-  console.log(`${LOG_PREFIX} ${'='.repeat(50)}`);
-  console.log(`${LOG_PREFIX} ${title}`);
-  console.log(`${LOG_PREFIX} ${'='.repeat(50)}`);
+  logger.debug(LOG_MODULES.EVALUATION, `${'='.repeat(50)} ${title} ${'='.repeat(50)}`);
 }
 
 /**
@@ -105,7 +104,7 @@ export async function POST(
     const { id } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     let where: any = { id };
     
@@ -126,7 +125,7 @@ export async function POST(
     }
 
     // 归属校验（管理员绕过）
-    if (!isAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -199,15 +198,15 @@ export async function POST(
         maxCost,
         verifyCompletion,
         onIterationStart: (iteration) => {
-          console.log(`[Ralph] 开始第 ${iteration} 次迭代`);
+          logger.debug(LOG_MODULES.EVALUATION, `开始第 ${iteration} 次迭代`);
         },
         onIterationEnd: async (iteration, duration) => {
-          console.log(`[Ralph] 第 ${iteration} 次迭代完成，耗时 ${duration}ms`);
+          logger.debug(LOG_MODULES.EVALUATION, `第 ${iteration} 次迭代完成，耗时 ${duration}ms`);
           // 保存迭代记录到数据库
           try {
             await prisma.evaluationIteration.create({
               data: {
-                id: `iter-${Date.now()}-${iteration}-${Math.random().toString(36).substr(2, 9)}`,
+                id: generateIndexedId('iter', iteration),
                 evaluationSessionId: id,
                 iterationNumber: iteration,
                 status: 'completed',
@@ -221,9 +220,7 @@ export async function POST(
           }
         },
         onContextSummarized: (data) => {
-          console.log(
-            `[Ralph] 上下文已总结: ${data.summarizedIterations} 次迭代，节省 ${data.tokensSaved} tokens`
-          );
+          logger.debug(LOG_MODULES.EVALUATION, `上下文已总结: ${data.summarizedIterations} 次迭代，节省 ${data.tokensSaved} tokens`);
         },
       }
     );
@@ -272,16 +269,16 @@ export async function POST(
         void text;
       },
       onToolCall: (name, parameters) => {
-        console.log(`[Ralph] 工具调用: ${name}`, Object.keys(parameters));
+        logger.debug(LOG_MODULES.EVALUATION, `工具调用: ${name}`, { details: { keys: Object.keys(parameters) } });
       },
       onToolResult: (name, result) => {
-        console.log(`[Ralph] 工具结果: ${name}`, result);
+        logger.debug(LOG_MODULES.EVALUATION, `工具结果: ${name}`, { details: { result } });
       },
       onComplete: (fullResponse) => {
-        console.log('[Ralph] 单次迭代完成，文本长度:', fullResponse.length);
+        logger.debug(LOG_MODULES.EVALUATION, '单次迭代完成，文本长度:', { details: { length: fullResponse.length } });
       },
       onError: (error) => {
-        console.error('[Ralph] 错误:', error);
+        logger.errorNoUser(LOG_MODULES.EVALUATION, '错误:', { details: { error: error.message } });
         prisma.evaluationSession.update({
           where: { id },
           data: {
@@ -290,7 +287,7 @@ export async function POST(
             completedAt: new Date(),
           },
         }).catch((err) => {
-          console.error('[Ralph] 更新失败状态出错:', err);
+          logger.errorNoUser(LOG_MODULES.EVALUATION, '更新失败状态出错:', { details: { error: String(err) } });
         });
       },
       onRalphComplete: async (result) => {
@@ -340,7 +337,7 @@ export async function POST(
       context,
       callbacks,
     }).catch(async (error) => {
-      console.error('[Ralph] 循环执行失败:', error);
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '循环执行失败:', { details: { error: error instanceof Error ? error.message : String(error) } });
       await prisma.evaluationSession.update({
         where: { id },
         data: {
@@ -365,7 +362,7 @@ export async function POST(
       },
     });
   } catch (error) {
-    console.error('[Ralph Start] 错误:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, 'Ralph 启动错误:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       {
         error: '服务器内部错误',

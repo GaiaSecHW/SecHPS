@@ -2,29 +2,21 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 import type { AlertCondition } from '@/types/monitoring';
 
 // GET /api/admin/alerts - 获取告警规则列表
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_READ)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
 
     const rules = await prisma.alertRule.findMany({
       include: {
@@ -52,23 +44,13 @@ export async function GET(request: Request) {
 
 // POST /api/admin/alerts - 创建告警规则
 export async function POST(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponseNested(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ details: { error: '未授权' } }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ details: { error: '无效的令牌' } }, { status: 401 });
-    }
-
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     const body = await request.json();
     const { name, description, metricType, condition, severity, cooldownPeriod, notificationChannels, tags } = body;
 
@@ -78,7 +60,7 @@ export async function POST(request: Request) {
 
     const rule = await prisma.alertRule.create({
       data: {
-        id: `alert-rule-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('alert-rule'),
         name,
         description,
         metricType,
@@ -93,7 +75,7 @@ export async function POST(request: Request) {
 
     await prisma.auditLog.create({
       data: {
-        id: `audit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('audit'),
         userId: payload.userId,
         action: 'alert_rule_create',
         resource: rule.id,

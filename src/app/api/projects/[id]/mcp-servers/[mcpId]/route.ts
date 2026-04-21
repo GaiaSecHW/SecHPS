@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/projects/:id/mcp-servers/:mcpId - 获取单个 MCP 服务器配置
 export async function GET(
@@ -9,18 +10,12 @@ export async function GET(
 ) {
   try {
     const { id: projectId, mcpId } = await params;
-    const authHeader = request.headers.get('authorization');
-
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 验证项目是否存在且属于用户
     const project = await prisma.project.findFirst({
@@ -48,7 +43,7 @@ export async function GET(
 
     return NextResponse.json({ mcpServer });
   } catch (error) {
-    console.error('Get MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '获取 MCP 服务器错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -63,18 +58,12 @@ export async function PUT(
 ) {
   try {
     const { id: projectId, mcpId } = await params;
-    const authHeader = request.headers.get('authorization');
-
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 验证项目是否存在且属于用户
     const project = await prisma.project.findFirst({
@@ -120,7 +109,7 @@ export async function PUT(
 
     return NextResponse.json({ mcpServer });
   } catch (error) {
-    console.error('Update MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '更新 MCP 服务器错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -135,18 +124,12 @@ export async function DELETE(
 ) {
   try {
     const { id: projectId, mcpId } = await params;
-    const authHeader = request.headers.get('authorization');
-
-    if (!authHeader) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // 使用统一认证中间件
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     // 验证项目是否存在且属于用户
     const project = await prisma.project.findFirst({
@@ -179,7 +162,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: 'MCP server deleted successfully' });
   } catch (error) {
-    console.error('Delete MCP server error:', error);
+    logger.errorNoUser(LOG_MODULES.MCP, '删除 MCP 服务器错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

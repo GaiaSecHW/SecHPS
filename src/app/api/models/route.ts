@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
@@ -32,27 +33,21 @@ function formatModel(model: any, includeApiKey: boolean = false) {
 // 普通用户：只能看到自己创建的模型 + 公开的模型
 // 管理员：可以看到所有模型
 export async function GET(request: Request) {
+  // 使用统一认证中间件（无权限要求，只需登录）
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const isActiveParam = searchParams.get('isActive');
     const forEvaluation = searchParams.get('forEvaluation') === 'true';
 
     // 检查是否是管理员
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 构建查询条件
     let where: any = {};
@@ -69,7 +64,7 @@ export async function GET(request: Request) {
         { isPublic: true },           // 公开的
         { userId: null },             // 系统级模型（管理员创建的公共模型）
       ];
-    } else if (isAdmin) {
+    } else if (userIsAdmin) {
       // 管理员可以看到所有模型
       // 不添加额外的userId过滤
     } else {
@@ -114,20 +109,14 @@ export async function GET(request: Request) {
 
 // 创建新的模型配置（个人模型）
 export async function POST(request: Request) {
+  // 使用统一认证中间件
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     const body = await request.json();
     const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
 
@@ -182,10 +171,10 @@ export async function POST(request: Request) {
     }
 
     // 检查是否是管理员
-    const isAdmin = payload.roles?.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 验证管理员专属字段
-    if (isSystemModel && !isAdmin) {
+    if (isSystemModel && !userIsAdmin) {
       return NextResponse.json(
         { error: '只有管理员可以创建系统模型' },
         { status: 403 }
@@ -200,7 +189,7 @@ export async function POST(request: Request) {
     }
 
     // 如果设置为默认模型，先取消其他默认模型
-    if (isDefault && isAdmin) {
+    if (isDefault && userIsAdmin) {
       await prisma.modelConfig.updateMany({
         where: { isDefault: true },
         data: { isDefault: false },
@@ -210,7 +199,7 @@ export async function POST(request: Request) {
     // 创建模型配置
     const model = await prisma.modelConfig.create({
       data: {
-        id: `model-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('model'),
         userId: isSystemModel ? null : payload.userId,  // 系统模型 userId 为 null
         name,
         providerType: providerType || 'openai',

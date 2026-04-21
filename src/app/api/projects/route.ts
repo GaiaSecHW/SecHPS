@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { generateId } from '@/lib/id-generator';
 import { PERMISSIONS } from '@/types/permissions';
 import { mkdir, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status');
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     const where: any = {};
     if (status) {
@@ -28,7 +29,7 @@ export async function GET(request: Request) {
     }
 
     // 普通用户可以看到自己的 + 公开共享的项目，管理员可以看所有项目
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       where.OR = [
         { userId: payload.userId },  // 自己创建的
         { isPublic: true },           // 公开共享的
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
     // 创建项目记录
     const project = await prisma.project.create({
       data: {
-        id: `proj-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('proj'),
         name: name.trim(),
         description: description || null,
         projectPath: projectDir,
@@ -175,7 +176,7 @@ export async function POST(request: Request) {
     for (const file of savedFiles) {
       await prisma.projectFile.create({
         data: {
-          id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId('file'),
           projectId: project.id,
           fileName: file.name,
           filePath: file.path,
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
             if (perm.toolPattern && perm.permission) {
               await prisma.toolPermission.create({
                 data: {
-                  id: `toolperm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                  id: generateId('toolperm'),
                   projectId: project.id,
                   toolPattern: perm.toolPattern,
                   permission: perm.permission,

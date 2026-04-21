@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { AuditLogger } from '@/lib/audit/logger';
 
 // 更新角色
@@ -22,7 +22,7 @@ export async function PATCH(
     const { id, roleId } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查工作流是否存在
     const workflow = await prisma.workflow.findUnique({
@@ -35,7 +35,7 @@ export async function PATCH(
     }
 
     // 检查权限：只能更新自己的，管理员可以更新所有
-    if (!isAdmin && workflow.userId !== payload.userId) {
+    if (!userIsAdmin && workflow.userId !== payload.userId) {
       logger.permissionDenied(LOG_MODULES.WORKFLOW, payload, 'WORKFLOW_UPDATE', id, { workflowName: workflow.name });
       return NextResponse.json({ error: '禁止访问：只能更新自己创建的工作流' }, { status: 403 });
     }
@@ -113,7 +113,7 @@ export async function DELETE(
     const { id, roleId } = await params;
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 检查工作流是否存在
     const workflow = await prisma.workflow.findUnique({
@@ -126,7 +126,7 @@ export async function DELETE(
     }
 
     // 检查权限：只能删除自己的，管理员可以删除所有
-    if (!isAdmin && workflow.userId !== payload.userId) {
+    if (!userIsAdmin && workflow.userId !== payload.userId) {
       logger.permissionDenied(LOG_MODULES.WORKFLOW, payload, 'WORKFLOW_UPDATE', id, { workflowName: workflow.name });
       return NextResponse.json({ error: '禁止访问：只能更新自己创建的工作流' }, { status: 403 });
     }

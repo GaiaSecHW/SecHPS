@@ -2,25 +2,20 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { generateId } from '@/lib/id-generator';
 
 // GET /api/admin/categories - 获取漏洞分类列表
 export async function GET(request: Request) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
     // 从 VulnerabilityCategory 表获取分类列表
     const categories = await prisma.vulnerabilityCategory.findMany({
       where: { isActive: true },
@@ -45,24 +40,13 @@ export async function GET(request: Request) {
 
 // PUT /api/admin/categories - 更新漏洞分类列表
 export async function PUT(request: Request) {
+  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
+  if (!auth.success) {
+    return authErrorResponse(auth);
+  }
+  const payload = auth.payload;
+
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
-
-    // 检查管理员权限
-    if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
-      return NextResponse.json({ error: '禁止访问 - 需要管理员权限' }, { status: 403 });
-    }
-
     const body = await request.json();
     const { categories } = body;
 
@@ -126,7 +110,7 @@ export async function PUT(request: Request) {
             updatedAt: new Date(),
           },
           create: {
-            id: cat.id || `cat-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: cat.id || generateId('cat'),
             value: cat.value,
             label: cat.label,
             description: cat.description,

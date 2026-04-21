@@ -16,6 +16,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
+import { extractErrorMessage } from '@/lib/api-client';
 
 // 文件树节点接口
 interface FileTreeNode {
@@ -105,8 +106,8 @@ export default function FileBrowser({ projectId, onFileSelect, selectedPath }: F
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: '获取文件列表失败' }));
-        setError(data.error || '获取文件列表失败');
+        const data = await response.json().catch(() => ({}));
+        setError(extractErrorMessage(data, '获取文件列表失败'));
         setLoading(false);
         return;
       }

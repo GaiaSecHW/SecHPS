@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 interface Workflow {
   id: string;
@@ -412,7 +413,7 @@ export default function WorkflowsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

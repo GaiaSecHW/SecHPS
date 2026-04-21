@@ -9,6 +9,7 @@ import { ProjectDiscovery } from '@/services/session-manager';
 import { readdir, stat } from 'fs/promises';
 import { join, extname, relative } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 语言扩展名映射
 const LANGUAGE_MAP: Record<string, string> = {
@@ -117,7 +118,7 @@ export async function GET(
       projectName: projectPath.split(/[\\/]/).pop() || projectName,
     });
   } catch (error) {
-    console.error('Browse error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '浏览文件错误:', { details: error });
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

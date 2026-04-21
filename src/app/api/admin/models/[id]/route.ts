@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 获取单个模型配置
 export async function GET(
@@ -37,8 +39,8 @@ export async function GET(
     }
 
     // 权限检查：管理员可查看所有，普通用户只能查看自己的或公开的模型
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
-    if (!isAdmin) {
+    const userIsAdmin = isAdmin(payload);
+    if (!userIsAdmin) {
       // 检查是否是自己的模型或公开模型
       if (model.userId !== payload.userId && !model.isPublic) {
         return NextResponse.json({ error: '无权访问此模型配置' }, { status: 403 });
@@ -62,7 +64,7 @@ export async function GET(
 
     return NextResponse.json({ model: formattedModel });
   } catch (error) {
-    console.error('获取模型配置错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, '获取模型配置错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
@@ -103,8 +105,8 @@ export async function PUT(
     }
 
     // 权限检查：管理员可修改所有，普通用户只能修改自己的模型
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
-    if (!isAdmin) {
+    const userIsAdmin = isAdmin(payload);
+    if (!userIsAdmin) {
       if (existingModel.userId !== payload.userId) {
         return NextResponse.json({ error: '无权修改此模型配置' }, { status: 403 });
       }
@@ -180,9 +182,9 @@ export async function PUT(
 
     return NextResponse.json({ model: formattedModel });
   } catch (error) {
-    console.error('更新模型配置错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, '更新模型配置错误:', { details: error });
     return NextResponse.json(
-      { error: '服务器内部错误', details: String(error) },
+      { error: '服务器内部错误' },
       { status: 500 }
     );
   }
@@ -222,8 +224,8 @@ export async function DELETE(
     }
 
     // 权限检查：管理员可删除所有，普通用户只能删除自己的模型
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
-    if (!isAdmin && existingModel.userId !== payload.userId) {
+    const userIsAdmin = isAdmin(payload);
+    if (!userIsAdmin && existingModel.userId !== payload.userId) {
       return NextResponse.json({ error: '无权删除此模型配置' }, { status: 403 });
     }
 
@@ -234,7 +236,7 @@ export async function DELETE(
 
     return NextResponse.json({ message: '模型配置已删除' });
   } catch (error) {
-    console.error('删除模型配置错误:', error);
+    logger.errorNoUser(LOG_MODULES.MODEL, '删除模型配置错误:', { details: error });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 
 // Types from API response
@@ -106,14 +107,6 @@ const statusLabels: Record<string, string> = {
   completed: '已完成',
 };
 
-function LoadingSpinner() {
-  return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
-    </div>
-  );
-}
-
 export default function MergeCandidatesPage() {
   return (
     <Suspense fallback={<LoadingSpinner />}>
@@ -181,7 +174,7 @@ function MergeCandidatesPageContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-t-2 border-blue-500"></div>
+        <LoadingSpinner size="xl" />
       </div>
     );
   }

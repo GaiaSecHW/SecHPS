@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { readdir, stat } from 'fs/promises';
 import { join, extname, relative } from 'path';
 import { existsSync } from 'fs';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // 语言扩展名映射
 const LANGUAGE_MAP: Record<string, string> = {
@@ -191,7 +192,7 @@ async function scanDirectory(
     }
   } catch (error) {
     // 忽略无法访问的目录
-    console.error(`Error scanning directory ${dirPath}:`, error);
+    logger.errorNoUser(LOG_MODULES.FILE, '扫描目录错误:', { details: { dirPath, error: String(error) } });
   }
 
   return result;
@@ -287,7 +288,7 @@ export async function GET(
       truncated: entryCount.count >= Math.min(maxEntries, 2000),
     });
   } catch (error) {
-    console.error('Browse error:', error);
+    logger.errorNoUser(LOG_MODULES.FILE, '浏览错误:', { details: { error: String(error) } });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

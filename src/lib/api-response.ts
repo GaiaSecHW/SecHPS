@@ -17,6 +17,39 @@ const DEFAULT_MESSAGES = {
 };
 
 /**
+ * 从 API 响应中提取错误消息
+ * 支持两种格式：{ error: 'message' } 和 { details: { error: 'message' } }
+ * 
+ * @param data - API 响应数据
+ * @param fallback - 默认错误消息
+ * @returns 错误消息字符串
+ * 
+ * @example
+ * const data = await response.json();
+ * const errorMsg = extractErrorMessage(data, '操作失败');
+ */
+export function extractErrorMessage(data: any, fallback: string = '操作失败'): string {
+  if (!data) return fallback;
+  
+  // 格式 A: { error: 'message' }
+  if (typeof data.error === 'string') {
+    return data.error;
+  }
+  
+  // 格式 B: { details: { error: 'message' } }
+  if (data.details?.error) {
+    return data.details.error;
+  }
+  
+  // 格式 C: { details: 'message' }
+  if (typeof data.details === 'string') {
+    return data.details;
+  }
+  
+  return fallback;
+}
+
+/**
  * 401 未授权响应
  * 
  * @param message - 可选的自定义错误消息，默认为 '未授权'
@@ -139,4 +172,55 @@ export function created<T>(data: T): NextResponse {
  */
 export function noContent(): NextResponse {
   return new NextResponse(null, { status: 204 });
+}
+
+/**
+ * 统一的错误处理工具函数
+ * 用于 catch 块中，安全地处理错误并返回标准响应
+ * 
+ * @param error - 捕获的错误（unknown 类型）
+ * @param context - 错误上下文描述（用于日志）
+ * @param logger - 可选的日志函数
+ * @returns NextResponse 500 错误响应
+ * 
+ * @example
+ * } catch (error: unknown) {
+ *   return handleApiError(error, '获取用户列表');
+ * }
+ */
+export function handleApiError(
+  error: unknown,
+  context: string,
+  logger?: (message: string, details?: unknown) => void
+): NextResponse {
+  // 提取错误消息
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  
+  // 记录错误（服务端日志）
+  if (logger) {
+    logger(`${context}失败`, { error: errorMessage });
+  } else {
+    console.error(`[API Error] ${context}:`, error);
+  }
+  
+  // 返回安全的错误响应（不泄露内部细节）
+  return NextResponse.json(
+    { error: '服务器内部错误' },
+    { status: 500 }
+  );
+}
+
+/**
+ * 嵌套格式的错误响应（向后兼容）
+ * 用于需要保持 `{ details: { error: '...' } }` 格式的旧 API
+ * 
+ * @param message - 错误消息
+ * @param status - HTTP 状态码，默认 500
+ * @returns NextResponse
+ */
+export function nestedError(message: string, status: number = 500): NextResponse {
+  return NextResponse.json(
+    { details: { error: message } },
+    { status }
+  );
 }

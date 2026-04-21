@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { routeRequestWithDefaultModel, getDefaultModelInfo } from '@/lib/model-client';
 import { analyzeSkillOverlap, getHighRiskGroups } from '@/services/skill-overlap-analysis';
 import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * POST /api/skills/predict-tasks
@@ -12,18 +13,12 @@ import type { SimilarSkill, OverlapType } from '@/services/skill-similarity';
  */
 export async function POST(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // Authenticate
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const { payload } = auth;
 
     const body = await request.json();
     const { taskName, taskDescription, nodeId, topK = 5 } = body;
@@ -39,7 +34,7 @@ export async function POST(request: Request) {
     // 创建任务
     const task = await prisma.skillPredictionTask.create({
       data: {
-        id: `predtask-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('predtask'),
         userId: payload.userId,
         nodeId,
         taskName,
@@ -71,18 +66,12 @@ export async function POST(request: Request) {
  */
 export async function GET(request: Request) {
   try {
-    // 验证 Token
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    // Authenticate
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const { payload } = auth;
 
     // 获取查询参数
     const { searchParams } = new URL(request.url);
@@ -323,7 +312,7 @@ async function executePredictionTask(taskId: string) {
     // 同时保存到 SkillPrediction 表
     await prisma.skillPrediction.create({
       data: {
-        id: `pred-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId('pred'),
         userId: task.userId,
         taskName: task.taskName,
         taskDescription: task.taskDescription,
@@ -716,7 +705,7 @@ async function triggerObservationLog(params: {
       for (const skill of group.skills) {
         await prisma.skillObservationLog.create({
           data: {
-            id: `obslog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            id: generateId('obslog'),
             skillId: skill.skillId,
             triggerType: 'overlap_detected',
             triggerContext: JSON.stringify({
@@ -752,7 +741,7 @@ async function triggerObservationLog(params: {
         for (const skill of group.skills) {
           await prisma.skillObservationLog.create({
             data: {
-              id: `obslog-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: generateId('obslog'),
               skillId: skill.skillId,
               triggerType: 'similarity_warning',
               triggerContext: JSON.stringify({

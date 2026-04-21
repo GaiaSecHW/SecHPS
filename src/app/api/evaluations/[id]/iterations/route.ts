@@ -5,9 +5,9 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
-import { hasPermission } from '@/lib/permissions';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
  * GET /api/evaluations/[id]/iterations
@@ -135,7 +135,7 @@ export async function GET(
       evaluationStatus: evaluation.status,
     });
   } catch (error) {
-    console.error('[Iterations API] 错误:', error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '迭代历史查询错误:', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
       {
         error: '服务器内部错误',

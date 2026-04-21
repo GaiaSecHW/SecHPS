@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { generateId, ID_PREFIXES } from '@/lib/id-generator';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
       // 创建用户
       const newUser = await tx.user.create({
         data: {
-          id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId(ID_PREFIXES.USER),
           email,
           username,
           passwordHash,
@@ -184,7 +185,7 @@ export async function POST(request: Request) {
         if (roleRecords.length > 0) {
           await tx.userRole.createMany({
             data: roleRecords.map((role, index) => ({
-              id: `userrole-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+              id: `${generateId(ID_PREFIXES.USER_ROLE)}-${index}`,
               userId: newUser.id,
               roleId: role.id,
             })),
@@ -199,7 +200,7 @@ export async function POST(request: Request) {
         if (defaultRole) {
           await tx.userRole.create({
             data: {
-              id: `userrole-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              id: generateId(ID_PREFIXES.USER_ROLE),
               userId: newUser.id,
               roleId: defaultRole.id,
             },
@@ -213,7 +214,7 @@ export async function POST(request: Request) {
     // 记录审计日志（放在事务外，避免事务失败也记录审计）
     await prisma.auditLog.create({
           data: {
-            id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: generateId(ID_PREFIXES.AUDIT),
             userId: payload.userId,
             action: 'user_create',
             resource: user.id,
@@ -237,9 +238,9 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.USER, '创建用户失败', { details: { error: String(error) } });
+    logger.errorNoUser(LOG_MODULES.USER, '创建用户失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json(
-      { details: { error: '服务器内部错误', details: String(error) } },
+      { details: { error: '服务器内部错误' } },
       { status: 500 }
     );
   }

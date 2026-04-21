@@ -3,7 +3,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken } from '@/lib/auth';
+import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/messages/[id] - 获取消息详情
 export async function GET(
@@ -11,28 +12,22 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    const auth = authenticateRequest(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const payload = auth.payload;
 
     const { id } = await params;
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
 
     // 检查是否是管理员
-    const isAdmin = Array.isArray(payload.roles) && payload.roles.includes('admin');
+    const userIsAdmin = isAdmin(payload);
 
     // 构建查询条件
     let where: any = { id };
-    if (!isAdmin) {
+    if (!userIsAdmin) {
       // 普通用户：通过 SessionMessage.EvaluationSession.Project.userId 验证所有权
       where.EvaluationSession = { Project: { userId: payload.userId } };
     }
@@ -97,7 +92,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error('Get message error:', error);
+    logger.errorNoUser(LOG_MODULES.SESSION, '获取消息错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
