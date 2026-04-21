@@ -449,6 +449,7 @@ export default function WorkflowEditPage() {
                 readOnly={!canEdit}
                 hideTriggers={true}
                 onRolesChange={fetchRoles}
+                isFSM={true}
               />
             </div>
           </div>
