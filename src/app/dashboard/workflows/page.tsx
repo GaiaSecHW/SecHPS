@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User, Layers } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -20,6 +20,7 @@ interface Workflow {
   thumbnail?: string;
   techStack?: string[];
   isPublic: boolean;
+  workflowType?: string;
   nodeCount: number;
   edgeCount: number;
   createdAt: string;
@@ -47,8 +48,36 @@ export default function WorkflowsPage() {
   const [creating, setCreating] = useState(false);
   const [updating, setUpdating] = useState(false);
   
+  // FSM 工作流相关状态
+  const [workflowType, setWorkflowType] = useState<'dag' | 'fsm'>('fsm');
+  const [fsmTemplates, setFsmTemplates] = useState<Array<{ id: string; name: string; displayName: string; description?: string }>>([]);
+  const [selectedFsmTemplateId, setSelectedFsmTemplateId] = useState<string>('');
+  const [loadingFsmTemplates, setLoadingFsmTemplates] = useState(false);
+  
   // 使用 Hook 获取技术栈选项
   const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds();
+
+  // 获取 FSM 模板列表
+  const fetchFsmTemplates = async () => {
+    setLoadingFsmTemplates(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/admin/fsm-templates', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setFsmTemplates(data.templates || data || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch FSM templates:', err);
+    } finally {
+      setLoadingFsmTemplates(false);
+    }
+  };
 
   useEffect(() => {
     // 检查是否是管理员
@@ -132,6 +161,7 @@ export default function WorkflowsPage() {
           description: workflowDescription,
           techStack: workflowTechStack,
           isPublic: workflowIsPublic,
+          workflowType,
         }),
       });
 
@@ -147,6 +177,8 @@ export default function WorkflowsPage() {
       setWorkflowDescription('');
       setWorkflowTechStack([]);
       setWorkflowIsPublic(false);
+      setWorkflowType('fsm');
+      setSelectedFsmTemplateId('');
       await fetchWorkflows();
     } catch (err) {
       toast.error('网络错误，请重试');
@@ -548,7 +580,8 @@ export default function WorkflowsPage() {
               {workflow.thumbnail && (
                 <div className="h-32 bg-gray-100 relative">
                   <img
-                    src={workflow.thumbnail.startsWith('data:') ? workflow.thumbnail : `data:image/png;base64,${workflow.thumbnail}`}
+                    src={workflow.thumbnail.startsWith('data:') ? workflow.thumbnail : 
+                         (workflow.thumbnail.startsWith('PHN2Z') ? `data:image/svg+xml;base64,${workflow.thumbnail}` : `data:image/png;base64,${workflow.thumbnail}`)}
                     alt={workflow.name}
                     className="w-full h-full object-cover"
                   />
@@ -563,6 +596,16 @@ export default function WorkflowsPage() {
                       <h3 className="text-lg font-semibold text-gray-900 truncate">
                         {workflow.name}
                       </h3>
+                      {/* 编排类型标签 */}
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                          workflow.workflowType === 'fsm'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}
+                      >
+                        {workflow.workflowType === 'fsm' ? '威胁建模固定编排' : '用户自由编排'}
+                      </span>
                       {/* 公开/私有标签 */}
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -714,10 +757,14 @@ export default function WorkflowsPage() {
                   setShowCreateModal(false);
                   setWorkflowName('');
                   setWorkflowDescription('');
+                  setWorkflowTechStack([]);
+                  setWorkflowIsPublic(false);
+                  setWorkflowType('fsm');
+                  setSelectedFsmTemplateId('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <AlertCircle size={20} />
+                <X size={20} />
               </button>
             </div>
 
@@ -751,6 +798,50 @@ export default function WorkflowsPage() {
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="请输入编排描述（可选）"
                 />
+              </div>
+
+              {/* 工作流类型选择 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  工作流类型 *
+                </label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="workflowType"
+                      value="fsm"
+                      checked={workflowType === 'fsm'}
+                      onChange={(e) => {
+                        setWorkflowType(e.target.value as 'dag' | 'fsm');
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700 flex items-center gap-1">
+                      <Layers size={14} />
+                      威胁建模固定编排
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="workflowType"
+                      value="dag"
+                      checked={workflowType === 'dag'}
+                      onChange={(e) => {
+                        setWorkflowType(e.target.value as 'dag' | 'fsm');
+                        setSelectedFsmTemplateId('');
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">用户自由编排</span>
+                  </label>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {workflowType === 'fsm' 
+                    ? '威胁建模固定编排：固定阶段执行（系统理解→安全评估→威胁分析→渗透测试→报告生成）'
+                    : '用户自由编排：自由拖拽节点，适合自定义任务流程'}
+                </p>
               </div>
 
               <div>
@@ -868,6 +959,8 @@ export default function WorkflowsPage() {
                   setWorkflowDescription('');
                   setWorkflowTechStack([]);
                   setWorkflowIsPublic(false);
+                  setWorkflowType('fsm');
+                  setSelectedFsmTemplateId('');
                 }}
                 disabled={creating}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
