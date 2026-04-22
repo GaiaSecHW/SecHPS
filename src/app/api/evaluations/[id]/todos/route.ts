@@ -55,6 +55,7 @@ async function getTodosFromSession(sessionId: string): Promise<any[]> {
 
 // GET /api/evaluations/[id]/todos - 获取评估会话的 TODO 列表
 // 数据隔离：普通用户只能查看自己项目评估的 TODO，管理员可以查看所有
+// 支持 nodeId 过滤（用于按节点显示任务）
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -73,6 +74,8 @@ export async function GET(
     }
 
     const { id } = await params;
+    const url = new URL(request.url);
+    const nodeId = url.searchParams.get('nodeId'); // 可选：按节点过滤
 
     // 检查是否是管理员
     const userIsAdmin = isAdmin(payload);
@@ -99,24 +102,32 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    if (!evaluation.opencodeSessionId) {
-      logger.debug(LOG_MODULES.EVALUATION, '评估会话没有 opencodeSessionId:', { details: { id } });
-      return NextResponse.json({ todos: [] });
-    }
-
-    logger.debug(LOG_MODULES.EVALUATION, '获取会话 TODO:', { details: { sessionId: evaluation.opencodeSessionId } });
+    logger.debug(LOG_MODULES.EVALUATION, '获取会话 TODO:', { details: { sessionId: evaluation.opencodeSessionId, nodeId } });
 
     // 优先从数据库读取快照
     if (evaluation.todoList) {
       try {
         const todos = JSON.parse(evaluation.todoList);
         if (Array.isArray(todos) && todos.length > 0) {
-          logger.debug(LOG_MODULES.EVALUATION, '从数据库快照返回 TODO:', { details: { count: todos.length } });
-          return NextResponse.json({ todos, source: 'db' });
+          // 如果有nodeId参数，过滤todos
+          let filteredTodos = todos;
+          if (nodeId) {
+            filteredTodos = todos.filter((todo: any) => {
+              // 每个todo可能包含nodeId或workflowNodeId字段
+              return todo.nodeId === nodeId || todo.workflowNodeId === nodeId;
+            });
+          }
+          logger.debug(LOG_MODULES.EVALUATION, '从数据库快照返回 TODO:', { details: { count: filteredTodos.length, nodeId } });
+          return NextResponse.json({ todos: filteredTodos, source: 'db' });
         }
       } catch {
         // JSON 解析失败，继续从文件读
       }
+    }
+
+    if (!evaluation.opencodeSessionId) {
+      logger.debug(LOG_MODULES.EVALUATION, '评估会话没有 opencodeSessionId:', { details: { id } });
+      return NextResponse.json({ todos: [] });
     }
 
     // 数据库没有快照时，从会话文件中解析 TODO

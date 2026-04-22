@@ -27,23 +27,40 @@ export async function GET(
     logger.access(LOG_MODULES.SESSION, payload, evaluationId, { action: 'fetch_children_by_evaluation', nodeId });
 
     // 从消息中提取 Agent/task 工具调用
-    const whereClause: any = { evaluationSessionId: evaluationId };
-    if (nodeId) {
-      whereClause.workflowNodeId = nodeId;
-    }
-
-    // 查询所有消息，提取工具调用
+    // FSM模式：nodeId在metadata中；DAG模式：nodeId在workflowNodeId中
     const messages = await prisma.sessionMessage.findMany({
-      where: whereClause,
+      where: { evaluationSessionId: evaluationId },
       select: {
         id: true,
         role: true,
         content: true,
         workflowNodeId: true,
+        metadata: true,
         createdAt: true,
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    // 如果有nodeId参数，过滤消息
+    let filteredMessages = messages;
+    if (nodeId) {
+      // 先尝试workflowNodeId（DAG模式）
+      const dagMessages = messages.filter(m => m.workflowNodeId === nodeId);
+      
+      if (dagMessages.length > 0) {
+        filteredMessages = dagMessages;
+      } else {
+        // FSM模式：从metadata.nodeId过滤
+        filteredMessages = messages.filter(m => {
+          try {
+            const meta = m.metadata ? JSON.parse(m.metadata) : {};
+            return meta.nodeId === nodeId;
+          } catch {
+            return false;
+          }
+        });
+      }
+    }
 
     // 解析消息中的 Agent/task 工具调用
     const children: Array<{
