@@ -6,11 +6,11 @@ import { prisma } from '@/lib/prisma';
 const LOG_PREFIX = '[EvaluationQueue]';
 
 /**
- * 获取当前运行中的评估数量
+ * 获取当前活跃的评估数量（包括 preparing 和 running）
  */
 export async function getRunningCount(): Promise<number> {
   return await prisma.evaluationSession.count({
-    where: { status: 'running' },
+    where: { status: { in: ['preparing', 'running'] } },
   });
 }
 
@@ -42,13 +42,13 @@ export async function processQueue(): Promise<void> {
   console.log(`${LOG_PREFIX} 开始处理队列...`);
   
   try {
-    const runningCount = await getRunningCount();
+    const activeCount = await getRunningCount();
     const maxConcurrent = await getMaxConcurrent();
     
-    console.log(`${LOG_PREFIX} 当前运行: ${runningCount}, 最大并发: ${maxConcurrent}`);
+    console.log(`${LOG_PREFIX} 当前活跃: ${activeCount}, 最大并发: ${maxConcurrent}`);
     
     // 如果还有空闲名额
-    if (runningCount < maxConcurrent) {
+    if (activeCount < maxConcurrent) {
       // 获取最早的排队评估
       const queuedEvaluation = await prisma.evaluationSession.findFirst({
         where: { status: 'queued' },
@@ -107,7 +107,7 @@ export async function processQueue(): Promise<void> {
  * 获取队列状态信息（供前端显示）
  */
 export async function getQueueStatus(): Promise<{
-  runningCount: number;
+  activeCount: number;
   queuedCount: number;
   maxConcurrent: number;
   queuedEvaluations: Array<{
@@ -118,7 +118,7 @@ export async function getQueueStatus(): Promise<{
     queuePosition: number;
   }>;
 }> {
-  const runningCount = await getRunningCount();
+  const activeCount = await getRunningCount();
   const queuedCount = await getQueuedCount();
   const maxConcurrent = await getMaxConcurrent();
   
@@ -142,7 +142,7 @@ export async function getQueueStatus(): Promise<{
   }));
   
   return {
-    runningCount,
+    activeCount,
     queuedCount,
     maxConcurrent,
     queuedEvaluations: queueList,

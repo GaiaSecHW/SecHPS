@@ -75,7 +75,7 @@ export async function GET(
             roleId: true,
           },
         },
-        // 添加节点执行记录（包含模型信息）
+        // 添加节点执行记录（包含模型信息和Token）
         NodeExecution: {
           orderBy: { order: 'asc' },
           select: {
@@ -89,6 +89,8 @@ export async function GET(
             modelConfigId: true,
             modelName: true,
             roleId: true,
+            inputTokens: true,
+            outputTokens: true,
           },
         },
       },

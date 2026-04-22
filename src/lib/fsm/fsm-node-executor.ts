@@ -39,11 +39,11 @@ export interface FSMExecutionContext extends ExecutionContext {
  */
 export class FSMNodeExecutor {
   private workspacePath: string;
-  private claudePath: string;
+  private outputsPath: string;  // 使用 outputs 替代 .claude
 
-  constructor(workspacePath: string, claudePath: string = '.claude') {
+  constructor(workspacePath: string, outputsPath: string = 'outputs') {
     this.workspacePath = workspacePath;
-    this.claudePath = claudePath;
+    this.outputsPath = outputsPath;
   }
 
   /**
@@ -446,8 +446,10 @@ ${errors.map(e => `- ${e}`).join('\n')}
     const fs = await import('fs/promises');
     const path = await import('path');
 
+    // 使用 outputs/phases 替代 .claude/phases
     const phaseDir = path.join(
-      this.claudePath,
+      this.workspacePath,
+      this.outputsPath,
       'phases',
       `${fsmPhase}-${phaseName}`
     );

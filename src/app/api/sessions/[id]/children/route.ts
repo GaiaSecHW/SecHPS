@@ -81,6 +81,22 @@ export async function GET(
       try {
         const messages = await getSessionMessages(sessionId, { dir: projectPath });
         
+        // 查询该评估的所有 NodeExecution 记录，用于关联 workflowNodeId
+        let nodeExecutions: any[] = [];
+        if (evaluation?.id) {
+          nodeExecutions = await prisma.nodeExecution.findMany({
+            where: { evaluationSessionId: evaluation.id },
+            select: {
+              workflowNodeId: true,
+              startedAt: true,
+              completedAt: true,
+              status: true,
+            },
+            orderBy: { startedAt: 'asc' },
+          });
+          logger.logNoUser(LOG_MODULES.SESSION, 'Found node executions', { details: { sessionId, count: nodeExecutions.length } });
+        }
+        
         // 提取所有 Agent 或 task 工具调用
         const agentCalls: Array<{
           id: string;
@@ -90,6 +106,7 @@ export async function GET(
           status: string;
           startedAt: string | null;
           completedAt: string | null;
+          workflowNodeId: string | null;
         }> = [];
 
         // 建立 tool_use id -> tool_result 的映射，用于提取结束时间
@@ -119,6 +136,24 @@ export async function GET(
                 // 提取结束时间（对应 tool_result 消息的时间戳）
                 const resultInfo = toolResultMap.get(part.id);
                 const completedAt = resultInfo?.timestamp || null;
+                
+                // 根据消息时间戳匹配 NodeExecution 获取 workflowNodeId
+                let workflowNodeId: string | null = null;
+                if (startedAt && nodeExecutions.length > 0) {
+                  const msgTime = new Date(startedAt).getTime();
+                  // 找到时间范围包含该消息的 NodeExecution
+                  for (const node of nodeExecutions) {
+                    if (node.startedAt) {
+                      const nodeStart = new Date(node.startedAt).getTime();
+                      const nodeEnd = node.completedAt ? new Date(node.completedAt).getTime() : Date.now();
+                      // 消息时间在节点执行时间范围内（允许 5 秒误差）
+                      if (msgTime >= nodeStart - 5000 && msgTime <= nodeEnd + 5000) {
+                        workflowNodeId = node.workflowNodeId;
+                        break;
+                      }
+                    }
+                  }
+                }
 
                 agentCalls.push({
                   id: part.id || `agent-${msgIndex}-${Date.now()}`,
@@ -128,6 +163,7 @@ export async function GET(
                   status: 'active',
                   startedAt,
                   completedAt,
+                  workflowNodeId,
                 });
               }
             });
@@ -146,6 +182,7 @@ export async function GET(
           status: call.status,
           startedAt: call.startedAt,
           completedAt: call.completedAt,
+          workflowNodeId: call.workflowNodeId,  // 添加 workflowNodeId 字段
         }));
 
         // 不在此处获取第一条消息时间，避免阻塞 API 响应

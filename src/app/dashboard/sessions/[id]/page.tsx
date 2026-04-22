@@ -104,7 +104,9 @@ function SessionDetailContent({
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const evaluationId = searchParams.get('evaluationId');
+  const evaluationId = id; // 使用路由参数id，而不是searchParams
+  
+  console.log('[Page] evaluationId from route:', evaluationId);
 
   const [evaluation, setEvaluation] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -178,33 +180,73 @@ function SessionDetailContent({
   const childStartedAtRef = useRef<Record<string, string>>({});
 
   useEffect(() => {
-    if (evaluationId) {
-      fetchEvaluation();
-      fetchMessages();
-      fetchProgressQuestion();
-      fetchWorkflowNodes();
-    }
-  }, [evaluationId]);
-
-  useEffect(() => {
-    // SSE 连接不再依赖 opencodeSessionId（多 Agent 模式下 session_id 保存在 NodeExecution）
-    if (evaluationId && evaluation?.projectId) {
-      fetchSessionDetail();
-      fetchTodos();
-      fetchSdkProjects();
-      fetchChildrenSessions();
-      
-      // 连接 SSE 实时事件流
-      connectToEvaluationStream();
-    }
+    if (!evaluationId) return;
+    
+    // 所有数据加载放在一个串行流程，每次调用后休息1秒
+    const loadAllData = async () => {
+      try {
+        setLoading(true);
+        
+        // 1. 先获取评估基本信息（返回数据供后续使用）
+        const evalData = await fetchEvaluation();
+        await new Promise(r => setTimeout(r, 1000));
+        
+        const projectId = evalData?.projectId;
+        
+        // 2. 消息
+        await fetchMessages();
+        await new Promise(r => setTimeout(r, 1000));
+        
+        // 3. 进度问题
+        await fetchProgressQuestion();
+        await new Promise(r => setTimeout(r, 1000));
+        
+        // 4. 工作流节点
+        await fetchWorkflowNodes();
+        await new Promise(r => setTimeout(r, 1000));
+        
+        if (projectId) {
+          // 5. 会话详情
+          await fetchSessionDetail();
+          await new Promise(r => setTimeout(r, 1000));
+          
+          // 6. 任务列表
+          await fetchTodos();
+          await new Promise(r => setTimeout(r, 1000));
+          
+          // 7. SDK项目
+          await fetchSdkProjects();
+          await new Promise(r => setTimeout(r, 1000));
+          
+          // 8. 子会话
+          await fetchChildrenSessions();
+          await new Promise(r => setTimeout(r, 1000));
+          
+          // 9. 广播
+          await fetchBroadcast();
+          await new Promise(r => setTimeout(r, 1000));
+          
+          // 10. 最后连接SSE（仅运行中状态）
+          if (evalData?.status === 'running') {
+            connectToEvaluationStream();
+          }
+        }
+        
+        setLoading(false);
+      } catch (e) {
+        console.error('[Init] Error:', e);
+        setLoading(false);
+      }
+    };
+    
+    loadAllData();
     
     return () => {
-      // 清理 SSE 连接
       if (abortController) {
         abortController.abort();
       }
     };
-  }, [evaluationId, evaluation?.projectId]);
+  }, [evaluationId]);
 
   // 连接评估实时事件流（使用 fetch 替代 EventSource，支持 Authorization header）
   const connectToEvaluationStream = async () => {
@@ -445,10 +487,17 @@ function SessionDetailContent({
         break;
         
       case 'done':
-        // 审计完成
+        // 审计完成 - 串行刷新
         console.log('[Evaluation] Audit completed:', data.message);
-        fetchEvaluation(); // 刷新评估状态
-        fetchMessages(); // 刷新消息列表
+        (async () => {
+          try {
+            await fetchEvaluation(); // 先刷新评估状态
+            await new Promise(r => setTimeout(r, 1000));
+            await fetchMessages(); // 再刷新消息列表
+          } catch (e) {
+            console.error('[Done refresh] Error:', e);
+          }
+        })();
         if (abortController) {
           abortController.abort();
         }
@@ -548,23 +597,32 @@ function SessionDetailContent({
       return;
     }
 
-    // 如果没有 SSE 连接，则使用轮询作为后备
-    const interval = setInterval(() => {
+    // 如果没有 SSE 连接，则使用串行轮询作为后备
+    const interval = setInterval(async () => {
       if (!abortController) {
-        fetchMessages(); // 添加消息轮询
-        fetchTodos();
-        fetchSessionDetail();
-        fetchChildrenSessions();
-        fetchWorkflowNodes(); // 添加节点轮询
-        fetchEvaluation(); // 刷新评估状态
+        try {
+          await fetchMessages(); // 1. 消息
+          await new Promise(r => setTimeout(r, 1000));
+          await fetchTodos();    // 2. 任务
+          await new Promise(r => setTimeout(r, 1000));
+          await fetchChildrenSessions(); // 3. 子Agent
+          await new Promise(r => setTimeout(r, 1000));
+          await fetchWorkflowNodes(); // 4. 节点
+          await new Promise(r => setTimeout(r, 1000));
+          await fetchEvaluation(); // 5. 评估状态
+          await new Promise(r => setTimeout(r, 1000));
+          await fetchBroadcast(); // 6. 广播
+        } catch (e) {
+          console.error('[Polling] Error:', e);
+        }
       }
-    }, 5000); // 5秒轮询一次，提高实时性
+    }, 5000); // 5秒轮询一次
 
     return () => clearInterval(interval);
   }, [evaluationId, evaluation?.opencodeSessionId, evaluation?.status, abortController]);
 
-  const fetchEvaluation = async () => {
-    if (!evaluationId) return;
+  const fetchEvaluation = async (): Promise<any> => {
+    if (!evaluationId) return null;
 
     try {
       const token = localStorage.getItem('token');
@@ -575,7 +633,6 @@ function SessionDetailContent({
       });
 
       if (!response.ok) {
-        // 先获取文本，再尝试解析 JSON
         const text = await response.text();
         console.error('[fetchEvaluation] Error response text:', text.substring(0, 500));
         try {
@@ -585,16 +642,35 @@ function SessionDetailContent({
           setError(`服务器错误 (${response.status})`);
         }
         setLoading(false);
-        return;
+        return null;
       }
 
       const data = await response.json();
+      console.log('[fetchEvaluation] Token数据:', {
+        totalInputTokens: data.evaluation?.totalInputTokens,
+        totalOutputTokens: data.evaluation?.totalOutputTokens,
+        status: data.evaluation?.status,
+      });
       setEvaluation(data.evaluation);
       setLoading(false);
+      return data.evaluation; // 返回数据供后续使用
     } catch (err) {
       console.error('Fetch evaluation error:', err);
       setError('网络错误，请重试');
       setLoading(false);
+      return null;
+    }
+  };
+
+  const fetchBroadcast = async () => {
+    try {
+      const response = await fetch('/api/broadcast');
+      if (!response.ok) return;
+      const data = await response.json();
+      // 可根据需要处理广播内容
+      console.log('[Broadcast]', data.config?.content);
+    } catch (err) {
+      console.error('Fetch broadcast error:', err);
     }
   };
 
@@ -645,16 +721,15 @@ function SessionDetailContent({
     }
   };
 
-  // 获取节点消息（按 nodeId 过滤）
+  // 获取节点消息（按 nodeId 过滤）- 串行调用
   // FSM 模式：nodeId 保存在 metadata.nodeId，后端从 metadata 过滤
   // DAG 模式：nodeId 保存在 workflowNodeId，后端从 workflowNodeId 过滤
   const fetchNodeMessages = async (nodeId: string) => {
     if (!evaluationId) return;
 
-    setLoadingNodeMessages(true);
     try {
       const token = localStorage.getItem('token');
-      console.log('[fetchNodeMessages] 开始获取消息, nodeId:', nodeId, 'evaluationId:', evaluationId);
+      console.log('[fetchNodeMessages] 开始获取消息, nodeId:', nodeId);
 
       // 按 nodeId 过滤，只获取该节点的消息
       const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db&nodeId=${encodeURIComponent(nodeId)}`, {
@@ -671,42 +746,44 @@ function SessionDetailContent({
 
       const data = await response.json();
       console.log('[fetchNodeMessages] API返回:', data.messages?.length || 0, '条消息');
-      console.log('[fetchNodeMessages] 消息 role 分布:', data.messages?.reduce((acc: any, m: any) => { acc[m.role] = (acc[m.role] || 0) + 1; return acc; }, {}));
-      
-      // 检查 tool_call 消息中的 Agent 调用
-      const toolCalls = data.messages?.filter((m: any) => m.role === 'tool_call') || [];
-      console.log('[fetchNodeMessages] tool_call 消息:', toolCalls.length);
-      toolCalls.forEach((m: any) => {
-        try {
-          const c = JSON.parse(m.content);
-          if (c.name === 'Agent' || c.name === 'task') {
-            console.log('[fetchNodeMessages] 发现 Agent/task 调用:', c.name, c.args?.description?.substring(0, 30));
-          }
-        } catch {}
-      });
       
       setNodeMessages(data.messages || []);
     } catch (err) {
       console.error('[fetchNodeMessages] Error:', err);
       setNodeMessages([]);
-    } finally {
-      setLoadingNodeMessages(false);
     }
   };
 
-  // 处理节点点击
-  const handleNodeClick = (nodeId: string) => {
+  // 处理节点点击 - 串行加载节点相关数据
+  const handleNodeClick = async (nodeId: string) => {
     console.log('[handleNodeClick] 点击节点, nodeId:', nodeId);
-    console.log('[handleNodeClick] 当前 workflowNodes:', workflowNodes.map(n => ({ id: n.id, label: n.label })));
     
     if (selectedNodeId === nodeId) {
       // 取消选择
       setSelectedNodeId(null);
       setNodeMessages([]);
     } else {
-      // 选择节点
+      // 选择节点，串行加载数据
       setSelectedNodeId(nodeId);
-      fetchNodeMessages(nodeId);
+      setLoadingNodeMessages(true);
+      
+      try {
+        // 1. 加载节点消息
+        await fetchNodeMessages(nodeId);
+        await new Promise(r => setTimeout(r, 1000));
+        
+        // 2. 加载节点任务（如果需要）
+        // await fetchNodeTodos(nodeId);
+        // await new Promise(r => setTimeout(r, 1000));
+        
+        // 3. 加载节点子Agent（如果需要）
+        // await fetchNodeChildren(nodeId);
+        
+      } catch (e) {
+        console.error('[NodeClick] Error:', e);
+      } finally {
+        setLoadingNodeMessages(false);
+      }
     }
   };
 
@@ -820,20 +897,21 @@ function SessionDetailContent({
     try {
       const token = localStorage.getItem('token');
 
-      const [listResponse, currentResponse] = await Promise.all([
-        fetch(`/api/projects/sdk/list?evaluationId=${evaluationId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`/api/projects/sdk/current?evaluationId=${evaluationId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
+      // 串行获取SDK项目列表和当前项目
+      const listResponse = await fetch(`/api/projects/sdk/list?evaluationId=${evaluationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      await new Promise(r => setTimeout(r, 1000));
 
       if (listResponse.ok) {
         const listData = await listResponse.json();
         setSdkProjects(listData.projects || []);
         console.log('[SDK Projects] List:', listData.projects?.length || 0);
       }
+
+      const currentResponse = await fetch(`/api/projects/sdk/current?evaluationId=${evaluationId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (currentResponse.ok) {
         const currentData = await currentResponse.json();
@@ -966,129 +1044,95 @@ function SessionDetailContent({
   const fetchChildSessionMessages = async (childId: string) => {
     setLoadingChildMessages(true);
     try {
-      // childId 格式是 `${msg.id}-${part.id}` 或直接是 msg.id
-      // 从 nodeMessages 中找到对应的消息
-      const msgId = childId.includes('-') ? childId.split('-')[0] : childId;
+      const token = localStorage.getItem('token');
       
-      // 找到工具调用消息和对应的结果消息
-      const toolCallMsg = nodeMessages.find((m: any) => m.id === msgId);
-      
-      if (toolCallMsg) {
-        // 解析消息内容
-        let content = toolCallMsg.content;
-        if (typeof content === 'string') {
-          try {
-            content = JSON.parse(content);
-          } catch {
-            content = [{ type: 'text', text: content }];
+      // 方式1: 从 evaluations/[id]/children?childId=xxx 获取
+      if (evaluationId) {
+        const response = await fetch(
+          `/api/evaluations/${evaluationId}/children?childId=${encodeURIComponent(childId)}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
           }
-        }
-        
-        const parts = Array.isArray(content) ? content : [content];
-        
-        // 找到工具调用部分
-        const toolUsePart = parts.find((p: any) => 
-          p.type === 'tool_use' && (p.name === 'Agent' || p.name === 'task')
         );
         
-        // 找到对应的工具结果（在后续消息中）
-        const toolResultMsg = nodeMessages.find((m: any) => {
-          let resultContent = m.content;
-          if (typeof resultContent === 'string') {
-            try {
-              resultContent = JSON.parse(resultContent);
-            } catch {
-              return false;
-            }
-          }
-          const resultParts = Array.isArray(resultContent) ? resultContent : [resultContent];
-          return resultParts.some((p: any) => 
-            p.type === 'tool_result' && p.tool_use_id === toolUsePart?.id
-          );
-        });
-        
-        // 构建子 Agent 消息列表
-        const childMessages: any[] = [];
-        
-        // 添加用户输入（工具调用的参数）
-        if (toolUsePart) {
-          const args = toolUsePart.input || toolUsePart.args || {};
-          childMessages.push({
-            id: `${childId}-input`,
-            role: 'user',
-            content: args.prompt || args.description || JSON.stringify(args, null, 2),
-            createdAt: toolCallMsg.createdAt,
-          });
-        }
-        
-        // 添加助手输出（工具结果）
-        if (toolResultMsg) {
-          let resultContent = toolResultMsg.content;
-          if (typeof resultContent === 'string') {
-            try {
-              resultContent = JSON.parse(resultContent);
-            } catch {
-              // 保持原样
-            }
-          }
-          const resultParts = Array.isArray(resultContent) ? resultContent : [resultContent];
-          const resultPart = resultParts.find((p: any) => p.type === 'tool_result');
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Child Messages] From evaluations API:', data.messages?.length || 0);
           
-          if (resultPart) {
-            childMessages.push({
-              id: `${childId}-output`,
-              role: 'assistant',
-              content: resultPart.content || resultPart.output || JSON.stringify(resultPart, null, 2),
-              createdAt: toolResultMsg.createdAt,
-            });
+          if (data.messages && data.messages.length > 0) {
+            // 格式化消息
+            const formattedMessages = data.messages.map((msg: any, index: number) => ({
+              id: msg.uuid || msg.id || `child-msg-${index}`,
+              role: msg.role || msg.message?.role || 'assistant',
+              content: msg.content || msg.message?.content || '',
+              createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
+            }));
+            setChildSessionMessages(formattedMessages);
+            return;
           }
         }
-        
-        console.log('[Child Messages] Extracted from node messages:', childMessages.length);
-        setChildSessionMessages(childMessages);
-        return;
       }
       
-      // 如果没找到，尝试旧的方式（从 NodeExecution 获取）
-      const token = localStorage.getItem('token');
-      if (evaluationId) {
-        const nodeExecResponse = await fetch(
-          `/api/evaluations/${evaluationId}/nodes`,
+      // 方式2: 从 opencodeSessionId 获取（需要先找到sessionId）
+      if (evaluation?.opencodeSessionId) {
+        const sessionId = evaluation.opencodeSessionId;
+        const response = await fetch(
+          `/api/sessions/${sessionId}/children?childId=${encodeURIComponent(childId)}`,
           {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+            headers: { Authorization: `Bearer ${token}` },
           }
         );
         
-        if (nodeExecResponse.ok) {
-          const nodeExecData = await nodeExecResponse.json();
-          const nodeExec = nodeExecData.nodes?.find((n: any) => n.id === childId || n.workflowNodeId === childId);
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Child Messages] From sessions API:', data.messages?.length || 0);
           
-          if (nodeExec?.opencodeSessionId) {
-            const response = await fetch(
-              `/api/sessions/${nodeExec.opencodeSessionId}/messages`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-            
-            if (response.ok) {
-              const data = await response.json();
-              console.log('[Child Messages] Received from node execution:', data.messages?.length || 0);
-              
-              const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
-                id: msg.uuid || msg.id || `child-msg-${index}`,
-                role: msg.role || (msg.message?.role) || 'assistant',
-                content: msg.content || msg.message?.content || '',
-                createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
-              }));
-              
-              setChildSessionMessages(formattedMessages);
-              return;
+          if (data.messages && data.messages.length > 0) {
+            const formattedMessages = data.messages.map((msg: any, index: number) => ({
+              id: msg.uuid || msg.id || `child-msg-${index}`,
+              role: msg.role || msg.message?.role || 'assistant',
+              content: msg.content || msg.message?.content || '',
+              createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
+            }));
+            setChildSessionMessages(formattedMessages);
+            return;
+          }
+        }
+      }
+      
+      // 方式3: 从NodeExecution的opencodeSessionId获取（备用）
+      const nodeExecResponse = await fetch(
+        `/api/evaluations/${evaluationId}/nodes`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+      
+      if (nodeExecResponse.ok) {
+        const nodeExecData = await nodeExecResponse.json();
+        const nodeExec = nodeExecData.nodes?.find((n: any) => n.id === childId || n.workflowNodeId === childId);
+        
+        if (nodeExec?.opencodeSessionId) {
+          const response = await fetch(
+            `/api/sessions/${nodeExec.opencodeSessionId}/messages`,
+            {
+              headers: { Authorization: `Bearer ${token}` },
             }
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[Child Messages] From node execution:', data.messages?.length || 0);
+            
+            const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
+              id: msg.uuid || msg.id || `child-msg-${index}`,
+              role: msg.role || msg.message?.role || 'assistant',
+              content: msg.content || msg.message?.content || '',
+              createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
+            }));
+            
+            setChildSessionMessages(formattedMessages);
+            return;
           }
         }
       }
@@ -1308,156 +1352,21 @@ function SessionDetailContent({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => router.push('/dashboard/sessions')}
-              className="text-gray-400 hover:text-gray-600"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div>
-              <h1 className="text-xl font-semibold text-gray-900">
-                {evaluation.Project?.name || '评估会话详情'}
-              </h1>
-              <div className="flex items-center space-x-4 text-sm text-gray-500">
-                <span>ID: {evaluation.id}</span>
-                {evaluation.Project?.User && (
-                  <span className="flex items-center space-x-1">
-                    <User size={12} />
-                    <span>创建者: {evaluation.Project.User.name || evaluation.Project.User.username || '未知'}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center space-x-2">
-              {evaluation.status && (
-                <span
-                  className={`ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                    evaluation.status === 'completed'
-                      ? 'bg-green-100 text-green-800'
-                      : evaluation.status === 'running'
-                      ? 'bg-blue-100 text-blue-800'
-                      : evaluation.status === 'failed'
-                      ? 'bg-red-100 text-red-800'
-                      : evaluation.status === 'cancelled'
-                      ? 'bg-yellow-100 text-yellow-800'
-                      : 'bg-gray-100 text-gray-800'
-                  }`}
-                >
-                  {evaluation.status === 'running'
-                    ? '运行中'
-                    : evaluation.status === 'completed'
-                    ? '已完成'
-                    : evaluation.status === 'failed'
-                    ? '失败'
-                    : evaluation.status === 'cancelled'
-                    ? '已取消'
-                    : evaluation.status}
-                </span>
-              )}
-              {/* 显示结束原因 */}
-              {evaluation.endReason && evaluation.status !== 'running' && (
-                <span className="text-xs text-gray-500" title={evaluation.endMessage || ''}>
-                  ({evaluation.endReason === 'stopped' ? '用户中止' :
-                    evaluation.endReason === 'error' ? '执行错误' :
-                    evaluation.endReason === 'idle_timeout' ? '空闲超时' :
-                    evaluation.endReason === 'max_runtime' ? '超过最大运行时间' :
-                    evaluation.endReason === 'completed' ? '正常完成' :
-                    evaluation.endReason === 'manual_abort' ? '手动中止' :
-                    evaluation.endReason})
-                </span>
-              )}
-            </div>
-            
-            {/* 实时 Token 使用量和模型信息 - 仅运行中显示 */}
-            {evaluation.status === 'running' && realtimeTokenUsage && (
-              <div className="flex items-center space-x-4 ml-4 pl-4 border-l border-gray-200">
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-gray-500">模型:</span>
-                  <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                    {realtimeTokenUsage.modelName}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <span className="text-xs text-gray-500">Token:</span>
-                  <span className="text-xs font-medium text-gray-700">
-                    输入 {formatTokenNumber(realtimeTokenUsage.cumulativeInputTokens)} / 
-                    输出 {formatTokenNumber(realtimeTokenUsage.cumulativeOutputTokens)}
-                  </span>
-                </div>
-                {fsmPhaseProgress && (
-                  <div className="flex items-center space-x-2">
-                    <span className="text-xs text-gray-500">阶段:</span>
-                    <span className="text-xs font-medium text-gray-700">
-                      {fsmPhaseProgress.phaseName} ({fsmPhaseProgress.currentPhase}/{fsmPhaseProgress.totalPhases})
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <div className="flex items-center space-x-2">
-              {/* 查看报告按钮 - 评估完成后显示 */}
-              {evaluation.status === 'completed' && (
-                <button
-                  onClick={() => router.push(`/dashboard/evaluations/${evaluationId}/report`)}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 hover:bg-green-50 rounded border border-green-200"
-                >
-                  <FileSearch size={16} />
-                  <span>查看报告</span>
-                </button>
-              )}
-              {/* MCP 服务器管理入口 */}
-              {evaluation.status === 'running' && (
-                <>
-                  <button
-                    onClick={handleAskProgress}
-                    disabled={!progressQuestion}
-                    className={`flex items-center space-x-1 px-3 py-1.5 text-sm font-medium rounded border ${
-                      progressQuestion
-                        ? 'text-blue-600 hover:text-blue-800 hover:bg-blue-50 border-blue-200'
-                        : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed'
-                    }`}
-                    title={!progressQuestion ? '请先在"系统配置"中设置"进展询问消息"' : '询问当前评估进展'}
-                  >
-                    <MessageSquare size={16} />
-                    <span>询问进展</span>
-                    {!progressQuestion && (
-                      <span className="text-xs text-gray-400 ml-1">(未配置)</span>
-                    )}
-                  </button>
-                  <button
-                    onClick={handleStopEvaluation}
-                    className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-orange-600 hover:text-orange-800 hover:bg-orange-50 rounded border border-orange-200"
-                  >
-                    <Square size={16} />
-                    <span>停止</span>
-                  </button>
-                </>
-              )}
-              {evaluation.status !== 'running' && (
-                <button
-                  onClick={handleDeleteEvaluation}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded border border-red-200"
-                >
-                  <Trash2 size={16} />
-                  <span>删除</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {/* 评估头部组件：Token 统计 + 评估信息 */}
+      {/* 评估头部组件 */}
       <EvaluationHeader 
-        evaluation={evaluation}
+        status={evaluation?.status || 'pending'}
+        totalInputTokens={evaluation?.totalInputTokens || 0}
+        totalOutputTokens={evaluation?.totalOutputTokens || 0}
+        projectName={evaluation?.Project?.name}
+        workflowType={evaluation?.workflowType}
+        onStop={handleStopEvaluation}
+        onBack={() => router.push('/dashboard/sessions')}
+        onViewReport={() => router.push(`/dashboard/evaluations/${evaluationId}/report`)}
+        onAskProgress={handleAskProgress}
+        onDelete={handleDeleteEvaluation}
+        progressQuestion={progressQuestion}
         realtimeTokenUsage={realtimeTokenUsage}
+        evaluation={evaluation}
       />
       
       {/* Main Content */}
@@ -1898,33 +1807,39 @@ function SessionDetailContent({
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* 节点任务 */}
-                    <div className="border border-gray-200 rounded-lg p-3">
-                      <button
-                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
-                        onClick={() => setIsTodosExpanded(!isTodosExpanded)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <ListTodo size={16} className="text-blue-600" />
-                          <span>节点任务</span>
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                            {todos.filter((t: any) => t.nodeId === selectedNodeId).length} 个
-                          </span>
-                        </div>
-                        {isTodosExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </button>
-                      {isTodosExpanded && (
-                        <div className="mt-3 space-y-2">
-                          {todos.filter((t: any) => t.nodeId === selectedNodeId).length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-2">该节点暂无任务</p>
-                          ) : (
-                            todos.filter((t: any) => t.nodeId === selectedNodeId).map((todo: any, idx: number) => (
-                              <TodoItem key={todo.id || `todo-${idx}`} todo={todo} />
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
+{/* 节点任务 */}
+                     <div className="border border-gray-200 rounded-lg p-3">
+                       <button
+                         className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
+                         onClick={() => setIsTodosExpanded(!isTodosExpanded)}
+                       >
+                         <div className="flex items-center gap-2">
+                           <ListTodo size={16} className="text-blue-600" />
+                           <span>节点任务</span>
+                           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                             {todos.filter((t: any) => 
+                               t.nodeId === selectedNodeId || t.workflowNodeId === selectedNodeId
+                             ).length} 个
+                           </span>
+                         </div>
+                         {isTodosExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                       </button>
+                       {isTodosExpanded && (
+                         <div className="mt-3 space-y-2">
+                           {todos.filter((t: any) => 
+                             t.nodeId === selectedNodeId || t.workflowNodeId === selectedNodeId
+                           ).length === 0 ? (
+                             <p className="text-sm text-gray-500 text-center py-2">该节点暂无任务</p>
+                           ) : (
+                             todos.filter((t: any) => 
+                               t.nodeId === selectedNodeId || t.workflowNodeId === selectedNodeId
+                             ).map((todo: any, idx: number) => (
+                               <TodoItem key={todo.id || `todo-${idx}`} todo={todo} />
+                             ))
+                           )}
+                         </div>
+                       )}
+                     </div>
                     
                     {/* 节点消息 */}
                     <div className="border border-gray-200 rounded-lg p-3">
@@ -2000,52 +1915,69 @@ function SessionDetailContent({
                     </div>
                     
 {/* 节点子Agent（从消息中提取 role=tool_call 且 name=Agent 的工具调用） */}
-                     <div className="border border-gray-200 rounded-lg p-3">
-                       <button
-                         className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
-                         onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
-                       >
-                         <div className="flex items-center gap-2">
-                           <GitBranch size={16} className="text-purple-600" />
-                           <span>子Agent调用</span>
-                           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                             {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
-                               try {
-                                 const c = JSON.parse(m.content);
-                                 return c.name === 'Agent' || c.name === 'task';
-                               } catch { return false; }
-                             }).length} 个
-                           </span>
-                         </div>
-                         {isChildrenExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                       </button>
-                       {isChildrenExpanded && (
-                         <div className="mt-3 space-y-2">
-                           {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
-                             try {
-                               const c = JSON.parse(m.content);
-                               return c.name === 'Agent' || c.name === 'task';
-                             } catch { return false; }
-                           }).length === 0 ? (
-                             <p className="text-sm text-gray-500 text-center py-2">该节点暂无子Agent调用</p>
-                           ) : (
-                             nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
-                               try {
-                                 const c = JSON.parse(m.content);
-                                 return c.name === 'Agent' || c.name === 'task';
-                               } catch { return false; }
-                             }).map((msg: any, idx: number) => {
-                               const content = JSON.parse(msg.content);
-                               const childId = `${msg.id}-${idx}`;
-                               const isExpanded = expandedChildMessages.has(childId);
-                               
-                               // 查找对应的 tool_result（toolUseId 保存在 metadata 中）
-                               const toolResultMsg = nodeMessages.find((m: any) => {
-                                 try {
-                                   const meta = m.metadata ? JSON.parse(m.metadata) : {};
-                                   return m.role === 'tool_result' && meta.toolUseId === content.toolUseId;
-                                 } catch { return false; }
-                               });
+                      <div className="border border-gray-200 rounded-lg p-3">
+                        <button
+                          className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
+                          onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <GitBranch size={16} className="text-purple-600" />
+                            <span>子Agent调用</span>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                              {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
+                                try {
+                                  const c = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+                                  return c?.name === 'Agent' || c?.name === 'task';
+                                } catch { return false; }
+                              }).length} 个
+                            </span>
+                          </div>
+                          {isChildrenExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </button>
+                        {isChildrenExpanded && (
+                          <div className="mt-3 space-y-2">
+                            {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
+                              try {
+                                const c = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+                                return c?.name === 'Agent' || c?.name === 'task';
+                              } catch { return false; }
+                            }).length === 0 ? (
+                              <p className="text-sm text-gray-500 text-center py-2">该节点暂无子Agent调用</p>
+                            ) : (
+                              nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
+                                try {
+                                  const c = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+                                  return c?.name === 'Agent' || c?.name === 'task';
+                                } catch { return false; }
+                              }).map((msg: any, idx: number) => {
+                                const content = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
+                                const childId = `${msg.id}-${idx}`;
+                                const isExpanded = expandedChildMessages.has(childId);
+                                
+                                // 调试日志
+                                console.log('[子Agent] tool_call:', {
+                                  msgId: msg.id,
+                                  toolUseId: content?.toolUseId,
+                                  name: content?.name,
+                                  args: content?.args,
+                                });
+                                
+                                // 查找对应的 tool_result（toolUseId 保存在 metadata 中）
+                                const toolResultMsg = nodeMessages.find((m: any) => {
+                                  const meta = m.metadata || {};
+                                  const match = m.role === 'tool_result' && meta.toolUseId === content?.toolUseId;
+                                  if (m.role === 'tool_result') {
+                                    console.log('[子Agent] tool_result检查:', {
+                                      msgId: m.id,
+                                      metaToolUseId: meta.toolUseId,
+                                      targetToolUseId: content?.toolUseId,
+                                      match,
+                                    });
+                                  }
+                                  return match;
+                                });
+                                
+                                console.log('[子Agent] 找到的tool_result:', toolResultMsg?.id, toolResultMsg?.content?.substring(0, 100));
                                
                                return (
                                  <div key={idx} className="bg-purple-50 rounded border border-purple-200">
@@ -2081,14 +2013,14 @@ function SessionDetailContent({
                                            {JSON.stringify(content.args, null, 2)}
                                          </pre>
                                        </div>
-                                       {toolResultMsg && (
-                                         <div>
-                                           <div className="text-xs font-semibold text-gray-700 mb-1">执行结果:</div>
-                                           <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[200px] whitespace-pre-wrap">
-                                             {toolResultMsg.content.substring(0, 500)}
-                                           </pre>
-                                         </div>
-                                       )}
+{toolResultMsg && (
+                                          <div>
+                                            <div className="text-xs font-semibold text-gray-700 mb-1">执行结果:</div>
+                                            <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[500px] whitespace-pre-wrap">
+                                              {toolResultMsg.content}
+                                            </pre>
+                                          </div>
+                                        )}
                                        {!toolResultMsg && (
                                          <div className="text-xs text-gray-500 italic">等待结果...</div>
                                        )}

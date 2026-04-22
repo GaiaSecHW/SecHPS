@@ -8,6 +8,10 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 /**
  * 获取评估会话的子Agent列表（从消息中提取 Agent/task 工具调用）
  * GET /api/evaluations/[id]/children
+ * 
+ * 参数:
+ * - nodeId: 可选，按节点过滤
+ * - childId: 可选，获取特定子Agent的消息
  */
 export async function GET(
   request: Request,
@@ -23,8 +27,9 @@ export async function GET(
     const { id: evaluationId } = await params;
     const url = new URL(request.url);
     const nodeId = url.searchParams.get('nodeId'); // 可选：按节点过滤
+    const childId = url.searchParams.get('childId'); // 可选：获取特定子Agent消息
 
-    logger.access(LOG_MODULES.SESSION, payload, evaluationId, { action: 'fetch_children_by_evaluation', nodeId });
+    logger.access(LOG_MODULES.SESSION, payload, evaluationId, { action: 'fetch_children_by_evaluation', nodeId, childId });
 
     // 从消息中提取 Agent/task 工具调用
     // FSM模式：nodeId在metadata中；DAG模式：nodeId在workflowNodeId中
@@ -60,6 +65,80 @@ export async function GET(
           }
         });
       }
+    }
+
+    // 如果请求特定子Agent的消息
+    if (childId) {
+      logger.logNoUser(LOG_MODULES.SESSION, 'Fetching messages for child', { details: { childId } });
+      
+      // 解析 childId：格式是 `${msgId}-${partId}` 或直接是 msgId
+      const msgId = childId.includes('-') ? childId.split('-')[0] : childId;
+      
+      // 找到 tool_call 消息
+      const toolCallMsg = messages.find(m => m.id === msgId);
+      
+      if (!toolCallMsg) {
+        return NextResponse.json({ messages: [], total: 0 });
+      }
+      
+      // 解析 tool_call 消息内容，获取 toolUseId
+      let toolCallContent: any = toolCallMsg.content;
+      if (typeof toolCallContent === 'string') {
+        try {
+          toolCallContent = JSON.parse(toolCallContent);
+        } catch {
+          toolCallContent = { args: {} };
+        }
+      }
+      
+      const toolUseId = toolCallContent.toolUseId || toolCallMsg.id;
+      
+      // 构建子Agent消息列表
+      const childMessages: any[] = [];
+      
+      // 添加 tool_call 消息（用户输入）
+      const args = toolCallContent.args || {};
+      childMessages.push({
+        id: `${childId}-input`,
+        role: 'user',
+        content: args.prompt || args.description || JSON.stringify(args, null, 2),
+        createdAt: toolCallMsg.createdAt?.toISOString(),
+      });
+      
+      // 找到所有相关的 tool_result 消息
+      for (const msg of messages) {
+        if (msg.role === 'tool_result') {
+          let msgContent = msg.content;
+          let msgMetadata: any = msg.metadata;
+          
+          if (typeof msgMetadata === 'string') {
+            try {
+              msgMetadata = JSON.parse(msgMetadata);
+            } catch {
+              msgMetadata = { toolUseId: null };
+            }
+          }
+          
+          // 检查 metadata 中的 toolUseId 是否匹配
+          if (msgMetadata?.toolUseId === toolUseId || msgMetadata?.toolUseId === childId) {
+            childMessages.push({
+              id: msg.id,
+              role: 'assistant',
+              content: msgContent,
+              createdAt: msg.createdAt?.toISOString(),
+              isError: msgMetadata.isError,
+            });
+          }
+        }
+      }
+      
+      logger.logNoUser(LOG_MODULES.SESSION, 'Found messages for child', { details: { childId, count: childMessages.length } });
+      
+      return NextResponse.json({
+        messages: childMessages,
+        total: childMessages.length,
+        source: 'evaluation',
+      });
     }
 
     // 解析消息中的 Agent/task 工具调用

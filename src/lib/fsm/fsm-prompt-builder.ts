@@ -18,21 +18,46 @@ export function buildAgentZonePrompt(
   const phase2Summary = extractPhase2Summary(phaseOutputs['P2'] || phaseOutputs['Phase2']);
   const phase3Summary = extractPhase3Summary(phaseOutputs['P3'] || phaseOutputs['Phase3']);
 
-  sections.push(`
+sections.push(`
 至此，威胁建模分析已完成以下阶段：
 
 ✅ **Node 1 系统理解** - 已完成
    产出文件：
-   - .claude/phases/1-system-understanding/P1_project_context.yaml
+   - outputs/phases/1-system-understanding/P1_project_context.yaml
      - 项目类型: ${phase1Summary.projectType}
      - 技术栈: ${phase1Summary.techStack}
      - 模块数量: ${phase1Summary.moduleCount}
      - 入口点数量: ${phase1Summary.entryPointCount}
    
-   - .claude/phases/1-system-understanding/P2_dfd_elements.yaml
+   - outputs/phases/1-system-understanding/P2_dfd_elements.yaml
      - DFD 元素数量: ${phase1Summary.dfdElementCount}
      - 数据流数量: ${phase1Summary.dataFlowCount}
      - 覆盖率: ${phase1Summary.coveragePercentage}%
+`);
+
+  sections.push(`
+✅ **Node 2 安全评估** - 已完成
+   产出文件：
+   - outputs/phases/2-security-assessment/P3_boundary_context.yaml
+     - 信任边界数量: ${phase2Summary.boundaryCount}
+   
+   - outputs/phases/2-security-assessment/P4_security_gaps.yaml
+     - 安全缺口数量: ${phase2Summary.gapCount}
+     - 高危缺口: ${phase2Summary.highGaps}
+     - 严重缺口: ${phase2Summary.criticalGaps}
+`);
+
+  sections.push(`
+✅ **Node 3 娏胁分析** - 已完成
+   产出文件：
+   - outputs/phases/3-threat-analysis/P5_threat_inventory.yaml
+     - 娏胁总数: ${phase3Summary.threatCount}
+     - STRIDE 分布: ${formatStrideDistribution(phase3Summary.strideDistribution)}
+   
+   - outputs/phases/3-threat-analysis/P6_validated_risks.yaml
+     - 已验证风险: ${phase3Summary.verifiedRisks}
+     - 理论风险: ${phase3Summary.theoreticalRisks}
+     - POC 数量: ${phase3Summary.pocCount}
 `);
 
   sections.push(`
@@ -242,7 +267,7 @@ ${Object.entries(upstreamData)
 
 ## 输出格式
 请将结果写入:
-.claude/phases/${phaseNumber}-${phaseName}/P${phaseNumber}_output.yaml
+outputs/phases/${phaseNumber}-${phaseName}/P${phaseNumber}_output.yaml
 `;
 }
 

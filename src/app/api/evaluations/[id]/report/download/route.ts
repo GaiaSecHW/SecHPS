@@ -93,10 +93,10 @@ export async function GET(request: Request, context: RouteContext) {
       });
     }
 
-    // Markdown 格式
+    // Markdown 格式 - 使用 outputs/skills 替代 .claude/skills
     const workspacePath = evaluation.Project?.projectPath || '';
     const templateName = workflow?.FSMTemplate?.name || 'threat-modeling';
-    const reportsPath = path.join(workspacePath, '.claude', 'skills', templateName, 'reports');
+    const reportsPath = path.join(workspacePath, 'outputs', 'skills', templateName, 'reports');
 
     // 读取所有报告文件并合并
     const reportFiles = [

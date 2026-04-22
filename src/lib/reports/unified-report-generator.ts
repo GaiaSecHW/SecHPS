@@ -202,8 +202,8 @@ export async function saveUnifiedReport(
   // 1. Generate Markdown content
   const markdownContent = generateMarkdownReport(reportData);
   
-  // 2. Write to workspace
-  const reportsDir = path.join(workspacePath, '.claude', 'reports');
+  // 2. Write to workspace - 使用 outputs/reports 替代 .claude/reports
+  const reportsDir = path.join(workspacePath, 'outputs', 'reports');
   if (!fs.existsSync(reportsDir)) {
     fs.mkdirSync(reportsDir, { recursive: true });
   }

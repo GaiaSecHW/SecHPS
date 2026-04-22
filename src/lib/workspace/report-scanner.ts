@@ -88,14 +88,14 @@ export async function scanWorkspaceReports(
     errors: [],
   };
 
-  // 默认扫描路径
+  // 默认扫描路径 - 使用 outputs 替代 .claude
   const scanPaths = [
     workspacePath,
     path.join(workspacePath, 'reports'),
     path.join(workspacePath, 'scan-reports'),
     path.join(workspacePath, 'vulnerabilities'),
-    path.join(workspacePath, '.claude'),
-    path.join(workspacePath, '.claude', 'reports'),
+    path.join(workspacePath, 'outputs'),
+    path.join(workspacePath, 'outputs', 'reports'),
     ...additionalPaths || [],
   ];
 

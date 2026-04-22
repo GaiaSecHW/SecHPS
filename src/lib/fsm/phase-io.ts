@@ -2,13 +2,15 @@
  * Phase IO 模块
  * 
  * 读取和写入阶段输出 YAML 文件
+ * 注意：使用 outputs/ 目录替代 .claude/ 目录，因为大模型不允许操作 .claude 目录
  */
 import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'yaml'; // 需要安装: npm install yaml
 import { prisma } from '@/lib/prisma';
 
-const CLAUDE_PHASES_PATH = path.join(process.cwd(), '.claude', 'phases');
+// 使用 outputs/phases 替代 .claude/phases
+const OUTPUTS_PHASES_PATH = path.join(process.cwd(), 'outputs', 'phases');
 
 export interface PhaseData {
   phaseNumber: number;
@@ -45,9 +47,9 @@ export async function readPhaseOutput(
       };
     }
 
-    // 从文件读取
+    // 从文件读取 - 使用 outputs/phases 替代 .claude/phases
     const phaseName = getPhaseName(phaseNumber);
-    const phaseDir = path.join(CLAUDE_PHASES_PATH, `${phaseNumber}-${phaseName}`);
+    const phaseDir = path.join(OUTPUTS_PHASES_PATH, `${phaseNumber}-${phaseName}`);
     const yamlFile = path.join(phaseDir, `P${phaseNumber}_output.yaml`);
 
     const rawYaml = await fs.readFile(yamlFile, 'utf-8');
@@ -80,8 +82,8 @@ export async function writePhaseOutput(
   // 转换为 YAML
   const rawYaml = yaml.stringify(data);
   
-  // 写入文件
-  const phaseDir = path.join(CLAUDE_PHASES_PATH, `${phaseNumber}-${phaseName}`);
+  // 写入文件 - 使用 outputs/phases 替代 .claude/phases
+  const phaseDir = path.join(OUTPUTS_PHASES_PATH, `${phaseNumber}-${phaseName}`);
   await fs.mkdir(phaseDir, { recursive: true });
   
   const outputPath = path.join(phaseDir, `P${phaseNumber}_output.yaml`);

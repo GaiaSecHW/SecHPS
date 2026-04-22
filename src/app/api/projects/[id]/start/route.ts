@@ -150,15 +150,16 @@ export async function POST(
     }
 
     // 检查并发限制（队列启动时跳过）
+    // 注意：需要统计 preparing 和 running 状态，因为创建时是 preparing
     const maxConcurrent = globalConfig?.maxConcurrentEvaluations || 3;
-    const runningCount = await prisma.evaluationSession.count({
-      where: { status: 'running' },
+    const activeCount = await prisma.evaluationSession.count({
+      where: { status: { in: ['preparing', 'running'] } },
     });
     
-    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { runningCount, maxConcurrent });
+    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { activeCount, maxConcurrent });
     
     // 如果超出并发限制且不是队列启动，创建排队状态的评估
-    if (!isQueuedStart && runningCount >= maxConcurrent) {
+    if (!isQueuedStart && activeCount >= maxConcurrent) {
       logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
       
       // 创建排队状态的评估会话
@@ -179,7 +180,7 @@ export async function POST(
         message: '评估已加入排队队列',
         evaluationId: queuedEvaluation.id,
         status: 'queued',
-        queuePosition: runningCount - maxConcurrent + 1,
+        queuePosition: activeCount - maxConcurrent + 1,
         maxConcurrent,
       }, { status: 202 }); // 202 Accepted 表示请求已接受但未处理
     }
@@ -820,6 +821,27 @@ export async function POST(
                 evaluationId: evaluation.id,
               });
               
+              // 获取 FSMTemplate.nodes 来映射 phase 到正确的 nodeId
+              let fsmPhaseToNodeId: Record<number, string> = {};
+              if (workflow.fsmTemplateId) {
+                const fsmTemplate = await prisma.fSMTemplate.findUnique({
+                  where: { id: workflow.fsmTemplateId },
+                  select: { nodes: true },
+                });
+                if (fsmTemplate?.nodes) {
+                  try {
+                    const fsmNodes = JSON.parse(fsmTemplate.nodes);
+                    fsmNodes.forEach((node: any) => {
+                      if (node.fsmPhase) {
+                        fsmPhaseToNodeId[node.fsmPhase] = node.id;
+                      }
+                    });
+                  } catch (e) {
+                    logger.warn(LOG_MODULES.EVALUATION, '[FSM Async] 解析 FSMTemplate.nodes 失败', { error: String(e) });
+                  }
+                }
+              }
+              
               // 调用 FSM 执行服务
               const { createFSMWorkflowExecutionService } = await import('@/lib/fsm');
               
@@ -854,7 +876,26 @@ export async function POST(
                   },
                   onPhaseToolCall: (phase, tool, args) => {
                     logger.debug(LOG_MODULES.FSM, `Phase ${phase} 工具调用: ${tool}`);
-                    // 工具调用通过日志记录，前端通过 messages API 获取
+                    // 检测 TodoWrite 工具调用
+                    if (tool === 'TodoWrite' && args?.todos && Array.isArray(args.todos)) {
+                      // 使用正确的nodeId（从FSMTemplate.nodes映射）
+                      const nodeId = fsmPhaseToNodeId[phase] || `fsm-node-p${phase}`;
+                      const todosWithNodeId = args.todos.map((todo: any) => ({
+                        ...todo,
+                        nodeId: nodeId,
+                        workflowNodeId: nodeId,
+                        phase: phase,
+                      }));
+                      
+                      emitTodoUpdate(evaluation.id, todosWithNodeId);
+                      
+                      // 保存到数据库
+                      const newSnapshot = JSON.stringify(todosWithNodeId);
+                      prisma.evaluationSession.update({
+                        where: { id: evaluation.id },
+                        data: { todoList: newSnapshot },
+                      }).catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '[FSM Async] 保存 TODO 失败', { error: err }));
+                    }
                   },
                   onPhaseComplete: async (phase, result) => {
                     logger.info(LOG_MODULES.FSM, `Phase ${phase} 完成`, {
@@ -1596,10 +1637,25 @@ export async function POST(
                 
                 // 检测 TodoWrite 工具调用
                 if (tool === 'TodoWrite' && args?.todos && Array.isArray(args.todos)) {
-                  emitTodoUpdate(dagEvaluation.id, args.todos);
+                  // 为每个todo添加当前节点的nodeId（使用sortedNodes）
+                  const currentNode = sortedNodes[nodeIndex];
+                  const todosWithNodeId = args.todos.map((todo: any) => ({
+                    ...todo,
+                    nodeId: currentNode?.id || null,
+                    workflowNodeId: currentNode?.id || null,
+                    nodeIndex: nodeIndex,
+                  }));
+                  
+                  logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] TodoWrite 保存', {
+                    nodeIndex,
+                    nodeId: currentNode?.id,
+                    todosCount: todosWithNodeId.length,
+                  });
+                  
+                  emitTodoUpdate(dagEvaluation.id, todosWithNodeId);
                   
                   // 保存到数据库
-                  const newSnapshot = JSON.stringify(args.todos);
+                  const newSnapshot = JSON.stringify(todosWithNodeId);
                   prisma.evaluationSession.update({
                     where: { id: dagEvaluation.id },
                     data: { todoList: newSnapshot },

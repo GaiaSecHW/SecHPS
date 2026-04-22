@@ -80,9 +80,9 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: `未知章节: ${section}` }, { status: 400 });
     }
 
-    // 读取章节内容
+    // 读取章节内容 - 使用 outputs/skills 替代 .claude/skills
     const workspacePath = evaluation.Project?.projectPath || '';
-    const reportsPath = path.join(workspacePath, '.claude', 'skills', workflow.FSMTemplate?.name || 'threat-modeling', 'reports');
+    const reportsPath = path.join(workspacePath, 'outputs', 'skills', workflow.FSMTemplate?.name || 'threat-modeling', 'reports');
     const filePath = path.join(reportsPath, sectionFile);
 
     if (!fs.existsSync(filePath)) {

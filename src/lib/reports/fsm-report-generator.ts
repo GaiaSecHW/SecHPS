@@ -200,9 +200,10 @@ export async function generateFSMReport(
 
 /**
  * 读取 Phase 输出文件
+ * 注意：使用 outputs/skills 替代 .claude/skills
  */
 async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['phaseOutputs']> {
-  const outputsPath = path.join(workspacePath, '.claude', 'skills', 'threat-modeling', 'outputs');
+  const outputsPath = path.join(workspacePath, 'outputs', 'skills', 'threat-modeling', 'outputs');
   const phaseOutputs: FSMReportData['phaseOutputs'] = {};
 
   const phaseFiles = [
@@ -381,9 +382,10 @@ function calculateSummary(
 
 /**
  * 生成报告文件
+ * 注意：使用 outputs/skills 替代 .claude/skills
  */
 async function generateReportFiles(reportData: FSMReportData, workspacePath: string): Promise<void> {
-  const reportsPath = path.join(workspacePath, '.claude', 'skills', 'threat-modeling', 'reports');
+  const reportsPath = path.join(workspacePath, 'outputs', 'skills', 'threat-modeling', 'reports');
   
   // 创建报告目录
   if (!fs.existsSync(reportsPath)) {
@@ -1043,9 +1045,10 @@ function generateMermaidNodes(dfdElements: any): string {
 
 /**
  * 保存报告到数据库
+ * 注意：使用 outputs/skills 替代 .claude/skills
  */
 async function saveReportToDatabase(reportData: FSMReportData, workspacePath: string): Promise<void> {
-  const reportsPath = path.join(workspacePath, '.claude', 'skills', 'threat-modeling', 'reports');
+  const reportsPath = path.join(workspacePath, 'outputs', 'skills', 'threat-modeling', 'reports');
   
   // 读取主报告内容
   const mainReportPath = path.join(reportsPath, 'RISK-ASSESSMENT-REPORT.md');

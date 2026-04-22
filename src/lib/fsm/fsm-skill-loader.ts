@@ -1,7 +1,8 @@
 /**
  * FSM Skill 加载器
  * 
- * 在 FSM 工作流启动时，将 Skill 目录复制到项目 .claude/skills/ 目录
+ * 在 FSM 工作流启动时，将 Skill 目录复制到项目 outputs/skills/ 目录
+ * 注意：使用 outputs/ 目录替代 .claude/ 目录，因为大模型不允许操作 .claude 目录
  */
 import fs from 'fs/promises';
 import path from 'path';
@@ -9,8 +10,9 @@ import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
 
 const DATA_SKILLS_PATH = path.join(process.cwd(), 'data', 'skills');
-const CLAUDE_SKILLS_PATH = path.join(process.cwd(), '.claude', 'skills');
-const CLAUDE_PHASES_PATH = path.join(process.cwd(), '.claude', 'phases');
+// 使用 outputs/ 替代 .claude/
+const OUTPUTS_SKILLS_PATH = path.join(process.cwd(), 'outputs', 'skills');
+const OUTPUTS_PHASES_PATH = path.join(process.cwd(), 'outputs', 'phases');
 
 export interface LoadResult {
   success: boolean;
@@ -60,19 +62,19 @@ export async function loadFSMSkill(
       await createSkillTemplate(sourcePath, templateName);
     }
 
-    // 4. 目标路径
-    const targetPath = path.join(CLAUDE_SKILLS_PATH, templateName);
+    // 4. 目标路径 - 使用 outputs/skills 替代 .claude/skills
+    const targetPath = path.join(OUTPUTS_SKILLS_PATH, templateName);
 
     // 5. 复制 Skill 目录
     await copyDirectory(sourcePath, targetPath);
 
-    // 6. 创建阶段输出目录
+    // 6. 创建阶段输出目录 - 使用 outputs/phases 替代 .claude/phases
     const phaseDirs: string[] = [];
     const nodes = JSON.parse(template.nodes);
     
     for (const node of nodes) {
       const phaseDir = path.join(
-        CLAUDE_PHASES_PATH,
+        OUTPUTS_PHASES_PATH,
         `${node.fsmPhase}-${getPhaseName(node.fsmPhase)}`
       );
       await fs.mkdir(phaseDir, { recursive: true });
@@ -81,7 +83,7 @@ export async function loadFSMSkill(
 
     // 7. 创建 session 子目录 (如果提供了 sessionId)
     if (sessionId) {
-      const sessionPhasesPath = path.join(CLAUDE_PHASES_PATH, sessionId);
+      const sessionPhasesPath = path.join(OUTPUTS_PHASES_PATH, sessionId);
       await fs.mkdir(sessionPhasesPath, { recursive: true });
     }
 
@@ -209,7 +211,7 @@ export async function readPhaseContent(
 ): Promise<Record<string, string>> {
   const contents: Record<string, string> = {};
   
-  const skillPath = path.join(CLAUDE_SKILLS_PATH, skillName, 'phases');
+  const skillPath = path.join(DATA_SKILLS_PATH, skillName, 'phases');
   
   for (const phase of phases) {
     const phaseFile = path.join(skillPath, `${phase}.md`);
