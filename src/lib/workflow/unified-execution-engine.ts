@@ -267,11 +267,13 @@ export class UnifiedWorkflowExecutionEngine {
 
         // 累积助手响应文本（用于最终保存）
         let accumulatedAssistantText = '';
+        let lastSavedLength = 0;  // 记录上次保存的长度
 
         // 执行节点
         const result = await agent.loop({
-          evaluationId: `${this.config.evaluationSessionId}-node-${nodeIndex}`,
+          evaluationId: this.config.evaluationSessionId,  // 使用真实的 evaluationSessionId
           projectId: this.config.projectId,
+          workflowNodeId: node.id,  // 传递 workflowNodeId
           context: {
             projectName: this.config.projectName,
             taskDescription: prompt,
@@ -280,8 +282,20 @@ export class UnifiedWorkflowExecutionEngine {
           },
           callbacks: {
             onChunk: (text) => {
+              // 日志：打印 onChunk 被调用
+              console.log(`[executeNode] 📝 onChunk 被调用, 文本长度: ${text.length}, 累计: ${accumulatedAssistantText.length + text.length}`);
+              
               // 累积助手响应文本
               accumulatedAssistantText += text;
+              
+              // 实时保存每条消息（不再等待 500 字符）
+              this.saveNodeMessage(
+                nodeId, 
+                'assistant_chunk', 
+                text,
+                JSON.stringify({ nodeIndex, timestamp: Date.now(), cumulativeLength: accumulatedAssistantText.length })
+              ).catch(err => console.error('[executeNode] 保存助手消息片段失败:', err));
+              
               // 调用外部回调
               this.callbacks.onNodeChunk(nodeIndex, text);
             },
@@ -515,6 +529,7 @@ export class UnifiedWorkflowExecutionEngine {
   ): RalphLoopAgent {
     console.log(`[createNodeAgent] Creating agent for node ${nodeIndex}: ${node.label}`);
     console.log(`[createNodeAgent] Model: ${modelConfig.name}`);
+    console.log(`[createNodeAgent] WorkflowNodeId: ${node.id}`);
 
     return createRalphLoopAgent(
       {
@@ -532,6 +547,7 @@ export class UnifiedWorkflowExecutionEngine {
         systemPrompt: this.config.systemPrompt,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
+        workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
       }
     );
   }
@@ -718,6 +734,11 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
 
   /**
    * 保存节点执行记录到数据库
+   * 
+   * FSM 模式：workflowNodeId 使用 FSM phase 标识（如 "P1", "P2"），不对应 WorkflowNode 表记录
+   * DAG 模式：workflowNodeId 对应 WorkflowNode 表的真实 ID
+   * 
+   * 注意：NodeExecution 表没有对 WorkflowNode 的外键约束，只有唯一约束
    */
   private async saveNodeExecutionToDB(
     nodeIndex: number,
@@ -726,58 +747,111 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
     modelConfig: ModelConfigForExecution
   ): Promise<void> {
     try {
-      await prisma.nodeExecution.create({
-        data: {
-          id: `node-exec-${this.config.evaluationSessionId}-${nodeIndex}`,
-          evaluationSessionId: this.config.evaluationSessionId,
-          workflowNodeId: node.id,
-          nodeLabel: node.label,
-          nodeType: node.fsmPhase ? 'fsm_phase' : 'custom',
-          status: result.status,
-          startedAt: new Date(this.startTime.getTime() + result.duration * nodeIndex),
-          completedAt: new Date(),
-          updatedAt: new Date(),
-          order: nodeIndex,
-          modelConfigId: modelConfig.id,
-          modelName: modelConfig.name,
-          roleId: node.roleId ?? undefined,
+      // 检查是否已存在（避免唯一约束冲突）
+      const existing = await prisma.nodeExecution.findUnique({
+        where: {
+          evaluationSessionId_workflowNodeId: {
+            evaluationSessionId: this.config.evaluationSessionId,
+            workflowNodeId: node.id,
+          },
         },
       });
-      console.log(`[saveNodeExecutionToDB] 保存节点执行记录: ${node.label}`);
+
+      const data = {
+        evaluationSessionId: this.config.evaluationSessionId,
+        workflowNodeId: node.id,
+        nodeLabel: node.label,
+        nodeType: node.fsmPhase ? 'fsm_phase' : (node.type || 'custom'),
+        status: result.status,
+        startedAt: new Date(this.startTime.getTime() + result.duration * nodeIndex),
+        completedAt: new Date(),
+        updatedAt: new Date(),
+        order: nodeIndex,
+        modelConfigId: modelConfig.id,
+        modelName: modelConfig.name,
+        roleId: node.roleId ?? undefined,
+      };
+
+      if (existing) {
+        // 更新现有记录
+        await prisma.nodeExecution.update({
+          where: { id: existing.id },
+          data: {
+            status: result.status,
+            completedAt: new Date(),
+            updatedAt: new Date(),
+            modelConfigId: modelConfig.id,
+            modelName: modelConfig.name,
+          },
+        });
+        console.log(`[saveNodeExecutionToDB] 更新节点执行记录: ${node.label}`);
+      } else {
+        // 创建新记录
+        await prisma.nodeExecution.create({
+          data: {
+            id: `node-exec-${this.config.evaluationSessionId}-${nodeIndex}`,
+            ...data,
+          },
+        });
+        console.log(`[saveNodeExecutionToDB] 创建节点执行记录: ${node.label}, workflowType=${this.config.workflowType}`);
+      }
     } catch (error) {
       console.error(`[saveNodeExecutionToDB] 保存失败:`, error);
+      // 不抛出错误，允许执行继续进行
     }
   }
 
   /**
    * 保存单条节点消息到数据库
-   * 支持实时保存各类消息（user, assistant, tool_call, tool_result）
+   * 支持实时保存各类消息（user, assistant, assistant_chunk, tool_call, tool_result）
+   * 
+   * FSM 模式特殊处理：workflowNodeId 不保存到数据库，因为 FSM 节点 ID 来自 JSON 配置，
+   * 不存在于 WorkflowNode 表中，会导致外键约束失败。
    * 
    * @param nodeId 工作流节点 ID
-   * @param role 消息角色 (user, assistant, tool_call, tool_result)
+   * @param role 消息角色 (user, assistant, assistant_chunk, tool_call, tool_result)
    * @param content 消息内容
    * @param metadata 可选的元数据（JSON 字符串）
    */
   async saveNodeMessage(
     nodeId: string,
-    role: 'user' | 'assistant' | 'tool_call' | 'tool_result',
+    role: string,  // 支持任意角色类型
     content: string,
     metadata?: string
   ): Promise<void> {
     try {
-      await prisma.sessionMessage.create({
-        data: {
-          id: generateId('msg'),
-          evaluationSessionId: this.config.evaluationSessionId,
-          workflowNodeId: nodeId,
-          role,
-          content,
-          metadata,
-        },
-      });
-      console.log(`[saveNodeMessage] 保存消息: nodeId=${nodeId}, role=${role}`);
+      // FSM 模式：不保存 workflowNodeId，避免外键约束失败
+      // DAG 模式：保存 workflowNodeId，用于节点消息过滤
+      const isFSM = this.config.workflowType === 'fsm';
+      
+      const data: {
+        id: string;
+        evaluationSessionId: string;
+        workflowNodeId?: string;
+        role: string;
+        content: string;
+        metadata?: string;
+      } = {
+        id: generateId('msg'),
+        evaluationSessionId: this.config.evaluationSessionId,
+        role,
+        content,
+      };
+      
+      // DAG 模式才保存 workflowNodeId
+      if (!isFSM) {
+        data.workflowNodeId = nodeId;
+      }
+      
+      if (metadata) {
+        data.metadata = metadata;
+      }
+      
+      await prisma.sessionMessage.create({ data });
+      console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}, workflowType=${this.config.workflowType}`);
     } catch (error) {
       console.error(`[saveNodeMessage] 保存失败:`, error);
+      // 不抛出错误，允许执行继续进行
     }
   }
 

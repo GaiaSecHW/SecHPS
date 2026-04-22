@@ -178,7 +178,8 @@ function SessionDetailContent({
   }, [evaluationId]);
 
   useEffect(() => {
-    if (evaluation?.opencodeSessionId) {
+    // SSE 连接不再依赖 opencodeSessionId（多 Agent 模式下 session_id 保存在 NodeExecution）
+    if (evaluationId && evaluation?.projectId) {
       fetchSessionDetail();
       fetchTodos();
       fetchSdkProjects();
@@ -194,7 +195,7 @@ function SessionDetailContent({
         abortController.abort();
       }
     };
-  }, [evaluation?.opencodeSessionId]);
+  }, [evaluationId, evaluation?.projectId]);
 
   // 连接评估实时事件流（使用 fetch 替代 EventSource，支持 Authorization header）
   const connectToEvaluationStream = async () => {
@@ -292,19 +293,20 @@ function SessionDetailContent({
         break;
         
       case 'token_usage':
+      case 'phase_token_usage':
         // 实时 token 使用量和模型信息
         setRealtimeTokenUsage({
-          phase: data.phase,
-          phaseName: data.phaseName,
+          phase: data.phase || data.nodeIndex,
+          phaseName: data.phaseName || '',
           modelName: data.modelName,
           inputTokens: data.inputTokens,
           outputTokens: data.outputTokens,
-          totalTokens: data.totalTokens,
+          totalTokens: data.totalTokens || (data.inputTokens + data.outputTokens),
           cumulativeInputTokens: data.cumulativeInputTokens,
           cumulativeOutputTokens: data.cumulativeOutputTokens,
-          cumulativeTotalTokens: data.cumulativeTotalTokens,
+          cumulativeTotalTokens: data.cumulativeTotalTokens || (data.cumulativeInputTokens + data.cumulativeOutputTokens),
         });
-        console.log(`[Token] Phase ${data.phase}: ${data.modelName} - 累计 ${data.cumulativeTotalTokens} tokens`);
+        console.log(`[Token] Phase ${data.phase || data.nodeIndex}: ${data.modelName} - 输入 ${data.inputTokens}, 输出 ${data.outputTokens}, 累计 ${data.cumulativeInputTokens + data.cumulativeOutputTokens} tokens`);
         break;
 
       case 'phase_start':
@@ -457,10 +459,30 @@ function SessionDetailContent({
         break;
         
       case 'message':
-        // 消息块 - 实时添加到消息列表
+        // 消息块 - 实时添加到节点消息列表
         if (data.content) {
+          const nodeId = data.nodeId;
+          console.log('[Message] Real-time update, nodeId:', nodeId, 'content length:', data.content.length);
+          
+          // 如果当前选中的节点就是消息所属的节点，实时更新 nodeMessages
+          if (nodeId && selectedNodeId === nodeId) {
+            setNodeMessages(prev => {
+              // 避免重复添加
+              const exists = prev.some(m => m.id === data.id);
+              if (exists) return prev;
+              
+              return [...prev, {
+                id: data.id || `msg-${Date.now()}`,
+                role: 'assistant',
+                content: data.content,
+                createdAt: new Date().toISOString(),
+                workflowNodeId: nodeId,
+              }];
+            });
+          }
+          
+          // 同时更新全局 messages（用于轮询刷新时合并）
           setMessages(prev => {
-            // 避免重复添加
             const exists = prev.some(m => m.id === data.id);
             if (exists) return prev;
             
@@ -469,9 +491,9 @@ function SessionDetailContent({
               role: 'assistant',
               content: data.content,
               createdAt: new Date().toISOString(),
+              workflowNodeId: nodeId,
             }];
           });
-          console.log('[Message] Real-time update received');
         }
         break;
         
@@ -482,7 +504,8 @@ function SessionDetailContent({
   };
 
   useEffect(() => {
-    if (!evaluation?.opencodeSessionId) return;
+    // 多 Agent 模式使用 evaluationId，旧模式使用 opencodeSessionId
+    if (!evaluationId && !evaluation?.opencodeSessionId) return;
 
     // 如果评估已完成，不需要轮询
     if (evaluation.status === 'completed' || evaluation.status === 'failed') {
@@ -497,11 +520,12 @@ function SessionDetailContent({
         fetchSessionDetail();
         fetchChildrenSessions();
         fetchWorkflowNodes(); // 添加节点轮询
+        fetchEvaluation(); // 刷新评估状态
       }
-    }, 10000); // 10秒轮询一次
+    }, 5000); // 5秒轮询一次，提高实时性
 
     return () => clearInterval(interval);
-  }, [evaluation?.opencodeSessionId, evaluation?.status, abortController]);
+  }, [evaluationId, evaluation?.opencodeSessionId, evaluation?.status, abortController]);
 
   const fetchEvaluation = async () => {
     if (!evaluationId) return;
@@ -683,6 +707,31 @@ function SessionDetailContent({
   };
 
   const fetchTodos = async () => {
+    // 优先使用 evaluationId 获取 todos
+    if (evaluationId) {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(
+          `/api/evaluations/${evaluationId}/todos`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          setTodos(data.todos || []);
+          console.log('[TODO] Fetched from evaluation API:', data.todos?.length || 0, 'todos');
+          return;
+        }
+      } catch (err) {
+        console.error('[TODO] Error fetching from evaluation API:', err);
+      }
+    }
+
+    // 兼容旧的 opencodeSessionId 方式
     if (!evaluation?.opencodeSessionId) return;
 
     try {
@@ -744,12 +793,16 @@ function SessionDetailContent({
   };
 
   const fetchChildrenSessions = async () => {
-    if (!evaluation?.opencodeSessionId) return;
+    // 多Agent模式：使用 evaluationId 获取子Agent列表
+    // 子Agent信息从 NodeExecution 表获取
+    if (!evaluationId) return;
 
     try {
       const token = localStorage.getItem('token');
+      
+      // 使用 evaluationId 获取子Agent列表（从 NodeExecution 表）
       const response = await fetch(
-        `/api/sessions/${evaluation.opencodeSessionId}/children`,
+        `/api/evaluations/${evaluationId}/children`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -759,6 +812,35 @@ function SessionDetailContent({
 
       if (!response.ok) {
         console.error('[Children] Failed to fetch children sessions:', response.status);
+        // 如果新API失败，尝试旧的方式（兼容）
+        if (evaluation?.opencodeSessionId) {
+          const fallbackResponse = await fetch(
+            `/api/sessions/${evaluation.opencodeSessionId}/children`,
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+          if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            console.log('[Children] Fallback received children sessions:', fallbackData.children?.length || 0);
+            setChildrenSessions(prev => {
+              const newChildren = fallbackData.children || [];
+              return newChildren.map((newChild: any) => {
+                const savedStartedAt = childStartedAtRef.current[newChild.id];
+                const existingChild = prev.find(c => c.id === newChild.id);
+                if (savedStartedAt) {
+                  return { ...newChild, startedAt: savedStartedAt };
+                }
+                if (existingChild?.startedAt && !newChild.startedAt) {
+                  return { ...newChild, startedAt: existingChild.startedAt };
+                }
+                return newChild;
+              });
+            });
+          }
+        }
         return;
       }
 
@@ -831,46 +913,104 @@ function SessionDetailContent({
     try {
       const token = localStorage.getItem('token');
       
-      // 调用 children API 并传入 childId 参数
-      const response = await fetch(
-        `/api/sessions/${evaluation?.opencodeSessionId}/children?childId=${childId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      // 多Agent模式：使用 evaluationId 获取子会话消息
+      // 从 NodeExecution 表获取 session_id，然后获取消息
+      if (evaluationId) {
+        // 先获取子会话的 session_id（从 NodeExecution 表）
+        const nodeExecResponse = await fetch(
+          `/api/evaluations/${evaluationId}/nodes`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+        
+        if (nodeExecResponse.ok) {
+          const nodeExecData = await nodeExecResponse.json();
+          // 找到对应的节点执行记录
+          const nodeExec = nodeExecData.nodes?.find((n: any) => n.id === childId || n.workflowNodeId === childId);
+          
+          if (nodeExec?.opencodeSessionId) {
+            // 使用 opencodeSessionId 获取消息
+            const response = await fetch(
+              `/api/sessions/${nodeExec.opencodeSessionId}/messages`,
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+            
+            if (response.ok) {
+              const data = await response.json();
+              console.log('[Child Messages] Received from node execution:', data.messages?.length || 0);
+              
+              const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
+                id: msg.uuid || msg.id || `child-msg-${index}`,
+                role: msg.role || (msg.message?.role) || 'assistant',
+                content: msg.content || msg.message?.content || '',
+                createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
+              }));
+              
+              setChildSessionMessages(formattedMessages);
+              
+              if (formattedMessages.length > 0 && formattedMessages[0].createdAt) {
+                const firstMsgTime = formattedMessages[0].createdAt;
+                childStartedAtRef.current[childId] = firstMsgTime;
+                setChildrenSessions(prev => prev.map(child => 
+                  child.id === childId && !child.startedAt 
+                    ? { ...child, startedAt: firstMsgTime }
+                    : child
+                ));
+              }
+              return;
+            }
+          }
         }
-      );
-
-      if (!response.ok) {
-        console.error('[Child Messages] Failed to fetch:', response.status);
-        setChildSessionMessages([]);
-        return;
       }
+      
+      // 兼容旧模式：使用 opencodeSessionId
+      if (evaluation?.opencodeSessionId) {
+        const response = await fetch(
+          `/api/sessions/${evaluation.opencodeSessionId}/children?childId=${childId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      const data = await response.json();
-      console.log('[Child Messages] Received:', data.messages?.length || 0);
-      
-      // 转换消息格式为前端期望的格式
-      const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
-        id: msg.uuid || msg.id || `child-msg-${index}`,
-        role: msg.role || (msg.message?.role) || 'assistant',
-        content: msg.content || msg.message?.content || '',
-        createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
-      }));
-      
-      setChildSessionMessages(formattedMessages);
-      
-      // 如果第一条消息有时间，更新子任务的 startedAt
-      if (formattedMessages.length > 0 && formattedMessages[0].createdAt) {
-        const firstMsgTime = formattedMessages[0].createdAt;
-        // 保存到 ref，防止轮询覆盖
-        childStartedAtRef.current[childId] = firstMsgTime;
-        setChildrenSessions(prev => prev.map(child => 
-          child.id === childId && !child.startedAt 
-            ? { ...child, startedAt: firstMsgTime }
-            : child
-        ));
-        console.log('[Child Messages] Updated startedAt for child:', childId, firstMsgTime);
+        if (!response.ok) {
+          console.error('[Child Messages] Failed to fetch:', response.status);
+          setChildSessionMessages([]);
+          return;
+        }
+
+        const data = await response.json();
+        console.log('[Child Messages] Received:', data.messages?.length || 0);
+        
+        const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
+          id: msg.uuid || msg.id || `child-msg-${index}`,
+          role: msg.role || (msg.message?.role) || 'assistant',
+          content: msg.content || msg.message?.content || '',
+          createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
+        }));
+        
+        setChildSessionMessages(formattedMessages);
+        
+        if (formattedMessages.length > 0 && formattedMessages[0].createdAt) {
+          const firstMsgTime = formattedMessages[0].createdAt;
+          childStartedAtRef.current[childId] = firstMsgTime;
+          setChildrenSessions(prev => prev.map(child => 
+            child.id === childId && !child.startedAt 
+              ? { ...child, startedAt: firstMsgTime }
+              : child
+          ));
+        }
+      } else {
+        console.log('[Child Messages] No opencodeSessionId available');
+        setChildSessionMessages([]);
       }
     } catch (err) {
       console.error('[Child Messages] Error fetching:', err);
@@ -897,7 +1037,8 @@ function SessionDetailContent({
 
     try {
       const token = localStorage.getItem('token');
-      const sessionId = evaluation?.opencodeSessionId;
+      // 使用 evaluationId 而不是 opencodeSessionId（多 Agent 模式下 opencodeSessionId 保存在 NodeExecution）
+      const sessionId = evaluationId || evaluation?.opencodeSessionId;
       const response = await fetch(
         `/api/messages/${message.id}?sessionId=${sessionId}`,
         {
@@ -910,20 +1051,42 @@ function SessionDetailContent({
       if (!response.ok) {
         const data = await response.json();
         console.error('获取消息详情失败:', data.error);
+        // 使用本地消息数据构建详情
+        const content = message.content || '';
+        const parts = typeof content === 'string' 
+          ? [{ type: 'text', text: content }]
+          : Array.isArray(content) 
+            ? content 
+            : [{ type: 'text', text: String(content) }];
         setMessageDetail({
           info: message,
-          parts: message.content || [],
+          parts,
         });
         return;
       }
 
       const data = await response.json();
-      setMessageDetail(data.message);
+      // API 返回 { message: { content, role, ... } }，需要转换为 { info, parts } 格式
+      const apiMessage = data.message;
+      const parts = Array.isArray(apiMessage.content) 
+        ? apiMessage.content 
+        : [{ type: 'text', text: String(apiMessage.content || '') }];
+      setMessageDetail({
+        info: apiMessage,
+        parts,
+      });
     } catch (err) {
       console.error('获取消息详情失败:', err);
+      // 使用本地消息数据构建详情
+      const content = message.content || '';
+      const parts = typeof content === 'string' 
+        ? [{ type: 'text', text: content }]
+        : Array.isArray(content) 
+          ? content 
+          : [{ type: 'text', text: String(content) }];
       setMessageDetail({
         info: message,
-        parts: message.content || [],
+        parts,
       });
     } finally {
       setLoadingDetail(false);
@@ -1399,8 +1562,8 @@ function SessionDetailContent({
               </div>
             )}
             
-            {/* TODO List - 已隐藏：现在每个节点单独执行 Agent，用户应通过点击节点查看任务 */}
-            {/* <div className="mb-6">
+            {/* TODO List - 任务列表 */}
+            <div className="mb-6">
               <button
                 onClick={() => setIsTodosExpanded(!isTodosExpanded)}
                 className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
@@ -1419,34 +1582,12 @@ function SessionDetailContent({
                 ) : (
                   <div className="space-y-2">
                     {todos.map((todo, index) => (
-                      <div key={todo.id || `todo-${index}-${todo.content?.substring(0, 20)}`} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200">
-                        {todo.status === 'completed' ? (
-                          <CheckCircle2 size={18} className="text-green-500 flex-shrink-0" />
-                        ) : todo.status === 'in_progress' ? (
-                          <Loader2 size={18} className="text-blue-500 flex-shrink-0 animate-spin" />
-                        ) : (
-                          <Circle size={18} className="text-gray-400 flex-shrink-0" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900">
-                            {todo.content}
-                          </p>
-                          {todo.priority && (
-                            <span className={`inline-block mt-1 px-2 py-0.5 text-xs rounded-full ${
-                              todo.priority === 'high' ? 'bg-red-100 text-red-700' :
-                              todo.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                              'bg-gray-100 text-gray-600'
-                            }`}>
-                              {todo.priority === 'high' ? '高' : todo.priority === 'medium' ? '中' : '低'}
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      <TodoItem key={todo.id || `todo-${index}-${todo.content?.substring(0, 20)}`} todo={todo} />
                     ))}
                   </div>
                 )
               )}
-            </div> */}
+            </div>
 
             {/* Ralph Loop 迭代记录 */}
             {evaluation?.EvaluationIteration && evaluation.EvaluationIteration.length > 0 && (
@@ -1731,342 +1872,14 @@ function SessionDetailContent({
                                 </span>
                               )}
                             </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* 节点消息显示区域 */}
-            {selectedNodeId && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <MessageSquare size={18} className="mr-2 text-blue-600" />
-                    节点消息: {workflowNodes.find(n => n.id === selectedNodeId)?.label || '未知节点'}
-                  </h3>
-                  <button
-                    onClick={() => {
-                      setSelectedNodeId(null);
-                      setNodeMessages([]);
-                    }}
-                    className="text-sm text-gray-500 hover:text-gray-700"
-                  >
-                    取消选择
-                  </button>
-                </div>
-                
-                {loadingNodeMessages ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 size={24} className="animate-spin text-blue-500" />
-                    <span className="ml-2 text-gray-500">加载消息中...</span>
-                  </div>
-                ) : nodeMessages.length > 0 ? (
-                  <div className="space-y-2 max-h-96 overflow-y-auto bg-white rounded-lg border border-gray-200 p-3">
-                    {nodeMessages.map((msg: any, idx: number) => (
-                      <div key={msg.id || idx} className={`p-2 rounded ${msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                        <div className="text-xs text-gray-500 mb-1">
-                          {msg.role === 'user' ? '👤 用户' : '🤖 助手'}
-                          {msg.createdAt && ` · ${new Date(msg.createdAt).toLocaleTimeString('zh-CN')}`}
-                        </div>
-                        <div className="text-sm text-gray-700 whitespace-pre-wrap">
-                          {msg.content?.substring(0, 500)}
-                          {msg.content?.length > 500 && '...'}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    该节点暂无消息记录
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Children Sessions */}
-            {childrenSessions.length > 0 && (
-              <div className="mb-6">
-                <button
-                  onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
-                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
-                >
-                  <div className="flex items-center">
-                    <GitBranch size={18} className="mr-2 text-purple-600" />
-                    子会话 ({childrenSessions.length})
-                  </div>
-                  {isChildrenExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
-                {isChildrenExpanded && (
-                  <div className="space-y-2">
-                    {/* 按启动时间排序，从小到大 */}
-                    {[...childrenSessions]
-                      .sort((a, b) => {
-                        if (a.startedAt && b.startedAt) {
-                          return new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
-                        }
-                        if (a.startedAt) return -1;
-                        if (b.startedAt) return 1;
-                        return 0;
-                      })
-                      .map((child) => (
-                      <div key={child.id}>
-                        <div
-                          className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                            selectedChildSession === child.id
-                              ? 'bg-purple-50 border-purple-300'
-                              : 'bg-white border-gray-200 hover:border-purple-200'
-                          }`}
-                          onClick={() => {
-                            if (selectedChildSession === child.id) {
-                              setSelectedChildSession(null);
-                              setChildSessionMessages([]);
-                            } else {
-                              setSelectedChildSession(child.id);
-                              fetchChildSessionMessages(child.id);
-                            }
-                            // 如果有关联消息索引，滚动到该消息
-                            if (child.messageIndex !== undefined && selectedChildSession !== child.id) {
-                              const messageElement = document.getElementById(`message-${child.messageIndex}`);
-                              if (messageElement) {
-                                messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                messageElement.classList.add('ring-2', 'ring-purple-400');
-                                setTimeout(() => {
-                                  messageElement.classList.remove('ring-2', 'ring-purple-400');
-                                }, 2000);
-                              }
-                            }
-                          }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-900 truncate">
-                                {child.title || '无标题'}
-                              </p>
-                              <div className="flex items-center space-x-2 mt-1 flex-wrap gap-y-0.5">
-                                <p className="text-xs text-gray-500">
-                                  ID: {child.id.substring(0, 20)}...
-                                </p>
-                                {child.messageIndex !== undefined && (
-                                  <span className="text-xs text-blue-600">
-                                    (消息 #{child.messageIndex + 1})
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center space-x-2 ml-2 flex-shrink-0">
-                              {child.startedAt && (
-                                <span className="text-xs text-gray-500 flex items-center">
-                                  <Clock size={10} className="mr-1" />
-                                  {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              )}
-                              {child.completedAt && (
-                                <span className="text-xs text-gray-500 flex items-center">
-                                  <CheckCircle2 size={10} className="mr-1" />
-                                  {new Date(child.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              )}
-                              {child.startedAt && child.completedAt && (
-                                <span className="text-xs text-purple-600">
-                                  {Math.round((new Date(child.completedAt).getTime() - new Date(child.startedAt).getTime()) / 1000)}s
-                                </span>
-                              )}
-                              {child.completedAt && (
-                                <>
-                                  {child.status === 'active' && (
-                                    <Loader2 size={12} className="text-orange-500 animate-spin" />
-                                  )}
-                                  {child.status && (
-                                    <span
-                                      className={`text-xs px-2 py-0.5 rounded ${
-                                        child.status === 'active'
-                                          ? 'bg-green-100 text-green-700'
-                                          : 'bg-gray-100 text-gray-600'
-                                      }`}
-                                    >
-                                      {child.status}
-                                    </span>
-                                  )}
-                                </>
-                              )}
-                              <ChevronRight
-                                size={16}
-                                className={`text-gray-400 transition-transform ${
-                                  selectedChildSession === child.id ? 'rotate-90' : ''
-                                }`}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* 子会话消息详情 */}
-                        {selectedChildSession === child.id && (
-                          <div className="mt-2 ml-4 pl-4 border-l-2 border-purple-200">
-                            {loadingChildMessages ? (
-                              <div className="flex items-center justify-center py-4">
-                                <Loader2 className="h-5 w-5 animate-spin text-purple-600" />
-                                <span className="ml-2 text-sm text-gray-500">加载子会话消息...</span>
-                              </div>
-                            ) : childSessionMessages.length > 0 ? (
-                              <div className="space-y-1">
-                                <p className="text-xs font-medium text-purple-700 mb-2">
-                                  子会话消息 ({childSessionMessages.length})
-                                </p>
-                                {(showAllChildMessages ? childSessionMessages : childSessionMessages.slice(0, 5)).map((msg, idx) => {
-                                  const msgKey = msg.id || `msg-${idx}`;
-                                  const isMsgExpanded = expandedChildMessages.has(msgKey);
-                                  
-                                  // 解析消息内容，判断类型
-                                  const msgParts = Array.isArray(msg.content) ? msg.content : 
-                                    (typeof msg.content === 'string' ? [{ type: 'text', text: msg.content }] : []);
-                                  const hasText = msgParts.some((p: any) => p.type === 'text' && p.text);
-                                  const toolUseCount = msgParts.filter((p: any) => p.type === 'tool_use' || p.type === 'tool').length;
-                                  const toolResultCount = msgParts.filter((p: any) => p.type === 'tool_result').length;
-                                  
-                                  // 获取文本预览（仅当有文本时）
-                                  const textPreview = hasText ? (() => {
-                                    const textPart = msgParts.find((p: any) => p.type === 'text' && p.text);
-                                    return textPart ? textPart.text.substring(0, 30) + (textPart.text.length > 30 ? '...' : '') : '';
-                                  })() : '';
-                                  
-                                  return (
-                                    <div
-                                      key={msgKey}
-                                      className={`rounded border ${
-                                        msg.role === 'user'
-                                          ? 'bg-blue-50 border-blue-200'
-                                          : 'bg-gray-50 border-gray-200'
-                                      }`}
-                                    >
-                                      {/* 可点击的消息标题行 */}
-                                      <button
-                                        className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-100 transition-colors"
-                                        onClick={() => {
-                                          setExpandedChildMessages(prev => {
-                                            const next = new Set(prev);
-                                            next.has(msgKey) ? next.delete(msgKey) : next.add(msgKey);
-                                            return next;
-                                          });
-                                        }}
-                                      >
-                                        <div className="flex items-center space-x-2 min-w-0 flex-1 flex-wrap">
-                                          <span className={`text-xs font-medium flex-shrink-0 ${
-                                            msg.role === 'user' ? 'text-blue-700' : 'text-gray-700'
-                                          }`}>
-                                            {msg.role === 'user' ? '👤 用户' : '🤖 AI'}
-                                          </span>
-                                          {/* 文本预览 */}
-                                          {textPreview && (
-                                            <span className="text-xs text-gray-500 truncate">
-                                              {textPreview}
-                                            </span>
-                                          )}
-                                          {/* 工具调用标签 */}
-                                          {toolUseCount > 0 && (
-                                            <span className="text-xs px-1 py-0.5 rounded bg-blue-100 text-blue-700">
-                                              🔧 {toolUseCount}
-                                            </span>
-                                          )}
-                                          {/* 工具结果标签 */}
-                                          {toolResultCount > 0 && (
-                                            <span className="text-xs px-1 py-0.5 rounded bg-gray-200 text-gray-700">
-                                              📤 {toolResultCount}
-                                            </span>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center space-x-2 flex-shrink-0 ml-2">
-                                          {msg.createdAt && (
-                                            <span className="text-xs text-gray-400">
-                                              {new Date(msg.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                            </span>
-                                          )}
-                                          <span className="text-xs text-gray-400">
-                                            {isMsgExpanded ? '▲' : '▼'}
-                                          </span>
-                                        </div>
-                                      </button>
-                                      
-                                      {/* 展开的消息内容 */}
-                                      {isMsgExpanded && (
-                                        <div className="px-2 pb-2 border-t border-gray-200">
-                                          <div className="pt-2 space-y-1">
-                                            {/* 文本内容 */}
-                                            {hasText && msgParts.filter((p: any) => p.type === 'text' && p.text).map((part: any, partIdx: number) => (
-                                              <p key={`text-${partIdx}`} className="text-xs whitespace-pre-wrap">{part.text}</p>
-                                            ))}
-                                            {/* 工具调用 */}
-                                            {toolUseCount > 0 && msgParts.filter((p: any) => p.type === 'tool_use' || p.type === 'tool').map((part: any, partIdx: number) => (
-                                              <div key={`tool-${partIdx}`} className="bg-blue-50 rounded border border-blue-200 p-1.5">
-                                                <span className="text-xs font-medium text-blue-700">🔧 {part.name || 'unknown'}</span>
-                                                {part.input && (
-                                                  <pre className="text-xs text-gray-600 mt-1 overflow-x-auto whitespace-pre-wrap break-all">
-                                                    {JSON.stringify(part.input, null, 2).substring(0, 300)}
-                                                  </pre>
-                                                )}
-                                              </div>
-                                            ))}
-                                            {/* 工具结果 */}
-                                            {toolResultCount > 0 && msgParts.filter((p: any) => p.type === 'tool_result').map((part: any, partIdx: number) => {
-                                              const raw = part.content ?? part.output ?? part.result;
-                                              let text = '';
-                                              if (raw !== null && raw !== undefined) {
-                                                if (typeof raw === 'string') {
-                                                  text = raw;
-                                                } else if (Array.isArray(raw)) {
-                                                  text = raw.map((item: any) =>
-                                                    typeof item === 'string' ? item :
-                                                    item.text ?? item.content ?? JSON.stringify(item)
-                                                  ).join('\n');
-                                                } else {
-                                                  text = JSON.stringify(raw, null, 2);
-                                                }
-                                              }
-                                              const label = part.toolName || part.name || part.tool_use_id || '';
-                                              return (
-                                                <div key={`result-${partIdx}`} className={`rounded border p-1.5 ${part.is_error ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                                                  <span className={`text-xs font-medium ${part.is_error ? 'text-red-700' : 'text-gray-700'}`}>
-                                                    📤 {label || '工具结果'} {part.is_error && '⚠️'}
-                                                  </span>
-                                                  {text && (
-                                                    <pre className="text-xs text-gray-600 mt-1 overflow-x-auto whitespace-pre-wrap break-all max-h-32">
-                                                      {text.length > 500 ? text.substring(0, 500) + '...' : text}
-                                                    </pre>
-                                                  )}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                                {childSessionMessages.length > 5 && (
-                                  <button
-                                    onClick={() => setShowAllChildMessages(!showAllChildMessages)}
-                                    className="w-full text-xs text-purple-600 hover:text-purple-800 text-center py-1.5 bg-purple-50 hover:bg-purple-100 rounded transition-colors"
-                                  >
-                                    {showAllChildMessages 
-                                      ? `收起 (显示前 5 条)` 
-                                      : `显示全部 ${childSessionMessages.length} 条消息`}
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <p className="text-sm text-gray-500 py-2">暂无消息</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                           </div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 )}
+               </div>
+             )}
 
             {/* Node Messages - 当选中节点时显示 */}
             {selectedNodeId && (
@@ -2075,7 +1888,7 @@ function SessionDetailContent({
                   <div className="flex items-center">
                     <MessageSquare size={18} className="mr-2 text-blue-600" />
                     <span className="text-lg font-semibold text-gray-900">
-                      节点消息
+                      节点消息: {workflowNodes.find((n: any) => n.id === selectedNodeId)?.label || '未知节点'}
                     </span>
                     <span className="ml-2 text-sm text-gray-500">
                       ({nodeMessages.length} 条)
@@ -2099,73 +1912,129 @@ function SessionDetailContent({
                     <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                     <span className="ml-2 text-sm text-gray-500">加载节点消息...</span>
                   </div>
-                ) : nodeMessages.length > 0 ? (
-                  <div className="space-y-3 bg-white rounded-lg border border-blue-200 p-4">
-                    {nodeMessages.map((message, index) => (
-                      <div key={`${message.id}-${index}`} className="rounded-lg border border-gray-200">
-                        <MessageBubble
-                          message={message}
-                          isSelected={selectedMessage?.id === message.id}
-                          onClick={() => handleMessageClick(message)}
-                          onCopy={() =>
-                            handleCopy(
-                              typeof message.content === 'string'
-                                ? message.content
-                                : JSON.stringify(message.content, null, 2)
-                            )
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
                 ) : (
-                  <div className="text-center py-8 bg-white rounded-lg border border-gray-200">
-                    <p className="text-gray-500">该节点暂无消息记录</p>
-                    <p className="text-xs text-gray-400 mt-1">消息可能尚未保存到数据库</p>
+                  <div className="space-y-4">
+                    {/* 所有消息 - 不过滤 */}
+                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                        <MessageSquare size={14} className="mr-2 text-blue-600" />
+                        节点消息 ({nodeMessages.length} 条)
+                      </h4>
+                      {nodeMessages.length > 0 ? (
+                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                          {nodeMessages.map((message: any, index: number) => (
+                            <MessageBubble
+                              key={`${message.id}-${index}`}
+                              message={message}
+                              onCopy={() => {
+                                navigator.clipboard.writeText(
+                                  typeof message.content === 'string' 
+                                    ? message.content 
+                                    : JSON.stringify(message.content, null, 2)
+                                );
+                              }}
+                              onClick={() => {
+                                setSelectedMessage(message);
+                                // 转换消息内容为 MessageDetailPanel 需要的格式
+                                let parts: any[] = [];
+                                const content = message.content;
+                                
+                                if (typeof content === 'string') {
+                                  // 尝试解析 JSON
+                                  try {
+                                    const parsed = JSON.parse(content);
+                                    if (Array.isArray(parsed)) {
+                                      parts = parsed;
+                                    } else {
+                                      parts = [{ type: 'text', text: content }];
+                                    }
+                                  } catch {
+                                    parts = [{ type: 'text', text: content }];
+                                  }
+                                } else if (Array.isArray(content)) {
+                                  parts = content;
+                                } else if (content) {
+                                  parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
+                                }
+                                
+                                setMessageDetail({
+                                  id: message.id,
+                                  role: message.role,
+                                  content: message.content,
+                                  createdAt: message.createdAt,
+                                  workflowNodeId: message.workflowNodeId,
+                                  // MessageDetailPanel 需要的格式
+                                  parts: parts,
+                                  info: {
+                                    id: message.id,
+                                    role: message.role,
+                                    time: {
+                                      created: message.createdAt,
+                                    },
+                                  },
+                                });
+                              }}
+                              isSelected={selectedMessage?.id === message.id}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">暂无消息</p>
+                      )}
+                    </div>
+                    
+                    {/* 子 Agent 明细 */}
+                    <div className="bg-white rounded-lg border border-purple-200 p-4">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                        <GitBranch size={14} className="mr-2 text-purple-600" />
+                        子 Agent 明细 ({childrenSessions.length} 个)
+                      </h4>
+                      {childrenSessions.length > 0 ? (
+                        <div className="space-y-2">
+                          {childrenSessions.map((child: any) => (
+                            <div 
+                              key={child.id}
+                              className="p-2 rounded border border-purple-200 bg-purple-50 cursor-pointer hover:bg-purple-100"
+                              onClick={() => {
+                                setSelectedChildSession(child.id);
+                                fetchChildSessionMessages(child.id);
+                              }}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-gray-700">
+                                  {child.title || `子 Agent ${child.id.substring(0, 8)}`}
+                                </span>
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  child.status === 'active' || child.status === 'running' ? 'bg-green-100 text-green-700' :
+                                  child.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  {child.status || 'unknown'}
+                                </span>
+                              </div>
+                              {child.startedAt && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                </div>
+                              )}
+                              {child.modelName && (
+                                <div className="text-xs text-blue-600 mt-1">
+                                  模型: {child.modelName}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">暂无子 Agent</p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Messages - 已隐藏：现在每个节点单独执行 Agent，用户应通过点击节点查看消息 */}
-            {/* <div className="mb-6">
-              <button
-                onClick={() => setIsMessagesExpanded(!isMessagesExpanded)}
-                className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-4 hover:text-gray-700 transition-colors"
-              >
-                <div className="flex items-center">
-                  <MessageSquare size={18} className="mr-2 text-green-600" />
-                  消息记录 ({messages.length})
-                </div>
-                {isMessagesExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </button>
-              {isMessagesExpanded && (
-                messages.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-gray-500">暂无消息</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {messages.map((message, index) => (
-                      <div key={`${message.id}-${index}`} id={`message-${index}`}>
-                        <MessageBubble
-                          message={message}
-                          isSelected={selectedMessage?.id === message.id}
-                          onClick={() => handleMessageClick(message)}
-                          onCopy={() =>
-                            handleCopy(
-                              typeof message.content === 'string'
-                                ? message.content
-                                : JSON.stringify(message.content, null, 2)
-                            )
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )
-              )}
-            </div> */}
+            {/* Children Sessions - 已移除，保留"子 Agent 明细"栏目 */}
           </div>
         </div>
 
@@ -2481,12 +2350,20 @@ function MessageBubble({
               </button>
             </div>
 
-            {/* 文本内容 */}
+            {/* 文本内容 - 只显示三行，超出显示省略号 */}
             {textParts.length > 0 && (
               <div className={`prose prose-sm max-w-none ${isUser ? 'prose-invert text-white' : ''}`}>
-                {textParts.map((part: any, idx: number) => (
-                  <ReactMarkdown key={idx}>{part.text || ''}</ReactMarkdown>
-                ))}
+                {textParts.map((part: any, idx: number) => {
+                  const text = part.text || '';
+                  // 限制显示三行（约 300 字符）
+                  const maxChars = 300;
+                  const displayText = text.length > maxChars ? text.substring(0, maxChars) + '...' : text;
+                  return (
+                    <div key={idx} className="line-clamp-3">
+                      <ReactMarkdown>{displayText}</ReactMarkdown>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -2762,10 +2639,19 @@ function MessageBubble({
 }
 
 function MessageDetailPanel({ messageDetail }: { messageDetail: any }) {
+  const parts = messageDetail?.parts || [];
+  const info = messageDetail?.info || {};
+  
   const [expandedParts, setExpandedParts] = useState<Record<number, boolean>>({});
 
-  const info = messageDetail?.info || {};
-  const parts = messageDetail?.parts || [];
+  // 当 messageDetail 变化时，默认展开所有部分
+  useEffect(() => {
+    const initial: Record<number, boolean> = {};
+    parts.forEach((_: any, index: number) => {
+      initial[index] = true;
+    });
+    setExpandedParts(initial);
+  }, [messageDetail]);
 
   const togglePart = (index: number) => {
     setExpandedParts((prev) => ({ ...prev, [index]: !prev[index] }));

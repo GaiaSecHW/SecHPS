@@ -257,6 +257,9 @@ export class ClaudeAgentService {
       let capturedSessionId = false;
       
       // 累计 token 使用量（从 assistant 消息中提取）
+      // 注意：SDK 返回的 usage 是累计值（cumulative），不是增量值（incremental）
+      // 所以要用 Math.max 取最大值，而不是累加
+      // 参考：https://docs.anthropic.com/en/api/streaming
       const seenMessageIds = new Set<string>();
       let accumulatedInputTokens = 0;
       let accumulatedOutputTokens = 0;
@@ -265,19 +268,69 @@ export class ClaudeAgentService {
 
       // 遍历消息流
       for await (const message of q) {
-        // 调试：打印每条消息的完整结构
         const msg = message as any;
-        console.log('[ClaudeAgent] 📨 消息类型:', msg.type, '| subtype:', msg.subtype);
+        const msgType = msg.type;
+        const msgSubtype = msg.subtype;
+        const msgRole = msg.role;
         
-        // 检查是否有 usage 相关字段
-        if (msg.usage || msg.apiUsage || msg.total_cost_usd !== undefined || msg.num_turns !== undefined) {
-          console.log('[ClaudeAgent] 📊 发现 usage 相关数据:', {
-            usage: msg.usage,
-            apiUsage: msg.apiUsage,
-            total_cost_usd: msg.total_cost_usd,
-            num_turns: msg.num_turns,
-            modelUsage: msg.modelUsage,
-          });
+        // 打印消息类型
+        console.log(`[ClaudeAgent] 📨 消息: type=${msgType} | subtype=${msgSubtype} | role=${msgRole}`);
+        
+        // 处理所有可能包含内容的消息
+        let extractedContent = '';
+        
+        // 1. result 字段（完成时的最终结果）
+        if (msg.result && typeof msg.result === 'string') {
+          extractedContent = msg.result;
+          console.log('[ClaudeAgent] 📨 从 result 提取，长度:', extractedContent.length);
+        }
+        
+        // 2. message.content 字段
+        if (!extractedContent && msg.message?.content) {
+          const content = msg.message.content;
+          if (Array.isArray(content)) {
+            const textBlocks = content.filter((b: any) => b.type === 'text' && b.text);
+            if (textBlocks.length > 0) {
+              extractedContent = textBlocks.map((b: any) => b.text).join('');
+              console.log('[ClaudeAgent] 📨 从 message.content[] 提取，长度:', extractedContent.length);
+            }
+          } else if (typeof content === 'string') {
+            extractedContent = content;
+            console.log('[ClaudeAgent] 📨 从 message.content (string) 提取，长度:', extractedContent.length);
+          }
+        }
+        
+        // 3. content 字段（直接）
+        if (!extractedContent && msg.content) {
+          const content = msg.content;
+          if (Array.isArray(content)) {
+            const textBlocks = content.filter((b: any) => b.type === 'text' && b.text);
+            if (textBlocks.length > 0) {
+              extractedContent = textBlocks.map((b: any) => b.text).join('');
+              console.log('[ClaudeAgent] 📨 从 content[] 提取，长度:', extractedContent.length);
+            }
+          } else if (typeof content === 'string') {
+            extractedContent = content;
+            console.log('[ClaudeAgent] 📨 从 content (string) 提取，长度:', extractedContent.length);
+          }
+        }
+        
+        // 4. text 字段
+        if (!extractedContent && msg.text && typeof msg.text === 'string') {
+          extractedContent = msg.text;
+          console.log('[ClaudeAgent] 📨 从 text 提取，长度:', extractedContent.length);
+        }
+        
+        // 5. description 字段（system/task_progress 消息）
+        if (!extractedContent && msg.description && typeof msg.description === 'string') {
+          extractedContent = msg.description;
+          console.log('[ClaudeAgent] 📨 从 description 提取，长度:', extractedContent.length);
+        }
+        
+        // 如果提取到内容，调用 onChunk
+        if (extractedContent) {
+          fullResponse += extractedContent;
+          callbacks.onChunk?.(extractedContent);
         }
         
         callbacks.onMessage?.(message);
@@ -301,17 +354,6 @@ export class ClaudeAgentService {
           const msg = message as any;
           const totalCostUsd = msg.total_cost_usd || 0;
           
-          console.log('[ClaudeAgent] Result Success - total_cost_usd:', totalCostUsd);
-          console.log('[ClaudeAgent] Result Success - modelUsage:', JSON.stringify(msg.modelUsage));
-          console.log('[ClaudeAgent] 📊 累计 token:', {
-            inputTokens: accumulatedInputTokens,
-            outputTokens: accumulatedOutputTokens,
-            cacheReadTokens: accumulatedCacheReadTokens,
-            cacheCreationTokens: accumulatedCacheCreationTokens,
-            totalCostUsd,
-            steps: seenMessageIds.size,
-          });
-          
           // 回调最终累计的 token 使用量
           const usageData = {
             inputTokens: accumulatedInputTokens,
@@ -321,7 +363,7 @@ export class ClaudeAgentService {
             totalCostUsd,
             modelUsage: msg.modelUsage || {},
           };
-          console.log('[ClaudeAgent] ✅ 最终 Token 使用量:', usageData);
+          
           callbacks.onUsage?.(usageData);
         } else if (this.isResultError(message)) {
           // 错误结果消息
@@ -341,17 +383,8 @@ export class ClaudeAgentService {
             callbacks.onToolResult?.(toolResult.tool_name, toolResult.tool_result);
           }
         } else if (this.isAssistantMessage(message)) {
-          // 助手消息（流式文本）
+          // 助手消息（流式文本）- 已在上面统一提取内容，这里只处理 token 使用量
           const assistantMsg = message as any;
-          
-          // 调试：打印完整的 assistant 消息结构
-          console.log('[ClaudeAgent] 📨 Assistant 消息完整结构:', {
-            type: assistantMsg.type,
-            hasMessage: !!assistantMsg.message,
-            hasUsage: !!assistantMsg.usage,
-            messageKeys: assistantMsg.message ? Object.keys(assistantMsg.message) : [],
-            topKeys: Object.keys(assistantMsg),
-          });
           
           // 根据 SDK 文档，token 使用量可能在以下位置：
           // 1. message.message.usage（嵌套结构）
@@ -360,60 +393,90 @@ export class ClaudeAgentService {
           let msgId = null;
           
           if (assistantMsg.message?.usage) {
-            // 方式1：嵌套在 message.message 中
             msgId = assistantMsg.message.id;
             usageData = assistantMsg.message.usage;
-            console.log('[ClaudeAgent] 📊 从 message.message.usage 提取');
           } else if (assistantMsg.usage) {
-            // 方式2：直接在消息上
             msgId = assistantMsg.id || assistantMsg.message_id;
             usageData = assistantMsg.usage;
-            console.log('[ClaudeAgent] 📊 从 message.usage 提取');
           }
           
           if (usageData) {
-            // 使用 message ID 去重（并行工具调用可能共享相同 ID）
             if (msgId && !seenMessageIds.has(msgId)) {
               seenMessageIds.add(msgId);
               
               const inputTokens = usageData.input_tokens || 0;
-              const outputTokens = usageData.output_tokens || 0;
+              const outputTokens = usageData.outputTokens || 0;
               const cacheReadTokens = usageData.cache_read_input_tokens || 0;
               const cacheCreationTokens = usageData.cache_creation_input_tokens || 0;
               
-              accumulatedInputTokens += inputTokens;
-              accumulatedOutputTokens += outputTokens;
-              accumulatedCacheReadTokens += cacheReadTokens;
-              accumulatedCacheCreationTokens += cacheCreationTokens;
+              // SDK 返回的是累计值，使用 Math.max 而不是累加
+              // 避免重复计算（SDK 可能在多个事件中返回相同的累计值）
+              accumulatedInputTokens = Math.max(accumulatedInputTokens, inputTokens);
+              accumulatedOutputTokens = Math.max(accumulatedOutputTokens, outputTokens);
+              accumulatedCacheReadTokens = Math.max(accumulatedCacheReadTokens, cacheReadTokens);
+              accumulatedCacheCreationTokens = Math.max(accumulatedCacheCreationTokens, cacheCreationTokens);
               
-              console.log('[ClaudeAgent] 📊 Assistant 消息 usage:', {
-                msgId,
-                inputTokens,
-                outputTokens,
-                cacheReadTokens,
-                cacheCreationTokens,
-              });
+              console.log('[ClaudeAgent] 📊 Token (cumulative): input=%d, output=%d', accumulatedInputTokens, accumulatedOutputTokens);
               
-              // 实时回调每次的 token 使用量
+              // 回调当前的累计值
               callbacks.onUsage?.({
-                inputTokens,
-                outputTokens,
-                cacheReadInputTokens: cacheReadTokens,
-                cacheCreationInputTokens: cacheCreationTokens,
-                totalCostUsd: 0, // 单条消息没有费用，费用在 result 消息中
+                inputTokens: accumulatedInputTokens,
+                outputTokens: accumulatedOutputTokens,
+                cacheReadInputTokens: accumulatedCacheReadTokens,
+                cacheCreationInputTokens: accumulatedCacheCreationTokens,
+                totalCostUsd: 0,
                 modelUsage: {},
               });
             }
-          } else {
-            console.log('[ClaudeAgent] ⚠️ Assistant 消息中没有找到 usage 数据');
+          }
+          // 内容已在上面统一提取，这里不再重复处理
+        } else {
+          // 其他类型的消息 - 也要尝试提取内容
+          console.log('[ClaudeAgent] 📨 其他消息类型，尝试提取内容');
+          console.log('[ClaudeAgent] 📨 消息 keys:', Object.keys(msg));
+          
+          // 处理 type=user 消息
+          if (msgType === 'user') {
+            console.log('[ClaudeAgent] 📨 处理 user 消息');
+            // user 消息通常包含在 message.content 中
+            if (msg.message?.content) {
+              const content = msg.message.content;
+              if (Array.isArray(content)) {
+                for (const block of content) {
+                  if (block.type === 'text' && block.text) {
+                    console.log('[ClaudeAgent] 📨 从 user 消息提取 text，长度:', block.text.length);
+                    // user 消息不追加到 fullResponse，但触发 onMessage 回调
+                    callbacks.onMessage?.(message);
+                  }
+                }
+              } else if (typeof content === 'string') {
+                console.log('[ClaudeAgent] 📨 从 user 消息提取 string content，长度:', content.length);
+                callbacks.onMessage?.(message);
+              }
+            }
+            // 检查 tool_use_result（工具返回结果）
+            if (msg.tool_use_result) {
+              console.log('[ClaudeAgent] 📨 user 消息包含 tool_use_result');
+              callbacks.onMessage?.(message);
+            }
+            continue;
           }
           
-          if (assistantMsg.content) {
-            for (const block of assistantMsg.content) {
-              if (block.type === 'text' && block.text) {
-                fullResponse += block.text;
-                callbacks.onChunk?.(block.text);
+          // 尝试从各种可能的位置提取内容
+          if (msg.message?.content) {
+            const content = msg.message.content;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === 'text' && block.text) {
+                  console.log('[ClaudeAgent] 📨 从其他消息提取 text，长度:', block.text.length);
+                  fullResponse += block.text;
+                  callbacks.onChunk?.(block.text);
+                }
               }
+            } else if (typeof content === 'string') {
+              console.log('[ClaudeAgent] 📨 从其他消息提取 string content，长度:', content.length);
+              fullResponse += content;
+              callbacks.onChunk?.(content);
             }
           }
         }

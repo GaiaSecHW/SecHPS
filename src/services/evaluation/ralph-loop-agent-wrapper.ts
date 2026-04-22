@@ -228,11 +228,13 @@ export class RalphLoopAgent {
   async loop({
     evaluationId,
     projectId,
+    workflowNodeId,
     context,
     callbacks,
   }: {
     evaluationId: string;
     projectId: string;
+    workflowNodeId?: string;  // 工作流节点 ID
     context: {
       projectName: string;
       projectDescription?: string;
@@ -312,19 +314,25 @@ export class RalphLoopAgent {
             onToolCall: callbacks.onToolCall,
             onToolResult: callbacks.onToolResult,
             onUsage: (usage) => {
-              // 累加每次 API 调用的 token 使用量（包括主任务和子任务）
+              // 注意：上游 claude-agent.ts 返回的 usage 是累计值（cumulative）
+              // 所以这里使用 Math.max 而不是累加，避免重复计算
+              // 参考：https://docs.anthropic.com/en/api/streaming
               iterationUsage = {
-                inputTokens: iterationUsage.inputTokens + (usage.inputTokens || 0),
-                outputTokens: iterationUsage.outputTokens + (usage.outputTokens || 0),
-                totalTokens: iterationUsage.totalTokens + (usage.inputTokens || 0) + (usage.outputTokens || 0),
+                inputTokens: Math.max(iterationUsage.inputTokens, usage.inputTokens || 0),
+                outputTokens: Math.max(iterationUsage.outputTokens, usage.outputTokens || 0),
+                totalTokens: Math.max(iterationUsage.inputTokens, usage.inputTokens || 0) + Math.max(iterationUsage.outputTokens, usage.outputTokens || 0),
               };
-              console.log(`[Ralph Loop] 迭代 ${iteration} 累计 Token:`, {
+              console.log(`[Ralph Loop] 迭代 ${iteration} 累计 Token (cumulative):`, {
                 本次: { input: usage.inputTokens, output: usage.outputTokens },
                 累计: iterationUsage,
               });
               
-              // 传递给上层回调
-              callbacks.onUsage?.(usage);
+              // 传递给上层回调（累计值）
+              callbacks.onUsage?.({
+                ...usage,
+                inputTokens: iterationUsage.inputTokens,
+                outputTokens: iterationUsage.outputTokens,
+              });
             },
             onComplete: async (fullResponse) => {
               resolve({
@@ -594,6 +602,7 @@ export function createRalphLoopAgent(
     settingSources?: ('project' | 'user' | 'local')[];
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
     allowDangerouslySkipPermissions?: boolean;
+    workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id
   }
 ): RalphLoopAgent {
   // 解析模型名称
@@ -621,6 +630,7 @@ export function createRalphLoopAgent(
     settingSources: sdkOptions?.settingSources,
     permissionMode: sdkOptions?.permissionMode,
     allowDangerouslySkipPermissions: sdkOptions?.allowDangerouslySkipPermissions,
+    workflowNodeId: sdkOptions?.workflowNodeId,  // 传递 workflowNodeId
     // Ralph Loop 配置
     ...ralphConfig,
   });

@@ -38,7 +38,7 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
       include: {
-        Project: { select: { userId: true } },
+        Project: { select: { userId: true, configId: true } },
         NodeExecution: {
           orderBy: { order: 'asc' },
         },
@@ -54,6 +54,45 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // 获取系统配置中的 workflowConfig（用于 start/end 节点名称）
+    let workflowConfig: {
+      startNodeLabel?: string;
+      startNodeDescription?: string;
+      endNodeLabel?: string;
+      endNodeDescription?: string;
+    } | null = null;
+    
+    // 优先使用项目关联的配置，否则使用全局激活配置
+    const projectConfigId = evaluation.Project.configId;
+    if (projectConfigId) {
+      const projectConfig = await prisma.opencodeConfig.findUnique({
+        where: { id: projectConfigId },
+        select: { workflowConfig: true },
+      });
+      if (projectConfig?.workflowConfig) {
+        try {
+          workflowConfig = JSON.parse(projectConfig.workflowConfig);
+        } catch (e) {
+          logger.warn(LOG_MODULES.EVALUATION, '解析项目配置 workflowConfig 失败', { error: String(e) });
+        }
+      }
+    }
+    
+    // 如果项目没有配置，尝试获取全局激活配置
+    if (!workflowConfig) {
+      const globalConfig = await prisma.opencodeConfig.findFirst({
+        where: { isActive: true },
+        select: { workflowConfig: true },
+      });
+      if (globalConfig?.workflowConfig) {
+        try {
+          workflowConfig = JSON.parse(globalConfig.workflowConfig);
+        } catch (e) {
+          logger.warn(LOG_MODULES.EVALUATION, '解析全局配置 workflowConfig 失败', { error: String(e) });
+        }
+      }
+    }
+    
     // 获取工作流节点配置（如果有 workflowId）
     let workflowNodes: any[] = [];
     let roleModels: any[] = [];
@@ -67,8 +106,8 @@ export async function GET(
             include: {
               role: true, // 包含角色信息
             },
-            orderBy: { fsmOrder: 'asc' },
           },
+          WorkflowEdge: true, // 包含边信息（用于拓扑排序）
           WorkflowRole: true,
           FSMTemplate: true, // 包含 FSM 模板
         },
@@ -105,22 +144,99 @@ export async function GET(
             logger.error(LOG_MODULES.EVALUATION, '解析 FSMTemplate.nodes 失败', { error: String(e) });
           }
         } else if (workflow.WorkflowNode && workflow.WorkflowNode.length > 0) {
-          // DAG 工作流：从 WorkflowNode 表获取节点
-          workflowNodes = workflow.WorkflowNode.map(node => {
+          // DAG 工作流：按拓扑排序获取节点
+          
+          // 构建邻接表和入度映射
+          const adjacencyList: Map<string, string[]> = new Map();
+          const inDegree: Map<string, number> = new Map();
+          
+          // 初始化所有节点入度为 0
+          for (const node of workflow.WorkflowNode) {
+            inDegree.set(node.id, 0);
+            adjacencyList.set(node.id, []);
+          }
+          
+          // 从边构建图
+          for (const edge of workflow.WorkflowEdge) {
+            const neighbors = adjacencyList.get(edge.sourceId) || [];
+            neighbors.push(edge.targetId);
+            adjacencyList.set(edge.sourceId, neighbors);
+            
+            const currentDegree = inDegree.get(edge.targetId) || 0;
+            inDegree.set(edge.targetId, currentDegree + 1);
+          }
+          
+          // Kahn 算法拓扑排序
+          const queue: string[] = [];
+          for (const [nodeId, degree] of inDegree.entries()) {
+            if (degree === 0) {
+              queue.push(nodeId);
+            }
+          }
+          
+          const sortedNodeIds: string[] = [];
+          while (queue.length > 0) {
+            const currentNodeId = queue.shift()!;
+            sortedNodeIds.push(currentNodeId);
+            
+            const neighbors = adjacencyList.get(currentNodeId) || [];
+            for (const neighborId of neighbors) {
+              const currentDegree = inDegree.get(neighborId) || 0;
+              const newDegree = currentDegree - 1;
+              inDegree.set(neighborId, newDegree);
+              
+              if (newDegree === 0) {
+                queue.push(neighborId);
+              }
+            }
+          }
+          
+          // 如果拓扑排序完成，使用排序后的顺序；否则使用原始顺序
+          const nodeOrder = sortedNodeIds.length === workflow.WorkflowNode.length 
+            ? sortedNodeIds 
+            : workflow.WorkflowNode.map(n => n.id);
+          
+          // 创建节点映射
+          const nodeMap = new Map(workflow.WorkflowNode.map(n => [n.id, n]));
+          
+          // 按拓扑顺序构建节点列表
+          workflowNodes = nodeOrder.map((nodeId, index) => {
+            const node = nodeMap.get(nodeId);
+            if (!node) return null;
+            
             const nodeData = node.data ? JSON.parse(node.data) : {};
+            
+            // 根据节点类型获取 label
+            let label: string;
+            if (node.type === 'start') {
+              // 开始节点：优先使用系统配置，其次 nodeData，最后默认值
+              label = workflowConfig?.startNodeLabel || nodeData.label || nodeData.name || '开始';
+            } else if (node.type === 'end') {
+              // 结束节点：优先使用系统配置，其次 nodeData，最后默认值
+              label = workflowConfig?.endNodeLabel || nodeData.label || nodeData.name || '结束';
+            } else {
+              // 其他节点：使用 nodeData 中的 label
+              label = nodeData.label || nodeData.name || `节点 ${node.id.substring(0, 8)}`;
+            }
+            
             return {
               id: node.id,
-              label: nodeData.label || nodeData.name || `节点 ${node.id.substring(0, 8)}`,
+              label,
               type: node.type,
               roleId: node.roleId,
               roleName: node.role?.name || null,
               roleColor: node.role?.color || null,
               fsmPhase: node.fsmPhase,
-              fsmOrder: node.fsmOrder,
+              fsmOrder: index, // 使用拓扑排序后的顺序
               skills: node.skills ? JSON.parse(node.skills) : [],
               vulnerabilityCategories: node.vulnerabilityCategories ? JSON.parse(node.vulnerabilityCategories) : [],
               data: nodeData,
             };
+          }).filter((n): n is NonNullable<typeof n> => n !== null);
+          
+          logger.debug(LOG_MODULES.EVALUATION, 'DAG 节点拓扑排序完成', { 
+            nodeCount: workflowNodes.length,
+            order: workflowNodes.map((n: any) => n.label)
           });
         }
         
