@@ -1,6 +1,24 @@
 'use client';
+ 
+import { ArrowLeft, Square, Loader2, CheckCircle2, Circle, X, FileSearch, MessageSquare, Trash2, Coins, Info } from 'lucide-react';
 
-import { ArrowLeft, Square, Loader2, CheckCircle2, Circle, X, FileSearch, MessageSquare, Trash2 } from 'lucide-react';
+// 自适应单位格式化 Token
+function formatTokenNumber(num: number): string {
+  if (num >= 1000000) {
+    return (num / 1000000).toFixed(1) + 'M';
+  }
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + 'K';
+  }
+  return num.toString();
+}
+
+// 预估费用计算（与 dashboard 一致：输入 ¥6/M, 输出 ¥22/M）
+function calculateEstimatedCost(inputTokens: number, outputTokens: number): number {
+  const inputCost = (inputTokens / 1000000) * 6;   // ¥6 per million input tokens
+  const outputCost = (outputTokens / 1000000) * 22; // ¥22 per million output tokens
+  return inputCost + outputCost;
+}
 
 interface EvaluationHeaderProps {
   status: string;
@@ -14,17 +32,6 @@ interface EvaluationHeaderProps {
   onAskProgress?: () => void;
   onDelete?: () => void;
   progressQuestion?: string;
-  realtimeTokenUsage?: {
-    phase: number;
-    phaseName: string;
-    modelName: string;
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    cumulativeInputTokens: number;
-    cumulativeOutputTokens: number;
-    cumulativeTotalTokens: number;
-  } | null;
   evaluation?: any;
 }
 
@@ -154,28 +161,30 @@ export function EvaluationHeader({
       {/* 第二行：Token统计和实时信息 */}
       <div className="flex items-center justify-between text-sm mt-2">
         <div className="flex items-center gap-4">
-          {/* Token统计 */}
+          {/* Token统计 - 自适应单位 + 预估费用 */}
           <div className="flex items-center gap-2">
-            <span className="text-gray-500">Token:</span>
+            <Coins size={14} className="text-orange-500" />
             <span className="font-medium text-blue-600">
-              {totalTokens.toLocaleString()}
+              {formatTokenNumber(totalInputTokens + totalOutputTokens)}
             </span>
             <span className="text-gray-400">
-              (输入: {totalInputTokens.toLocaleString()}, 输出: {totalOutputTokens.toLocaleString()})
+              (输入: {formatTokenNumber(totalInputTokens)}, 输出: {formatTokenNumber(totalOutputTokens)})
             </span>
           </div>
           
-          {/* 实时Token */}
-          {status === 'running' && realtimeTokenUsage && (
-            <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
-              <span className="text-gray-500">实时:</span>
-              <span className="text-xs font-medium text-gray-700">
-                输入 {realtimeTokenUsage.cumulativeInputTokens.toLocaleString()} / 
-                输出 {realtimeTokenUsage.cumulativeOutputTokens.toLocaleString()}
+          {/* 预估费用 - 带 tooltip */}
+          <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
+            <span className="text-gray-500">预估费用:</span>
+            <span className="font-medium text-orange-600">
+              ¥{calculateEstimatedCost(totalInputTokens, totalOutputTokens).toFixed(2)}
+            </span>
+            <span className="cursor-help relative group">
+              <Info size={12} className="text-gray-400 hover:text-gray-600" />
+              <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
+                费用 = 输入Token × ¥6/百万 + 输出Token × ¥22/百万
               </span>
-              <span className="text-xs text-gray-500">模型: {realtimeTokenUsage.modelName}</span>
-            </div>
-          )}
+            </span>
+          </div>
         </div>
         
         <div className="flex items-center gap-2">

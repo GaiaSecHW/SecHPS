@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { verifyToken, hasPermission } from '@/lib/auth';
+import { isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { createRalphLoopAgent } from '@/services/evaluation';
@@ -94,27 +95,32 @@ export async function POST(
     let roleModels: { roleId: string; modelId: string }[] | null = null;
     let queuedEvaluationId: string | null = null; // 队列启动时复用的评估ID
     let reconnectEvaluationId: string | null = null; // 重连已存在的评估
+    let bodyParsed = false; // 标记是否成功解析请求体
+    
     try {
       const body = await request.json();
+      bodyParsed = true;
       workflowId = body.workflowId || null;
       agentTeamId = body.agentTeamId || null;
       modelId = body.modelId || null;
       roleModels = body.roleModels || null;
       queuedEvaluationId = body.queuedEvaluationId || null;
       reconnectEvaluationId = body.evaluationId || null; // 用于重连 SSE
-    } catch {
-      // 如果没有请求体，继续执行
+    } catch (e) {
+      // 如果没有请求体或解析失败，继续执行（某些请求如 SSE 重连可能有空请求体）
+      logger.debug(LOG_MODULES.EVALUATION, '请求体解析失败或为空', { error: String(e) });
     }
 
+    logger.debug(LOG_MODULES.EVALUATION, 'start API 调用', { projectId: id, reconnectEvaluationId, bodyParsed, isSSEReconnect: !!reconnectEvaluationId });
     logger.debug(LOG_MODULES.EVALUATION, '启动评估参数', { workflowId, modelId, roleModelsCount: roleModels?.length || 0 });
 
-    // 获取项目信息（包括运行中的评估）
+    // 获取项目信息（包括运行中和准备中的评估）
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
         ProjectFile: true,
         EvaluationSession: {
-          where: { status: 'running' },
+          where: { status: { in: ['preparing', 'running'] } },
         },
       },
     });
@@ -123,8 +129,8 @@ export async function POST(
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
-    // 项目归属校验
-    if (project.userId !== payload.userId) {
+    // 项目归属校验（SSE 重连时跳过，因为后续有评估归属检查）
+    if (!reconnectEvaluationId && project.userId !== payload.userId) {
       return NextResponse.json({ error: '无权操作此项目' }, { status: 403 });
     }
 
@@ -149,17 +155,22 @@ export async function POST(
       }
     }
 
-    // 检查并发限制（队列启动时跳过）
+    // 检查并发限制（队列启动和 SSE 重连时跳过）
     // 注意：需要统计 preparing 和 running 状态，因为创建时是 preparing
+    // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查并发限制
+    // 并发限制按项目统计：每个项目最多允许 N 个并发评估
     const maxConcurrent = globalConfig?.maxConcurrentEvaluations || 3;
     const activeCount = await prisma.evaluationSession.count({
-      where: { status: { in: ['preparing', 'running'] } },
+      where: { 
+        projectId: id,  // 只统计当前项目的评估数量
+        status: { in: ['preparing', 'running'] } 
+      },
     });
     
-    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { activeCount, maxConcurrent });
+    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { activeCount, maxConcurrent, isSSEReconnect: !!reconnectEvaluationId });
     
-    // 如果超出并发限制且不是队列启动，创建排队状态的评估
-    if (!isQueuedStart && activeCount >= maxConcurrent) {
+    // 如果超出并发限制且不是队列启动或 SSE 重连，创建排队状态的评估
+    if (!isQueuedStart && !reconnectEvaluationId && activeCount >= maxConcurrent) {
       logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
       
       // 创建排队状态的评估会话
@@ -239,14 +250,20 @@ export async function POST(
       where: { projectId: id },
     });
 
-    // 检查是否有运行中的评估会话
-    const runningEvaluations = project.EvaluationSession || [];
+    // 检查是否有运行中或准备中的评估会话
+    const activeEvaluations = project.EvaluationSession || [];
     
-    // 如果是 SSE 重连（提供了 evaluationId），且该评估正在运行
+    // 如果是 SSE 重连（提供了 evaluationId），且该评估正在运行或准备中
     if (reconnectEvaluationId) {
-      const targetEvaluation = runningEvaluations.find(e => e.id === reconnectEvaluationId);
+      const targetEvaluation = activeEvaluations.find(e => e.id === reconnectEvaluationId);
       if (targetEvaluation) {
-        logger.debug(LOG_MODULES.EVALUATION, 'SSE 重连到现有评估', { evaluationId: reconnectEvaluationId });
+        // SSE 重连权限检查：评估所属项目必须是用户自己的，或者用户是管理员
+        const userIsAdmin = isAdmin(payload);
+        if (!userIsAdmin && project.userId !== payload.userId) {
+          return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
+        }
+        
+        logger.debug(LOG_MODULES.EVALUATION, 'SSE 重连到现有评估', { evaluationId: reconnectEvaluationId, status: targetEvaluation.status });
         
         // 导入事件总线订阅函数
         const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');
@@ -330,10 +347,10 @@ export async function POST(
       }
     }
     
-    if (runningEvaluations.length > 0) {
+    if (activeEvaluations.length > 0) {
       return NextResponse.json({ 
-        error: '项目已在运行中', 
-        runningEvaluationId: runningEvaluations[0].id 
+        error: '项目已有评估正在运行或准备中', 
+        activeEvaluationId: activeEvaluations[0].id 
       }, { status: 400 });
     }
 
@@ -654,13 +671,41 @@ export async function POST(
           
           logger.info(LOG_MODULES.EVALUATION, 'FSM 评估已创建，状态为 preparing', { evaluationId: evaluation.id });
           
-          // 立即返回 202 Accepted
-          const responseJson = {
-            evaluationId: evaluation.id,
-            status: 'preparing',
-            workflowType: 'fsm',
-            message: '评估已创建，正在后台准备中...',
-          };
+          // 创建 SSE 流响应（订阅 eventBus 事件）
+          const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');
+          const encoder = new TextEncoder();
+          let unsubscribe: (() => void) | null = null;
+          
+          const stream = new ReadableStream({
+            start(controller) {
+              // 订阅所有评估事件
+              unsubscribe = subscribeToEvaluationEvents(evaluation.id, (event) => {
+                try {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                  
+                  // 如果评估完成，发送 [DONE] 并关闭流
+                  if (event.type === 'evaluation_complete') {
+                    controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                    controller.close();
+                  }
+                } catch (e) {
+                  // 流已关闭，忽略
+                }
+              });
+              
+              // 发送初始事件
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+                type: 'started',
+                evaluationId: evaluation.id,
+                status: 'preparing',
+                workflowType: 'fsm',
+                message: '评估已创建，正在后台准备中...',
+              })}\n\n`));
+            },
+            cancel() {
+              if (unsubscribe) unsubscribe();
+            },
+          });
           
           // 后台异步执行（不阻塞响应）
           void (async () => {
@@ -1072,8 +1117,14 @@ export async function POST(
             }
           })();
           
-          // 立即返回 202 Accepted
-          return NextResponse.json(responseJson, { status: 202 });
+          // 返回 SSE 流响应
+          return new NextResponse(stream, {
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+            },
+          });
         } else {
           // ========================================
           // DAG 模式：异步执行架构
@@ -1098,13 +1149,41 @@ export async function POST(
         
         logger.info(LOG_MODULES.EVALUATION, 'DAG 评估已创建，状态为 preparing', { evaluationId: dagEvaluation.id });
         
-        // 立即返回 202 Accepted
-        const dagResponseJson = {
-          evaluationId: dagEvaluation.id,
-          status: 'preparing',
-          workflowType: 'dag',
-          message: '评估已创建，正在后台准备中...',
-        };
+        // 创建 SSE 流响应（订阅 eventBus 事件）
+        const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');
+        const encoder = new TextEncoder();
+        let dagUnsubscribe: (() => void) | null = null;
+        
+        const dagStream = new ReadableStream({
+          start(controller) {
+            // 订阅所有评估事件
+            dagUnsubscribe = subscribeToEvaluationEvents(dagEvaluation.id, (event) => {
+              try {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+                
+                // 如果评估完成，发送 [DONE] 并关闭流
+                if (event.type === 'evaluation_complete') {
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                  controller.close();
+                }
+              } catch (e) {
+                // 流已关闭，忽略
+              }
+            });
+            
+            // 发送初始事件
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({
+              type: 'started',
+              evaluationId: dagEvaluation.id,
+              status: 'preparing',
+              workflowType: 'dag',
+              message: '评估已创建，正在后台准备中...',
+            })}\n\n`));
+          },
+          cancel() {
+            if (dagUnsubscribe) dagUnsubscribe();
+          },
+        });
         
         // 后台异步执行（不阻塞响应）
         void (async () => {
@@ -1846,8 +1925,14 @@ export async function POST(
           }
         })();
         
-        // 立即返回 202 Accepted
-        return NextResponse.json(dagResponseJson, { status: 202 });
+        // 返回 SSE 流响应
+        return new NextResponse(dagStream, {
+          headers: {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+          },
+        });
         }
       } catch (error) {
         logger.errorNoUser(LOG_MODULES.EVALUATION, 'Skills 同步或工作流启动失败', { error });

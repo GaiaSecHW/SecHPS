@@ -104,11 +104,18 @@ function SessionDetailContent({
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const projectId = id; // 路由参数是 projectId
-  const evaluationId = searchParams.get('evaluationId'); // evaluationId 在 query 参数
   
-  console.log('[Page] projectId from route:', projectId);
-  console.log('[Page] evaluationId from query:', evaluationId);
+  // 确认路由参数
+  console.log('[Page] Route param id:', id);
+  console.log('[Page] Is id an evaluationId?', id?.startsWith('eval-'));
+  
+  // 注意：路由参数id可能是projectId，也可能是错误的evaluationId
+  // 需要从evaluation.projectId获取真正的projectId
+  const evaluationId = searchParams.get('evaluationId') || id; // 如果没有query参数，id可能就是evaluationId
+  const projectId = searchParams.get('projectId'); // 尝试从query获取projectId
+  
+  console.log('[Page] evaluationId:', evaluationId);
+  console.log('[Page] projectId from query:', projectId);
 
   const [evaluation, setEvaluation] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -132,7 +139,6 @@ function SessionDetailContent({
   const [isNodeMessagesExpanded, setIsNodeMessagesExpanded] = useState(false); // 节点消息区域默认收缩
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
   const [isRalphLoopExpanded, setIsRalphLoopExpanded] = useState(false);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
   const [progressQuestion, setProgressQuestion] = useState<string>('');
   const [showAllChildMessages, setShowAllChildMessages] = useState(false);
@@ -140,28 +146,6 @@ function SessionDetailContent({
   const [expandedChildMessages, setExpandedChildMessages] = useState<Set<string>>(new Set());
   const [injectedExperiences, setInjectedExperiences] = useState<{ id: string; title: string; errorCategory: string; hitCount: number }[]>([]);
   const [experienceInjectionChecked, setExperienceInjectionChecked] = useState(false);
-  
-  // 实时 token 使用量和模型信息
-  const [realtimeTokenUsage, setRealtimeTokenUsage] = useState<{
-    phase: number;
-    phaseName: string;
-    modelName: string;
-    inputTokens: number;
-    outputTokens: number;
-    totalTokens: number;
-    cumulativeInputTokens: number;
-    cumulativeOutputTokens: number;
-    cumulativeTotalTokens: number;
-  } | null>(null);
-  
-  // FSM 阶段进度
-  const [fsmPhaseProgress, setFsmPhaseProgress] = useState<{
-    currentPhase: number;
-    phaseName: string;
-    status: string;
-    totalPhases: number;
-    completedPhases: number[];
-  } | null>(null);
   
   // 工作流节点列表（合并配置和执行状态）
   const [workflowNodes, setWorkflowNodes] = useState<any[]>([]);
@@ -184,54 +168,51 @@ function SessionDetailContent({
   useEffect(() => {
     if (!evaluationId) return;
     
-    // 所有数据加载放在一个串行流程，每次调用后休息1秒
+    // 所有数据加载放在一个串行流程，每次调用后休息3秒
     const loadAllData = async () => {
       try {
         setLoading(true);
         
         // 1. 先获取评估基本信息（返回数据供后续使用）
         const evalData = await fetchEvaluation();
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 3000));
         
         const projectId = evalData?.projectId;
+        console.log('[Init] After fetchEvaluation, projectId:', projectId, 'evalData exists:', !!evalData);
         
         // 2. 消息
         await fetchMessages();
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 3000));
         
         // 3. 进度问题
         await fetchProgressQuestion();
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 3000));
         
         // 4. 工作流节点
         await fetchWorkflowNodes();
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 3000));
+        
+        console.log('[Init] projectId check:', projectId ? 'passed' : 'FAILED - will skip SSE');
         
         if (projectId) {
           // 5. 会话详情
           await fetchSessionDetail();
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 3000));
           
           // 6. 任务列表
           await fetchTodos();
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 3000));
           
           // 7. SDK项目
           await fetchSdkProjects();
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 3000));
           
           // 8. 子会话
           await fetchChildrenSessions();
-          await new Promise(r => setTimeout(r, 1000));
+          await new Promise(r => setTimeout(r, 3000));
           
           // 9. 广播
           await fetchBroadcast();
-          await new Promise(r => setTimeout(r, 1000));
-          
-          // 10. 最后连接SSE（仅运行中状态）
-          if (evalData?.status === 'running') {
-            connectToEvaluationStream();
-          }
         }
         
         setLoading(false);
@@ -242,353 +223,7 @@ function SessionDetailContent({
     };
     
     loadAllData();
-    
-    return () => {
-      if (abortController) {
-        abortController.abort();
-      }
-    };
   }, [evaluationId]);
-
-  // 连接评估实时事件流（使用 fetch 替代 EventSource，支持 Authorization header）
-  const connectToEvaluationStream = async () => {
-    if (!evaluationId || !evaluation?.projectId) return;
-    
-    // 只有在评估运行中时才连接 SSE
-    // 注意：evaluation 可能还没加载，需要检查 evaluation 存在且 status 不是 running
-    if (evaluation && evaluation.status !== 'running') {
-      console.log('[SSE] Evaluation not running, skip SSE connection');
-      return;
-    }
-    
-    const token = localStorage.getItem('token');
-    const controller = new AbortController();
-    setAbortController(controller);
-    
-    try {
-      const response = await fetch(`/api/projects/${evaluation.projectId}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({ evaluationId }),
-        signal: controller.signal,
-      });
-      
-      if (!response.ok) {
-        console.warn('[SSE] Connection failed:', response.status);
-        return;
-      }
-      
-      console.log('[SSE] Connected to evaluation stream');
-      
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      
-      if (!reader) {
-        console.warn('[SSE] No response body');
-        return;
-      }
-      
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') continue;
-            try {
-              const event = JSON.parse(data);
-              handleStreamEvent(event);
-            } catch {
-              // 忽略解析错误
-            }
-          }
-        }
-      }
-        
-      console.log('[SSE] Stream ended');
-    } catch (error: unknown) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('[SSE] Connection aborted');
-      } else {
-        console.warn('[SSE] Connection error:', error);
-      }
-    } finally {
-      setAbortController(null);
-    }
-  };
-
-  // 处理流式事件
-  const handleStreamEvent = (data: any) => {
-    switch (data.type) {
-      case 'preparing_progress':
-        // 准备阶段进度（MCP 执行等）
-        console.log('[Preparing]', data.stage, data.message, data.error || '');
-        // 可以显示准备进度给用户
-        break;
-        
-      case 'evaluation_started':
-        // 评估正式开始
-        console.log('[Started]', data.workflowType, data.message);
-        // 更新状态为 running
-        break;
-        
-      case 'todo_update':
-        // 实时更新 TODO 列表
-        if (data.todos && Array.isArray(data.todos)) {
-          setTodos(data.todos);
-          console.log('[TODO] Real-time update:', data.todos.length, 'items');
-        }
-        break;
-        
-      case 'vulnerability_summary':
-        // 接收漏洞总结
-        setVulnerabilitySummary({
-          summary: data.summary,
-          vulnerabilities: data.vulnerabilities,
-        });
-        console.log('[Vuln] Received vulnerability summary:', data.summary);
-        break;
-        
-      case 'token_usage':
-      case 'phase_token_usage':
-        // 实时 token 使用量和模型信息
-        setRealtimeTokenUsage({
-          phase: data.phase || data.nodeIndex,
-          phaseName: data.phaseName || data.nodeName || '',
-          modelName: data.modelName,
-          inputTokens: data.inputTokens,
-          outputTokens: data.outputTokens,
-          totalTokens: data.totalTokens || (data.inputTokens + data.outputTokens),
-          cumulativeInputTokens: data.cumulativeInputTokens,
-          cumulativeOutputTokens: data.cumulativeOutputTokens,
-          cumulativeTotalTokens: data.cumulativeTotalTokens || (data.cumulativeInputTokens + data.cumulativeOutputTokens),
-        });
-        // 更新对应节点的 Token 数据
-        setWorkflowNodes(prev => {
-          const nodeIdx = data.nodeIndex - 1; // nodeIndex 是 1-based
-          if (nodeIdx >= 0 && nodeIdx < prev.length) {
-            const updated = [...prev];
-            updated[nodeIdx] = {
-              ...updated[nodeIdx],
-              inputTokens: data.inputTokens || updated[nodeIdx].inputTokens,
-              outputTokens: data.outputTokens || updated[nodeIdx].outputTokens,
-            };
-            return updated;
-          }
-          return prev;
-        });
-        console.log(`[Token] Phase ${data.phase || data.nodeIndex}: ${data.modelName} - 输入 ${data.inputTokens}, 输出 ${data.outputTokens}, 累计 ${data.cumulativeInputTokens + data.cumulativeOutputTokens} tokens`);
-        break;
-
-      case 'phase_start':
-        // DAG 节点开始
-        setFsmPhaseProgress(prev => ({
-          currentPhase: data.nodeIndex,
-          phaseName: data.nodeName,
-          status: 'running',
-          totalPhases: data.totalNodes,
-          completedPhases: prev?.completedPhases || [],
-        }));
-        setRealtimeTokenUsage(prev => prev ? {
-          ...prev,
-          phase: data.nodeIndex,
-          phaseName: data.nodeName,
-          modelName: data.modelName,
-        } : null);
-        // 更新节点状态为 running
-        setWorkflowNodes(prev => {
-          const nodeIndex = data.nodeIndex - 1; // nodeIndex 是 1-based
-          if (nodeIndex >= 0 && nodeIndex < prev.length) {
-            const updated = [...prev];
-            updated[nodeIndex] = {
-              ...updated[nodeIndex],
-              status: 'running',
-              modelName: data.modelName || updated[nodeIndex].modelName,
-              startedAt: new Date().toISOString(),
-            };
-            return updated;
-          }
-          return prev;
-        });
-        // 更新进度
-        setNodeProgress(prev => {
-          if (!prev) return null;
-          const nodeIndex = data.nodeIndex - 1;
-          return {
-            ...prev,
-            running: prev.running + 1,
-            pending: prev.pending - 1,
-            currentRunningNode: {
-              id: workflowNodes[nodeIndex]?.id || '',
-              label: data.nodeName,
-              modelName: data.modelName,
-            },
-          };
-        });
-        console.log(`[Phase] Node ${data.nodeIndex}/${data.totalNodes} started: ${data.nodeName} (Model: ${data.modelName})`);
-        break;
-
-      case 'started':
-        // 评估启动，记录信息
-        console.log(`[Evaluation] Started: ${data.evaluationId}, type: ${data.workflowType}, nodes: ${data.totalNodes}`);
-        // 刷新评估信息
-        fetchEvaluation();
-        break;
-
-      case 'phase_complete':
-        // FSM 阶段完成
-        setFsmPhaseProgress(prev => {
-          const completedPhases = prev?.completedPhases || [];
-          return {
-            currentPhase: data.phase,
-            phaseName: data.phaseName,
-            status: data.status,
-            totalPhases: 6, // FSM 固定 6 个阶段
-            completedPhases: data.status === 'completed' 
-              ? [...completedPhases, data.phase] 
-              : completedPhases,
-          };
-        });
-        // 更新节点状态为 completed 或 failed
-        setWorkflowNodes(prev => {
-          const nodeIndex = data.phase - 1; // phase 是 1-based
-          if (nodeIndex >= 0 && nodeIndex < prev.length) {
-            const updated = [...prev];
-            updated[nodeIndex] = {
-              ...updated[nodeIndex],
-              status: data.status === 'completed' ? 'completed' : 'failed',
-              completedAt: new Date().toISOString(),
-            };
-            return updated;
-          }
-          return prev;
-        });
-        // 更新进度
-        setNodeProgress(prev => {
-          if (!prev) return null;
-          const newCompleted = data.status === 'completed' ? prev.completed + 1 : prev.completed;
-          const newFailed = data.status === 'failed' ? prev.failed + 1 : prev.failed;
-          return {
-            ...prev,
-            completed: newCompleted,
-            running: prev.running - 1,
-            failed: newFailed,
-            currentRunningNode: null,
-          };
-        });
-        console.log(`[Phase] Phase ${data.phase} (${data.phaseName}) ${data.status}`);
-        break;
-        
-      case 'done':
-        // 审计完成 - 串行刷新
-        console.log('[Evaluation] Audit completed:', data.message);
-        (async () => {
-          try {
-            await fetchEvaluation(); // 先刷新评估状态
-            await new Promise(r => setTimeout(r, 1000));
-            await fetchMessages(); // 再刷新消息列表
-          } catch (e) {
-            console.error('[Done refresh] Error:', e);
-          }
-        })();
-        if (abortController) {
-          abortController.abort();
-        }
-        break;
-        
-      case 'error':
-        console.error('[Evaluation] Error:', data.error);
-        break;
-        
-      case 'node_complete':
-        // 节点完成（工作流相关）
-        console.log('[Node] Completed:', data.nodeId);
-        // 更新节点状态
-        setWorkflowNodes(prev => {
-          const nodeIdx = prev.findIndex(n => n.id === data.nodeId || n.workflowNodeId === data.nodeId);
-          if (nodeIdx >= 0) {
-            const updated = [...prev];
-            updated[nodeIdx] = {
-              ...updated[nodeIdx],
-              status: 'completed',
-              completedAt: new Date().toISOString(),
-            };
-            return updated;
-          }
-          return prev;
-        });
-        // 更新进度
-        setNodeProgress(prev => {
-          if (!prev) return null;
-          return {
-            ...prev,
-            completed: prev.completed + 1,
-            running: Math.max(0, prev.running - 1),
-            currentRunningNode: null,
-          };
-        });
-        break;
-
-      case 'experience_injected':
-        // 自主进化经验注入信息
-        setInjectedExperiences(data.experiences || []);
-        setExperienceInjectionChecked(true);
-        console.log(`[Experience] Injected ${data.count} experiences`);
-        break;
-        
-      case 'message':
-        // 消息块 - 实时添加到节点消息列表
-        if (data.content) {
-          const nodeId = data.nodeId;
-          console.log('[Message] Real-time update, nodeId:', nodeId, 'content length:', data.content.length);
-          
-          // 如果当前选中的节点就是消息所属的节点，实时更新 nodeMessages
-          if (nodeId && selectedNodeId === nodeId) {
-            setNodeMessages(prev => {
-              // 避免重复添加
-              const exists = prev.some(m => m.id === data.id);
-              if (exists) return prev;
-              
-              return [...prev, {
-                id: data.id || `msg-${Date.now()}`,
-                role: 'assistant',
-                content: data.content,
-                createdAt: new Date().toISOString(),
-                workflowNodeId: nodeId,
-              }];
-            });
-          }
-          
-          // 同时更新全局 messages（用于轮询刷新时合并）
-          setMessages(prev => {
-            const exists = prev.some(m => m.id === data.id);
-            if (exists) return prev;
-            
-            return [...prev, {
-              id: data.id || `msg-${Date.now()}`,
-              role: 'assistant',
-              content: data.content,
-              createdAt: new Date().toISOString(),
-              workflowNodeId: nodeId,
-            }];
-          });
-        }
-        break;
-        
-      default:
-        // 忽略其他事件
-        break;
-    }
-  };
 
   useEffect(() => {
     // 多 Agent 模式使用 evaluationId，旧模式使用 opencodeSessionId
@@ -599,29 +234,40 @@ function SessionDetailContent({
       return;
     }
 
-    // 如果没有 SSE 连接，则使用串行轮询作为后备
-    const interval = setInterval(async () => {
-      if (!abortController) {
+    // 轮询逻辑：每 5 秒轮询一次，获取 Token 和其他数据
+    // 不依赖 SSE，轮询始终执行
+    let isPolling = true;
+    
+    const pollLoop = async () => {
+      while (isPolling) {
         try {
-          await fetchMessages(); // 1. 消息
-          await new Promise(r => setTimeout(r, 1000));
-          await fetchTodos();    // 2. 任务
-          await new Promise(r => setTimeout(r, 1000));
-          await fetchChildrenSessions(); // 3. 子Agent
-          await new Promise(r => setTimeout(r, 1000));
-          await fetchWorkflowNodes(); // 4. 节点
-          await new Promise(r => setTimeout(r, 1000));
-          await fetchEvaluation(); // 5. 评估状态
-          await new Promise(r => setTimeout(r, 1000));
-          await fetchBroadcast(); // 6. 广播
+          await fetchEvaluation(); // 1. 评估状态和 Token
+          await new Promise(r => setTimeout(r, 5000));
+          if (!isPolling) break;
+          
+          await fetchWorkflowNodes(); // 2. 节点
+          await new Promise(r => setTimeout(r, 5000));
+          if (!isPolling) break;
+          
+          await fetchMessages(); // 3. 消息
+          await new Promise(r => setTimeout(r, 5000));
+          if (!isPolling) break;
+          
+          await fetchTodos();    // 4. 任务
+          await new Promise(r => setTimeout(r, 5000));
         } catch (e) {
           console.error('[Polling] Error:', e);
+          await new Promise(r => setTimeout(r, 5000)); // 出错也休息5秒
         }
       }
-    }, 5000); // 5秒轮询一次
+    };
+    
+    pollLoop();
 
-    return () => clearInterval(interval);
-  }, [evaluationId, evaluation?.opencodeSessionId, evaluation?.status, abortController]);
+return () => {
+      isPolling = false;
+    };
+  }, [evaluationId, evaluation?.opencodeSessionId, evaluation?.status]);
 
   const fetchEvaluation = async (): Promise<any> => {
     if (!evaluationId) return null;
@@ -648,10 +294,13 @@ function SessionDetailContent({
       }
 
       const data = await response.json();
-      console.log('[fetchEvaluation] Token数据:', {
+      console.log('[fetchEvaluation] 完整数据:', {
+        id: data.evaluation?.id,
+        projectId: data.evaluation?.projectId,
+        ProjectId: data.evaluation?.Project?.id,
+        status: data.evaluation?.status,
         totalInputTokens: data.evaluation?.totalInputTokens,
         totalOutputTokens: data.evaluation?.totalOutputTokens,
-        status: data.evaluation?.status,
       });
       setEvaluation(data.evaluation);
       setLoading(false);
@@ -707,13 +356,6 @@ function SessionDetailContent({
       }
 
       const data = await response.json();
-      console.log('[fetchMessages] Response data:', {
-        messagesCount: data.messages?.length,
-        total: data.total,
-        firstMessage: data.messages?.[0],
-        lastMessage: data.messages?.[data.messages?.length - 1],
-      });
-      
       setMessages(data.messages || []);
       setLoading(false);
     } catch (err) {
@@ -724,16 +366,12 @@ function SessionDetailContent({
   };
 
   // 获取节点消息（按 nodeId 过滤）- 串行调用
-  // FSM 模式：nodeId 保存在 metadata.nodeId，后端从 metadata 过滤
-  // DAG 模式：nodeId 保存在 workflowNodeId，后端从 workflowNodeId 过滤
   const fetchNodeMessages = async (nodeId: string) => {
     if (!evaluationId) return;
 
     try {
       const token = localStorage.getItem('token');
-      console.log('[fetchNodeMessages] 开始获取消息, nodeId:', nodeId);
 
-      // 按 nodeId 过滤，只获取该节点的消息
       const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db&nodeId=${encodeURIComponent(nodeId)}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -741,7 +379,6 @@ function SessionDetailContent({
       });
 
       if (!response.ok) {
-        console.error('[fetchNodeMessages] Failed:', response.status);
         setNodeMessages([]);
         return;
       }
@@ -1354,11 +991,11 @@ function SessionDetailContent({
 
   return (
     <div className="h-full flex flex-col">
-      {/* 评估头部组件 */}
+      {/* 评估头部组件 - Token 从 workflowNodes 汇总（实时数据） */}
       <EvaluationHeader 
         status={evaluation?.status || 'pending'}
-        totalInputTokens={evaluation?.totalInputTokens || 0}
-        totalOutputTokens={evaluation?.totalOutputTokens || 0}
+        totalInputTokens={evaluation?.totalInputTokens || workflowNodes.reduce((sum, node) => sum + (node.inputTokens || 0), 0)}
+        totalOutputTokens={evaluation?.totalOutputTokens || workflowNodes.reduce((sum, node) => sum + (node.outputTokens || 0), 0)}
         projectName={evaluation?.Project?.name}
         workflowType={evaluation?.workflowType}
         onStop={handleStopEvaluation}
@@ -1367,7 +1004,6 @@ function SessionDetailContent({
         onAskProgress={handleAskProgress}
         onDelete={handleDeleteEvaluation}
         progressQuestion={progressQuestion}
-        realtimeTokenUsage={realtimeTokenUsage}
         evaluation={evaluation}
       />
       
