@@ -2183,7 +2183,7 @@ function MessageBubble({
   isSelected: boolean;
 }) {
   const isUser = message.role === 'user';
-  const [isCollapsed, setIsCollapsed] = useState(false); // 默认展开
+  const [isCollapsed, setIsCollapsed] = useState(true); // 默认收缩
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [expandedThinking, setExpandedThinking] = useState(false);
   const [expandedReasoning, setExpandedReasoning] = useState(false);
