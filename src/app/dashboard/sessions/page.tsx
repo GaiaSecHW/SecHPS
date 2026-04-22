@@ -678,6 +678,31 @@ export default function SessionsPage() {
       // 立即刷新项目列表以显示"评估运行中"状态
       await fetchProjects();
 
+      // 检查是否是异步模式（202 Accepted）
+      if (response.status === 202) {
+        const data = await response.json();
+        console.log('[评估异步启动]', data);
+        
+        // FSM 异步模式：立即返回 evaluationId
+        if (data.evaluationId && data.status === 'preparing') {
+          setStartingProject(null);
+          
+          // 立即跳转到评估详情页（状态为 'preparing'）
+          router.push(`/dashboard/sessions/${projectId}?evaluationId=${data.evaluationId}`);
+          return;
+        }
+        
+        // 队列模式：评估已加入排队
+        if (data.status === 'queued') {
+          setStartingProject(null);
+          toast.success(`评估已加入排队队列，位置: ${data.queuePosition}`);
+          return;
+        }
+        
+        setStartingProject(null);
+        return;
+      }
+
       // 处理 SSE 流式响应（后台监听，不阻塞UI）
       const reader = response.body?.getReader();
       if (!reader) {

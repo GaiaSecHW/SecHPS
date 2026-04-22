@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { EvaluationHeader } from '@/components/evaluation';
 
 // 辅助函数：获取消息内容预览
 function getContentPreview(content: any): string {
@@ -277,6 +278,18 @@ function SessionDetailContent({
   // 处理流式事件
   const handleStreamEvent = (data: any) => {
     switch (data.type) {
+      case 'preparing_progress':
+        // 准备阶段进度（MCP 执行等）
+        console.log('[Preparing]', data.stage, data.message, data.error || '');
+        // 可以显示准备进度给用户
+        break;
+        
+      case 'evaluation_started':
+        // 评估正式开始
+        console.log('[Started]', data.workflowType, data.message);
+        // 更新状态为 running
+        break;
+        
       case 'todo_update':
         // 实时更新 TODO 列表
         if (data.todos && Array.isArray(data.todos)) {
@@ -299,7 +312,7 @@ function SessionDetailContent({
         // 实时 token 使用量和模型信息
         setRealtimeTokenUsage({
           phase: data.phase || data.nodeIndex,
-          phaseName: data.phaseName || '',
+          phaseName: data.phaseName || data.nodeName || '',
           modelName: data.modelName,
           inputTokens: data.inputTokens,
           outputTokens: data.outputTokens,
@@ -307,6 +320,20 @@ function SessionDetailContent({
           cumulativeInputTokens: data.cumulativeInputTokens,
           cumulativeOutputTokens: data.cumulativeOutputTokens,
           cumulativeTotalTokens: data.cumulativeTotalTokens || (data.cumulativeInputTokens + data.cumulativeOutputTokens),
+        });
+        // 更新对应节点的 Token 数据
+        setWorkflowNodes(prev => {
+          const nodeIdx = data.nodeIndex - 1; // nodeIndex 是 1-based
+          if (nodeIdx >= 0 && nodeIdx < prev.length) {
+            const updated = [...prev];
+            updated[nodeIdx] = {
+              ...updated[nodeIdx],
+              inputTokens: data.inputTokens || updated[nodeIdx].inputTokens,
+              outputTokens: data.outputTokens || updated[nodeIdx].outputTokens,
+            };
+            return updated;
+          }
+          return prev;
         });
         console.log(`[Token] Phase ${data.phase || data.nodeIndex}: ${data.modelName} - 输入 ${data.inputTokens}, 输出 ${data.outputTokens}, 累计 ${data.cumulativeInputTokens + data.cumulativeOutputTokens} tokens`);
         break;
@@ -611,17 +638,19 @@ function SessionDetailContent({
     }
   };
 
-  // 获取节点消息（显示所有消息，不过滤）
+  // 获取节点消息（按 nodeId 过滤）
+  // FSM 模式：nodeId 保存在 metadata.nodeId，后端从 metadata 过滤
+  // DAG 模式：nodeId 保存在 workflowNodeId，后端从 workflowNodeId 过滤
   const fetchNodeMessages = async (nodeId: string) => {
     if (!evaluationId) return;
 
     setLoadingNodeMessages(true);
     try {
       const token = localStorage.getItem('token');
-      console.log('[fetchNodeMessages] Fetching all messages for evaluation:', evaluationId);
+      console.log('[fetchNodeMessages] Fetching messages for node:', nodeId);
 
-      // 不再按 nodeId 过滤，返回所有消息
-      const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db`, {
+      // 按 nodeId 过滤，只获取该节点的消息
+      const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db&nodeId=${encodeURIComponent(nodeId)}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -634,7 +663,7 @@ function SessionDetailContent({
       }
 
       const data = await response.json();
-      console.log('[fetchNodeMessages] Received:', data.messages?.length || 0, 'messages');
+      console.log('[fetchNodeMessages] Received:', data.messages?.length || 0, 'messages for node:', nodeId, 'fsmMode:', data.fsmMode);
       
       setNodeMessages(data.messages || []);
     } catch (err) {
@@ -1400,87 +1429,11 @@ function SessionDetailContent({
         </div>
       </div>
       
-      {/* 评估信息面板 */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">启动时间</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.startedAt ? new Date(evaluation.startedAt).toLocaleString('zh-CN') : '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">停止时间</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.completedAt ? new Date(evaluation.completedAt).toLocaleString('zh-CN') : '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">使用的模型</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.modelName || evaluation.modelConfigName || '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">模型提供商</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.providerType || evaluation.modelConfigProviderType || '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">模型提供者</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.modelCreatorId === null ? (
-                <span className="text-purple-600">系统模型</span>
-              ) : (
-                evaluation.modelCreatorName || evaluation.modelCreatorUsername || '未知用户'
-              )}
-            </p>
-          </div>
-          {/* Token 消耗信息 */}
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">输入 Token</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.totalInputTokens != null ? formatTokenNumber(evaluation.totalInputTokens) : '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">输出 Token</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.totalOutputTokens != null ? formatTokenNumber(evaluation.totalOutputTokens) : '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1">总 Token</h3>
-            <p className="text-sm text-gray-900">
-              {evaluation.totalTokens != null ? formatTokenNumber(evaluation.totalTokens) : '-'}
-            </p>
-          </div>
-          <div>
-            <h3 className="text-xs font-medium text-gray-500 mb-1 flex items-center">
-              预估费用
-              <span className="ml-1 cursor-help relative group">
-                <Info size={12} className="text-orange-400 hover:text-orange-600" />
-                <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
-                  ¥6/百万输入 + ¥22/百万输出
-                </span>
-              </span>
-            </h3>
-            <p className="text-sm text-orange-600 font-medium">
-              {evaluation.estimatedCost ? `¥${evaluation.estimatedCost.toFixed(4)}` : '-'}
-            </p>
-          </div>
-        </div>
-        {/* 结束详情（失败或取消时显示详细信息） */}
-        {evaluation.endMessage && evaluation.status !== 'running' && (
-          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-            <h3 className="text-xs font-medium text-gray-500 mb-1">结束详情</h3>
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
-              {evaluation.endMessage}
-            </p>
-          </div>
-        )}
-      </div>
+      {/* 评估头部组件：Token 统计 + 评估信息 */}
+      <EvaluationHeader 
+        evaluation={evaluation}
+        realtimeTokenUsage={realtimeTokenUsage}
+      />
       
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
@@ -1593,33 +1546,9 @@ function SessionDetailContent({
               </div>
             )}
             
-            {/* TODO List - 任务列表 */}
-            <div className="mb-6">
-              <button
-                onClick={() => setIsTodosExpanded(!isTodosExpanded)}
-                className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
-              >
-                <div className="flex items-center">
-                  <ListTodo size={18} className="mr-2 text-blue-600" />
-                  任务列表 ({todos.length})
-                </div>
-                {isTodosExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-              </button>
-              {isTodosExpanded && (
-                todos.length === 0 ? (
-                  <div className="text-center py-4 bg-gray-100 rounded-lg border border-gray-200">
-                    <p className="text-sm text-gray-500">暂无任务</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {todos.map((todo, index) => (
-                      <TodoItem key={todo.id || `todo-${index}-${todo.content?.substring(0, 20)}`} todo={todo} />
-                    ))}
-                  </div>
-                )
-              )}
-            </div>
-
+            {/* 公共任务列表已移除 - 任务现在按节点显示 */}
+            {/* 点击节点查看该节点的任务、消息和子Agent */}
+            
             {/* Ralph Loop 迭代记录 */}
             {evaluation?.EvaluationIteration && evaluation.EvaluationIteration.length > 0 && (
               <div className="mb-6">
@@ -1912,17 +1841,16 @@ function SessionDetailContent({
                </div>
              )}
 
-            {/* Node Messages - 当选中节点时显示 */}
+            {/* Node Detail Panel - 当选中节点时显示节点的消息、任务、子Agent */}
             {selectedNodeId && (
-              <div className="mb-6">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center">
-                    <MessageSquare size={18} className="mr-2 text-blue-600" />
+              <div className="mb-6 bg-white rounded-lg border border-blue-300 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
                     <span className="text-lg font-semibold text-gray-900">
-                      节点消息: {workflowNodes.find((n: any) => n.id === selectedNodeId)?.label || '未知节点'}
+                      {workflowNodes.find((n: any) => n.id === selectedNodeId)?.label || '未知节点'}
                     </span>
-                    <span className="ml-2 text-sm text-gray-500">
-                      ({nodeMessages.length} 条)
+                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                      节点详情
                     </span>
                   </div>
                   <button
@@ -1930,152 +1858,182 @@ function SessionDetailContent({
                       setSelectedNodeId(null);
                       setNodeMessages([]);
                     }}
-                    className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
-                    title="取消选择"
+                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="关闭节点详情"
                   >
                     <X size={14} />
-                    <span>取消选择</span>
+                    <span>关闭</span>
                   </button>
                 </div>
                 
                 {loadingNodeMessages ? (
-                  <div className="flex items-center justify-center py-8 bg-white rounded-lg border border-gray-200">
+                  <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
-                    <span className="ml-2 text-sm text-gray-500">加载节点消息...</span>
+                    <span className="ml-2 text-sm text-gray-500">加载节点数据...</span>
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {/* 所有消息 - 不过滤 */}
-                    <div className="bg-white rounded-lg border border-gray-200 p-4">
+                    {/* 节点任务 */}
+                    <div className="border border-gray-200 rounded-lg p-3">
                       <button
-                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700 mb-3"
+                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
+                        onClick={() => setIsTodosExpanded(!isTodosExpanded)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <ListTodo size={16} className="text-blue-600" />
+                          <span>节点任务</span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            {todos.filter((t: any) => t.nodeId === selectedNodeId).length} 个
+                          </span>
+                        </div>
+                        {isTodosExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      {isTodosExpanded && (
+                        <div className="mt-3 space-y-2">
+                          {todos.filter((t: any) => t.nodeId === selectedNodeId).length === 0 ? (
+                            <p className="text-sm text-gray-500 text-center py-2">该节点暂无任务</p>
+                          ) : (
+                            todos.filter((t: any) => t.nodeId === selectedNodeId).map((todo: any, idx: number) => (
+                              <TodoItem key={todo.id || `todo-${idx}`} todo={todo} />
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* 节点消息 */}
+                    <div className="border border-gray-200 rounded-lg p-3">
+                      <button
+                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
                         onClick={() => setIsNodeMessagesExpanded(!isNodeMessagesExpanded)}
                       >
-                        <div className="flex items-center">
-                          <MessageSquare size={14} className="mr-2 text-blue-600" />
-                          节点消息 ({nodeMessages.length} 条)
+                        <div className="flex items-center gap-2">
+                          <MessageSquare size={16} className="text-green-600" />
+                          <span>节点消息</span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            {nodeMessages.length} 条
+                          </span>
                         </div>
                         {isNodeMessagesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>
                       {isNodeMessagesExpanded && (
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                          {nodeMessages.map((message: any, index: number) => (
-                            <MessageBubble
-                              key={`${message.id}-${index}`}
-                              message={message}
-                              onCopy={() => {
-                                navigator.clipboard.writeText(
-                                  typeof message.content === 'string' 
-                                    ? message.content 
-                                    : JSON.stringify(message.content, null, 2)
-                                );
-                              }}
-                              onClick={() => {
-                                setSelectedMessage(message);
-                                // 转换消息内容为 MessageDetailPanel 需要的格式
-                                let parts: any[] = [];
-                                const content = message.content;
-                                
-                                if (typeof content === 'string') {
-                                  // 尝试解析 JSON
-                                  try {
-                                    const parsed = JSON.parse(content);
-                                    if (Array.isArray(parsed)) {
-                                      parts = parsed;
-                                    } else {
+                        <div className="mt-3 space-y-3 max-h-80 overflow-y-auto">
+                          {nodeMessages.length === 0 ? (
+                            <p className="text-sm text-gray-500 text-center py-2">该节点暂无消息</p>
+                          ) : (
+                            nodeMessages.map((message: any, index: number) => (
+                              <MessageBubble
+                                key={`${message.id}-${index}`}
+                                message={message}
+                                onCopy={() => {
+                                  navigator.clipboard.writeText(
+                                    typeof message.content === 'string' 
+                                      ? message.content 
+                                      : JSON.stringify(message.content, null, 2)
+                                  );
+                                }}
+                                onClick={() => {
+                                  setSelectedMessage(message);
+                                  let parts: any[] = [];
+                                  const content = message.content;
+                                  if (typeof content === 'string') {
+                                    try {
+                                      const parsed = JSON.parse(content);
+                                      if (Array.isArray(parsed)) {
+                                        parts = parsed;
+                                      } else {
+                                        parts = [{ type: 'text', text: content }];
+                                      }
+                                    } catch {
                                       parts = [{ type: 'text', text: content }];
                                     }
-                                  } catch {
-                                    parts = [{ type: 'text', text: content }];
+                                  } else if (Array.isArray(content)) {
+                                    parts = content;
+                                  } else if (content) {
+                                    parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
                                   }
-                                } else if (Array.isArray(content)) {
-                                  parts = content;
-                                } else if (content) {
-                                  parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
-                                }
-                                
-                                setMessageDetail({
-                                  id: message.id,
-                                  role: message.role,
-                                  content: message.content,
-                                  createdAt: message.createdAt,
-                                  workflowNodeId: message.workflowNodeId,
-                                  // MessageDetailPanel 需要的格式
-                                  parts: parts,
-                                  info: {
+                                  setMessageDetail({
                                     id: message.id,
                                     role: message.role,
-                                    time: {
-                                      created: message.createdAt,
+                                    content: message.content,
+                                    createdAt: message.createdAt,
+                                    workflowNodeId: message.workflowNodeId,
+                                    parts: parts,
+                                    info: {
+                                      id: message.id,
+                                      role: message.role,
+                                      time: { created: message.createdAt },
                                     },
-                                  },
-                                });
-                              }}
-                              isSelected={selectedMessage?.id === message.id}
-                            />
-                          ))}
+                                  });
+                                }}
+                                isSelected={selectedMessage?.id === message.id}
+                              />
+                            ))
+                          )}
                         </div>
-                      )}
-                      {isNodeMessagesExpanded && nodeMessages.length === 0 && (
-                        <p className="text-sm text-gray-500">暂无消息</p>
                       )}
                     </div>
                     
-                    {/* 子 Agent 明细 */}
-                    <div className="bg-white rounded-lg border border-purple-200 p-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                        <GitBranch size={14} className="mr-2 text-purple-600" />
-                        子 Agent 明细 ({childrenSessions.filter((c: any) => c.workflowNodeId === selectedNodeId).length} 个)
-                      </h4>
-                      {childrenSessions.filter((c: any) => c.workflowNodeId === selectedNodeId).length > 0 ? (
-                        <div className="space-y-2">
-                          {childrenSessions
-                            .filter((c: any) => c.workflowNodeId === selectedNodeId)
-                            .map((child: any) => (
-                              <div 
-                                key={child.id}
-                                className="p-2 rounded border border-purple-200 bg-purple-50 cursor-pointer hover:bg-purple-100"
-                                onClick={() => {
-                                  setSelectedChildSession(child.id);
-                                  fetchChildSessionMessages(child.id);
-                                }}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm font-medium text-gray-700">
-                                    {child.title || `子 Agent ${child.id.substring(0, 8)}`}
-                                  </span>
-                                  <span className={`text-xs px-2 py-0.5 rounded ${
-                                    child.status === 'active' || child.status === 'running' ? 'bg-green-100 text-green-700' :
-                                    child.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                                    'bg-gray-100 text-gray-600'
-                                  }`}>
-                                    {child.status || 'unknown'}
-                                  </span>
-                                </div>
-                                {child.startedAt && (
-                                  <div className="text-xs text-gray-500 mt-1">
-                                    {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                  </div>
-                                )}
-                                {child.modelName && (
-                                  <div className="text-xs text-blue-600 mt-1">
-                                    模型: {child.modelName}
-                                  </div>
-                                )}
-                              </div>
-                            ))}
+                    {/* 节点子Agent（从消息中提取 task/Agent 工具调用） */}
+                    <div className="border border-gray-200 rounded-lg p-3">
+                      <button
+                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
+                        onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <GitBranch size={16} className="text-purple-600" />
+                          <span>子Agent调用</span>
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                            {nodeMessages.filter((m: any) => {
+                              try {
+                                const c = JSON.parse(m.content);
+                                return c.name === 'task' || c.name === 'Agent';
+                              } catch { return false; }
+                            }).length} 个
+                          </span>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-500">暂无子 Agent</p>
+                        {isChildrenExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      {isChildrenExpanded && (
+                        <div className="mt-3 space-y-2">
+                          {nodeMessages.filter((m: any) => {
+                            try {
+                              const c = JSON.parse(m.content);
+                              return c.name === 'task' || c.name === 'Agent';
+                            } catch { return false; }
+                          }).length === 0 ? (
+                            <p className="text-sm text-gray-500 text-center py-2">该节点暂无子Agent调用</p>
+                          ) : (
+                            nodeMessages.filter((m: any) => {
+                              try {
+                                const c = JSON.parse(m.content);
+                                return c.name === 'task' || c.name === 'Agent';
+                              } catch { return false; }
+                            }).map((msg: any, idx: number) => {
+                              const content = JSON.parse(msg.content);
+                              return (
+                                <div key={idx} className="p-2 bg-purple-50 rounded border border-purple-200">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-purple-700">
+                                      {content.name === 'task' ? 'Task' : 'Agent'}
+                                    </span>
+                                    <span className="text-xs text-gray-600 truncate">
+                                      {content.args?.prompt?.substring(0, 50) || content.args?.description?.substring(0, 50) || '未知任务'}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
                 )}
               </div>
             )}
-
-            {/* Children Sessions - 已移除，保留"子 Agent 明细"栏目 */}
-          </div>
+            
+            </div>
         </div>
 
         {/* Right Panel: Message Detail */}
@@ -2223,6 +2181,13 @@ function MessageBubble({
   isSelected: boolean;
 }) {
   const isUser = message.role === 'user';
+  const isToolCall = message.role === 'tool_call';
+  const isToolResult = message.role === 'tool_result';
+  const isThinking = message.role === 'thinking';
+  const isAssistant = message.role === 'assistant' || message.role === 'assistant_chunk';
+  // 工具结果显示在右边（用户侧），因为它是给 AI 的输入
+  // thinking 消息显示在左边（AI 侧）
+  const isRightSide = isUser || isToolResult;
   const [isCollapsed, setIsCollapsed] = useState(true); // 默认收缩
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
   const [expandedThinking, setExpandedThinking] = useState(false);
@@ -2233,6 +2198,43 @@ function MessageBubble({
   // 解析所有内容部分
   const parseContent = () => {
     if (typeof message.content === 'string') {
+      // 对于工具调用，尝试解析 JSON（包含 toolUseId）
+      if (isToolCall) {
+        try {
+          const parsed = JSON.parse(message.content);
+          return [{ 
+            type: 'tool_call', 
+            toolUseId: parsed.toolUseId || parsed.id || 'unknown',
+            name: parsed.name, 
+            args: parsed.args 
+          }];
+        } catch {
+          return [{ type: 'tool_call', text: message.content }];
+        }
+      }
+      // 对于工具结果（包含 isError）
+      if (isToolResult) {
+        // 尝试从 metadata 解析
+        let toolUseId = 'unknown';
+        let isError = false;
+        if (message.metadata) {
+          try {
+            const meta = JSON.parse(message.metadata);
+            toolUseId = meta.toolUseId || 'unknown';
+            isError = meta.isError || false;
+          } catch {}
+        }
+        return [{ 
+          type: 'tool_result', 
+          toolUseId,
+          content: message.content,
+          isError 
+        }];
+      }
+      // thinking 角色
+      if (message.role === 'thinking') {
+        return [{ type: 'thinking', thinking: message.content }];
+      }
       return [{ type: 'text', text: message.content }];
     }
     if (Array.isArray(message.content)) {
@@ -2246,7 +2248,7 @@ function MessageBubble({
   // 按类型分组
   const textParts = parts.filter((p: any) => p.type === 'text');
   const reasoningParts = parts.filter((p: any) => p.type === 'reasoning');
-  const toolUseParts = parts.filter((p: any) => p.type === 'tool_use');
+  const toolUseParts = parts.filter((p: any) => p.type === 'tool_use' || p.type === 'tool_call');
   const toolResultParts = parts.filter((p: any) => p.type === 'tool_result');
   const subtaskParts = parts.filter((p: any) => p.type === 'subtask' || p.type === 'todo');
   const thinkingParts = parts.filter((p: any) => p.type === 'thinking');
@@ -2258,31 +2260,35 @@ function MessageBubble({
   const textPreview = textContent.substring(0, 30) + (textContent.length > 30 ? '...' : '');
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex ${isRightSide ? 'justify-end' : 'justify-start'}`}>
       <div
         className={`max-w-[90%] rounded-lg transition-all duration-200 ${
           isSelected
-            ? isUser
+            ? isRightSide
               ? 'bg-blue-600 text-white ring-2 ring-blue-400'
+              : isToolCall
+              ? 'bg-purple-100 text-purple-800 ring-2 ring-purple-400'
               : 'bg-blue-50 border-2 border-blue-400 shadow-md'
-            : isUser
+            : isRightSide
             ? 'bg-blue-500 text-white hover:bg-blue-600'
+            : isToolCall
+            ? 'bg-purple-50 border border-purple-200 hover:bg-purple-100'
             : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
         }`}
       >
         {/* 可点击的标题行（摘要） - 点击展开/收缩 */}
         <button
           className={`w-full flex items-center justify-between px-4 py-2 text-left transition-colors ${
-            isCollapsed ? (isUser ? 'hover:bg-blue-600' : 'hover:bg-gray-50') : ''
-          } ${isUser && !isCollapsed ? 'rounded-t-lg' : ''} ${isUser && isCollapsed ? 'rounded-lg' : ''}`}
+            isCollapsed ? (isRightSide ? 'hover:bg-blue-600' : 'hover:bg-gray-50') : ''
+          } ${isRightSide && !isCollapsed ? 'rounded-t-lg' : ''} ${isRightSide && isCollapsed ? 'rounded-lg' : ''}`}
           onClick={() => setIsCollapsed(!isCollapsed)}
         >
           <div className="flex items-center space-x-2 min-w-0 flex-1 flex-wrap">
             {/* 角色图标 */}
             <span className={`text-xs font-medium flex-shrink-0 ${
-              isUser ? 'text-white' : 'text-gray-700'
+              isRightSide ? 'text-white' : isToolCall ? 'text-purple-700' : isThinking ? 'text-yellow-700' : 'text-gray-700'
             }`}>
-              {isUser ? '👤 用户' : '🤖 AI'}
+              {isUser ? '👤 用户' : isToolResult ? '📤 执行结果' : isToolCall ? '🔧 工具调用' : isThinking ? '🧠 思考' : '🤖 AI'}
             </span>
             
             {/* 文本预览 - 仅收缩时显示 */}
@@ -2297,7 +2303,7 @@ function MessageBubble({
             {/* 工具调用标签 */}
             {toolUseParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isUser ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700'
+                isRightSide ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700'
               }`}>
                 🔧 {toolUseParts.length}
               </span>
@@ -2306,7 +2312,7 @@ function MessageBubble({
             {/* 工具结果标签 */}
             {toolResultParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isUser ? 'bg-blue-300 text-white' : 'bg-gray-200 text-gray-700'
+                isRightSide ? 'bg-blue-300 text-white' : 'bg-gray-200 text-gray-700'
               }`}>
                 📤 {toolResultParts.length}
               </span>
@@ -2315,7 +2321,7 @@ function MessageBubble({
             {/* 推理标签 */}
             {reasoningParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isUser ? 'bg-purple-400 text-white' : 'bg-purple-100 text-purple-700'
+                isRightSide ? 'bg-purple-400 text-white' : 'bg-purple-100 text-purple-700'
               }`}>
                 推理
               </span>
@@ -2324,7 +2330,7 @@ function MessageBubble({
             {/* 思考标签 */}
             {thinkingParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isUser ? 'bg-yellow-400 text-white' : 'bg-yellow-100 text-yellow-700'
+                isRightSide ? 'bg-yellow-400 text-white' : 'bg-yellow-100 text-yellow-700'
               }`}>
                 思考
               </span>
