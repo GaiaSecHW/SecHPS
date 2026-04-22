@@ -509,6 +509,9 @@ model NodeExecution {
   modelConfigId       String?
   modelName           String?
   roleId              String?
+  opencodeSessionId   String?           // Claude SDK 返回的会话 ID，用于恢复节点执行
+  inputTokens         Int?
+  outputTokens        Int?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime
   ModelConfig         ModelConfig?      @relation(fields: [modelConfigId], references: [id])

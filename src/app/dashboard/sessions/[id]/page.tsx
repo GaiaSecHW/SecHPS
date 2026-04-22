@@ -203,7 +203,8 @@ function SessionDetailContent({
     if (!evaluationId || !evaluation?.projectId) return;
     
     // 只有在评估运行中时才连接 SSE
-    if (evaluation.status !== 'running') {
+    // 注意：evaluation 可能还没加载，需要检查 evaluation 存在且 status 不是 running
+    if (evaluation && evaluation.status !== 'running') {
       console.log('[SSE] Evaluation not running, skip SSE connection');
       return;
     }
@@ -610,16 +611,17 @@ function SessionDetailContent({
     }
   };
 
-  // 获取节点消息（按 nodeId 过滤）
+  // 获取节点消息（显示所有消息，不过滤）
   const fetchNodeMessages = async (nodeId: string) => {
     if (!evaluationId) return;
 
     setLoadingNodeMessages(true);
     try {
       const token = localStorage.getItem('token');
-      console.log('[fetchNodeMessages] Fetching messages for nodeId:', nodeId);
+      console.log('[fetchNodeMessages] Fetching all messages for evaluation:', evaluationId);
 
-      const response = await fetch(`/api/evaluations/${evaluationId}/messages?nodeId=${nodeId}&source=db`, {
+      // 不再按 nodeId 过滤，返回所有消息
+      const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

@@ -57,13 +57,12 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
-    // 解析 URL 参数获取分页信息和过滤参数
+    // 解析 URL 参数获取分页信息
     const url = new URL(request.url);
     const limitParam = url.searchParams.get('limit');
     const offsetParam = url.searchParams.get('offset');
     const startTimeParam = url.searchParams.get('startTime');
     const endTimeParam = url.searchParams.get('endTime');
-    const nodeIdParam = url.searchParams.get('nodeId'); // 用于节点过滤
     const sourceParam = url.searchParams.get('source'); // 'db' | 'sdk' | 'auto'
     
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
@@ -71,9 +70,9 @@ export async function GET(
     const startTime = startTimeParam ? new Date(startTimeParam) : null;
     const endTime = endTimeParam ? new Date(endTimeParam) : null;
 
-    // 如果指定了 nodeId 或 source=db，从数据库查询
-    if (nodeIdParam || sourceParam === 'db') {
-      return await getMessagesFromDB(id, nodeIdParam, limit, offset);
+    // 如果指定了 source=db，从数据库查询（不过滤nodeId，返回所有消息）
+    if (sourceParam === 'db') {
+      return await getMessagesFromDB(id, null, limit, offset);
     }
 
     // 否则从 SDK 获取消息（原有逻辑）

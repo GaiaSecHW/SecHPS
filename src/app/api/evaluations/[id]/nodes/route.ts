@@ -307,6 +307,9 @@ export async function GET(
           // 模型信息
           modelName: exec?.modelName || modelFromRole || null,
           modelConfigId: exec?.modelConfigId || null,
+          // Token 信息
+          inputTokens: exec?.inputTokens || null,
+          outputTokens: exec?.outputTokens || null,
         };
       });
     } else {
@@ -322,6 +325,8 @@ export async function GET(
         order: exec.order,
         modelName: exec.modelName,
         modelConfigId: exec.modelConfigId,
+        inputTokens: exec.inputTokens,
+        outputTokens: exec.outputTokens,
       }));
     }
 
