@@ -19,6 +19,7 @@ export enum EventType {
   EVALUATION_COMPLETE = 'evaluation_complete',
   EVALUATION_PROGRESS = 'evaluation_progress',
   MESSAGE_CHUNK = 'message_chunk',
+  PHASE_TOKEN_USAGE = 'phase_token_usage',
 }
 
 // 事件数据类型
@@ -47,6 +48,18 @@ export interface EvaluationCompleteEvent {
 export interface MessageChunkEvent {
   evaluationId: string;
   content: string;
+  timestamp: number;
+}
+
+export interface PhaseTokenUsageEvent {
+  evaluationId: string;
+  nodeIndex: number;
+  nodeName?: string;
+  modelName: string;
+  inputTokens: number;
+  outputTokens: number;
+  cumulativeInputTokens: number;
+  cumulativeOutputTokens: number;
   timestamp: number;
 }
 
