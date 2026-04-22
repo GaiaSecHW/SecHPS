@@ -117,6 +117,7 @@ function SessionDetailContent({
   const [isTodosExpanded, setIsTodosExpanded] = useState(true);
   const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
+  const [isNodeMessagesExpanded, setIsNodeMessagesExpanded] = useState(false); // 节点消息区域默认收缩
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
   const [isRalphLoopExpanded, setIsRalphLoopExpanded] = useState(false);
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -1916,11 +1917,17 @@ function SessionDetailContent({
                   <div className="space-y-4">
                     {/* 所有消息 - 不过滤 */}
                     <div className="bg-white rounded-lg border border-gray-200 p-4">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
-                        <MessageSquare size={14} className="mr-2 text-blue-600" />
-                        节点消息 ({nodeMessages.length} 条)
-                      </h4>
-                      {nodeMessages.length > 0 ? (
+                      <button
+                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700 mb-3"
+                        onClick={() => setIsNodeMessagesExpanded(!isNodeMessagesExpanded)}
+                      >
+                        <div className="flex items-center">
+                          <MessageSquare size={14} className="mr-2 text-blue-600" />
+                          节点消息 ({nodeMessages.length} 条)
+                        </div>
+                        {isNodeMessagesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
+                      {isNodeMessagesExpanded && (
                         <div className="space-y-3 max-h-96 overflow-y-auto">
                           {nodeMessages.map((message: any, index: number) => (
                             <MessageBubble
@@ -1978,7 +1985,8 @@ function SessionDetailContent({
                             />
                           ))}
                         </div>
-                      ) : (
+                      )}
+                      {isNodeMessagesExpanded && nodeMessages.length === 0 && (
                         <p className="text-sm text-gray-500">暂无消息</p>
                       )}
                     </div>

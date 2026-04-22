@@ -6,7 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 /**
- * 获取评估会话的子Agent列表（从NodeExecution表获取）
+ * 获取评估会话的子Agent列表（从消息中提取 Agent/task 工具调用）
  * GET /api/evaluations/[id]/children
  */
 export async function GET(
@@ -26,63 +26,100 @@ export async function GET(
 
     logger.access(LOG_MODULES.SESSION, payload, evaluationId, { action: 'fetch_children_by_evaluation', nodeId });
 
-    // 获取评估会话和工作流信息
-    const evaluation = await prisma.evaluationSession.findUnique({
-      where: { id: evaluationId },
-      select: {
-        workflowId: true,
-        NodeExecution: {
-          where: nodeId ? { workflowNodeId: nodeId } : undefined,
-          orderBy: { order: 'asc' },
-        },
-      },
-    });
-
-    if (!evaluation) {
-      return NextResponse.json({ children: [], total: 0 });
+    // 从消息中提取 Agent/task 工具调用
+    const whereClause: any = { evaluationSessionId: evaluationId };
+    if (nodeId) {
+      whereClause.workflowNodeId = nodeId;
     }
 
-    // 获取工作流节点信息（用于获取节点标签）
-    let workflowNodesMap = new Map<string, { label: string; type: string }>();
-    if (evaluation.workflowId) {
-      const workflow = await prisma.workflow.findUnique({
-        where: { id: evaluation.workflowId },
-        select: {
-          WorkflowNode: {
-            select: { id: true, data: true, type: true },
-          },
-        },
-      });
-      if (workflow?.WorkflowNode) {
-        workflow.WorkflowNode.forEach(wn => {
-          // data 字段是 JSON，包含 label
-          let label = '';
+    // 查询所有消息，提取工具调用
+    const messages = await prisma.sessionMessage.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        role: true,
+        content: true,
+        workflowNodeId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // 解析消息中的 Agent/task 工具调用
+    const children: Array<{
+      id: string;
+      workflowNodeId: string | null;
+      title: string;
+      status: string;
+      startedAt: string | null;
+      completedAt: string | null;
+      type: string;
+    }> = [];
+
+    for (const msg of messages) {
+      try {
+        // 解析消息内容
+        let content = msg.content;
+        if (typeof content === 'string') {
           try {
-            const data = typeof wn.data === 'string' ? JSON.parse(wn.data) : wn.data;
-            label = data?.label || '';
+            content = JSON.parse(content);
           } catch {
-            // 忽略解析错误
+            continue;
           }
-          workflowNodesMap.set(wn.id, { label, type: wn.type });
-        });
+        }
+
+        // 处理数组形式的内容
+        const parts = Array.isArray(content) ? content : [content];
+        
+        for (const part of parts) {
+          if (!part || typeof part !== 'object') continue;
+          
+          // 检查是否是 Agent 或 task 工具调用
+          if (part.type === 'tool_use' && (part.name === 'Agent' || part.name === 'task')) {
+            const args = part.input || part.args || {};
+            const description = args.description || 
+                               args.prompt?.substring(0, 100) || 
+                               args.category || 
+                               `子任务 ${children.length + 1}`;
+            
+            children.push({
+              id: `${msg.id}-${part.id || children.length}`,
+              workflowNodeId: msg.workflowNodeId,
+              title: description.substring(0, 100),
+              status: 'active',
+              startedAt: msg.createdAt?.toISOString() || null,
+              completedAt: null,
+              type: part.name,
+            });
+          }
+          
+          // 也检查 role === 'tool_call' 的情况
+          if (msg.role === 'tool_call' && (part.name === 'Agent' || part.name === 'task')) {
+            const args = part.input || part.args || {};
+            const description = args.description || 
+                               args.prompt?.substring(0, 100) || 
+                               args.category || 
+                               `子任务 ${children.length + 1}`;
+            
+            // 避免重复添加
+            const exists = children.some(c => c.id === msg.id);
+            if (!exists) {
+              children.push({
+                id: msg.id,
+                workflowNodeId: msg.workflowNodeId,
+                title: description.substring(0, 100),
+                status: 'active',
+                startedAt: msg.createdAt?.toISOString() || null,
+                completedAt: null,
+                type: part.name,
+              });
+            }
+          }
+        }
+      } catch {
+        // 解析失败，跳过
       }
     }
-
-    // 构建 children 列表
-    const children = evaluation.NodeExecution.map(exec => {
-      const nodeInfo = workflowNodesMap.get(exec.workflowNodeId);
-      return {
-        id: exec.id,
-        workflowNodeId: exec.workflowNodeId,
-        title: exec.nodeLabel || nodeInfo?.label || `节点 ${exec.workflowNodeId?.substring(0, 8) || 'unknown'}`,
-        type: exec.nodeType || nodeInfo?.type || 'unknown',
-        status: exec.status || 'pending',
-        startedAt: exec.startedAt?.toISOString() || null,
-        completedAt: exec.completedAt?.toISOString() || null,
-        opencodeSessionId: exec.opencodeSessionId,
-        modelName: exec.modelName,
-      };
-    });
 
     logger.logNoUser(LOG_MODULES.SESSION, 'Found children for evaluation', { 
       details: { evaluationId, count: children.length } 
