@@ -160,7 +160,7 @@ P1_project_context:
 
 ### Output File
 
-- **Path**: `.claude/skills/threat-modeling/outputs/P1_project_context.yaml`
+- **Path**: `outputs/P1_project_context.yaml`
 - **Format**: YAML
 
 ### Validation Criteria

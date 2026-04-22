@@ -312,14 +312,15 @@ export class FSMWorkflowExecutionService {
     }));
   }
 
-  /**
-   * 创建统一执行引擎配置
-   */
+/**
+    * 创建统一执行引擎配置
+    */
   private createUnifiedEngineConfig(): UnifiedExecutionConfig {
-    // 转换默认模型配置
+    // FSM 使用父模型配置，所有节点共享同一模型
+    // modelConfig 只包含基础字段，需要从 models 解析模型名
     const defaultModelConfig: ModelConfigForExecution = {
-      id: 'default',
-      name: this.config.modelConfig.models || 'default-model',
+      id: 'fsm-default',
+      name: this.config.modelConfig.models || 'FSM Model',
       providerType: this.config.modelConfig.providerType,
       apiKey: this.config.modelConfig.apiKey,
       apiBaseUrl: this.config.modelConfig.apiBaseUrl,
@@ -335,7 +336,7 @@ export class FSMWorkflowExecutionService {
       workspacePath: this.config.workspacePath,
       systemPrompt: this.config.systemPrompt,
       userPrompt: this.fsmTemplate?.description || '',
-      roleModels: this.config.roleModels,
+      roleModels: undefined,  // FSM 不使用角色模型映射，所有节点使用同一父模型
       defaultModelConfig,
       maxIterationsPerNode: this.config.maxIterationsPerPhase,
       maxRetries: 15, // FSM 默认重试次数

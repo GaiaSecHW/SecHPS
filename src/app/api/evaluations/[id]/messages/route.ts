@@ -269,14 +269,22 @@ async function getMessagesFromDB(
     // FSM 模式：从 metadata.nodeId 过滤
     let filteredMessages = messages;
     if (isFSMMode && nodeId) {
+      console.log('[getMessagesFromDB] FSM 模式过滤, 目标 nodeId:', nodeId);
+      console.log('[getMessagesFromDB] 查询到的消息数:', messages.length);
+      
       filteredMessages = messages.filter((msg) => {
         try {
           const metadata = msg.metadata ? JSON.parse(msg.metadata) : {};
+          const msgNodeId = metadata.nodeId;
+          if (msg.role === 'tool_call') {
+            console.log('[getMessagesFromDB] tool_call 消息, metadata.nodeId:', msgNodeId, '匹配:', msgNodeId === nodeId);
+          }
           return metadata.nodeId === nodeId;
         } catch {
           return false;
         }
       });
+      console.log('[getMessagesFromDB] 过滤后消息数:', filteredMessages.length);
       // 应用分页
       if (limit) {
         filteredMessages = filteredMessages.slice(offset, offset + limit);

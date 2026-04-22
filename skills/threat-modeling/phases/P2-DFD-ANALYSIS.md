@@ -184,7 +184,7 @@ P2_dfd_elements:
 
 ### Output File
 
-- **Path**: `.claude/skills/threat-modeling/outputs/P2_dfd_elements.yaml`
+- **Path**: `outputs/P2_dfd_elements.yaml`
 - **Format**: YAML
 
 ### Validation Criteria

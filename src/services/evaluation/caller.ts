@@ -183,7 +183,11 @@ export function createEvaluationCaller(
 ): EvaluationCaller {
   // 解析模型列表
   const models = JSON.parse(modelConfig.models || '[]');
-  const model = models[0] || 'claude-sonnet-4-20250514';
+  const model = models[0];
+  
+  if (!model) {
+    throw new Error(`模型配置的 models 字段为空，必须配置至少一个模型。`);
+  }
 
   return new EvaluationCaller({
     providerType: modelConfig.providerType,

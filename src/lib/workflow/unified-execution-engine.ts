@@ -313,6 +313,19 @@ export class UnifiedWorkflowExecutionEngine {
               ).catch(err => console.error('[executeNode] 保存思考消息失败:', err));
             },
             onToolCall: (toolUseId, name, args) => {
+              // ========================================
+              // 子Agent交互日志 - 工具调用
+              // ========================================
+              if (name === 'Agent' || name === 'task') {
+                console.log('\n' + '='.repeat(80));
+                console.log('[子Agent交互] 工具调用');
+                console.log('[子Agent交互] toolUseId:', toolUseId);
+                console.log('[子Agent交互] 工具名称:', name);
+                console.log('[子Agent交互] 参数(args):');
+                console.log(JSON.stringify(args, null, 2));
+                console.log('='.repeat(80) + '\n');
+              }
+              
               // 保存工具调用消息到数据库（包含 toolUseId 用于匹配 tool_result）
               this.saveNodeMessage(
                 nodeId,
@@ -324,6 +337,19 @@ export class UnifiedWorkflowExecutionEngine {
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
             onToolResult: (toolUseId, content, isError) => {
+              // ========================================
+              // 子Agent交互日志 - 工具结果
+              // ========================================
+              console.log('\n' + '='.repeat(80));
+              console.log('[子Agent交互] 工具结果');
+              console.log('[子Agent交互] toolUseId:', toolUseId);
+              console.log('[子Agent交互] isError:', isError);
+              console.log('[子Agent交互] 结果内容:');
+              const resultContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
+              // 打印完整内容，不截断
+              console.log(resultContent);
+              console.log('='.repeat(80) + '\n');
+              
               // 保存工具结果消息到数据库（包含 toolUseId 和 isError）
               this.saveNodeMessage(
                 nodeId,
@@ -944,13 +970,10 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
     metadata?: string
   ): Promise<void> {
     try {
-      // FSM 模式特殊处理：不保存 workflowNodeId 到数据库
-      // 因为 FSM 节点 ID 来自 JSON 配置，不存在于 WorkflowNode 表中
-      // 会导致外键约束失败。将 nodeId 保存到 metadata 中用于过滤。
       const data: {
         id: string;
         evaluationSessionId: string;
-        workflowNodeId?: string;
+        workflowNodeId?: string | null;
         role: string;
         content: string;
         metadata?: string;
@@ -961,14 +984,23 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
         content,
       };
       
-      // 不保存 workflowNodeId（会导致外键约束失败）
-      // 将 nodeId 保存到 metadata 中用于节点过滤
+      // 解析 metadata
       const nodeMetadata = metadata ? JSON.parse(metadata) : {};
-      nodeMetadata.nodeId = nodeId;  // 用于过滤
+      
+      // 区分 FSM 和 DAG 模式
+      if (this.config.workflowType === 'fsm') {
+        // FSM 模式：不保存 workflowNodeId（节点 ID 来自 JSON 配置，不存在于 WorkflowNode 表）
+        // 将 nodeId 保存到 metadata 中用于过滤
+        nodeMetadata.nodeId = nodeId;
+      } else {
+        // DAG 模式：保存 workflowNodeId 外键（节点 ID 存在于 WorkflowNode 表）
+        data.workflowNodeId = nodeId;
+      }
+      
       data.metadata = JSON.stringify(nodeMetadata);
       
       await prisma.sessionMessage.create({ data });
-      console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}`);
+      console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}, workflowType=${this.config.workflowType}, workflowNodeId=${data.workflowNodeId || 'null'}`);
     } catch (error) {
       console.error(`[saveNodeMessage] 保存失败:`, error);
       // 不抛出错误，允许执行继续进行

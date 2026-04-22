@@ -313,8 +313,8 @@ output_files:
 
 ## Report Storage Path
 
-- **Base Path**: `.claude/skills/threat-modeling/reports/`
-- **Files**: 8 Markdown files
+- **Base Path**: `reports/`
+- **Files**: all Markdown files
 
 ---
 
@@ -334,6 +334,6 @@ output_files:
 Phase 8 完成后，威胁建模工作流结束。
 
 所有输出:
-- `.claude/skills/threat-modeling/outputs/P1-P7.yaml`
-- `.claude/skills/threat-modeling/reports/*.md`
+- `utputs/P1-P7.yaml`
+- `reports/*.md`
 - `vulnerabilities/*.json` (Agent Zone)

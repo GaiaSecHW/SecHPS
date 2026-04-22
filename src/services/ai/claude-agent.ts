@@ -57,8 +57,10 @@ export interface ClaudeAgentConfig {
 
 export interface ClaudeAgentCallbacks {
   onChunk?: (text: string) => void;
-  onToolUse?: (name: string, input: Record<string, unknown>) => void;
-  onToolResult?: (name: string, result: unknown) => void;
+  onText?: (text: string) => void;  // 文本内容
+  onThinking?: (thinking: string) => void;  // 扩展思考
+  onToolUse?: (id: string, name: string, input: Record<string, unknown>) => void;  // 工具调用
+  onToolResult?: (toolUseId: string, content: unknown, isError?: boolean) => void;  // 工具结果
   onComplete?: (fullResponse: string) => void;
   onError?: (error: Error) => void;
   onMessage?: (message: SDKMessage) => void;
@@ -92,8 +94,11 @@ export class ClaudeAgentService {
   private abortController: AbortController | null = null;
 
   constructor(config: ClaudeAgentConfig = {}) {
+    if (!config.model) {
+      throw new Error('ClaudeAgentService 必须配置 model 参数，未设置模型将无法执行。');
+    }
     this.config = {
-      model: config.model || 'claude-sonnet-4-20250514',
+      model: config.model,
       ...config,
     };
   }
@@ -126,6 +131,13 @@ export class ClaudeAgentService {
       ...process.env,
       // MCP 工具调用超时设置为 10 分钟（默认 60 秒）
       CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: '600000',
+      // 将所有模型相关环境变量设置为父Agent的模型，确保子Agent使用相同模型
+      ANTHROPIC_MODEL: this.config.model,
+      ANTHROPIC_SMALL_FAST_MODEL: this.config.model,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: this.config.model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: this.config.model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: this.config.model,
+      CLAUDE_CODE_SUBAGENT_MODEL: this.config.model,
     };
 
     // 如果配置了 baseUrl（CCR 代理），设置环境变量
@@ -285,14 +297,27 @@ export class ClaudeAgentService {
           console.log('[ClaudeAgent] 📨 从 result 提取，长度:', extractedContent.length);
         }
         
-        // 2. message.content 字段
+        // 2. message.content 字段 - 同时处理 text、tool_use 和 thinking blocks
         if (!extractedContent && msg.message?.content) {
           const content = msg.message.content;
           if (Array.isArray(content)) {
+            // 提取文本内容
             const textBlocks = content.filter((b: any) => b.type === 'text' && b.text);
             if (textBlocks.length > 0) {
               extractedContent = textBlocks.map((b: any) => b.text).join('');
-              console.log('[ClaudeAgent] 📨 从 message.content[] 提取，长度:', extractedContent.length);
+              console.log('[ClaudeAgent] 📨 从 message.content[] 提取文本，长度:', extractedContent.length);
+            }
+            // 提取 thinking blocks
+            const thinkingBlocks = content.filter((b: any) => b.type === 'thinking' && b.thinking);
+            for (const block of thinkingBlocks) {
+              console.log('[ClaudeAgent] 📨 从 message.content[] 发现 thinking，长度:', block.thinking?.length || 0);
+              callbacks.onThinking?.(block.thinking);
+            }
+            // 提取工具调用 blocks - 按 SDK 格式提取完整信息
+            const toolUseBlocks = content.filter((b: any) => b.type === 'tool_use');
+            for (const block of toolUseBlocks) {
+              console.log('[ClaudeAgent] 📨 从 message.content[] 发现 tool_use:', block.name, 'id:', block.id);
+              callbacks.onToolUse?.(block.id || 'unknown', block.name || 'unknown', block.input || {});
             }
           } else if (typeof content === 'string') {
             extractedContent = content;
@@ -300,14 +325,26 @@ export class ClaudeAgentService {
           }
         }
         
-        // 3. content 字段（直接）
+        // 3. content 字段（直接） - 同样处理 thinking 和 tool_use blocks
         if (!extractedContent && msg.content) {
           const content = msg.content;
           if (Array.isArray(content)) {
             const textBlocks = content.filter((b: any) => b.type === 'text' && b.text);
             if (textBlocks.length > 0) {
               extractedContent = textBlocks.map((b: any) => b.text).join('');
-              console.log('[ClaudeAgent] 📨 从 content[] 提取，长度:', extractedContent.length);
+              console.log('[ClaudeAgent] 📨 从 content[] 提取文本，长度:', extractedContent.length);
+            }
+            // 提取 thinking blocks
+            const thinkingBlocks = content.filter((b: any) => b.type === 'thinking' && b.thinking);
+            for (const block of thinkingBlocks) {
+              console.log('[ClaudeAgent] 📨 从 content[] 发现 thinking，长度:', block.thinking?.length || 0);
+              callbacks.onThinking?.(block.thinking);
+            }
+            // 提取工具调用 blocks - 按 SDK 格式提取完整信息
+            const toolUseBlocks = content.filter((b: any) => b.type === 'tool_use');
+            for (const block of toolUseBlocks) {
+              console.log('[ClaudeAgent] 📨 从 content[] 发现 tool_use:', block.name, 'id:', block.id);
+              callbacks.onToolUse?.(block.id || 'unknown', block.name || 'unknown', block.input || {});
             }
           } else if (typeof content === 'string') {
             extractedContent = content;
@@ -371,16 +408,20 @@ export class ClaudeAgentService {
           console.error('[ClaudeAgent] Error:', errorMsg);
           callbacks.onError?.(new Error(errorMsg));
         } else if (this.isToolUseMessage(message)) {
-          // 工具使用消息
+          // 工具使用消息 - 按 SDK 格式提取完整信息
           const toolUse = message as any;
           if (toolUse.tool_name) {
-            callbacks.onToolUse?.(toolUse.tool_name, toolUse.tool_input || {});
+            callbacks.onToolUse?.(toolUse.tool_use_id || toolUse.id || 'unknown', toolUse.tool_name, toolUse.tool_input || {});
           }
         } else if (this.isToolResultMessage(message)) {
-          // 工具结果消息
+          // 工具结果消息 - 按 SDK 格式提取完整信息
           const toolResult = message as any;
           if (toolResult.tool_name) {
-            callbacks.onToolResult?.(toolResult.tool_name, toolResult.tool_result);
+            callbacks.onToolResult?.(
+              toolResult.tool_use_id || 'unknown',
+              toolResult.tool_result,
+              toolResult.is_error || false
+            );
           }
         } else if (this.isAssistantMessage(message)) {
           // 助手消息（流式文本）- 已在上面统一提取内容，这里只处理 token 使用量
@@ -405,7 +446,7 @@ export class ClaudeAgentService {
               seenMessageIds.add(msgId);
               
               const inputTokens = usageData.input_tokens || 0;
-              const outputTokens = usageData.outputTokens || 0;
+              const outputTokens = usageData.output_tokens || 0;
               const cacheReadTokens = usageData.cache_read_input_tokens || 0;
               const cacheCreationTokens = usageData.cache_creation_input_tokens || 0;
               
@@ -448,16 +489,70 @@ export class ClaudeAgentService {
                     // user 消息不追加到 fullResponse，但触发 onMessage 回调
                     callbacks.onMessage?.(message);
                   }
+                  // 处理 tool_result block（用户消息中的工具结果）
+                  if (block.type === 'tool_result') {
+                    console.log('[ClaudeAgent] 📨 从 user 消息提取 tool_result, tool_use_id:', block.tool_use_id);
+                    const toolResultContent = typeof block.content === 'string'
+                      ? block.content
+                      : JSON.stringify(block.content);
+                    callbacks.onToolResult?.(
+                      block.tool_use_id || 'unknown',
+                      toolResultContent,
+                      block.is_error || false
+                    );
+                  }
                 }
               } else if (typeof content === 'string') {
                 console.log('[ClaudeAgent] 📨 从 user 消息提取 string content，长度:', content.length);
                 callbacks.onMessage?.(message);
               }
             }
-            // 检查 tool_use_result（工具返回结果）
+            // 检查 tool_use_result（工具返回结果） - 按 SDK 格式提取完整信息
             if (msg.tool_use_result) {
               console.log('[ClaudeAgent] 📨 user 消息包含 tool_use_result');
-              callbacks.onMessage?.(message);
+              console.log('[ClaudeAgent] 📨 tool_use_result keys:', Object.keys(msg.tool_use_result));
+              console.log('[ClaudeAgent] 📨 msg keys:', Object.keys(msg));
+              
+              const toolResultData = msg.tool_use_result;
+              
+              // 提取 tool_use_id - 这是匹配 tool_use 的关键
+              const toolUseId = 
+                msg.parent_tool_use_id ||
+                toolResultData.tool_use_id ||
+                msg.tool_use_id ||
+                'unknown';
+              
+              // 提取工具名称（用于显示）
+              const toolName = 
+                msg.tool_name || 
+                toolResultData.tool_name || 
+                toolResultData.name || 
+                'unknown';
+              
+              // 提取工具结果 - 优先提取 output 字段
+              let toolResult;
+              if (toolResultData.output) {
+                toolResult = typeof toolResultData.output === 'string' 
+                  ? toolResultData.output 
+                  : JSON.stringify(toolResultData.output);
+              } else if (toolResultData.content) {
+                toolResult = typeof toolResultData.content === 'string'
+                  ? toolResultData.content
+                  : JSON.stringify(toolResultData.content);
+              } else if (toolResultData.result) {
+                toolResult = toolResultData.result;
+              } else {
+                toolResult = JSON.stringify(toolResultData);
+              }
+              
+              // 提取错误状态
+              const isError = toolResultData.is_error || toolResultData.error || false;
+              
+              console.log('[ClaudeAgent] 📨 提取的 tool_use_id:', toolUseId);
+              console.log('[ClaudeAgent] 📨 提取的工具名称:', toolName);
+              console.log('[ClaudeAgent] 📨 提取的工具结果长度:', typeof toolResult === 'string' ? toolResult.length : JSON.stringify(toolResult).length);
+              console.log('[ClaudeAgent] 📨 是否错误:', isError);
+              callbacks.onToolResult?.(toolUseId, toolResult, isError);
             }
             continue;
           }

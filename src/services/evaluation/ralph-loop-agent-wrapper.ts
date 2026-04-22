@@ -311,6 +311,7 @@ export class RalphLoopAgent {
               fullText += text;
               callbacks.onChunk(text);
             },
+            onThinking: callbacks.onThinking,
             onToolCall: callbacks.onToolCall,
             onToolResult: callbacks.onToolResult,
             onUsage: (usage) => {
@@ -609,9 +610,13 @@ export function createRalphLoopAgent(
   let model: string;
   try {
     const parsed = JSON.parse(modelConfig.models);
-    model = Array.isArray(parsed) ? (parsed[0] || 'claude-sonnet-4-20250514') : parsed;
+    model = Array.isArray(parsed) ? parsed[0] : parsed;
   } catch {
-    model = modelConfig.models || 'claude-sonnet-4-20250514';
+    model = modelConfig.models;
+  }
+  
+  if (!model) {
+    throw new Error(`模型配置的 models 字段为空，必须配置至少一个模型。`);
   }
 
   const providerType: 'claude' | 'openai' =

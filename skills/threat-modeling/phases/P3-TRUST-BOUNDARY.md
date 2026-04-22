@@ -147,7 +147,7 @@ P3_boundary_context:
 
 ### Output File
 
-- **Path**: `.claude/skills/threat-modeling/outputs/P3_boundary_context.yaml`
+- **Path**: `outputs/P3_boundary_context.yaml`
 - **Format**: YAML
 
 ### Validation Criteria

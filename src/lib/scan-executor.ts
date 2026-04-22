@@ -169,7 +169,7 @@ export class ScanExecutor {
           providerType: modelConfig.providerType,
           apiKey: modelConfig.apiKey,
           apiBaseUrl: modelConfig.apiBaseUrl,
-          model: JSON.parse(modelConfig.models)[0] || 'claude-sonnet-4-20250514',
+          model: JSON.parse(modelConfig.models)[0],
         },
         maxToolCalls: 20,
         maxIterations: 10,

@@ -7,6 +7,7 @@ import { recordWatchdogActivity } from '@/lib/stream-watchdog';
 import { completeSkillExecution } from '@/services/skill-execution-tracker';
 import { updateAnalysisReport, parseAnalysisFromOutput } from '@/services/analysis-report';
 import { updateSkillExecutionLog } from '@/services/skill-execution-log';
+import { generateId } from '@/lib/id-generator';
 
 // ============================================
 // 日志工具
@@ -53,12 +54,14 @@ export interface EnhancedEvaluationConfig {
   allowDangerouslySkipPermissions?: boolean;
   resumeSession?: string;
   temperature?: number;  // 模型温度，默认 0.3
+  workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id 到 NodeExecution 表
 }
 
 export interface EnhancedEvaluationCallbacks {
   onChunk: (text: string) => void;
-  onToolCall: (name: string, parameters: Record<string, unknown>) => void;
-  onToolResult: (name: string, result: ToolResult) => void;
+  onThinking?: (thinking: string) => void;  // 扩展思考回调
+  onToolCall: (toolUseId: string, name: string, parameters: Record<string, unknown>) => void;  // 添加 toolUseId 参数
+  onToolResult: (toolUseId: string, content: unknown, isError?: boolean) => void;  // 改用 toolUseId 和 isError
   onComplete: (fullResponse: string) => void;
   onError: (error: Error) => void;
   onNodeStatusChange?: (nodeId: string, status: string, nodeLabel?: string, nodeType?: string) => void;
@@ -98,6 +101,7 @@ export class EnhancedEvaluationCaller {
   private agentService: ClaudeAgentService;
   private currentEvaluationId: string | null = null;
   private currentProjectId: string | null = null;
+  private currentWorkflowNodeId: string | null = null;  // 当前工作流节点 ID
   private currentSkillExecutionId: string | null = null;  // 当前 Skill 执行记录 ID
   private currentSkillId: string | null = null;  // 当前执行的 Skill ID
   private aborted: boolean = false;  // 中止标志
@@ -109,6 +113,9 @@ export class EnhancedEvaluationCaller {
     logInfo(`模型: ${config.model}`);
     logInfo(`工作目录: ${config.cwd || '未设置'}`);
     logInfo(`系统提示词类型: ${typeof config.systemPrompt}`);
+    
+    // 设置 workflowNodeId（用于保存 session_id 到 NodeExecution 表）
+    this.currentWorkflowNodeId = config.workflowNodeId || null;
     
     // 确定 baseUrl
     let agentBaseUrl: string | undefined;
@@ -192,10 +199,16 @@ export class EnhancedEvaluationCaller {
         }
         callbacks.onChunk(text);
       },
-      onToolUse: async (name, input) => {
+      onThinking: (thinking) => {
+        // 扩展思考回调
+        if (callbacks.onThinking) {
+          callbacks.onThinking(thinking);
+        }
+      },
+      onToolUse: async (id, name, input) => {
         // 记录活动到 Watchdog
         if (this.currentEvaluationId) {
-          recordWatchdogActivity(this.currentEvaluationId, 'tool_call', { name });
+          recordWatchdogActivity(this.currentEvaluationId, 'tool_call', { name, toolUseId: id });
         }
         
         // 检测 Skill 工具调用，创建执行记录并更新统计
@@ -251,14 +264,14 @@ export class EnhancedEvaluationCaller {
           }
         }
         
-        callbacks.onToolCall(name, input);
+        callbacks.onToolCall(id, name, input);
       },
-      onToolResult: async (name, result) => {
+      onToolResult: async (toolUseId, content, isError) => {
         // 检测 Skill 工具结果，更新执行状态
-        if (name === 'Skill' && this.currentSkillExecutionId && this.currentSkillId) {
+        if (this.currentSkillExecutionId && this.currentSkillId) {
           try {
             // 解析结果中的漏洞数量
-            const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+            const resultStr = typeof content === 'string' ? content : JSON.stringify(content);
             const findingsMatch = resultStr.match(/发现\s*(\d+)\s*个|found\s*(\d+)\s*vulnerabilit/i);
             const findingsCount = findingsMatch ? (parseInt(findingsMatch[1]) || parseInt(findingsMatch[2]) || 0) : 0;
             
@@ -284,12 +297,7 @@ export class EnhancedEvaluationCaller {
           }
         }
         
-        const toolResult: ToolResult = {
-          success: true,
-          output: result,
-          duration: 0,
-        };
-        callbacks.onToolResult(name, toolResult);
+        callbacks.onToolResult(toolUseId, content, isError || false);
       },
       onUsage: (usage) => {
         // 记录 Token 活动到 Watchdog
@@ -379,14 +387,58 @@ export class EnhancedEvaluationCaller {
       onError: callbacks.onError,
       onSessionId: async (sessionId) => {
         console.log('[Evaluation] 捕获 SDK 会话 ID:', sessionId);
+        console.log('[Evaluation] currentEvaluationId:', this.currentEvaluationId);
+        console.log('[Evaluation] currentWorkflowNodeId:', this.currentWorkflowNodeId);
+        
+        // 优先保存到 NodeExecution 表（如果提供了 workflowNodeId）
+        if (this.currentEvaluationId && this.currentWorkflowNodeId) {
+          try {
+            // 使用 upsert：如果记录存在则更新，否则创建新记录
+            await prisma.nodeExecution.upsert({
+              where: {
+                evaluationSessionId_workflowNodeId: {
+                  evaluationSessionId: this.currentEvaluationId,
+                  workflowNodeId: this.currentWorkflowNodeId,
+                },
+              },
+              update: {
+                opencodeSessionId: sessionId,
+                updatedAt: new Date(),
+              },
+              create: {
+                id: generateId('nodeexec'),
+                evaluationSessionId: this.currentEvaluationId,
+                workflowNodeId: this.currentWorkflowNodeId,
+                nodeLabel: this.currentWorkflowNodeId,  // 临时使用 ID 作为 label
+                nodeType: 'task',
+                status: 'running',
+                opencodeSessionId: sessionId,
+                updatedAt: new Date(),
+              },
+            });
+            console.log('[Evaluation] opencodeSessionId 已保存到 NodeExecution 表');
+          } catch (e) {
+            console.error('[Evaluation] 保存到 NodeExecution 失败:', e);
+          }
+          return;
+        }
+        
+        // 如果没有 workflowNodeId，尝试保存到 EvaluationSession 表
         if (this.currentEvaluationId) {
+          // 检查是否是拼接的临时 ID（节点级 ID 格式: eval-xxx-node-0）
+          if (this.currentEvaluationId.includes('-node-')) {
+            console.log('[Evaluation] 跳过保存: 当前为节点级临时 ID，且未提供 workflowNodeId');
+            return;
+          }
+          
           try {
             await prisma.evaluationSession.update({
               where: { id: this.currentEvaluationId },
               data: { opencodeSessionId: sessionId },
             });
+            console.log('[Evaluation] opencodeSessionId 已保存到 EvaluationSession 表');
           } catch (e) {
-            console.error('[Evaluation] 保存 opencodeSessionId 失败:', e);
+            console.error('[Evaluation] 保存到 EvaluationSession 失败:', e);
           }
         }
       },
@@ -457,16 +509,21 @@ export function createEnhancedEvaluationCaller(
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
     allowDangerouslySkipPermissions?: boolean;
     resumeSession?: string;
+    workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id
   }
 ): EnhancedEvaluationCaller {
   // 支持两种格式：JSON 数组或单个字符串
   let model: string;
   try {
     const parsed = JSON.parse(modelConfig.models);
-    model = Array.isArray(parsed) ? (parsed[0] || 'claude-sonnet-4-20250514') : parsed;
+    model = Array.isArray(parsed) ? parsed[0] : parsed;
   } catch {
     // 如果不是 JSON，直接作为模型名称使用
-    model = modelConfig.models || 'claude-sonnet-4-20250514';
+    model = modelConfig.models;
+  }
+  
+  if (!model) {
+    throw new Error(`模型配置的 models 字段为空，必须配置至少一个模型。`);
   }
 
   const providerType: 'claude' | 'openai' =
@@ -488,6 +545,7 @@ export function createEnhancedEvaluationCaller(
     permissionMode: sdkOptions?.permissionMode,
     allowDangerouslySkipPermissions: sdkOptions?.allowDangerouslySkipPermissions,
     resumeSession: sdkOptions?.resumeSession,
+    workflowNodeId: sdkOptions?.workflowNodeId,
   });
 
   if (workingDirectory) {

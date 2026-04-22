@@ -164,7 +164,7 @@ P4_security_gaps:
 
 ### Output File
 
-- **Path**: `.claude/skills/threat-modeling/outputs/P4_security_gaps.yaml`
+- **Path**: `outputs/P4_security_gaps.yaml`
 - **Format**: YAML
 
 ### Validation Criteria

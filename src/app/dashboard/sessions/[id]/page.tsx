@@ -647,7 +647,7 @@ function SessionDetailContent({
     setLoadingNodeMessages(true);
     try {
       const token = localStorage.getItem('token');
-      console.log('[fetchNodeMessages] Fetching messages for node:', nodeId);
+      console.log('[fetchNodeMessages] 开始获取消息, nodeId:', nodeId, 'evaluationId:', evaluationId);
 
       // 按 nodeId 过滤，只获取该节点的消息
       const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db&nodeId=${encodeURIComponent(nodeId)}`, {
@@ -663,7 +663,20 @@ function SessionDetailContent({
       }
 
       const data = await response.json();
-      console.log('[fetchNodeMessages] Received:', data.messages?.length || 0, 'messages for node:', nodeId, 'fsmMode:', data.fsmMode);
+      console.log('[fetchNodeMessages] API返回:', data.messages?.length || 0, '条消息');
+      console.log('[fetchNodeMessages] 消息 role 分布:', data.messages?.reduce((acc: any, m: any) => { acc[m.role] = (acc[m.role] || 0) + 1; return acc; }, {}));
+      
+      // 检查 tool_call 消息中的 Agent 调用
+      const toolCalls = data.messages?.filter((m: any) => m.role === 'tool_call') || [];
+      console.log('[fetchNodeMessages] tool_call 消息:', toolCalls.length);
+      toolCalls.forEach((m: any) => {
+        try {
+          const c = JSON.parse(m.content);
+          if (c.name === 'Agent' || c.name === 'task') {
+            console.log('[fetchNodeMessages] 发现 Agent/task 调用:', c.name, c.args?.description?.substring(0, 30));
+          }
+        } catch {}
+      });
       
       setNodeMessages(data.messages || []);
     } catch (err) {
@@ -676,6 +689,9 @@ function SessionDetailContent({
 
   // 处理节点点击
   const handleNodeClick = (nodeId: string) => {
+    console.log('[handleNodeClick] 点击节点, nodeId:', nodeId);
+    console.log('[handleNodeClick] 当前 workflowNodes:', workflowNodes.map(n => ({ id: n.id, label: n.label })));
+    
     if (selectedNodeId === nodeId) {
       // 取消选择
       setSelectedNodeId(null);
@@ -1173,7 +1189,9 @@ function SessionDetailContent({
         return;
       }
 
+      // 刷新所有状态
       fetchEvaluation();
+      fetchWorkflowNodes();
       fetchSessionDetail();
       alert('评估会话已停止');
     } catch (err) {
@@ -1974,60 +1992,108 @@ function SessionDetailContent({
                       )}
                     </div>
                     
-                    {/* 节点子Agent（从消息中提取 task/Agent 工具调用） */}
-                    <div className="border border-gray-200 rounded-lg p-3">
-                      <button
-                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
-                        onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
-                      >
-                        <div className="flex items-center gap-2">
-                          <GitBranch size={16} className="text-purple-600" />
-                          <span>子Agent调用</span>
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                            {nodeMessages.filter((m: any) => {
-                              try {
-                                const c = JSON.parse(m.content);
-                                return c.name === 'task' || c.name === 'Agent';
-                              } catch { return false; }
-                            }).length} 个
-                          </span>
-                        </div>
-                        {isChildrenExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                      </button>
-                      {isChildrenExpanded && (
-                        <div className="mt-3 space-y-2">
-                          {nodeMessages.filter((m: any) => {
-                            try {
-                              const c = JSON.parse(m.content);
-                              return c.name === 'task' || c.name === 'Agent';
-                            } catch { return false; }
-                          }).length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-2">该节点暂无子Agent调用</p>
-                          ) : (
-                            nodeMessages.filter((m: any) => {
-                              try {
-                                const c = JSON.parse(m.content);
-                                return c.name === 'task' || c.name === 'Agent';
-                              } catch { return false; }
-                            }).map((msg: any, idx: number) => {
-                              const content = JSON.parse(msg.content);
-                              return (
-                                <div key={idx} className="p-2 bg-purple-50 rounded border border-purple-200">
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs font-medium text-purple-700">
-                                      {content.name === 'task' ? 'Task' : 'Agent'}
-                                    </span>
-                                    <span className="text-xs text-gray-600 truncate">
-                                      {content.args?.prompt?.substring(0, 50) || content.args?.description?.substring(0, 50) || '未知任务'}
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })
-                          )}
-                        </div>
-                      )}
-                    </div>
+{/* 节点子Agent（从消息中提取 role=tool_call 且 name=Agent 的工具调用） */}
+                     <div className="border border-gray-200 rounded-lg p-3">
+                       <button
+                         className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
+                         onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
+                       >
+                         <div className="flex items-center gap-2">
+                           <GitBranch size={16} className="text-purple-600" />
+                           <span>子Agent调用</span>
+                           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                             {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
+                               try {
+                                 const c = JSON.parse(m.content);
+                                 return c.name === 'Agent' || c.name === 'task';
+                               } catch { return false; }
+                             }).length} 个
+                           </span>
+                         </div>
+                         {isChildrenExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                       </button>
+                       {isChildrenExpanded && (
+                         <div className="mt-3 space-y-2">
+                           {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
+                             try {
+                               const c = JSON.parse(m.content);
+                               return c.name === 'Agent' || c.name === 'task';
+                             } catch { return false; }
+                           }).length === 0 ? (
+                             <p className="text-sm text-gray-500 text-center py-2">该节点暂无子Agent调用</p>
+                           ) : (
+                             nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
+                               try {
+                                 const c = JSON.parse(m.content);
+                                 return c.name === 'Agent' || c.name === 'task';
+                               } catch { return false; }
+                             }).map((msg: any, idx: number) => {
+                               const content = JSON.parse(msg.content);
+                               const childId = `${msg.id}-${idx}`;
+                               const isExpanded = expandedChildMessages.has(childId);
+                               
+                               // 查找对应的 tool_result（toolUseId 保存在 metadata 中）
+                               const toolResultMsg = nodeMessages.find((m: any) => {
+                                 try {
+                                   const meta = m.metadata ? JSON.parse(m.metadata) : {};
+                                   return m.role === 'tool_result' && meta.toolUseId === content.toolUseId;
+                                 } catch { return false; }
+                               });
+                               
+                               return (
+                                 <div key={idx} className="bg-purple-50 rounded border border-purple-200">
+                                   <button
+                                     className="w-full p-2 flex items-center justify-between hover:bg-purple-100 transition-colors"
+                                     onClick={() => {
+                                       setExpandedChildMessages(prev => {
+                                         const newSet = new Set(prev);
+                                         if (newSet.has(childId)) {
+                                           newSet.delete(childId);
+                                         } else {
+                                           newSet.add(childId);
+                                         }
+                                         return newSet;
+                                       });
+                                     }}
+                                   >
+                                     <div className="flex items-center gap-2">
+                                       <span className="text-xs font-medium text-purple-700">
+                                         {content.name === 'task' ? 'Task' : 'Agent'}
+                                       </span>
+                                       <span className="text-xs text-gray-600 truncate max-w-[200px]">
+                                         {content.args?.prompt?.substring(0, 50) || content.args?.description?.substring(0, 50) || '未知任务'}
+                                       </span>
+                                     </div>
+                                     {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                   </button>
+                                   {isExpanded && (
+                                     <div className="p-3 border-t border-purple-200 bg-white space-y-3">
+                                       <div>
+                                         <div className="text-xs font-semibold text-gray-700 mb-1">输入参数:</div>
+                                         <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[150px] whitespace-pre-wrap">
+                                           {JSON.stringify(content.args, null, 2)}
+                                         </pre>
+                                       </div>
+                                       {toolResultMsg && (
+                                         <div>
+                                           <div className="text-xs font-semibold text-gray-700 mb-1">执行结果:</div>
+                                           <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[200px] whitespace-pre-wrap">
+                                             {toolResultMsg.content.substring(0, 500)}
+                                           </pre>
+                                         </div>
+                                       )}
+                                       {!toolResultMsg && (
+                                         <div className="text-xs text-gray-500 italic">等待结果...</div>
+                                       )}
+                                     </div>
+                                   )}
+                                 </div>
+                               );
+                             })
+                           )}
+                         </div>
+                       )}
+                     </div>
                   </div>
                 )}
               </div>

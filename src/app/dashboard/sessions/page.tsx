@@ -643,39 +643,37 @@ export default function SessionsPage() {
     workflowId?: string | null,
     roleModelsOrModelId?: { roleId: string; modelId: string }[] | string | null
   ) => {
-    setStartingProject(projectId);
-
     // 判断参数类型：roleModels array 或 modelId string
     const isRoleModels = Array.isArray(roleModelsOrModelId);
     const roleModelsParam = isRoleModels ? roleModelsOrModelId : null;
     const modelId = isRoleModels ? null : roleModelsOrModelId;
 
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/projects/${projectId}/start`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          workflowId: workflowId || undefined,
-          modelId: modelId || undefined,
-          roleModels: roleModelsParam || undefined,
-        }),
-      });
+    // 立即关闭对话框，不等待后端响应
+    setSelectedWorkflow(null);
+    setStartingProject(null);
 
+    // 发送请求到后台，不等待结果
+    const token = localStorage.getItem('token');
+    fetch(`/api/projects/${projectId}/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        workflowId: workflowId || undefined,
+        modelId: modelId || undefined,
+        roleModels: roleModelsParam || undefined,
+      }),
+    }).then(async (response) => {
       if (!response.ok) {
         const data = await response.json();
-        setStartingProject(null);
-        
-        // 显示详细的错误弹窗
         alert(`启动评估失败\n\n${data.error || '未知错误'}`);
         toast.error(data.error || '启动项目失败');
         return;
       }
 
-      // 立即刷新项目列表以显示"评估运行中"状态
+      // 刷新项目列表以显示"评估运行中"状态
       await fetchProjects();
 
       // 检查是否是异步模式（202 Accepted）
@@ -683,102 +681,30 @@ export default function SessionsPage() {
         const data = await response.json();
         console.log('[评估异步启动]', data);
         
-        // FSM 异步模式：立即返回 evaluationId
+        // FSM 异步模式：立即跳转到评估详情页
         if (data.evaluationId && data.status === 'preparing') {
-          setStartingProject(null);
-          
-          // 立即跳转到评估详情页（状态为 'preparing'）
           router.push(`/dashboard/sessions/${projectId}?evaluationId=${data.evaluationId}`);
           return;
         }
         
-        // 队列模式：评估已加入排队
+        // 队列模式
         if (data.status === 'queued') {
-          setStartingProject(null);
           toast.success(`评估已加入排队队列，位置: ${data.queuePosition}`);
           return;
         }
         
-        setStartingProject(null);
         return;
       }
 
-      // 处理 SSE 流式响应（后台监听，不阻塞UI）
-      const reader = response.body?.getReader();
-      if (!reader) {
-        console.warn('[SSE] 响应体不可读，但评估已启动');
-        setStartingProject(null);
-        return;
+      // SSE 流式响应：跳转到评估详情页
+      const data = await response.json();
+      if (data.evaluationId) {
+        router.push(`/dashboard/sessions/${projectId}?evaluationId=${data.evaluationId}`);
       }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      // 后台监听 SSE 流
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                const data = line.slice(6);
-                if (data === '[DONE]') continue;
-
-                try {
-                  const event = JSON.parse(data);
-
-                  if (event.type === 'started') {
-                    // 评估已启动，跳转到详情页
-                    console.log('[评估启动]', event.evaluationId);
-                    setStartingProject(null);
-
-                    // 跳转到评估详情页
-                    router.push(`/dashboard/sessions/${projectId}?evaluationId=${event.evaluationId}`);
-                    return;
-                  }
-
-                  if (event.type === 'message') {
-                    // 实时显示评估内容
-                    console.log('[评估]', event.content);
-                  } else if (event.type === 'done') {
-                    console.log('[评估完成]');
-                    await fetchProjects();
-                    setStartingProject(null);
-                    return;
-                  } else if (event.type === 'error') {
-                    console.error('[评估失败]', event.error);
-                    await fetchProjects();
-                    setStartingProject(null);
-                    return;
-                  } else if (event.type === 'aborted') {
-                    console.log('[评估已中止]', event.message);
-                    toast.error(`评估已中止: ${event.message || '用户手动中止'}`);
-                    await fetchProjects();
-                    setStartingProject(null);
-                    return;
-                  }
-                } catch {
-                  // 忽略解析错误
-                }
-              }
-            }
-          }
-        } catch (error) {
-          console.error('[SSE] 流处理错误:', error);
-        } finally {
-          setStartingProject(null);
-        }
-      })();
-    } catch (err) {
-      toast.error('网络错误，请重试');
-      setStartingProject(null);
-    }
+    }).catch((error) => {
+      console.error('[启动评估错误]', error);
+      toast.error('启动评估失败');
+    });
   };
 
   const deleteProject = async (projectId: string) => {

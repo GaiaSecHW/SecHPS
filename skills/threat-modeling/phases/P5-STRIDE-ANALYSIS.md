@@ -184,7 +184,7 @@ P5_threat_inventory:
 
 ### Output File
 
-- **Path**: `.claude/skills/threat-modeling/outputs/P5_threat_inventory.yaml`
+- **Path**: `outputs/P5_threat_inventory.yaml`
 - **Format**: YAML
 
 ### Validation Criteria
