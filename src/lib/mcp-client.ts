@@ -1,19 +1,35 @@
 /**
  * MCP Client - 直接调用 MCP 服务器工具
  * 
- * 使用 JSON-RPC 2.0 协议通过 stdio 与 MCP 服务器通信
- * 用于在评估启动前调用 MCP 工具（如 AI4Java 的 decompileProject）
+ * 支持两种 MCP 类型：
+ * 1. Local MCP（Stdio）- 通过子进程 stdin/stdout JSON-RPC 通信
+ * 2. Remote MCP（SSE）- 通过 HTTP/SSE 直接通信
+ * 
+ * 不经过大模型/SDK，直接调用工具
  */
 
 import { spawn, ChildProcess } from 'child_process';
 import { logger, LOG_MODULES } from './logger';
 
-// MCP 服务器配置
-export interface McpServerConfig {
-  command: string;
+// 动态导入 EventSource（避免 Next.js ESM 兼容问题）
+let EventSourceClass: typeof import('eventsource').EventSource;
+async function getEventSource() {
+  if (!EventSourceClass) {
+    const module = await import('eventsource');
+    EventSourceClass = module.EventSource;
+  }
+  return EventSourceClass;
+}
+
+// MCP 服务器配置（统一接口）
+export interface McpConfig {
+  name: string;
+  type: 'local' | 'remote';
+  command?: string;  // local 类型必填
   args?: string[];
+  url?: string;      // remote 类型必填
   env?: Record<string, string>;
-  timeout?: number; // 超时时间（毫秒），默认 5 分钟
+  timeout?: number;  // 超时时间（毫秒），默认 10 分钟
 }
 
 // MCP 工具调用结果
@@ -40,11 +56,15 @@ interface JsonRpcResponse {
   error?: { code: number; message: string; data?: unknown };
 }
 
+// ========================================
+// Local MCP Client（Stdio 方式）
+// ========================================
+
 /**
- * MCP 客户端类
- * 管理 MCP 服务器的生命周期和工具调用
+ * Local MCP 客户端类
+ * 通过 stdin/stdout JSON-RPC 与本地 MCP 服务器通信
  */
-export class McpClient {
+export class LocalMcpClient {
   private process: ChildProcess | null = null;
   private requestId = 0;
   private pendingRequests: Map<number, {
@@ -54,56 +74,44 @@ export class McpClient {
   }> = new Map();
   private buffer = '';
   private initialized = false;
-  private config: McpServerConfig;
+  private config: { command: string; args?: string[]; env?: Record<string, string>; timeout: number };
   private serverName: string;
 
-  constructor(serverName: string, config: McpServerConfig) {
+  constructor(serverName: string, config: { command: string; args?: string[]; env?: Record<string, string>; timeout?: number }) {
     this.serverName = serverName;
     this.config = {
-      timeout: 5 * 60 * 1000, // 默认 5 分钟超时
+      timeout: 10 * 60 * 1000, // 默认 10 分钟超时
       ...config,
     };
   }
 
-  /**
-   * 启动 MCP 服务器并初始化连接
-   */
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        logger.debug(LOG_MODULES.MCP, `启动 MCP 服务器: ${this.serverName}`, {
+        logger.info(LOG_MODULES.MCP, `[Local] 启动 MCP 服务器: ${this.serverName}`, {
           command: this.config.command,
           args: this.config.args,
         });
 
-        // 合并环境变量
-        const env = {
-          ...process.env,
-          ...this.config.env,
-        };
+        const env = { ...process.env, ...this.config.env };
 
-        // 启动子进程
         this.process = spawn(this.config.command, this.config.args || [], {
           stdio: ['pipe', 'pipe', 'pipe'],
           env,
           windowsHide: true,
         });
 
-        // 处理 stdout（JSON-RPC 响应）
         this.process.stdout?.on('data', (data: Buffer) => {
           this.handleData(data.toString());
         });
 
-        // 处理 stderr（日志输出）
         this.process.stderr?.on('data', (data: Buffer) => {
           logger.debug(LOG_MODULES.MCP, `[${this.serverName}] stderr:`, { output: data.toString() });
         });
 
-        // 处理进程退出
         this.process.on('close', (code) => {
-          logger.debug(LOG_MODULES.MCP, `MCP 服务器 ${this.serverName} 已退出`, { code });
+          logger.info(LOG_MODULES.MCP, `[Local] MCP 服务器 ${this.serverName} 已退出`, { code });
           this.process = null;
-          // 拒绝所有待处理的请求
           for (const [id, pending] of this.pendingRequests) {
             clearTimeout(pending.timeout);
             pending.reject(new Error(`MCP 服务器已关闭 (code: ${code})`));
@@ -111,26 +119,19 @@ export class McpClient {
           this.pendingRequests.clear();
         });
 
-        // 处理错误
         this.process.on('error', (error) => {
-          logger.errorNoUser(LOG_MODULES.MCP, `MCP 服务器 ${this.serverName} 错误:`, error);
+          logger.errorNoUser(LOG_MODULES.MCP, `[Local] MCP 服务器 ${this.serverName} 错误:`, error);
           reject(error);
         });
 
-        // 发送初始化请求
+        // MCP 协议初始化
         this.sendRequest('initialize', {
           protocolVersion: '2024-11-05',
-          capabilities: {
-            tools: {},
-          },
-          clientInfo: {
-            name: 'ai4web-mcp-client',
-            version: '1.0.0',
-          },
+          capabilities: { tools: {} },
+          clientInfo: { name: 'ai4web-mcp-client', version: '1.0.0' },
         })
           .then((response) => {
-            logger.debug(LOG_MODULES.MCP, `MCP 服务器 ${this.serverName} 初始化成功`, { result: response.result });
-            // 发送 initialized 通知
+            logger.info(LOG_MODULES.MCP, `[Local] MCP 服务器 ${this.serverName} 初始化成功`);
             this.sendNotification('notifications/initialized', {});
             this.initialized = true;
             resolve();
@@ -142,16 +143,13 @@ export class McpClient {
     });
   }
 
-  /**
-   * 调用 MCP 工具
-   */
   async callTool(toolName: string, args: Record<string, unknown>): Promise<McpToolResult> {
     if (!this.initialized) {
-      throw new Error('MCP 客户端未初始化，请先调用 connect()');
+      throw new Error('MCP 客户端未初始化');
     }
 
     try {
-      logger.debug(LOG_MODULES.MCP, `调用 MCP 工具: ${toolName}`, { args });
+      logger.info(LOG_MODULES.MCP, `[Local] 调用工具: ${toolName}`, { args });
 
       const response = await this.sendRequest('tools/call', {
         name: toolName,
@@ -159,15 +157,10 @@ export class McpClient {
       });
 
       if (response.error) {
-        return {
-          success: false,
-          error: response.error.message,
-          isError: true,
-        };
+        return { success: false, error: response.error.message, isError: true };
       }
 
       const result = response.result as { content?: unknown[]; isError?: boolean };
-      
       return {
         success: !result.isError,
         content: result.content,
@@ -183,55 +176,28 @@ export class McpClient {
     }
   }
 
-  /**
-   * 列出可用工具
-   */
-  async listTools(): Promise<unknown[]> {
-    if (!this.initialized) {
-      throw new Error('MCP 客户端未初始化，请先调用 connect()');
-    }
-
-    const response = await this.sendRequest('tools/list', {});
-    return (response.result as { tools: unknown[] })?.tools || [];
-  }
-
-  /**
-   * 关闭 MCP 服务器连接
-   */
   async close(): Promise<void> {
     if (this.process) {
-      logger.debug(LOG_MODULES.MCP, `关闭 MCP 服务器: ${this.serverName}`);
+      logger.info(LOG_MODULES.MCP, `[Local] 关闭 MCP 服务器: ${this.serverName}`);
       
-      // 清理待处理请求
       for (const [id, pending] of this.pendingRequests) {
         clearTimeout(pending.timeout);
         pending.reject(new Error('MCP 客户端已关闭'));
       }
       this.pendingRequests.clear();
 
-      // 发送 shutdown 请求
       try {
         await this.sendRequest('shutdown', {}, 5000);
         this.sendNotification('notifications/exit', {});
-      } catch {
-        // 忽略关闭时的错误
-      }
+      } catch { }
 
-      // 强制关闭进程
       this.process.kill();
       this.process = null;
       this.initialized = false;
     }
   }
 
-  /**
-   * 发送 JSON-RPC 请求
-   */
-  private sendRequest(
-    method: string,
-    params: Record<string, unknown>,
-    timeout = this.config.timeout
-  ): Promise<JsonRpcResponse> {
+  private sendRequest(method: string, params: Record<string, unknown>, timeout?: number): Promise<JsonRpcResponse> {
     return new Promise((resolve, reject) => {
       if (!this.process?.stdin) {
         reject(new Error('MCP 服务器未启动'));
@@ -239,133 +205,404 @@ export class McpClient {
       }
 
       const id = ++this.requestId;
-      const request: JsonRpcRequest = {
-        jsonrpc: '2.0',
-        id,
-        method,
-        params,
-      };
+      const request: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
 
-      // 设置超时
       const timeoutHandle = setTimeout(() => {
         this.pendingRequests.delete(id);
         reject(new Error(`请求超时: ${method}`));
-      }, timeout);
+      }, timeout || this.config.timeout);
 
-      // 保存待处理请求
-      this.pendingRequests.set(id, {
-        resolve,
-        reject,
-        timeout: timeoutHandle,
-      });
+      this.pendingRequests.set(id, { resolve, reject, timeout: timeoutHandle });
 
-      // 发送请求
       const message = JSON.stringify(request) + '\n';
-      logger.debug(LOG_MODULES.MCP, `发送请求: ${method}`, { id });
       this.process.stdin.write(message);
     });
   }
 
-  /**
-   * 发送 JSON-RPC 通知（不需要响应）
-   */
   private sendNotification(method: string, params: Record<string, unknown>): void {
-    if (!this.process?.stdin) {
-      return;
-    }
-
-    const notification = {
-      jsonrpc: '2.0',
-      method,
-      params,
-    };
-
-    const message = JSON.stringify(notification) + '\n';
-    this.process.stdin.write(message);
+    if (!this.process?.stdin) return;
+    const notification = { jsonrpc: '2.0', method, params };
+    this.process.stdin.write(JSON.stringify(notification) + '\n');
   }
 
-  /**
-   * 处理接收到的数据
-   */
   private handleData(data: string): void {
     this.buffer += data;
-
-    // 尝试解析完整的 JSON 消息
     const lines = this.buffer.split('\n');
-    this.buffer = lines.pop() || ''; // 保留最后一个不完整的行
+    this.buffer = lines.pop() || '';
 
     for (const line of lines) {
-      if (!line.trim()) {
-        continue;
-      }
-
+      if (!line.trim()) continue;
       try {
         const response: JsonRpcResponse = JSON.parse(line);
-        
-        // 查找对应的待处理请求
         const pending = this.pendingRequests.get(response.id);
         if (pending) {
           clearTimeout(pending.timeout);
           this.pendingRequests.delete(response.id);
           pending.resolve(response);
-        } else {
-          logger.warn(LOG_MODULES.MCP, `收到未知请求 ID 的响应: ${response.id}`);
         }
       } catch (error) {
-        logger.warn(LOG_MODULES.MCP, `解析 JSON-RPC 响应失败:`, { line, error });
+        logger.warn(LOG_MODULES.MCP, `[Local] 解析响应失败:`, { line, error });
       }
     }
   }
 }
 
+// ========================================
+// Remote MCP Client（SSE 方式）
+// ========================================
+
 /**
- * 快捷方法：调用 MCP 工具
+ * Remote MCP 客户端类
+ * 通过 HTTP/SSE 与远程 MCP 服务器通信
  * 
- * @param serverName MCP 服务器名称（用于日志）
+ * MCP SSE 协议：
+ * - GET /sse - 建立 SSE 连接，接收响应
+ * - POST /message - 发送 JSON-RPC 请求
+ */
+export class RemoteMcpClient {
+  private eventSource: any = null;  // EventSource 类型（动态导入）
+  private baseUrl: string;
+  private sseUrl: string;
+  private messageUrl: string;
+  private requestId = 0;
+  private pendingRequests: Map<number, {
+    resolve: (value: JsonRpcResponse) => void;
+    reject: (error: Error) => void;
+    timeout: NodeJS.Timeout;
+  }> = new Map();
+  private initialized = false;
+  private serverName: string;
+  private timeout: number;
+
+  constructor(serverName: string, config: { url: string; timeout?: number }) {
+    this.serverName = serverName;
+    this.timeout = config.timeout || 10 * 60 * 1000;
+    
+    // 解析 URL，构建 SSE 和 Message 端点
+    // MCP SSE 协议标准：
+    // - SSE 端点: /sse
+    // - Message 端点: /message
+    this.baseUrl = config.url.replace(/\/sse$/, '').replace(/\/$/, '');
+    this.sseUrl = `${this.baseUrl}/sse`;
+    this.messageUrl = `${this.baseUrl}/message`;
+  }
+
+  async connect(): Promise<void> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        logger.info(LOG_MODULES.MCP, `[Remote] 连接 MCP 服务器: ${this.serverName}`, {
+          sseUrl: this.sseUrl,
+          messageUrl: this.messageUrl,
+        });
+
+        // 动态获取 EventSource 类
+        const EventSource = await getEventSource();
+
+        // 建立 SSE 连接
+        this.eventSource = new EventSource(this.sseUrl);
+
+        this.eventSource.onopen = () => {
+          logger.info(LOG_MODULES.MCP, `[Remote] SSE 连接已建立: ${this.serverName}`);
+        };
+
+        // 监听 message 事件（JSON-RPC 响应）
+        this.eventSource.onmessage = (event: any) => {
+          this.handleMessage(event.data);
+        };
+
+        // 监听 endpoint 事件（获取 message 端点）
+        this.eventSource.addEventListener('endpoint', (event: any) => {
+          logger.info(LOG_MODULES.MCP, `[Remote] 收到 endpoint 事件`, { data: event.data });
+          // MCP 服务器返回的 endpoint 可能是相对路径或完整 URL
+          if (event.data) {
+            const endpoint = event.data as string;
+            // 判断是否为相对路径（不以 http:// 或 https:// 开头）
+            if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+              this.messageUrl = endpoint;
+            } else {
+              // 相对路径，拼接 baseUrl
+              this.messageUrl = `${this.baseUrl}${endpoint}`;
+            }
+            logger.info(LOG_MODULES.MCP, `[Remote] Message URL`, { messageUrl: this.messageUrl });
+          }
+          
+          // 发送初始化请求
+          this.sendRequest('initialize', {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            clientInfo: { name: 'ai4web-mcp-client', version: '1.0.0' },
+          })
+            .then((response) => {
+              logger.info(LOG_MODULES.MCP, `[Remote] MCP 服务器 ${this.serverName} 初始化成功`);
+              this.sendNotification('notifications/initialized', {});
+              this.initialized = true;
+              resolve();
+            })
+            .catch(reject);
+        });
+
+        this.eventSource.onerror = (error: any) => {
+          logger.errorNoUser(LOG_MODULES.MCP, `[Remote] SSE 连接错误: ${this.serverName}`, { error });
+          if (!this.initialized) {
+            reject(new Error('SSE 连接失败'));
+          }
+        };
+
+        // 超时处理
+        setTimeout(() => {
+          if (!this.initialized) {
+            this.close();
+            reject(new Error('连接超时'));
+          }
+        }, 30000); // 30秒连接超时
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  async callTool(toolName: string, args: Record<string, unknown>): Promise<McpToolResult> {
+    if (!this.initialized) {
+      throw new Error('MCP 客户端未初始化');
+    }
+
+    try {
+      logger.info(LOG_MODULES.MCP, `[Remote] 调用工具: ${toolName}`, { args });
+
+      const response = await this.sendRequest('tools/call', {
+        name: toolName,
+        arguments: args,
+      });
+
+      if (response.error) {
+        return { success: false, error: response.error.message, isError: true };
+      }
+
+      const result = response.result as { content?: unknown[]; isError?: boolean };
+      return {
+        success: !result.isError,
+        content: result.content,
+        error: result.isError ? '工具执行失败' : undefined,
+        isError: result.isError,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+        isError: true,
+      };
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.eventSource) {
+      logger.info(LOG_MODULES.MCP, `[Remote] 关闭 MCP 连接: ${this.serverName}`);
+      
+      for (const [id, pending] of this.pendingRequests) {
+        clearTimeout(pending.timeout);
+        pending.reject(new Error('MCP 客户端已关闭'));
+      }
+      this.pendingRequests.clear();
+
+      this.eventSource.close();
+      this.eventSource = null;
+      this.initialized = false;
+    }
+  }
+
+  private sendRequest(method: string, params: Record<string, unknown>, timeout?: number): Promise<JsonRpcResponse> {
+    return new Promise((resolve, reject) => {
+      const id = ++this.requestId;
+      const request: JsonRpcRequest = { jsonrpc: '2.0', id, method, params };
+
+      const timeoutHandle = setTimeout(() => {
+        this.pendingRequests.delete(id);
+        reject(new Error(`请求超时: ${method}`));
+      }, timeout || this.timeout);
+
+      this.pendingRequests.set(id, { resolve, reject, timeout: timeoutHandle });
+
+      // 通过 HTTP POST 发送请求
+      fetch(this.messageUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error(`HTTP 错误: ${response.status}`));
+          }
+          // 响应会通过 SSE 返回，不需要处理 HTTP 响应体
+        })
+        .catch((error) => {
+          clearTimeout(timeoutHandle);
+          this.pendingRequests.delete(id);
+          reject(error);
+        });
+    });
+  }
+
+  private sendNotification(method: string, params: Record<string, unknown>): void {
+    const notification = { jsonrpc: '2.0', method, params };
+    
+    fetch(this.messageUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(notification),
+    }).catch((error) => {
+      logger.warn(LOG_MODULES.MCP, `[Remote] 发送通知失败:`, { method, error });
+    });
+  }
+
+  private handleMessage(data: string): void {
+    try {
+      const response: JsonRpcResponse = JSON.parse(data);
+      
+      const pending = this.pendingRequests.get(response.id);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        this.pendingRequests.delete(response.id);
+        pending.resolve(response);
+      }
+    } catch (error) {
+      logger.warn(LOG_MODULES.MCP, `[Remote] 解析响应失败:`, { data, error });
+    }
+  }
+}
+
+// ========================================
+// 统一调用函数
+// ========================================
+
+/**
+ * 直接调用 MCP 工具（不经过大模型）
+ * 
+ * 根据 type 自动选择 Local 或 Remote 客户端
+ * 
  * @param config MCP 服务器配置
  * @param toolName 工具名称
- * @param args 工具参数
+ * @param toolArgs 工具参数
  * @returns 工具调用结果
  */
+export async function callMcpToolDirect(
+  config: McpConfig,
+  toolName: string,
+  toolArgs: Record<string, unknown>
+): Promise<McpToolResult> {
+  const startTime = Date.now();
+  
+  logger.info(LOG_MODULES.MCP, `[Direct] 开始调用 MCP 工具`, {
+    serverName: config.name,
+    serverType: config.type,
+    toolName,
+    toolArgs,
+  });
+
+  try {
+    let client: LocalMcpClient | RemoteMcpClient;
+
+    if (config.type === 'local') {
+      if (!config.command) {
+        return { success: false, error: 'local 类型缺少 command 配置', isError: true };
+      }
+      client = new LocalMcpClient(config.name, {
+        command: config.command,
+        args: config.args,
+        env: config.env,
+        timeout: config.timeout,
+      });
+    } else if (config.type === 'remote') {
+      if (!config.url) {
+        return { success: false, error: 'remote 类型缺少 url 配置', isError: true };
+      }
+      client = new RemoteMcpClient(config.name, {
+        url: config.url,
+        timeout: config.timeout,
+      });
+    } else {
+      return { success: false, error: `不支持的 MCP 类型: ${config.type}`, isError: true };
+    }
+
+    await client.connect();
+    const result = await client.callTool(toolName, toolArgs);
+    await client.close();
+
+    const duration = Date.now() - startTime;
+    logger.info(LOG_MODULES.MCP, `[Direct] MCP 工具调用完成`, {
+      success: result.success,
+      duration: `${duration}ms`,
+      durationSeconds: (duration / 1000).toFixed(2),
+    });
+
+    return result;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    
+    logger.errorNoUser(LOG_MODULES.MCP, `[Direct] MCP 工具调用异常`, {
+      error: errorMsg,
+      duration: `${duration}ms`,
+    });
+
+    return {
+      success: false,
+      error: errorMsg,
+      isError: true,
+    };
+  }
+}
+
+/**
+ * 直接调用 AI4Java 的 decompileProject 工具
+ * 
+ * @param config AI4Java MCP 配置（从数据库获取）
+ * @param projectRoot 项目根目录
+ * @returns 反编译结果
+ */
+export async function callAi4JavaDecompileDirect(
+  config: McpConfig,
+  projectRoot: string
+): Promise<McpToolResult> {
+  logger.info(LOG_MODULES.MCP, `[Direct] 调用 AI4Java decompileProject`, {
+    serverName: config.name,
+    serverType: config.type,
+    projectRoot,
+  });
+
+  // 参数名使用 path（MCP 工具定义的参数名）
+  return callMcpToolDirect(config, 'decompileProject', { path: projectRoot });
+}
+
+// ========================================
+// 兼容旧接口（仅支持 local）
+// ========================================
+
+export interface McpServerConfig {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  timeout?: number;
+}
+
 export async function callMcpTool(
   serverName: string,
   config: McpServerConfig,
   toolName: string,
   args: Record<string, unknown>
 ): Promise<McpToolResult> {
-  const client = new McpClient(serverName, config);
-  
-  try {
-    await client.connect();
-    const result = await client.callTool(toolName, args);
-    return result;
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : String(error),
-      isError: true,
-    };
-  } finally {
-    await client.close();
-  }
+  return callMcpToolDirect(
+    { name: serverName, type: 'local', ...config },
+    toolName,
+    args
+  );
 }
 
-/**
- * 快捷方法：调用 AI4Java 的 decompileProject 工具
- * 
- * @param serverConfig AI4Java MCP 服务器配置
- * @param projectRoot 项目根目录
- * @returns 反编译结果
- */
 export async function callAi4JavaDecompile(
   serverConfig: McpServerConfig,
   projectRoot: string
 ): Promise<McpToolResult> {
-  logger.info(LOG_MODULES.MCP, '调用 AI4Java decompileProject', { projectRoot });
-  
-  return callMcpTool(
-    'ai4java',
-    serverConfig,
+  return callMcpToolDirect(
+    { name: 'ai4java', type: 'local', ...serverConfig },
     'decompileProject',
     { projectRoot }
   );

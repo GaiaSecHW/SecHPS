@@ -458,11 +458,12 @@ export async function POST(
     sdkOptions.settingSources = ['project'];
 
     // 清理项目目录中的旧文件/目录，确保每次评估从干净状态开始
+    // 注意：不再清理 .claude 目录，改为清理 outputs 目录
     if (project.projectPath) {
       const cleanupTargets = [
         { path: join(project.projectPath, 'workspace'), type: 'dir' },
         { path: join(project.projectPath, 'vulnerabilities'), type: 'dir' },
-        { path: join(project.projectPath, '.claude'), type: 'dir' },
+        { path: join(project.projectPath, 'outputs'), type: 'dir' },
         { path: join(project.projectPath, 'vulnerabilities.json'), type: 'file' },
         { path: join(project.projectPath, 'cloubugs4ai.cache.bin'), type: 'file' },
       ];
@@ -476,12 +477,15 @@ export async function POST(
         }
       }
       
-      // 创建评估所需的工作目录
+      // 创建评估所需的工作目录 - 使用 outputs 替代 .claude
       const workDirs = [
         join(project.projectPath, 'vulnerabilities'),
         join(project.projectPath, 'workspace'),
         join(project.projectPath, 'workspace', 'decompile_src'),
         join(project.projectPath, 'workspace', 'extract_zip'),
+        join(project.projectPath, 'outputs'),
+        join(project.projectPath, 'outputs', 'phases'),
+        join(project.projectPath, 'outputs', 'reports'),
       ];
       for (const dir of workDirs) {
         try {
@@ -494,76 +498,92 @@ export async function POST(
 
       // ========================================
       // 调用 AI4Java MCP 的 decompileProject 工具
-      // 在创建目录后、评估开始前执行
-      // 适用于 FSM 和 DAG 两种流程
+      // 直接调用 MCP，不经过大模型/SDK
+      // 支持 local 和 remote MCP
+      // 等待 MCP 完成后再启动评估
       // ========================================
       logger.info(LOG_MODULES.EVALUATION, '[MCP] 开始检查 AI4Java MCP 服务器配置', {
         mcpServersCount: mcpServers.length,
         mcpServerNames: mcpServers.map(s => s.name),
       });
       
-      try {
-        // 查找 AI4Java MCP 服务器配置（优先项目级别，其次共享）
-        const ai4javaMcp = mcpServers.find(s => s.name === 'ai4java' && s.isEnabled);
+      // 查找 AI4Java MCP 服务器配置（优先项目级别，其次共享）
+      const ai4javaMcp = mcpServers.find(s => s.name === 'ai4java' && s.isEnabled);
+      
+      if (ai4javaMcp) {
+        // 构建 MCP 配置
+        const mcpConfig = {
+          name: ai4javaMcp.name,
+          type: ai4javaMcp.type as 'local' | 'remote',
+          command: ai4javaMcp.command,
+          args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : undefined,
+          url: ai4javaMcp.url,
+          env: ai4javaMcp.env ? JSON.parse(ai4javaMcp.env) : undefined,
+          timeout: 10 * 60 * 1000, // 10 分钟超时
+        };
         
-        if (ai4javaMcp && ai4javaMcp.type === 'local' && ai4javaMcp.command) {
-          logger.info(LOG_MODULES.EVALUATION, '[MCP] 检测到 AI4Java MCP 本地服务器，准备执行 decompileProject', {
+        // 验证配置完整性
+        const isValidConfig = 
+          (mcpConfig.type === 'local' && mcpConfig.command) ||
+          (mcpConfig.type === 'remote' && mcpConfig.url);
+        
+        if (!isValidConfig) {
+          logger.warn(LOG_MODULES.EVALUATION, '[MCP] AI4Java MCP 配置不完整', {
             serverId: ai4javaMcp.id,
             serverName: ai4javaMcp.name,
-            command: ai4javaMcp.command,
-            args: ai4javaMcp.args,
+            serverType: mcpConfig.type,
+            hasCommand: !!mcpConfig.command,
+            hasUrl: !!mcpConfig.url,
+          });
+        } else {
+          // 执行 MCP 调用，等待完成后再启动评估
+          logger.info(LOG_MODULES.EVALUATION, '[MCP] 开始执行 decompileProject', {
+            serverId: ai4javaMcp.id,
+            serverName: ai4javaMcp.name,
+            serverType: mcpConfig.type,
             projectPath: project.projectPath,
           });
           
-          const { callAi4JavaDecompile } = await import('@/lib/mcp-client');
-          
-          const startTime = Date.now();
-          logger.info(LOG_MODULES.EVALUATION, '[MCP] 开始调用 decompileProject 工具...');
-          
-          const decompileResult = await callAi4JavaDecompile(
-            {
-              command: ai4javaMcp.command,
-              args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : [],
-              env: ai4javaMcp.env ? JSON.parse(ai4javaMcp.env) : {},
-              timeout: 10 * 60 * 1000, // 10 分钟超时（反编译可能较慢）
-            },
-            project.projectPath
-          );
-          
-          const duration = Date.now() - startTime;
-          
-          if (decompileResult.success) {
-            logger.info(LOG_MODULES.EVALUATION, '[MCP] decompileProject 执行成功', {
-              duration: `${duration}ms`,
-              durationSeconds: (duration / 1000).toFixed(2),
-              contentLength: decompileResult.content ? JSON.stringify(decompileResult.content).length : 0,
-              contentPreview: decompileResult.content ? JSON.stringify(decompileResult.content).substring(0, 500) : null,
-            });
-          } else {
-            logger.warn(LOG_MODULES.EVALUATION, '[MCP] decompileProject 执行失败', {
-              duration: `${duration}ms`,
-              error: decompileResult.error,
-              isError: decompileResult.isError,
+          try {
+            const { callAi4JavaDecompileDirect } = await import('@/lib/mcp-client');
+            
+            const startTime = Date.now();
+            
+            const decompileResult = await callAi4JavaDecompileDirect(
+              mcpConfig,
+              project.projectPath
+            );
+            
+            const duration = Date.now() - startTime;
+            
+            if (decompileResult.success) {
+              logger.info(LOG_MODULES.EVALUATION, '[MCP] decompileProject 执行成功', {
+                duration: `${duration}ms`,
+                durationSeconds: (duration / 1000).toFixed(2),
+                contentLength: decompileResult.content ? JSON.stringify(decompileResult.content).length : 0,
+                projectPath: project.projectPath,
+              });
+            } else {
+              logger.warn(LOG_MODULES.EVALUATION, '[MCP] decompileProject 执行失败（继续启动评估）', {
+                duration: `${duration}ms`,
+                error: decompileResult.error,
+                isError: decompileResult.isError,
+                projectPath: project.projectPath,
+              });
+            }
+          } catch (error) {
+            // MCP 调用失败不阻止评估启动
+            logger.errorNoUser(LOG_MODULES.EVALUATION, '[MCP] decompileProject 异常（继续启动评估）', {
+              error: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+              projectPath: project.projectPath,
             });
           }
-        } else if (ai4javaMcp && ai4javaMcp.type === 'remote') {
-          // 远程 MCP 服务器暂不支持直接调用
-          logger.warn(LOG_MODULES.EVALUATION, '[MCP] AI4Java MCP 配置为远程服务器，暂不支持启动前调用 decompileProject', {
-            serverId: ai4javaMcp.id,
-            serverName: ai4javaMcp.name,
-            url: ai4javaMcp.url,
-          });
-        } else {
-          logger.info(LOG_MODULES.EVALUATION, '[MCP] 未检测到 AI4Java MCP 服务器配置，跳过 decompileProject', {
-            availableServers: mcpServers.map(s => s.name),
-            hint: '请在 MCP 服务器管理中添加名为 "ai4java" 的本地 MCP 服务器',
-          });
         }
-      } catch (error) {
-        // 反编译失败不应阻止评估启动
-        logger.errorNoUser(LOG_MODULES.EVALUATION, '[MCP] 调用 AI4Java decompileProject 异常', {
-          error: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
+      } else {
+        logger.info(LOG_MODULES.EVALUATION, '[MCP] 未检测到 AI4Java MCP 服务器配置，跳过 decompileProject', {
+          availableServers: mcpServers.map(s => s.name),
+          hint: '请在 MCP 服务器管理中添加名为 "ai4java" 的 MCP 服务器（支持 local 和 remote）',
         });
       }
     }
@@ -677,6 +697,8 @@ export async function POST(
                   details: { 
                     status: result.status, 
                     duration: result.totalDuration,
+                    totalInputTokens: result.totalInputTokens,
+                    totalOutputTokens: result.totalOutputTokens,
                     totalTokens: result.totalTokens,
                     totalCost: result.totalCost,
                     phaseCount: result.phaseResults.length,
@@ -698,13 +720,15 @@ export async function POST(
                   ? `工作流未完成。失败阶段: ${failedPhasesInfo || '未知'}` 
                   : null;
                 
+                // 正确更新 separated tokens
                 await prisma.evaluationSession.update({
                   where: { id: evaluation.id },
                   data: {
                     status: result.status === 'completed' ? 'completed' : 'failed',
                     completedAt: new Date(),
-                    totalInputTokens: result.totalTokens > 0 ? result.totalTokens : undefined,
-                    totalOutputTokens: 0,
+                    totalInputTokens: result.totalInputTokens,
+                    totalOutputTokens: result.totalOutputTokens,
+                    totalTokens: result.totalTokens,
                     endReason: result.status === 'completed' ? 'completed' : 'error',
                     endMessage: errorMessage,
                     errorMessage: errorMessage,
@@ -1090,18 +1114,11 @@ export async function POST(
       taskNodes: totalTasks,
     });
     
-    // 写入 CLAUDE.md 全局模板到项目 .claude 目录
+    // 写入 CLAUDE.md 全局模板到项目目录（注意：不写入 .claude 目录，因为大模型不允许操作）
     if (project.projectPath && globalConfig?.claudemdTemplate) {
       try {
-        const claudeDir = join(project.projectPath, '.claude');
-        const claudeMdPath = join(claudeDir, 'CLAUDE.md');
-        
-        // 确保 .claude 目录存在
-        try {
-          await access(claudeDir);
-        } catch {
-          await mkdir(claudeDir, { recursive: true });
-        }
+        // 直接写入项目根目录的 CLAUDE.md
+        const claudeMdPath = join(project.projectPath, 'CLAUDE.md');
         
         // 写入 CLAUDE.md 文件（覆盖已存在的文件）
         await writeFile(claudeMdPath, globalConfig.claudemdTemplate, 'utf-8');
@@ -1383,24 +1400,44 @@ export async function POST(
         };
 
         // 更新节点状态
-        const updateNodeStatus = async (nodeId: string, status: 'completed' | 'failed') => {
+        const updateNodeStatus = async (
+          nodeId: string, 
+          nodeName: string,
+          status: 'running' | 'completed' | 'failed',
+          nodeIndex?: number,
+          modelName?: string,
+          modelConfigId?: string
+        ) => {
           try {
             // Find existing node execution
             const existingExecution = await prisma.nodeExecution.findFirst({
               where: {
                 evaluationSessionId: evaluation.id,
-                nodeId: nodeId,
+                workflowNodeId: nodeId,
               },
             });
             
             if (existingExecution) {
+              const updateData: any = {
+                status,
+                updatedAt: new Date(),
+              };
+              if (status === 'running') {
+                updateData.startedAt = new Date();
+              }
+              if (status === 'completed' || status === 'failed') {
+                updateData.completedAt = new Date();
+              }
+              if (modelName) {
+                updateData.modelName = modelName;
+              }
+              if (modelConfigId) {
+                updateData.modelConfigId = modelConfigId;
+              }
+              
               await prisma.nodeExecution.update({
                 where: { id: existingExecution.id },
-                data: {
-                  status,
-                  completedAt: new Date(),
-                  updatedAt: new Date(),
-                },
+                data: updateData,
               });
             } else {
               await prisma.nodeExecution.create({
@@ -1408,16 +1445,19 @@ export async function POST(
                   id: generateId('nodeexec'),
                   evaluationSessionId: evaluation.id,
                   workflowNodeId: nodeId,
-                  nodeLabel: nodeId,
+                  nodeLabel: nodeName,
                   nodeType: 'task',
                   status,
-                  order: 0,
-                  completedAt: new Date(),
+                  order: nodeIndex ?? 0,
+                  startedAt: status === 'running' ? new Date() : null,
+                  completedAt: (status === 'completed' || status === 'failed') ? new Date() : null,
+                  modelName: modelName || null,
+                  modelConfigId: modelConfigId || null,
                   updatedAt: new Date(),
                 },
               });
             }
-            logger.debug(LOG_MODULES.EVALUATION, 'Node 状态更新', { nodeId, status });
+            logger.debug(LOG_MODULES.EVALUATION, 'Node 状态更新', { nodeId, nodeName, status });
           } catch (e) {
             logger.errorNoUser(LOG_MODULES.EVALUATION, 'Node 状态更新失败', { nodeId, error: e });
           }
@@ -1438,7 +1478,10 @@ export async function POST(
             const node = sortedNodes[nodeIndex];
             const modelConfigForNode = await getModelConfigForRole(node.roleId ?? undefined, roleModels, defaultModelConfig);
             
-            // 发送节点开始事件
+            // 创建 running 状态的节点执行记录
+            await updateNodeStatus(nodeId, nodeName, 'running', nodeIndex, modelConfigForNode.name, modelConfigForNode.id);
+            
+            // 发送节点开始事件到 SSE 流（用于新启动的评估）
             safeEnqueue(`data: ${JSON.stringify({
               type: 'phase_start',
               nodeIndex: nodeIndex + 1,
@@ -1447,6 +1490,16 @@ export async function POST(
               nodeId: nodeId,
               modelName: modelConfigForNode.name,
             })}\n\n`);
+            
+            // 同时发送到事件总线（用于重连的用户）
+            const { emitPhaseStart } = require('@/lib/event-bus');
+            emitPhaseStart(evaluation.id, {
+              nodeIndex: nodeIndex + 1,
+              nodeId: nodeId,
+              nodeName: nodeName,
+              modelName: modelConfigForNode.name,
+              totalNodes: sortedNodes.length,
+            });
           },
           
           onNodeChunk: (nodeIndex, text) => {
@@ -1454,6 +1507,7 @@ export async function POST(
             safeEnqueue(`data: ${JSON.stringify({
               type: 'message',
               nodeIndex,
+              nodeId: currentNodeId,  // 添加 nodeId
               content: text,
               timestamp: Date.now(),
             })}\n\n`);
@@ -1464,6 +1518,7 @@ export async function POST(
             safeEnqueue(`data: ${JSON.stringify({
               type: 'tool_call',
               nodeIndex,
+              nodeId: currentNodeId,  // 添加 nodeId
               name: tool,
               parameters: args,
               timestamp: Date.now(),
@@ -1501,20 +1556,33 @@ export async function POST(
           },
           
           onTokenUsage: (data) => {
-            // 更新累计 Token
+            // 更新累计 Token（仅内存，不写入数据库）
             cumulativeTokens.input = data.cumulativeInputTokens;
             cumulativeTokens.output = data.cumulativeOutputTokens;
             
-            // 发送 Token 使用事件
+            // 发送 Token 使用事件到 SSE 流（用于新启动的评估）
             safeEnqueue(`data: ${JSON.stringify({
               type: 'phase_token_usage',
               nodeIndex: data.nodeIndex + 1,
+              nodeName: data.nodeName,
               modelName: data.modelName,
               inputTokens: data.inputTokens,
               outputTokens: data.outputTokens,
               cumulativeInputTokens: data.cumulativeInputTokens,
               cumulativeOutputTokens: data.cumulativeOutputTokens,
             })}\n\n`);
+            
+            // 同时发送到事件总线（用于重连的用户）
+            const { emitPhaseTokenUsage } = require('@/lib/event-bus');
+            emitPhaseTokenUsage(evaluation.id, {
+              nodeIndex: data.nodeIndex + 1,
+              nodeName: data.nodeName,
+              modelName: data.modelName,
+              inputTokens: data.inputTokens,
+              outputTokens: data.outputTokens,
+              cumulativeInputTokens: data.cumulativeInputTokens,
+              cumulativeOutputTokens: data.cumulativeOutputTokens,
+            });
           },
           
           onNodeRetry: (nodeIndex, nodeId, nodeName, retryCount, maxRetries, error) => {
@@ -1555,7 +1623,14 @@ export async function POST(
             })}\n\n`);
             
             // 更新节点状态到数据库
-            await updateNodeStatus(result.nodeId, result.status === 'completed' ? 'completed' : 'failed');
+            await updateNodeStatus(
+              result.nodeId, 
+              result.nodeName,
+              result.status === 'completed' ? 'completed' : 'failed',
+              nodeIndex,
+              result.modelName,
+              result.modelConfigId
+            );
           },
           
           onNodeError: (nodeIndex, nodeId, nodeName, error) => {
