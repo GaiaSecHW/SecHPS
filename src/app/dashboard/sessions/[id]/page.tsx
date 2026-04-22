@@ -104,9 +104,11 @@ function SessionDetailContent({
   const { id } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const evaluationId = id; // 使用路由参数id，而不是searchParams
+  const projectId = id; // 路由参数是 projectId
+  const evaluationId = searchParams.get('evaluationId'); // evaluationId 在 query 参数
   
-  console.log('[Page] evaluationId from route:', evaluationId);
+  console.log('[Page] projectId from route:', projectId);
+  console.log('[Page] evaluationId from query:', evaluationId);
 
   const [evaluation, setEvaluation] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
