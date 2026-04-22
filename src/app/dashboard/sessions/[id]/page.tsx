@@ -30,6 +30,13 @@ import {
 import ReactMarkdown from 'react-markdown';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EvaluationHeader } from '@/components/evaluation';
+import {
+  useEvaluation,
+  useWorkflowNodes,
+  useNodeMessages,
+  useNodeTodos,
+  useNodeChildren,
+} from '@/lib/hooks';
 
 // 辅助函数：获取消息内容预览
 function getContentPreview(content: any): string {
