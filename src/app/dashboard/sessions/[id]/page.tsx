@@ -1995,43 +1995,45 @@ function SessionDetailContent({
                     <div className="bg-white rounded-lg border border-purple-200 p-4">
                       <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
                         <GitBranch size={14} className="mr-2 text-purple-600" />
-                        子 Agent 明细 ({childrenSessions.length} 个)
+                        子 Agent 明细 ({childrenSessions.filter((c: any) => c.workflowNodeId === selectedNodeId).length} 个)
                       </h4>
-                      {childrenSessions.length > 0 ? (
+                      {childrenSessions.filter((c: any) => c.workflowNodeId === selectedNodeId).length > 0 ? (
                         <div className="space-y-2">
-                          {childrenSessions.map((child: any) => (
-                            <div 
-                              key={child.id}
-                              className="p-2 rounded border border-purple-200 bg-purple-50 cursor-pointer hover:bg-purple-100"
-                              onClick={() => {
-                                setSelectedChildSession(child.id);
-                                fetchChildSessionMessages(child.id);
-                              }}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-gray-700">
-                                  {child.title || `子 Agent ${child.id.substring(0, 8)}`}
-                                </span>
-                                <span className={`text-xs px-2 py-0.5 rounded ${
-                                  child.status === 'active' || child.status === 'running' ? 'bg-green-100 text-green-700' :
-                                  child.status === 'completed' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-gray-100 text-gray-600'
-                                }`}>
-                                  {child.status || 'unknown'}
-                                </span>
+                          {childrenSessions
+                            .filter((c: any) => c.workflowNodeId === selectedNodeId)
+                            .map((child: any) => (
+                              <div 
+                                key={child.id}
+                                className="p-2 rounded border border-purple-200 bg-purple-50 cursor-pointer hover:bg-purple-100"
+                                onClick={() => {
+                                  setSelectedChildSession(child.id);
+                                  fetchChildSessionMessages(child.id);
+                                }}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-medium text-gray-700">
+                                    {child.title || `子 Agent ${child.id.substring(0, 8)}`}
+                                  </span>
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    child.status === 'active' || child.status === 'running' ? 'bg-green-100 text-green-700' :
+                                    child.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                                    'bg-gray-100 text-gray-600'
+                                  }`}>
+                                    {child.status || 'unknown'}
+                                  </span>
+                                </div>
+                                {child.startedAt && (
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                )}
+                                {child.modelName && (
+                                  <div className="text-xs text-blue-600 mt-1">
+                                    模型: {child.modelName}
+                                  </div>
+                                )}
                               </div>
-                              {child.startedAt && (
-                                <div className="text-xs text-gray-500 mt-1">
-                                  {new Date(child.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
-                                </div>
-                              )}
-                              {child.modelName && (
-                                <div className="text-xs text-blue-600 mt-1">
-                                  模型: {child.modelName}
-                                </div>
-                              )}
-                            </div>
-                          ))}
+                            ))}
                         </div>
                       ) : (
                         <p className="text-sm text-gray-500">暂无子 Agent</p>
