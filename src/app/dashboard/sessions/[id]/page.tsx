@@ -508,7 +508,7 @@ function SessionDetailContent({
     if (!evaluationId && !evaluation?.opencodeSessionId) return;
 
     // 如果评估已完成，不需要轮询
-    if (evaluation.status === 'completed' || evaluation.status === 'failed') {
+    if (evaluation?.status === 'completed' || evaluation?.status === 'failed') {
       return;
     }
 
