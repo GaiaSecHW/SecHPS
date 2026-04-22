@@ -908,16 +908,96 @@ function SessionDetailContent({
     }
   };
 
-  // 获取子会话消息
+  // 获取子会话消息 - 从当前节点消息中提取工具调用和结果
   const fetchChildSessionMessages = async (childId: string) => {
     setLoadingChildMessages(true);
     try {
-      const token = localStorage.getItem('token');
+      // childId 格式是 `${msg.id}-${part.id}` 或直接是 msg.id
+      // 从 nodeMessages 中找到对应的消息
+      const msgId = childId.includes('-') ? childId.split('-')[0] : childId;
       
-      // 多Agent模式：使用 evaluationId 获取子会话消息
-      // 从 NodeExecution 表获取 session_id，然后获取消息
+      // 找到工具调用消息和对应的结果消息
+      const toolCallMsg = nodeMessages.find((m: any) => m.id === msgId);
+      
+      if (toolCallMsg) {
+        // 解析消息内容
+        let content = toolCallMsg.content;
+        if (typeof content === 'string') {
+          try {
+            content = JSON.parse(content);
+          } catch {
+            content = [{ type: 'text', text: content }];
+          }
+        }
+        
+        const parts = Array.isArray(content) ? content : [content];
+        
+        // 找到工具调用部分
+        const toolUsePart = parts.find((p: any) => 
+          p.type === 'tool_use' && (p.name === 'Agent' || p.name === 'task')
+        );
+        
+        // 找到对应的工具结果（在后续消息中）
+        const toolResultMsg = nodeMessages.find((m: any) => {
+          let resultContent = m.content;
+          if (typeof resultContent === 'string') {
+            try {
+              resultContent = JSON.parse(resultContent);
+            } catch {
+              return false;
+            }
+          }
+          const resultParts = Array.isArray(resultContent) ? resultContent : [resultContent];
+          return resultParts.some((p: any) => 
+            p.type === 'tool_result' && p.tool_use_id === toolUsePart?.id
+          );
+        });
+        
+        // 构建子 Agent 消息列表
+        const childMessages: any[] = [];
+        
+        // 添加用户输入（工具调用的参数）
+        if (toolUsePart) {
+          const args = toolUsePart.input || toolUsePart.args || {};
+          childMessages.push({
+            id: `${childId}-input`,
+            role: 'user',
+            content: args.prompt || args.description || JSON.stringify(args, null, 2),
+            createdAt: toolCallMsg.createdAt,
+          });
+        }
+        
+        // 添加助手输出（工具结果）
+        if (toolResultMsg) {
+          let resultContent = toolResultMsg.content;
+          if (typeof resultContent === 'string') {
+            try {
+              resultContent = JSON.parse(resultContent);
+            } catch {
+              // 保持原样
+            }
+          }
+          const resultParts = Array.isArray(resultContent) ? resultContent : [resultContent];
+          const resultPart = resultParts.find((p: any) => p.type === 'tool_result');
+          
+          if (resultPart) {
+            childMessages.push({
+              id: `${childId}-output`,
+              role: 'assistant',
+              content: resultPart.content || resultPart.output || JSON.stringify(resultPart, null, 2),
+              createdAt: toolResultMsg.createdAt,
+            });
+          }
+        }
+        
+        console.log('[Child Messages] Extracted from node messages:', childMessages.length);
+        setChildSessionMessages(childMessages);
+        return;
+      }
+      
+      // 如果没找到，尝试旧的方式（从 NodeExecution 获取）
+      const token = localStorage.getItem('token');
       if (evaluationId) {
-        // 先获取子会话的 session_id（从 NodeExecution 表）
         const nodeExecResponse = await fetch(
           `/api/evaluations/${evaluationId}/nodes`,
           {
@@ -929,11 +1009,9 @@ function SessionDetailContent({
         
         if (nodeExecResponse.ok) {
           const nodeExecData = await nodeExecResponse.json();
-          // 找到对应的节点执行记录
           const nodeExec = nodeExecData.nodes?.find((n: any) => n.id === childId || n.workflowNodeId === childId);
           
           if (nodeExec?.opencodeSessionId) {
-            // 使用 opencodeSessionId 获取消息
             const response = await fetch(
               `/api/sessions/${nodeExec.opencodeSessionId}/messages`,
               {
@@ -955,66 +1033,16 @@ function SessionDetailContent({
               }));
               
               setChildSessionMessages(formattedMessages);
-              
-              if (formattedMessages.length > 0 && formattedMessages[0].createdAt) {
-                const firstMsgTime = formattedMessages[0].createdAt;
-                childStartedAtRef.current[childId] = firstMsgTime;
-                setChildrenSessions(prev => prev.map(child => 
-                  child.id === childId && !child.startedAt 
-                    ? { ...child, startedAt: firstMsgTime }
-                    : child
-                ));
-              }
               return;
             }
           }
         }
       }
       
-      // 兼容旧模式：使用 opencodeSessionId
-      if (evaluation?.opencodeSessionId) {
-        const response = await fetch(
-          `/api/sessions/${evaluation.opencodeSessionId}/children?childId=${childId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        if (!response.ok) {
-          console.error('[Child Messages] Failed to fetch:', response.status);
-          setChildSessionMessages([]);
-          return;
-        }
-
-        const data = await response.json();
-        console.log('[Child Messages] Received:', data.messages?.length || 0);
-        
-        const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
-          id: msg.uuid || msg.id || `child-msg-${index}`,
-          role: msg.role || (msg.message?.role) || 'assistant',
-          content: msg.content || msg.message?.content || '',
-          createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
-        }));
-        
-        setChildSessionMessages(formattedMessages);
-        
-        if (formattedMessages.length > 0 && formattedMessages[0].createdAt) {
-          const firstMsgTime = formattedMessages[0].createdAt;
-          childStartedAtRef.current[childId] = firstMsgTime;
-          setChildrenSessions(prev => prev.map(child => 
-            child.id === childId && !child.startedAt 
-              ? { ...child, startedAt: firstMsgTime }
-              : child
-          ));
-        }
-      } else {
-        console.log('[Child Messages] No opencodeSessionId available');
-        setChildSessionMessages([]);
-      }
+      console.log('[Child Messages] No messages found for child:', childId);
+      setChildSessionMessages([]);
     } catch (err) {
-      console.error('[Child Messages] Error fetching:', err);
+      console.error('[Child Messages] Error:', err);
       setChildSessionMessages([]);
     } finally {
       setLoadingChildMessages(false);
