@@ -86,7 +86,9 @@ export interface FSMPhaseResult {
   outputPath: string;
   iterations: number;
   duration: number;
-  totalTokens: number;
+  inputTokens: number;   // 输入 token 数
+  outputTokens: number;  // 输出 token 数
+  totalTokens: number;   // 总 token 数（input + output）
   cost: number;
 }
 
@@ -110,7 +112,9 @@ export interface FSMWorkflowResult {
   agentZoneResults: AgentZoneResult[];
   totalDuration: number;
   totalCost: number;
-  totalTokens: number;
+  totalInputTokens: number;   // 总输入 token 数
+  totalOutputTokens: number;  // 总输出 token 数
+  totalTokens: number;        // 总 token 数（input + output）
   generatedReports: string[];
 }
 
@@ -229,7 +233,10 @@ export class FSMWorkflowExecutionService {
       const duration = Date.now() - startTime;
       const status = this.determineStatus(phaseResults, agentZoneResults);
       const totalCost = this.calculateTotalCost(phaseResults);
-      const totalTokens = phaseResults.reduce((sum, r) => sum + r.totalTokens, 0);
+      // 从 engineResult 获取分离的 tokens（更准确）
+      const totalInputTokens = engineResult.totalInputTokens || phaseResults.reduce((sum, r) => sum + r.inputTokens, 0);
+      const totalOutputTokens = engineResult.totalOutputTokens || phaseResults.reduce((sum, r) => sum + r.outputTokens, 0);
+      const totalTokens = totalInputTokens + totalOutputTokens;
 
       const result: FSMWorkflowResult = {
         sessionId: this.config.evaluationSessionId,
@@ -240,6 +247,8 @@ export class FSMWorkflowExecutionService {
         agentZoneResults,
         totalDuration: duration,
         totalCost,
+        totalInputTokens,
+        totalOutputTokens,
         totalTokens,
         generatedReports: [],
       };
@@ -265,6 +274,8 @@ export class FSMWorkflowExecutionService {
         agentZoneResults: [],
         totalDuration: Date.now() - startTime,
         totalCost: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
         totalTokens: 0,
         generatedReports: [],
       };
@@ -329,6 +340,9 @@ export class FSMWorkflowExecutionService {
       maxIterationsPerNode: this.config.maxIterationsPerPhase,
       maxRetries: 15, // FSM 默认重试次数
       retryDelayMs: 60000, // 1 分钟重试间隔
+      workflowConfig: {
+        fsmTemplateSkillPath: this.fsmTemplate?.skillPath || undefined, // 传递 FSM Template skillPath 用于拼接节点 skillPath
+      },
     };
   }
 
@@ -386,6 +400,8 @@ export class FSMWorkflowExecutionService {
           outputPath: result.outputYamlPath || '',
           iterations: result.iterations,
           duration: result.duration,
+          inputTokens: result.inputTokens,
+          outputTokens: result.outputTokens,
           totalTokens: result.inputTokens + result.outputTokens,
           cost: this.calculatePhaseCost({ inputTokens: result.inputTokens, outputTokens: result.outputTokens }),
         };
@@ -421,6 +437,7 @@ export class FSMWorkflowExecutionService {
 
   /**
    * 转换引擎结果为 FSM Phase 结果
+   * 正确提取分离的 input/output tokens
    */
   private convertEngineResultsToPhaseResults(
     nodeResults: NodeExecutionResult[],
@@ -428,6 +445,8 @@ export class FSMWorkflowExecutionService {
   ): FSMPhaseResult[] {
     return nodeResults.map((result, index) => {
       const node = nodes[index];
+      const inputTokens = result.inputTokens || 0;
+      const outputTokens = result.outputTokens || 0;
       return {
         phaseNumber: node?.fsmPhase || index + 1,
         phaseName: result.nodeName,
@@ -436,8 +455,10 @@ export class FSMWorkflowExecutionService {
         outputPath: result.outputYamlPath || '',
         iterations: result.iterations,
         duration: result.duration,
-        totalTokens: result.inputTokens + result.outputTokens,
-        cost: this.calculatePhaseCost({ inputTokens: result.inputTokens, outputTokens: result.outputTokens }),
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens + outputTokens,
+        cost: this.calculatePhaseCost({ inputTokens, outputTokens }),
       };
     });
   }

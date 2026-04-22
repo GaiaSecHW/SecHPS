@@ -109,6 +109,7 @@ export interface UnifiedExecutionConfig {
     endNodeLabel?: string;
     endNodeDescription?: string;
     fsmPhasePrompts?: Record<number, string>; // FSM Phase 1-6 的提示词
+    fsmTemplateSkillPath?: string; // FSM Template 的 skillPath（用于拼接节点 skillPath）
   };
 }
 

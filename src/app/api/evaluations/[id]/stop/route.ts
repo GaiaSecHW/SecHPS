@@ -89,6 +89,34 @@ export async function POST(
     });
     logger.debug(LOG_MODULES.EVALUATION, '评估状态已更新为 cancelled:', { details: { id, tokens: { input: currentTokens?.totalInputTokens, output: currentTokens?.totalOutputTokens } } });
 
+    // 更新所有相关 NodeExecution 状态为 cancelled
+    const nodeExecutionsUpdated = await prisma.nodeExecution.updateMany({
+      where: {
+        evaluationSessionId: id,
+        status: { in: ['pending', 'running'] },
+      },
+      data: {
+        status: 'cancelled',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+    logger.debug(LOG_MODULES.EVALUATION, 'NodeExecution 已取消:', { details: { count: nodeExecutionsUpdated.count } });
+
+    // 更新所有相关 SkillExecution 状态为 cancelled
+    const skillExecutionsUpdated = await prisma.skillExecution.updateMany({
+      where: {
+        evaluationId: id,
+        status: { in: ['pending', 'running'] },
+      },
+      data: {
+        status: 'cancelled',
+        completedAt: new Date(),
+        error: '用户手动中止评估',
+      },
+    });
+    logger.debug(LOG_MODULES.EVALUATION, 'SkillExecution 已取消:', { details: { count: skillExecutionsUpdated.count } });
+
     // 更新项目状态（如果有正在运行的评估）
     await prisma.project.updateMany({
       where: {

@@ -64,15 +64,16 @@ export async function GET(
     const startTimeParam = url.searchParams.get('startTime');
     const endTimeParam = url.searchParams.get('endTime');
     const sourceParam = url.searchParams.get('source'); // 'db' | 'sdk' | 'auto'
+    const nodeIdParam = url.searchParams.get('nodeId'); // 按节点 ID 过滤
     
     const limit = limitParam ? parseInt(limitParam, 10) : undefined;
     const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
     const startTime = startTimeParam ? new Date(startTimeParam) : null;
     const endTime = endTimeParam ? new Date(endTimeParam) : null;
 
-    // 如果指定了 source=db，从数据库查询（不过滤nodeId，返回所有消息）
+    // 如果指定了 source=db，从数据库查询（支持 nodeId 过滤）
     if (sourceParam === 'db') {
-      return await getMessagesFromDB(id, null, limit, offset);
+      return await getMessagesFromDB(id, nodeIdParam, limit, offset);
     }
 
     // 否则从 SDK 获取消息（原有逻辑）
@@ -185,7 +186,6 @@ export async function GET(
         endTime: endTime.toISOString(),
         beforeCount: formattedMessages.length,
         afterCount: filteredMessages.length,
-        nodeId: nodeIdParam,
       } });
     }
     
@@ -218,7 +218,9 @@ export async function GET(
 }
 
 /**
- * 从数据库查询消息（支持按 nodeId 过滤）
+ * 从数据库查询消息
+ * FSM 模式：nodeId 保存在 metadata.nodeId 中，需要在内存中过滤
+ * DAG 模式：nodeId 保存在 workflowNodeId 字段，可以直接查询
  */
 async function getMessagesFromDB(
   evaluationId: string,
@@ -232,38 +234,76 @@ async function getMessagesFromDB(
       evaluationSessionId: evaluationId,
     };
     
+    // DAG 模式：直接使用 workflowNodeId 过滤
+    // FSM 模式：不设置 workflowNodeId，后续从 metadata.nodeId 过滤
+    let isFSMMode = false;
+    
     if (nodeId) {
-      where.workflowNodeId = nodeId;
+      // 检查 nodeId 是否存在于 WorkflowNode 表（DAG 模式）
+      const workflowNodeExists = await prisma.workflowNode.findUnique({
+        where: { id: nodeId },
+        select: { id: true },
+      });
+      
+      if (workflowNodeExists) {
+        // DAG 模式：使用 workflowNodeId 外键
+        where.workflowNodeId = nodeId;
+      } else {
+        // FSM 模式：从 metadata 中过滤
+        isFSMMode = true;
+      }
     }
 
-    // 查询总数
-    const total = await prisma.sessionMessage.count({ where });
+    // FSM 模式需要获取更多消息用于内存过滤
+    const queryLimit = isFSMMode ? 1000 : limit;
+    const queryOffset = isFSMMode ? 0 : offset;
 
     // 查询消息列表
     const messages = await prisma.sessionMessage.findMany({
       where,
       orderBy: { createdAt: 'asc' },
-      skip: offset,
-      take: limit,
+      skip: queryOffset,
+      take: queryLimit,
     });
 
+    // FSM 模式：从 metadata.nodeId 过滤
+    let filteredMessages = messages;
+    if (isFSMMode && nodeId) {
+      filteredMessages = messages.filter((msg) => {
+        try {
+          const metadata = msg.metadata ? JSON.parse(msg.metadata) : {};
+          return metadata.nodeId === nodeId;
+        } catch {
+          return false;
+        }
+      });
+      // 应用分页
+      if (limit) {
+        filteredMessages = filteredMessages.slice(offset, offset + limit);
+      }
+    }
+
+    const total = isFSMMode ? filteredMessages.length : await prisma.sessionMessage.count({ where });
+    const hasMore = limit ? offset + limit < total : false;
+
     // 格式化消息
-    const formattedMessages = messages.map((msg) => ({
+    const formattedMessages = filteredMessages.map((msg) => ({
       id: msg.id,
       role: msg.role,
       content: msg.content,
       createdAt: msg.createdAt.toISOString(),
       workflowNodeId: msg.workflowNodeId,
       metadata: msg.metadata ? JSON.parse(msg.metadata) : null,
+      // 从 metadata 中提取 nodeId（用于前端显示）
+      nodeId: msg.metadata ? (JSON.parse(msg.metadata).nodeId || msg.workflowNodeId) : msg.workflowNodeId,
     }));
-
-    const hasMore = limit ? offset + limit < total : false;
 
     logger.debug(LOG_MODULES.EVALUATION, '从数据库返回消息:', { details: {
       nodeId,
       total,
       count: formattedMessages.length,
       source: 'db',
+      fsmMode: isFSMMode,
     } });
 
     return NextResponse.json({

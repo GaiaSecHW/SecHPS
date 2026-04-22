@@ -839,15 +839,29 @@ export async function POST(
                 {
                   onPhaseStart: async (phase, phaseName) => {
                     logger.debug(LOG_MODULES.FSM, `Phase ${phase} (${phaseName}) 开始`);
+                    // 推送阶段开始事件
+                    emitPhaseStart(evaluation.id, {
+                      nodeIndex: phase,
+                      nodeId: `fsm-node-p${phase}`,
+                      nodeName: phaseName,
+                      modelName: modelConfig.name,
+                      totalNodes: 7,
+                    });
                   },
-                  onPhaseChunk: (phase, text) => {},
+                  onPhaseChunk: (phase, text) => {
+                    // 推送实时文本流（通过 event-bus）
+                    emitMessageChunk(evaluation.id, text);
+                  },
                   onPhaseToolCall: (phase, tool, args) => {
                     logger.debug(LOG_MODULES.FSM, `Phase ${phase} 工具调用: ${tool}`);
+                    // 工具调用通过日志记录，前端通过 messages API 获取
                   },
                   onPhaseComplete: async (phase, result) => {
                     logger.info(LOG_MODULES.FSM, `Phase ${phase} 完成`, {
                       details: { iterations: result.iterations, duration: result.duration, status: result.status },
                     });
+                    // 推送节点完成事件
+                    emitNodeComplete(evaluation.id, `fsm-node-p${phase}`);
                   },
                   onPhaseError: (phase, error) => {
                     logger.errorNoUser(LOG_MODULES.FSM, `Phase ${phase} 错误: ${error.message}`);
@@ -956,7 +970,17 @@ export async function POST(
                   },
                   onTokenUsage: (data) => {
                     logger.debug(LOG_MODULES.FSM, `[FSM Async] Token 使用:`, data);
-                    // 通过 event-bus 推送（前端通过 SSE 重连获取）
+                    // 推送 Token 使用事件到 SSE 流
+                    // FSM 回调使用 phase，转换为 nodeIndex
+                    emitPhaseTokenUsage(evaluation.id, {
+                      nodeIndex: data.phase,
+                      nodeName: data.phaseName,
+                      modelName: data.modelName,
+                      inputTokens: data.inputTokens,
+                      outputTokens: data.outputTokens,
+                      cumulativeInputTokens: data.cumulativeInputTokens,
+                      cumulativeOutputTokens: data.cumulativeOutputTokens,
+                    });
                   },
                 }
               );

@@ -536,8 +536,8 @@ function SessionDetailContent({
     // 多 Agent 模式使用 evaluationId，旧模式使用 opencodeSessionId
     if (!evaluationId && !evaluation?.opencodeSessionId) return;
 
-    // 如果评估已完成，不需要轮询
-    if (evaluation?.status === 'completed' || evaluation?.status === 'failed') {
+    // 如果评估已完成、失败或已取消，不需要轮询
+    if (evaluation?.status === 'completed' || evaluation?.status === 'failed' || evaluation?.status === 'cancelled') {
       return;
     }
 

@@ -51,6 +51,9 @@ export class UnifiedWorkflowExecutionEngine {
   /** 累计 Token 使用量 */
   private cumulativeTokens: { input: number; output: number } = { input: 0, output: 0 };
   
+  /** 每个节点的 Token 使用量（避免重复累加） */
+  private nodeTokens: Record<number, { input: number; output: number }> = {};
+  
   /** 执行开始时间 */
   private startTime: Date = new Date();
 
@@ -123,9 +126,9 @@ export class UnifiedWorkflowExecutionEngine {
           break;
         }
 
-        // 更新累计 Token
-        this.cumulativeTokens.input += result.inputTokens;
-        this.cumulativeTokens.output += result.outputTokens;
+        // 注意：不再在这里累加 Token，因为 onUsage 回调已经实时更新了 cumulativeTokens
+        // 避免重复累加（onUsage 使用 nodeTokens 对象正确处理累计）
+        console.log(`[UnifiedEngine] 节点完成后累计 Token: input=${this.cumulativeTokens.input}, output=${this.cumulativeTokens.output}`);
       }
 
       // 4. 生成最终结果
@@ -299,24 +302,34 @@ export class UnifiedWorkflowExecutionEngine {
               // 调用外部回调
               this.callbacks.onNodeChunk(nodeIndex, text);
             },
-            onToolCall: (name, args) => {
-              // 保存工具调用消息到数据库
+            onThinking: (thinking) => {
+              // 保存思考消息到数据库
+              console.log(`[executeNode] 🧠 onThinking 被调用, 长度: ${thinking?.length || 0}`);
+              this.saveNodeMessage(
+                nodeId,
+                'thinking',
+                thinking,
+                JSON.stringify({ nodeIndex, timestamp: Date.now() })
+              ).catch(err => console.error('[executeNode] 保存思考消息失败:', err));
+            },
+            onToolCall: (toolUseId, name, args) => {
+              // 保存工具调用消息到数据库（包含 toolUseId 用于匹配 tool_result）
               this.saveNodeMessage(
                 nodeId,
                 'tool_call',
-                JSON.stringify({ name, args }),
+                JSON.stringify({ toolUseId, name, args }),
                 JSON.stringify({ nodeIndex, timestamp: Date.now() })
               ).catch(err => console.error('[executeNode] 保存工具调用消息失败:', err));
               // 调用外部回调
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
-            onToolResult: (name, result) => {
-              // 保存工具结果消息到数据库
+            onToolResult: (toolUseId, content, isError) => {
+              // 保存工具结果消息到数据库（包含 toolUseId 和 isError）
               this.saveNodeMessage(
                 nodeId,
                 'tool_result',
-                typeof result === 'string' ? result : JSON.stringify(result),
-                JSON.stringify({ toolName: name, nodeIndex, timestamp: Date.now() })
+                typeof content === 'string' ? content : JSON.stringify(content),
+                JSON.stringify({ toolUseId, isError, nodeIndex, timestamp: Date.now() })
               ).catch(err => console.error('[executeNode] 保存工具结果消息失败:', err));
             },
             onComplete: () => {},
@@ -324,6 +337,19 @@ export class UnifiedWorkflowExecutionEngine {
               console.error(`[executeNode] Agent 错误: ${error.message}`);
             },
             onUsage: (usage) => {
+              // SDK 返回的是当前节点的累计值
+              // 记录每个节点的累计值（避免重复累加）
+              this.nodeTokens[nodeIndex] = {
+                input: usage.inputTokens || 0,
+                output: usage.outputTokens || 0,
+              };
+              
+              // 计算所有节点的总累计值
+              this.cumulativeTokens.input = Object.values(this.nodeTokens)
+                .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
+              this.cumulativeTokens.output = Object.values(this.nodeTokens)
+                .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
+              
               // 实时推送 Token 使用量
               this.callbacks.onTokenUsage({
                 nodeIndex,
@@ -331,12 +357,14 @@ export class UnifiedWorkflowExecutionEngine {
                 nodeName,
                 modelName: modelConfig.name,
                 modelConfigId: modelConfig.id,
+                // 当前节点的值（用于节点内显示）
                 inputTokens: usage.inputTokens || 0,
                 outputTokens: usage.outputTokens || 0,
                 totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
-                cumulativeInputTokens: this.cumulativeTokens.input + (usage.inputTokens || 0),
-                cumulativeOutputTokens: this.cumulativeTokens.output + (usage.outputTokens || 0),
-                cumulativeTotalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output + (usage.inputTokens || 0) + (usage.outputTokens || 0),
+                // 所有节点的累计值（用于顶部统计）
+                cumulativeInputTokens: this.cumulativeTokens.input,
+                cumulativeOutputTokens: this.cumulativeTokens.output,
+                cumulativeTotalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output,
               });
             },
             onRalphComplete: async () => {},
@@ -368,6 +396,21 @@ export class UnifiedWorkflowExecutionEngine {
         // 成功完成
         if (result.completionReason === 'verified' || result.text.length > 100) {
           console.log(`[executeNode] 节点执行成功: iterations=${result.iterations}`);
+
+          // 确保 Token 数据正确（使用 result.totalUsage 作为最终值）
+          // 如果 onUsage 回调没有被正确调用，使用 result.totalUsage 作为备份
+          if (result.totalUsage && result.totalUsage.inputTokens > 0) {
+            console.log(`[executeNode] 使用 result.totalUsage 更新 nodeTokens: input=${result.totalUsage.inputTokens}, output=${result.totalUsage.outputTokens}`);
+            this.nodeTokens[nodeIndex] = {
+              input: result.totalUsage.inputTokens,
+              output: result.totalUsage.outputTokens,
+            };
+            // 重新计算所有节点的总累计值
+            this.cumulativeTokens.input = Object.values(this.nodeTokens)
+              .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
+            this.cumulativeTokens.output = Object.values(this.nodeTokens)
+              .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
+          }
 
           // 写入 YAML 输出
           const outputYamlPath = await this.writeNodeOutput(nodeIndex, node, result.text);
@@ -547,35 +590,88 @@ export class UnifiedWorkflowExecutionEngine {
         systemPrompt: this.config.systemPrompt,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
-        workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
+workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
       }
     );
   }
 
-  /**
-   * FSM Phase 默认内容
-   * 当 workflowConfig.fsmPhasePrompts 未配置时使用
-   */
-  private getFSMPhaseDefaultPrompt(phase: number): string {
-    const phasePrompts: Record<number, string> = {
-      1: '威胁建模 - 识别系统威胁和攻击面，分析潜在的安全风险',
-      2: '代码审计 - 深入分析源代码漏洞，检查代码质量和安全问题',
-      3: '漏洞分析 - 验证和分类发现的漏洞，评估漏洞严重程度',
-      4: '报告生成 - 汇总分析结果，生成完整的安全评估报告',
-      5: '修复建议 - 为发现的漏洞提供修复建议和最佳实践',
-      6: '验证修复 - 验证修复方案的有效性，确保漏洞已正确修复',
-    };
-    return phasePrompts[phase] || `Phase ${phase} - 执行阶段 ${phase} 的任务`;
+/**
+    * 加载 FSM Phase Skill 内容
+    * 从 skills/ 目录读取预设的 Phase 执行指令
+    * 
+    * 注意：skillPath 可能是相对路径（如 phases/P1-xxx.md）
+    * 需要根据 FSM Template 的 skillPath 拼接完整路径
+    */
+  private async loadFSMPhaseSkillContent(node: UnifiedNodeDefinition): Promise<string> {
+    // 检查节点是否有 skillPath
+    const nodeSkillPath = node.skillPath;
+    if (!nodeSkillPath) {
+      throw new Error(`FSM Phase 节点 ${node.label} 缺少 skillPath 配置，无法执行。请检查 FSM Template 配置。`);
+    }
+
+    // 拼接完整 Skill 路径
+    // FSM Template 的 skillPath: "skills/threat-modeling" -> 提取 "threat-modeling"
+    // 节点的 skillPath: "phases/P1-PROJECT-UNDERSTANDING.md"
+    // 完整路径: "threat-modeling/phases/P1-PROJECT-UNDERSTANDING.md"
+    let fullSkillPath = nodeSkillPath;
+    
+    // 如果 skillPath 不包含 "/" 或以 "phases/" 开头，需要加上 FSM Template 前缀
+    if (nodeSkillPath.startsWith('phases/') || !nodeSkillPath.includes('/')) {
+      // 从 config.workflowId 获取 FSM Template 的 skillPath
+      const fsmTemplateSkillPath = this.config.workflowConfig?.fsmTemplateSkillPath;
+      if (fsmTemplateSkillPath) {
+        // fsmTemplateSkillPath 格式: "skills/threat-modeling" -> 提取 "threat-modeling"
+        const templatePrefix = fsmTemplateSkillPath.replace(/^skills\//, '').replace(/\/$/, '');
+        fullSkillPath = `${templatePrefix}/${nodeSkillPath}`;
+      } else {
+        // 默认使用 threat-modeling（如果找不到 Template skillPath）
+        fullSkillPath = `threat-modeling/${nodeSkillPath}`;
+        console.warn(`[loadFSMPhaseSkillContent] 未找到 FSM Template skillPath，使用默认前缀 threat-modeling`);
+      }
+    }
+
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+      
+      // 完整物理路径: process.cwd()/skills/threat-modeling/phases/P1-xxx.md
+      const fullPath = path.join(process.cwd(), 'skills', fullSkillPath);
+      
+      console.log(`[loadFSMPhaseSkillContent] Reading skill file: ${fullPath}`);
+      console.log(`[loadFSMPhaseSkillContent] Node skillPath: ${nodeSkillPath}, Full skillPath: ${fullSkillPath}`);
+      
+      const content = await fs.readFile(fullPath, 'utf-8');
+      console.log(`[loadFSMPhaseSkillContent] Loaded ${content.length} bytes from ${fullSkillPath}`);
+      
+      // 验证文件内容是否有效（至少包含 Phase 标题）
+      if (!content.includes('# Phase') && !content.includes('## Objective')) {
+        throw new Error(`Skill 文件 ${fullSkillPath} 内容无效，缺少必要的 Phase 定义。`);
+      }
+      
+      return content;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      throw new Error(`FSM Phase 节点 ${node.label} Skill 文件读取失败: ${fullSkillPath}。错误: ${errorMsg}。请检查 Skill 文件是否存在且路径正确。`);
+    }
   }
 
   /**
-   * 构建节点提示词
-   * 根据节点类型使用不同的内容来源：
-   * - start 节点：使用 workflowConfig.startNodeDescription
-   * - end 节点：使用 workflowConfig.endNodeDescription
-   * - fsm_phase 节点：使用 workflowConfig.fsmPhasePrompts[fsmPhase] 或默认内容
-   * - 其他节点：使用 node.description 或 node.data 中的内容
-   */
+    * FSM Phase 默认内容 - 已禁用
+    * FSM 节点必须配置 skillPath，不再使用默认模板
+    */
+  private getFSMPhaseDefaultPrompt(phase: number): string {
+    // 禁止使用默认模板，抛出错误
+    throw new Error(`FSM Phase ${phase} 未配置 Skill 文件，无法执行。请为 FSM Template 的每个节点配置 skillPath。`);
+  }
+
+/**
+    * 构建节点提示词
+    * 根据节点类型使用不同的内容来源：
+    * - start 节点：使用 workflowConfig.startNodeDescription
+    * - end 节点：使用 workflowConfig.endNodeDescription
+    * - fsm_phase 节点：优先读取 Skill 文件内容，否则使用默认内容
+    * - 其他节点：使用 node.description 或 node.data 中的内容
+    */
   private async buildNodePrompt(
     nodeIndex: number,
     node: UnifiedNodeDefinition
@@ -598,12 +694,9 @@ export class UnifiedWorkflowExecutionEngine {
         node.description || 
         '结束工作流执行，汇总所有结果';
     } else if (nodeType === 'fsm_phase' && node.fsmPhase) {
-      // FSM Phase 节点：使用 workflowConfig.fsmPhasePrompts 或默认内容
-      const phasePrompt = this.config.workflowConfig?.fsmPhasePrompts?.[node.fsmPhase];
-      nodeDescription = phasePrompt || 
-        this.getFSMPhaseDefaultPrompt(node.fsmPhase) ||
-        node.description || 
-        `执行 FSM Phase ${node.fsmPhase}`;
+      // FSM Phase 节点：必须读取 Skill 文件内容
+      // loadFSMPhaseSkillContent 会抛出错误如果文件不存在
+      nodeDescription = await this.loadFSMPhaseSkillContent(node);
     } else {
       // 其他节点：使用 node.description 或 node.data
       nodeDescription = node.description || 
@@ -612,7 +705,34 @@ export class UnifiedWorkflowExecutionEngine {
         '执行节点任务';
     }
 
-    // 构建提示词
+    // FSM Phase：Skill 文件已经包含完整的执行指令，直接使用
+    // Skill 文件内容格式: "# Phase 1: Project Understanding..."
+    if (nodeType === 'fsm_phase') {
+      // 构建 Skill 内容 + 项目上下文
+      const prompt = `
+${nodeDescription}
+
+---
+
+## 项目上下文
+
+### 项目信息
+- 项目名称: ${this.config.projectName}
+- 项目路径: ${this.config.workspacePath}
+
+### 前序节点输出
+${previousOutputs || '(首个节点，无前序输出)'}
+
+### 输出路径
+- 输出目录: outputs/phases/${nodeIndex + 1}-${node.label}/
+- 输出文件: output.yaml
+
+${this.config.userPrompt ? `### 用户附加提示\n${this.config.userPrompt}` : ''}
+`;
+      return prompt;
+    }
+
+    // 非 FSM Phase：使用通用模板
     const prompt = `
 # 工作流节点执行: ${node.label}
 
@@ -634,7 +754,7 @@ ${previousOutputs}
 
 ## 输出要求
 - 输出格式: YAML
-- 输出路径: .claude/phases/${nodeIndex + 1}-${node.label}/output.yaml
+- 输出路径: outputs/phases/${nodeIndex + 1}-${node.label}/output.yaml
 - 必须包含完整的分析结果
 
 ## 用户提示词
@@ -652,13 +772,13 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
 
     for (let i = 0; i < currentNodeIndex; i++) {
       const node = this.nodes[i];
-      // 尝试读取前序节点的 YAML 输出
+      // 尝试读取前序节点的 YAML 输出 - 使用 outputs/ 替代 .claude/
       try {
         const fs = await import('fs/promises');
         const path = await import('path');
         const outputPath = path.join(
           this.config.workspacePath,
-          '.claude',
+          'outputs',
           'phases',
           `${i + 1}-${node.label}`,
           'output.yaml'
@@ -687,10 +807,10 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
     // 提取 YAML 内容
     const yamlContent = this.extractYamlFromResult(content);
 
-    // 创建输出目录
+    // 创建输出目录 - 使用 outputs/ 替代 .claude/
     const phaseDir = path.join(
       this.config.workspacePath,
-      '.claude',
+      'outputs',
       'phases',
       `${nodeIndex + 1}-${node.label}`
     );
@@ -770,6 +890,8 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
         modelConfigId: modelConfig.id,
         modelName: modelConfig.name,
         roleId: node.roleId ?? undefined,
+        inputTokens: result.inputTokens || 0,
+        outputTokens: result.outputTokens || 0,
       };
 
       if (existing) {
@@ -782,6 +904,8 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
             updatedAt: new Date(),
             modelConfigId: modelConfig.id,
             modelName: modelConfig.name,
+            inputTokens: result.inputTokens || 0,
+            outputTokens: result.outputTokens || 0,
           },
         });
         console.log(`[saveNodeExecutionToDB] 更新节点执行记录: ${node.label}`);
@@ -820,10 +944,9 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
     metadata?: string
   ): Promise<void> {
     try {
-      // FSM 模式：不保存 workflowNodeId，避免外键约束失败
-      // DAG 模式：保存 workflowNodeId，用于节点消息过滤
-      const isFSM = this.config.workflowType === 'fsm';
-      
+      // FSM 模式特殊处理：不保存 workflowNodeId 到数据库
+      // 因为 FSM 节点 ID 来自 JSON 配置，不存在于 WorkflowNode 表中
+      // 会导致外键约束失败。将 nodeId 保存到 metadata 中用于过滤。
       const data: {
         id: string;
         evaluationSessionId: string;
@@ -838,17 +961,14 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
         content,
       };
       
-      // DAG 模式才保存 workflowNodeId
-      if (!isFSM) {
-        data.workflowNodeId = nodeId;
-      }
-      
-      if (metadata) {
-        data.metadata = metadata;
-      }
+      // 不保存 workflowNodeId（会导致外键约束失败）
+      // 将 nodeId 保存到 metadata 中用于节点过滤
+      const nodeMetadata = metadata ? JSON.parse(metadata) : {};
+      nodeMetadata.nodeId = nodeId;  // 用于过滤
+      data.metadata = JSON.stringify(nodeMetadata);
       
       await prisma.sessionMessage.create({ data });
-      console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}, workflowType=${this.config.workflowType}`);
+      console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}`);
     } catch (error) {
       console.error(`[saveNodeMessage] 保存失败:`, error);
       // 不抛出错误，允许执行继续进行
