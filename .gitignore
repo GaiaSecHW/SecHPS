@@ -55,5 +55,8 @@ Thumbs.db
 # Data files (skills are managed via database)
 data/skills/
 
+# Session messages (JSONL storage)
+data/sessions/
+
 # OMC tool state files
 .omc/
