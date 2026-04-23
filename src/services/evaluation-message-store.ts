@@ -15,6 +15,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import readline from 'readline';
 import AsyncLock from 'async-lock';
 
 // ============================================
@@ -223,6 +224,12 @@ export class EvaluationMessageStore {
   
   /** 项目 ID */
   private projectId: string;
+  
+  /** 消息 ID 到行索引的缓存 */
+  private messageIdCache: Map<string, number> = new Map();
+  
+  /** 缓存是否已构建 */
+  private cacheBuilt: boolean = false;
 
   /**
    * 构造函数
@@ -356,6 +363,9 @@ export class EvaluationMessageStore {
   /**
    * 获取消息列表（流式读取）
    * 
+   * 使用 readline + for await 模式，不加载全部消息到内存。
+   * 如果指定 nodeId，使用 nodeIdRanges 只读取指定范围行。
+   * 
    * @param options 查询选项
    * @returns 消息列表和分页信息
    */
@@ -365,66 +375,241 @@ export class EvaluationMessageStore {
     offset?: number;
     limit?: number;
   }): Promise<EvaluationMessagesResult> {
-    // TODO: 实现流式读取，参考 session-manager.ts:424-445
     const offset = options?.offset ?? 0;
     const limit = options?.limit ?? 100;
     
-    // 读取索引获取总数
+    // 检查文件是否存在
+    try {
+      await fs.access(this.messagesPath);
+    } catch {
+      return {
+        messages: [],
+        total: 0,
+        hasMore: false,
+        offset,
+        limit,
+      };
+    }
+    
+    // 读取索引获取 nodeIdRanges
     const indexContent = await fs.readFile(this.indexPath, 'utf-8');
     const index: MessageIndex = JSON.parse(indexContent);
     
-    // 如果指定 nodeId，使用 nodeIdRanges 优化
-    if (options?.nodeId && index.nodeIdRanges[options.nodeId]) {
-      const range = index.nodeIdRanges[options.nodeId];
-      // TODO: 实现范围读取优化
+    // 如果指定 nodeId 且存在范围，使用范围优化
+    const useRangeOptimization = options?.nodeId && index.nodeIdRanges[options.nodeId];
+    
+    try {
+      const fileStream = await fs.open(this.messagesPath, 'r');
+      const rl = readline.createInterface({
+        input: fileStream.createReadStream(),
+        crlfDelay: Infinity,
+      });
+      
+      const messages: EvaluationMessage[] = [];
+      let lineIndex = 0;
+      let totalFiltered = 0;
+      
+      // 获取范围（如果使用范围优化）
+      const range = useRangeOptimization 
+        ? index.nodeIdRanges[options!.nodeId!] 
+        : null;
+      
+      // 构建缓存（首次读取时）
+      if (!this.cacheBuilt) {
+        this.messageIdCache.clear();
+      }
+      
+      for await (const line of rl) {
+        if (!line.trim()) {
+          lineIndex++;
+          continue;
+        }
+        
+        // 范围优化：跳过不在范围内的行
+        if (range && (lineIndex < range.start || lineIndex > range.end)) {
+          lineIndex++;
+          continue;
+        }
+        
+        try {
+          const msg: EvaluationMessage = JSON.parse(line);
+          
+          // 构建缓存
+          if (!this.cacheBuilt) {
+            this.messageIdCache.set(msg.id, lineIndex);
+          }
+          
+          // 过滤条件
+          let matches = true;
+          
+          if (options?.nodeId && msg.nodeId !== options.nodeId) {
+            matches = false;
+          }
+          
+          if (options?.agentCallMsgId && msg.agentCallMsgId !== options.agentCallMsgId) {
+            matches = false;
+          }
+          
+          if (matches) {
+            totalFiltered++;
+            
+            // 分页：只收集范围内的消息
+            if (totalFiltered > offset && totalFiltered <= offset + limit) {
+              messages.push(msg);
+            }
+          }
+        } catch (parseError) {
+          // 跳过格式错误的行
+        }
+        
+        lineIndex++;
+      }
+      
+      // 标记缓存已构建
+      this.cacheBuilt = true;
+      
+      await fileStream.close();
+      
+      return {
+        messages,
+        total: totalFiltered,
+        hasMore: totalFiltered > offset + limit,
+        offset,
+        limit,
+      };
+    } catch (error) {
+      console.error('Error reading messages:', error);
+      return {
+        messages: [],
+        total: 0,
+        hasMore: false,
+        offset,
+        limit,
+      };
     }
-    
-    // 临时实现：读取全部消息后过滤
-    const messagesContent = await fs.readFile(this.messagesPath, 'utf-8');
-    const lines = messagesContent.trim().split('\n').filter(line => line.length > 0);
-    
-    let messages: EvaluationMessage[] = lines.map(line => JSON.parse(line));
-    
-    // 过滤
-    if (options?.nodeId) {
-      messages = messages.filter(msg => msg.nodeId === options.nodeId);
-    }
-    if (options?.agentCallMsgId) {
-      messages = messages.filter(msg => msg.agentCallMsgId === options.agentCallMsgId);
-    }
-    
-    // 分页
-    const total = messages.length;
-    const paginatedMessages = messages.slice(offset, offset + limit);
-    
-    return {
-      messages: paginatedMessages,
-      total,
-      hasMore: offset + limit < total,
-      offset,
-      limit,
-    };
   }
 
   /**
-   * 获取单条消息
+   * 获取单条消息（使用缓存定位优化）
+   * 
+   * 如果缓存已构建，直接定位到指定行读取。
+   * 如果缓存未构建，先构建缓存再查找。
    * 
    * @param messageId 消息 ID
    * @returns 消息或 null
    */
   async getMessageById(messageId: string): Promise<EvaluationMessage | null> {
-    // TODO: 实现缓存定位优化
-    const messagesContent = await fs.readFile(this.messagesPath, 'utf-8');
-    const lines = messagesContent.trim().split('\n').filter(line => line.length > 0);
-    
-    for (const line of lines) {
-      const message: EvaluationMessage = JSON.parse(line);
-      if (message.id === messageId) {
-        return message;
-      }
+    // 检查文件是否存在
+    try {
+      await fs.access(this.messagesPath);
+    } catch {
+      return null;
     }
     
-    return null;
+    // 如果缓存已构建且有该消息的索引，直接定位读取
+    if (this.cacheBuilt && this.messageIdCache.has(messageId)) {
+      const lineIndex = this.messageIdCache.get(messageId)!;
+      return this.readMessageAtLine(lineIndex);
+    }
+    
+    // 缓存未构建，需要流式查找并构建缓存
+    try {
+      const fileStream = await fs.open(this.messagesPath, 'r');
+      const rl = readline.createInterface({
+        input: fileStream.createReadStream(),
+        crlfDelay: Infinity,
+      });
+      
+      let lineIndex = 0;
+      let foundMessage: EvaluationMessage | null = null;
+      
+      // 清空并重建缓存
+      this.messageIdCache.clear();
+      
+      for await (const line of rl) {
+        if (!line.trim()) {
+          lineIndex++;
+          continue;
+        }
+        
+        try {
+          const msg: EvaluationMessage = JSON.parse(line);
+          
+          // 添加到缓存
+          this.messageIdCache.set(msg.id, lineIndex);
+          
+          // 检查是否是目标消息
+          if (msg.id === messageId) {
+            foundMessage = msg;
+          }
+        } catch (parseError) {
+          // 跳过格式错误的行
+        }
+        
+        lineIndex++;
+      }
+      
+      // 标记缓存已构建
+      this.cacheBuilt = true;
+      
+      await fileStream.close();
+      
+      return foundMessage;
+    } catch (error) {
+      console.error('Error finding message by ID:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * 读取指定行的消息（内部方法）
+   * 
+   * @param lineIndex 行索引（0-based）
+   * @returns 消息或 null
+   */
+  private async readMessageAtLine(lineIndex: number): Promise<EvaluationMessage | null> {
+    try {
+      const fileStream = await fs.open(this.messagesPath, 'r');
+      const rl = readline.createInterface({
+        input: fileStream.createReadStream(),
+        crlfDelay: Infinity,
+      });
+      
+      let currentIndex = 0;
+      let foundMessage: EvaluationMessage | null = null;
+      
+      for await (const line of rl) {
+        if (currentIndex === lineIndex && line.trim()) {
+          try {
+            foundMessage = JSON.parse(line);
+            break; // 找到目标行，提前退出
+          } catch (parseError) {
+            // 格式错误
+          }
+        }
+        currentIndex++;
+        
+        // 如果已经超过目标行，提前退出
+        if (currentIndex > lineIndex) {
+          break;
+        }
+      }
+      
+      await fileStream.close();
+      
+      return foundMessage;
+    } catch (error) {
+      console.error('Error reading message at line:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * 清除缓存（用于重新加载）
+   */
+  clearCache(): void {
+    this.messageIdCache.clear();
+    this.cacheBuilt = false;
   }
 
   /**
