@@ -1,6 +1,6 @@
 // src/services/evaluation/caller.ts
 
-import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService } from '@/services/ai';
+import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService, AppMcpServerConfig } from '@/services/ai';
 import { ConversationHistory } from './history';
 import { PromptBuilder, PromptContext } from './prompt';
 
@@ -12,6 +12,7 @@ export interface EvaluationConfig {
   maxTokens?: number;
   cwd?: string;
   allowedTools?: string[]; // 可选：允许的工具列表
+  mcpServers?: AppMcpServerConfig[]; // MCP 服务器配置
 }
 
 export interface EvaluationCallbacks {
@@ -43,7 +44,9 @@ export class EvaluationCaller {
       model: config.model,
       maxTokens: config.maxTokens,
       cwd: config.cwd,
+      baseUrl: config.baseUrl,
       allowedTools,
+      mcpServers: config.mcpServers,  // MCP 服务器配置
     });
     this.history = new ConversationHistory();
     this.promptBuilder = new PromptBuilder();
