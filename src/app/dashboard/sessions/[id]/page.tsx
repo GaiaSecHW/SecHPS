@@ -165,6 +165,15 @@ function SessionDetailContent({
 
   // 用 ref 持久保存子任务的 startedAt，防止轮询覆盖
   const childStartedAtRef = useRef<Record<string, string>>({});
+  
+  // 节点数据轮询控制 - 针对运行中的节点
+  const nodePollingRef = useRef<{
+    intervalId: NodeJS.Timeout | null;
+    nodeId: string | null;
+  }>({ intervalId: null, nodeId: null });
+  
+  // 已加载完成的节点ID集合（不再重复加载）
+  const loadedCompletedNodesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!evaluationId) return;
@@ -230,20 +239,27 @@ function SessionDetailContent({
     // 多 Agent 模式使用 evaluationId，旧模式使用 opencodeSessionId
     if (!evaluationId) return;
 
-    // 轮询逻辑：每 5 秒轮询一次
+    // 主轮询逻辑：只在评估运行时轮询，完成后停止
     let isPolling = true;
     
     const pollLoop = async () => {
       while (isPolling) {
-        // 每个 fetch 独立执行，不互相影响
-        fetchEvaluation().catch(e => console.error('[Poll] fetchEvaluation error:', e));
-        fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
-        fetchMessages().catch(e => console.error('[Poll] fetchMessages error:', e));
-        fetchTodos().catch(e => console.error('[Poll] fetchTodos error:', e));
-        fetchChildrenSessions().catch(e => console.error('[Poll] fetchChildrenSessions error:', e));
+        // 先获取评估状态
+        const evalData = await fetchEvaluation();
         
-        // 等待 5 秒后继续
-        await new Promise(r => setTimeout(r, 5000));
+        // 如果评估已完成，停止轮询
+        if (evalData?.status === 'completed' || evalData?.status === 'cancelled' || evalData?.status === 'failed') {
+          console.log('[Poll] Evaluation completed, stopping polling');
+          // 最后一次完整刷新
+          fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
+          break;
+        }
+        
+        // 评估仍在运行，继续轮询节点状态
+        fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
+        
+        // 等待 10 秒后继续
+        await new Promise(r => setTimeout(r, 10000));
       }
     };
     
@@ -252,7 +268,7 @@ function SessionDetailContent({
     return () => {
       isPolling = false;
     };
-  }, [evaluationId]); // 只依赖 evaluationId，不依赖 evaluation?.status
+  }, [evaluationId]);
 
   const fetchEvaluation = async (): Promise<any> => {
     if (!evaluationId) return null;
@@ -368,9 +384,25 @@ function SessionDetailContent({
     }
   };
 
-  // 归一化节点数据加载 - 一次性获取所有数据（含子Agent消息）
-  const fetchNodeData = async (nodeId: string) => {
+  // 归一化节点数据加载 - 根据节点状态智能加载
+  const fetchNodeData = async (nodeId: string, nodeStatus?: string) => {
     if (!evaluationId) return;
+
+    // 如果节点是 pending 状态，不加载任何数据
+    if (nodeStatus === 'pending') {
+      console.log('[NodeData] Node is pending, skip loading');
+      setNodeMessages([]);
+      setTodos([]);
+      setChildrenSessions([]);
+      setPreloadedAgentMessages({});
+      return;
+    }
+
+    // 如果节点已完成且已加载过，跳过重复加载
+    if (nodeStatus === 'completed' && loadedCompletedNodesRef.current.has(nodeId)) {
+      console.log('[NodeData] Node already loaded (completed), skip');
+      return;
+    }
 
     try {
       const token = localStorage.getItem('token');
@@ -396,8 +428,12 @@ function SessionDetailContent({
       setNodeMessages(data.messages || []);
       setTodos(data.todos || []);
       setChildrenSessions(data.children || []);
-      // 缓存预加载的子Agent消息
       setPreloadedAgentMessages(data.agentMessages || {});
+      
+      // 如果节点已完成，标记为已加载（不再重复）
+      if (nodeStatus === 'completed') {
+        loadedCompletedNodesRef.current.add(nodeId);
+      }
     } catch (err) {
       console.error('[NodeData] Error:', err);
       setNodeMessages([]);
@@ -406,8 +442,32 @@ function SessionDetailContent({
       setPreloadedAgentMessages({});
     }
   };
+  
+  // 启动节点级轮询（仅对运行中的节点）
+  const startNodePolling = (nodeId: string) => {
+    // 先停止之前的轮询
+    stopNodePolling();
+    
+    nodePollingRef.current.nodeId = nodeId;
+    console.log('[NodePoll] Started for node:', nodeId);
+    
+    nodePollingRef.current.intervalId = setInterval(() => {
+      console.log('[NodePoll] Refreshing node data...');
+      fetchNodeData(nodeId, 'running');
+    }, 10000); // 每 10 秒刷新
+  };
+  
+  // 停止节点级轮询
+  const stopNodePolling = () => {
+    if (nodePollingRef.current.intervalId) {
+      clearInterval(nodePollingRef.current.intervalId);
+      nodePollingRef.current.intervalId = null;
+      console.log('[NodePoll] Stopped');
+    }
+    nodePollingRef.current.nodeId = null;
+  };
 
-  // 处理节点点击 - 使用归一化API一次性加载三类数据
+  // 处理节点点击 - 根据节点状态智能加载
   const handleNodeClick = async (nodeId: string) => {
     if (selectedNodeId === nodeId) {
       // 取消选择
@@ -415,20 +475,46 @@ function SessionDetailContent({
       setNodeMessages([]);
       setTodos([]);
       setChildrenSessions([]);
+      setPreloadedAgentMessages({});
+      stopNodePolling();
     } else {
-      // 选择节点，一次性加载三类数据
-      setSelectedNodeId(nodeId);
-      setLoadingNodeMessages(true);
+      // 获取节点状态
+      const node = workflowNodes.find((n: any) => n.id === nodeId);
+      const nodeStatus = node?.status || 'pending';
       
-      try {
-        await fetchNodeData(nodeId);
-      } catch (e) {
-        // 忽略错误
-      } finally {
+      // 选择节点
+      setSelectedNodeId(nodeId);
+      
+      // 根据状态决定加载策略
+      if (nodeStatus === 'pending') {
+        // 等待状态：不加载
         setLoadingNodeMessages(false);
+        setNodeMessages([]);
+        setTodos([]);
+        setChildrenSessions([]);
+        setPreloadedAgentMessages({});
+      } else if (nodeStatus === 'running') {
+        // 运行中：加载一次 + 启动轮询
+        setLoadingNodeMessages(true);
+        await fetchNodeData(nodeId, 'running');
+        setLoadingNodeMessages(false);
+        startNodePolling(nodeId);
+      } else {
+        // 已完成/失败：只加载一次，不轮询
+        setLoadingNodeMessages(true);
+        await fetchNodeData(nodeId, nodeStatus);
+        setLoadingNodeMessages(false);
+        stopNodePolling();
       }
     }
   };
+  
+  // 清理：组件卸载或切换节点时停止轮询
+  useEffect(() => {
+    return () => {
+      stopNodePolling();
+    };
+  }, []);
 
   // 获取工作流节点列表（合并配置和执行状态）
   const fetchWorkflowNodes = async () => {
