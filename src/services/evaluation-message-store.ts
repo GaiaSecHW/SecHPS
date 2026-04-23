@@ -252,17 +252,24 @@ export class EvaluationMessageStore {
   /**
    * 初始化会话存储
    * 
-   * 创建目录和初始文件
+   * 创建目录和初始文件，并执行崩溃恢复校验
    */
   async initialize(): Promise<void> {
     // 创建会话目录
     await fs.mkdir(this.sessionDir, { recursive: true });
     
     // 创建空的 messages.jsonl（如果不存在）
+    let messagesFileExists = false;
     try {
       await fs.access(this.messagesPath);
+      messagesFileExists = true;
     } catch {
       await fs.writeFile(this.messagesPath, '', 'utf-8');
+    }
+    
+    // 崩溃恢复：校验最后一行完整性
+    if (messagesFileExists) {
+      await this.validateAndRepairLastLine();
     }
     
     // 创建初始 index.json（如果不存在）
@@ -302,6 +309,183 @@ export class EvaluationMessageStore {
         JSON.stringify(initialSummary, null, 2),
         'utf-8'
       );
+    }
+  }
+
+  /**
+   * 崩溃恢复：校验最后一行完整性
+   * 
+   * 当系统崩溃时，最后一行可能：
+   * - 部分写入（不完整 JSON）
+   * - 完全缺失（写入未完成）
+   * 
+   * 此方法会：
+   * 1. 读取文件末尾内容
+   * 2. 找到最后一个完整的换行符
+   3. 尝试解析最后一行 JSON
+   * 4. 如果解析失败，截断损坏的行
+   * 5. 更新 index.json 的 messageCount
+   */
+  private async validateAndRepairLastLine(): Promise<void> {
+    try {
+      // 获取文件大小
+      const stats = await fs.stat(this.messagesPath);
+      const fileSize = stats.size;
+      
+      // 空文件无需校验
+      if (fileSize === 0) {
+        return;
+      }
+      
+      // 读取文件末尾内容（最多 10KB，足够包含最后几行）
+      const readSize = Math.min(fileSize, 10240);
+      const readOffset = fileSize - readSize;
+      
+      const fileHandle = await fs.open(this.messagesPath, 'r');
+      const buffer = Buffer.alloc(readSize);
+      await fileHandle.read(buffer, 0, readSize, readOffset);
+      await fileHandle.close();
+      
+      const tailContent = buffer.toString('utf-8');
+      
+      // 找到最后一个完整的换行符位置
+      const lastNewlineIndex = tailContent.lastIndexOf('\n');
+      
+      // 如果没有换行符，说明文件可能损坏（没有完整行）
+      if (lastNewlineIndex === -1) {
+        // 整个文件内容可能是不完整的 JSON，截断整个文件
+        await fs.writeFile(this.messagesPath, '', 'utf-8');
+        await this.rebuildIndex();
+        console.warn(`[Crash Recovery] Truncated entire corrupted file: ${this.messagesPath}`);
+        return;
+      }
+      
+      // 提取最后一行内容（换行符之后的内容）
+      const lastLineContent = tailContent.substring(lastNewlineIndex + 1).trim();
+      
+      // 如果最后一行是空的（文件以换行符结尾），无需修复
+      if (lastLineContent === '') {
+        return;
+      }
+      
+      // 尝试解析最后一行 JSON
+      try {
+        JSON.parse(lastLineContent);
+        // 解析成功，最后一行完整，无需修复
+      } catch (parseError) {
+        // 解析失败，最后一行损坏，需要截断
+        const truncatePosition = readOffset + lastNewlineIndex + 1;
+        
+        // 截断文件到最后一个完整行
+        await fs.truncate(this.messagesPath, truncatePosition);
+        
+        // 重建索引
+        await this.rebuildIndex();
+        
+        console.warn(`[Crash Recovery] Truncated corrupted last line in: ${this.messagesPath}`);
+      }
+    } catch (error) {
+      console.error('[Crash Recovery] Error validating last line:', error);
+      // 校验失败时，尝试重建索引作为安全措施
+      await this.rebuildIndex();
+    }
+  }
+
+  /**
+   * 重建索引文件
+   * 
+   * 重新计算 messageCount 和 nodeIdRanges
+   */
+  private async rebuildIndex(): Promise<void> {
+    try {
+      // 检查 messages.jsonl 是否存在
+      try {
+        await fs.access(this.messagesPath);
+      } catch {
+        // 文件不存在，创建空索引
+        const emptyIndex: MessageIndex = {
+          sessionId: this.sessionId,
+          projectId: this.projectId,
+          messageCount: 0,
+          nodeIdRanges: {},
+          lastActivity: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+        };
+        await fs.writeFile(this.indexPath, JSON.stringify(emptyIndex, null, 2), 'utf-8');
+        return;
+      }
+      
+      // 流式读取所有有效行
+      const fileStream = await fs.open(this.messagesPath, 'r');
+      const rl = readline.createInterface({
+        input: fileStream.createReadStream(),
+        crlfDelay: Infinity,
+      });
+      
+      let validLineCount = 0;
+      const nodeIdRanges: Record<string, { start: number; end: number }> = {};
+      let lastActivity = new Date().toISOString();
+      
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        
+        try {
+          const msg: EvaluationMessage = JSON.parse(line);
+          validLineCount++;
+          
+          // 更新 nodeIdRanges
+          const nodeId = msg.nodeId;
+          if (!nodeIdRanges[nodeId]) {
+            nodeIdRanges[nodeId] = { start: validLineCount - 1, end: validLineCount - 1 };
+          } else {
+            nodeIdRanges[nodeId].end = validLineCount - 1;
+          }
+          
+          // 更新最后活动时间
+          if (msg.timestamp > lastActivity) {
+            lastActivity = msg.timestamp;
+          }
+        } catch (parseError) {
+          // 跳过无效行
+        }
+      }
+      
+      await fileStream.close();
+      
+      // 读取现有索引获取 createdAt
+      let createdAt = new Date().toISOString();
+      try {
+        const existingIndexContent = await fs.readFile(this.indexPath, 'utf-8');
+        const existingIndex: MessageIndex = JSON.parse(existingIndexContent);
+        createdAt = existingIndex.createdAt;
+      } catch {
+        // 索引文件不存在或损坏，使用当前时间
+      }
+      
+      // 写入新索引
+      const newIndex: MessageIndex = {
+        sessionId: this.sessionId,
+        projectId: this.projectId,
+        messageCount: validLineCount,
+        nodeIdRanges,
+        lastActivity,
+        createdAt,
+      };
+      
+      await fs.writeFile(this.indexPath, JSON.stringify(newIndex, null, 2), 'utf-8');
+      
+      // 同步更新 summary.json 的 messageCount
+      try {
+        const summaryContent = await fs.readFile(this.summaryPath, 'utf-8');
+        const summary: MessageSummary = JSON.parse(summaryContent);
+        summary.messageCount = validLineCount;
+        summary.updatedAt = new Date().toISOString();
+        await fs.writeFile(this.summaryPath, JSON.stringify(summary, null, 2), 'utf-8');
+      } catch {
+        // summary.json 不存在或损坏，忽略
+      }
+    } catch (error) {
+      console.error('[Crash Recovery] Error rebuilding index:', error);
     }
   }
 
