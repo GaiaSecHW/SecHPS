@@ -175,7 +175,10 @@ export class ClaudeAgentService {
       abortController: this.abortController,
       env,
       // 设置源（加载 CLAUDE.md 和 MCP 配置）
-      settingSources: this.config.settingSources || ['project', 'user'],
+      // 只加载 project 配置，避免 user 配置干扰认证
+      // 'project' 加载项目目录下的 CLAUDE.md 和 .claude/settings.json
+      // 'user' 加载 ~/.claude/ 配置（可能导致认证冲突）
+      settingSources: this.config.settingSources || ['project'],
       
       // 权限模式
       permissionMode: this.config.permissionMode,
