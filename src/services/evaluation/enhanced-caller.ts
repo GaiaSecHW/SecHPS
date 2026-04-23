@@ -55,6 +55,7 @@ export interface EnhancedEvaluationConfig {
   resumeSession?: string;
   temperature?: number;  // 模型温度，默认 0.3
   workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id 到 NodeExecution 表
+  allowedTools?: string[];  // 允许的工具列表（包含注册的 Skills）
 }
 
 export interface EnhancedEvaluationCallbacks {
@@ -130,7 +131,7 @@ export class EnhancedEvaluationCaller {
       maxTokens: config.maxTokens,
       cwd: config.cwd,
       baseUrl: agentBaseUrl,
-      allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
+      allowedTools: config.allowedTools || ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'],
       mcpServers: config.mcpServers,
       toolPermissions: config.toolPermissions,
       systemPrompt: config.systemPrompt,
@@ -144,6 +145,7 @@ export class EnhancedEvaluationCaller {
     logInfo(`Base URL: ${agentBaseUrl}`);
     logInfo(`权限模式: ${config.permissionMode}`);
     logInfo(`允许跳过权限: ${config.allowDangerouslySkipPermissions}`);
+    logInfo(`allowedTools: ${config.allowedTools?.length || 8} tools`);
   }
 
   /**

@@ -635,6 +635,7 @@ export function createRalphLoopAgent(
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
     allowDangerouslySkipPermissions?: boolean;
     workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id
+    allowedTools?: string[];  // 允许的工具列表（包含注册的 Skills）
   }
 ): RalphLoopAgent {
   // 解析模型名称
@@ -667,6 +668,7 @@ export function createRalphLoopAgent(
     permissionMode: sdkOptions?.permissionMode,
     allowDangerouslySkipPermissions: sdkOptions?.allowDangerouslySkipPermissions,
     workflowNodeId: sdkOptions?.workflowNodeId,  // 传递 workflowNodeId
+    allowedTools: sdkOptions?.allowedTools,  // 传递 allowedTools（包含注册的 Skills）
     // Ralph Loop 配置
     ...ralphConfig,
   });
