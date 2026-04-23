@@ -55,6 +55,15 @@ export class UnifiedWorkflowExecutionEngine {
   /** 每个节点的 Token 使用量（避免重复累加） */
   private nodeTokens: Record<number, { input: number; output: number }> = {};
   
+  /** Token 更新待处理（debounce） */
+  private tokenUpdatePending: Record<string, { input: number; output: number; modelName: string; modelConfigId: string }> = {};
+  
+  /** Token 更新定时器 */
+  private tokenUpdateTimer: NodeJS.Timeout | null = null;
+  
+  /** Token 更新间隔（毫秒）- 前端轮询5秒，我们2秒更新一次即可 */
+  private TOKEN_UPDATE_INTERVAL = 2000;
+  
   /** 执行开始时间 */
   private startTime: Date = new Date();
   
@@ -249,6 +258,9 @@ export class UnifiedWorkflowExecutionEngine {
     const modelConfig = await this.getModelConfigForRole(node.roleId ?? undefined);
     console.log(`[executeNode] 使用模型: ${modelConfig.name} (${modelConfig.providerType})`);
 
+    // 创建节点执行记录（status='running'）- 让 token 更新能找到记录
+    await this.createNodeExecutionRecord(node, nodeIndex, modelConfig);
+
     // 重试机制
     const maxRetries = this.config.maxRetries;
     const retryDelayMs = this.config.retryDelayMs;
@@ -393,6 +405,9 @@ export class UnifiedWorkflowExecutionEngine {
                 .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
               this.cumulativeTokens.output = Object.values(this.nodeTokens)
                 .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
+              
+              // 实时更新 NodeExecution 表的 Token（前端轮询 nodes API 获取）
+              this.updateNodeExecutionTokensDebounced(nodeId, usage.inputTokens || 0, usage.outputTokens || 0, modelConfig);
               
               // 实时推送 Token 使用量
               this.callbacks.onTokenUsage({
@@ -1263,6 +1278,151 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
    */
   private async sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Debounce 更新 NodeExecution Token（避免频繁写入数据库）
+   * 
+   * 前端每5秒轮询 nodes API，我们每2秒更新一次即可
+   */
+  private updateNodeExecutionTokensDebounced(
+    nodeId: string,
+    inputTokens: number,
+    outputTokens: number,
+    modelConfig: ModelConfigForExecution
+  ): void {
+    // 记录待更新的 token 数据
+    this.tokenUpdatePending[nodeId] = {
+      input: inputTokens,
+      output: outputTokens,
+      modelName: modelConfig.name,
+      modelConfigId: modelConfig.id,
+    };
+    
+    // 如果已有定时器，不重复设置
+    if (this.tokenUpdateTimer) {
+      return;
+    }
+    
+    // 设置定时器，延迟更新
+    this.tokenUpdateTimer = setTimeout(async () => {
+      this.tokenUpdateTimer = null;
+      
+      // 执行所有待更新的 token
+      const pending = { ...this.tokenUpdatePending };
+      this.tokenUpdatePending = {};
+      
+      for (const [nodeId, data] of Object.entries(pending)) {
+        try {
+          await this.updateNodeExecutionTokens(nodeId, data.input, data.output, data.modelName, data.modelConfigId);
+        } catch (e) {
+          console.error(`[updateNodeExecutionTokensDebounced] 更新 ${nodeId} 失败:`, e);
+        }
+      }
+    }, this.TOKEN_UPDATE_INTERVAL);
+  }
+
+  /**
+   * 创建节点执行记录（节点开始时）
+   * 
+   * 让 token 更新能找到记录进行更新
+   */
+  private async createNodeExecutionRecord(
+    node: UnifiedNodeDefinition,
+    nodeIndex: number,
+    modelConfig: ModelConfigForExecution
+  ): Promise<void> {
+    try {
+      // 检查是否已存在
+      const existing = await prisma.nodeExecution.findUnique({
+        where: {
+          evaluationSessionId_workflowNodeId: {
+            evaluationSessionId: this.config.evaluationSessionId,
+            workflowNodeId: node.id,
+          },
+        },
+      });
+      
+      if (existing) {
+        // 已存在，更新状态为 running
+        await prisma.nodeExecution.update({
+          where: { id: existing.id },
+          data: {
+            status: 'running',
+            startedAt: new Date(),
+            updatedAt: new Date(),
+          },
+        });
+        console.log(`[createNodeExecutionRecord] 更新节点记录: ${node.label}`);
+      } else {
+        // 创建新记录
+        await prisma.nodeExecution.create({
+          data: {
+            id: `node-exec-${this.config.evaluationSessionId}-${nodeIndex}`,
+            evaluationSessionId: this.config.evaluationSessionId,
+            workflowNodeId: node.id,
+            nodeLabel: node.label,
+            nodeType: node.fsmPhase ? 'fsm_phase' : (node.type || 'custom'),
+            status: 'running',
+            startedAt: new Date(),
+            order: nodeIndex,
+            modelConfigId: modelConfig.id,
+            modelName: modelConfig.name,
+            roleId: node.roleId ?? undefined,
+            inputTokens: 0,
+            outputTokens: 0,
+          },
+        });
+        console.log(`[createNodeExecutionRecord] 创建节点记录: ${node.label}`);
+      }
+    } catch (error) {
+      console.error(`[createNodeExecutionRecord] 创建失败:`, error);
+      // 不阻塞执行
+    }
+  }
+
+  /**
+   * 实时更新 NodeExecution 表的 Token 字段
+   * 
+   * 让前端轮询 nodes API 能获取到执行中的节点 token
+   */
+  private async updateNodeExecutionTokens(
+    nodeId: string,
+    inputTokens: number,
+    outputTokens: number,
+    modelName: string,
+    modelConfigId: string
+  ): Promise<void> {
+    try {
+      // 查找现有记录
+      const existing = await prisma.nodeExecution.findUnique({
+        where: {
+          evaluationSessionId_workflowNodeId: {
+            evaluationSessionId: this.config.evaluationSessionId,
+            workflowNodeId: nodeId,
+          },
+        },
+      });
+      
+      if (existing) {
+        // 更新现有记录的 token 字段
+        await prisma.nodeExecution.update({
+          where: { id: existing.id },
+          data: {
+            inputTokens,
+            outputTokens,
+            modelName,
+            modelConfigId,
+            updatedAt: new Date(),
+          },
+        });
+        console.log(`[updateNodeExecutionTokens] 更新 ${nodeId}: input=${inputTokens}, output=${outputTokens}`);
+      }
+      // 如果不存在，说明节点记录还没创建，等节点开始时创建
+    } catch (error) {
+      console.error(`[updateNodeExecutionTokens] 更新失败:`, error);
+      // 不抛出错误，不阻塞执行
+    }
   }
 }
 
