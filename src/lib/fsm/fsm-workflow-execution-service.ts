@@ -18,8 +18,10 @@ import type {
   NodeExecutionResult,
   WorkflowExecutionResult,
   ModelConfigForExecution,
+  McpServerConfigForExecution,
 } from '@/lib/workflow/types';
 import { loadFSMSkill } from './fsm-skill-loader';
+import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import { generateIndexedId } from '@/lib/id-generator';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import type { FSMTemplate } from '@prisma/client';
@@ -49,6 +51,8 @@ export interface FSMExecutionConfig {
   };
   systemPrompt?: string;  // 系统提示词
   roleModels?: { roleId: string; modelId: string }[];  // 角色模型配置
+  userId?: string;  // 用户 ID（用于加载 MCP 配置）
+  mcpServers?: McpServerConfigForExecution[];  // MCP 服务器配置（可选，若传入则使用）
 }
 
 // FSM 执行回调
@@ -202,8 +206,8 @@ export class FSMWorkflowExecutionService {
       // 3. 转换 FSM 节点为 UnifiedNodeDefinition
       const unifiedNodes = this.convertFSMNodesToUnified(nodes);
 
-      // 4. 创建统一执行引擎配置
-      const engineConfig = this.createUnifiedEngineConfig();
+      // 4. 创建统一执行引擎配置（异步加载 MCP）
+      const engineConfig = await this.createUnifiedEngineConfig();
 
       // 5. 创建回调适配器
       const engineCallbacks = this.createEngineCallbacks();
@@ -313,9 +317,9 @@ export class FSMWorkflowExecutionService {
   }
 
 /**
-    * 创建统一执行引擎配置
-    */
-  private createUnifiedEngineConfig(): UnifiedExecutionConfig {
+   * 创建统一执行引擎配置
+   */
+  private async createUnifiedEngineConfig(): Promise<UnifiedExecutionConfig> {
     // FSM 使用父模型配置，所有节点共享同一模型
     // modelConfig 只包含基础字段，需要从 models 解析模型名
     const defaultModelConfig: ModelConfigForExecution = {
@@ -326,6 +330,13 @@ export class FSMWorkflowExecutionService {
       apiBaseUrl: this.config.modelConfig.apiBaseUrl,
       models: this.config.modelConfig.models,
     };
+
+    // 加载 MCP 配置：优先使用传入的配置，否则从数据库加载
+    let mcpServers = this.config.mcpServers;
+    if (!mcpServers && this.config.userId) {
+      mcpServers = await loadMcpServersForProject(this.config.projectId, this.config.userId);
+      console.log(`[FSM] 从数据库加载 MCP 配置: ${mcpServers?.length || 0} 个`);
+    }
 
     return {
       evaluationSessionId: this.config.evaluationSessionId,
@@ -338,6 +349,7 @@ export class FSMWorkflowExecutionService {
       userPrompt: this.fsmTemplate?.description || '',
       roleModels: undefined,  // FSM 不使用角色模型映射，所有节点使用同一父模型
       defaultModelConfig,
+      mcpServers,  // MCP 服务器配置
       maxIterationsPerNode: this.config.maxIterationsPerPhase,
       maxRetries: 15, // FSM 默认重试次数
       retryDelayMs: 60000, // 1 分钟重试间隔

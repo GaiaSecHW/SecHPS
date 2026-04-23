@@ -8,7 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { createRalphLoopAgent, RalphLoopAgent } from '@/services/evaluation';
 import { generateId } from '@/lib/id-generator';
-import { EvaluationMessageStore, createEvaluationMessageStore } from '@/services/evaluation-message-store';
+import { createNodeStreamStore, NodeStreamStore, StreamEvent } from '@/services/node-stream-store';
 import { parseAndSaveVulnerabilities } from '@/lib/vulnerability/parser';
 import type {
   UnifiedNodeDefinition,
@@ -68,15 +68,18 @@ export class UnifiedWorkflowExecutionEngine {
   /** 执行开始时间 */
   private startTime: Date = new Date();
   
-  /** JSONL 消息存储（双写过渡） */
-  private messageStore: EvaluationMessageStore | null = null;
+  /** 节点流存储（一个 SSE 流对应一个文件） */
+  private nodeStreamStore: NodeStreamStore;
+  
+  /** 当前活跃的 agentId（用于子Agent流） */
+  private activeAgentId: string | null = null;
 
   constructor(config: UnifiedExecutionConfig, callbacks: UnifiedExecutionCallbacks) {
     this.config = config;
     this.callbacks = callbacks;
     
-    // 初始化 JSONL 消息存储（双写过渡）
-    this.messageStore = createEvaluationMessageStore(config.projectId, config.evaluationSessionId);
+    // 初始化节点流存储
+    this.nodeStreamStore = createNodeStreamStore(config.projectId, config.evaluationSessionId);
   }
 
   /**
@@ -148,17 +151,6 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     console.log(`[UnifiedEngine] 项目: ${this.config.projectName}`);
     console.log(`[UnifiedEngine] 节点数量: ${this.nodes.length}`);
     
-    // 初始化 JSONL 消息存储
-    if (this.messageStore) {
-      try {
-        await this.messageStore.initialize();
-        console.log(`[UnifiedEngine] JSONL 消息存储初始化成功`);
-      } catch (error) {
-        console.error(`[UnifiedEngine] JSONL 消息存储初始化失败:`, error);
-        // 不阻塞主流程
-      }
-    }
-
     // 1. 更新数据库状态为 'running'
     await this.updateSessionStatus('running', '工作流开始执行');
 
@@ -286,9 +278,15 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     console.log(`[executeNode] nodeId: ${nodeId}`);
     console.log(`[executeNode] roleId: ${node.roleId || 'default'}`);
     console.log(`[executeNode] skillPath: ${node.skillPath || 'none'}`);
+    console.log(`[executeNode] node.skills: ${JSON.stringify(node.skills)}`);
+    console.log(`[executeNode] node.vulnerabilityCategories: ${JSON.stringify(node.vulnerabilityCategories)}`);
 
     // 调用节点开始回调
     await this.callbacks.onNodeStart(nodeIndex, nodeId, nodeName);
+
+    // 初始化节点目录（创建 node-{nodeId}/ 和 agents/ 目录）
+    await this.nodeStreamStore.initNodeDir(nodeId);
+    console.log(`[executeNode] 初始化节点目录: node-${nodeId}`);
 
     // 获取模型配置
     const modelConfig = await this.getModelConfigForRole(node.roleId ?? undefined);
@@ -331,12 +329,14 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         // 构建节点提示词
         const prompt = await this.buildNodePrompt(nodeIndex, node);
 
-        // 保存用户消息（提示词）到数据库
-        await this.saveNodeMessage(nodeId, 'user', prompt);
+        // 保存用户消息（提示词）到 stream.jsonl
+        this.nodeStreamStore.appendToStream(nodeId, {
+          event: 'user',
+          data: { text: prompt },
+        }).catch(err => console.error('[executeNode] 保存用户消息失败:', err));
 
         // 累积助手响应文本（用于最终保存）
         let accumulatedAssistantText = '';
-        let lastSavedLength = 0;  // 记录上次保存的长度
 
         // 执行节点
         const result = await agent.loop({
@@ -349,88 +349,92 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
             initialMessage: prompt,
             files: [],
           },
-          callbacks: {
+callbacks: {
             onChunk: (text) => {
-              // 日志：打印 onChunk 被调用
-              console.log(`[executeNode] 📝 onChunk 被调用, 文本长度: ${text.length}, 累计: ${accumulatedAssistantText.length + text.length}`);
-              
               // 累积助手响应文本
               accumulatedAssistantText += text;
               
-              // 实时保存每条消息（不再等待 500 字符）
-              this.saveNodeMessage(
-                nodeId, 
-                'assistant_chunk', 
-                text,
-                JSON.stringify({ nodeIndex, timestamp: Date.now(), cumulativeLength: accumulatedAssistantText.length })
-              ).catch(err => console.error('[executeNode] 保存助手消息片段失败:', err));
+              // 写入 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'text',
+                data: { text, cumulativeLength: accumulatedAssistantText.length },
+              }).catch(err => console.error('[executeNode] 保存文本失败:', err));
               
               // 调用外部回调
               this.callbacks.onNodeChunk(nodeIndex, text);
             },
             onThinking: (thinking) => {
-              // 保存思考消息到数据库
-              console.log(`[executeNode] 🧠 onThinking 被调用, 长度: ${thinking?.length || 0}`);
-              this.saveNodeMessage(
-                nodeId,
-                'thinking',
-                thinking,
-                JSON.stringify({ nodeIndex, timestamp: Date.now() })
-              ).catch(err => console.error('[executeNode] 保存思考消息失败:', err));
+              // 写入 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'thinking',
+                data: { text: thinking },
+              }).catch(err => console.error('[executeNode] 保存思考失败:', err));
             },
             onToolCall: (toolUseId, name, args) => {
-              // ========================================
-              // 子Agent交互日志 - 工具调用
-              // ========================================
+              // 子Agent交互日志
               if (name === 'Agent' || name === 'task') {
                 console.log('\n' + '='.repeat(80));
-                console.log('[子Agent交互] 工具调用');
-                console.log('[子Agent交互] toolUseId:', toolUseId);
-                console.log('[子Agent交互] 工具名称:', name);
-                console.log('[子Agent交互] 参数(args):');
-                console.log(JSON.stringify(args, null, 2));
+                console.log('[子Agent交互] 工具调用:', name, toolUseId);
+                console.log('[子Agent交互] 参数:', JSON.stringify(args, null, 2));
                 console.log('='.repeat(80) + '\n');
               }
               
-              // 保存工具调用消息到数据库（包含 toolUseId 用于匹配 tool_result）
-              this.saveNodeMessage(
-                nodeId,
-                'tool_call',
-                JSON.stringify({ toolUseId, name, args }),
-                JSON.stringify({ nodeIndex, timestamp: Date.now() })
-              ).catch(err => console.error('[executeNode] 保存工具调用消息失败:', err));
+              // 写入 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'tool_use',
+                data: { toolUseId, name, args },
+              }).catch(err => console.error('[executeNode] 保存工具调用失败:', err));
+              
               // 调用外部回调
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
             onToolResult: (toolUseId, content, isError) => {
-              // ========================================
-              // 子Agent交互日志 - 工具结果
-              // ========================================
+              // 子Agent交互日志
               console.log('\n' + '='.repeat(80));
-              console.log('[子Agent交互] 工具结果');
-              console.log('[子Agent交互] toolUseId:', toolUseId);
-              console.log('[子Agent交互] isError:', isError);
-              console.log('[子Agent交互] 结果内容:');
+              console.log('[子Agent交互] 工具结果:', toolUseId, 'isError:', isError);
               const resultContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-              // 打印完整内容，不截断
               console.log(resultContent);
               console.log('='.repeat(80) + '\n');
               
-              // 保存工具结果消息到数据库（包含 toolUseId 和 isError）
-              this.saveNodeMessage(
-                nodeId,
-                'tool_result',
-                typeof content === 'string' ? content : JSON.stringify(content),
-                JSON.stringify({ toolUseId, isError, nodeIndex, timestamp: Date.now() })
-              ).catch(err => console.error('[executeNode] 保存工具结果消息失败:', err));
+              // 检查是否是 async_launched（子Agent启动）
+              const resultData = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return {}; } })() : content;
+              if (resultData?.isAsync || resultData?.status === 'async_launched') {
+                const agentId = resultData?.agentId;
+                if (agentId) {
+                  this.activeAgentId = agentId;
+                  console.log(`[executeNode] 子Agent启动: agentId=${agentId}`);
+                  
+                  // 写入 stream.jsonl（标记子Agent启动）
+                  this.nodeStreamStore.appendToStream(nodeId, {
+                    event: 'agent_launched',
+                    data: { toolUseId, agentId, description: resultData?.description },
+                  }).catch(err => console.error('[executeNode] 保存 agent_launched 失败:', err));
+                }
+              }
+              
+              // 写入 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'tool_result',
+                data: { toolUseId, content: resultData, isError },
+              }).catch(err => console.error('[executeNode] 保存工具结果失败:', err));
             },
-            onComplete: () => {},
+            onComplete: () => {
+              // 写入 message_stop 到 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'message_stop',
+                data: { text: accumulatedAssistantText },
+              }).catch(err => console.error('[executeNode] 保存 message_stop 失败:', err));
+            },
             onError: (error) => {
               console.error(`[executeNode] Agent 错误: ${error.message}`);
+              // 写入 error 到 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'error',
+                data: { message: error.message, stack: error.stack },
+              }).catch(err => console.error('[executeNode] 保存 error 失败:', err));
             },
             onUsage: (usage) => {
               // SDK 返回的是当前节点的累计值
-              // 记录每个节点的累计值（避免重复累加）
               this.nodeTokens[nodeIndex] = {
                 input: usage.inputTokens || 0,
                 output: usage.outputTokens || 0,
@@ -442,8 +446,14 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
               this.cumulativeTokens.output = Object.values(this.nodeTokens)
                 .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
               
-              // 实时更新 NodeExecution 表的 Token（前端轮询 nodes API 获取）
+              // 实时更新 NodeExecution 表的 Token
               this.updateNodeExecutionTokensDebounced(nodeId, usage.inputTokens || 0, usage.outputTokens || 0, modelConfig);
+              
+              // 写入 token_usage 到 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'token_usage',
+                data: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+              }).catch(err => console.error('[executeNode] 保存 token_usage 失败:', err));
               
               // 实时推送 Token 使用量
               this.callbacks.onTokenUsage({
@@ -452,11 +462,9 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
                 nodeName,
                 modelName: modelConfig.name,
                 modelConfigId: modelConfig.id,
-                // 当前节点的值（用于节点内显示）
                 inputTokens: usage.inputTokens || 0,
                 outputTokens: usage.outputTokens || 0,
                 totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
-                // 所有节点的累计值（用于顶部统计）
                 cumulativeInputTokens: this.cumulativeTokens.input,
                 cumulativeOutputTokens: this.cumulativeTokens.output,
                 cumulativeTotalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output,
@@ -509,10 +517,6 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
 
           // 写入 YAML 输出
           const outputYamlPath = await this.writeNodeOutput(nodeIndex, node, result.text);
-
-          // 保存助手消息到数据库（使用累积的文本或最终结果）
-          const assistantText = accumulatedAssistantText || result.text;
-          await this.saveNodeMessage(nodeId, 'assistant', assistantText);
 
           const nodeResult: NodeExecutionResult = {
             nodeIndex,
@@ -660,7 +664,8 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
   /**
    * 创建节点 Agent
    * 
-   * 动态查询节点配置的 Skills，注册到 allowedTools 中
+   * 动态查询节点配置的 Skills，使用 SDK 的 skills 参数注册
+   * 传递 MCP 服务器配置给 Claude Agent SDK
    */
   private async createNodeAgent(
     nodeIndex: number,
@@ -674,14 +679,21 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     // 动态查询节点配置的 Skills
     const skills = await this.getNodeSkills(node);
     
-    // 构建 allowedTools（包含 Skill 注册）
-    const baseTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
-    const skillTools = skills.map(s => `Skill(${s.name})`);
-    const allowedTools = [...baseTools, ...skillTools];
+    // 基础工具权限（包含 Skill 工具）
+    const allowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
     
-    console.log(`[createNodeAgent] allowedTools: ${allowedTools.length} tools`);
-    if (skills.length > 0) {
-      console.log(`[createNodeAgent] 注册 Skills: ${skills.map(s => s.displayName || s.name).join(', ')}`);
+    // Skills 注册：使用 SDK 的 skills 参数（直接传 skill name）
+    const skillNames = skills.map(s => s.name);
+    
+    // MCP 配置：从 config 获取并传递给 SDK
+    const mcpServers = this.config.mcpServers;
+    
+    console.log(`[createNodeAgent] allowedTools: ${allowedTools.join(', ')}`);
+    if (skillNames.length > 0) {
+      console.log(`[createNodeAgent] 注册 Skills: ${skillNames.join(', ')}`);
+    }
+    if (mcpServers && mcpServers.length > 0) {
+      console.log(`[createNodeAgent] MCP 服务器: ${mcpServers.map(m => m.name).join(', ')}`);
     }
 
     return createRalphLoopAgent(
@@ -701,51 +713,33 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
-        allowedTools,  // 注册 Skills
+        allowedTools,  // 工具权限
+        skills: skillNames.length > 0 ? skillNames : undefined,  // 注册 Skills（SDK 标准方式）
+        mcpServers,  // MCP 服务器配置（传递给 Claude Agent SDK）
       }
     );
   }
 
-  /**
-   * 获取节点配置的 Skills
-   * 
-   * 根据节点的 Skill 加载模式动态查询匹配的 Skills
-   * 
-   * 模式：
-   * - manual: 从 node.data.skills (skill ID 数组) 查询
-   * - vulnerability: 从 node.data.vulnerabilityCategories 匹配（考虑技术栈）
-   * - description: 不需要 Skills
-   */
+/**
+    * 获取节点配置的 Skills
+    * 
+    * 根据节点配置动态查询匹配的 Skills
+    * 
+    * 判断规则（优先级）：
+    * 1. 如果 node.skills 有值 -> manual 模式，从 skill ID 数组查询
+    * 2. 如果 node.vulnerabilityCategories 有值 -> vulnerability 模式，从漏洞分类匹配（考虑技术栈）
+    * 3. 否则 -> description 模式，不需要 Skills
+    */
   private async getNodeSkills(node: UnifiedNodeDefinition): Promise<Array<{ name: string; displayName: string }>> {
-    const nodeData = node.data as Record<string, unknown> | undefined;
-    if (!nodeData) return [];
-
-    // 获取 Skill 加载模式
-    const mode = (nodeData.skillLoadingMode as string) || 'description';
+    console.log(`[getNodeSkills] 节点: ${node.label}`);
+    console.log(`[getNodeSkills] node.skills: ${JSON.stringify(node.skills)}`);
+    console.log(`[getNodeSkills] node.vulnerabilityCategories: ${JSON.stringify(node.vulnerabilityCategories)}`);
     
-    // description 模式不需要 Skills
-    if (mode === 'description') {
-      return [];
-    }
-
-    // manual 模式：从 node.data.skills 获取 skill IDs
-    if (mode === 'manual') {
-      let skillIds: string[] = [];
-      const skillsField = nodeData.skills;
+    // 优先级 1: manual 模式 - node.skills 有 skill ID 数组
+    if (node.skills && node.skills.length > 0) {
+      const skillIds = node.skills;
       
-      if (typeof skillsField === 'string') {
-        try {
-          skillIds = JSON.parse(skillsField);
-        } catch {
-          return [];
-        }
-      } else if (Array.isArray(skillsField)) {
-        skillIds = skillsField as string[];
-      }
-      
-      if (skillIds.length === 0) return [];
-      
-      console.log(`[getNodeSkills] manual 模式, skillIds: ${skillIds.join(', ')}`);
+      console.log(`[getNodeSkills] manual 模式 (node.skills), skillIds: ${skillIds.join(', ')}`);
       
       // 从数据库查询 Skill 详情
       try {
@@ -768,21 +762,43 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
       }
     }
 
-    // vulnerability 模式：从漏洞分类匹配 Skills
-    if (mode === 'vulnerability') {
-      const categories = (nodeData.vulnerabilityCategories as string[]) || [];
-      if (categories.length === 0) return [];
+    // 优先级 2: vulnerability 模式 - node.vulnerabilityCategories 有漏洞分类数组
+    if (node.vulnerabilityCategories && node.vulnerabilityCategories.length > 0) {
+      const categories = node.vulnerabilityCategories;
       
-      console.log(`[getNodeSkills] vulnerability 模式, categories: ${categories.join(', ')}`);
+      console.log(`[getNodeSkills] vulnerability 模式 (node.vulnerabilityCategories), categories: ${categories.join(', ')}`);
       
       // 从数据库查询匹配漏洞分类的 Skills
-      // 同时考虑技术栈匹配（如果有配置）
+      // 步骤1: 先找到这些分类对应的 VulnerabilityPattern IDs
+      // 步骤2: 再查询 Skills 匹配这些 vulnerabilityPatternIds
       const techStackIds = this.config.techStackIds || [];
       
       try {
+        // 查询 VulnerabilityPattern IDs（通过 VulnerabilityCategory.value 匹配）
+        const vulnPatterns = await prisma.vulnerabilityPattern.findMany({
+          where: {
+            isActive: true,
+            categoryRef: {
+              value: { in: categories },
+            },
+          },
+          select: {
+            id: true,
+          },
+        });
+        
+        const patternIds = vulnPatterns.map(p => p.id);
+        console.log(`[getNodeSkills] 找到 ${patternIds.length} 个 VulnerabilityPattern IDs`);
+        
+        if (patternIds.length === 0) {
+          console.log(`[getNodeSkills] 未找到匹配的 VulnerabilityPattern，返回空`);
+          return [];
+        }
+        
+        // 查询匹配这些 vulnerabilityPatternIds 的 Skills
         const whereClause: any = {
           isActive: true,
-          vulnerabilityPatternCategory: { in: categories },
+          vulnerabilityPatternId: { in: patternIds },
         };
         
         // 技术栈匹配：Skill 无技术栈(通用) 或匹配工作流技术栈
@@ -809,6 +825,8 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
       }
     }
 
+    // 优先级 3: description 模式 - 无 Skills 配置
+    console.log(`[getNodeSkills] description 模式，节点 ${node.label} 无 Skills 配置`);
     return [];
   }
 
@@ -949,34 +967,59 @@ ${this.config.userPrompt ? `### 用户附加提示\n${this.config.userPrompt}` :
       return prompt;
     }
 
-    // 非 FSM Phase：使用通用模板
-    const prompt = `
+    // start/end 节点：不需要 Skills 提示词，直接返回简单提示词
+    if (nodeType === 'start' || nodeType === 'end') {
+      const prompt = `
 # 工作流节点执行: ${node.label}
 
 ## 项目信息
 - 项目名称: ${this.config.projectName}
-- 工作流类型: ${this.config.workflowType}
+- 项目路径: ${this.config.workspacePath}
 
 ## 当前节点
 - 节点名称: ${node.label}
 - 节点类型: ${nodeType}
 - 节点描述: ${nodeDescription}
-- FSM 阶段: ${node.fsmPhase ? `Phase ${node.fsmPhase}` : '无'}
 
 ## 前序节点输出
 ${previousOutputs}
 
 ## 任务要求
-请执行当前节点的任务，并将结果写入 YAML 文件。
+${nodeDescription}
 
-## 输出要求
-- 输出格式: YAML
-- 输出路径: outputs/phases/${nodeIndex + 1}-${node.label}/output.yaml
-- 必须包含完整的分析结果
-
-## 用户提示词
-${this.config.userPrompt || '请完成当前节点的任务。'}
+${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : ''}
 `;
+      return prompt;
+    }
+
+    // task / subtask / agent-zone 节点
+    // 根据模式生成提示词：
+    // - description 模式：直接用用户写的节点描述
+    // - manual/vulnerability 模式：根据 Skills 生成提示词
+    
+    // 获取节点配置的 Skills
+    const skills = await this.getNodeSkills(node);
+    
+    // 获取节点模式（从 node.data 中读取）
+    const nodeData = node.data as Record<string, unknown> | undefined;
+    const mode = (nodeData?.skillLoadingMode as string) || 'description';
+    
+    let prompt = '';
+    
+    if (mode === 'description' || skills.length === 0) {
+      // description 模式或无 Skills：直接用用户写的描述
+      prompt = `${nodeDescription}`;
+      console.log(`[buildNodePrompt] description 模式，提示词: ${prompt.slice(0, 100)}...`);
+    } else {
+      // manual 或 vulnerability 模式：根据 Skills 生成提示词
+      prompt = `请执行以下安全检查任务，必须执行所有指定的 Skills：
+
+必须执行的 Skills：
+${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
+
+请确保以上所有 Skills 都被执行，且每个skill以独立子代理（Subagent）执行，不要遗漏。`;
+      console.log(`[buildNodePrompt] ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
+    }
 
     return prompt;
   }
@@ -1139,171 +1182,6 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
     } catch (error) {
       console.error(`[saveNodeExecutionToDB] 保存失败:`, error);
       // 不抛出错误，允许执行继续进行
-    }
-  }
-
-  /**
-   * 保存单条节点消息到数据库
-   * 支持实时保存各类消息（user, assistant, assistant_chunk, tool_call, tool_result）
-   * 
-   * FSM 模式特殊处理：workflowNodeId 不保存到数据库，因为 FSM 节点 ID 来自 JSON 配置，
-   * 不存在于 WorkflowNode 表中，会导致外键约束失败。
-   * 
-   * @param nodeId 工作流节点 ID
-   * @param role 消息角色 (user, assistant, assistant_chunk, tool_call, tool_result)
-   * @param content 消息内容
-   * @param metadata 可选的元数据（JSON 字符串）
-   */
-  async saveNodeMessage(
-    nodeId: string,
-    role: string,  // 支持任意角色类型
-    content: string,
-    metadata?: string
-  ): Promise<void> {
-    try {
-      const data: {
-        id: string;
-        evaluationSessionId: string;
-        workflowNodeId?: string | null;
-        role: string;
-        content: string;
-        metadata?: string;
-      } = {
-        id: generateId('msg'),
-        evaluationSessionId: this.config.evaluationSessionId,
-        role,
-        content,
-      };
-      
-      // 解析 metadata
-      const nodeMetadata = metadata ? JSON.parse(metadata) : {};
-      
-      // 所有模式：将 nodeId 保存到 metadata 中，不使用外键
-      // 原因：用户画布创建的节点不存在于 WorkflowNode 表
-      nodeMetadata.nodeId = nodeId;
-      
-      data.metadata = JSON.stringify(nodeMetadata);
-      
-      // 注意：不再设置 workflowNodeId 外键
-      // 避免外键约束失败（节点可能不存在于 WorkflowNode 表）
-      
-      // ========================================
-      // 双写机制：同时写入 Prisma 和 JSONL
-      // ========================================
-      
-      // 1. 写入 JSONL（先写，确保数据持久化）
-      if (this.messageStore) {
-        try {
-          // 提取 nodeIndex 和 agentCallMsgId
-          const nodeIndex = nodeMetadata.nodeIndex ?? 0;
-          const agentCallMsgId = nodeMetadata.agentCallMsgId ?? null;
-          
-          // 映射 role 到 EvaluationMessage 支持的类型
-          const mappedRole = this.mapRoleToJsonlRole(role);
-          
-          await this.messageStore.appendMessage({
-            role: mappedRole,
-            nodeId: nodeId,  // 字符串，无外键依赖
-            nodeIndex: nodeIndex,
-            content: content,
-            agentCallMsgId: agentCallMsgId,
-            // 工具相关字段（从 metadata 提取）
-            toolName: nodeMetadata.name,
-            toolInput: nodeMetadata.args,
-            toolResult: role === 'tool_result' ? content : undefined,
-            toolUseId: nodeMetadata.toolUseId,
-          });
-        } catch (jsonlError) {
-          console.error(`[saveNodeMessage] JSONL 写入失败:`, jsonlError);
-          // 不阻塞主流程
-        }
-      }
-      
-      // 2. 写入 Prisma（双写过渡期保留）
-      await prisma.sessionMessage.create({ data });
-      console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}, workflowType=${this.config.workflowType}, workflowNodeId=${data.workflowNodeId || 'null'}`);
-    } catch (error) {
-      console.error(`[saveNodeMessage] 保存失败:`, error);
-      // 不抛出错误，允许执行继续进行
-    }
-  }
-  
-  /**
-   * 映射 role 到 EvaluationMessage 支持的类型
-   */
-  private mapRoleToJsonlRole(role: string): 'user' | 'assistant' | 'system' | 'tool_use' | 'tool_result' {
-    const roleMap: Record<string, 'user' | 'assistant' | 'system' | 'tool_use' | 'tool_result'> = {
-      'user': 'user',
-      'assistant': 'assistant',
-      'assistant_chunk': 'assistant',
-      'thinking': 'assistant',
-      'system': 'system',
-      'tool_call': 'tool_use',
-      'tool_result': 'tool_result',
-    };
-    return roleMap[role] || 'assistant';
-  }
-
-  /**
-   * 保存节点消息到数据库
-   * 支持按节点过滤显示
-   * 
-   * 注意：此方法在节点完成后调用，保存最终结果
-   * 实时消息通过 saveNodeMessage 方法在执行过程中保存
-   */
-  private async saveNodeMessagesToDB(
-    nodeId: string,
-    responseText: string,
-    promptText: string
-  ): Promise<void> {
-    try {
-      // 检查是否已存在用户消息（可能在节点开始时已保存）
-      const existingUserMessage = await prisma.sessionMessage.findFirst({
-        where: {
-          evaluationSessionId: this.config.evaluationSessionId,
-          workflowNodeId: nodeId,
-          role: 'user',
-        },
-      });
-
-      // 如果不存在用户消息，保存用户消息（提示词）
-      if (!existingUserMessage) {
-        await prisma.sessionMessage.create({
-          data: {
-            id: generateId('msg'),
-            evaluationSessionId: this.config.evaluationSessionId,
-            workflowNodeId: nodeId,
-            role: 'user',
-            content: promptText,
-          },
-        });
-      }
-
-      // 检查是否已存在助手消息（可能在节点完成时已保存）
-      const existingAssistantMessage = await prisma.sessionMessage.findFirst({
-        where: {
-          evaluationSessionId: this.config.evaluationSessionId,
-          workflowNodeId: nodeId,
-          role: 'assistant',
-        },
-      });
-
-      // 如果不存在助手消息，保存助手消息（响应）
-      if (!existingAssistantMessage) {
-        await prisma.sessionMessage.create({
-          data: {
-            id: generateId('msg'),
-            evaluationSessionId: this.config.evaluationSessionId,
-            workflowNodeId: nodeId,
-            role: 'assistant',
-            content: responseText,
-          },
-        });
-      }
-
-      console.log(`[saveNodeMessagesToDB] 保存节点消息: nodeId=${nodeId}`);
-    } catch (error) {
-      console.error(`[saveNodeMessagesToDB] 保存失败:`, error);
     }
   }
 

@@ -69,6 +69,29 @@ export interface ModelConfigForExecution {
 // ============ 执行配置类型 ============
 
 /**
+ * MCP 服务器配置（用于执行）
+ * 从数据库 McpServerConfig 模型转换而来
+ */
+export interface McpServerConfigForExecution {
+  /** MCP 名称 */
+  name: string;
+  /** MCP 类型 */
+  type: 'local' | 'remote';
+  /** 本地命令 */
+  command?: string;
+  /** 命令参数 */
+  args?: string[];
+  /** 远程 URL */
+  url?: string;
+  /** 环境变量 */
+  env?: Record<string, string>;
+  /** 是否启用 */
+  isEnabled?: boolean;
+  /** 是否自动启动 */
+  autoStart?: boolean;
+}
+
+/**
  * 统一执行配置
  * 用于初始化工作流执行引擎
  */
@@ -98,6 +121,8 @@ export interface UnifiedExecutionConfig {
   defaultModelConfig: ModelConfigForExecution;
   /** 技术栈 ID 数组（用于 Skill 匹配） */
   techStackIds?: string[];
+  /** MCP 服务器配置（传递给 Claude Agent SDK） */
+  mcpServers?: McpServerConfigForExecution[];
   /** 每个节点最大迭代次数 */
   maxIterationsPerNode: number;
   /** 最大重试次数 */
