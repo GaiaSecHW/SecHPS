@@ -123,6 +123,7 @@ export async function GET(
       
       // 1. 添加 Agent 调用（用户输入）
       const args = toolCallContent.args || toolCallContent.input || {};
+      const agentCallMsgId = toolCallMsg.id; // Agent调用的消息ID，用于前端过滤
       childMessages.push({
         id: `${childId}-input`,
         role: 'user',
@@ -130,6 +131,7 @@ export async function GET(
         createdAt: agentStartTime,
         isAgentCall: true,
         toolUseId: toolUseId,
+        agentCallMsgId: agentCallMsgId, // 标记属于哪个Agent
       });
       
       // 2. 添加执行时间范围内的所有消息（thinking, tool_call, assistant_chunk, tool_result）
@@ -164,6 +166,7 @@ export async function GET(
               createdAt: msg.createdAt?.toISOString(),
               isError: metadata?.isError,
               toolUseId: metadata?.toolUseId,
+              agentCallMsgId: agentCallMsgId, // 标记属于哪个Agent
             });
           }
         }
@@ -178,6 +181,7 @@ export async function GET(
           createdAt: finalResult.createdAt?.toISOString(),
           isFinalResult: true,
           toolUseId: toolUseId,
+          agentCallMsgId: agentCallMsgId, // 标记属于哪个Agent
         });
       }
       

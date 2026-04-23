@@ -133,7 +133,7 @@ function SessionDetailContent({
   const [selectedChildSession, setSelectedChildSession] = useState<string | null>(null);
   const [childSessionMessages, setChildSessionMessages] = useState<any[]>([]);
   const [loadingChildMessages, setLoadingChildMessages] = useState(false);
-  const [isTodosExpanded, setIsTodosExpanded] = useState(true);
+  const [isTodosExpanded, setIsTodosExpanded] = useState(false);  // 任务列表默认收缩
   const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [isNodeMessagesExpanded, setIsNodeMessagesExpanded] = useState(false); // 节点消息区域默认收缩
@@ -157,7 +157,7 @@ function SessionDetailContent({
     failed: number;
     currentRunningNode: { id: string; label: string; modelName: string } | null;
   } | null>(null);
-  const [isNodesExpanded, setIsNodesExpanded] = useState(true);
+  const [isNodesExpanded, setIsNodesExpanded] = useState(true);  // 节点列表默认展开
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeMessages, setNodeMessages] = useState<any[]>([]);
   const [loadingNodeMessages, setLoadingNodeMessages] = useState(false);
@@ -1619,20 +1619,29 @@ return () => {
                                
                                return (
                                  <div key={idx} className="bg-purple-50 rounded border border-purple-200">
-                                   <button
-                                     className="w-full p-2 flex items-center justify-between hover:bg-purple-100 transition-colors"
-                                     onClick={() => {
-                                       setExpandedChildMessages(prev => {
-                                         const newSet = new Set(prev);
-                                         if (newSet.has(childId)) {
-                                           newSet.delete(childId);
-                                         } else {
-                                           newSet.add(childId);
-                                         }
-                                         return newSet;
-                                       });
-                                     }}
-                                   >
+<button
+                                      className="w-full p-2 flex items-center justify-between hover:bg-purple-100 transition-colors"
+                                      onClick={() => {
+                                        const newExpanded = !expandedChildMessages.has(childId);
+                                        setExpandedChildMessages(prev => {
+                                          const newSet = new Set(prev);
+                                          if (newSet.has(childId)) {
+                                            newSet.delete(childId);
+                                          } else {
+                                            newSet.add(childId);
+                                          }
+                                          return newSet;
+                                        });
+                                        
+                                        // 展开时加载子Agent消息
+                                        if (newExpanded) {
+                                          // 使用 msg.id 或 toolUseId 获取消息
+                                          const fetchId = msg.id;
+                                          console.log('[子Agent] Loading messages for:', fetchId, 'toolUseId:', content?.toolUseId);
+                                          fetchChildSessionMessages(fetchId);
+                                        }
+                                      }}
+                                    >
                                      <div className="flex items-center gap-2">
                                        <span className="text-xs font-medium text-purple-700">
                                          {content.name === 'task' ? 'Task' : 'Agent'}
@@ -1643,27 +1652,58 @@ return () => {
                                      </div>
                                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                    </button>
-                                   {isExpanded && (
-                                     <div className="p-3 border-t border-purple-200 bg-white space-y-3">
-                                       <div>
-                                         <div className="text-xs font-semibold text-gray-700 mb-1">输入参数:</div>
-                                         <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[150px] whitespace-pre-wrap">
-                                           {JSON.stringify(content.args, null, 2)}
-                                         </pre>
-                                       </div>
-{toolResultMsg && (
-                                          <div>
-                                            <div className="text-xs font-semibold text-gray-700 mb-1">执行结果:</div>
-                                            <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[500px] whitespace-pre-wrap">
-                                              {toolResultMsg.content}
-                                            </pre>
+{isExpanded && (
+                                      <div className="p-3 border-t border-purple-200 bg-white">
+                                        {/* 加载子Agent消息 */}
+                                        {loadingChildMessages && (
+                                          <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
+                                            <Loader2 size={12} className="animate-spin" />
+                                            加载子Agent执行过程...
                                           </div>
                                         )}
-                                       {!toolResultMsg && (
-                                         <div className="text-xs text-gray-500 italic">等待结果...</div>
-                                       )}
-                                     </div>
-                                   )}
+                                        
+                                        {/* 显示执行期间的所有消息 - 使用 MessageBubble 组件 */}
+                                        {/* 使用 agentCallMsgId 正确关联消息 */}
+                                        {childSessionMessages.filter(m => m.agentCallMsgId === msg.id).length > 0 ? (
+                                          <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                                            {childSessionMessages
+                                              .filter(m => m.agentCallMsgId === msg.id)
+                                              .map((childMsg: any, msgIdx: number) => (
+                                                <MessageBubble
+                                                  key={childMsg.id || `child-msg-${msgIdx}`}
+                                                  message={childMsg}
+                                                  onCopy={() => {
+                                                    navigator.clipboard.writeText(
+                                                      typeof childMsg.content === 'string' 
+                                                        ? childMsg.content 
+                                                        : JSON.stringify(childMsg.content, null, 2)
+                                                    );
+                                                  }}
+                                                  onClick={() => {}}
+                                                  isSelected={false}
+                                                />
+                                              ))}
+                                          </div>
+                                        ) : toolResultMsg ? (
+                                          <div className="space-y-2">
+                                            <div>
+                                              <div className="text-xs font-semibold text-gray-700 mb-1">输入参数:</div>
+                                              <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[150px] whitespace-pre-wrap">
+                                                {JSON.stringify(content.args, null, 2)}
+                                              </pre>
+                                            </div>
+                                            <div>
+                                              <div className="text-xs font-semibold text-gray-700 mb-1">执行结果:</div>
+                                              <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[500px] whitespace-pre-wrap">
+                                                {toolResultMsg.content}
+                                              </pre>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="text-xs text-gray-500 italic">等待结果...</div>
+                                        )}
+                                      </div>
+                                    )}
                                  </div>
                                );
                              })
