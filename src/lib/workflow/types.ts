@@ -96,6 +96,8 @@ export interface UnifiedExecutionConfig {
   }>;
   /** 默认模型配置 */
   defaultModelConfig: ModelConfigForExecution;
+  /** 技术栈 ID 数组（用于 Skill 匹配） */
+  techStackIds?: string[];
   /** 每个节点最大迭代次数 */
   maxIterationsPerNode: number;
   /** 最大重试次数 */

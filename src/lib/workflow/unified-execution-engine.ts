@@ -324,8 +324,8 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
       }
 
       try {
-        // 创建 RalphLoopAgent
-        const agent = this.createNodeAgent(nodeIndex, modelConfig, node);
+        // 创建 RalphLoopAgent (async - 需要 await)
+        const agent = await this.createNodeAgent(nodeIndex, modelConfig, node);
         this.currentAgent = agent;
 
         // 构建节点提示词
@@ -659,15 +659,30 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
 
   /**
    * 创建节点 Agent
+   * 
+   * 动态查询节点配置的 Skills，注册到 allowedTools 中
    */
-  private createNodeAgent(
+  private async createNodeAgent(
     nodeIndex: number,
     modelConfig: ModelConfigForExecution,
     node: UnifiedNodeDefinition
-  ): RalphLoopAgent {
+  ): Promise<RalphLoopAgent> {
     console.log(`[createNodeAgent] Creating agent for node ${nodeIndex}: ${node.label}`);
     console.log(`[createNodeAgent] Model: ${modelConfig.name}`);
     console.log(`[createNodeAgent] WorkflowNodeId: ${node.id}`);
+
+    // 动态查询节点配置的 Skills
+    const skills = await this.getNodeSkills(node);
+    
+    // 构建 allowedTools（包含 Skill 注册）
+    const baseTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
+    const skillTools = skills.map(s => `Skill(${s.name})`);
+    const allowedTools = [...baseTools, ...skillTools];
+    
+    console.log(`[createNodeAgent] allowedTools: ${allowedTools.length} tools`);
+    if (skills.length > 0) {
+      console.log(`[createNodeAgent] 注册 Skills: ${skills.map(s => s.displayName || s.name).join(', ')}`);
+    }
 
     return createRalphLoopAgent(
       {
@@ -685,9 +700,116 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         systemPrompt: this.config.systemPrompt,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
-workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
+        workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
+        allowedTools,  // 注册 Skills
       }
     );
+  }
+
+  /**
+   * 获取节点配置的 Skills
+   * 
+   * 根据节点的 Skill 加载模式动态查询匹配的 Skills
+   * 
+   * 模式：
+   * - manual: 从 node.data.skills (skill ID 数组) 查询
+   * - vulnerability: 从 node.data.vulnerabilityCategories 匹配（考虑技术栈）
+   * - description: 不需要 Skills
+   */
+  private async getNodeSkills(node: UnifiedNodeDefinition): Promise<Array<{ name: string; displayName: string }>> {
+    const nodeData = node.data as Record<string, unknown> | undefined;
+    if (!nodeData) return [];
+
+    // 获取 Skill 加载模式
+    const mode = (nodeData.skillLoadingMode as string) || 'description';
+    
+    // description 模式不需要 Skills
+    if (mode === 'description') {
+      return [];
+    }
+
+    // manual 模式：从 node.data.skills 获取 skill IDs
+    if (mode === 'manual') {
+      let skillIds: string[] = [];
+      const skillsField = nodeData.skills;
+      
+      if (typeof skillsField === 'string') {
+        try {
+          skillIds = JSON.parse(skillsField);
+        } catch {
+          return [];
+        }
+      } else if (Array.isArray(skillsField)) {
+        skillIds = skillsField as string[];
+      }
+      
+      if (skillIds.length === 0) return [];
+      
+      console.log(`[getNodeSkills] manual 模式, skillIds: ${skillIds.join(', ')}`);
+      
+      // 从数据库查询 Skill 详情
+      try {
+        const skills = await prisma.skill.findMany({
+          where: {
+            id: { in: skillIds },
+            isActive: true,
+          },
+          select: {
+            name: true,
+            displayName: true,
+          },
+        });
+        
+        console.log(`[getNodeSkills] 查询到 ${skills.length} 个 Skills`);
+        return skills;
+      } catch (error) {
+        console.error(`[getNodeSkills] 查询失败:`, error);
+        return [];
+      }
+    }
+
+    // vulnerability 模式：从漏洞分类匹配 Skills
+    if (mode === 'vulnerability') {
+      const categories = (nodeData.vulnerabilityCategories as string[]) || [];
+      if (categories.length === 0) return [];
+      
+      console.log(`[getNodeSkills] vulnerability 模式, categories: ${categories.join(', ')}`);
+      
+      // 从数据库查询匹配漏洞分类的 Skills
+      // 同时考虑技术栈匹配（如果有配置）
+      const techStackIds = this.config.techStackIds || [];
+      
+      try {
+        const whereClause: any = {
+          isActive: true,
+          vulnerabilityPatternCategory: { in: categories },
+        };
+        
+        // 技术栈匹配：Skill 无技术栈(通用) 或匹配工作流技术栈
+        if (techStackIds.length > 0) {
+          whereClause.OR = [
+            { techStackId: null },
+            { techStackId: { in: techStackIds } },
+          ];
+        }
+        
+        const skills = await prisma.skill.findMany({
+          where: whereClause,
+          select: {
+            name: true,
+            displayName: true,
+          },
+        });
+        
+        console.log(`[getNodeSkills] 查询到 ${skills.length} 个匹配漏洞分类的 Skills`);
+        return skills;
+      } catch (error) {
+        console.error(`[getNodeSkills] 查询失败:`, error);
+        return [];
+      }
+    }
+
+    return [];
   }
 
 /**
@@ -1056,17 +1178,14 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
       // 解析 metadata
       const nodeMetadata = metadata ? JSON.parse(metadata) : {};
       
-      // 区分 FSM 和 DAG 模式
-      if (this.config.workflowType === 'fsm') {
-        // FSM 模式：不保存 workflowNodeId（节点 ID 来自 JSON 配置，不存在于 WorkflowNode 表）
-        // 将 nodeId 保存到 metadata 中用于过滤
-        nodeMetadata.nodeId = nodeId;
-      } else {
-        // DAG 模式：保存 workflowNodeId 外键（节点 ID 存在于 WorkflowNode 表）
-        data.workflowNodeId = nodeId;
-      }
+      // 所有模式：将 nodeId 保存到 metadata 中，不使用外键
+      // 原因：用户画布创建的节点不存在于 WorkflowNode 表
+      nodeMetadata.nodeId = nodeId;
       
       data.metadata = JSON.stringify(nodeMetadata);
+      
+      // 注意：不再设置 workflowNodeId 外键
+      // 避免外键约束失败（节点可能不存在于 WorkflowNode 表）
       
       // ========================================
       // 双写机制：同时写入 Prisma 和 JSONL
