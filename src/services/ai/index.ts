@@ -52,3 +52,5 @@ export { ClaudeProvider } from './claude';
 export { CCRProxyProvider } from './ccr-proxy';
 export { ClaudeAgentService, createClaudeAgentService } from './claude-agent';
 export type { ClaudeAgentConfig, ClaudeAgentCallbacks, AppMcpServerConfig, ToolPermissionRule, SystemPromptConfig } from './claude-agent';
+// 从 SDK 导出 AgentDefinition 类型（用于配置子Agent）
+export type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';

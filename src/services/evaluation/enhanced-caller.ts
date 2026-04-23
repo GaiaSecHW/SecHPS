@@ -1,6 +1,6 @@
 // src/services/evaluation/enhanced-caller.ts
 
-import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService, AppMcpServerConfig, ToolPermissionRule } from '@/services/ai';
+import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService, AppMcpServerConfig, ToolPermissionRule, AgentDefinition } from '@/services/ai';
 import { parseAndSaveResults } from './result-parser';
 import { prisma } from '@/lib/prisma';
 import { recordWatchdogActivity } from '@/lib/stream-watchdog';
@@ -56,6 +56,8 @@ export interface EnhancedEvaluationConfig {
   temperature?: number;  // 模型温度，默认 0.3
   workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id 到 NodeExecution 表
   allowedTools?: string[];  // 允许的工具列表（包含注册的 Skills）
+  skills?: string[];  // Skills 配置（传递给子Agent）
+  agents?: Record<string, AgentDefinition>;  // 子Agent定义（SDK官方推荐传递MCP/Skills的方式）
 }
 
 export interface EnhancedEvaluationCallbacks {
@@ -140,6 +142,8 @@ export class EnhancedEvaluationCaller {
       allowDangerouslySkipPermissions: config.allowDangerouslySkipPermissions,
       resumeSession: config.resumeSession,
       temperature: config.temperature ?? 0.7,  // 传递温度参数
+      skills: config.skills,  // Skills 配置
+      agents: config.agents,  // 子Agent定义（SDK官方推荐方式）
     });
     logInfo(`ClaudeAgentService 初始化完成`);
     logInfo(`Base URL: ${agentBaseUrl}`);

@@ -6,6 +6,7 @@
 
 import { EnhancedEvaluationCaller } from './enhanced-caller';
 import type { EnhancedEvaluationConfig, EnhancedEvaluationCallbacks } from './enhanced-caller';
+import type { AgentDefinition } from '@/services/ai';
 import { prisma } from '@/lib/prisma';
 import type { VerifyCompletionFunction, VerifyCompletionResult, SimpleGenerateTextResult } from './ralph-loop-agent-evaluator';
 import {
@@ -67,6 +68,18 @@ export interface RalphLoopAgentConfig extends EnhancedEvaluationConfig {
     summarizedIterations: number;
     tokensSaved: number;
   }) => void | Promise<void>;
+  
+  /**
+   * Skills 配置（传递给子Agent）
+   * 使用 SDK 官方推荐的 agents 字段传递 Skills
+   */
+  skills?: string[];
+  
+  /**
+   * 子Agent定义（SDK官方推荐传递MCP/Skills的方式）
+   * 如果配置了此字段，子Agent将继承指定的 MCP 服务器和 Skills
+   */
+  agents?: Record<string, AgentDefinition>;
 }
 
 /**
@@ -635,7 +648,9 @@ export function createRalphLoopAgent(
     permissionMode?: 'default' | 'acceptEdits' | 'bypassPermissions' | 'plan' | 'dontAsk' | 'auto';
     allowDangerouslySkipPermissions?: boolean;
     workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id
-    allowedTools?: string[];  // 允许的工具列表（包含注册的 Skills）
+    allowedTools?: string[];  // 允许的工具列表
+    skills?: string[];  // Skills 配置（传递给子Agent）
+    agents?: Record<string, AgentDefinition>;  // 子Agent定义（SDK官方推荐方式）
   }
 ): RalphLoopAgent {
   // 解析模型名称
@@ -668,7 +683,9 @@ export function createRalphLoopAgent(
     permissionMode: sdkOptions?.permissionMode,
     allowDangerouslySkipPermissions: sdkOptions?.allowDangerouslySkipPermissions,
     workflowNodeId: sdkOptions?.workflowNodeId,  // 传递 workflowNodeId
-    allowedTools: sdkOptions?.allowedTools,  // 传递 allowedTools（包含注册的 Skills）
+    allowedTools: sdkOptions?.allowedTools,  // 传递 allowedTools
+    skills: sdkOptions?.skills,  // 传递 Skills 配置
+    agents: sdkOptions?.agents,  // 传递子Agent定义（SDK官方推荐方式）
     // Ralph Loop 配置
     ...ralphConfig,
   });

@@ -661,11 +661,14 @@ callbacks: {
     }
   }
 
-  /**
-   * 创建节点 Agent
+/**
+ * 创建节点 Agent
    * 
    * 动态查询节点配置的 Skills，使用 SDK 的 skills 参数注册
    * 传递 MCP 服务器配置给 Claude Agent SDK
+   * 
+   * 重要：子 Agent（通过 Agent 工具创建）需要通过 agents 配置来继承 MCP 和 Skills
+   * 根据 SDK 官方文档，子 Agent 不会自动继承父 Agent 的 MCP 和 Skills
    */
   private async createNodeAgent(
     nodeIndex: number,
@@ -687,6 +690,38 @@ callbacks: {
     
     // MCP 配置：从 config 获取并传递给 SDK
     const mcpServers = this.config.mcpServers;
+    
+    // 构建子 Agent 定义（让 Agent 工具创建的子 Agent 继承所有父 Agent 配置）
+    // 这是 SDK 官方推荐的传递 MCP/Skills 给子 Agent 的方式
+    // 子 Agent 应该总是继承：allowedTools、mcpServers、skills
+    const agents: Record<string, any> = {};
+    
+    // 获取 MCP 服务器名称列表（用于子 Agent 引用）
+    const mcpServerNames = mcpServers ? mcpServers.map(m => m.name) : [];
+    
+    // 创建一个通用的子 Agent 配置，继承父 Agent 的所有配置
+    // Agent 工具会根据任务类型选择合适的子 Agent
+    agents['general-purpose'] = {
+      description: '通用子Agent，继承父Agent的allowedTools、MCP和Skills',
+      prompt: 'You are a helpful assistant. Follow the instructions and use available tools.',
+      tools: allowedTools,  // 继承父 Agent 的 allowedTools
+      mcpServers: mcpServerNames.length > 0 ? mcpServerNames : undefined,  // 子 Agent 引用父 Agent 已定义的 MCP 服务器（按名称），无配置则不传递
+      skills: skillNames.length > 0 ? skillNames : undefined,  // 子 Agent 继承 Skills，无配置则不传递
+      model: 'inherit',  // 使用父 Agent 的模型
+    };
+    
+    console.log(`[createNodeAgent] 配置子Agent 'general-purpose' 继承:`);
+    console.log(`  - allowedTools: ${allowedTools.join(', ')}`);
+    if (mcpServerNames.length > 0) {
+      console.log(`  - MCP Servers: ${mcpServerNames.join(', ')}`);
+    } else {
+      console.log(`  - MCP Servers: 无（父Agent未配置）`);
+    }
+    if (skillNames.length > 0) {
+      console.log(`  - Skills: ${skillNames.join(', ')}`);
+    } else {
+      console.log(`  - Skills: 无（父Agent未配置）`);
+    }
     
     console.log(`[createNodeAgent] allowedTools: ${allowedTools.join(', ')}`);
     if (skillNames.length > 0) {
@@ -713,9 +748,10 @@ callbacks: {
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
         workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
-        allowedTools,  // 工具权限
-        skills: skillNames.length > 0 ? skillNames : undefined,  // 注册 Skills（SDK 标准方式）
-        mcpServers,  // MCP 服务器配置（传递给 Claude Agent SDK）
+        allowedTools,  // 父 Agent 工具权限
+        skills: skillNames.length > 0 ? skillNames : undefined,  // 父 Agent 注册 Skills
+        mcpServers,  // 父 Agent MCP 服务器配置
+        agents,  // 子 Agent 定义（总是传递，让子 Agent 继承所有父配置）
       }
     );
   }

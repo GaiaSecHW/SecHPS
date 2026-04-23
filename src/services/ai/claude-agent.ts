@@ -1,6 +1,6 @@
 // src/services/ai/claude-agent.ts
 
-import { query, Options, SDKMessage, SDKResultSuccess, SDKResultError, McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
+import { query, Options, SDKMessage, SDKResultSuccess, SDKResultError, McpServerConfig, AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 
 /**
  * MCP 服务器配置（应用层）
@@ -54,6 +54,10 @@ export interface ClaudeAgentConfig {
   settings?: { context_management?: boolean };  // 通过 settings 对象配置 context_management
   temperature?: number;  // 模型温度，默认 0.3
   skills?: string[];  // Skills 配置（传递给子Agent）
+  
+  // 子Agent定义（Agent工具可调用的子Agent类型）
+  // 使用 SDK AgentDefinition 类型，支持 mcpServers 和 skills 字段
+  agents?: Record<string, AgentDefinition>;
 }
 
 export interface ClaudeAgentCallbacks {
@@ -141,27 +145,8 @@ export class ClaudeAgentService {
       CLAUDE_CODE_SUBAGENT_MODEL: this.config.model,
     };
     
-    // 传递 MCP 配置给子Agent（通过环境变量）
-    // SDK 的 Agent 工具会读取这些环境变量为子Agent配置MCP
-    if (this.config.mcpServers && this.config.mcpServers.length > 0) {
-      // 将 MCP 配置序列化为 JSON，传递给子Agent
-      env.CLAUDE_CODE_MCP_SERVERS = JSON.stringify(this.config.mcpServers.map(s => ({
-        name: s.name,
-        type: s.type,
-        command: s.command,
-        args: s.args,
-        url: s.url,
-        env: s.env,
-        isEnabled: s.isEnabled !== false,
-      })));
-      console.log('[ClaudeAgentService] MCP 配置已传递给子Agent环境变量');
-    }
-    
-    // 传递 Skills 配置给子Agent（如果有配置）
-    if (this.config.skills && this.config.skills.length > 0) {
-      env.CLAUDE_CODE_SKILLS = JSON.stringify(this.config.skills);
-      console.log('[ClaudeAgentService] Skills 配置已传递给子Agent:', this.config.skills.join(', '));
-    }
+    // 注意：MCP 和 Skills 现在通过 agents 配置传递给子Agent（官方推荐方式）
+    // 不再使用环境变量 CLAUDE_CODE_MCP_SERVERS 和 CLAUDE_CODE_SKILLS
 
     // 如果配置了 baseUrl（CCR 代理），设置环境变量
     if (this.config.baseUrl) {
@@ -261,6 +246,21 @@ export class ClaudeAgentService {
           : JSON.stringify(this.config.systemPrompt));
     } else {
       console.log('[ClaudeAgentService] ⚠️  未配置系统提示词');
+    }
+    
+    // 配置子Agent定义（Agent工具可调用）
+    // 使用 SDK AgentDefinition 类型，支持 mcpServers 和 skills 字段
+    // 这是官方推荐的传递 MCP 和 Skills 给子Agent的方式
+    if (this.config.agents && Object.keys(this.config.agents).length > 0) {
+      options.agents = this.config.agents;
+      console.log('[ClaudeAgentService] 已配置子Agent定义:', Object.keys(this.config.agents).join(', '));
+      
+      // 日志每个子Agent的 MCP 和 Skills 配置
+      for (const [agentName, agentDef] of Object.entries(this.config.agents)) {
+        console.log(`[ClaudeAgentService] 子Agent "${agentName}":`);
+        console.log(`  - MCP Servers: ${agentDef.mcpServers ? JSON.stringify(agentDef.mcpServers) : '无'}`);
+        console.log(`  - Skills: ${agentDef.skills ? agentDef.skills.join(', ') : '无'}`);
+      }
     }
 
     let fullResponse = '';
