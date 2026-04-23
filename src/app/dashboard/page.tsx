@@ -89,6 +89,7 @@ export default function DashboardPage() {
     callCount: 0,
   });
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasRunningEvaluations, setHasRunningEvaluations] = useState(false);
 
   useEffect(() => {
     // 检查是否是管理员
@@ -102,6 +103,17 @@ export default function DashboardPage() {
     fetchVulnStats();
     fetchTokenStats();
   }, []);
+  
+  // 轮询机制：如果有运行中的评估，每5秒刷新
+  useEffect(() => {
+    if (!hasRunningEvaluations) return;
+    
+    const pollInterval = setInterval(() => {
+      fetchData();
+    }, 5000);
+    
+    return () => clearInterval(pollInterval);
+  }, [hasRunningEvaluations]);
 
   const fetchData = async () => {
     try {
@@ -122,6 +134,13 @@ export default function DashboardPage() {
       const data = await response.json();
       const projectList = data.projects || [];
       setSessions(projectList);
+
+      // 检查是否有运行中的评估（用于轮询）
+      const hasRunning = projectList.some((p: any) => 
+        p.evaluationStatus === 'running' || p.hasWaitingEvaluation || 
+        p.evaluations?.some((e: any) => e.status === 'running' || e.status === 'preparing' || e.status === 'ready')
+      );
+      setHasRunningEvaluations(hasRunning);
 
       // 计算统计数据 - 每个项目只统计最后一次评估的状态
       let completed = 0;
