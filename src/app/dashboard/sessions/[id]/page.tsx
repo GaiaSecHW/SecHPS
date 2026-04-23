@@ -1639,8 +1639,41 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                                       : JSON.stringify(childMsg.content, null, 2)
                                                   );
                                                 }}
-                                                onClick={() => {}}
-                                                isSelected={false}
+                                                onClick={() => {
+                                                  setSelectedMessage(childMsg);
+                                                  let parts: any[] = [];
+                                                  const content = childMsg.content;
+                                                  if (typeof content === 'string') {
+                                                    try {
+                                                      const parsed = JSON.parse(content);
+                                                      if (Array.isArray(parsed)) {
+                                                        parts = parsed;
+                                                      } else {
+                                                        parts = [{ type: 'text', text: content }];
+                                                      }
+                                                    } catch {
+                                                      parts = [{ type: 'text', text: content }];
+                                                    }
+                                                  } else if (Array.isArray(content)) {
+                                                    parts = content;
+                                                  } else if (content) {
+                                                    parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
+                                                  }
+                                                  setMessageDetail({
+                                                    id: childMsg.id,
+                                                    role: childMsg.role,
+                                                    content: childMsg.content,
+                                                    createdAt: childMsg.createdAt,
+                                                    agentId: childMsg.agentId,
+                                                    parts: parts,
+                                                    info: {
+                                                      id: childMsg.id,
+                                                      role: childMsg.role,
+                                                      time: { created: childMsg.createdAt },
+                                                    },
+                                                  });
+                                                }}
+                                                isSelected={selectedMessage?.id === childMsg.id}
                                               />
                                             ))}
                                           </div>
