@@ -89,11 +89,18 @@ export async function GET(
         event: event.event,
       }));
 
-      // 3. 解析 TodoWrite（找最近一次）
+      // 3. 解析 TodoWrite（找最近一次，并添加 nodeId）
       for (let i = events.length - 1; i >= 0; i--) {
         const event = events[i];
         if (event.event === 'tool_use' && event.data?.name === 'TodoWrite') {
-          todos = event.data?.args?.todos || [];
+          const rawTodos = event.data?.args?.todos || [];
+          // 给每个 todo 添加 nodeId，便于前端过滤
+          todos = rawTodos.map((todo: any, idx: number) => ({
+            ...todo,
+            id: todo.id || `todo-${nodeId}-${idx}`,
+            nodeId: nodeId,
+            workflowNodeId: nodeId,
+          }));
           break;
         }
       }
