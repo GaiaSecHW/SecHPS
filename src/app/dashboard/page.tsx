@@ -34,10 +34,10 @@ interface Session {
 
 interface Stats {
   total: number;
-  running: number;
   completed: number;
   failed: number;
-  waiting: number;
+  runningEvaluations: number;  // 正在运行的评估数量（preparing + running）
+  queuedEvaluations: number;   // 队列中等待的评估数量
 }
 
 interface VulnerabilityStats {
@@ -64,10 +64,10 @@ export default function DashboardPage() {
   const [error, setError] = useState('');
   const [stats, setStats] = useState<Stats>({
     total: 0,
-    running: 0,
     completed: 0,
     failed: 0,
-    waiting: 0,
+    runningEvaluations: 0,
+    queuedEvaluations: 0,
   });
   const [vulnStats, setVulnStats] = useState<VulnerabilityStats>({
     total: 0,
@@ -120,18 +120,44 @@ export default function DashboardPage() {
       const projectList = data.projects || [];
       setSessions(projectList);
 
-      // 计算统计数据
-      const running = projectList.filter((s: Session) => s.status === 'running').length;
-      const completed = projectList.filter((s: Session) => s.status === 'completed').length;
-      const failed = projectList.filter((s: Session) => s.status === 'failed').length;
-      const waiting = projectList.length - running - completed - failed;
+      // 计算统计数据 - 每个项目只统计最后一次评估的状态
+      let completed = 0;
+      let failed = 0;
+      let runningEvaluations = 0;
+      let queuedEvaluations = 0;
+
+      for (const project of projectList) {
+        // 获取该项目所有评估，按 startedAt 排序
+        const evaluations = project.evaluations || [];
+        if (evaluations.length === 0) continue;  // 没有评估的项目不计入统计
+
+        // 找最后一次评估（最新的）
+        const sortedEvaluations = evaluations.sort((a: any, b: any) => 
+          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+        );
+        const lastEvaluation = sortedEvaluations[0];
+        
+        if (!lastEvaluation) continue;
+
+        // 根据最后一次评估状态统计
+        const lastStatus = lastEvaluation.status;
+        if (lastStatus === 'completed') {
+          completed++;
+        } else if (lastStatus === 'failed') {
+          failed++;
+        } else if (lastStatus === 'queued') {
+          queuedEvaluations++;
+        } else if (['running', 'preparing'].includes(lastStatus)) {
+          runningEvaluations++;
+        }
+      }
 
       const newStats = {
         total: projectList.length,
-        running,
         completed,
         failed,
-        waiting,
+        runningEvaluations,
+        queuedEvaluations,
       };
       setStats(newStats);
       setLoading(false);
@@ -268,16 +294,16 @@ export default function DashboardPage() {
             textColor="text-primary-700"
           />
           <StatCard
-            title="运行中"
-            value={stats.running}
+            title="评估运行"
+            value={stats.runningEvaluations}
             icon={<Activity size={24} />}
             color="bg-blue-500"
             bgColor="bg-blue-50"
             textColor="text-blue-700"
           />
           <StatCard
-            title="等待中"
-            value={stats.waiting}
+            title="队列中"
+            value={stats.queuedEvaluations}
             icon={<Hourglass size={24} />}
             color="bg-yellow-500"
             bgColor="bg-yellow-50"
@@ -449,85 +475,6 @@ export default function DashboardPage() {
             textColor="text-indigo-700"
           />
         </div>
-      </div>
-
-      {/* 项目状态分布 */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <TrendingUp size={20} className="mr-2 text-primary-500" />
-          项目状态分布
-        </h2>
-        {stats.total === 0 ? (
-          <p className="text-gray-500 text-center py-8">暂无数据</p>
-        ) : (
-          <div className="space-y-4">
-            <StatusItem
-              label="运行中"
-              count={stats.running}
-              total={stats.total}
-              color="bg-blue-500"
-            />
-            <StatusItem
-              label="等待中"
-              count={stats.waiting}
-              total={stats.total}
-              color="bg-yellow-500"
-            />
-            <StatusItem
-              label="已完成"
-              count={stats.completed}
-              total={stats.total}
-              color="bg-green-500"
-            />
-            <StatusItem
-              label="失败"
-              count={stats.failed}
-              total={stats.total}
-              color="bg-red-500"
-            />
-          </div>
-        )}
-      </div>
-
-      {/* 最近项目列表 */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Clock size={20} className="mr-2 text-primary-500" />
-            最近项目
-          </h2>
-          <Link
-            href="/dashboard/sessions"
-            className="flex items-center text-sm text-primary-600 hover:text-primary-800 transition-colors"
-          >
-            查看全部
-            <ArrowRight size={16} className="ml-1" />
-          </Link>
-        </div>
-
-        {sessions.length === 0 ? (
-          <div className="text-center py-12">
-            <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">
-              暂无项目
-            </h3>
-            <p className="mt-2 text-sm text-gray-600">
-              创建您的第一个项目开始使用 AI4WEB
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sessions.slice(0, 5).map((session) => (
-              <SessionRow
-                key={session.id}
-                session={session}
-                getStatusText={getStatusText}
-                getStatusBgColor={getStatusBgColor}
-                getProgressPercentage={getProgressPercentage}
-              />
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

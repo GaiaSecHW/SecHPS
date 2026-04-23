@@ -32,6 +32,7 @@ interface EvaluationHeaderProps {
   onAskProgress?: () => void;
   onDelete?: () => void;
   progressQuestion?: string;
+  realtimeTokenUsage?: { inputTokens: number; outputTokens: number };
   evaluation?: any;
 }
 

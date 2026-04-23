@@ -82,12 +82,14 @@ export async function GET(
         }
       }
       
-      // 如果没找到，可能是 toolUseId 或在 children 列表中
+      // 如果没找到，尝试通过消息 ID 匹配
       if (!toolCallMsg) {
-        const child = children.find(c => c.toolUseId === childId || c.id === childId);
-        if (child) {
-          toolCallMsg = messages.find(m => m.id === child.id);
-          toolUseId = child.toolUseId;
+        // 直接在消息中查找，而不是使用 children（children 还未构建）
+        for (const msg of messages) {
+          if (msg.role === 'tool_call' && msg.id === childId) {
+            toolCallMsg = msg;
+            break;
+          }
         }
       }
       
@@ -96,7 +98,7 @@ export async function GET(
       }
       
       // 解析 Agent 调用内容
-      let toolCallContent = toolCallMsg.content;
+      let toolCallContent: any = toolCallMsg.content;
       if (typeof toolCallContent === 'string') {
         try { toolCallContent = JSON.parse(toolCallContent); } catch { toolCallContent = {}; }
       }
@@ -107,7 +109,7 @@ export async function GET(
       // 找到对应的最终 tool_result（获取结束时间）
       const finalResult = messages.find(m => {
         if (m.role !== 'tool_result') return false;
-        let meta = m.metadata;
+        let meta: any = m.metadata;
         if (typeof meta === 'string') { try { meta = JSON.parse(meta); } catch { return false; } }
         return meta?.toolUseId === toolUseId;
       });
@@ -148,13 +150,13 @@ export async function GET(
             if (msg.id === toolCallMsg.id || msg.id === finalResult?.id) continue;
             
             // 解析 content
-            let content = msg.content;
+            let content: any = msg.content;
             if (typeof content === 'string') {
               try { content = JSON.parse(content); } catch { /* keep as string */ }
             }
             
             // 解析 metadata
-            let metadata = msg.metadata;
+            let metadata: any = msg.metadata;
             if (typeof metadata === 'string') {
               try { metadata = JSON.parse(metadata); } catch { metadata = {}; }
             }
@@ -217,10 +219,10 @@ export async function GET(
     }> = [];
 
     // 收集所有 tool_result 的 toolUseId，用于确定子Agent是否完成
-    const toolResultMap: Record<string, { completedAt: string; isError: boolean }> = {};
+    const toolResultMap: Record<string, { completedAt: string | null; isError: boolean }> = {};
     for (const msg of messages) {
       if (msg.role === 'tool_result') {
-        let meta = msg.metadata;
+        let meta: any = msg.metadata;
         if (typeof meta === 'string') {
           try { meta = JSON.parse(meta); } catch { continue; }
         }
@@ -236,7 +238,7 @@ export async function GET(
     for (const msg of messages) {
       try {
         // 解析消息内容
-        let content = msg.content;
+        let content: any = msg.content;
         if (typeof content === 'string') {
           try {
             content = JSON.parse(content);

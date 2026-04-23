@@ -33,7 +33,7 @@ export async function POST(
     const internalCallToken = request.headers.get('X-Internal-Token');
     const isQueuedStart = internalCallToken === process.env.INTERNAL_API_SECRET;
     
-    let payload: { userId: string; permissions: string[] } | null = null;
+    let payload: { userId: string; permissions: string[]; roles?: string[] } | null = null;
     
     if (isQueuedStart) {
       // 内部调用：从请求体获取用户信息或使用项目所有者
@@ -43,7 +43,7 @@ export async function POST(
         select: { userId: true },
       });
       if (project) {
-        // 获取用户权限
+        // 获取用户权限和角色
         const user = await prisma.user.findUnique({
           where: { id: project.userId },
           include: {
@@ -60,7 +60,8 @@ export async function POST(
         });
         if (user) {
           const permissions = user.UserRole.flatMap(ur => ur.Role.Permission.map(p => `${p.module}:${p.action}`));
-          payload = { userId: user.id, permissions };
+          const roles = user.UserRole.map(ur => ur.Role.name);
+          payload = { userId: user.id, permissions, roles };
         }
       }
       if (!payload) {
@@ -258,7 +259,7 @@ export async function POST(
       const targetEvaluation = activeEvaluations.find(e => e.id === reconnectEvaluationId);
       if (targetEvaluation) {
         // SSE 重连权限检查：评估所属项目必须是用户自己的，或者用户是管理员
-        const userIsAdmin = isAdmin(payload);
+        const userIsAdmin = payload.roles?.includes('admin') ?? false;
         if (!userIsAdmin && project.userId !== payload.userId) {
           return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
         }
