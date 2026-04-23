@@ -73,15 +73,38 @@ export async function GET(request: Request) {
     });
 
     // 转换数据格式，添加漏洞数量和运行状态
-    const projectsWithVulnCount = projects.map(project => ({
-      ...project,
-      evaluations: project.EvaluationSession || [],  // 映射字段名给前端
-      vulnerabilityCount: project._count?.Vulnerability || 0,
-      hasRunningEvaluation: project.EvaluationSession?.some((e: any) => e.status === 'running' || e.status === 'queued') || false,
-      userName: project.User?.name || null,
-      userUsername: project.User?.username || null,
-      User: undefined,  // 移除嵌套的 User 对象
-    }));
+    const projectsWithVulnCount = projects.map(project => {
+      // 计算评估状态
+      const runningCount = project.EvaluationSession?.filter((e: any) => e.status === 'running').length || 0;
+      const waitingCount = project.EvaluationSession?.filter((e: any) => e.status === 'preparing' || e.status === 'ready').length || 0;
+      const completedCount = project.EvaluationSession?.filter((e: any) => e.status === 'completed').length || 0;
+      const failedCount = project.EvaluationSession?.filter((e: any) => e.status === 'failed' || e.status === 'cancelled').length || 0;
+      
+      // 状态优先级：running > waiting > failed > completed
+      let evaluationStatus = 'idle';
+      if (runningCount > 0) {
+        evaluationStatus = 'running';
+      } else if (waitingCount > 0) {
+        evaluationStatus = 'waiting'; // 等候中
+      } else if (failedCount > 0) {
+        evaluationStatus = 'failed';
+      } else if (completedCount > 0) {
+        evaluationStatus = 'completed';
+      }
+      
+      return {
+        ...project,
+        evaluations: project.EvaluationSession || [],
+        vulnerabilityCount: project._count?.Vulnerability || 0,
+        hasRunningEvaluation: runningCount > 0,
+        hasWaitingEvaluation: waitingCount > 0,
+        evaluationStatus, // 新增：综合评估状态
+        evaluationCounts: { running: runningCount, waiting: waitingCount, completed: completedCount, failed: failedCount },
+        userName: project.User?.name || null,
+        userUsername: project.User?.username || null,
+        User: undefined,
+      };
+    });
 
     return NextResponse.json({ projects: projectsWithVulnCount });
   } catch (error) {

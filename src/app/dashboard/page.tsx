@@ -27,6 +27,9 @@ interface Session {
   createdAt: string;
   updatedAt: string;
   status?: string;
+  evaluationStatus?: string; // 新增：综合评估状态 (running, waiting, completed, failed, idle)
+  hasWaitingEvaluation?: boolean; // 新增：是否有等候中的评估
+  evaluationCounts?: { running: number; waiting: number; completed: number; failed: number }; // 新增
   config?: any;
   messages?: any[];
   evaluations?: { id: string; status: string; startedAt: string; completedAt: string | null }[];
@@ -224,12 +227,20 @@ export default function DashboardPage() {
     switch (status) {
       case 'running':
         return '运行中';
+      case 'waiting':
+        return '排队中';
+      case 'preparing':
+        return '准备中';
+      case 'ready':
+        return '就绪';
       case 'completed':
         return '已完成';
       case 'failed':
         return '失败';
+      case 'cancelled':
+        return '已取消';
       default:
-        return '等待中';
+        return '空闲';
     }
   };
 
@@ -237,12 +248,18 @@ export default function DashboardPage() {
     switch (status) {
       case 'running':
         return 'bg-blue-50 text-blue-700 border-blue-200';
+      case 'waiting':
+      case 'preparing':
+      case 'ready':
+        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
       case 'completed':
         return 'bg-green-50 text-green-700 border-green-200';
       case 'failed':
         return 'bg-red-50 text-red-700 border-red-200';
+      case 'cancelled':
+        return 'bg-gray-50 text-gray-700 border-gray-200';
       default:
-        return 'bg-yellow-50 text-yellow-700 border-yellow-200';
+        return 'bg-gray-50 text-gray-500 border-gray-200';
     }
   };
 
@@ -610,6 +627,14 @@ function SessionRow({
 }) {
   const progress = getProgressPercentage(session);
   
+  // 使用 API 返回的 evaluationStatus，如果没有则从 evaluations 计算
+  const evaluationStatus = session.evaluationStatus || 
+    (session.evaluations?.length > 0 
+      ? (session.evaluations[0]?.status === 'preparing' || session.evaluations[0]?.status === 'ready' 
+        ? 'waiting' 
+        : session.evaluations[0]?.status)
+      : 'idle');
+  
   // 获取最新的评估记录
   const latestEvaluation = session.evaluations?.[0];
   const detailHref = latestEvaluation 
@@ -627,10 +652,10 @@ function SessionRow({
             <span
               className={
                 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ' +
-                getStatusBgColor(session.status)
+                getStatusBgColor(evaluationStatus)
               }
             >
-              {getStatusText(session.status)}
+              {getStatusText(evaluationStatus)}
             </span>
           </div>
           <p className="mt-2 text-sm text-gray-600">
