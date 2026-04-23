@@ -16,12 +16,6 @@ export async function GET(request: Request) {
   const { payload } = auth;
 
   try {
-    // 检查权限 - 管理员直接允许，或检查 TOKEN_DETAIL 权限
-    const userIsAdmin = isAdmin(payload);
-    if (!userIsAdmin && !hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL)) {
-      return NextResponse.json({ details: { error: '禁止访问' } }, { status: 403 });
-    }
-
     // 获取查询参数
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
@@ -35,14 +29,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ details: { error: '缺少项目ID' } }, { status: 400 });
     }
 
-    // 检查用户是否有权限访问该项目（管理员可以访问任何项目）
+    // 权限检查逻辑：
+    // 1. 管理员可访问任何项目
+    // 2. 有 TOKEN_DETAIL 权限的用户可访问任何项目
+    // 3. 普通用户只能访问自己拥有的项目
+    const userIsAdmin = isAdmin(payload);
+    const hasTokenDetailPermission = hasPermission(payload.permissions, PERMISSIONS.TOKEN_DETAIL);
+    
+    // 构建查询条件：管理员或有 TOKEN_DETAIL 权限的用户可以访问任何项目
+    const projectWhereClause = (userIsAdmin || hasTokenDetailPermission)
+      ? { id: projectId }
+      : { id: projectId, userId: payload.userId };
+
     const project = await prisma.project.findFirst({
-      where: userIsAdmin
-        ? { id: projectId }
-        : {
-            id: projectId,
-            userId: payload.userId,
-          },
+      where: projectWhereClause,
     });
 
     if (!project) {
