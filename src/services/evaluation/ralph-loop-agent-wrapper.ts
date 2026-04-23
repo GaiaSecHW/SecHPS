@@ -23,6 +23,7 @@ import {
   type ErrorContext,
   type ExperienceMatch,
 } from '@/services/autonomous-evolution/experience-query-service';
+import { EvaluationMessageStore, createEvaluationMessageStore } from '@/services/evaluation-message-store';
 
 /**
  * Ralph Loop Agent 配置
@@ -153,6 +154,7 @@ export class RalphLoopAgent {
   private caller: EnhancedEvaluationCaller;
   private config: RalphLoopAgentConfig;
   private aborted: boolean = false;  // 中止标志
+  private messageStore: EvaluationMessageStore | null = null;  // JSONL 消息存储
 
   constructor(config: RalphLoopAgentConfig) {
     this.config = config;
@@ -252,6 +254,16 @@ export class RalphLoopAgent {
     let completionReason: RalphLoopAgentResult['completionReason'] = 'max-iterations';
     let reason: string | undefined;
     let lastExperienceGuidance: string | undefined;  // 存储上一轮错误查询到的经验指导
+    
+    // 初始化 JSONL 消息存储
+    this.messageStore = createEvaluationMessageStore(projectId, evaluationId);
+    try {
+      await this.messageStore.initialize();
+      console.log(`[Ralph Loop] JSONL 消息存储初始化成功`);
+    } catch (error) {
+      console.error(`[Ralph Loop] JSONL 消息存储初始化失败:`, error);
+      this.messageStore = null;  // 失败时置空，不影响主流程
+    }
 
     const stopConditions = this.getStopConditions();
     const modelId = this.getModelId();
@@ -494,7 +506,26 @@ export class RalphLoopAgent {
         if (verification.reason && !verification.complete) {
           console.log(`[Ralph] 迭代 ${iteration} 反馈: ${verification.reason}`);
 
-          // 保存反馈到数据库
+          // ========================================
+          // 双写机制：同时写入 Prisma 和 JSONL
+          // ========================================
+          
+          // 1. 写入 JSONL（先写）
+          if (this.messageStore) {
+            try {
+              await this.messageStore.appendMessage({
+                role: 'system',
+                nodeId: workflowNodeId || 'ralph-feedback',  // 使用 workflowNodeId 或固定 nodeId
+                nodeIndex: iteration,  // 使用迭代次数作为 nodeIndex
+                content: `[Ralph 反馈]\n${verification.reason}`,
+                agentCallMsgId: null,
+              });
+            } catch (jsonlError) {
+              console.error('[Ralph] JSONL 写入失败:', jsonlError);
+            }
+          }
+          
+          // 2. 写入 Prisma（双写过渡期保留）
           try {
             await prisma.sessionMessage.create({
               data: {

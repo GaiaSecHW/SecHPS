@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { AIMessage } from '@/services/ai';
+import { EvaluationMessageStore, createEvaluationMessageStore } from '@/services/evaluation-message-store';
 
 export interface ConversationMessage {
   id: string;
@@ -14,6 +15,44 @@ export interface ConversationMessage {
  * 对话历史管理
  */
 export class ConversationHistory {
+  /** JSONL 消息存储缓存（按 evaluationId） */
+  private messageStoreCache: Map<string, EvaluationMessageStore> = new Map();
+  
+  /**
+   * 获取或创建 JSONL 消息存储
+   */
+  private async getMessageStore(evaluationId: string): Promise<EvaluationMessageStore | null> {
+    try {
+      // 检查缓存
+      if (this.messageStoreCache.has(evaluationId)) {
+        return this.messageStoreCache.get(evaluationId)!;
+      }
+      
+      // 查询 EvaluationSession 获取 projectId
+      const session = await prisma.evaluationSession.findUnique({
+        where: { id: evaluationId },
+        select: { projectId: true },
+      });
+      
+      if (!session) {
+        console.error(`[ConversationHistory] 未找到评估会话: ${evaluationId}`);
+        return null;
+      }
+      
+      // 创建并初始化消息存储
+      const store = createEvaluationMessageStore(session.projectId, evaluationId);
+      await store.initialize();
+      
+      // 缓存
+      this.messageStoreCache.set(evaluationId, store);
+      
+      return store;
+    } catch (error) {
+      console.error(`[ConversationHistory] 获取消息存储失败:`, error);
+      return null;
+    }
+  }
+  
   /**
    * 获取对话历史
    */
@@ -35,6 +74,27 @@ export class ConversationHistory {
    * 添加用户消息
    */
   async addUserMessage(evaluationId: string, content: string): Promise<ConversationMessage> {
+    // ========================================
+    // 双写机制：同时写入 Prisma 和 JSONL
+    // ========================================
+    
+    // 1. 写入 JSONL（先写）
+    const messageStore = await this.getMessageStore(evaluationId);
+    if (messageStore) {
+      try {
+        await messageStore.appendMessage({
+          role: 'user',
+          nodeId: 'conversation',  // 对话消息使用固定 nodeId
+          nodeIndex: 0,
+          content: content,
+          agentCallMsgId: null,
+        });
+      } catch (jsonlError) {
+        console.error('[ConversationHistory] JSONL 写入失败:', jsonlError);
+      }
+    }
+    
+    // 2. 写入 Prisma（双写过渡期保留）
     const message = await prisma.sessionMessage.create({
       data: {
         id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
@@ -59,6 +119,27 @@ export class ConversationHistory {
    * 添加助手消息
    */
   async addAssistantMessage(evaluationId: string, content: string): Promise<ConversationMessage> {
+    // ========================================
+    // 双写机制：同时写入 Prisma 和 JSONL
+    // ========================================
+    
+    // 1. 写入 JSONL（先写）
+    const messageStore = await this.getMessageStore(evaluationId);
+    if (messageStore) {
+      try {
+        await messageStore.appendMessage({
+          role: 'assistant',
+          nodeId: 'conversation',  // 对话消息使用固定 nodeId
+          nodeIndex: 0,
+          content: content,
+          agentCallMsgId: null,
+        });
+      } catch (jsonlError) {
+        console.error('[ConversationHistory] JSONL 写入失败:', jsonlError);
+      }
+    }
+    
+    // 2. 写入 Prisma（双写过渡期保留）
     const message = await prisma.sessionMessage.create({
       data: {
         id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
