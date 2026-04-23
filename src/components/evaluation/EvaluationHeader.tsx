@@ -1,6 +1,6 @@
 'use client';
  
-import { ArrowLeft, Square, Loader2, CheckCircle2, Circle, X, FileSearch, MessageSquare, Trash2, Coins, Info } from 'lucide-react';
+import { ArrowLeft, Square, Loader2, CheckCircle2, Circle, X, FileSearch, MessageSquare, Trash2, Coins, Info, Clock } from 'lucide-react';
 
 // 自适应单位格式化 Token
 function formatTokenNumber(num: number): string {
@@ -18,6 +18,26 @@ function calculateEstimatedCost(inputTokens: number, outputTokens: number): numb
   const inputCost = (inputTokens / 1000000) * 6;   // ¥6 per million input tokens
   const outputCost = (outputTokens / 1000000) * 22; // ¥22 per million output tokens
   return inputCost + outputCost;
+}
+
+// 格式化耗时
+function formatDuration(startedAt: string | Date | null, completedAt: string | Date | null): string {
+  if (!startedAt) return '--';
+  
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  const durationMs = end - start;
+  
+  if (durationMs < 1000) return `${durationMs}ms`;
+  if (durationMs < 60000) return `${Math.round(durationMs / 1000)}秒`;
+  if (durationMs < 3600000) {
+    const minutes = Math.floor(durationMs / 60000);
+    const seconds = Math.round((durationMs % 60000) / 1000);
+    return `${minutes}分${seconds}秒`;
+  }
+  const hours = Math.floor(durationMs / 3600000);
+  const minutes = Math.floor((durationMs % 3600000) / 60000);
+  return `${hours}小时${minutes}分`;
 }
 
 interface EvaluationHeaderProps {
@@ -185,6 +205,26 @@ export function EvaluationHeader({
                 费用 = 输入Token × ¥6/百万 + 输出Token × ¥22/百万
               </span>
             </span>
+          </div>
+          
+          {/* 启动时间、终止时间、耗时 */}
+          <div className="flex items-center gap-2 pl-4 border-l border-gray-200">
+            <Clock size={14} className="text-gray-400" />
+            {evaluation?.startedAt && (
+              <span className="text-gray-500">
+                启动: {new Date(evaluation.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+            {evaluation?.completedAt && (
+              <span className="text-gray-500">
+                终止: {new Date(evaluation.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+            {evaluation?.startedAt && (
+              <span className="text-gray-500 pl-2 border-l border-gray-200">
+                耗时: {formatDuration(evaluation.startedAt, evaluation.completedAt)}
+              </span>
+            )}
           </div>
         </div>
         
