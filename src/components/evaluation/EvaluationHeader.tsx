@@ -191,7 +191,7 @@ export function EvaluationHeader({
           {/* 工作流类型 */}
           {workflowType && (
             <span className="text-gray-500">
-              {workflowType === 'fsm' ? 'FSM流程' : 'DAG编排'}
+              {workflowType === 'fsm' ? '固定编排' : '自由编排'}
             </span>
           )}
           
