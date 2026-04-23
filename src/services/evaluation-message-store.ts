@@ -575,9 +575,22 @@ export class EvaluationMessageStore {
       };
     }
     
-    // 读取索引获取 nodeIdRanges
-    const indexContent = await fs.readFile(this.indexPath, 'utf-8');
-    const index: MessageIndex = JSON.parse(indexContent);
+    // 读取索引获取 nodeIdRanges（如果 index.json 不存在，使用空索引）
+    let index: MessageIndex;
+    try {
+      const indexContent = await fs.readFile(this.indexPath, 'utf-8');
+      index = JSON.parse(indexContent);
+    } catch {
+      // index.json 不存在，使用空索引
+      index = {
+        sessionId: this.sessionId,
+        projectId: this.projectId,
+        messageCount: 0,
+        nodeIdRanges: {},
+        lastActivity: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      };
+    }
     
     // 如果指定 nodeId 且存在范围，使用范围优化
     const useRangeOptimization = options?.nodeId && index.nodeIdRanges[options.nodeId];
@@ -848,11 +861,14 @@ export class EvaluationMessageStore {
   }
 
   /**
-   * 检查会话是否存在
+   * 检查会话是否存在（检查 messages.jsonl 和 index.json 是否存在）
    */
   async exists(): Promise<boolean> {
     try {
       await fs.access(this.sessionDir);
+      // 还需要检查 messages.jsonl 和 index.json 是否存在
+      await fs.access(this.messagesPath);
+      await fs.access(this.indexPath);
       return true;
     } catch {
       return false;
