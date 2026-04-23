@@ -934,13 +934,6 @@ export async function POST(
                       }));
                       
                       emitTodoUpdate(evaluation.id, todosWithNodeId);
-                      
-                      // 保存到数据库
-                      const newSnapshot = JSON.stringify(todosWithNodeId);
-                      prisma.evaluationSession.update({
-                        where: { id: evaluation.id },
-                        data: { todoList: newSnapshot },
-                      }).catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '[FSM Async] 保存 TODO 失败', { error: err }));
                     }
                   },
                   onPhaseComplete: async (phase, result) => {
@@ -1733,13 +1726,6 @@ export async function POST(
                   });
                   
                   emitTodoUpdate(dagEvaluation.id, todosWithNodeId);
-                  
-                  // 保存到数据库
-                  const newSnapshot = JSON.stringify(todosWithNodeId);
-                  prisma.evaluationSession.update({
-                    where: { id: dagEvaluation.id },
-                    data: { todoList: newSnapshot },
-                  }).catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 保存 TODO 失败', { error: err }));
                 }
               },
               

@@ -362,7 +362,6 @@ model EvaluationSession {
   errorMessage              String?
   modelName                 String?
   providerType              String?
-  todoList                  String?
   totalInputTokens          Int                         @default(0)
   totalOutputTokens         Int                         @default(0)
   totalTokens               Int                         @default(0)

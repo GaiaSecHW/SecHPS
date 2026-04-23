@@ -133,6 +133,7 @@ function SessionDetailContent({
   const [selectedChildSession, setSelectedChildSession] = useState<string | null>(null);
   const [childSessionMessages, setChildSessionMessages] = useState<any[]>([]);
   const [loadingChildMessages, setLoadingChildMessages] = useState(false);
+  const [preloadedAgentMessages, setPreloadedAgentMessages] = useState<Record<string, any[]>>({}); // 预加载的子Agent消息
   const [isTodosExpanded, setIsTodosExpanded] = useState(false);  // 任务列表默认收缩
   const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
@@ -227,47 +228,31 @@ function SessionDetailContent({
 
   useEffect(() => {
     // 多 Agent 模式使用 evaluationId，旧模式使用 opencodeSessionId
-    if (!evaluationId && !evaluation?.opencodeSessionId) return;
+    if (!evaluationId) return;
 
-    // 如果评估已完成、失败或已取消，不需要轮询
-    if (evaluation?.status === 'completed' || evaluation?.status === 'failed' || evaluation?.status === 'cancelled') {
-      return;
-    }
-
-    // 轮询逻辑：每 5 秒轮询一次，获取 Token 和其他数据
-    // 不依赖 SSE，轮询始终执行
+    // 轮询逻辑：每 5 秒轮询一次
     let isPolling = true;
     
     const pollLoop = async () => {
       while (isPolling) {
-        try {
-          await fetchEvaluation(); // 1. 评估状态和 Token
-          await new Promise(r => setTimeout(r, 5000));
-          if (!isPolling) break;
-          
-          await fetchWorkflowNodes(); // 2. 节点
-          await new Promise(r => setTimeout(r, 5000));
-          if (!isPolling) break;
-          
-          await fetchMessages(); // 3. 消息
-          await new Promise(r => setTimeout(r, 5000));
-          if (!isPolling) break;
-          
-          await fetchTodos();    // 4. 任务
-          await new Promise(r => setTimeout(r, 5000));
-        } catch (e) {
-          console.error('[Polling] Error:', e);
-          await new Promise(r => setTimeout(r, 5000)); // 出错也休息5秒
-        }
+        // 每个 fetch 独立执行，不互相影响
+        fetchEvaluation().catch(e => console.error('[Poll] fetchEvaluation error:', e));
+        fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
+        fetchMessages().catch(e => console.error('[Poll] fetchMessages error:', e));
+        fetchTodos().catch(e => console.error('[Poll] fetchTodos error:', e));
+        fetchChildrenSessions().catch(e => console.error('[Poll] fetchChildrenSessions error:', e));
+        
+        // 等待 5 秒后继续
+        await new Promise(r => setTimeout(r, 5000));
       }
     };
     
     pollLoop();
 
-return () => {
+    return () => {
       isPolling = false;
     };
-  }, [evaluationId, evaluation?.opencodeSessionId, evaluation?.status]);
+  }, [evaluationId]); // 只依赖 evaluationId，不依赖 evaluation?.status
 
   const fetchEvaluation = async (): Promise<any> => {
     if (!evaluationId) return null;
@@ -319,9 +304,8 @@ return () => {
       if (!response.ok) return;
       const data = await response.json();
       // 可根据需要处理广播内容
-      console.log('[Broadcast]', data.config?.content);
     } catch (err) {
-      console.error('Fetch broadcast error:', err);
+      // 忽略广播错误
     }
   };
 
@@ -330,8 +314,6 @@ return () => {
 
     try {
       const token = localStorage.getItem('token');
-      console.log('[fetchMessages] evaluationId:', evaluationId);
-      console.log('[fetchMessages] Fetching from:', `/api/evaluations/${evaluationId}/messages`);
 
       const response = await fetch(`/api/evaluations/${evaluationId}/messages`, {
         headers: {
@@ -339,12 +321,8 @@ return () => {
         },
       });
 
-      console.log('[fetchMessages] Response status:', response.status, response.statusText);
-
       if (!response.ok) {
-        // 先获取文本，再尝试解析 JSON
         const text = await response.text();
-        console.error('[fetchMessages] Error response text:', text.substring(0, 500));
         try {
           const data = JSON.parse(text);
           setError(data.error || '获取消息失败');
@@ -365,14 +343,14 @@ return () => {
     }
   };
 
-  // 获取节点消息（按 nodeId 过滤）- 串行调用
+  // 获取节点消息（按 nodeId 过滤）- 保留用于轮询
   const fetchNodeMessages = async (nodeId: string) => {
     if (!evaluationId) return;
 
     try {
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`/api/evaluations/${evaluationId}/messages?source=db&nodeId=${encodeURIComponent(nodeId)}`, {
+      const response = await fetch(`/api/evaluations/${evaluationId}/messages?nodeId=${encodeURIComponent(nodeId)}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -384,42 +362,68 @@ return () => {
       }
 
       const data = await response.json();
-      console.log('[fetchNodeMessages] API返回:', data.messages?.length || 0, '条消息');
-      
       setNodeMessages(data.messages || []);
     } catch (err) {
-      console.error('[fetchNodeMessages] Error:', err);
       setNodeMessages([]);
     }
   };
 
-  // 处理节点点击 - 串行加载节点相关数据
+  // 归一化节点数据加载 - 一次性获取所有数据（含子Agent消息）
+  const fetchNodeData = async (nodeId: string) => {
+    if (!evaluationId) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `/api/evaluations/${evaluationId}/node-data?nodeId=${encodeURIComponent(nodeId)}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!response.ok) {
+        setNodeMessages([]);
+        setTodos([]);
+        setChildrenSessions([]);
+        setPreloadedAgentMessages({});
+        return;
+      }
+
+      const data = await response.json();
+      console.log('[NodeData] Loaded:', data.total);
+      
+      // 解包数据到各状态
+      setNodeMessages(data.messages || []);
+      setTodos(data.todos || []);
+      setChildrenSessions(data.children || []);
+      // 缓存预加载的子Agent消息
+      setPreloadedAgentMessages(data.agentMessages || {});
+    } catch (err) {
+      console.error('[NodeData] Error:', err);
+      setNodeMessages([]);
+      setTodos([]);
+      setChildrenSessions([]);
+      setPreloadedAgentMessages({});
+    }
+  };
+
+  // 处理节点点击 - 使用归一化API一次性加载三类数据
   const handleNodeClick = async (nodeId: string) => {
-    console.log('[handleNodeClick] 点击节点, nodeId:', nodeId);
-    
     if (selectedNodeId === nodeId) {
       // 取消选择
       setSelectedNodeId(null);
       setNodeMessages([]);
+      setTodos([]);
+      setChildrenSessions([]);
     } else {
-      // 选择节点，串行加载数据
+      // 选择节点，一次性加载三类数据
       setSelectedNodeId(nodeId);
       setLoadingNodeMessages(true);
       
       try {
-        // 1. 加载节点消息
-        await fetchNodeMessages(nodeId);
-        await new Promise(r => setTimeout(r, 1000));
-        
-        // 2. 加载节点任务（如果需要）
-        // await fetchNodeTodos(nodeId);
-        // await new Promise(r => setTimeout(r, 1000));
-        
-        // 3. 加载节点子Agent（如果需要）
-        // await fetchNodeChildren(nodeId);
-        
+        await fetchNodeData(nodeId);
       } catch (e) {
-        console.error('[NodeClick] Error:', e);
+        // 忽略错误
       } finally {
         setLoadingNodeMessages(false);
       }
@@ -477,28 +481,30 @@ return () => {
     }
   };
 
-  const fetchTodos = async () => {
-    // 优先使用 evaluationId 获取 todos
+  const fetchTodos = async (nodeId?: string) => {
+    // 如果没有 evaluationId 且没有 opencodeSessionId，直接返回
+    if (!evaluationId && !evaluation?.opencodeSessionId) return;
+
     if (evaluationId) {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch(
-          `/api/evaluations/${evaluationId}/todos`,
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
+        const url = nodeId 
+          ? `/api/evaluations/${evaluationId}/todos?nodeId=${encodeURIComponent(nodeId)}`
+          : `/api/evaluations/${evaluationId}/todos`;
+        
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
 
         if (response.ok) {
           const data = await response.json();
           setTodos(data.todos || []);
-          console.log('[TODO] Fetched from evaluation API:', data.todos?.length || 0, 'todos');
           return;
         }
       } catch (err) {
-        console.error('[TODO] Error fetching from evaluation API:', err);
+        console.error('[TODO] Error fetching:', err);
       }
     }
 
@@ -517,13 +523,11 @@ return () => {
       );
 
       if (!response.ok) {
-        console.error('[TODO] Failed to fetch todos:', response.status);
         return;
       }
 
       const data = await response.json();
       setTodos(data.todos || []);
-      console.log('[TODO] Fetched', data.todos?.length || 0, 'todos');
     } catch (err) {
       console.error('[TODO] Error fetching todos:', err);
     }
@@ -564,80 +568,49 @@ return () => {
     }
   };
 
-  const fetchChildrenSessions = async () => {
-    // 多Agent模式：使用 evaluationId 获取子Agent列表
-    // 子Agent信息从 NodeExecution 表获取
-    if (!evaluationId) return;
+const fetchChildrenSessions = async (nodeId?: string) => {
+    // 如果没有 evaluationId 且没有 opencodeSessionId，直接返回
+    if (!evaluationId && !evaluation?.opencodeSessionId) return;
 
     try {
       const token = localStorage.getItem('token');
       
-      // 使用 evaluationId 获取子Agent列表（从 NodeExecution 表）
-      const response = await fetch(
-        `/api/evaluations/${evaluationId}/children`,
+      // 优先使用 evaluationId 获取子Agent列表
+      if (evaluationId) {
+        const url = nodeId 
+          ? `/api/evaluations/${evaluationId}/children?nodeId=${encodeURIComponent(nodeId)}`
+          : `/api/evaluations/${evaluationId}/children`;
+        
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setChildrenSessions(data.children || []);
+          return;
+        }
+      }
+
+      // 兼容旧的 opencodeSessionId 方式
+      if (!evaluation?.opencodeSessionId) return;
+
+      const fallbackResponse = await fetch(
+        `/api/sessions/${evaluation.opencodeSessionId}/children`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
-
-      if (!response.ok) {
-        console.error('[Children] Failed to fetch children sessions:', response.status);
-        // 如果新API失败，尝试旧的方式（兼容）
-        if (evaluation?.opencodeSessionId) {
-          const fallbackResponse = await fetch(
-            `/api/sessions/${evaluation.opencodeSessionId}/children`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-          if (fallbackResponse.ok) {
-            const fallbackData = await fallbackResponse.json();
-            console.log('[Children] Fallback received children sessions:', fallbackData.children?.length || 0);
-            setChildrenSessions(prev => {
-              const newChildren = fallbackData.children || [];
-              return newChildren.map((newChild: any) => {
-                const savedStartedAt = childStartedAtRef.current[newChild.id];
-                const existingChild = prev.find(c => c.id === newChild.id);
-                if (savedStartedAt) {
-                  return { ...newChild, startedAt: savedStartedAt };
-                }
-                if (existingChild?.startedAt && !newChild.startedAt) {
-                  return { ...newChild, startedAt: existingChild.startedAt };
-                }
-                return newChild;
-              });
-            });
-          }
-        }
-        return;
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        setChildrenSessions(fallbackData.children || []);
       }
-
-      const data = await response.json();
-      console.log('[Children] Received children sessions:', data.children?.length || 0, data.children);
-      
-      // 合并新旧数据，保留已有的 startedAt（防止轮询覆盖）
-      setChildrenSessions(prev => {
-        const newChildren = data.children || [];
-        return newChildren.map((newChild: any) => {
-          // 优先使用 ref 中保存的 startedAt，然后是旧 state，最后是新数据
-          const savedStartedAt = childStartedAtRef.current[newChild.id];
-          const existingChild = prev.find(c => c.id === newChild.id);
-          
-          if (savedStartedAt) {
-            return { ...newChild, startedAt: savedStartedAt };
-          }
-          if (existingChild?.startedAt && !newChild.startedAt) {
-            return { ...newChild, startedAt: existingChild.startedAt };
-          }
-          return newChild;
-        });
-      });
     } catch (err) {
-      console.error('[Children] Error fetching:', err);
+      // 忽略错误
     }
   };
 
@@ -679,105 +652,35 @@ return () => {
     }
   };
 
-  // 获取子会话消息 - 从当前节点消息中提取工具调用和结果
+  // 获取子会话消息 - 从预加载的 agentMessages 中读取（无需API调用）
   const fetchChildSessionMessages = async (childId: string) => {
+    // 优先使用预加载的消息
+    if (preloadedAgentMessages[childId] && preloadedAgentMessages[childId].length > 0) {
+      console.log('[Child Messages] Using preloaded:', preloadedAgentMessages[childId].length);
+      setChildSessionMessages(preloadedAgentMessages[childId]);
+      return;
+    }
+    
+    // 如果预加载中没有，尝试从 evaluations API 获取
     setLoadingChildMessages(true);
     try {
       const token = localStorage.getItem('token');
       
-      // 方式1: 从 evaluations/[id]/children?childId=xxx 获取
-      if (evaluationId) {
-        const response = await fetch(
-          `/api/evaluations/${evaluationId}/children?childId=${encodeURIComponent(childId)}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Child Messages] From evaluations API:', data.messages?.length || 0);
-          
-          if (data.messages && data.messages.length > 0) {
-            // 格式化消息
-            const formattedMessages = data.messages.map((msg: any, index: number) => ({
-              id: msg.uuid || msg.id || `child-msg-${index}`,
-              role: msg.role || msg.message?.role || 'assistant',
-              content: msg.content || msg.message?.content || '',
-              createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
-            }));
-            setChildSessionMessages(formattedMessages);
-            return;
-          }
-        }
-      }
-      
-      // 方式2: 从 opencodeSessionId 获取（需要先找到sessionId）
-      if (evaluation?.opencodeSessionId) {
-        const sessionId = evaluation.opencodeSessionId;
-        const response = await fetch(
-          `/api/sessions/${sessionId}/children?childId=${encodeURIComponent(childId)}`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Child Messages] From sessions API:', data.messages?.length || 0);
-          
-          if (data.messages && data.messages.length > 0) {
-            const formattedMessages = data.messages.map((msg: any, index: number) => ({
-              id: msg.uuid || msg.id || `child-msg-${index}`,
-              role: msg.role || msg.message?.role || 'assistant',
-              content: msg.content || msg.message?.content || '',
-              createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
-            }));
-            setChildSessionMessages(formattedMessages);
-            return;
-          }
-        }
-      }
-      
-      // 方式3: 从NodeExecution的opencodeSessionId获取（备用）
-      const nodeExecResponse = await fetch(
-        `/api/evaluations/${evaluationId}/nodes`,
+      const response = await fetch(
+        `/api/evaluations/${evaluationId}/children?nodeId=${selectedNodeId}&childId=${encodeURIComponent(childId)}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
       
-      if (nodeExecResponse.ok) {
-        const nodeExecData = await nodeExecResponse.json();
-        const nodeExec = nodeExecData.nodes?.find((n: any) => n.id === childId || n.workflowNodeId === childId);
-        
-        if (nodeExec?.opencodeSessionId) {
-          const response = await fetch(
-            `/api/sessions/${nodeExec.opencodeSessionId}/messages`,
-            {
-              headers: { Authorization: `Bearer ${token}` },
-            }
-          );
-          
-          if (response.ok) {
-            const data = await response.json();
-            console.log('[Child Messages] From node execution:', data.messages?.length || 0);
-            
-            const formattedMessages = (data.messages || []).map((msg: any, index: number) => ({
-              id: msg.uuid || msg.id || `child-msg-${index}`,
-              role: msg.role || msg.message?.role || 'assistant',
-              content: msg.content || msg.message?.content || '',
-              createdAt: msg.timestamp || msg.createdAt || msg.message?.timestamp || new Date().toISOString(),
-            }));
-            
-            setChildSessionMessages(formattedMessages);
-            return;
-          }
-        }
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Child Messages] From evaluations API:', data.messages?.length || 0);
+        setChildSessionMessages(data.messages || []);
+      } else {
+        console.log('[Child Messages] No messages found for child:', childId);
+        setChildSessionMessages([]);
       }
-      
-      console.log('[Child Messages] No messages found for child:', childId);
-      setChildSessionMessages([]);
     } catch (err) {
       console.error('[Child Messages] Error:', err);
       setChildSessionMessages([]);
@@ -1552,7 +1455,7 @@ return () => {
                       )}
                     </div>
                     
-{/* 节点子Agent（从消息中提取 role=tool_call 且 name=Agent 的工具调用） */}
+{/* 节点子Agent - 使用API返回的children列表（而非从nodeMessages提取） */}
                       <div className="border border-gray-200 rounded-lg p-3">
                         <button
                           className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
@@ -1562,155 +1465,111 @@ return () => {
                             <GitBranch size={16} className="text-purple-600" />
                             <span>子Agent调用</span>
                             <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                              {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
-                                try {
-                                  const c = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
-                                  return c?.name === 'Agent' || c?.name === 'task';
-                                } catch { return false; }
-                              }).length} 个
+                              {childrenSessions.length} 个
                             </span>
                           </div>
                           {isChildrenExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </button>
                         {isChildrenExpanded && (
                           <div className="mt-3 space-y-2">
-                            {nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
-                              try {
-                                const c = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
-                                return c?.name === 'Agent' || c?.name === 'task';
-                              } catch { return false; }
-                            }).length === 0 ? (
+                            {childrenSessions.length === 0 ? (
                               <p className="text-sm text-gray-500 text-center py-2">该节点暂无子Agent调用</p>
                             ) : (
-                              nodeMessages.filter((m: any) => m.role === 'tool_call').filter((m: any) => {
-                                try {
-                                  const c = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
-                                  return c?.name === 'Agent' || c?.name === 'task';
-                                } catch { return false; }
-                              }).map((msg: any, idx: number) => {
-                                const content = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content;
-                                const childId = `${msg.id}-${idx}`;
-                                const isExpanded = expandedChildMessages.has(childId);
+                              childrenSessions.map((child: any, idx: number) => {
+                                const childKey = child.agentId || child.toolUseId || child.id;
+                                const isExpanded = expandedChildMessages.has(childKey);
                                 
-                                // 调试日志
-                                console.log('[子Agent] tool_call:', {
-                                  msgId: msg.id,
-                                  toolUseId: content?.toolUseId,
-                                  name: content?.name,
-                                  args: content?.args,
-                                });
+                                // 状态图标
+                                const statusIcon = {
+                                  completed: { icon: CheckCircle2, color: 'text-green-500' },
+                                  running: { icon: Loader2, color: 'text-blue-500 animate-spin' },
+                                  failed: { icon: X, color: 'text-red-500' },
+                                  active: { icon: Circle, color: 'text-gray-400' },
+                                };
+                                const iconConfig = statusIcon[child.status as keyof typeof statusIcon] || statusIcon.active;
+                                const StatusIcon = iconConfig.icon;
                                 
-                                // 查找对应的 tool_result（toolUseId 保存在 metadata 中）
-                                const toolResultMsg = nodeMessages.find((m: any) => {
-                                  const meta = m.metadata || {};
-                                  const match = m.role === 'tool_result' && meta.toolUseId === content?.toolUseId;
-                                  if (m.role === 'tool_result') {
-                                    console.log('[子Agent] tool_result检查:', {
-                                      msgId: m.id,
-                                      metaToolUseId: meta.toolUseId,
-                                      targetToolUseId: content?.toolUseId,
-                                      match,
-                                    });
-                                  }
-                                  return match;
-                                });
-                                
-                                console.log('[子Agent] 找到的tool_result:', toolResultMsg?.id, toolResultMsg?.content?.substring(0, 100));
-                               
-                               return (
-                                 <div key={idx} className="bg-purple-50 rounded border border-purple-200">
-<button
+                                return (
+                                  <div key={childKey} className="bg-purple-50 rounded border border-purple-200">
+                                    <button
                                       className="w-full p-2 flex items-center justify-between hover:bg-purple-100 transition-colors"
                                       onClick={() => {
-                                        const newExpanded = !expandedChildMessages.has(childId);
+                                        const newExpanded = !expandedChildMessages.has(childKey);
                                         setExpandedChildMessages(prev => {
                                           const newSet = new Set(prev);
-                                          if (newSet.has(childId)) {
-                                            newSet.delete(childId);
+                                          if (newSet.has(childKey)) {
+                                            newSet.delete(childKey);
                                           } else {
-                                            newSet.add(childId);
+                                            newSet.add(childKey);
                                           }
                                           return newSet;
                                         });
                                         
-                                        // 展开时加载子Agent消息
+                                        // 展开时使用预加载消息（无需API调用）
                                         if (newExpanded) {
-                                          // 使用 msg.id 或 toolUseId 获取消息
-                                          const fetchId = msg.id;
-                                          console.log('[子Agent] Loading messages for:', fetchId, 'toolUseId:', content?.toolUseId);
-                                          fetchChildSessionMessages(fetchId);
+                                          // 优先使用预加载消息
+                                          const agentId = child.agentId || childKey;
+                                          console.log('[子Agent] Using preloaded messages for:', agentId);
+                                          
+                                          if (preloadedAgentMessages[agentId]) {
+                                            setChildSessionMessages(preloadedAgentMessages[agentId]);
+                                          } else {
+                                            // 备用：API调用
+                                            fetchChildSessionMessages(agentId);
+                                          }
                                         }
                                       }}
                                     >
-                                     <div className="flex items-center gap-2">
-                                       <span className="text-xs font-medium text-purple-700">
-                                         {content.name === 'task' ? 'Task' : 'Agent'}
-                                       </span>
-                                       <span className="text-xs text-gray-600 truncate max-w-[200px]">
-                                         {content.args?.prompt?.substring(0, 50) || content.args?.description?.substring(0, 50) || '未知任务'}
-                                       </span>
-                                     </div>
-                                     {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                   </button>
-{isExpanded && (
-                                      <div className="p-3 border-t border-purple-200 bg-white">
-                                        {/* 加载子Agent消息 */}
-                                        {loadingChildMessages && (
-                                          <div className="flex items-center gap-2 text-xs text-gray-500 mb-2">
-                                            <Loader2 size={12} className="animate-spin" />
-                                            加载子Agent执行过程...
-                                          </div>
+                                      <div className="flex items-center gap-2">
+                                        <StatusIcon size={14} className={iconConfig.color} />
+                                        <span className="text-xs font-medium text-purple-700">
+                                          {child.type === 'task' ? 'Task' : 'Agent'}
+                                        </span>
+                                        <span className="text-xs text-gray-600 truncate max-w-[200px]">
+                                          {child.title}
+                                        </span>
+                                        {child.messageCount && (
+                                          <span className="text-xs bg-purple-100 text-purple-600 px-1 rounded">
+                                            {child.messageCount} 条消息
+                                          </span>
                                         )}
-                                        
-                                        {/* 显示执行期间的所有消息 - 使用 MessageBubble 组件 */}
-                                        {/* 使用 agentCallMsgId 正确关联消息 */}
-                                        {childSessionMessages.filter(m => m.agentCallMsgId === msg.id).length > 0 ? (
+                                      </div>
+                                      {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    </button>
+                                    
+                                    {isExpanded && (
+                                      <div className="p-3 border-t border-purple-200 bg-white">
+                                        {/* 显示子Agent消息 - 直接使用 childSessionMessages */}
+                                        {childSessionMessages.length > 0 ? (
                                           <div className="space-y-2 max-h-[500px] overflow-y-auto">
-                                            {childSessionMessages
-                                              .filter(m => m.agentCallMsgId === msg.id)
-                                              .map((childMsg: any, msgIdx: number) => (
-                                                <MessageBubble
-                                                  key={childMsg.id || `child-msg-${msgIdx}`}
-                                                  message={childMsg}
-                                                  onCopy={() => {
-                                                    navigator.clipboard.writeText(
-                                                      typeof childMsg.content === 'string' 
-                                                        ? childMsg.content 
-                                                        : JSON.stringify(childMsg.content, null, 2)
-                                                    );
-                                                  }}
-                                                  onClick={() => {}}
-                                                  isSelected={false}
-                                                />
-                                              ))}
-                                          </div>
-                                        ) : toolResultMsg ? (
-                                          <div className="space-y-2">
-                                            <div>
-                                              <div className="text-xs font-semibold text-gray-700 mb-1">输入参数:</div>
-                                              <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[150px] whitespace-pre-wrap">
-                                                {JSON.stringify(content.args, null, 2)}
-                                              </pre>
-                                            </div>
-                                            <div>
-                                              <div className="text-xs font-semibold text-gray-700 mb-1">执行结果:</div>
-                                              <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-[500px] whitespace-pre-wrap">
-                                                {toolResultMsg.content}
-                                              </pre>
-                                            </div>
+                                            {childSessionMessages.map((childMsg: any, msgIdx: number) => (
+                                              <MessageBubble
+                                                key={childMsg.id || `child-msg-${msgIdx}`}
+                                                message={childMsg}
+                                                onCopy={() => {
+                                                  navigator.clipboard.writeText(
+                                                    typeof childMsg.content === 'string' 
+                                                      ? childMsg.content 
+                                                      : JSON.stringify(childMsg.content, null, 2)
+                                                  );
+                                                }}
+                                                onClick={() => {}}
+                                                isSelected={false}
+                                              />
+                                            ))}
                                           </div>
                                         ) : (
-                                          <div className="text-xs text-gray-500 italic">等待结果...</div>
+                                          <div className="text-xs text-gray-500 italic">暂无执行消息</div>
                                         )}
                                       </div>
                                     )}
-                                 </div>
-                               );
-                             })
-                           )}
-                         </div>
-                       )}
-                     </div>
+                                  </div>
+                                );
+                              })
+                            )}
+                          </div>
+                        )}
+                      </div>
                   </div>
                 )}
               </div>
