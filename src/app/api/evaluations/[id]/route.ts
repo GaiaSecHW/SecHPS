@@ -196,7 +196,6 @@ export async function DELETE(
     
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: { Project: { select: { userId: true, id: true } } },
       select: {
         projectId: true,
         Project: {

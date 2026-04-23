@@ -182,7 +182,10 @@ export async function GET(
       }
       
       toolUseId = toolUseId || toolCallContent.toolUseId || childId;
-      const agentStartTime = toolCallMsg.createdAt?.toISOString();
+      // createdAt 可能是字符串（JSONL）或 Date 对象（Prisma），需要统一处理
+      const agentStartTime = typeof toolCallMsg.createdAt === 'string' 
+        ? toolCallMsg.createdAt 
+        : toolCallMsg.createdAt?.toISOString();
       
       // 找到对应的最终 tool_result（获取结束时间）
       const finalResult = messages.find(m => {
@@ -192,7 +195,9 @@ export async function GET(
         return meta?.toolUseId === toolUseId;
       });
       
-      const agentEndTime = finalResult?.createdAt?.toISOString();
+      const agentEndTime = typeof finalResult?.createdAt === 'string'
+        ? finalResult.createdAt
+        : finalResult?.createdAt?.toISOString();
       
       logger.logNoUser(LOG_MODULES.SESSION, 'Agent execution period', { 
         details: { childId, toolUseId, startTime: agentStartTime, endTime: agentEndTime }
@@ -243,7 +248,7 @@ export async function GET(
               id: msg.id,
               role: msg.role,
               content: typeof content === 'object' ? JSON.stringify(content, null, 2) : content,
-              createdAt: msg.createdAt?.toISOString(),
+              createdAt: typeof msg.createdAt === 'string' ? msg.createdAt : msg.createdAt?.toISOString(),
               isError: metadata?.isError,
               toolUseId: metadata?.toolUseId,
               agentCallMsgId: agentCallMsgId, // 标记属于哪个Agent
@@ -258,7 +263,7 @@ export async function GET(
           id: finalResult.id,
           role: 'tool_result',
           content: finalResult.content,
-          createdAt: finalResult.createdAt?.toISOString(),
+          createdAt: typeof finalResult.createdAt === 'string' ? finalResult.createdAt : finalResult.createdAt?.toISOString(),
           isFinalResult: true,
           toolUseId: toolUseId,
           agentCallMsgId: agentCallMsgId, // 标记属于哪个Agent
@@ -305,8 +310,9 @@ export async function GET(
           try { meta = JSON.parse(meta); } catch { continue; }
         }
         if (meta?.toolUseId && meta.toolUseId !== 'unknown') {
+          const completedAt = typeof msg.createdAt === 'string' ? msg.createdAt : msg.createdAt?.toISOString();
           toolResultMap[meta.toolUseId] = {
-            completedAt: msg.createdAt?.toISOString() || null,
+            completedAt: completedAt || null,
             isError: meta.isError || false,
           };
         }
@@ -356,7 +362,7 @@ export async function GET(
                 workflowNodeId: msg.workflowNodeId,
                 title: description.substring(0, 100),
                 status: status,
-                startedAt: msg.createdAt?.toISOString() || null,
+                startedAt: typeof msg.createdAt === 'string' ? msg.createdAt : msg.createdAt?.toISOString() || null,
                 completedAt: completedAt,
                 type: part.name,
               });
