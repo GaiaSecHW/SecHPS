@@ -83,13 +83,43 @@ export class UnifiedWorkflowExecutionEngine {
    * 设置节点列表
    * @param nodes 节点定义数组（已排序）
    */
-  setNodes(nodes: UnifiedNodeDefinition[]): void {
-    this.nodes = nodes;
-    console.log(`[UnifiedEngine] 设置节点列表: ${nodes.length} 个节点`);
-    for (const node of nodes) {
-      console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (roleId: ${node.roleId || 'default'})`);
+setNodes(nodes: UnifiedNodeDefinition[]): void {
+      // 过滤节点：如果 start/end 节点没有配置描述，则不加入编排
+      const filteredNodes = nodes.filter(node => {
+        const nodeType = node.type || 'task';
+        
+        // start 节点：如果没有 startNodeDescription 则跳过
+        if (nodeType === 'start') {
+          const hasDescription = this.config.workflowConfig?.startNodeDescription || node.description;
+          if (!hasDescription) {
+            console.log(`[UnifiedEngine] 跳过 start 节点: ${node.label} (未配置 startNodeDescription)`);
+            return false;
+          }
+        }
+        
+        // end 节点：如果没有 endNodeDescription 则跳过
+        if (nodeType === 'end') {
+          const hasDescription = this.config.workflowConfig?.endNodeDescription || node.description;
+          if (!hasDescription) {
+            console.log(`[UnifiedEngine] 跳过 end 节点: ${node.label} (未配置 endNodeDescription)`);
+            return false;
+          }
+        }
+        
+        return true;
+      });
+      
+      this.nodes = filteredNodes;
+      console.log(`[UnifiedEngine] 设置节点列表: 原始 ${nodes.length} 个 -> 过滤后 ${filteredNodes.length} 个节点`);
+      for (const node of filteredNodes) {
+        console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (type: ${node.type || 'task'}, roleId: ${node.roleId || 'default'})`);
+      }
+      
+      // 记录被过滤的节点
+      if (nodes.length !== filteredNodes.length) {
+        console.log(`[UnifiedEngine] 已跳过 ${nodes.length - filteredNodes.length} 个无效节点 (start/end 无配置)`);
+      }
     }
-  }
 
   /**
    * 中止执行
