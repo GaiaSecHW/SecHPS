@@ -186,7 +186,7 @@ export async function getActiveVulnerabilityPatterns(): Promise<Array<{ id: stri
       name: true,
       displayName: true,
       categoryId: true,
-      categoryRef: { select: { value: true } },
+      VulnerabilityCategory: { select: { value: true } },
     },
     orderBy: [{ categoryId: 'asc' }, { name: 'asc' }],
   });
@@ -194,7 +194,7 @@ export async function getActiveVulnerabilityPatterns(): Promise<Array<{ id: stri
     id: p.id,
     name: p.name,
     displayName: p.displayName,
-    categoryValue: p.categoryRef?.value,
+    categoryValue: p.VulnerabilityCategory?.value,
   }));
 }
 

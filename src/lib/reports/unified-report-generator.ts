@@ -558,6 +558,7 @@ async function saveReportToDatabase(
       }))),
       status: 'generated',
       generatedAt: reportData.generatedAt,
+      updatedAt: new Date(),
     },
     update: {
       mainReportPath: reportFilePath,

@@ -1091,6 +1091,7 @@ async function saveReportToDatabase(reportData: FSMReportData, workspacePath: st
       }),
       status: 'generated',
       generatedAt: reportData.generatedAt,
+      updatedAt: new Date(),
     },
     update: {
       mainReportPath: mainReportPath,

@@ -8,6 +8,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import yaml from 'yaml'; // 需要安装: npm install yaml
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 
 // 使用 outputs/phases 替代 .claude/phases
 const OUTPUTS_PHASES_PATH = path.join(process.cwd(), 'outputs', 'phases');
@@ -92,6 +93,7 @@ export async function writePhaseOutput(
   // 写入数据库
   await prisma.phaseOutput.create({
     data: {
+      id: generateId('phase'),
       sessionId,
       executionId,
       nodeId,
@@ -100,7 +102,8 @@ export async function writePhaseOutput(
       phases: JSON.stringify(getPhaseLabels(phaseNumber)),
       outputYaml: rawYaml,
       outputPath,
-      status: 'pending' // 等待验证
+      status: 'pending', // 等待验证
+      updatedAt: new Date()
     }
   });
 

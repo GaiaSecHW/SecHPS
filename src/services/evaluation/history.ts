@@ -65,7 +65,7 @@ export class ConversationHistory {
     return messages.map(m => ({
       id: m.id,
       role: m.role as 'user' | 'assistant',
-      content: m.content,
+      content: m.content || '',
       createdAt: m.createdAt,
     }));
   }
@@ -110,7 +110,7 @@ export class ConversationHistory {
     return {
       id: message.id,
       role: 'user',
-      content: message.content,
+      content: message.content || '',
       createdAt: message.createdAt,
     };
   }
@@ -155,7 +155,7 @@ export class ConversationHistory {
     return {
       id: message.id,
       role: 'assistant',
-      content: message.content,
+      content: message.content || '',
       createdAt: message.createdAt,
     };
   }

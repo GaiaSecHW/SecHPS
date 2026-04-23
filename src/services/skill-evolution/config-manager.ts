@@ -48,6 +48,7 @@ export async function getConfig(): Promise<SkillEvolutionConfig> {
       maxDescriptionLength: 200,
       codeSnippetLines: 6,
       isActive: true,
+      updatedAt: new Date(),
     },
   });
 

@@ -132,6 +132,7 @@ export async function createEmptyAnalysisReport(params: {
       projectId: params.projectId,
       projectName: '',
       description: '',
+      updatedAt: new Date(),
     },
   });
   

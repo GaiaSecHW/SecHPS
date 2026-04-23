@@ -6,6 +6,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 import type { WorkflowNode, WorkflowExecution, EvaluationSession } from '@prisma/client';
 import type { ExecutionContext, StepResult } from '@/types/workflow';
 
@@ -479,6 +480,7 @@ ${errors.map(e => `- ${e}`).join('\n')}
   ): Promise<void> {
     await prisma.phaseOutput.create({
       data: {
+        id: generateId('phase'),
         sessionId,
         executionId,
         nodeId,
@@ -488,7 +490,8 @@ ${errors.map(e => `- ${e}`).join('\n')}
         outputYaml,
         outputPath,
         status: 'validated',
-        validatedAt: new Date()
+        validatedAt: new Date(),
+        updatedAt: new Date()
       }
     });
   }

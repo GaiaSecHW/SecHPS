@@ -5,6 +5,7 @@
 
 import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 import type { TokenUsageContext } from '@/types/call-scene';
 import type { BalanceAnalysisResult } from './balance-analyzer';
 import type { CompactCase } from './case-extractor';
@@ -378,6 +379,7 @@ export async function generateImprovement(
     // 保存到 SkillImprovement 表
     const improvement = await prisma.skillImprovement.create({
       data: {
+        id: generateId('improve'),
         skillId,
         taskId: options?.taskId,
         falsePositiveCases: JSON.stringify(falsePositiveCases),
@@ -405,6 +407,7 @@ export async function generateImprovement(
     // 即使失败，也创建一条记录（保持原内容）
     const improvement = await prisma.skillImprovement.create({
       data: {
+        id: generateId('improve'),
         skillId,
         taskId: options?.taskId,
         falsePositiveCases: JSON.stringify(falsePositiveCases),

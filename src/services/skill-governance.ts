@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 import {
   analyzeSkillDuplication,
   type SkillForLLMAnalysis,
@@ -218,6 +219,7 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
   // 3. 创建分析记录（标记为 pending）
   const analysisRecords = await prisma.skillAnalysis.createMany({
     data: potentialDuplicates.map(d => ({
+      id: generateId('analysis'),
       skillId: skill.id,
       relatedSkillId: d.id,
       analysisType: 'duplication_check',
@@ -320,6 +322,7 @@ export async function analyzeSkillPair(
   // 2. 存储分析结果到数据库
   const analysisRecord = await prisma.skillAnalysis.create({
     data: {
+      id: generateId('analysis'),
       skillId: skillA.id,
       relatedSkillId: skillB.id,
       analysisType: 'duplication_check',
