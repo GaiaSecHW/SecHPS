@@ -9,8 +9,10 @@ import { verifyToken } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { createFSMWorkflowExecutionService, type FSMExecutionCallbacks } from '@/lib/fsm';
 import { createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
-import type { UnifiedExecutionCallbacks } from '@/lib/workflow/types';
+import { generateNodeList } from '@/lib/workflow/node-list-generator';
+import type { UnifiedExecutionCallbacks, McpServerConfigForExecution } from '@/lib/workflow/types';
 import { createRalphLoopAgent, parseAndSaveResults, type RalphLoopAgentCallbacks } from '@/services/evaluation';
+import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 /** 获取模型配置 */
@@ -28,7 +30,7 @@ async function updateStatus(id: string, status: string, data?: Record<string, an
 }
 
 /** FSM 执行引擎 */
-async function executeFSM(id: string, evaluation: any, modelConfig: any, body: any) {
+async function executeFSM(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined, userId: string) {
   const fsmTemplateId = body.fsmTemplateId || evaluation.Workflow?.fsmTemplateId;
   if (!fsmTemplateId) throw new Error('FSM 模式需要指定 fsmTemplateId');
   const fsmTemplate = await prisma.fSMTemplate.findUnique({ where: { id: fsmTemplateId } });
@@ -51,19 +53,22 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
     evaluationSessionId: id, projectId: evaluation.projectId, workflowId: evaluation.workflowId || 'fsm-default',
     fsmTemplateId, workspacePath: evaluation.Project.projectPath || process.cwd(),
     maxIterationsPerPhase: body.maxIterationsPerPhase || 10, maxCostPerPhase: body.maxCostPerPhase || 2.0, modelConfig,
+    userId,  // 传递 userId 用于加载 MCP
+    mcpServers,  // 传递 MCP 配置（优先使用传入的，否则从数据库加载）
   }, callbacks);
 
   service.execute().catch((e) => updateStatus(id, 'failed', { errorMessage: e.message }));
 }
 
 /** DAG 执行引擎 */
-async function executeDAG(id: string, evaluation: any, modelConfig: any, body: any) {
+async function executeDAG(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined) {
   const workflowId = evaluation.workflowId;
   if (!workflowId) throw new Error('DAG 模式需要 workflowId');
-  const workflow = await prisma.workflow.findUnique({ where: { id: workflowId }, include: { WorkflowNode: true } });
-  if (!workflow?.WorkflowNode?.length) throw new Error('Workflow 或节点不存在');
+  
+  // 使用 generateNodeList 获取完整的节点定义（包含 skills, vulnerabilityCategories）
+  const nodes = await generateNodeList(workflowId);
+  if (!nodes.length) throw new Error('Workflow 节点不存在');
 
-  const nodes = workflow.WorkflowNode.map((n: any) => ({ id: n.id, label: n.label, type: n.type, roleId: n.roleId, skillPath: n.skillPath, description: n.description, fsmPhase: n.fsmPhase, fsmOrder: n.fsmOrder, data: n.data ? JSON.parse(n.data) : undefined }));
   const callbacks: UnifiedExecutionCallbacks = {
     onNodeStart: (i, _nid, n) => logger.debug(LOG_MODULES.WORKFLOW, `Node ${i}: ${n}`),
     onNodeChunk: () => {},
@@ -80,15 +85,16 @@ async function executeDAG(id: string, evaluation: any, modelConfig: any, body: a
     evaluationSessionId: id, projectId: evaluation.projectId, projectName: evaluation.Project.name, workflowId, workflowType: 'custom',
     workspacePath: evaluation.Project.projectPath || process.cwd(),
     defaultModelConfig: { id: 'dag-default', name: modelConfig.model, ...modelConfig },
+    mcpServers,  // MCP 配置传递给统一执行引擎
     maxIterationsPerNode: body.maxIterations || 10, maxRetries: 15, retryDelayMs: 60000,
   }, callbacks);
-  engine.setNodes(nodes as any);
+  engine.setNodes(nodes);
   engine.execute().catch((e) => updateStatus(id, 'failed', { errorMessage: e.message }));
 }
 
 /** Ralph 执行引擎 */
-async function executeRalph(id: string, evaluation: any, modelConfig: any, body: any) {
-  const agent = createRalphLoopAgent(modelConfig, evaluation.Project.projectPath, { maxIterations: body.maxIterations || 15, maxTokens: body.maxTokens || 100000, maxCost: body.maxCost || 5.0 });
+async function executeRalph(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined) {
+  const agent = createRalphLoopAgent(modelConfig, evaluation.Project.projectPath, { maxIterations: body.maxIterations || 15, maxTokens: body.maxTokens || 100000, maxCost: body.maxCost || 5.0 }, { mcpServers });
   const context = { projectName: evaluation.Project.name, taskDescription: evaluation.Project.OpencodeConfig?.taskDescription, initialMessage: evaluation.Project.OpencodeConfig?.taskDescription, files: evaluation.Project.ProjectFile?.map((f: any) => ({ name: f.fileName, type: f.fileType, size: f.fileSize })) || [] };
   const callbacks: RalphLoopAgentCallbacks = {
     onChunk: () => {},
@@ -128,12 +134,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const body = await request.json();
     const workflowType = evaluation.workflowType || body.workflowType || 'ralph';
 
+    // 加载 MCP 配置（用于所有 workflowType）
+    const mcpServers = evaluation.projectId && payload.userId
+      ? await loadMcpServersForProject(evaluation.projectId, payload.userId)
+      : undefined;
+
     await updateStatus(id, 'running', { startedAt: new Date() });
 
     switch (workflowType) {
-      case 'fsm': await executeFSM(id, evaluation, modelConfig, body); break;
-      case 'dag': await executeDAG(id, evaluation, modelConfig, body); break;
-      case 'ralph': await executeRalph(id, evaluation, modelConfig, body); break;
+      case 'fsm': await executeFSM(id, evaluation, modelConfig, body, mcpServers, payload.userId); break;
+      case 'dag': await executeDAG(id, evaluation, modelConfig, body, mcpServers); break;
+      case 'ralph': await executeRalph(id, evaluation, modelConfig, body, mcpServers); break;
       default: await updateStatus(id, 'ready', { errorMessage: `未知的 workflowType: ${workflowType}` }); return NextResponse.json({ error: `未知的 workflowType: ${workflowType}` }, { status: 400 });
     }
 
