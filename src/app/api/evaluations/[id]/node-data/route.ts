@@ -187,6 +187,85 @@ export async function GET(
           completedAt = result.timestamp || null;
         }
         
+        // 如果没有 agent 流文件，从主 stream 提取相关消息
+        if (!hasStreamFile && !agentMessages[agentId]) {
+          // 找 Agent 调用时间范围
+          const agentStartTime = call.timestamp;
+          const agentEndTime = result?.timestamp;
+          
+          if (agentStartTime) {
+            const startMs = new Date(agentStartTime).getTime();
+            const endMs = agentEndTime ? new Date(agentEndTime).getTime() : Date.now();
+            
+            // 提取时间范围内的消息作为子Agent消息
+            const extractedMessages: any[] = [];
+            
+            // 1. 添加用户输入（Agent 调用的 prompt）
+            extractedMessages.push({
+              id: `${agentId}-input`,
+              role: 'user',
+              content: call.args?.prompt || call.args?.description || '子任务启动',
+              createdAt: agentStartTime,
+              event: 'user_input',
+              agentId: agentId,
+            });
+            
+            // 2. 提取时间范围内的 text/thinking/tool 事件
+            for (const event of events) {
+              if (!event.timestamp) continue;
+              const eventTime = new Date(event.timestamp).getTime();
+              
+              // 在时间范围内且不是 Agent tool_use 本身
+              if (eventTime >= startMs && eventTime <= endMs) {
+                // 排除 Agent tool_use（已处理）和 TodoWrite
+                if (event.event === 'tool_use' && 
+                    (event.data?.name === 'Agent' || event.data?.name === 'TodoWrite')) {
+                  continue;
+                }
+                
+                // 添加相关事件
+                if (event.event === 'text' || event.event === 'thinking' || 
+                    event.event === 'tool_use' || event.event === 'tool_result') {
+                  extractedMessages.push({
+                    id: `${agentId}-${eventTime}-${extractedMessages.length}`,
+                    role: event.event === 'text' || event.event === 'thinking' ? 'assistant' :
+                          event.event === 'tool_use' ? 'tool_call' : 'tool_result',
+                    content: typeof event.data === 'string' ? event.data : 
+                             (event.data?.text || event.data?.content || JSON.stringify(event.data)),
+                    createdAt: event.timestamp,
+                    event: event.event,
+                    agentId: agentId,
+                  });
+                }
+              }
+            }
+            
+            // 3. 添加最终结果
+            if (result) {
+              extractedMessages.push({
+                id: `${agentId}-result`,
+                role: 'tool_result',
+                content: typeof result.data === 'string' ? result.data : 
+                         (result.data?.content || JSON.stringify(result.data)),
+                createdAt: result.timestamp,
+                event: 'tool_result',
+                agentId: agentId,
+                isFinalResult: true,
+              });
+            }
+            
+            // 按时间排序
+            extractedMessages.sort((a, b) => 
+              new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            
+            // 缓存提取的消息
+            if (extractedMessages.length > 0) {
+              agentMessages[agentId] = extractedMessages;
+            }
+          }
+        }
+        
         children.push({
           id: call.toolUseId,
           toolUseId: call.toolUseId,
