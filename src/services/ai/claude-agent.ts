@@ -53,6 +53,7 @@ export interface ClaudeAgentConfig {
   resumeSession?: string;  // 恢复会话 ID
   settings?: { context_management?: boolean };  // 通过 settings 对象配置 context_management
   temperature?: number;  // 模型温度，默认 0.3
+  skills?: string[];  // Skills 配置（传递给子Agent）
 }
 
 export interface ClaudeAgentCallbacks {
@@ -139,6 +140,28 @@ export class ClaudeAgentService {
       ANTHROPIC_DEFAULT_OPUS_MODEL: this.config.model,
       CLAUDE_CODE_SUBAGENT_MODEL: this.config.model,
     };
+    
+    // 传递 MCP 配置给子Agent（通过环境变量）
+    // SDK 的 Agent 工具会读取这些环境变量为子Agent配置MCP
+    if (this.config.mcpServers && this.config.mcpServers.length > 0) {
+      // 将 MCP 配置序列化为 JSON，传递给子Agent
+      env.CLAUDE_CODE_MCP_SERVERS = JSON.stringify(this.config.mcpServers.map(s => ({
+        name: s.name,
+        type: s.type,
+        command: s.command,
+        args: s.args,
+        url: s.url,
+        env: s.env,
+        isEnabled: s.isEnabled !== false,
+      })));
+      console.log('[ClaudeAgentService] MCP 配置已传递给子Agent环境变量');
+    }
+    
+    // 传递 Skills 配置给子Agent（如果有配置）
+    if (this.config.skills && this.config.skills.length > 0) {
+      env.CLAUDE_CODE_SKILLS = JSON.stringify(this.config.skills);
+      console.log('[ClaudeAgentService] Skills 配置已传递给子Agent:', this.config.skills.join(', '));
+    }
 
     // 如果配置了 baseUrl（CCR 代理），设置环境变量
     if (this.config.baseUrl) {
@@ -166,8 +189,8 @@ export class ClaudeAgentService {
       disallowedTools: this.config.disallowedTools,
       abortController: this.abortController,
       env,
-      // 设置源（加载 CLAUDE.md）
-      settingSources: this.config.settingSources || [],
+      // 设置源（加载 CLAUDE.md 和 MCP 配置）
+      settingSources: this.config.settingSources || ['project', 'user'],
       
       // 权限模式
       permissionMode: this.config.permissionMode,
