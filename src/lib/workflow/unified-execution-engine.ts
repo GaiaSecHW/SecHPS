@@ -8,6 +8,7 @@
 import { prisma } from '@/lib/prisma';
 import { createRalphLoopAgent, RalphLoopAgent } from '@/services/evaluation';
 import { generateId } from '@/lib/id-generator';
+import { EvaluationMessageStore, createEvaluationMessageStore } from '@/services/evaluation-message-store';
 import type {
   UnifiedNodeDefinition,
   ModelConfigForExecution,
@@ -56,10 +57,16 @@ export class UnifiedWorkflowExecutionEngine {
   
   /** 执行开始时间 */
   private startTime: Date = new Date();
+  
+  /** JSONL 消息存储（双写过渡） */
+  private messageStore: EvaluationMessageStore | null = null;
 
   constructor(config: UnifiedExecutionConfig, callbacks: UnifiedExecutionCallbacks) {
     this.config = config;
     this.callbacks = callbacks;
+    
+    // 初始化 JSONL 消息存储（双写过渡）
+    this.messageStore = createEvaluationMessageStore(config.projectId, config.evaluationSessionId);
   }
 
   /**
@@ -100,6 +107,17 @@ export class UnifiedWorkflowExecutionEngine {
     console.log(`[UnifiedEngine] 开始执行工作流: ${this.config.workflowId}`);
     console.log(`[UnifiedEngine] 项目: ${this.config.projectName}`);
     console.log(`[UnifiedEngine] 节点数量: ${this.nodes.length}`);
+    
+    // 初始化 JSONL 消息存储
+    if (this.messageStore) {
+      try {
+        await this.messageStore.initialize();
+        console.log(`[UnifiedEngine] JSONL 消息存储初始化成功`);
+      } catch (error) {
+        console.error(`[UnifiedEngine] JSONL 消息存储初始化失败:`, error);
+        // 不阻塞主流程
+      }
+    }
 
     // 1. 更新数据库状态为 'running'
     await this.updateSessionStatus('running', '工作流开始执行');
@@ -999,12 +1017,61 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
       
       data.metadata = JSON.stringify(nodeMetadata);
       
+      // ========================================
+      // 双写机制：同时写入 Prisma 和 JSONL
+      // ========================================
+      
+      // 1. 写入 JSONL（先写，确保数据持久化）
+      if (this.messageStore) {
+        try {
+          // 提取 nodeIndex 和 agentCallMsgId
+          const nodeIndex = nodeMetadata.nodeIndex ?? 0;
+          const agentCallMsgId = nodeMetadata.agentCallMsgId ?? null;
+          
+          // 映射 role 到 EvaluationMessage 支持的类型
+          const mappedRole = this.mapRoleToJsonlRole(role);
+          
+          await this.messageStore.appendMessage({
+            role: mappedRole,
+            nodeId: nodeId,  // 字符串，无外键依赖
+            nodeIndex: nodeIndex,
+            content: content,
+            agentCallMsgId: agentCallMsgId,
+            // 工具相关字段（从 metadata 提取）
+            toolName: nodeMetadata.name,
+            toolInput: nodeMetadata.args,
+            toolResult: role === 'tool_result' ? content : undefined,
+            toolUseId: nodeMetadata.toolUseId,
+          });
+        } catch (jsonlError) {
+          console.error(`[saveNodeMessage] JSONL 写入失败:`, jsonlError);
+          // 不阻塞主流程
+        }
+      }
+      
+      // 2. 写入 Prisma（双写过渡期保留）
       await prisma.sessionMessage.create({ data });
       console.log(`[saveNodeMessage] 保存消息成功: nodeId=${nodeId}, role=${role}, workflowType=${this.config.workflowType}, workflowNodeId=${data.workflowNodeId || 'null'}`);
     } catch (error) {
       console.error(`[saveNodeMessage] 保存失败:`, error);
       // 不抛出错误，允许执行继续进行
     }
+  }
+  
+  /**
+   * 映射 role 到 EvaluationMessage 支持的类型
+   */
+  private mapRoleToJsonlRole(role: string): 'user' | 'assistant' | 'system' | 'tool_use' | 'tool_result' {
+    const roleMap: Record<string, 'user' | 'assistant' | 'system' | 'tool_use' | 'tool_result'> = {
+      'user': 'user',
+      'assistant': 'assistant',
+      'assistant_chunk': 'assistant',
+      'thinking': 'assistant',
+      'system': 'system',
+      'tool_call': 'tool_use',
+      'tool_result': 'tool_result',
+    };
+    return roleMap[role] || 'assistant';
   }
 
   /**
