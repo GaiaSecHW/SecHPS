@@ -96,7 +96,12 @@ async function executeRalph(id: string, evaluation: any, modelConfig: any, body:
     onToolResult: (n) => logger.debug(LOG_MODULES.EVALUATION, `Result: ${n}`),
     onComplete: () => {},
     onError: (e) => logger.errorNoUser(LOG_MODULES.EVALUATION, `Error: ${e.message}`),
-    onRalphComplete: async (r) => { try { await parseAndSaveResults(id, evaluation.projectId, r.text); } catch {} updateStatus(id, r.completionReason === 'verified' ? 'completed' : 'failed', { summary: `Ralph: ${r.iterations} iterations` }); },
+    onRalphComplete: async (r) => {
+      // 漏洞入库流程有问题，暂时停止调用 parseAndSaveResults
+      // TODO: 修复漏洞入库流程后重新启用
+      // try { await parseAndSaveResults(id, evaluation.projectId, r.text); } catch {}
+      updateStatus(id, r.completionReason === 'verified' ? 'completed' : 'failed', { summary: `Ralph: ${r.iterations} iterations` });
+    },
   };
   agent.loop({ evaluationId: id, projectId: evaluation.projectId, context, callbacks }).catch((e) => updateStatus(id, 'failed', { errorMessage: e.message }));
 }
