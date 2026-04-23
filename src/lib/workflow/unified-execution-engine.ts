@@ -1365,6 +1365,7 @@ ${this.config.userPrompt || '请完成当前节点的任务。'}
             nodeType: node.fsmPhase ? 'fsm_phase' : (node.type || 'custom'),
             status: 'running',
             startedAt: new Date(),
+            updatedAt: new Date(),
             order: nodeIndex,
             modelConfigId: modelConfig.id,
             modelName: modelConfig.name,
