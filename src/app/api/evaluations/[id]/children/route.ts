@@ -4,6 +4,79 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { createEvaluationMessageStore, EvaluationMessage } from '@/services/evaluation-message-store';
+
+/**
+ * 从 JSONL 或 Prisma 获取消息（JSONL 优先，Prisma 兜底）
+ */
+async function getMessagesWithFallback(
+  evaluationId: string,
+  projectId: string,
+  nodeId?: string | null
+): Promise<{ messages: any[]; source: 'jsonl' | 'db' }> {
+  // 尝试从 JSONL 读取
+  try {
+    const store = createEvaluationMessageStore(projectId, evaluationId);
+    if (await store.exists()) {
+      const result = await store.getMessages({
+        nodeId: nodeId || undefined,
+        limit: 1000, // 获取足够多的消息用于提取 Agent/task
+      });
+      
+      // 转换 JSONL 消息格式为兼容格式
+      const messages = result.messages.map((msg: EvaluationMessage) => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        workflowNodeId: msg.nodeId,
+        metadata: JSON.stringify({
+          nodeId: msg.nodeId,
+          nodeIndex: msg.nodeIndex,
+          agentCallMsgId: msg.agentCallMsgId,
+          toolName: msg.toolName,
+          toolUseId: msg.toolUseId,
+          toolInput: msg.toolInput,
+          toolResult: msg.toolResult,
+        }),
+        createdAt: msg.timestamp,
+      }));
+      
+      return { messages, source: 'jsonl' };
+    }
+  } catch (jsonlError) {
+    logger.warn(LOG_MODULES.SESSION, 'JSONL 读取失败，fallback 到 Prisma:', { details: { error: String(jsonlError) } });
+  }
+  
+  // Fallback: 从 Prisma 读取
+  const where: any = { evaluationSessionId: evaluationId };
+  
+  // 如果有 nodeId，尝试 DAG 模式过滤
+  if (nodeId) {
+    const workflowNodeExists = await prisma.workflowNode.findUnique({
+      where: { id: nodeId },
+      select: { id: true },
+    });
+    
+    if (workflowNodeExists) {
+      where.workflowNodeId = nodeId;
+    }
+  }
+  
+  const messages = await prisma.sessionMessage.findMany({
+    where,
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      workflowNodeId: true,
+      metadata: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  
+  return { messages, source: 'db' };
+}
 
 /**
  * 获取评估会话的子Agent列表（从消息中提取 Agent/task 工具调用）
@@ -31,24 +104,26 @@ export async function GET(
 
     logger.access(LOG_MODULES.SESSION, payload, evaluationId, { action: 'fetch_children_by_evaluation', nodeId, childId });
 
-    // 从消息中提取 Agent/task 工具调用
-    // FSM模式：nodeId在metadata中；DAG模式：nodeId在workflowNodeId中
-    const messages = await prisma.sessionMessage.findMany({
-      where: { evaluationSessionId: evaluationId },
-      select: {
-        id: true,
-        role: true,
-        content: true,
-        workflowNodeId: true,
-        metadata: true,
-        createdAt: true,
-      },
-      orderBy: { createdAt: 'asc' },
+    // 获取 evaluationSession 以获取 projectId
+    const evaluation = await prisma.evaluationSession.findUnique({
+      where: { id: evaluationId },
+      select: { projectId: true },
     });
+    
+    if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+    
+    const projectId = evaluation.projectId;
 
-    // 如果有nodeId参数，过滤消息
+    // 从 JSONL 或 Prisma 获取消息（JSONL 优先）
+    const { messages, source } = await getMessagesWithFallback(evaluationId, projectId, nodeId);
+    
+    logger.debug(LOG_MODULES.SESSION, '获取消息来源:', { details: { source, count: messages.length } });
+
+    // 如果有nodeId参数，过滤消息（仅对 Prisma fallback 的消息需要额外过滤）
     let filteredMessages = messages;
-    if (nodeId) {
+    if (nodeId && source === 'db') {
       // 先尝试workflowNodeId（DAG模式）
       const dagMessages = messages.filter(m => m.workflowNodeId === nodeId);
       
@@ -65,6 +140,9 @@ export async function GET(
           }
         });
       }
+    } else if (nodeId && source === 'jsonl') {
+      // JSONL 消息已经在 getMessagesWithFallback 中按 nodeId 过滤
+      filteredMessages = messages;
     }
 
     // 如果请求特定子Agent的消息
@@ -202,7 +280,7 @@ export async function GET(
         messages: childMessages,
         total: childMessages.length,
         periodMessages: childMessages.length - 2, // 执行期间的中间消息数量
-        source: 'evaluation',
+        source: source,
       });
     }
 
@@ -297,7 +375,7 @@ export async function GET(
     return NextResponse.json({
       children,
       total: children.length,
-      source: 'evaluation',
+      source: source,
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SESSION, 'Children API error', { details: { error: error instanceof Error ? error.message : String(error) } });

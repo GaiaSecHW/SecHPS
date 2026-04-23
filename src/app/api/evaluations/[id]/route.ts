@@ -6,6 +6,7 @@ import { verifyToken, hasPermission } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { createEvaluationMessageStore } from '@/services/evaluation-message-store';
 
 // GET /api/evaluations/[id] - 获取评估会话详情
 // 数据隔离：普通用户只能查看自己项目的评估，管理员可以查看所有
@@ -195,7 +196,16 @@ export async function DELETE(
     
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: { Project: { select: { userId: true } } },
+      include: { Project: { select: { userId: true, id: true } } },
+      select: {
+        projectId: true,
+        Project: {
+          select: {
+            userId: true,
+            id: true,
+          },
+        },
+      },
     });
 
     if (!evaluation) {
@@ -205,6 +215,21 @@ export async function DELETE(
     // 归属校验（管理员绕过）
     if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // 删除 JSONL 存储目录（如果存在）
+    const projectId = evaluation.Project?.id || evaluation.projectId;
+    if (projectId) {
+      try {
+        const store = createEvaluationMessageStore(projectId, id);
+        if (await store.exists()) {
+          await store.delete();
+          logger.debug(LOG_MODULES.EVALUATION, '已删除 JSONL 存储目录:', { details: { evaluationId: id, projectId } });
+        }
+      } catch (jsonlError) {
+        // JSONL 删除失败不影响主流程，仅记录警告
+        logger.warn(LOG_MODULES.EVALUATION, '删除 JSONL 存储目录失败:', { details: { error: String(jsonlError) } });
+      }
     }
 
     // 级联删除所有关联数据（使用事务）

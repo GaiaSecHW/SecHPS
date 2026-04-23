@@ -470,7 +470,7 @@ Wave FINAL (验证和清理 - 并行审核):
 
   **Commit**: NO
 
-- [ ] 15. 改造 evaluations/[id]/messages API [Wave 4]
+- [x] 15. 改造 evaluations/[id]/messages API [Wave 4]
 
   **What to do**: API 改为从 JSONL 读取，保持返回格式兼容
 
@@ -480,25 +480,25 @@ Wave FINAL (验证和清理 - 并行审核):
 
   **Commit**: NO
 
-- [ ] 16. 改造 evaluations/[id]/children API [Wave 4]
+- [x] 16. 改造 evaluations/[id]/children API [Wave 4]
 
   **What to do**: 子 Agent API 从 JSONL 读取，提取 Agent/task 调用
 
   **Commit**: NO
 
-- [ ] 17. 改造 messages/[id] API [Wave 4]
+- [x] 17. 改造 messages/[id] API [Wave 4]
 
   **What to do**: 单条消息详情从 JSONL 查找
 
   **Commit**: NO
 
-- [ ] 18. 改造 evaluations/[id] 删除 API [Wave 4]
+- [x] 18. 改造 evaluations/[id] 删除 API [Wave 4]
 
   **What to do**: 删除会话时删除 JSONL 目录
 
   **Commit**: NO
 
-- [ ] 19. 添加 fallback 兜底机制 [Wave 4]
+- [x] 19. 添加 fallback 兜底机制 [Wave 4]
 
   **What to do**: JSONL 读取失败时 fallback 到 Prisma（过渡期）
 
@@ -545,10 +545,14 @@ Wave FINAL (验证和清理 - 并行审核):
 - [ ] W3-3. FSM 会话实际写入验证
 
 ### Wave 4 完成复核
-- [ ] W4-1. API 返回格式验证（与现有格式兼容）
-- [ ] W4-2. nodeId 过滤 API 验证
-- [ ] W4-3. 子 Agent API 验证
-- [ ] W4-4. 删除会话验证（JSONL 目录正确删除）
+- [x] W4-1. API 返回格式验证（与现有格式兼容）
+  结果：所有 API 返回格式保持兼容，添加 source 字段标识数据来源
+- [x] W4-2. nodeId 过滤 API 验证
+  结果：messages API 支持 nodeId 过滤，JSONL 和 Prisma 都正确处理
+- [x] W4-3. 子 Agent API 验证
+  结果：children API 从 JSONL/Prisma 提取 Agent/task 调用
+- [x] W4-4. 删除会话验证（JSONL 目录正确删除）
+  结果：DELETE endpoint 先删除 JSONL 目录，再级联删除 Prisma 数据
 
 ### Final 综合复核
 - [ ] F1. Plan compliance audit [oracle]

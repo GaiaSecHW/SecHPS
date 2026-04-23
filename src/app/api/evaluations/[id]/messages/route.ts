@@ -6,6 +6,7 @@ import { verifyToken } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { createEvaluationMessageStore, EvaluationMessage } from '@/services/evaluation-message-store';
 
 // GET /api/evaluations/[id]/messages - 获取评估会话的消息列表
 // 数据隔离：普通用户只能查看自己项目评估的消息，管理员可以查看所有
@@ -218,7 +219,7 @@ export async function GET(
 }
 
 /**
- * 从数据库查询消息
+ * 从 JSONL 或数据库查询消息（JSONL 优先，Prisma 兜底）
  * FSM 模式：nodeId 保存在 metadata.nodeId 中，需要在内存中过滤
  * DAG 模式：nodeId 保存在 workflowNodeId 字段，可以直接查询
  */
@@ -229,6 +230,71 @@ async function getMessagesFromDB(
   offset: number
 ): Promise<Response> {
   try {
+    // 获取 evaluationSession 以获取 projectId
+    const evaluation = await prisma.evaluationSession.findUnique({
+      where: { id: evaluationId },
+      select: { projectId: true },
+    });
+    
+    if (!evaluation) {
+      return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+    
+    const projectId = evaluation.projectId;
+    
+    // 尝试从 JSONL 读取
+    try {
+      const store = createEvaluationMessageStore(projectId, evaluationId);
+      if (await store.exists()) {
+        logger.debug(LOG_MODULES.EVALUATION, '从 JSONL 读取消息:', { details: { evaluationId, projectId, nodeId } });
+        
+        const result = await store.getMessages({
+          nodeId: nodeId || undefined,
+          offset,
+          limit: limit || 100,
+        });
+        
+        // 格式化 JSONL 消息为 API 响应格式
+        const formattedMessages = result.messages.map((msg: EvaluationMessage) => ({
+          id: msg.id,
+          role: msg.role,
+          content: msg.content,
+          createdAt: msg.timestamp,
+          workflowNodeId: msg.nodeId, // JSONL 使用 nodeId 字段
+          metadata: {
+            nodeId: msg.nodeId,
+            nodeIndex: msg.nodeIndex,
+            agentCallMsgId: msg.agentCallMsgId,
+            toolName: msg.toolName,
+            toolUseId: msg.toolUseId,
+          },
+          nodeId: msg.nodeId,
+        }));
+        
+        logger.debug(LOG_MODULES.EVALUATION, '从 JSONL 返回消息:', { details: {
+          nodeId,
+          total: result.total,
+          count: formattedMessages.length,
+          source: 'jsonl',
+        } });
+        
+        return NextResponse.json({
+          messages: formattedMessages,
+          total: result.total,
+          hasMore: result.hasMore,
+          offset: result.offset,
+          limit: result.limit || null,
+          source: 'jsonl',
+          nodeId,
+        });
+      }
+    } catch (jsonlError) {
+      logger.warn(LOG_MODULES.EVALUATION, 'JSONL 读取失败，fallback 到 Prisma:', { details: { error: String(jsonlError) } });
+    }
+    
+    // Fallback: 从 Prisma 读取（原有逻辑）
+    logger.debug(LOG_MODULES.EVALUATION, '从 Prisma 读取消息:', { details: { evaluationId, nodeId } });
+    
     // 构建查询条件
     const where: any = {
       evaluationSessionId: evaluationId,
