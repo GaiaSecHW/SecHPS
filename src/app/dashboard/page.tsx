@@ -648,10 +648,10 @@ function SessionRow({
   
   // 使用 API 返回的 evaluationStatus，如果没有则从 evaluations 计算
   const evaluationStatus = session.evaluationStatus || 
-    (session.evaluations?.length > 0 
-      ? (session.evaluations[0]?.status === 'preparing' || session.evaluations[0]?.status === 'ready' 
+    ((session.evaluations?.length ?? 0) > 0 
+      ? (session.evaluations![0]?.status === 'preparing' || session.evaluations![0]?.status === 'ready' 
         ? 'waiting' 
-        : session.evaluations[0]?.status)
+        : session.evaluations![0]?.status)
       : 'idle');
   
   // 获取最新的评估记录
