@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const analysis = await prisma.skillAnalysis.findUnique({
       where: { id },
       include: {
-        skill: {
+        Skill: {
           select: {
             id: true,
             name: true,
@@ -54,7 +54,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     if (analysis.inferredVulnPatternId) {
       vulnerabilityPattern = await prisma.vulnerabilityPattern.findUnique({
         where: { id: analysis.inferredVulnPatternId },
-        select: { id: true, name: true, displayName: true, categoryId: true, categoryRef: { select: { value: true } } },
+        select: { id: true, name: true, displayName: true, categoryId: true, VulnerabilityCategory: { select: { value: true } } },
       });
     }
 
@@ -62,7 +62,7 @@ export async function GET(request: Request, { params }: RouteParams) {
     const detail = {
       id: analysis.id,
       skillId: analysis.skillId,
-      skill: analysis.skill,
+      skill: analysis.Skill,
       analysisType: analysis.analysisType,
       isDuplicate: analysis.isDuplicate,
       overlapType: analysis.overlapType,
@@ -134,7 +134,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const analysis = await prisma.skillAnalysis.findUnique({
       where: { id },
       include: {
-        skill: {
+        Skill: {
           select: {
             id: true,
             name: true,

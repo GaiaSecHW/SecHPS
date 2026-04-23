@@ -778,7 +778,7 @@ callbacks: {
         const vulnPatterns = await prisma.vulnerabilityPattern.findMany({
           where: {
             isActive: true,
-            categoryRef: {
+            VulnerabilityCategory: {
               value: { in: categories },
             },
           },
