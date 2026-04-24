@@ -1320,29 +1320,16 @@ if (loading) {
               })()}
 
               <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-                {/* 第一行：黑盒渗透、环境配置 */}
+                {/* 第一行：灰盒渗透、漏洞管理 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => handleAIPenetration(project)}
-                      disabled={!project.environmentUrl}
-                      className={`flex items-center space-x-1 px-3 py-1 text-sm font-medium ${
-                        project.environmentUrl
-                          ? 'text-purple-600 hover:text-purple-800'
-                          : 'text-gray-400 cursor-not-allowed'
-                      }`}
-                      title={project.environmentUrl ? '黑盒渗透测试' : '请先配置环境URL'}
-                    >
-                      <Shield size={16} />
-                      <span>黑盒渗透</span>
-                    </button>
-                    <button
                       onClick={() => openEnvConfigModal(project)}
                       className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-800"
-                      title="环境配置"
+                      title="灰盒渗透"
                     >
                       <Settings size={16} />
-                      <span>环境配置</span>
+                      <span>灰盒渗透</span>
                     </button>
                     <button
                       onClick={() => handleVulnerabilityManagement(project)}
@@ -2154,12 +2141,12 @@ if (loading) {
         </div>
       )}
 
-      {/* 环境配置对话框 */}
+      {/* 灰盒渗透对话框 */}
       {showEnvConfigModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">环境配置</h3>
+              <h3 className="text-lg font-semibold text-gray-900">灰盒渗透</h3>
               <button
                 onClick={() => {
                   setShowEnvConfigModal(false);
