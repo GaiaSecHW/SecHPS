@@ -155,7 +155,8 @@ export async function completeEvaluationFailed(
   projectId: string,
   projectPath: string,
   errorMessage: string,
-  endReason?: string
+  endReason?: string,
+  endMessage?: string
 ): Promise<{ success: boolean; vulnSaved: number; error?: string }> {
   return completeEvaluation({
     evaluationId,
@@ -164,5 +165,6 @@ export async function completeEvaluationFailed(
     status: 'failed',
     errorMessage,
     endReason: endReason || 'error',
+    endMessage,  // 传递详细的结束消息（包含失败节点详情）
   });
 }

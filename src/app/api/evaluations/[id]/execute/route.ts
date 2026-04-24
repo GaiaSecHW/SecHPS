@@ -46,12 +46,18 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
       if (r.status === 'completed') {
         await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `FSM: ${r.phaseResults.length} phases, ${r.agentZoneResults?.length || 0} agents`, { input: r.totalInputTokens, output: r.totalOutputTokens });
       } else {
-        await completeEvaluationFailed(id, evaluation.projectId, projectPath, 'FSM 执行失败', r.status);
+        // FSM 失败时传递详细信息：从 phaseResults 中找到失败的阶段
+        const failedPhases = r.phaseResults.filter(p => p.status === 'failed');
+        const errorMsg = `FSM 执行失败，状态: ${r.status}`;
+        const endMsg = failedPhases.length > 0 
+          ? `失败阶段: ${failedPhases.map(p => `Phase ${p.phaseNumber} (${p.phaseName})`).join(', ')}`
+          : `执行状态: ${r.status}, 总阶段数: ${r.phaseResults.length}`;
+        await completeEvaluationFailed(id, evaluation.projectId, projectPath, errorMsg, r.status, endMsg);
       }
     },
     onWorkflowError: (e) => {
       const projectPath = evaluation.Project.projectPath || process.cwd();
-      completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message).catch(() => {});
+      completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message, 'error', e.stack).catch(() => {});
     },
   };
 
@@ -65,7 +71,7 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
 
   service.execute().catch(async (e) => {
     const projectPath = evaluation.Project.projectPath || process.cwd();
-    await completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message);
+    await completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message, 'error', e.stack);
   });
 }
 
@@ -90,12 +96,13 @@ async function executeDAG(id: string, evaluation: any, modelConfig: any, body: a
       if (r.status === 'completed') {
         await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `DAG: ${r.nodeResults.length} nodes`, { input: r.totalInputTokens, output: r.totalOutputTokens });
       } else {
-        await completeEvaluationFailed(id, evaluation.projectId, projectPath, r.endMessage || 'DAG 执行失败', r.endReason);
+        // 传递完整的错误信息：errorMessage（简短）+ endMessage（详细）
+        await completeEvaluationFailed(id, evaluation.projectId, projectPath, r.error || 'DAG 执行失败', r.endReason, r.endMessage);
       }
     },
     onWorkflowError: (e) => {
       const projectPath = evaluation.Project.projectPath || process.cwd();
-      completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message).catch(() => {});
+      completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message, 'error', e.stack).catch(() => {});
     },
     onTokenUsage: () => {},
   };
@@ -127,15 +134,18 @@ async function executeRalph(id: string, evaluation: any, modelConfig: any, body:
     onRalphComplete: async (r) => {
       const projectPath = evaluation.Project.projectPath || process.cwd();
       if (r.completionReason === 'verified') {
-        await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `Ralph: ${r.iterations} iterations`);
+        await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `Ralph: ${r.iterations} iterations`, { input: r.totalUsage.inputTokens, output: r.totalUsage.outputTokens });
       } else {
-        await completeEvaluationFailed(id, evaluation.projectId, projectPath, 'Ralph 执行未验证通过');
+        // Ralph 失败时传递详细信息
+        const errorMsg = r.reason || `Ralph 执行未验证通过，原因: ${r.completionReason}`;
+        const endMsg = `迭代次数: ${r.iterations}, 完成原因: ${r.completionReason}, Token: ${r.totalUsage.totalTokens}`;
+        await completeEvaluationFailed(id, evaluation.projectId, projectPath, errorMsg, r.completionReason, endMsg);
       }
     },
   };
   agent.loop({ evaluationId: id, projectId: evaluation.projectId, context, callbacks }).catch((e) => {
     const projectPath = evaluation.Project.projectPath || process.cwd();
-    completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message).catch(() => {});
+    completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message, 'error', e.stack).catch(() => {});
   });
 }
 
