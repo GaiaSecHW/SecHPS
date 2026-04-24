@@ -521,25 +521,25 @@ try {
       nodeCount: 7,
       nodes: THREAT_MODELING_NODES,
       agentZone: THREAT_MODELING_AGENT_ZONE,
-      defaultRoles: THREAT_MODELING_DEFAULT_ROLES,
       skillPath: 'skills/threat-modeling',
       version: '3.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
     create: {
-      id: 'fsm-threat-modeling',
+      id: 'threat-modeling',
       name: 'threat-modeling',
       displayName: '威胁建模分析',
       description: '固定流程：P1(项目理解) → P2(DFD分析) → P3(信任边界) → P4(安全评审) → P5(STRIDE) → 渗透测试 → P6(报告)',
       nodeCount: 7,
       nodes: THREAT_MODELING_NODES,
       agentZone: THREAT_MODELING_AGENT_ZONE,
-      defaultRoles: THREAT_MODELING_DEFAULT_ROLES,
       skillPath: 'skills/threat-modeling',
       version: '3.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
   });
   console.log('✅ 已创建 threat-modeling FSM 模板');
@@ -561,9 +561,10 @@ try {
       version: '1.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
     create: {
-      id: 'fsm-code-audit',
+      id: 'code-audit',
       name: 'code-audit',
       displayName: '代码审计',
       description: '3阶段FSM代码审计工作流',
@@ -578,6 +579,7 @@ try {
       version: '1.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
   });
   console.log('✅ 已创建 code-audit FSM 模板');

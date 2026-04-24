@@ -104,6 +104,7 @@ async function main() {
       version: '3.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
     create: {
       id: 'threat-modeling',
@@ -117,6 +118,7 @@ async function main() {
       version: '3.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
   });
 
@@ -138,6 +140,7 @@ async function main() {
       version: '2.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
     create: {
       id: 'code-audit',
@@ -155,6 +158,7 @@ async function main() {
       version: '2.0.0',
       isActive: true,
       isBuiltin: true,
+      updatedAt: new Date(),
     },
   });
 
