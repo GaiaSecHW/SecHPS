@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
+import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // POST /api/skills/batch - 批量操作
@@ -75,9 +76,10 @@ export async function POST(request: Request) {
             isActive: true,
           },
         });
-        // 启用：同步保存到磁盘
+        // 启用：同步保存到磁盘（包含标准输出模板）
+        const template = await getSkillOutputTemplate();
         for (const skill of skills) {
-          saveSkillToDisk(skill).catch(err => {
+          saveSkillToDisk(skill, template).catch(err => {
             logger.errorWithUser(LOG_MODULES.SKILL, payload, '批量启用保存磁盘文件失败', skill.id, { details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } });
           });
         }

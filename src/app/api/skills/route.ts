@@ -9,19 +9,11 @@ import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { skillSelectMinimal } from '@/lib/query-optimizer';
 import { saveSkillToDisk } from '@/services/skill-files';
+import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { findSimilarSkills, SkillForSimilarity, SimilarSkill } from '@/services/skill-similarity';
 import { triggerGovernanceAnalysis } from '@/services/skill-governance';
 import { generateId } from '@/lib/id-generator';
-
-// 获取 skillOutputTemplate 的辅助函数
-async function getSkillOutputTemplate(): Promise<string | undefined> {
-  const config = await prisma.opencodeConfig.findFirst({
-    where: { isActive: true },
-    select: { skillOutputTemplate: true },
-  });
-  return config?.skillOutputTemplate || undefined;
-}
 
 // GET /api/skills - 获取 Skills 列表
 // 支持作用域过滤：
@@ -132,7 +124,7 @@ export async function GET(request: Request) {
       techStackName: skill.TechStackOption?.name || null,
       techStackCategory: skill.TechStackOption?.category || null,
       vulnerabilityPatternName: skill.VulnerabilityPattern?.displayName || skill.VulnerabilityPattern?.name || null,
-      vulnerabilityPatternCategory: skill.VulnerabilityPattern?.categoryRef?.value || null,
+      vulnerabilityPatternCategory: skill.VulnerabilityPattern?.VulnerabilityCategory?.value || null,
       vulnerabilityPatternCwe: skill.VulnerabilityPattern?.cwe || null,
       TechStackOption: undefined, // 移除嵌套对象
       VulnerabilityPattern: undefined, // 移除嵌套对象

@@ -6,17 +6,9 @@ import { hasPermission } from '@/lib/auth';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
+import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
-
-// 获取 skillOutputTemplate 的辅助函数
-async function getSkillOutputTemplate(): Promise<string | undefined> {
-  const config = await prisma.opencodeConfig.findFirst({
-    where: { isActive: true },
-    select: { skillOutputTemplate: true },
-  });
-  return config?.skillOutputTemplate || undefined;
-}
 
 // GET /api/skills/:id - 获取 Skill 详情
 export async function GET(
@@ -39,7 +31,7 @@ export async function GET(
         VulnerabilityPattern: {
           select: {
             id: true, name: true, displayName: true, cwe: true,
-            categoryRef: { select: { value: true } },
+            VulnerabilityCategory: { select: { value: true } },
           },
         },
         SkillExecution: {
@@ -73,7 +65,7 @@ export async function GET(
         techStackName: TechStackOption?.name || null,
         techStackCategory: TechStackOption?.category || null,
         vulnerabilityPatternName: VulnerabilityPattern?.displayName || VulnerabilityPattern?.name || null,
-        vulnerabilityPatternCategory: VulnerabilityPattern?.categoryRef?.value || null,
+        vulnerabilityPatternCategory: VulnerabilityPattern?.VulnerabilityCategory?.value || null,
         vulnerabilityPatternCwe: VulnerabilityPattern?.cwe || null,
       },
     });

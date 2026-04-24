@@ -6,6 +6,7 @@
 import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
 import { saveSkillToDisk } from '@/services/skill-files';
+import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { getImprovementDetail } from './improvement-generator';
 import type { Skill } from '@prisma/client';
 
@@ -34,18 +35,6 @@ export interface RejectImprovementResult {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * 获取 skillOutputTemplate
- * 从活跃的 OpencodeConfig 中获取模板
- */
-async function getSkillOutputTemplate(): Promise<string | undefined> {
-  const config = await prisma.opencodeConfig.findFirst({
-    where: { isActive: true },
-    select: { skillOutputTemplate: true },
-  });
-  return config?.skillOutputTemplate || undefined;
-}
 
 /**
  * 构建 SkillEvolution 的 beforeData 和 afterData

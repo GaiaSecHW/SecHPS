@@ -235,9 +235,9 @@ export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string
  * 更新磁盘上的 Skill
  * 如果是新版本，会创建新文件并更新 metadata.json
  */
-export async function updateSkillOnDisk(skill: Skill): Promise<boolean> {
+export async function updateSkillOnDisk(skill: Skill, skillOutputTemplate?: string): Promise<boolean> {
   // saveSkillToDisk 已经处理了版本更新逻辑
-  return saveSkillToDisk(skill);
+  return saveSkillToDisk(skill, skillOutputTemplate);
 }
 
 /**

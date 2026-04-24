@@ -22,6 +22,7 @@ import { prisma } from '@/lib/prisma';
 import type { Skill, SkillMergeRecord } from '@prisma/client';
 import { saveSkillToDisk } from './skill-files';
 import { aggregateObservationStats } from './skill-observation-stats';
+import { getSkillOutputTemplate } from '@/lib/skill-template';
 
 /**
  * 合并策略类型
@@ -312,8 +313,9 @@ async function executeContentMerge(
     });
     mergeRecords.push(targetMergeRecord);
     
-    // 7. 保存到磁盘
-    await saveSkillToDisk(mergedSkill);
+    // 7. 保存到磁盘（包含标准输出模板）
+    const template = await getSkillOutputTemplate();
+    await saveSkillToDisk(mergedSkill, template);
     
     // 8. 更新观测统计（合并后重新聚合）
     await updateObservationStatsAfterMerge(mergedSkill.id, [
@@ -444,8 +446,9 @@ async function executeReplaceMerge(
       mergeRecords.push(mergeRecord);
     }
     
-    // 4. 保存到磁盘
-    await saveSkillToDisk(mergedSkill);
+    // 4. 保存到磁盘（包含标准输出模板）
+    const template2 = await getSkillOutputTemplate();
+    await saveSkillToDisk(mergedSkill, template2);
     
     // 5. 更新观测统计（合并后重新聚合）
     await updateObservationStatsAfterMerge(mergedSkill.id, [
@@ -550,8 +553,9 @@ async function executeTechStackSplit(
       
       updatedSkills.push(updatedSkill);
       
-      // 保存到磁盘
-      await saveSkillToDisk(updatedSkill);
+      // 保存到磁盘（包含标准输出模板）
+      const template3 = await getSkillOutputTemplate();
+      await saveSkillToDisk(updatedSkill, template3);
     }
     
     // 4. 创建 SkillMergeRecord 审计记录
@@ -810,6 +814,9 @@ export async function approveMergeRequest(
  */
 export async function revertMerge(mergeRecordId: string, userId: string): Promise<MergeResult> {
   try {
+    // 获取标准输出模板（用于恢复时写入磁盘）
+    const template = await getSkillOutputTemplate();
+    
     const mergeRecord = await prisma.skillMergeRecord.findUnique({
       where: { id: mergeRecordId },
     });
@@ -851,7 +858,7 @@ export async function revertMerge(mergeRecordId: string, userId: string): Promis
         data: { isLatest: true },
       });
       restoredSkills.push(restoredTarget);
-      await saveSkillToDisk(restoredTarget);
+      await saveSkillToDisk(restoredTarget, template);
     }
 
     // 恢复源 Skills
@@ -866,7 +873,7 @@ export async function revertMerge(mergeRecordId: string, userId: string): Promis
           data: { isLatest: true },
         });
         restoredSkills.push(restoredSource);
-        await saveSkillToDisk(restoredSource);
+        await saveSkillToDisk(restoredSource, template);
       }
     }
 
