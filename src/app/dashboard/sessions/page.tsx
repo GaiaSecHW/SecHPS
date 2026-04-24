@@ -1186,14 +1186,19 @@ if (loading) {
                     {(() => {
                       try {
                         const techStackArr = JSON.parse(project.techStack);
-                        return techStackArr.map((ts: string) => (
-                          <span
-                            key={ts}
-                            className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
-                          >
-                            {ts}
-                          </span>
-                        ));
+                        return techStackArr.map((tsId: string) => {
+                          // 将 ID 转换为显示名称
+                          const option = techStackOptions.find(o => o.id === tsId);
+                          const displayName = option?.name || option?.description || tsId;
+                          return (
+                            <span
+                              key={tsId}
+                              className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
+                            >
+                              {displayName}
+                            </span>
+                          );
+                        });
                       } catch {
                         return null;
                       }
@@ -2526,12 +2531,22 @@ if (loading) {
                       }}
                       className="block w-full px-3 py-2 border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
                     >
-                      <option value="">选择模型应用到所有角色</option>
-                      {models.map((model) => (
-                        <option key={model.id} value={model.id}>
-                          {model.name} ({model.providerType})
-                        </option>
-                      ))}
+<option value="">选择模型应用到所有角色</option>
+                       {models.map((model) => {
+                         // 不显示 providerType 为 claude 的模型
+                         if (model.providerType === 'claude') return null;
+                         
+                         // 显示模型名称 + 创建者（如果有）
+                         const displayName = model.userName 
+                           ? `${model.name} (${model.userName})`
+                           : model.name;
+                         
+                         return (
+                           <option key={model.id} value={model.id}>
+                             {displayName}
+                           </option>
+                         );
+                       })}
                     </select>
                   </div>
 
@@ -2577,11 +2592,21 @@ if (loading) {
                             className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                           >
                             <option value="">选择模型</option>
-                            {models.map((model) => (
-                              <option key={model.id} value={model.id}>
-                                {model.name} ({model.providerType})
-                              </option>
-                            ))}
+                            {models.map((model) => {
+                              // 不显示 providerType 为 claude 的模型
+                              if (model.providerType === 'claude') return null;
+                              
+                              // 显示模型名称 + 创建者（如果有）
+                              const displayName = model.userName 
+                                ? `${model.name} (${model.userName})`
+                                : model.name;
+                              
+                              return (
+                                <option key={model.id} value={model.id}>
+                                  {displayName}
+                                </option>
+                              );
+                            })}
                           </select>
                         </div>
                       </div>
