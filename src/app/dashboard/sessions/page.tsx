@@ -264,27 +264,6 @@ export default function SessionsPage() {
       const data = await response.json();
       let roles = data.roles || [];
       
-      // 检查是否有角色没有节点（表示有节点未分配角色）
-      const hasEmptyRole = roles.some((r: any) => !r.nodes || r.nodes.length === 0);
-      
-      // 如果存在没有节点的角色，添加默认角色
-      if (hasEmptyRole || roles.length === 0) {
-        // 移除没有节点的角色（它们不需要配置模型）
-        roles = roles.filter((r: any) => r.nodes && r.nodes.length > 0);
-        
-        // 添加默认角色
-        roles.push({
-          id: 'default',
-          name: '默认角色',
-          description: '未分配角色的节点将使用此模型',
-          color: '#6b7280', // Tailwind gray-500
-          order: 999,
-          nodes: [],
-          nodeCount: 0,
-        });
-        console.log('[WorkflowRoles] Added default role for unassigned nodes');
-      }
-      
       console.log('[WorkflowRoles] Loaded roles:', roles.length, roles.map((r: any) => r.name));
       setWorkflowRoles(roles);
       

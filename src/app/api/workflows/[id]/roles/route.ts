@@ -147,7 +147,18 @@ export async function GET(
 
     logger.read(LOG_MODULES.WORKFLOW, payload, 'workflow-roles', id, { count: roles.length });
 
-    return NextResponse.json({ roles });
+    // 标准化返回格式：将 WorkflowNode 映射为 nodes，并添加 nodeCount
+    const formattedRoles = roles.map((role: any) => ({
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      color: role.color,
+      order: role.order,
+      nodes: role.WorkflowNode || [],
+      nodeCount: role.WorkflowNode?.length || role.nodeCount || 0,
+    }));
+
+    return NextResponse.json({ roles: formattedRoles });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Get workflow roles error', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
