@@ -543,42 +543,13 @@ export async function parseAndSaveResults(
     }
 
     // 7. 保存漏洞详情
+    // [已禁用] 漏洞入库统一在 evaluation-completion.ts 的 completeEvaluation 函数处理
+    // 此处不再调用 prisma.vulnerability.create，避免重复入库
     let savedCount = 0;
     let failedCount = 0;
 
-    logInfo(`开始保存 ${vulnerabilities.length} 个漏洞到数据库...`);
-
-    for (const vuln of vulnerabilities) {
-      try {
-        await prisma.vulnerability.create({
-          data: {
-            id: `vuln-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-            projectId,
-            evaluationId,
-            type: vuln.type || '未知类型',
-            severity: vuln.severity?.toLowerCase() || 'medium',
-            title: vuln.title || '未知漏洞',
-            description: vuln.description || vuln.title || '',
-            cwe: vuln.cwe_id || null,
-            location: vuln.location || null,           // 直接存储 location
-            POC: vuln.POC || null,                     // 直接存储 POC
-            vulnerable: vuln.vulnerable ?? true,       // 是否为真实漏洞
-            fixSuggestion: vuln.recommendation || null,
-            skill: vuln.skill || null,
-            updatedAt: new Date(),
-          },
-        });
-        savedCount++;
-        
-        // 每保存5个打印一次进度
-        if (savedCount % 5 === 0) {
-          logInfo(`已保存 ${savedCount}/${vulnerabilities.length} 个漏洞...`);
-        }
-      } catch (dbError) {
-        failedCount++;
-        logWarn(`保存漏洞失败 (${vuln.title}): ${dbError}`);
-      }
-    }
+    logInfo(`[已禁用] 漏洞入库跳过 - 统一在评估结束时处理`);
+    logInfo(`发现漏洞 ${vulnerabilities.length} 个，将在评估结束后统一入库`);
 
     logSuccess('========================================');
     logSuccess('漏洞保存完成');

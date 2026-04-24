@@ -7,9 +7,10 @@
 
 import { prisma } from '@/lib/prisma';
 import { createRalphLoopAgent, RalphLoopAgent } from '@/services/evaluation';
+import { NodeStreamStore } from '@/services/node-stream-store';
+import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import { generateId } from '@/lib/id-generator';
-import { createNodeStreamStore, NodeStreamStore, StreamEvent } from '@/services/node-stream-store';
-import { parseAndSaveVulnerabilities } from '@/lib/vulnerability/parser';
+import { logger, LOG_MODULES } from '@/lib/logger';
 import type {
   UnifiedNodeDefinition,
   ModelConfigForExecution,
@@ -244,12 +245,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
       // 5. 更新数据库状态
       await this.updateSessionStatus(status, endReason, workflowResult);
 
-      // 5.5. 解析并保存漏洞（如果工作流成功完成）
-      if (status === 'completed') {
-        await this.parseAndSaveVulnerabilitiesFromProject();
-      }
-
-      // 6. 调用完成回调
+      // 6. 调用完成回调（漏洞入库由调用方在项目结束时处理）
       await this.callbacks.onWorkflowComplete(workflowResult);
 
       console.log(`[UnifiedEngine] 工作流执行完成: ${status}`);
@@ -1783,37 +1779,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
       console.error(`[updateNodeExecutionTokens] 更新失败:`, error);
       // 不抛出错误，不阻塞执行
     }
-  }
-
-  /**
-   * 解析项目根目录下的 vulnerabilities.json 并保存到数据库
-   * 
-   * DAG/FSM 模式下，漏洞由 AI Skill 执行后写入 vulnerabilities.json 文件
-   * 工作流完成后需要解析并入库
-   */
-  private async parseAndSaveVulnerabilitiesFromProject(): Promise<void> {
-    const vulnerabilitiesPath = `${this.config.workspacePath}/vulnerabilities.json`;
-    
-    console.log(`[UnifiedEngine] 检查漏洞文件: ${vulnerabilitiesPath}`);
-    
-    try {
-      const result = await parseAndSaveVulnerabilities(
-        vulnerabilitiesPath,
-        this.config.projectId,
-        this.config.evaluationSessionId
-      );
-      
-      console.log(`[UnifiedEngine] 漏洞解析完成: 保存 ${result.saved} 个, 跳过 ${result.skipped} 个`);
-      
-      if (result.errors.length > 0) {
-        console.warn(`[UnifiedEngine] 漏洞解析错误:`, result.errors);
-      }
-    } catch (error) {
-      // vulnerabilities.json 不存在或解析失败 - 不阻塞流程
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      console.log(`[UnifiedEngine] 漏洞解析跳过: ${errorMsg}`);
-    }
-  }
+}
 }
 
 /**

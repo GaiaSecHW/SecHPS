@@ -262,6 +262,7 @@ export class FSMWorkflowExecutionService {
         result.generatedReports = await this.generateReports(result);
       }
 
+      // 12. 调用完成回调（漏洞入库由 completeEvaluation 统一处理）
       await this.callbacks.onWorkflowComplete(result);
       return result;
 

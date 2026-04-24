@@ -327,31 +327,18 @@ export class AgentExecutor {
   /**
    * 保存漏洞到数据库
    * 同时更新 Skill.vulnerabilityCount 计数
+   * 
+   * [已禁用] 漏洞入库统一在 evaluation-completion.ts 的 completeEvaluation 函数处理
+   * 此方法不再调用，避免重复入库
    */
   private async saveVulnerabilities(vulnerabilities: ParsedVulnerability[]): Promise<void> {
-    for (const vuln of vulnerabilities) {
-      await prisma.vulnerability.create({
-        data: {
-          id: `vuln-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-          projectId: this.context.projectId,
-          skillExecutionId: this.executionId,  // 关联到执行记录
-          skill: this.skillName,               // 记录来源 Skill 名称
-          title: vuln.title,
-          description: vuln.description,
-          type: vuln.type || 'unknown',
-          severity: vuln.severity,
-          location: vuln.location || vuln.filePath || null,  // 兼容旧格式
-          POC: vuln.POC || null,
-          vulnerable: vuln.vulnerable ?? true,
-          fixSuggestion: vuln.recommendation,
-          cwe: vuln.cwe,
-          status: 'new',
-          updatedAt: new Date(),
-        },
-      });
-    }
-
-    // 更新 Skill.vulnerabilityCount 计数
+    // 禁用：漏洞入库统一在评估结束时处理
+    // for (const vuln of vulnerabilities) {
+    //   await prisma.vulnerability.create({ ... });
+    // }
+    console.log(`[AgentExecutor] saveVulnerabilities 已禁用，漏洞将在评估结束时统一入库`);
+    
+    // 更新 Skill.vulnerabilityCount 计数（保留）
     if (vulnerabilities.length > 0) {
       await prisma.skill.update({
         where: { id: this.context.skillId },

@@ -11,9 +11,10 @@ import { createFSMWorkflowExecutionService, type FSMExecutionCallbacks } from '@
 import { createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
 import { generateNodeList } from '@/lib/workflow/node-list-generator';
 import type { UnifiedExecutionCallbacks, McpServerConfigForExecution } from '@/lib/workflow/types';
-import { createRalphLoopAgent, parseAndSaveResults, type RalphLoopAgentCallbacks } from '@/services/evaluation';
+import { createRalphLoopAgent, type RalphLoopAgentCallbacks } from '@/services/evaluation';
 import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { completeEvaluation, completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
 
 /** 获取模型配置 */
 async function getModelConfig() {
@@ -22,11 +23,6 @@ async function getModelConfig() {
   if (!model) return null;
   const models = JSON.parse(model.models || '[]');
   return { providerType: model.providerType, apiKey: model.apiKey, apiBaseUrl: model.apiBaseUrl, models: model.models, model: models[0] || 'claude-sonnet-4-20250514' };
-}
-
-/** 更新会话状态 */
-async function updateStatus(id: string, status: string, data?: Record<string, any>) {
-  await prisma.evaluationSession.update({ where: { id }, data: { status, ...data, ...(status === 'failed' || status === 'completed' ? { completedAt: new Date() } : {}) } });
 }
 
 /** FSM 执行引擎 */
@@ -45,8 +41,18 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
     onAgentZoneStart: (a) => logger.info(LOG_MODULES.FSM, `AgentZone: ${a.join(',')}`),
     onAgentZoneProgress: (a, s) => logger.debug(LOG_MODULES.FSM, `${a}: ${s}`),
     onAgentZoneComplete: () => logger.info(LOG_MODULES.FSM, 'AgentZone done'),
-    onWorkflowComplete: async (r) => updateStatus(id, r.status === 'completed' ? 'completed' : 'failed', { summary: `FSM: ${r.phaseResults.length} phases` }),
-    onWorkflowError: (e) => updateStatus(id, 'failed', { errorMessage: e.message }).catch(() => {}),
+    onWorkflowComplete: async (r) => {
+      const projectPath = evaluation.Project.projectPath || process.cwd();
+      if (r.status === 'completed') {
+        await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `FSM: ${r.phaseResults.length} phases, ${r.agentZoneResults?.length || 0} agents`, { input: r.totalInputTokens, output: r.totalOutputTokens });
+      } else {
+        await completeEvaluationFailed(id, evaluation.projectId, projectPath, 'FSM 执行失败', r.status);
+      }
+    },
+    onWorkflowError: (e) => {
+      const projectPath = evaluation.Project.projectPath || process.cwd();
+      completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message).catch(() => {});
+    },
   };
 
   const service = createFSMWorkflowExecutionService({
@@ -57,7 +63,10 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
     mcpServers,  // 传递 MCP 配置（优先使用传入的，否则从数据库加载）
   }, callbacks);
 
-  service.execute().catch((e) => updateStatus(id, 'failed', { errorMessage: e.message }));
+  service.execute().catch(async (e) => {
+    const projectPath = evaluation.Project.projectPath || process.cwd();
+    await completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message);
+  });
 }
 
 /** DAG 执行引擎 */
@@ -76,8 +85,18 @@ async function executeDAG(id: string, evaluation: any, modelConfig: any, body: a
     onNodeComplete: (i) => logger.info(LOG_MODULES.WORKFLOW, `Node ${i} done`),
     onNodeError: (i) => logger.errorNoUser(LOG_MODULES.WORKFLOW, `Node ${i} error`),
     onNodeRetry: (i, _nid, _n, r, m) => logger.debug(LOG_MODULES.WORKFLOW, `Node ${i} retry ${r}/${m}`),
-    onWorkflowComplete: async (r) => updateStatus(id, r.status, { summary: `DAG: ${r.nodeResults.length} nodes` }),
-    onWorkflowError: (e) => updateStatus(id, 'failed', { errorMessage: e.message }).catch(() => {}),
+    onWorkflowComplete: async (r) => {
+      const projectPath = evaluation.Project.projectPath || process.cwd();
+      if (r.status === 'completed') {
+        await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `DAG: ${r.nodeResults.length} nodes`, { input: r.totalInputTokens, output: r.totalOutputTokens });
+      } else {
+        await completeEvaluationFailed(id, evaluation.projectId, projectPath, r.endMessage || 'DAG 执行失败', r.endReason);
+      }
+    },
+    onWorkflowError: (e) => {
+      const projectPath = evaluation.Project.projectPath || process.cwd();
+      completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message).catch(() => {});
+    },
     onTokenUsage: () => {},
   };
 
@@ -89,7 +108,10 @@ async function executeDAG(id: string, evaluation: any, modelConfig: any, body: a
     maxIterationsPerNode: body.maxIterations || 10, maxRetries: 15, retryDelayMs: 60000,
   }, callbacks);
   engine.setNodes(nodes);
-  engine.execute().catch((e) => updateStatus(id, 'failed', { errorMessage: e.message }));
+  engine.execute().catch(async (e) => {
+    const projectPath = evaluation.Project.projectPath || process.cwd();
+    await completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message);
+  });
 }
 
 /** Ralph 执行引擎 */
@@ -103,13 +125,18 @@ async function executeRalph(id: string, evaluation: any, modelConfig: any, body:
     onComplete: () => {},
     onError: (e) => logger.errorNoUser(LOG_MODULES.EVALUATION, `Error: ${e.message}`),
     onRalphComplete: async (r) => {
-      // 漏洞入库流程有问题，暂时停止调用 parseAndSaveResults
-      // TODO: 修复漏洞入库流程后重新启用
-      // try { await parseAndSaveResults(id, evaluation.projectId, r.text); } catch {}
-      updateStatus(id, r.completionReason === 'verified' ? 'completed' : 'failed', { summary: `Ralph: ${r.iterations} iterations` });
+      const projectPath = evaluation.Project.projectPath || process.cwd();
+      if (r.completionReason === 'verified') {
+        await completeEvaluationSuccess(id, evaluation.projectId, projectPath, `Ralph: ${r.iterations} iterations`);
+      } else {
+        await completeEvaluationFailed(id, evaluation.projectId, projectPath, 'Ralph 执行未验证通过');
+      }
     },
   };
-  agent.loop({ evaluationId: id, projectId: evaluation.projectId, context, callbacks }).catch((e) => updateStatus(id, 'failed', { errorMessage: e.message }));
+  agent.loop({ evaluationId: id, projectId: evaluation.projectId, context, callbacks }).catch((e) => {
+    const projectPath = evaluation.Project.projectPath || process.cwd();
+    completeEvaluationFailed(id, evaluation.projectId, projectPath, e.message).catch(() => {});
+  });
 }
 
 /** POST /api/evaluations/[id]/execute - 统一执行 API */
@@ -139,13 +166,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       ? await loadMcpServersForProject(evaluation.projectId, payload.userId)
       : undefined;
 
-    await updateStatus(id, 'running', { startedAt: new Date() });
+    // 更新为 running 状态
+    await prisma.evaluationSession.update({ where: { id }, data: { status: 'running', startedAt: new Date() } });
 
     switch (workflowType) {
       case 'fsm': await executeFSM(id, evaluation, modelConfig, body, mcpServers, payload.userId); break;
       case 'dag': await executeDAG(id, evaluation, modelConfig, body, mcpServers); break;
       case 'ralph': await executeRalph(id, evaluation, modelConfig, body, mcpServers); break;
-      default: await updateStatus(id, 'ready', { errorMessage: `未知的 workflowType: ${workflowType}` }); return NextResponse.json({ error: `未知的 workflowType: ${workflowType}` }, { status: 400 });
+      default: 
+        await prisma.evaluationSession.update({ where: { id }, data: { status: 'ready', errorMessage: `未知的 workflowType: ${workflowType}` } });
+        return NextResponse.json({ error: `未知的 workflowType: ${workflowType}` }, { status: 400 });
     }
 
     return NextResponse.json({ success: true, status: 'running', evaluationId: id, workflowType, message: `${workflowType} 工作流已启动` });
