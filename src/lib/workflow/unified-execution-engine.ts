@@ -1102,7 +1102,64 @@ callbacks: {
 
     // FSM Phase：Skill 文件已经包含完整的执行指令，直接使用
     // Skill 文件内容格式: "# Phase 1: Project Understanding..."
+    // 
+    // 特殊情况：skillPath 为 null 的节点（如渗透测试）需要走自定义流程逻辑
+    // - 查询 skills/vulnerabilityCategories 配置
+    // - 根据 Skills 生成第一条消息
     if (nodeType === 'fsm_phase') {
+      // skillPath 为 null 的节点（如渗透测试）走自定义流程逻辑
+      if (!node.skillPath) {
+        console.log(`[buildNodePrompt] FSM Phase ${node.label} 无 skillPath，走自定义流程逻辑`);
+        
+        // 获取节点配置的 Skills（用户编排）
+        const skills = await this.getNodeSkills(node);
+        const nodeData = node.data as Record<string, unknown> | undefined;
+        const mode = (nodeData?.skillLoadingMode as string) || 'description';
+        
+        let prompt = '';
+        
+        if (mode === 'description' || skills.length === 0) {
+          // description 模式或无 Skills：直接用用户写的描述 + 项目上下文
+          prompt = `
+${nodeDescription}
+
+---
+
+## 项目上下文
+
+### 项目信息
+- 项目名称: ${this.config.projectName}
+- 项目路径: ${this.config.workspacePath}
+
+### 前序节点输出
+${previousOutputs || '(首个节点，无前序输出)'}
+`;
+          console.log(`[buildNodePrompt] FSM Phase description 模式，提示词: ${prompt.slice(0, 100)}...`);
+        } else {
+          // manual 或 vulnerability 模式：根据 Skills 生成提示词（和自定义流程一样）
+          prompt = `请执行以下安全检查任务，必须执行所有指定的 Skills：
+
+必须执行的 Skills：
+${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
+
+---
+
+## 项目上下文
+
+### 项目信息
+- 项目名称: ${this.config.projectName}
+- 项目路径: ${this.config.workspacePath}
+
+### 前序节点输出
+${previousOutputs || '(首个节点，无前序输出)'}
+`;
+          console.log(`[buildNodePrompt] FSM Phase ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
+        }
+        
+        return prompt;
+      }
+      
+      // skillPath 有值：读取 Skill 文件内容
       // 构建 Skill 内容 + 项目上下文
       const prompt = `
 ${nodeDescription}

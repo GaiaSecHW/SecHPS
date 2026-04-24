@@ -166,9 +166,9 @@ export class FSMWorkflowExecutionService {
     this.callbacks = callbacks;
   }
 
-  /**
-   * 执行 FSM 工作流
-   */
+/**
+    * 执行 FSM 工作流
+    */
   async execute(): Promise<FSMWorkflowResult> {
     const startTime = Date.now();
 
@@ -183,6 +183,11 @@ export class FSMWorkflowExecutionService {
       const agentZone = this.fsmTemplate.agentZone 
         ? JSON.parse(this.fsmTemplate.agentZone) as AgentZoneConfig 
         : null;
+
+      // 1.5 加载用户添加的自定义节点（WorkflowNode 表）
+      // 用户在编排界面添加的 task 节点，应该在渗透测试阶段执行
+      const userNodes = await this.loadUserNodes();
+      console.log(`[execute] 加载用户添加节点: ${userNodes.length} 个`);
 
       // 2. 加载 Skill 内容到 workspace
       if (this.fsmTemplate.skillPath) {
@@ -203,8 +208,8 @@ export class FSMWorkflowExecutionService {
         }
       }
 
-      // 3. 转换 FSM 节点为 UnifiedNodeDefinition
-      const unifiedNodes = this.convertFSMNodesToUnified(nodes);
+      // 3. 转换 FSM 节点为 UnifiedNodeDefinition（合并用户节点）
+      const unifiedNodes = this.convertFSMNodesToUnified(nodes, userNodes);
 
       // 4. 创建统一执行引擎配置（异步加载 MCP）
       const engineConfig = await this.createUnifiedEngineConfig();
@@ -296,25 +301,147 @@ export class FSMWorkflowExecutionService {
     });
   }
 
+/**
+    * 加载 WorkflowNode 表的用户编排节点
+    * 
+    * 用户在编排界面添加的自定义节点（type=task）存储在 WorkflowNode 表
+    * 这些节点应该在 FSM 渗透测试阶段执行
+    */
+  private async loadUserNodes(): Promise<UnifiedNodeDefinition[]> {
+    const userNodes: UnifiedNodeDefinition[] = [];
+    
+    try {
+      const workflowNodes = await prisma.workflowNode.findMany({
+        where: { 
+          workflowId: this.config.workflowId,
+          type: 'task',  // 用户添加的 task 节点
+        },
+        select: {
+          id: true,
+          type: true,
+          skills: true,
+          vulnerabilityCategories: true,
+          data: true,
+          roleId: true,
+          positionX: true,
+        },
+        orderBy: { positionX: 'asc' },  // 按编排界面位置排序
+      });
+      
+      console.log(`[loadUserNodes] 找到 ${workflowNodes.length} 个用户添加的节点`);
+      
+      for (const wn of workflowNodes) {
+        const data = wn.data ? JSON.parse(wn.data) : {};
+        
+        const unifiedNode: UnifiedNodeDefinition = {
+          id: wn.id,
+          label: data.label || '用户节点',
+          type: wn.type,  // task
+          description: data.description || '',
+          roleId: wn.roleId,
+          // 用户配置的 skills
+          skills: wn.skills ? JSON.parse(wn.skills) : undefined,
+          // 用户配置的漏洞分类
+          vulnerabilityCategories: wn.vulnerabilityCategories ? JSON.parse(wn.vulnerabilityCategories) : undefined,
+          data: {
+            ...data,
+            skillLoadingMode: data.skillLoadingMode || 'description',
+          },
+          fsmPhase: 6,  // 渗透测试阶段
+          fsmOrder: 6,  // 在 FSM 流程中的位置
+        };
+        
+        console.log(`[loadUserNodes] 用户节点: ${wn.id}`);
+        console.log(`  label: ${unifiedNode.label}`);
+        console.log(`  skills: ${unifiedNode.skills ? JSON.stringify(unifiedNode.skills) : '无'}`);
+        console.log(`  vulnCategories: ${unifiedNode.vulnerabilityCategories ? JSON.stringify(unifiedNode.vulnerabilityCategories) : '无'}`);
+        console.log(`  skillLoadingMode: ${data.skillLoadingMode || 'description'}`);
+        
+        userNodes.push(unifiedNode);
+      }
+    } catch (error) {
+      console.error(`[loadUserNodes] 查询失败:`, error);
+    }
+    
+    return userNodes;
+  }
+
   /**
-   * 转换 FSM 节点为 UnifiedNodeDefinition
-   */
-  private convertFSMNodesToUnified(nodes: FSMPhaseDefinition[]): UnifiedNodeDefinition[] {
-    return nodes.map(node => ({
-      id: node.id,
-      label: node.label,
-      roleId: node.roleId,
-      skillPath: node.skillPath,
-      fsmPhase: node.fsmPhase,
-      fsmOrder: node.fsmPhase, // FSM 使用 phase 作为顺序
-      description: node.description,
-      type: 'fsm_phase',
-      // 保留 phases 信息用于提示词构建
-      data: {
-        phases: node.phases,
-        phase: node.phase,
-      },
-    }));
+    * 转换 FSM 节点为 UnifiedNodeDefinition
+    * 
+    * 1. 从 FSMTemplate.nodes 读取固定流程节点（P1-P5, P6）
+    * 2. 从 WorkflowNode 表读取用户添加的 task 节点
+    * 3. 在渗透测试阶段（fsmPhase=6）位置插入用户节点
+    */
+  private convertFSMNodesToUnified(
+    nodes: FSMPhaseDefinition[],
+    userNodes: UnifiedNodeDefinition[]
+  ): UnifiedNodeDefinition[] {
+    const result: UnifiedNodeDefinition[] = [];
+    
+    // 1. 处理 FSMTemplate.nodes 中的节点（排除 skillPath=null 的渗透测试占位节点）
+    for (const node of nodes) {
+      // skillPath 为 null 的节点（fsm-node-penetration）是占位符，用用户节点替换
+      if (node.skillPath === null && node.fsmPhase === 6) {
+        console.log(`[convertFSMNodesToUnified] 跳过占位节点: ${node.id} (${node.label})，用用户节点替换`);
+        continue;
+      }
+      
+      const unifiedNode: UnifiedNodeDefinition = {
+        id: node.id,
+        label: node.label,
+        roleId: node.roleId,
+        skillPath: node.skillPath,
+        fsmPhase: node.fsmPhase,
+        fsmOrder: node.fsmPhase,
+        description: node.description,
+        type: 'fsm_phase',
+        data: {
+          phases: node.phases,
+          phase: node.phase,
+        },
+      };
+      
+      result.push(unifiedNode);
+    }
+    
+    // 2. 在 fsmPhase=6 位置插入用户节点（渗透测试阶段）
+    // 找到 P5（fsmPhase=5）之后、P6（fsmPhase=7）之前的位置
+    const p5Index = result.findIndex(n => n.fsmPhase === 5);
+    const p6Index = result.findIndex(n => n.fsmPhase === 7);
+    
+    if (userNodes.length > 0) {
+      // 在 P5 和 P6 之间插入用户节点
+      const insertIndex = p5Index >= 0 ? p5Index + 1 : result.length;
+      
+      console.log(`[convertFSMNodesToUnified] 在位置 ${insertIndex} 插入 ${userNodes.length} 个用户节点`);
+      
+      // 更新用户节点的 fsmOrder（保持执行顺序）
+      userNodes.forEach((node, i) => {
+        node.fsmOrder = 6 + i * 0.1;  // 6.0, 6.1, 6.2...
+      });
+      
+      // 插入用户节点
+      result.splice(insertIndex, 0, ...userNodes);
+      
+      // 更新 P6 的 fsmOrder（在用户节点之后）
+      if (p6Index >= 0) {
+        const newP6Index = insertIndex + userNodes.length;
+        result[newP6Index].fsmOrder = 7;
+      }
+    }
+    
+    // 3. 按 fsmOrder 排序
+    result.sort((a, b) => (a.fsmOrder || 0) - (b.fsmOrder || 0));
+    
+    console.log(`[convertFSMNodesToUnified] 最终节点列表 (${result.length} 个):`);
+    for (const n of result) {
+      console.log(`  ${n.fsmOrder}: ${n.id} (${n.label}, type: ${n.type})`);
+      if (n.skills) console.log(`    skills: ${JSON.stringify(n.skills)}`);
+      if (n.vulnerabilityCategories) console.log(`    vulnCategories: ${JSON.stringify(n.vulnerabilityCategories)}`);
+    }
+    
+    return result;
   }
 
 /**
