@@ -41,6 +41,22 @@ export async function GET(
         Project: { select: { userId: true, configId: true } },
         NodeExecution: {
           orderBy: { order: 'asc' },
+          select: {
+            id: true,
+            workflowNodeId: true,
+            nodeLabel: true,
+            nodeType: true,
+            status: true,
+            skipped: true,
+            skipReason: true,
+            startedAt: true,
+            completedAt: true,
+            order: true,
+            modelConfigId: true,
+            modelName: true,
+            inputTokens: true,
+            outputTokens: true,
+          },
         },
       },
     });
@@ -424,7 +440,7 @@ export async function POST(
     const existingExecution = await prisma.nodeExecution.findFirst({
       where: {
         evaluationSessionId: id,
-        nodeId: nodeId,
+        workflowNodeId: nodeId,
       },
     });
 

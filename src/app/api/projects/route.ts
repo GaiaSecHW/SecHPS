@@ -51,7 +51,8 @@ export async function GET(request: Request) {
           orderBy: {
             startedAt: 'desc',
           },
-          take: 3,  // 获取最近3个评估（包括运行中和已完成的）
+          // 不限制数量，确保能获取到所有运行中的评估
+          // 之前 take: 3 可能导致运行中的评估不在返回列表中
         },
         User: {
           select: {
@@ -74,9 +75,12 @@ export async function GET(request: Request) {
 
     // 转换数据格式，添加漏洞数量和运行状态
     const projectsWithVulnCount = projects.map(project => {
-      // 计算评估状态（preparing 也算运行中）
-      const runningCount = project.EvaluationSession?.filter((e: any) => e.status === 'running' || e.status === 'preparing').length || 0;
-      const waitingCount = project.EvaluationSession?.filter((e: any) => e.status === 'ready' || e.status === 'queued').length || 0;
+      // 计算评估状态（preparing、running、queued 都算活跃状态）
+      // queued 状态也应该阻止新的评估启动
+      const runningCount = project.EvaluationSession?.filter((e: any) => 
+        e.status === 'running' || e.status === 'preparing' || e.status === 'queued'
+      ).length || 0;
+      const waitingCount = project.EvaluationSession?.filter((e: any) => e.status === 'ready').length || 0;
       const completedCount = project.EvaluationSession?.filter((e: any) => e.status === 'completed').length || 0;
       const failedCount = project.EvaluationSession?.filter((e: any) => e.status === 'failed' || e.status === 'cancelled').length || 0;
       

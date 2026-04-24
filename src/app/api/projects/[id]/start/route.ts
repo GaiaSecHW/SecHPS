@@ -159,6 +159,28 @@ export async function POST(
       }
     }
 
+    // 检查该项目是否有正在运行/准备中的评估（队列启动和 SSE 重连时跳过）
+    // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查
+    if (!isQueuedStart && !reconnectEvaluationId) {
+      const projectActiveEvaluations = await prisma.evaluationSession.count({
+        where: {
+          projectId: id,
+          status: { in: ['preparing', 'running', 'queued'] }
+        },
+      });
+      
+      if (projectActiveEvaluations > 0) {
+        logger.warn(LOG_MODULES.EVALUATION, '该项目已有正在运行的评估，拒绝启动', {
+          projectId: id,
+          activeCount: projectActiveEvaluations,
+        });
+        return NextResponse.json({
+          error: '该项目已有正在运行的评估，请等待当前评估完成后再启动新的评估',
+          activeEvaluations: projectActiveEvaluations,
+        }, { status: 409 }); // 409 Conflict
+      }
+    }
+    
     // 检查并发限制（队列启动和 SSE 重连时跳过）
     // 注意：需要统计 preparing 和 running 状态，因为创建时是 preparing
     // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查并发限制
@@ -170,7 +192,7 @@ export async function POST(
       },
     });
     
-    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { activeCount, maxConcurrent, isSSEReconnect: !!reconnectEvaluationId });
+    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { activeCount, maxConcurrent, isSSEReconnect: !!reconnectEvaluationId, projectId: id });
     
     // 如果超出并发限制且不是队列启动或 SSE 重连，创建排队状态的评估
     if (!isQueuedStart && !reconnectEvaluationId && activeCount >= maxConcurrent) {
@@ -877,6 +899,7 @@ export async function POST(
               
               // 获取 FSMTemplate.nodes 来映射 phase 到正确的 nodeId
               let fsmPhaseToNodeId: Record<number, string> = {};
+              let fsmNodesList: Array<{ id: string; label: string; fsmPhase: number; fsmOrder: number }> = [];
               if (workflow.fsmTemplateId) {
                 const fsmTemplate = await prisma.fSMTemplate.findUnique({
                   where: { id: workflow.fsmTemplateId },
@@ -885,14 +908,53 @@ export async function POST(
                 if (fsmTemplate?.nodes) {
                   try {
                     const fsmNodes = JSON.parse(fsmTemplate.nodes);
+                    fsmNodesList = fsmNodes.map((node: any) => ({
+                      id: node.id,
+                      label: node.label || `Phase ${node.fsmPhase}`,
+                      fsmPhase: node.fsmPhase,
+                      fsmOrder: node.fsmOrder || node.fsmPhase,
+                    }));
                     fsmNodes.forEach((node: any) => {
                       if (node.fsmPhase) {
                         fsmPhaseToNodeId[node.fsmPhase] = node.id;
                       }
                     });
+                    logger.info(LOG_MODULES.EVALUATION, '[FSM Async] FSMTemplate.nodes 解析完成', { 
+                      nodeCount: fsmNodesList.length,
+                      nodeIds: fsmNodesList.map(n => n.id).join(', ')
+                    });
                   } catch (e) {
                     logger.warn(LOG_MODULES.EVALUATION, '[FSM Async] 解析 FSMTemplate.nodes 失败', { error: String(e) });
                   }
+                }
+              }
+              
+              // 预创建 NodeExecution 记录（确保前端能看到所有节点）
+              if (fsmNodesList.length > 0) {
+                try {
+                  await prisma.$transaction(
+                    fsmNodesList.map((node, i) =>
+                      prisma.nodeExecution.create({
+                        data: {
+                          id: generateIndexedId('nodeexec', i),
+                          evaluationSessionId: evaluation.id,
+                          workflowNodeId: node.id,
+                          nodeLabel: node.label,
+                          nodeType: 'fsm_phase',
+                          status: 'pending',
+                          order: node.fsmOrder || i,
+                          updatedAt: new Date(),
+                        },
+                      })
+                    )
+                  );
+                  logger.info(LOG_MODULES.EVALUATION, '[FSM Async] NodeExecution 记录预创建完成', { 
+                    count: fsmNodesList.length,
+                    evaluationId: evaluation.id
+                  });
+                } catch (e) {
+                  // 预创建失败不阻塞执行，后续 createNodeExecutionRecord 会处理
+                  logger.warn(LOG_MODULES.EVALUATION, '[FSM Async] NodeExecution 预创建失败（继续执行）', { error: String(e) });
                 }
               }
               

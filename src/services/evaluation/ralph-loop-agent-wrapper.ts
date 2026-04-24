@@ -556,12 +556,28 @@ export class RalphLoopAgent {
         // 没有验证函数时，检查文本是否包含完成信号
         const text = result.text.toLowerCase();
         const completionKeywords = [
-          '任务完成', '评估完成', '扫描完成', '已完成', '完成了', '全部完成',
+          '任务完成', '评估完成', '扫描完成', '已完成', '完成了', '全部完成', '执行完成', '分析完成',
           'task complete', 'completed', 'done', 'finished', 'all tasks', 'successfully completed',
+          'complete', 'success', 'finished all', 'tasks completed', 'generation complete',
+          '报告已生成', '报告生成完成', '威胁建模完成', '已结束', 'end of task',
         ];
+        
+        console.log(`[Ralph Loop] 检测完成关键词, 文本长度=${text.length}, 前100字符="${text.substring(0, 100)}..."`);
+        
         if (completionKeywords.some((kw) => text.includes(kw))) {
           completionReason = 'verified';
           reason = '检测到完成关键词';
+          console.log(`[Ralph Loop] 检测到完成关键词，节点标记为完成`);
+          break;
+        }
+        
+        // 如果文本长度足够（>500字符）且迭代次数达到上限的80%，也视为完成
+        // 这是为了处理 Agent 完成了工作但没有明确说"完成"的情况
+        const maxIterations = this.config.maxIterations || 10;
+        if (result.text.length > 500 && iteration >= maxIterations * 0.8) {
+          completionReason = 'verified';
+          reason = `文本长度足够(${result.text.length}字符)且迭代次数接近上限`;
+          console.log(`[Ralph Loop] 文本长度足够，迭代次数=${iteration}/${maxIterations}，节点标记为完成`);
           break;
         }
       }

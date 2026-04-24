@@ -2533,13 +2533,10 @@ if (loading) {
                     >
 <option value="">选择模型应用到所有角色</option>
                        {models.map((model) => {
-                         // 不显示 providerType 为 claude 的模型
-                         if (model.providerType === 'claude') return null;
-                         
-                         // 显示模型名称 + 创建者（如果有）
-                         const displayName = model.userName 
-                           ? `${model.name} (${model.userName})`
-                           : model.name;
+                         // 显示模型名称 + 创建者（系统模型显示"系统"）
+                         const displayName = model.userId 
+                           ? `${model.name} (${model.userName || model.userUsername || '未知'})`
+                           : `${model.name} (系统)`;
                          
                          return (
                            <option key={model.id} value={model.id}>
@@ -2593,13 +2590,10 @@ if (loading) {
                           >
                             <option value="">选择模型</option>
                             {models.map((model) => {
-                              // 不显示 providerType 为 claude 的模型
-                              if (model.providerType === 'claude') return null;
-                              
-                              // 显示模型名称 + 创建者（如果有）
-                              const displayName = model.userName 
-                                ? `${model.name} (${model.userName})`
-                                : model.name;
+                              // 显示模型名称 + 创建者（系统模型显示"系统"）
+                              const displayName = model.userId 
+                                ? `${model.name} (${model.userName || model.userUsername || '未知'})`
+                                : `${model.name} (系统)`;
                               
                               return (
                                 <option key={model.id} value={model.id}>
