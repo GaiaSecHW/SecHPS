@@ -65,7 +65,30 @@ export async function GET(
       },
     });
 
-    // 如果是 FSM 工作流，还需要从 FSMTemplate 获取 P1-P6 节点的角色信息
+    // 收集所有未分配角色的节点（用于添加默认角色）
+    const allUnassignedNodes: any[] = [];
+
+    // 1. 查询 WorkflowNode 表中没有分配角色的节点（roleId 为 null）
+    const unassignedWorkflowNodes = await prisma.workflowNode.findMany({
+      where: {
+        workflowId: id,
+        roleId: null,
+      },
+      select: { id: true, type: true, data: true, fsmPhase: true },
+    });
+
+    // 添加到未分配节点列表
+    unassignedWorkflowNodes.forEach((n: any) => {
+      const nodeData = n.data ? JSON.parse(n.data) : {};
+      allUnassignedNodes.push({
+        id: n.id,
+        type: n.type,
+        label: nodeData.label || n.id,
+        fsmPhase: n.fsmPhase,
+      });
+    });
+
+    // 2. 如果是 FSM 工作流，从 FSMTemplate 获取 FSM 阶段节点的角色信息
     if (workflow.workflowType === 'fsm' && workflow.fsmTemplateId) {
       const fsmTemplate = await prisma.fSMTemplate.findUnique({
         where: { id: workflow.fsmTemplateId },
@@ -74,18 +97,6 @@ export async function GET(
       
       if (fsmTemplate) {
         const fsmNodes = JSON.parse(fsmTemplate.nodes);
-        
-        // 收集 FSM 节点的角色 ID
-        const fsmRoleIds = new Set<string>();
-        const fsmNodesWithoutRole: any[] = [];
-        
-        fsmNodes.forEach((node: any) => {
-          if (node.roleId) {
-            fsmRoleIds.add(node.roleId);
-          } else {
-            fsmNodesWithoutRole.push(node);
-          }
-        });
         
         // 对于每个有角色的 FSM 节点，添加到对应角色的 WorkflowNode 列表
         for (const role of roles) {
@@ -102,27 +113,35 @@ export async function GET(
           }
         }
         
-        // 如果有未分配角色的 FSM 节点，添加"默认角色"
-        if (fsmNodesWithoutRole.length > 0) {
-          roles.push({
-            id: 'default',
-            name: '默认角色',
-            description: '未分配角色的 FSM 阶段节点将使用此模型',
-            color: '#gray',
-            order: 999,
-            WorkflowNode: fsmNodesWithoutRole.map((n: any) => {
-              const nodeData = n.data ? JSON.parse(n.data) : {};
-              const label = nodeData.label || n.id;
-              return {
-                id: n.id,
-                type: 'fsm-phase',
-                label,
-                fsmPhase: n.fsmPhase,
-              };
-            }) as any[],
-            nodeCount: fsmNodesWithoutRole.length,
-          } as any);
-        }
+        // 收集未分配角色的 FSM 节点
+        fsmNodes.forEach((node: any) => {
+          if (!node.roleId) {
+            const nodeData = node.data ? JSON.parse(node.data) : {};
+            allUnassignedNodes.push({
+              id: node.id,
+              type: 'fsm-phase',
+              label: nodeData.label || node.id,
+              fsmPhase: node.fsmPhase,
+            });
+          }
+        });
+      }
+    }
+
+    // 3. 如果有未分配角色的节点，统一添加一个"默认角色"（避免重复）
+    if (allUnassignedNodes.length > 0) {
+      // 检查是否已存在 default 角色（防止重复添加）
+      const existingDefault = roles.find(r => r.id === 'default');
+      if (!existingDefault) {
+        roles.push({
+          id: 'default',
+          name: '默认角色',
+          description: '未分配角色的节点将使用此模型',
+          color: '#6b7280',
+          order: 999,
+          WorkflowNode: allUnassignedNodes,
+          nodeCount: allUnassignedNodes.length,
+        } as any);
       }
     }
 
