@@ -323,9 +323,19 @@ export class FSMWorkflowExecutionService {
   private async createUnifiedEngineConfig(): Promise<UnifiedExecutionConfig> {
     // FSM 使用父模型配置，所有节点共享同一模型
     // modelConfig 只包含基础字段，需要从 models 解析模型名
+    // models 是 JSON 数组字符串，如 '["MiniMax/MiniMax-M2.5"]'，需要解析取第一个
+    let modelName = 'FSM Model';
+    try {
+      const modelsArray = JSON.parse(this.config.modelConfig.models);
+      modelName = modelsArray[0] || this.config.modelConfig.models;
+    } catch {
+      // 如果不是 JSON，直接使用原始值
+      modelName = this.config.modelConfig.models;
+    }
+    
     const defaultModelConfig: ModelConfigForExecution = {
       id: 'fsm-default',
-      name: this.config.modelConfig.models || 'FSM Model',
+      name: modelName,  // 使用解析后的模型名，不是 JSON 数组字符串
       providerType: this.config.modelConfig.providerType,
       apiKey: this.config.modelConfig.apiKey,
       apiBaseUrl: this.config.modelConfig.apiBaseUrl,
