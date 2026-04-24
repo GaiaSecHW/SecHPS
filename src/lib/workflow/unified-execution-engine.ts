@@ -1291,6 +1291,24 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 
       console.log(`[saveNodeExecutionToDB] 查询结果: ${node.label}, existing=${existing ? '存在' : '不存在'}, startedAt=${existing?.startedAt || 'null'}, status=${existing?.status || 'null'}`);
 
+      // 检查 modelConfigId 是否存在（避免外键约束失败）
+      let safeModelConfigId: string | null = null;
+      if (modelConfig.id) {
+        try {
+          const modelExists = await prisma.modelConfig.findUnique({
+            where: { id: modelConfig.id },
+            select: { id: true },
+          });
+          if (modelExists) {
+            safeModelConfigId = modelConfig.id;
+          } else {
+            console.warn(`[saveNodeExecutionToDB] modelConfigId ${modelConfig.id} 不存在于数据库，跳过外键更新`);
+          }
+        } catch (e) {
+          console.warn(`[saveNodeExecutionToDB] 检查 modelConfigId 失败:`, e);
+        }
+      }
+
       const data = {
         evaluationSessionId: this.config.evaluationSessionId,
         workflowNodeId: node.id,
@@ -1301,7 +1319,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         completedAt: new Date(),
         updatedAt: new Date(),
         order: nodeIndex,
-        modelConfigId: modelConfig.id,
+        modelConfigId: safeModelConfigId,  // 使用安全的 modelConfigId
         modelName: modelConfig.name,
         roleId: node.roleId ?? undefined,
         inputTokens: result.inputTokens || 0,
@@ -1310,28 +1328,29 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 
       if (existing) {
         // 更新现有记录
-        // 确保 startedAt 被设置（如果之前未设置）
         const updateData: any = {
           status: result.status,
           completedAt: new Date(),
           updatedAt: new Date(),
-          modelConfigId: modelConfig.id,
-          modelName: modelConfig.name,
+          modelName: modelConfig.name,  // modelName 无外键约束，安全写入
           inputTokens: result.inputTokens || 0,
           outputTokens: result.outputTokens || 0,
         };
         
-        // 如果 startedAt 未设置，使用计算值（节点开始时间）
-        if (!existing.startedAt) {
-          updateData.startedAt = new Date(this.startTime.getTime() + result.duration * nodeIndex);
-          console.log(`[saveNodeExecutionToDB] 补充设置 startedAt: ${node.label}`);
+        // 只有 modelConfigId 存在时才写入（避免外键约束）
+        if (safeModelConfigId) {
+          updateData.modelConfigId = safeModelConfigId;
         }
+        
+        // 强制设置 startedAt（确保节点启动时间被记录）
+        updateData.startedAt = new Date(this.startTime.getTime() + result.duration * nodeIndex);
+        console.log(`[saveNodeExecutionToDB] 设置 startedAt: ${node.label}`);
         
         await prisma.nodeExecution.update({
           where: { id: existing.id },
           data: updateData,
         });
-        console.log(`[saveNodeExecutionToDB] 更新节点执行记录: ${node.label}, startedAt=${existing.startedAt || '已补充'}, completedAt=已设置`);
+        console.log(`[saveNodeExecutionToDB] 更新节点执行记录成功: ${node.label}, status=${result.status}`);
       } else {
         // 创建新记录
         await prisma.nodeExecution.create({
@@ -1340,11 +1359,13 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             ...data,
           },
         });
-        console.log(`[saveNodeExecutionToDB] 创建节点执行记录: ${node.label}, workflowType=${this.config.workflowType}`);
+        console.log(`[saveNodeExecutionToDB] 创建节点执行记录成功: ${node.label}, status=${result.status}`);
       }
     } catch (error) {
-      console.error(`[saveNodeExecutionToDB] 保存失败:`, error);
-      // 不抛出错误，允许执行继续进行
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`[saveNodeExecutionToDB] 保存失败:`, err.message, err.stack);
+      // 记录错误到会话（但不阻塞执行）
+      await this.recordDatabaseError('saveNodeExecutionToDB', err, node.label);
     }
   }
 
@@ -1794,7 +1815,10 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 
       console.log(`[updateSessionStatus] 更新状态: ${status}, reason: ${reason}, 项目状态已同步更新`);
     } catch (error) {
-      console.error(`[updateSessionStatus] 更新失败:`, error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`[updateSessionStatus] 更新失败:`, err.message, err.stack);
+      // 会话状态更新失败是严重问题，记录错误
+      await this.recordDatabaseError('updateSessionStatus', err, `status=${status}`);
     }
   }
 
@@ -1861,6 +1885,17 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         if (node.errorStack) {
           message += `  堆栈: ${node.errorStack.substring(0, 200)}...\n`;
         }
+      }
+    }
+
+    // 添加数据库操作错误汇总
+    if (this.databaseErrors.length > 0) {
+      message += `\n⚠️ 数据库状态更新错误 (${this.databaseErrors.length} 个):\n`;
+      for (const err of this.databaseErrors.slice(0, 5)) {
+        message += `- ${err}\n`;
+      }
+      if (this.databaseErrors.length > 5) {
+        message += `- ...还有 ${this.databaseErrors.length - 5} 个错误\n`;
       }
     }
 
@@ -1947,26 +1982,46 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
       
       console.log(`[createNodeExecutionRecord] 查询结果: existing=${existing ? '存在' : '不存在'}, id=${existing?.id || 'null'}, startedAt=${existing?.startedAt || 'null'}, status=${existing?.status || 'null'}`);
       
+      // 检查 modelConfigId 是否存在（避免外键约束失败）
+      let safeModelConfigId: string | null = null;
+      if (modelConfig.id) {
+        try {
+          const modelExists = await prisma.modelConfig.findUnique({
+            where: { id: modelConfig.id },
+            select: { id: true },
+          });
+          if (modelExists) {
+            safeModelConfigId = modelConfig.id;
+          } else {
+            console.warn(`[createNodeExecutionRecord] modelConfigId ${modelConfig.id} 不存在于数据库，跳过外键更新`);
+          }
+        } catch (e) {
+          console.warn(`[createNodeExecutionRecord] 检查 modelConfigId 失败:`, e);
+        }
+      }
+      
       if (existing) {
         // 已存在，更新状态为 running，确保 startedAt 被设置
         const updateData: any = {
           status: 'running',
           updatedAt: now,
-          modelConfigId: modelConfig.id,
-          modelName: modelConfig.name,
+          modelName: modelConfig.name,  // modelName 无外键约束，安全写入
         };
         
-        // 如果 startedAt 未设置，现在设置
-        if (!existing.startedAt) {
-          updateData.startedAt = now;
-          console.log(`[createNodeExecutionRecord] 补充设置 startedAt: ${node.label}`);
+        // 只有 modelConfigId 存在时才写入（避免外键约束）
+        if (safeModelConfigId) {
+          updateData.modelConfigId = safeModelConfigId;
         }
+        
+        // 如果 startedAt 未设置，现在设置（强制设置）
+        updateData.startedAt = now;
+        console.log(`[createNodeExecutionRecord] 设置 startedAt: ${node.label}`);
         
         await prisma.nodeExecution.update({
           where: { id: existing.id },
           data: updateData,
         });
-        console.log(`[createNodeExecutionRecord] 更新节点记录: ${node.label}, startedAt=${existing.startedAt || '已补充'}`);
+        console.log(`[createNodeExecutionRecord] 更新节点记录成功: ${node.label}, status=running, startedAt=${now.toISOString()}`);
       } else {
         // 创建新记录
         await prisma.nodeExecution.create({
@@ -1980,18 +2035,20 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             startedAt: now,  // 确保设置启动时间
             updatedAt: now,
             order: nodeIndex,
-            modelConfigId: modelConfig.id,
+            modelConfigId: safeModelConfigId,  // 使用安全的 modelConfigId
             modelName: modelConfig.name,
             roleId: node.roleId ?? undefined,
             inputTokens: 0,
             outputTokens: 0,
           },
         });
-        console.log(`[createNodeExecutionRecord] 创建节点记录: ${node.label}, id=node-exec-${this.config.evaluationSessionId}-${nodeIndex}, startedAt=已设置`);
+        console.log(`[createNodeExecutionRecord] 创建节点记录成功: ${node.label}, status=running, startedAt=${now.toISOString()}`);
       }
     } catch (error) {
-      console.error(`[createNodeExecutionRecord] 创建失败:`, error);
-      // 不阻塞执行
+      const err = error instanceof Error ? error : new Error(String(error));
+      console.error(`[createNodeExecutionRecord] 创建失败:`, err.message, err.stack);
+      // 记录错误到会话（但不阻塞执行）
+      await this.recordDatabaseError('createNodeExecutionRecord', err, node.label);
     }
   }
 
@@ -2054,9 +2111,38 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
       // 如果不存在，说明节点记录还没创建，等节点开始时创建
     } catch (error) {
       console.error(`[updateNodeExecutionTokens] 更新失败:`, error);
-      // 不抛出错误，不阻塞执行
+      // Token 更新失败不记录到会话，因为这是次要操作
     }
-}
+  }
+
+  /**
+   * 记录数据库操作失败到会话 endMessage
+   * 
+   * 不抛出错误，不阻塞执行，但会在最终 endMessage 中标记"状态更新部分失败"
+   */
+  private databaseErrors: string[] = [];
+  
+  private async recordDatabaseError(operation: string, error: Error, nodeInfo?: string): Promise<void> {
+    const errorMsg = `${operation}${nodeInfo ? ` (${nodeInfo})` : ''}: ${error.message}`;
+    this.databaseErrors.push(errorMsg);
+    
+    // 记录数量，超过阈值时更新会话 endMessage
+    if (this.databaseErrors.length >= 3) {
+      try {
+        const warningMsg = `⚠️ 状态更新部分失败 (${this.databaseErrors.length} 个操作): ${this.databaseErrors.slice(0, 3).join('; ')}...`;
+        await prisma.evaluationSession.update({
+          where: { id: this.config.evaluationSessionId },
+          data: {
+            endMessage: warningMsg,
+            updatedAt: new Date(),
+          },
+        });
+        console.warn(`[recordDatabaseError] 已记录 ${this.databaseErrors.length} 个数据库错误到会话 endMessage`);
+      } catch (updateErr) {
+        console.error(`[recordDatabaseError] 更新会话 endMessage 失败:`, updateErr);
+      }
+    }
+  }
 }
 
 /**
