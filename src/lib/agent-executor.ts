@@ -136,9 +136,17 @@ export class AgentExecutor {
         // 解析响应
         const parsed = parseAIResponse(lastResponse);
 
-        // 保存漏洞
+        // 漏洞入库流程已改为从 vulnerabilities.json 文件解析
+        // 此处不再从 AI 响应中实时提取漏洞，避免误提取
+        // 正确的漏洞入库路径：unified-execution-engine.ts 的 parseAndSaveVulnerabilities
+        // 保存漏洞（已禁用）
+        // if (parsed.vulnerabilities.length > 0) {
+        //   await this.saveVulnerabilities(parsed.vulnerabilities);
+        //   parsed.vulnerabilities.forEach(v => this.callbacks.onVulnerability(v));
+        // }
+        
+        // 仍然触发回调（用于 UI 展示），但不入库
         if (parsed.vulnerabilities.length > 0) {
-          await this.saveVulnerabilities(parsed.vulnerabilities);
           parsed.vulnerabilities.forEach(v => this.callbacks.onVulnerability(v));
         }
 

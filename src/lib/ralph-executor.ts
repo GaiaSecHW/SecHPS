@@ -177,16 +177,19 @@ export async function executeRalphLoop(input: RalphExecuteInput): Promise<RalphE
         details: { iterations: result.iterations, reason: result.completionReason, tokens: result.totalUsage.totalTokens },
       });
 
-      try {
-        const parseResult = await parseAndSaveResults(evaluationId, projectId, result.text);
-        if (parseResult.success) {
-          logger.info(LOG_MODULES.EVALUATION, `漏洞入库成功: ${parseResult.vulnCount} 个`);
-        } else {
-          logger.warn(LOG_MODULES.EVALUATION, `漏洞入库失败: ${parseResult.error}`);
-        }
-      } catch (parseError) {
-        logger.errorNoUser(LOG_MODULES.EVALUATION, '解析结果异常:', { details: { error: String(parseError) } });
-      }
+      // 漏洞入库流程已改为从 vulnerabilities.json 文件解析
+      // 此处不再从 AI 响应文本中提取漏洞，避免误提取
+      // 正确的漏洞入库路径：unified-execution-engine.ts 的 parseAndSaveVulnerabilities
+      // try {
+      //   const parseResult = await parseAndSaveResults(evaluationId, projectId, result.text);
+      //   if (parseResult.success) {
+      //     logger.info(LOG_MODULES.EVALUATION, `漏洞入库成功: ${parseResult.vulnCount} 个`);
+      //   } else {
+      //     logger.warn(LOG_MODULES.EVALUATION, `漏洞入库失败: ${parseResult.error}`);
+      //   }
+      // } catch (parseError) {
+      //   logger.errorNoUser(LOG_MODULES.EVALUATION, '解析结果异常:', { details: { error: String(parseError) } });
+      // }
 
       await prisma.evaluationSession.update({
         where: { id: evaluationId },

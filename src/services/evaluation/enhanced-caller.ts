@@ -373,18 +373,20 @@ export class EnhancedEvaluationCaller {
             logError('解析保存分析报告时发生异常:', analysisError);
           }
           
-          // 解析并保存漏洞结果
-          logInfo('开始解析并保存漏洞结果...');
-          try {
-            const result = await parseAndSaveResults(this.currentEvaluationId, this.currentProjectId, fullResponse);
-            if (result.success) {
-              logSuccess(`漏洞入库成功: ${result.vulnCount} 个`);
-            } else {
-              logWarn(`漏洞入库失败: ${result.error}`);
-            }
-          } catch (parseError) {
-            logError('解析保存结果时发生异常:', parseError);
-          }
+          // 漏洞入库流程已改为从 vulnerabilities.json 文件解析
+          // 此处不再从 AI 响应文本中提取漏洞，避免误提取
+          // 正确的漏洞入库路径：unified-execution-engine.ts 的 parseAndSaveVulnerabilities
+          // logInfo('开始解析并保存漏洞结果...');
+          // try {
+          //   const result = await parseAndSaveResults(this.currentEvaluationId, this.currentProjectId, fullResponse);
+          //   if (result.success) {
+          //     logSuccess(`漏洞入库成功: ${result.vulnCount} 个`);
+          //   } else {
+          //     logWarn(`漏洞入库失败: ${result.error}`);
+          //   }
+          // } catch (parseError) {
+          //   logError('解析保存结果时发生异常:', parseError);
+          // }
         } else {
           logWarn('跳过漏洞解析: 评估ID、项目ID或响应为空');
         }
