@@ -1076,9 +1076,22 @@ callbacks: {
         node.description || 
         '结束工作流执行，汇总所有结果';
     } else if (nodeType === 'fsm_phase' && node.fsmPhase) {
-      // FSM Phase 节点：必须读取 Skill 文件内容
-      // loadFSMPhaseSkillContent 会抛出错误如果文件不存在
-      nodeDescription = await this.loadFSMPhaseSkillContent(node);
+      // FSM Phase 节点：优先读取 Skill 文件内容
+      // 如果 skillPath 为 null（如渗透测试节点），使用 description
+      if (node.skillPath) {
+        try {
+          nodeDescription = await this.loadFSMPhaseSkillContent(node);
+        } catch (error) {
+          // Skill 文件读取失败，使用 description 作为 fallback
+          const err = error instanceof Error ? error : new Error(String(error));
+          console.warn(`[buildNodePrompt] FSM Phase ${node.label} Skill 文件读取失败，使用 description:`, err.message);
+          nodeDescription = node.description || '执行节点任务';
+        }
+      } else {
+        // skillPath 为 null（如渗透测试节点），使用 description
+        console.log(`[buildNodePrompt] FSM Phase ${node.label} 无 skillPath，使用 description: ${node.description || '无描述'}`);
+        nodeDescription = node.description || '执行节点任务';
+      }
     } else {
       // 其他节点：使用 node.description 或 node.data
       nodeDescription = node.description || 
