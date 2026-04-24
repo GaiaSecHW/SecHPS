@@ -1308,9 +1308,9 @@ if (loading) {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => openEnvConfigModal(project)}
-                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-gray-600 hover:text-gray-800"
-                      title="灰盒渗透"
+                      disabled
+                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-gray-400 cursor-not-allowed opacity-50"
+                      title="功能开发中，暂不可用"
                     >
                       <Settings size={16} />
                       <span>灰盒渗透</span>
