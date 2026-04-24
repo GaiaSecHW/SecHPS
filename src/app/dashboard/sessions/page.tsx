@@ -1149,7 +1149,7 @@ if (loading) {
               <div className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-[200px]" title={project.name || '未命名项目'}>
+                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-[280px]" title={project.name || '未命名项目'}>
                       {project.name || '未命名项目'}
                     </h3>
                     {/* 共享状态标签 */}
