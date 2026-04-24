@@ -160,11 +160,10 @@ export async function POST(
     // 检查并发限制（队列启动和 SSE 重连时跳过）
     // 注意：需要统计 preparing 和 running 状态，因为创建时是 preparing
     // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查并发限制
-    // 并发限制按项目统计：每个项目最多允许 N 个并发评估
+    // 并发限制按全局统计：整个系统最多允许 N 个并发评估
     const maxConcurrent = globalConfig?.maxConcurrentEvaluations || 3;
     const activeCount = await prisma.evaluationSession.count({
       where: { 
-        projectId: id,  // 只统计当前项目的评估数量
         status: { in: ['preparing', 'running'] } 
       },
     });
@@ -673,6 +672,12 @@ export async function POST(
           
           logger.info(LOG_MODULES.EVALUATION, 'FSM 评估已创建，状态为 preparing', { evaluationId: evaluation.id });
           
+          // 立即更新项目状态为 running（防止前端显示旧状态）
+          await prisma.project.update({
+            where: { id },
+            data: { status: 'running' },
+          });
+          
           // 创建 SSE 流响应（订阅 eventBus 事件）
           const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');
           const encoder = new TextEncoder();
@@ -1114,6 +1119,12 @@ export async function POST(
         });
         
         logger.info(LOG_MODULES.EVALUATION, 'DAG 评估已创建，状态为 preparing', { evaluationId: dagEvaluation.id });
+        
+        // 立即更新项目状态为 running（防止前端显示旧状态）
+        await prisma.project.update({
+          where: { id },
+          data: { status: 'running' },
+        });
         
         // 创建 SSE 流响应（订阅 eventBus 事件）
         const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');
