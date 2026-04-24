@@ -476,6 +476,7 @@ model LogFileRecord {
   fileHash      String
   processedAt   DateTime @default(now())
   sequenceCount Int      @default(0)
+  updatedAt     DateTime @updatedAt
 
   @@index([filePath])
 }
