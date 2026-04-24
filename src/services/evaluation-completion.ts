@@ -10,6 +10,7 @@
 import { prisma } from '@/lib/prisma';
 import { parseAndSaveVulnerabilities } from '@/lib/vulnerability/parser';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { unlockProject } from '@/lib/evaluation-lock';
 
 const LOG_PREFIX = '[EvaluationCompletion]';
 
@@ -115,6 +116,14 @@ export async function completeEvaluation(
     );
   } catch (queueError) {
     logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 队列处理跳过`, { error: queueError });
+  }
+
+  // 4. 解锁项目（从全局 Map 中移除）
+  try {
+    await unlockProject(projectId);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 项目已解锁`, { projectId });
+  } catch (unlockError) {
+    logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 解锁项目失败`, { error: unlockError });
   }
 
   logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估完成处理结束`, {

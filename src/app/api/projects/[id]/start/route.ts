@@ -23,6 +23,7 @@ import { UnifiedWorkflowExecutionEngine, createUnifiedExecutionEngine } from '@/
 import { topologicalSortDAG } from '@/lib/workflow/topology-sort';
 import type { UnifiedExecutionCallbacks, NodeExecutionResult, WorkflowExecutionResult, ModelConfigForExecution, UnifiedNodeDefinition } from '@/lib/workflow/types';
 import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
+import { lockProject, isProjectLocked, unlockProject } from '@/lib/evaluation-lock';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -159,26 +160,31 @@ export async function POST(
       }
     }
 
-    // 检查该项目是否有正在运行/准备中的评估（队列启动和 SSE 重连时跳过）
-    // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查
-    if (!isQueuedStart && !reconnectEvaluationId) {
-      const projectActiveEvaluations = await prisma.evaluationSession.count({
-        where: {
-          projectId: id,
-          status: { in: ['preparing', 'running', 'queued'] }
-        },
-      });
+    // ========================================
+    // 使用全局 Map 锁检查项目是否正在评估
+    // ========================================
+    
+    // SSE 重连和队列启动不需要检查
+    if (!isQueuedStart && !reconnectEvaluationId && !queuedEvaluationId) {
+      // 尝试锁定项目
+      const evaluationId = generateId('eval');
+      const locked = await lockProject(id, evaluationId);
       
-      if (projectActiveEvaluations > 0) {
+      if (!locked) {
+        // 项目已被锁定，返回错误
+        const existingEvalId = isProjectLocked(id);
         logger.warn(LOG_MODULES.EVALUATION, '该项目已有正在运行的评估，拒绝启动', {
           projectId: id,
-          activeCount: projectActiveEvaluations,
+          existingEvaluationId: existingEvalId,
         });
         return NextResponse.json({
           error: '该项目已有正在运行的评估，请等待当前评估完成后再启动新的评估',
-          activeEvaluations: projectActiveEvaluations,
-        }, { status: 409 }); // 409 Conflict
+          existingEvaluationId: existingEvalId,
+        }, { status: 409 });
       }
+      
+      // 锁定成功，evaluationId 已在 Map 中
+      // 后续代码会使用这个 evaluationId 创建评估记录
     }
     
     // 检查并发限制（队列启动和 SSE 重连时跳过）

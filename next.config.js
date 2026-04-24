@@ -6,6 +6,7 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    instrumentation: true,  // 启用 instrumentation.ts
   },
   
   // API 路由最大执行时间（秒）
