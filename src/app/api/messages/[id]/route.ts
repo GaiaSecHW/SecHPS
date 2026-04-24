@@ -1,11 +1,12 @@
 // src/app/api/messages/[id]/route.ts
 // 数据隔离：普通用户只能查看自己项目评估的消息，管理员可以查看所有
+// 新架构：SessionMessage 只存索引，从 NodeStreamStore 读取内容
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { createEvaluationMessageStore, EvaluationMessage } from '@/services/evaluation-message-store';
+import { createNodeStreamStore } from '@/services/node-stream-store';
 
 // GET /api/messages/[id] - 获取消息详情
 export async function GET(
@@ -21,24 +22,22 @@ export async function GET(
 
     const { id } = await params;
     const { searchParams } = new URL(request.url);
-    const sessionId = searchParams.get('sessionId');
+    const nodeId = searchParams.get('nodeId');
+    const eventIndex = searchParams.get('eventIndex');
 
     // 检查是否是管理员
     const userIsAdmin = isAdmin(payload);
 
-    // 首先查找消息所属的 evaluationSession（用于获取 projectId）
-    // 构建查询条件
-    let where: any = { id };
-    if (!userIsAdmin) {
-      // 普通用户：通过 SessionMessage.EvaluationSession.Project.userId 验证所有权
-      where.EvaluationSession = { Project: { userId: payload.userId } };
-    }
-
-    // 先查找消息以获取 evaluationSessionId
+    // 先查找消息以获取 evaluationSessionId 和 projectId
     const messageWithSession = await prisma.sessionMessage.findFirst({
       where: { id },
       select: {
+        id: true,
         evaluationSessionId: true,
+        workflowNodeId: true,
+        role: true,
+        messageRef: true,
+        createdAt: true,
         EvaluationSession: {
           select: {
             id: true,
@@ -64,122 +63,109 @@ export async function GET(
 
     const evaluationId = messageWithSession.evaluationSessionId;
     const projectId = messageWithSession.EvaluationSession.projectId;
+    const messageNodeId = messageWithSession.workflowNodeId || nodeId;
 
-    // 尝试从 JSONL 读取
+    // 如果没有 nodeId，无法从 stream.jsonl 读取
+    if (!messageNodeId) {
+      return NextResponse.json({
+        message: {
+          id: messageWithSession.id,
+          role: messageWithSession.role,
+          content: null,
+          messageRef: messageWithSession.messageRef,
+          createdAt: messageWithSession.createdAt.toISOString(),
+          session: {
+            id: evaluationId,
+            opencodeSessionId: messageWithSession.EvaluationSession.opencodeSessionId,
+            status: messageWithSession.EvaluationSession.status,
+          },
+        },
+        source: 'index',
+        note: '需要 nodeId 参数从 stream.jsonl 读取内容',
+      });
+    }
+
+    // 从 NodeStreamStore 读取
     try {
-      const store = createEvaluationMessageStore(projectId, evaluationId);
-      if (await store.exists()) {
-        const jsonlMessage = await store.getMessageById(id);
+      const store = createNodeStreamStore(projectId, evaluationId);
+      const events = await store.readStream(messageNodeId);
+      
+      // 如果有 eventIndex，直接返回该事件
+      if (eventIndex) {
+        const index = parseInt(eventIndex);
+        const event = events[index];
         
-        if (jsonlMessage) {
-          logger.debug(LOG_MODULES.SESSION, '从 JSONL 获取消息:', { details: { messageId: id, source: 'jsonl' } });
-          
-          // 解析 content
-          let parsedContent;
-          if (typeof jsonlMessage.content === 'string') {
-            try {
-              parsedContent = JSON.parse(jsonlMessage.content);
-            } catch {
-              parsedContent = [{ type: 'text', text: jsonlMessage.content }];
-            }
-          } else if (Array.isArray(jsonlMessage.content)) {
-            parsedContent = jsonlMessage.content;
-          } else {
-            parsedContent = [{ type: 'text', text: JSON.stringify(jsonlMessage.content) }];
-          }
-          
+        if (event) {
           return NextResponse.json({
             message: {
-              id: jsonlMessage.id,
-              role: jsonlMessage.role,
-              content: parsedContent,
-              metadata: {
-                nodeId: jsonlMessage.nodeId,
-                nodeIndex: jsonlMessage.nodeIndex,
-                agentCallMsgId: jsonlMessage.agentCallMsgId,
-                toolName: jsonlMessage.toolName,
-                toolUseId: jsonlMessage.toolUseId,
-                toolInput: jsonlMessage.toolInput,
-                toolResult: jsonlMessage.toolResult,
-              },
-              createdAt: jsonlMessage.timestamp,
+              id: `${messageNodeId}-${index}`,
+              role: event.event === 'user' ? 'user' :
+                    event.event === 'text' || event.event === 'thinking' ? 'assistant' :
+                    event.event === 'tool_use' ? 'tool_call' :
+                    event.event === 'tool_result' ? 'tool_result' :
+                    event.event,
+              content: event.data,
+              createdAt: event.timestamp,
+              event: event.event,
+              nodeId: messageNodeId,
               session: {
                 id: evaluationId,
                 opencodeSessionId: messageWithSession.EvaluationSession.opencodeSessionId,
                 status: messageWithSession.EvaluationSession.status,
               },
             },
-            source: 'jsonl',
+            source: 'stream',
+            nodeId: messageNodeId,
+            eventIndex: index,
           });
         }
       }
-    } catch (jsonlError) {
-      logger.warn(LOG_MODULES.SESSION, 'JSONL 读取失败，fallback 到 Prisma:', { details: { error: String(jsonlError) } });
-    }
-
-    // Fallback: 从 Prisma 读取
-    logger.debug(LOG_MODULES.SESSION, '从 Prisma 获取消息:', { details: { messageId: id, source: 'db' } });
-    
-    // 查找消息
-    const message = await prisma.sessionMessage.findFirst({
-      where,
-      include: {
-        EvaluationSession: {
-          select: {
-            id: true,
-            opencodeSessionId: true,
-            status: true,
+      
+      // 否则返回节点所有消息
+      const messages = events.map((event, index) => ({
+        id: `${messageNodeId}-${index}`,
+        role: event.event === 'user' ? 'user' :
+              event.event === 'text' || event.event === 'thinking' ? 'assistant' :
+              event.event === 'tool_use' ? 'tool_call' :
+              event.event === 'tool_result' ? 'tool_result' :
+              event.event,
+        content: event.data,
+        createdAt: event.timestamp,
+        event: event.event,
+        nodeId: messageNodeId,
+      }));
+      
+      return NextResponse.json({
+        messages,
+        total: messages.length,
+        source: 'stream',
+        nodeId: messageNodeId,
+        session: {
+          id: evaluationId,
+          opencodeSessionId: messageWithSession.EvaluationSession.opencodeSessionId,
+          status: messageWithSession.EvaluationSession.status,
+        },
+      });
+    } catch (streamError) {
+      logger.warn(LOG_MODULES.SESSION, '从 stream.jsonl 读取失败:', { details: { error: String(streamError) } });
+      
+      return NextResponse.json({
+        message: {
+          id: messageWithSession.id,
+          role: messageWithSession.role,
+          content: null,
+          messageRef: messageWithSession.messageRef,
+          createdAt: messageWithSession.createdAt.toISOString(),
+          session: {
+            id: evaluationId,
+            opencodeSessionId: messageWithSession.EvaluationSession.opencodeSessionId,
+            status: messageWithSession.EvaluationSession.status,
           },
         },
-      },
-    });
-
-    if (!message) {
-      return NextResponse.json({ error: '消息不存在' }, { status: 404 });
+        source: 'index',
+        error: '无法从 stream.jsonl 读取内容',
+      });
     }
-
-    // 如果提供了 sessionId，验证消息属于该会话
-    // sessionId 可能是 evaluationSession.id 或 opencodeSessionId
-    if (sessionId) {
-      const belongsToSession =
-        message.EvaluationSession.id === sessionId ||
-        (message.EvaluationSession.opencodeSessionId && message.EvaluationSession.opencodeSessionId === sessionId);
-
-      if (!belongsToSession) {
-        return NextResponse.json({ error: '消息不属于该会话' }, { status: 403 });
-      }
-    }
-
-    // 解析 content（存储为 JSON 字符串）
-    let parsedContent;
-    try {
-      parsedContent = JSON.parse(message.content);
-    } catch {
-      // 如果不是 JSON，作为纯文本处理
-      parsedContent = [{ type: 'text', text: message.content }];
-    }
-
-    // 解析 metadata
-    let parsedMetadata = null;
-    if (message.metadata) {
-      try {
-        parsedMetadata = JSON.parse(message.metadata);
-      } catch {
-        parsedMetadata = message.metadata;
-      }
-    }
-
-    return NextResponse.json({
-      message: {
-        id: message.id,
-        role: message.role,
-        content: parsedContent,
-        metadata: parsedMetadata,
-        createdAt: message.createdAt,
-        session: message.EvaluationSession,
-      },
-      source: 'db',
-    });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SESSION, '获取消息错误:', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

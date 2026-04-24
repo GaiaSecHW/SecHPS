@@ -329,6 +329,26 @@ output_files:
 
 ---
 
+##生成漏洞汇总文件
+将项目vulnerabilities目录下的漏洞文件进行合并(注意：同一个漏洞【sink与sources相同】不要重复合并，漏洞描述的英文要翻译成中文)，合并后的文件必须在项目根目录，且文件名为必须为vulnerabilities.json，vulnerabilities.json文件格式如下：{
+"summary": {
+"total": 漏洞总数,
+},
+"vulnerabilities": [
+{
+"vulnerable": true/false,
+"type": "漏洞类型（如 SQL注入、XSS、CSRF、RCE、目录遍历）",
+"title": "漏洞标题",
+"description": "漏洞详细描述（污点传播路径[从入口到 Sink 的数据流]）,Web 入口- 入口类: com.example.controller.AdminController - HTTP 路径: POST /admin/exec - 参数来源: @RequestBody",
+"location": "所有涉及此漏洞的源代码",
+"POC":"[完整攻击请求 + 推导过程]",
+"skill": "发现此漏洞的工具或skill名称",
+"cwe_id": "CWE编号（如 CWE-89）"}
+]
+}
+
+请确保 JSON 格式正确，所有字段都填写完整，禁止反馈非安全漏洞。如果未发现安全漏洞，vulnerabilities 数组必须为空。
+
 ## Completion
 
 Phase 8 完成后，威胁建模工作流结束。

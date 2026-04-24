@@ -118,14 +118,14 @@ function buildBalanceAnalysisPrompt(
         `- **描述**: ${c.description}`,
       ];
       
-      if (c.filePath) {
-        parts.push(`- **文件路径**: ${c.filePath}`);
+      if (c.location) {
+        parts.push(`- **问题代码位置**: ${c.location}`);
       }
       
-      if (c.codeSnippetPreview) {
-        parts.push(`- **代码片段预览**:`);
+      if (c.POCPreview) {
+        parts.push(`- **POC 预览**:`);
         parts.push('```');
-        parts.push(c.codeSnippetPreview);
+        parts.push(c.POCPreview);
         parts.push('```');
       }
       

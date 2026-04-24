@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       prisma.skillAnalysis.findMany({
         where,
         include: {
-          skill: {
+          Skill: {
             select: {
               id: true,
               name: true,
@@ -75,7 +75,7 @@ export async function GET(request: Request) {
     // 组装响应
     const results = analyses.map(analysis => ({
       id: analysis.id,
-      skillA: analysis.skill,
+      skillA: analysis.Skill,
       skillB: relatedSkillMap.get(analysis.relatedSkillId || '') || null,
       isDuplicate: analysis.isDuplicate,
       overlapType: analysis.overlapType,

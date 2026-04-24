@@ -340,13 +340,12 @@ export class AgentExecutor {
           description: vuln.description,
           type: vuln.type || 'unknown',
           severity: vuln.severity,
-          status: 'new',
-          filePath: vuln.filePath,
-          lineStart: vuln.lineStart,
-          lineEnd: vuln.lineEnd,
-          codeSnippet: vuln.codeSnippet,
+          location: vuln.location || vuln.filePath || null,  // 兼容旧格式
+          POC: vuln.POC || null,
+          vulnerable: vuln.vulnerable ?? true,
           fixSuggestion: vuln.recommendation,
           cwe: vuln.cwe,
+          status: 'new',
           updatedAt: new Date(),
         },
       });

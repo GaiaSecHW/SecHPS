@@ -1459,18 +1459,15 @@ model Vulnerability {
   evaluationId              String?
   skillExecutionId          String?
   title                     String
-  description               String
+  description               String                      // 漏洞描述（污点传播路径）
   type                      String
-  cwe                       String?
+  cwe                       String?                     // CWE编号 (来自 JSON.cwe_id)
   severity                  String
   skill                     String?
-  filePath                  String?
-  lineStart                 Int?
-  lineEnd                   Int?
-  codeSnippet               String?
-  details                   String?
-  aiAnalysis                String?
-  fixSuggestion             String?
+  location                  String?                     // 所有涉及此漏洞的源代码 (来自 JSON.location)
+  POC                       String?                     // 完整攻击请求 + 推导过程 (来自 JSON.POC)
+  vulnerable                Boolean?                    @default(true) // 是否为真实漏洞 (来自 JSON.vulnerable)
+  fixSuggestion             String?                     // 修复建议（手动填写）
   status                    String                      @default("new")
   confirmedBy               String?
   confirmedAt               DateTime?
@@ -1494,6 +1491,7 @@ model Vulnerability {
   @@index([status])
   @@index([evaluationId])
   @@index([projectId])
+  @@index([vulnerable])
 }
 
 model VulnerabilityCategory {

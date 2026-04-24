@@ -22,12 +22,12 @@ export async function GET(request: Request) {
     });
 
     if (!config) {
-      // Return default values if no config found
+      // Return empty values if no config found (user can set their own)
       return NextResponse.json({
-        startNodeLabel: '开始',
-        startNodeDescription: '工作流的起始点',
-        endNodeLabel: '结束',
-        endNodeDescription: '工作流的结束点',
+        startNodeLabel: '',
+        startNodeDescription: '',
+        endNodeLabel: '',
+        endNodeDescription: '',
       });
     }
 
@@ -35,23 +35,24 @@ export async function GET(request: Request) {
     if (config.workflowConfig) {
       try {
         const workflowConfig = JSON.parse(config.workflowConfig);
+        // Use ?? to allow empty strings, only fallback on null/undefined
         return NextResponse.json({
-          startNodeLabel: workflowConfig.startNodeLabel || '开始',
-          startNodeDescription: workflowConfig.startNodeDescription || '工作流的起始点',
-          endNodeLabel: workflowConfig.endNodeLabel || '结束',
-          endNodeDescription: workflowConfig.endNodeDescription || '工作流的结束点',
+          startNodeLabel: workflowConfig.startNodeLabel ?? '',
+          startNodeDescription: workflowConfig.startNodeDescription ?? '',
+          endNodeLabel: workflowConfig.endNodeLabel ?? '',
+          endNodeDescription: workflowConfig.endNodeDescription ?? '',
         });
       } catch (e) {
         logger.errorWithUser(LOG_MODULES.WORKFLOW, payload, 'Failed to parse workflow config', undefined, { details: { error: String(e) } });
       }
     }
 
-    // Return default values if workflowConfig is not set
+    // Return empty values if workflowConfig is not set
     return NextResponse.json({
-      startNodeLabel: '开始',
-      startNodeDescription: '工作流的起始点',
-      endNodeLabel: '结束',
-      endNodeDescription: '工作流的结束点',
+      startNodeLabel: '',
+      startNodeDescription: '',
+      endNodeLabel: '',
+      endNodeDescription: '',
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.WORKFLOW, 'Get workflow config error', { details: { error: String(error) } });

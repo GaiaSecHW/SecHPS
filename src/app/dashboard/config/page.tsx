@@ -36,10 +36,10 @@ export default function ConfigPage() {
   const [projectUploadDir, setProjectUploadDir] = useState('');
   
   // 工作流配置
-  const [startNodeLabel, setStartNodeLabel] = useState('开始');
-  const [startNodeDescription, setStartNodeDescription] = useState('工作流的起始点');
-  const [endNodeLabel, setEndNodeLabel] = useState('结束');
-  const [endNodeDescription, setEndNodeDescription] = useState('工作流的结束点');
+  const [startNodeLabel, setStartNodeLabel] = useState('');
+  const [startNodeDescription, setStartNodeDescription] = useState('');
+  const [endNodeLabel, setEndNodeLabel] = useState('');
+  const [endNodeDescription, setEndNodeDescription] = useState('');
 
   // 系统提示词配置
   const [customSystemPrompt, setCustomSystemPrompt] = useState('');
@@ -119,10 +119,11 @@ export default function ConfigPage() {
         if (activeConfig.workflowConfig) {
           try {
             const workflowConfig = JSON.parse(activeConfig.workflowConfig);
-            setStartNodeLabel(workflowConfig.startNodeLabel || '开始');
-            setStartNodeDescription(workflowConfig.startNodeDescription || '工作流的起始点');
-            setEndNodeLabel(workflowConfig.endNodeLabel || '结束');
-            setEndNodeDescription(workflowConfig.endNodeDescription || '工作流的结束点');
+            // Use ?? to preserve empty strings
+            setStartNodeLabel(workflowConfig.startNodeLabel ?? '');
+            setStartNodeDescription(workflowConfig.startNodeDescription ?? '');
+            setEndNodeLabel(workflowConfig.endNodeLabel ?? '');
+            setEndNodeDescription(workflowConfig.endNodeDescription ?? '');
           } catch (e) {
             console.error('Failed to parse workflow config:', e);
           }

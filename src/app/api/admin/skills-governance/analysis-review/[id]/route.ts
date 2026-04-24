@@ -27,7 +27,7 @@ export async function GET(
     const analysis = await prisma.skillAnalysis.findUnique({
       where: { id },
       include: {
-        skill: {
+        Skill: {
           select: {
             id: true,
             name: true,
@@ -65,7 +65,7 @@ export async function GET(
     return NextResponse.json({
       data: {
         id: analysis.id,
-        skillA: analysis.skill,
+        skillA: analysis.Skill,
         skillB,
         isDuplicate: analysis.isDuplicate,
         overlapType: analysis.overlapType,
@@ -151,7 +151,7 @@ export async function PUT(
       // 检查是否已有重复组
       const existingGroup = await prisma.skillDuplicateGroup.findFirst({
         where: {
-          members: {
+          SkillDuplicateGroupMember: {
             some: { skillId: analysis.skillId },
           },
         },
@@ -172,11 +172,12 @@ export async function PUT(
             language: skillA?.techStackId || 'unknown',
             vulnerabilityType: skillA?.vulnerabilityPatternId || 'unknown',
             status: 'pending_review',
+            updatedAt: new Date(),
             skillCount: 2,
-            members: {
+            SkillDuplicateGroupMember: {
               create: [
-                { skillId: analysis.skillId, role: 'primary', similarityScore: 1.0 },
-                { skillId: analysis.relatedSkillId!, role: 'member', similarityScore: analysis.confidence },
+                { id: generateId('sdgm'), groupId, skillId: analysis.skillId, role: 'primary', similarityScore: 1.0 },
+                { id: generateId('sdgm'), groupId, skillId: analysis.relatedSkillId!, role: 'member', similarityScore: analysis.confidence },
               ],
             },
           },

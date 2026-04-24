@@ -188,6 +188,7 @@ export async function POST(request: Request) {
     // 创建工作流
     const workflow = await prisma.workflow.create({
       data: {
+        id: generateId('wf'),
         userId: payload.userId,
         name: trimmedName,
         description: description?.trim() || undefined,
@@ -197,6 +198,7 @@ export async function POST(request: Request) {
         isPublic: isPublic || false,
         workflowType: workflowType || 'dag',
         fsmTemplateId: workflowType === 'fsm' ? fsmTemplateId : undefined,
+        updatedAt: new Date(),
       },
       include: {
         WorkflowNode: true,

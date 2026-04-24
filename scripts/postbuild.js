@@ -43,6 +43,9 @@ const DIR_COPY_RULES = {
   // plugins: 全部复制
   'plugins': {
     mode: 'all',
+  },// plugins: 全部复制
+  'skills': {
+    mode: 'all',
   },
   // uploads: 不复制（用户上传文件目录）
   'uploads': {

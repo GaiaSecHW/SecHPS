@@ -26,12 +26,12 @@ interface Vulnerability {
   description: string;
   type: string;
   cwe: string | null;
+  severity: string;
   status: string;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
-  codeSnippet: string | null;
-  aiAnalysis: string | null;
+  location: string | null;         // 问题代码位置
+  POC: string | null;              // POC 验证代码
+  vulnerable: boolean | null;      // 是否为真实漏洞
+  fixSuggestion: string | null;
   skill: string | null;
   createdAt: string;
   project?: {
@@ -248,11 +248,11 @@ ${vuln.description || '无描述'}
 
 ## 问题代码位置
 
-${vuln.filePath || '无'}
+${vuln.location || '无'}
 
-## POC / 代码片段
+## POC 验证代码
 
-${vuln.codeSnippet ? '```\n' + vuln.codeSnippet + '\n```' : '无'}
+${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 
 ---
 *报告生成时间：${new Date().toLocaleString('zh-CN')}*
@@ -540,19 +540,27 @@ ${vuln.codeSnippet ? '```\n' + vuln.codeSnippet + '\n```' : '无'}
                   <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
                 </div>
 
-                {/* 问题代码 */}
-                {selectedVuln.filePath && (
+                {/* 问题代码位置 */}
+                {selectedVuln.location && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码</h4>
-                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.filePath}</pre>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码位置</h4>
+                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.location}</pre>
                   </div>
                 )}
 
-                {/* POC */}
-                {selectedVuln.codeSnippet && (
+                {/* POC 验证代码 */}
+                {selectedVuln.POC && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">POC</h4>
-                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.codeSnippet}</pre>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">POC 验证代码</h4>
+                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.POC}</pre>
+                  </div>
+                )}
+
+                {/* 修复建议 */}
+                {selectedVuln.fixSuggestion && (
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">修复建议</h4>
+                    <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
                   </div>
                 )}
               </div>

@@ -3,14 +3,17 @@
  */
 
 export interface ParsedVulnerability {
+  vulnerable?: boolean;       // 是否为真实漏洞
   title: string;
   description: string;
   type: string;
   severity: 'critical' | 'high' | 'medium' | 'low' | 'info';
-  filePath?: string;
-  lineStart?: number;
-  lineEnd?: number;
-  codeSnippet?: string;
+  location?: string;          // 问题代码位置
+  POC?: string;               // POC 验证代码
+  filePath?: string;          // 兼容旧格式
+  lineStart?: number;         // 兼容旧格式
+  lineEnd?: number;           // 兼容旧格式
+  codeSnippet?: string;       // 兼容旧格式
   recommendation?: string;
   cwe?: string;
   cve?: string;

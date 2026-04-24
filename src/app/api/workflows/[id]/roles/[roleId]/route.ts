@@ -135,7 +135,7 @@ export async function DELETE(
     const existingRole = await prisma.workflowRole.findFirst({
       where: { id: roleId, workflowId: id },
       include: {
-        nodes: { select: { id: true } },
+        WorkflowNode: { select: { id: true } },
       },
     });
 
@@ -144,10 +144,10 @@ export async function DELETE(
     }
 
     // 检查是否有节点关联此角色
-    if (existingRole.nodes.length > 0) {
+    if (existingRole.WorkflowNode.length > 0) {
       return NextResponse.json({
-        error: `无法删除：有 ${existingRole.nodes.length} 个节点正在使用此角色`,
-        nodeCount: existingRole.nodes.length,
+        error: `无法删除：有 ${existingRole.WorkflowNode.length} 个节点正在使用此角色`,
+        nodeCount: existingRole.WorkflowNode.length,
       }, { status: 400 });
     }
 

@@ -95,6 +95,7 @@ export async function POST(request: Request) {
         version: version || '1.0.0',
         isActive: isActive !== undefined ? isActive : true,
         isBuiltin: false,
+        updatedAt: new Date(),
       },
     });
 

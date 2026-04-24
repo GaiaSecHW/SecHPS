@@ -27,9 +27,9 @@ interface Vulnerability {
   cwe: string | null;
   severity: string;
   status: string;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
+  location: string | null;       // 问题代码位置
+  POC: string | null;            // POC 验证代码
+  vulnerable: boolean | null;    // 是否为真实漏洞
   skill: string | null;
   createdAt: string;
   project?: {
@@ -378,10 +378,10 @@ function VulnerabilitiesPageContent() {
                       <h3 className="font-semibold text-gray-900 truncate">{vuln.title}</h3>
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
                         {/* 文件位置 */}
-                        {vuln.filePath && (
+                        {vuln.location && (
                           <span className="flex items-center gap-1 truncate max-w-xs">
                             <FileCode size={14} />
-                            <span className="truncate">{vuln.filePath}</span>
+                            <span className="truncate">{vuln.location}</span>
                           </span>
                         )}
                         {/* 漏洞类型 */}

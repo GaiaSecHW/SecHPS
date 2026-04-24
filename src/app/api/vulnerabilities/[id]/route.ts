@@ -74,10 +74,7 @@ export async function GET(
     }
 
     return NextResponse.json({
-      vulnerability: {
-        ...vulnerability,
-        details: vulnerability.details ? JSON.parse(vulnerability.details) : null,
-      },
+      vulnerability,
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞详情错误', { details: { error: String(error) } });
@@ -125,12 +122,9 @@ export async function PUT(
     if (body.type !== undefined) updateData.type = body.type;
     if (body.cwe !== undefined) updateData.cwe = body.cwe;
     if (body.severity !== undefined) updateData.severity = body.severity;
-    if (body.filePath !== undefined) updateData.filePath = body.filePath;
-    if (body.lineStart !== undefined) updateData.lineStart = body.lineStart;
-    if (body.lineEnd !== undefined) updateData.lineEnd = body.lineEnd;
-    if (body.codeSnippet !== undefined) updateData.codeSnippet = body.codeSnippet;
-    if (body.details !== undefined) updateData.details = JSON.stringify(body.details);
-    if (body.aiAnalysis !== undefined) updateData.aiAnalysis = body.aiAnalysis;
+    if (body.location !== undefined) updateData.location = body.location;
+    if (body.POC !== undefined) updateData.POC = body.POC;
+    if (body.vulnerable !== undefined) updateData.vulnerable = body.vulnerable;
     if (body.fixSuggestion !== undefined) updateData.fixSuggestion = body.fixSuggestion;
     if (body.notes !== undefined) updateData.notes = body.notes;
     // 注意：projectId 不在更新字段中，防止漏洞转移到其他项目
@@ -143,10 +137,7 @@ export async function PUT(
     logger.update(LOG_MODULES.VULNERABILITY, payload, id, { fields: Object.keys(updateData) });
 
     return NextResponse.json({
-      vulnerability: {
-        ...updated,
-        details: updated.details ? JSON.parse(updated.details) : null,
-      },
+      vulnerability: updated,
     });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '更新漏洞错误', { details: { error: String(error) } });

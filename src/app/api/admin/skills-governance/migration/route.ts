@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 import {
   batchInferSkills,
   getSkillsForInference,
@@ -215,18 +216,19 @@ export async function POST(request: Request) {
     // 7. 创建分析记录
     for (const result of results.results) {
       if (!result.error) {
-        await prisma.skillAnalysis.create({
-          data: {
-            skillId: result.skillId,
-            analysisType: 'migration_inference',
-            confidence: result.confidence,
-            llmReason: result.reason,
-            inferredLanguage: result.language,
-            inferredVulnPatternId: result.vulnerabilityPatternId,
-            reviewStatus: result.confidence >= confidenceThreshold && autoApprove ? 'approved' : 'pending',
-            analyzedBy: 'llm',
-          },
-        });
+await prisma.skillAnalysis.create({
+            data: {
+              id: generateId('sa'),
+              skillId: result.skillId,
+              analysisType: 'migration_inference',
+              confidence: result.confidence,
+              llmReason: result.reason,
+              inferredLanguage: result.language,
+              inferredVulnPatternId: result.vulnerabilityPatternId,
+              reviewStatus: result.confidence >= confidenceThreshold && autoApprove ? 'approved' : 'pending',
+              analyzedBy: 'llm',
+            },
+          });
       }
     }
 

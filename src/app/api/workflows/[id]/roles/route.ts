@@ -4,6 +4,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import { AuditLogger } from '@/lib/audit/logger';
+import { generateId } from '@/lib/id-generator';
 
 // 获取工作流的角色列表
 // 普通用户：可以查看自己的 + 公开的 + 被分享的
@@ -58,7 +59,7 @@ export async function GET(
       where: { workflowId: id },
       orderBy: { order: 'asc' },
       include: {
-        nodes: {
+        WorkflowNode: {
           select: { id: true, type: true, data: true, fsmPhase: true },
         },
       },
@@ -86,17 +87,17 @@ export async function GET(
           }
         });
         
-        // 对于每个有角色的 FSM 节点，添加到对应角色的 nodes 列表
+        // 对于每个有角色的 FSM 节点，添加到对应角色的 WorkflowNode 列表
         for (const role of roles) {
           const fsmNodesForRole = fsmNodes.filter((n: any) => n.roleId === role.id);
           if (fsmNodesForRole.length > 0) {
-            // 确保 role.nodes 存在
-            if (!role.nodes) role.nodes = [];
+            // 确保 role.WorkflowNode 存在
+            if (!role.WorkflowNode) role.WorkflowNode = [];
             // 添加 FSM 节点信息
             fsmNodesForRole.forEach((n: any) => {
               const nodeData = n.data ? JSON.parse(n.data) : {};
               const label = nodeData.label || n.id;
-              (role.nodes as any[]).push({ id: n.id, type: 'fsm-phase', label, fsmPhase: n.fsmPhase });
+              (role.WorkflowNode as any[]).push({ id: n.id, type: 'fsm-phase', label, fsmPhase: n.fsmPhase });
             });
           }
         }
@@ -109,7 +110,7 @@ export async function GET(
             description: '未分配角色的 FSM 阶段节点将使用此模型',
             color: '#gray',
             order: 999,
-            nodes: fsmNodesWithoutRole.map((n: any) => {
+            WorkflowNode: fsmNodesWithoutRole.map((n: any) => {
               const nodeData = n.data ? JSON.parse(n.data) : {};
               const label = nodeData.label || n.id;
               return {
@@ -189,11 +190,13 @@ export async function POST(
     // 创建角色
     const role = await prisma.workflowRole.create({
       data: {
+        id: generateId('wr'),
         workflowId: id,
         name: name.trim(),
         description: description?.trim() || null,
         color: color || null,
         order: newOrder,
+        updatedAt: new Date(),
       },
     });
 

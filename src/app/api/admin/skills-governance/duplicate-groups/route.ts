@@ -6,6 +6,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { prisma } from '@/lib/prisma';
+import { generateId } from '@/lib/id-generator';
 
 /**
  * GET /api/admin/skills-governance/duplicate-groups
@@ -51,9 +52,9 @@ export async function GET(request: Request) {
       prisma.skillDuplicateGroup.findMany({
         where,
         include: {
-          members: {
+          SkillDuplicateGroupMember: {
             include: {
-              skill: {
+              Skill: {
                 select: {
                   id: true,
                   name: true,
@@ -110,13 +111,13 @@ export async function GET(request: Request) {
       skillCount: group.skillCount,
       createdAt: group.createdAt,
       updatedAt: group.updatedAt,
-      members: group.members.map(m => ({
+      members: group.SkillDuplicateGroupMember.map(m => ({
         id: m.id,
         skillId: m.skillId,
         role: m.role,
         similarityScore: m.similarityScore,
         joinedAt: m.joinedAt,
-        skill: m.skill,
+        skill: m.Skill,
       })),
     }));
 
@@ -207,17 +208,20 @@ export async function POST(request: Request) {
     // 创建重复组
     const group = await prisma.skillDuplicateGroup.create({
       data: {
+        id: generateId('sdg'),
         name: name || `${techStack.name}-${vulnPattern.displayName}-重复组`,
         language,
         vulnerabilityType,
         status: 'pending_review',
         skillCount: skillIds.length,
+        updatedAt: new Date(),
       },
     });
 
     // 添加成员
     await prisma.skillDuplicateGroupMember.createMany({
       data: skillIds.map((skillId: string) => ({
+        id: generateId('sdgm'),
         groupId: group.id,
         skillId,
         role: primarySkillId === skillId ? 'primary' : 'member',
@@ -235,9 +239,9 @@ export async function POST(request: Request) {
     const createdGroup = await prisma.skillDuplicateGroup.findUnique({
       where: { id: group.id },
       include: {
-        members: {
+        SkillDuplicateGroupMember: {
           include: {
-            skill: {
+            Skill: {
               select: { id: true, name: true, displayName: true },
             },
           },

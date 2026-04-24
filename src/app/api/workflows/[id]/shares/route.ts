@@ -157,6 +157,7 @@ export async function POST(
     // 创建分享记录
     const share = await prisma.workflowShare.create({
       data: {
+        id: generateId('ws'),
         workflowId: id,
         sharedBy: payload.userId,
         sharedWith,

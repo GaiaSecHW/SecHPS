@@ -129,9 +129,9 @@ interface VulnerabilitySummary {
     severity: string;       // 严重程度
     status: string;
     cwe?: string | null;
-    filePath?: string | null;
-    lineStart?: number | null;
-    lineEnd?: number | null;
+    location?: string | null;     // 问题代码位置
+    POC?: string | null;          // POC 验证代码
+    vulnerable?: boolean | null;  // 是否为真实漏洞
     description?: string | null;
     createdAt?: string | null;  // 创建时间
     skillName?: string;     // 发现该漏洞的 Skill 名称

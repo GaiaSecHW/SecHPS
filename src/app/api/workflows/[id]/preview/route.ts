@@ -51,10 +51,10 @@ export async function GET(
     });
 
     let workflowConfig = {
-      startNodeLabel: '开始',
-      startNodeDescription: 'Agent编排的起始点',
-      endNodeLabel: '结束',
-      endNodeDescription: 'Agent编排的结束点',
+      startNodeLabel: '',
+      startNodeDescription: '',
+      endNodeLabel: '',
+      endNodeDescription: '',
     };
 
     if (config?.value) {
@@ -206,11 +206,15 @@ function generatePreviewMarkdown(
   // 输出开始节点
   if (startNode) {
     const startLabel = workflowConfig.startNodeLabel || '开始';
-    const startDesc = workflowConfig.startNodeDescription || 'Agent编排的起始点';
+    const startDesc = workflowConfig.startNodeDescription || '';
     const startType = NODE_TYPE_MAP[startNode.type as keyof typeof NODE_TYPE_MAP];
     markdown += `## 1. ${startLabel}\n`;
     markdown += `**类型**: ${startType?.label || startNode.type}  \n`;
-    markdown += `**描述**: ${startDesc}\n\n`;
+    if (startDesc) {
+      markdown += `**描述**: ${startDesc}\n\n`;
+    } else {
+      markdown += '\n';
+    }
   }
 
   // 输出任务节点和子任务
@@ -244,12 +248,16 @@ function generatePreviewMarkdown(
   // 输出结束节点
   if (endNode) {
     const endLabel = workflowConfig.endNodeLabel || '结束';
-    const endDesc = workflowConfig.endNodeDescription || 'Agent编排的结束点';
+    const endDesc = workflowConfig.endNodeDescription || '';
     const endNumber = taskNodes.length + 2; // 开始节点 + 任务节点数 + 1
     const endType = NODE_TYPE_MAP[endNode.type as keyof typeof NODE_TYPE_MAP];
     markdown += `## ${endNumber}. ${endLabel}\n`;
     markdown += `**类型**: ${endType?.label || endNode.type}  \n`;
-    markdown += `**描述**: ${endDesc}\n\n`;
+    if (endDesc) {
+      markdown += `**描述**: ${endDesc}\n\n`;
+    } else {
+      markdown += '\n';
+    }
   }
 
   return markdown;

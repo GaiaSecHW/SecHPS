@@ -64,9 +64,9 @@ export interface VulnerabilityDetail {
   severity: string;
   cwe?: string;
   skill?: string;
-  filePath?: string;
-  lineStart?: number;
-  lineEnd?: number;
+  location?: string;          // 问题代码位置
+  POC?: string;               // POC 验证代码
+  vulnerable?: boolean;       // 是否为真实漏洞
   description?: string;
   status: string;
   source: 'database' | 'workspace';
@@ -319,6 +319,19 @@ async function getVulnerabilitiesFromDatabase(
       evaluationId: evaluationId,
       projectId: projectId,
     },
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      severity: true,
+      cwe: true,
+      skill: true,
+      location: true,
+      POC: true,
+      vulnerable: true,
+      description: true,
+      status: true,
+    },
     orderBy: { createdAt: 'desc' },
   });
   
@@ -329,9 +342,9 @@ async function getVulnerabilitiesFromDatabase(
     severity: v.severity,
     cwe: v.cwe ?? undefined,
     skill: v.skill ?? undefined,
-    filePath: v.filePath ?? undefined,
-    lineStart: v.lineStart ?? undefined,
-    lineEnd: v.lineEnd ?? undefined,
+    location: v.location ?? undefined,
+    POC: v.POC ?? undefined,
+    vulnerable: v.vulnerable ?? undefined,
     description: v.description,
     status: v.status,
     source: 'database',
@@ -366,9 +379,9 @@ async function scanWorkspaceVulnerabilities(
             severity: normalizeSeverity(item.severity || item.risk || 'medium'),
             cwe: item.cwe || item.CWE,
             skill: item.skill || item.skillName,
-            filePath: item.filePath || item.file || item.path,
-            lineStart: item.lineStart || item.line,
-            lineEnd: item.lineEnd || item.endLine,
+            location: item.location || item.filePath || item.file || item.path,
+            POC: item.POC || undefined,
+            vulnerable: item.vulnerable ?? true,
             description: item.description || item.details,
             status: item.status || 'new',
             source: 'workspace',
@@ -386,7 +399,7 @@ async function scanWorkspaceVulnerabilities(
   for (const wsVuln of scanResult.vulnerabilities) {
     // Avoid duplicates
     const exists = vulnerabilities.some(v =>
-      v.title === wsVuln.title && v.filePath === wsVuln.filePath
+      v.title === wsVuln.title && v.location === wsVuln.filePath
     );
     
     if (!exists) {
@@ -397,9 +410,9 @@ async function scanWorkspaceVulnerabilities(
         severity: wsVuln.severity,
         cwe: wsVuln.cwe,
         skill: wsVuln.sourceTool,
-        filePath: wsVuln.filePath,
-        lineStart: wsVuln.lineStart,
-        lineEnd: wsVuln.lineEnd,
+        location: wsVuln.filePath,
+        POC: undefined,
+        vulnerable: true,
         description: wsVuln.description,
         status: 'new',
         source: 'workspace',
@@ -424,8 +437,7 @@ function mergeVulnerabilities(
   for (const wsVuln of wsVulns) {
     const existsInDb = dbVulns.some(dbVuln =>
       dbVuln.title === wsVuln.title &&
-      dbVuln.filePath === wsVuln.filePath &&
-      dbVuln.lineStart === wsVuln.lineStart
+      dbVuln.location === wsVuln.location
     );
     
     if (!existsInDb) {
@@ -807,9 +819,7 @@ No vulnerabilities were identified during this evaluation.
   
   const vulnDetails = displayVulns.map(vuln => {
     const severityIcon = getSeverityIcon(vuln.severity);
-    const location = vuln.filePath
-      ? `${vuln.filePath}${vuln.lineStart ? `:${vuln.lineStart}` : ''}`
-      : 'N/A';
+    const location = vuln.location || 'N/A';
     
     return `
 ### ${severityIcon} ${vuln.title}

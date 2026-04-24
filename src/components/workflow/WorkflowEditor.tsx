@@ -1107,7 +1107,7 @@ const [showPreview, setShowPreview] = useState(false);
             const skill = availableSkills.find(s => s.id === id);
             userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
           });
-          userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+          userPrompt += '\n请确保以上所有 Skills 都被执行，且每个skill以独立子代理（Subagent）执行，不要遗漏。\n\n';
         }
       } else if (mode === 'vulnerability') {
         // 模式3：漏洞分类
@@ -1120,7 +1120,7 @@ const [showPreview, setShowPreview] = useState(false);
             matched.forEach((s, i) => {
               userPrompt += `${i + 1}. ${s.displayName || s.name}\n`;
             });
-            userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+            userPrompt += '\n请确保以上所有 Skills 都被执行，且每个skill以独立子代理（Subagent）执行，不要遗漏。\n\n';
           }
         }
       }

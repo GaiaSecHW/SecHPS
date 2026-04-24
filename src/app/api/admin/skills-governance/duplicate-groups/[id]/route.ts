@@ -28,9 +28,9 @@ export async function GET(request: Request, context: RouteContext) {
     const group = await prisma.skillDuplicateGroup.findUnique({
       where: { id },
       include: {
-        members: {
+        SkillDuplicateGroupMember: {
           include: {
-            skill: {
+            Skill: {
               select: {
                 id: true,
                 name: true,
@@ -69,7 +69,7 @@ export async function GET(request: Request, context: RouteContext) {
     ]);
 
     // 获取成员之间的分析结果
-    const memberIds = group.members.map(m => m.skillId);
+    const memberIds = group.SkillDuplicateGroupMember.map(m => m.skillId);
     const analyses = await prisma.skillAnalysis.findMany({
       where: {
         OR: memberIds.flatMap(id1 =>
@@ -148,9 +148,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const group = await prisma.skillDuplicateGroup.findUnique({
       where: { id },
       include: {
-        members: {
+        SkillDuplicateGroupMember: {
           include: {
-            skill: { select: { id: true, name: true, isActive: true } },
+            Skill: { select: { id: true, name: true, isActive: true } },
           },
         },
       },
@@ -174,12 +174,12 @@ export async function PATCH(request: Request, context: RouteContext) {
           return NextResponse.json({ error: 'merge 操作需要指定 primarySkillId' }, { status: 400 });
         }
 
-        const primaryMember = group.members.find(m => m.skillId === primarySkillId);
+const primaryMember = group.SkillDuplicateGroupMember.find(m => m.skillId === primarySkillId);
         if (!primaryMember) {
           return NextResponse.json({ error: 'primarySkillId 不在重复组成员中' }, { status: 400 });
         }
 
-        const otherMembers = group.members.filter(m => m.skillId !== primarySkillId);
+        const otherMembers = group.SkillDuplicateGroupMember.filter(m => m.skillId !== primarySkillId);
 
         // 创建合并记录
         for (const member of otherMembers) {
@@ -199,12 +199,12 @@ export async function PATCH(request: Request, context: RouteContext) {
 
         result = {
           message: `已创建 ${otherMembers.length} 个合并记录，等待执行`,
-          affectedSkills: otherMembers.map(m => m.skill.name),
+          affectedSkills: otherMembers.map(m => m.Skill.name),
         };
         break;
 
       case 'keep_all':
-        // 保留全部：标记为已处理，不做任何合并/删除
+        // 保留全部：标记为已处理，不做任何合并或删除
         result = {
           message: '已标记为保留全部，无需合并或删除',
           affectedSkills: [],
@@ -214,12 +214,12 @@ export async function PATCH(request: Request, context: RouteContext) {
       case 'delete_duplicates':
         // 删除重复：直接删除指定的 Skill
         if (!deleteSkillIds || deleteSkillIds.length === 0) {
-          return NextResponse.json({ error: 'delete_duplicates 操作需要指定 deleteSkillIds' }, { status: 400 });
+          return NextResponse.json({ error: 'delete_duplicates 操作需指定 deleteSkillIds' }, { status: 400 });
         }
 
         // 验证 deleteSkillIds 都在组成员中
         const invalidIds = deleteSkillIds.filter(
-          (sid: string) => !group.members.some(m => m.skillId === sid)
+          (sid: string) => !group.SkillDuplicateGroupMember.some(m => m.skillId === sid)
         );
         if (invalidIds.length > 0) {
           return NextResponse.json(
@@ -234,11 +234,11 @@ export async function PATCH(request: Request, context: RouteContext) {
           data: { isActive: false },
         });
 
-        const deletedSkills = group.members.filter(m => deleteSkillIds.includes(m.skillId));
+        const deletedSkills = group.SkillDuplicateGroupMember.filter(m => deleteSkillIds.includes(m.skillId));
 
-        result = {
+result = {
           message: `已将 ${deletedSkills.length} 个 Skill 标记为 inactive`,
-          affectedSkills: deletedSkills.map(m => m.skill.name),
+          affectedSkills: deletedSkills.map(m => m.Skill.name),
         };
         break;
     }

@@ -35,12 +35,9 @@ interface Vulnerability {
   cwe: string | null;
   severity: string;
   skill: string | null;
-  filePath: string | null;
-  lineStart: number | null;
-  lineEnd: number | null;
-  codeSnippet: string | null;
-  details: any | null;
-  aiAnalysis: string | null;
+  location: string | null;       // 问题代码位置
+  POC: string | null;            // POC 验证代码
+  vulnerable: boolean | null;    // 是否为真实漏洞
   fixSuggestion: string | null;
   status: string;
   confirmedBy: string | null;
@@ -189,62 +186,6 @@ export default function VulnerabilityDetailPage() {
     setConfirmDialog({ isOpen: true, action, loading: false });
   };
 
-  // Render code snippet with line numbers
-  const renderCodeSnippet = () => {
-    if (!vulnerability?.codeSnippet) return null;
-
-    const lines = vulnerability.codeSnippet.split('\n');
-    const startLine = vulnerability.lineStart || 1;
-
-    return (
-      <div className="bg-gray-900 rounded-lg overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
-          <div className="flex items-center gap-2">
-            <Code size={16} className="text-gray-400" />
-            <span className="text-sm text-gray-300 font-mono">
-              {vulnerability.filePath || '代码片段'}
-            </span>
-          </div>
-          <span className="text-xs text-gray-500">
-            行 {vulnerability.lineStart || '-'} - {vulnerability.lineEnd || '-'}
-          </span>
-        </div>
-        <div className="overflow-x-auto">
-          <pre className="p-0 m-0">
-            <code className="block">
-              {lines.map((line, index) => {
-                const lineNumber = startLine + index;
-                const isHighlighted =
-                  vulnerability.lineStart &&
-                  vulnerability.lineEnd &&
-                  lineNumber >= vulnerability.lineStart &&
-                  lineNumber <= vulnerability.lineEnd;
-
-                return (
-                  <div
-                    key={index}
-                    className={`flex px-4 py-1 ${
-                      isHighlighted
-                        ? 'bg-yellow-900/30 border-l-2 border-yellow-500'
-                        : ''
-                    }`}
-                  >
-                    <span className="w-8 text-right pr-4 text-gray-500 select-none font-mono text-sm">
-                      {lineNumber}
-                    </span>
-                    <span className="text-gray-100 font-mono text-sm whitespace-pre">
-                      {line || ' '}
-                    </span>
-                  </div>
-                );
-              })}
-            </code>
-          </pre>
-        </div>
-      </div>
-    );
-  };
-
   // Loading state
   if (loading) {
     return <PageLoading text="加载漏洞详情..." />;
@@ -381,27 +322,29 @@ export default function VulnerabilityDetailPage() {
             <p className="text-gray-700 leading-relaxed">{vulnerability.description}</p>
           </div>
 
-          {/* Code snippet */}
-          {vulnerability.codeSnippet && (
+          {/* Code snippet / Location */}
+          {vulnerability.location && (
             <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <Code size={18} />
-                代码片段
+                问题代码位置
               </h2>
-              {renderCodeSnippet()}
+              <pre className="text-sm bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto whitespace-pre-wrap">
+                {vulnerability.location}
+              </pre>
             </div>
           )}
 
-          {/* AI Analysis */}
-          {vulnerability.aiAnalysis && (
-            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg shadow border border-purple-200 p-6">
-              <h2 className="text-lg font-semibold text-purple-900 mb-4 flex items-center gap-2">
-                <Sparkles size={18} />
-                AI 分析
+          {/* POC */}
+          {vulnerability.POC && (
+            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Code size={18} />
+                POC 验证代码
               </h2>
-              <div className="text-purple-800 leading-relaxed whitespace-pre-wrap">
-                {vulnerability.aiAnalysis}
-              </div>
+              <pre className="text-sm bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto whitespace-pre-wrap">
+                {vulnerability.POC}
+              </pre>
             </div>
           )}
 
@@ -504,25 +447,11 @@ export default function VulnerabilityDetailPage() {
               位置信息
             </h2>
             <div className="space-y-4">
-              {/* File path */}
-              {vulnerability.filePath && (
-                <div>
-                  <label className="text-sm text-gray-500">文件路径</label>
-                  <p className="mt-1 text-gray-900 font-mono text-sm bg-gray-50 px-2 py-1 rounded">
-                    {vulnerability.filePath}
-                  </p>
-                </div>
-              )}
-
-              {/* Line numbers */}
+              {/* Vulnerable status */}
               <div>
-                <label className="text-sm text-gray-500">行号范围</label>
+                <label className="text-sm text-gray-500">漏洞状态</label>
                 <p className="mt-1 text-gray-900">
-                  {vulnerability.lineStart && vulnerability.lineEnd
-                    ? `${vulnerability.lineStart} - ${vulnerability.lineEnd}`
-                    : vulnerability.lineStart
-                    ? `第 ${vulnerability.lineStart} 行`
-                    : '未指定'}
+                  {vulnerability.vulnerable ? '真实漏洞' : '待确认'}
                 </p>
               </div>
             </div>

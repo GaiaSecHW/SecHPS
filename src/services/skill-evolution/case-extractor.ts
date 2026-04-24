@@ -9,8 +9,8 @@ export interface CompactCase {
   vulnerabilityId: string;
   title: string;
   description: string;
-  filePath?: string;
-  codeSnippetPreview?: string;
+  location?: string;           // 问题代码位置
+  POCPreview?: string;         // POC 代码片段
   status: 'false_positive' | 'confirmed';
   markedAt: Date;
 }
@@ -107,8 +107,8 @@ export async function getCompactCases(
           id: true,
           title: true,
           description: true,
-          filePath: true,
-          codeSnippet: true,
+          location: true,
+          POC: true,
           status: true,
           updatedAt: true,
         },
@@ -125,8 +125,8 @@ export async function getCompactCases(
           id: true,
           title: true,
           description: true,
-          filePath: true,
-          codeSnippet: true,
+          location: true,
+          POC: true,
           status: true,
           updatedAt: true,
         },
@@ -153,8 +153,8 @@ export async function getCompactCases(
       id: string;
       title: string;
       description: string;
-      filePath: string | null;
-      codeSnippet: string | null;
+      location: string | null;
+      POC: string | null;
       status: string;
       updatedAt: Date;
     },
@@ -167,8 +167,8 @@ export async function getCompactCases(
       v.description.length > maxLength
         ? v.description.slice(0, maxLength)
         : v.description,
-    filePath: v.filePath ?? undefined,
-    codeSnippetPreview: extractKeyLines(v.codeSnippet, snippetLines),
+    location: v.location ?? undefined,
+    POCPreview: extractKeyLines(v.POC, snippetLines),
     status: v.status as 'false_positive' | 'confirmed',
     markedAt: v.updatedAt,
   });

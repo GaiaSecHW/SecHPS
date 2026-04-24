@@ -156,12 +156,14 @@ export async function PUT(
         nodes.map((node: any) =>
           tx.workflowNode.create({
             data: {
+              id: generateId('wn'),
               workflowId: id,
               type: node.type,
               roleId: node.data?.roleId || node.roleId || null,  // 保存角色关联
               positionX: node.position.x,
               positionY: node.position.y,
               data: JSON.stringify(node.data),
+              updatedAt: new Date(),
               vulnerabilityCategories: Array.isArray(node.data.vulnerabilityCategories)
                 ? JSON.stringify(node.data.vulnerabilityCategories)
                 : null,
@@ -189,6 +191,7 @@ export async function PUT(
 
           return tx.workflowEdge.create({
             data: {
+              id: generateId('we'),
               workflowId: id,
               sourceId,
               targetId,

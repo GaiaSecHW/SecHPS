@@ -1223,7 +1223,7 @@ export default function SkillDetailPage() {
                               </div>
                               <div className="mt-1 text-sm text-gray-600">
                                 {item.vulnerability?.type && <span className="mr-2">类型: {item.vulnerability.type}</span>}
-                                {item.vulnerability?.filePath && <span className="mr-2">文件: {item.vulnerability.filePath}</span>}
+                                {item.vulnerability?.location && <span className="mr-2">位置: {item.vulnerability.location}</span>}
                               </div>
                               <div className="mt-1 text-xs text-gray-500">
                                 发现时间: {new Date(item.matchedAt).toLocaleString()}

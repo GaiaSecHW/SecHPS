@@ -109,7 +109,7 @@ export const skillSelectMinimal = {
       name: true,
       displayName: true,
       categoryId: true,
-      categoryRef: {
+      VulnerabilityCategory: {
         select: {
           value: true,
           label: true,
@@ -129,7 +129,7 @@ export const patternSelectMinimal = {
   displayName: true,
   description: true,
   categoryId: true,
-  categoryRef: {
+  VulnerabilityCategory: {
     select: {
       value: true,
       label: true,

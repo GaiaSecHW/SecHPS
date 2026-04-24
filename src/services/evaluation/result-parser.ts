@@ -177,12 +177,14 @@ function findJsonObjects(text: string): string[] {
 // ============================================
 
 interface ParsedVulnerability {
+  vulnerable?: boolean;
   type: string;
   severity: string;
   title: string;
   description?: string;
   cwe_id?: string;
   location?: string;
+  POC?: string;
   recommendation?: string;
   skill?: string;
 }
@@ -558,9 +560,10 @@ export async function parseAndSaveResults(
             title: vuln.title || '未知漏洞',
             description: vuln.description || vuln.title || '',
             cwe: vuln.cwe_id || null,
-            filePath: vuln.location || null,
+            location: vuln.location || null,           // 直接存储 location
+            POC: vuln.POC || null,                     // 直接存储 POC
+            vulnerable: vuln.vulnerable ?? true,       // 是否为真实漏洞
             fixSuggestion: vuln.recommendation || null,
-            aiAnalysis: vuln.description || null,
             skill: vuln.skill || null,
             updatedAt: new Date(),
           },
