@@ -116,12 +116,8 @@ export default function SessionsPage() {
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
   const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds();
-  // 环境配置表单状态
+  // 环境配置表单状态（灰盒渗透）
   const [environmentUrl, setEnvironmentUrl] = useState('');
-  const [adminUsername, setAdminUsername] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
-  const [normalUsername, setNormalUsername] = useState('');
-  const [normalPassword, setNormalPassword] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editFileInputRef = useRef<HTMLInputElement>(null);
   
@@ -757,10 +753,6 @@ setShowEditModal(true);
   const openEnvConfigModal = (project: Project) => {
     setSelectedProject(project);
     setEnvironmentUrl(project.environmentUrl || '');
-    setAdminUsername(project.adminUsername || '');
-    setAdminPassword('');
-    setNormalUsername(project.normalUsername || '');
-    setNormalPassword('');
     setShowEnvConfigModal(true);
   };
 
@@ -781,16 +773,12 @@ setShowEditModal(true);
         },
         body: JSON.stringify({
           environmentUrl: environmentUrl || undefined,
-          adminUsername: adminUsername || undefined,
-          adminPassword: adminPassword || undefined,
-          normalUsername: normalUsername || undefined,
-          normalPassword: normalPassword || undefined,
         }),
       });
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || '保存环境配置失败');
+        toast.error(data.error || '保存灰盒渗透配置失败');
         setUploading(false);
         return;
       }
@@ -798,10 +786,6 @@ setShowEditModal(true);
       setShowEnvConfigModal(false);
       setSelectedProject(null);
       setEnvironmentUrl('');
-      setAdminUsername('');
-      setAdminPassword('');
-      setNormalUsername('');
-      setNormalPassword('');
 
       await fetchProjects();
     } catch (err) {
@@ -2144,7 +2128,7 @@ if (loading) {
       {/* 灰盒渗透对话框 */}
       {showEnvConfigModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">灰盒渗透</h3>
               <button
@@ -2152,10 +2136,6 @@ if (loading) {
                   setShowEnvConfigModal(false);
                   setSelectedProject(null);
                   setEnvironmentUrl('');
-                  setAdminUsername('');
-                  setAdminPassword('');
-                  setNormalUsername('');
-                  setNormalPassword('');
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -2163,7 +2143,7 @@ if (loading) {
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-6">
               <div>
                 <label htmlFor="environmentUrl" className="block text-sm font-medium text-gray-700">
                   环境 URL
@@ -2178,72 +2158,6 @@ if (loading) {
                 />
                 <p className="mt-1 text-xs text-gray-500">请输入目标环境的访问地址</p>
               </div>
-
-              <div className="border-t border-gray-200 pt-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">管理员账号</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label htmlFor="adminUsername" className="block text-sm font-medium text-gray-700">
-                      用户名
-                    </label>
-                    <input
-                      id="adminUsername"
-                      type="text"
-                      value={adminUsername}
-                      onChange={(e) => setAdminUsername(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="管理员用户名"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="adminPassword" className="block text-sm font-medium text-gray-700">
-                      密码
-                    </label>
-                    <input
-                      id="adminPassword"
-                      type="password"
-                      value={adminPassword}
-                      onChange={(e) => setAdminPassword(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="留空则不修改密码"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">留空表示不修改现有密码</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="border-t border-gray-200 pt-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-3">普通用户账号</h4>
-                <div className="space-y-3">
-                  <div>
-                    <label htmlFor="normalUsername" className="block text-sm font-medium text-gray-700">
-                      用户名
-                    </label>
-                    <input
-                      id="normalUsername"
-                      type="text"
-                      value={normalUsername}
-                      onChange={(e) => setNormalUsername(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="普通用户名"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="normalPassword" className="block text-sm font-medium text-gray-700">
-                      密码
-                    </label>
-                    <input
-                      id="normalPassword"
-                      type="password"
-                      value={normalPassword}
-                      onChange={(e) => setNormalPassword(e.target.value)}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="留空则不修改密码"
-                    />
-                    <p className="mt-1 text-xs text-gray-500">留空表示不修改现有密码</p>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
@@ -2252,10 +2166,6 @@ if (loading) {
                   setShowEnvConfigModal(false);
                   setSelectedProject(null);
                   setEnvironmentUrl('');
-                  setAdminUsername('');
-                  setAdminPassword('');
-                  setNormalUsername('');
-                  setNormalPassword('');
                 }}
                 disabled={uploading}
                 className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
