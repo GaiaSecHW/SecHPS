@@ -8,6 +8,7 @@ import { abortAgent } from '@/lib/agent-registry';
 import { completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
 import { generateId } from '@/lib/id-generator';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { unlockProject } from '@/lib/evaluation-lock';
 
 // POST /api/evaluations/[id]/stop - 停止评估会话
 export async function POST(
@@ -65,7 +66,10 @@ export async function POST(
         },
       });
       
-      logger.debug(LOG_MODULES.EVALUATION, '排队评估已取消:', { details: { id } });
+      // 解锁项目
+      await unlockProject(evaluation.projectId);
+      
+      logger.debug(LOG_MODULES.EVALUATION, '排队评估已取消:', { details: { id, projectId: evaluation.projectId } });
       
       return NextResponse.json({
         success: true,
@@ -150,6 +154,10 @@ export async function POST(
         status: 'idle',
       },
     });
+
+    // 解锁项目（从全局 Map 中移除）
+    await unlockProject(evaluation.projectId);
+    logger.info(LOG_MODULES.EVALUATION, '项目已解锁', { details: { projectId: evaluation.projectId } });
 
     // 记录审计日志
     try {
