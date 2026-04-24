@@ -808,7 +808,7 @@ export async function POST(
               
               if (project.projectPath) {
                 try {
-                  // 拷贝所有技术栈匹配的 Skills
+                  // 拷贝所有技术栈匹配的 Skills（模板由 saveSkillToDisk 内部自动获取）
                   fsmCopyResult = await copySkillsToProject(
                     project.projectPath,
                     payload.userId,
@@ -1357,19 +1357,19 @@ export async function POST(
             const dagUniqueSkillIds = [...new Set(allSkillIds)];
             logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 合并后共唯一 Skill IDs（模式2/3）', { count: dagUniqueSkillIds.length });
 
-            // DAG 模式下的 Skills 同步结果
+// DAG 模式下的 Skills 同步结果
             let dagCopyResult: { success: number; failed: number; errors: string[]; copiedSkills: string[]; skillIds: string[]; invalidSkills?: any[] } | null = null;
             let dagSkillsUsedJson: string | null = null;
 
-            // 模式 1：拷贝所有技术栈匹配的 Skills，供 Agent 自主选择
+            // 模式 1：拷贝所有技术栈匹配的 Skills，供 Agent 自主选择（模板由 saveSkillToDisk 内部自动获取）
             if (hasDescriptionModeNode) {
               logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 存在自定义描述节点，拷贝所有技术栈匹配的 Skills 供 Agent 自主选择');
-              dagCopyResult = await copySkillsToProject(
-                project.projectPath || '',
-                payload.userId,
-                undefined,
-                projectTechStack
-              );
+dagCopyResult = await copySkillsToProject(
+                  project.projectPath || '',
+                  payload.userId,
+                  undefined,
+                  projectTechStack
+                );
               logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已拷贝 Skills 供模式 1 节点自主选择', { successCount: dagCopyResult.success });
               
               // 同时追加模式 2/3 指定的 Skills（必须执行）
@@ -1406,7 +1406,7 @@ export async function POST(
               dagCopyResult = await copySkillsByIds(
                 project.projectPath || '',
                 dagUniqueSkillIds,
-                undefined,
+                globalConfig?.skillOutputTemplate,
                 projectTechStack
               );
               

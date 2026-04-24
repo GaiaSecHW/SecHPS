@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Skill } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { getSkillOutputTemplate } from '@/lib/skill-template';
 
 /**
  * 路径安全验证
@@ -144,22 +145,31 @@ export function generateSkillMarkdown(skill: DiskSkill): string {
 
 /**
  * 生成符合 Claude 官方格式的 SKILL.md 内容
- * 直接返回 content 字段，不拼接模板
+ * 将 skillOutputTemplate 追加到 content 末尾
  */
 export function generateSkillMarkdownWithTemplate(skill: DiskSkill, skillOutputTemplate?: string): string {
-  // 直接返回内容，不拼接模板
-  return skill.content || '';
+  let content = skill.content || '';
+  
+  // 如果有模板，追加到末尾
+  if (skillOutputTemplate && skillOutputTemplate.trim()) {
+    content = content + '\n\n' + skillOutputTemplate.trim();
+  }
+  
+  return content;
 }
 
 /**
  * 保存 Skill 到磁盘
  */
-export async function saveSkillToDisk(skill: Skill, skillOutputTemplate?: string): Promise<boolean> {
+export async function saveSkillToDisk(skill: Skill, overrideTemplate?: string): Promise<boolean> {
   const skillDir = getSkillDir(skill.name, skill.userId);
   
   try {
     // 确保目录存在
     ensureDir(skillDir);
+    
+    // 获取模板：优先使用传入参数，否则从全局配置获取
+    const skillOutputTemplate = overrideTemplate ?? await getSkillOutputTemplate();
     
     // 保存 SKILL-v{version}.md 文件
     const skillFile = path.join(skillDir, `SKILL-v${skill.version}.md`);
@@ -522,13 +532,8 @@ export async function copySkillsToProject(
           continue;
         }
         
-        // 读取内容
+        // 读取内容（模板已在 saveSkillToDisk 时追加）
         let content = fs.readFileSync(sourceFile, 'utf-8');
-        
-        // 追加输出模板（如果提供）
-        if (skillOutputTemplate && skillOutputTemplate.trim()) {
-          content = content + '\n\n' + skillOutputTemplate;
-        }
         
         // 为每个 Skill 创建独立子目录
         const skillTargetDir = path.join(targetDir, skill.name);
@@ -897,13 +902,8 @@ export async function copySkillsByIds(
           continue;
         }
 
-        // 读取内容
+        // 读取内容（模板已在 saveSkillToDisk 时追加）
         let content = fs.readFileSync(sourceFile, 'utf-8');
-
-        // 追加输出模板（如果提供）
-        if (skillOutputTemplate && skillOutputTemplate.trim()) {
-          content = content + '\n\n' + skillOutputTemplate;
-        }
 
         // 验证 skill.name 安全性，防止路径遍历
         if (!isPathSafe(skill.name)) {

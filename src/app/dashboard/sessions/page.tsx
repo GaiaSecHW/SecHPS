@@ -666,9 +666,8 @@ export default function SessionsPage() {
     const roleModelsParam = isRoleModels ? roleModelsOrModelId : null;
     const modelId = isRoleModels ? null : roleModelsOrModelId;
 
-    // 立即关闭对话框，不等待后端响应
+    // 立即关闭对话框，但保持 startingProject 状态以禁用按钮
     setSelectedWorkflow(null);
-    setStartingProject(null);
 
     // 发送请求到后台，不等待结果
     const token = localStorage.getItem('token');
@@ -688,11 +687,15 @@ export default function SessionsPage() {
         const data = await response.json();
         alert(`启动评估失败\n\n${data.error || '未知错误'}`);
         toast.error(data.error || '启动项目失败');
+        setStartingProject(null); // 失败时清空状态
         return;
       }
 
       // 刷新项目列表以显示"评估运行中"状态
       await fetchProjects();
+
+      // 刷新完成后清空 startingProject（此时 hasRunningEvaluation 已更新）
+      setStartingProject(null);
 
       // 检查是否是异步模式（202 Accepted）
       if (response.status === 202) {
@@ -722,6 +725,7 @@ export default function SessionsPage() {
     }).catch((error) => {
       console.error('[启动评估错误]', error);
       toast.error('启动评估失败');
+      setStartingProject(null); // 错误时清空状态
     });
   };
 
@@ -980,11 +984,11 @@ ${vuln.description || '无描述'}
 
 ## 问题代码位置
 
-${vuln.filePath || '无'}
+${vuln.location || '无'}
 
-## POC / 代码片段
+## POC 验证代码
 
-${vuln.codeSnippet ? '```\n' + vuln.codeSnippet + '\n```' : '无'}
+${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 
 ---
 *报告生成时间：${new Date().toLocaleString('zh-CN')}*
@@ -1272,16 +1276,19 @@ toast.error(data.error || '更新项目失败');
                 )}
               </div>
 
-              {/* 最新评估会话信息 - 运行中时显示运行状态，否则显示最新评估状态 */}
-              {(() => {
-                const allEvals = project.evaluations || [];
-                const runningEval = allEvals.find((e: any) => e.status === 'running' || e.status === 'queued');
-                const latestEval = runningEval || allEvals
-                  .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
-                
-                if (!latestEval) return null;
-                
-                const isRunning = latestEval.status === 'running' || latestEval.status === 'queued';
+{/* 最新评估会话信息 - 运行中时显示运行状态，否则显示最新评估状态 */}
+               {(() => {
+                 const allEvals = project.evaluations || [];
+                 // 检查运行中、排队中、准备中的评估（preparing 也是正在启动的状态）
+                 const runningEval = allEvals.find((e: any) => 
+                   e.status === 'running' || e.status === 'queued' || e.status === 'preparing'
+                 );
+                 const latestEval = runningEval || allEvals
+                   .sort((a: any, b: any) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())[0];
+                 
+                 if (!latestEval) return null;
+                 
+                 const isRunning = latestEval.status === 'running' || latestEval.status === 'queued' || latestEval.status === 'preparing';
                 // 评估中显示启动时间，非评估中显示完成时间
                 const evalTime = isRunning 
                   ? (latestEval.startedAt ? new Date(latestEval.startedAt) : null)
@@ -1316,6 +1323,7 @@ toast.error(data.error || '更新项目失败');
                 
                 const statusConfig: Record<string, { bg: string; border: string; text: string; label: string }> = {
                   running: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', label: '运行中' },
+                  preparing: { bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700', label: '准备中' },
                   queued: { bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-700', label: '排队中' },
                   completed: { bg: 'bg-green-50', border: 'border-green-100', text: 'text-green-700', label: '已完成' },
                   failed: { bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700', label: '异常' },
@@ -1401,12 +1409,11 @@ toast.error(data.error || '更新项目失败');
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => {
-                          setStartingProject(null);
                           setSelectedProject(project);
                           setSelectedWorkflow(null);
                           setShowWorkflowModal(true);
                         }}
-                        disabled={project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued')}
+                        disabled={project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued' || e.status === 'preparing')}
                         className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play size={16} />
@@ -2981,16 +2988,16 @@ toast.error(data.error || '更新项目失败');
                 <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
                 <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVulnerability.description)}</div>
               </div>
-              {selectedVulnerability.filePath && (
+              {selectedVulnerability.location && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码</h4>
-                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.filePath}</pre>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码位置</h4>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.location}</pre>
                 </div>
               )}
-              {selectedVulnerability.codeSnippet && (
+              {selectedVulnerability.POC && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">POC</h4>
-                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.codeSnippet}</pre>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">POC 验证代码</h4>
+                  <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.POC}</pre>
                 </div>
               )}
             </div>
