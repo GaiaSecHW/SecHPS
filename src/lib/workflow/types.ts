@@ -43,6 +43,10 @@ export interface UnifiedNodeDefinition {
   fsmFixed?: boolean | null;
   /** 节点配置 */
   config?: Record<string, unknown>;
+  /** 是否跳过执行 */
+  skip?: boolean;
+  /** 跳过原因 */
+  skipReason?: string;
 }
 
 // ============ 模型配置类型 ============

@@ -541,6 +541,8 @@ model NodeExecution {
   nodeLabel           String
   nodeType            String
   status              String            @default("pending")
+  skipped             Boolean           @default(false)  // 是否跳过执行
+  skipReason          String?           // 跳过原因
   startedAt           DateTime?
   completedAt         DateTime?
   order               Int               @default(0)
@@ -560,6 +562,7 @@ model NodeExecution {
   @@index([evaluationSessionId])
   @@index([workflowNodeId])
   @@index([status])
+  @@index([skipped])
 }
 
 model NotificationChannel {

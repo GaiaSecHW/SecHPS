@@ -38,6 +38,25 @@ import {
   useNodeChildren,
 } from '@/lib/hooks';
 
+// 辅助函数：格式化执行时长（自适应秒/分/小时）
+function formatDuration(ms: number): string {
+  if (ms <= 0) return '0s';
+  
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  
+  if (hours > 0) {
+    const remainingMinutes = minutes % 60;
+    return remainingMinutes > 0 ? `${hours}h${remainingMinutes}m` : `${hours}h`;
+  }
+  if (minutes > 0) {
+    const remainingSeconds = seconds % 60;
+    return remainingSeconds > 0 ? `${minutes}m${remainingSeconds}s` : `${minutes}m`;
+  }
+  return `${seconds}s`;
+}
+
 // 辅助函数：获取消息内容预览
 function getContentPreview(content: any): string {
   if (!content) return '（空）';
@@ -153,6 +172,7 @@ function SessionDetailContent({
   const [nodeProgress, setNodeProgress] = useState<{
     total: number;
     completed: number;
+    skipped: number;
     running: number;
     pending: number;
     failed: number;
@@ -1240,7 +1260,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-300"
-                              style={{ width: `${(nodeProgress.completed / nodeProgress.total) * 100}%` }}
+                              style={{ width: `${((nodeProgress.completed + (nodeProgress.skipped || 0)) / nodeProgress.total) * 100}%` }}
                             />
                           </div>
                         </div>
@@ -1265,6 +1285,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                         <CheckCircle2 size={12} className="text-green-500" />
                         <span className="text-green-700">{nodeProgress.completed} 完成</span>
                       </span>
+                      {nodeProgress.skipped > 0 && (
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 size={12} className="text-gray-400" />
+                          <span className="text-gray-500">{nodeProgress.skipped} 跳过</span>
+                        </span>
+                      )}
                       {nodeProgress.running > 0 && (
                         <span className="flex items-center gap-1">
                           <Loader2 size={12} className="text-blue-500 animate-spin" />
@@ -1295,14 +1321,17 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                         ? new Date(node.completedAt).getTime() - new Date(node.startedAt).getTime()
                         : null;
                       
-                      // 状态图标和颜色
+                      // 状态图标和颜色（包含跳过状态）
                       const statusConfig = {
-                        completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' },
-                        running: { icon: Loader2, color: 'text-blue-500 animate-spin', bg: 'bg-blue-50', border: 'border-blue-200' },
-                        pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200' },
-                        failed: { icon: X, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200' },
+                        completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200', label: '完成' },
+                        running: { icon: Loader2, color: 'text-blue-500 animate-spin', bg: 'bg-blue-50', border: 'border-blue-200', label: '运行中' },
+                        pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200', label: '等待' },
+                        failed: { icon: X, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200', label: '失败' },
+                        skipped: { icon: CheckCircle2, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-300', label: '跳过' },
                       };
-                      const config = statusConfig[node.status as keyof typeof statusConfig] || statusConfig.pending;
+                      // 如果节点是跳过的，使用 skipped 配置
+                      const actualStatus = node.skipped ? 'skipped' : (node.status as keyof typeof statusConfig);
+                      const config = statusConfig[actualStatus] || statusConfig.pending;
                       const StatusIcon = config.icon;
                       
                       return (
@@ -1323,16 +1352,22 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                               
                               {/* 节点信息 */}
                               <div className="flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-900">
-                                    {node.label || `节点 ${index + 1}`}
-                                  </span>
-                                  {/* FSM 阶段编号 */}
-                                  {node.fsmPhase && (
-                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                                      Phase {node.fsmPhase}
-                                    </span>
-                                  )}
+<div className="flex items-center gap-2">
+                                   <span className="text-sm font-medium text-gray-900">
+                                     {node.label || `节点 ${index + 1}`}
+                                   </span>
+                                   {/* 跳过标记 */}
+                                   {node.skipped && (
+                                     <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-300">
+                                       跳过
+                                     </span>
+                                   )}
+                                   {/* FSM 阶段编号 */}
+                                   {node.fsmPhase && (
+                                     <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                       Phase {node.fsmPhase}
+                                     </span>
+                                   )}
                                   {/* 角色标签 */}
                                   {node.roleName && (
                                     <span 
@@ -1363,10 +1398,10 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                     </span>
                                   )}
                                   {/* 执行时长 */}
-                                  {duration && (
+                                  {duration != null && (
                                     <span className="flex items-center gap-1">
                                       <Clock size={10} />
-                                      {Math.round(duration / 1000)}s
+                                      {formatDuration(duration)}
                                     </span>
                                   )}
                                   {/* Token 信息 */}

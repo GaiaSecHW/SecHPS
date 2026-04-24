@@ -104,7 +104,7 @@ export async function GET(
         include: {
           WorkflowNode: {
             include: {
-              role: true, // 包含角色信息
+              WorkflowRole: true, // 包含角色信息
             },
           },
           WorkflowEdge: true, // 包含边信息（用于拓扑排序）
@@ -224,8 +224,8 @@ export async function GET(
               label,
               type: node.type,
               roleId: node.roleId,
-              roleName: node.role?.name || null,
-              roleColor: node.role?.color || null,
+              roleName: node.WorkflowRole?.name || null,
+              roleColor: node.WorkflowRole?.color || null,
               fsmPhase: node.fsmPhase,
               fsmOrder: index, // 使用拓扑排序后的顺序
               skills: node.skills ? JSON.parse(node.skills) : [],
@@ -301,6 +301,8 @@ export async function GET(
           vulnerabilityCategories: wn.vulnerabilityCategories,
           // 执行状态
           status: exec?.status || 'pending',
+          skipped: exec?.skipped || false,
+          skipReason: exec?.skipReason || null,
           startedAt: exec?.startedAt || null,
           completedAt: exec?.completedAt || null,
           order: exec?.order ?? wn.fsmOrder ?? index,
@@ -320,6 +322,8 @@ export async function GET(
         label: exec.nodeLabel,
         type: exec.nodeType,
         status: exec.status,
+        skipped: exec.skipped || false,
+        skipReason: exec.skipReason || null,
         startedAt: exec.startedAt,
         completedAt: exec.completedAt,
         order: exec.order,
@@ -332,7 +336,8 @@ export async function GET(
 
     // 计算进度统计
     const totalNodes = mergedNodes.length;
-    const completedNodes = mergedNodes.filter(n => n.status === 'completed').length;
+    const completedNodes = mergedNodes.filter(n => n.status === 'completed' && !n.skipped).length;
+    const skippedNodes = mergedNodes.filter(n => n.skipped).length;
     const runningNodes = mergedNodes.filter(n => n.status === 'running').length;
     const pendingNodes = mergedNodes.filter(n => n.status === 'pending').length;
     const failedNodes = mergedNodes.filter(n => n.status === 'failed').length;
@@ -350,6 +355,7 @@ export async function GET(
       progress: {
         total: totalNodes,
         completed: completedNodes,
+        skipped: skippedNodes,
         running: runningNodes,
         pending: pendingNodes,
         failed: failedNodes,

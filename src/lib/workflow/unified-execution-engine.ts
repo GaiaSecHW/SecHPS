@@ -87,16 +87,16 @@ export class UnifiedWorkflowExecutionEngine {
    * @param nodes 节点定义数组（已排序）
    */
 setNodes(nodes: UnifiedNodeDefinition[]): void {
-      // 过滤节点：如果 start/end 节点没有配置描述，则不加入编排
-      const filteredNodes = nodes.filter(node => {
+      // 过滤节点：如果 start/end 节点没有配置描述，标记为跳过（但仍保留在列表中以计入进度）
+      const processedNodes = nodes.map(node => {
         const nodeType = node.type || 'task';
         
         // start 节点：如果没有 startNodeDescription 则跳过
         if (nodeType === 'start') {
           const hasDescription = this.config.workflowConfig?.startNodeDescription || node.description;
           if (!hasDescription) {
-            console.log(`[UnifiedEngine] 跳过 start 节点: ${node.label} (未配置 startNodeDescription)`);
-            return false;
+            console.log(`[UnifiedEngine] 标记跳过 start 节点: ${node.label} (未配置 startNodeDescription)`);
+            return { ...node, skip: true, skipReason: '未配置开始节点描述' };
           }
         }
         
@@ -104,23 +104,23 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         if (nodeType === 'end') {
           const hasDescription = this.config.workflowConfig?.endNodeDescription || node.description;
           if (!hasDescription) {
-            console.log(`[UnifiedEngine] 跳过 end 节点: ${node.label} (未配置 endNodeDescription)`);
-            return false;
+            console.log(`[UnifiedEngine] 标记跳过 end 节点: ${node.label} (未配置 endNodeDescription)`);
+            return { ...node, skip: true, skipReason: '未配置结束节点描述' };
           }
         }
         
-        return true;
+        return { ...node, skip: false };
       });
       
-      this.nodes = filteredNodes;
-      console.log(`[UnifiedEngine] 设置节点列表: 原始 ${nodes.length} 个 -> 过滤后 ${filteredNodes.length} 个节点`);
-      for (const node of filteredNodes) {
-        console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (type: ${node.type || 'task'}, roleId: ${node.roleId || 'default'})`);
-      }
-      
-      // 记录被过滤的节点
-      if (nodes.length !== filteredNodes.length) {
-        console.log(`[UnifiedEngine] 已跳过 ${nodes.length - filteredNodes.length} 个无效节点 (start/end 无配置)`);
+      this.nodes = processedNodes;
+      const skippedCount = processedNodes.filter(n => n.skip).length;
+      console.log(`[UnifiedEngine] 设置节点列表: ${processedNodes.length} 个节点 (${skippedCount} 个将跳过)`);
+      for (const node of processedNodes) {
+        if (node.skip && 'skipReason' in node) {
+          console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (跳过: ${node.skipReason})`);
+        } else {
+          console.log(`[UnifiedEngine] - Node ${node.id}: ${node.label} (type: ${node.type || 'task'}, roleId: ${node.roleId || 'default'})`);
+        }
       }
     }
 
@@ -165,6 +165,37 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         }
 
         const node = this.nodes[i];
+        
+        // 检查节点是否需要跳过
+        if (node.skip) {
+          console.log(`[UnifiedEngine] ========== 跳过节点 ${i + 1}/${this.nodes.length}: ${node.label} ==========`);
+          console.log(`[UnifiedEngine] 跳过原因: ${node.skipReason}`);
+          
+          // 为跳过的节点创建执行记录（status=completed, skipped=true）
+          await this.saveSkippedNodeExecution(i, node);
+          
+          // 创建结果记录
+          const skippedResult: NodeExecutionResult = {
+            nodeIndex: i,
+            nodeId: node.id,
+            nodeName: node.label,
+            status: 'completed',
+            iterations: 0,
+            retryCount: 0,
+            duration: 0,
+            inputTokens: 0,
+            outputTokens: 0,
+            modelName: '',
+            modelConfigId: '',
+          };
+          nodeResults.push(skippedResult);
+          
+          // 调用节点完成回调
+          await this.callbacks.onNodeComplete(i, skippedResult);
+          
+          continue; // 跳过此节点
+        }
+        
         console.log(`[UnifiedEngine] ========== 开始执行节点 ${i + 1}/${this.nodes.length}: ${node.label} ==========`);
         
         const result = await this.executeNode(i, node);
@@ -1218,6 +1249,74 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     } catch (error) {
       console.error(`[saveNodeExecutionToDB] 保存失败:`, error);
       // 不抛出错误，允许执行继续进行
+    }
+  }
+
+  /**
+   * 保存跳过节点的执行记录到数据库
+   * 
+   * 跳过的节点：status='completed', skipped=true, skipReason记录原因
+   */
+  private async saveSkippedNodeExecution(
+    nodeIndex: number,
+    node: UnifiedNodeDefinition & { skipReason?: string }
+  ): Promise<void> {
+    try {
+      // 检查是否已存在（避免唯一约束冲突）
+      const existing = await prisma.nodeExecution.findUnique({
+        where: {
+          evaluationSessionId_workflowNodeId: {
+            evaluationSessionId: this.config.evaluationSessionId,
+            workflowNodeId: node.id,
+          },
+        },
+      });
+
+      const now = new Date();
+      const data = {
+        evaluationSessionId: this.config.evaluationSessionId,
+        workflowNodeId: node.id,
+        nodeLabel: node.label,
+        nodeType: node.fsmPhase ? 'fsm_phase' : (node.type || 'custom'),
+        status: 'completed',
+        skipped: true,
+        skipReason: node.skipReason || '未配置',
+        startedAt: now,
+        completedAt: now,
+        updatedAt: now,
+        order: nodeIndex,
+        modelConfigId: null,
+        modelName: null,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+
+      if (existing) {
+        // 更新现有记录
+        await prisma.nodeExecution.update({
+          where: { id: existing.id },
+          data: {
+            status: 'completed',
+            skipped: true,
+            skipReason: node.skipReason || '未配置',
+            startedAt: now,
+            completedAt: now,
+            updatedAt: now,
+          },
+        });
+        console.log(`[saveSkippedNodeExecution] 更新跳过节点记录: ${node.label}`);
+      } else {
+        // 创建新记录
+        await prisma.nodeExecution.create({
+          data: {
+            id: `node-exec-${this.config.evaluationSessionId}-${nodeIndex}`,
+            ...data,
+          },
+        });
+        console.log(`[saveSkippedNodeExecution] 创建跳过节点记录: ${node.label}`);
+      }
+    } catch (error) {
+      console.error(`[saveSkippedNodeExecution] 保存失败:`, error);
     }
   }
 
