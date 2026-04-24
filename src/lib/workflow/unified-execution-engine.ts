@@ -86,7 +86,10 @@ export class UnifiedWorkflowExecutionEngine {
     this.callbacks = callbacks;
     
     // 初始化节点流存储
-    this.nodeStreamStore = createNodeStreamStore(config.projectId, config.evaluationSessionId);
+    this.nodeStreamStore = new NodeStreamStore({
+      evaluationSessionId: config.evaluationSessionId,
+      projectId: config.projectId,
+    });
   }
 
   /**
