@@ -89,6 +89,8 @@ interface Project {
   userId?: string;
   userName?: string;
   userUsername?: string;
+  // 评估综合状态（API计算）
+  evaluationStatus?: 'idle' | 'running' | 'waiting' | 'completed' | 'failed';
 }
 
 export default function SessionsPage() {
@@ -157,9 +159,9 @@ export default function SessionsPage() {
   const [vulnSearchTerm, setVulnSearchTerm] = useState('');
   const [vulnStatusFilter, setVulnStatusFilter] = useState('');
 
-  // 检查是否有运行中的评估
+  // 检查是否有运行中或准备中的评估
   const hasRunningEvaluation = projects.some(p => 
-    p.evaluations?.some((e: any) => e.status === 'running')
+    p.evaluations?.some((e: any) => e.status === 'running' || e.status === 'preparing')
   );
 
   // 定义 fetchWorkflows 函数（在 useEffect 之前，避免引用错误）
@@ -1052,6 +1054,8 @@ toast.error(data.error || '更新项目失败');
     switch (status) {
       case 'running':
         return '运行中';
+      case 'waiting':
+        return '准备中';
       case 'completed':
         return '已完成';
       case 'failed':
@@ -1065,6 +1069,8 @@ toast.error(data.error || '更新项目失败');
     switch (status) {
       case 'running':
         return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'waiting':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'failed':
@@ -1145,11 +1151,11 @@ toast.error(data.error || '更新项目失败');
                       </span>
                     )}
                   </div>
-                  <span
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border"
-                  >
-                    {getStatusText(project.status)}
-                  </span>
+<span
+                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(project.evaluationStatus || project.status)}`}
+                   >
+                     {getStatusText(project.evaluationStatus || project.status)}
+                   </span>
                 </div>
 
                 {project.description && (
@@ -2061,45 +2067,44 @@ toast.error(data.error || '更新项目失败');
                               Token: 输入 {evaluation.totalInputTokens?.toLocaleString() || 0} / 输出 {evaluation.totalOutputTokens?.toLocaleString() || 0}
                             </p>
                           )}
-                          {/* 显示结束原因 */}
-                         {evaluation.status !== 'running' && evaluation.endReason && (
-                           <div className={`mt-2 p-2 rounded ${
-                             evaluation.endReason === 'completed' 
-                               ? 'bg-green-50 border border-green-200' 
-                               : evaluation.endReason === 'stopped'
-                               ? 'bg-yellow-50 border border-yellow-200'
-                               : 'bg-red-50 border border-red-200'
-                           }`}>
-                             <p className={`font-medium ${
-                               evaluation.endReason === 'completed' 
-                                 ? 'text-green-700' 
-                                 : evaluation.endReason === 'stopped'
-                                 ? 'text-yellow-700'
-                                 : 'text-red-700'
-                             }`}>
-                               {evaluation.endReason === 'completed' && '✅ 正常结束'}
-                               {evaluation.endReason === 'stopped' && '⏹️ 手工停止'}
-                               {evaluation.endReason === 'error' && '❌ 异常结束'}
-                             </p>
-                             {evaluation.endMessage && (
-                               <p className={`text-xs mt-1 ${
-                                 evaluation.endReason === 'completed' 
-                                   ? 'text-green-600' 
-                                   : evaluation.endReason === 'stopped'
-                                   ? 'text-yellow-600'
-                                   : 'text-red-600'
-                               }`}>
-                                 {evaluation.endMessage}
-                               </p>
-                             )}
-                           </div>
-                         )}
-                         {evaluation.opencodeSessionId && (
-                           <p>会话ID: {evaluation.opencodeSessionId}</p>
-                         )}
-                         {evaluation.errorMessage && !evaluation.endReason && (
-                           <p className="text-red-600">错误: {evaluation.errorMessage}</p>
-                         )}
+{/* 显示结束原因 */}
+                          {evaluation.status !== 'running' && evaluation.endReason && (
+                            <div className={`mt-2 p-2 rounded ${
+                              evaluation.endReason === 'completed' 
+                                ? 'bg-green-50 border border-green-200' 
+                                : evaluation.endReason === 'stopped'
+                                ? 'bg-yellow-50 border border-yellow-200'
+                                : 'bg-red-50 border border-red-200'
+                            }`}>
+                              <p className={`font-medium ${
+                                evaluation.endReason === 'completed' 
+                                  ? 'text-green-700' 
+                                  : evaluation.endReason === 'stopped'
+                                  ? 'text-yellow-700'
+                                  : 'text-red-700'
+                              }`}>
+                                {evaluation.endReason === 'completed' && '✅ 正常结束'}
+                                {evaluation.endReason === 'stopped' && '⏹️ 手工停止'}
+                                {evaluation.endReason === 'error' && '❌ 异常结束'}
+                              </p>
+                              {/* 显示详细错误/结束消息 */}
+                              {(evaluation.errorMessage || evaluation.endMessage) && (
+                                <p className={`text-xs mt-1 ${
+                                  evaluation.endReason === 'completed' 
+                                    ? 'text-green-600' 
+                                    : evaluation.endReason === 'stopped'
+                                    ? 'text-yellow-600'
+                                    : 'text-red-600'
+                                }`}>
+                                  {evaluation.errorMessage || evaluation.endMessage}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          {/* 失败但没有 endReason 时显示 errorMessage */}
+                          {evaluation.status === 'failed' && !evaluation.endReason && evaluation.errorMessage && (
+                            <p className="text-red-600 mt-2 p-2 bg-red-50 rounded">错误: {evaluation.errorMessage}</p>
+                          )}
                        </div>
                     </div>
                   ))}

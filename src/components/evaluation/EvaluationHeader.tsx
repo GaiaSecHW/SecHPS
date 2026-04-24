@@ -236,14 +236,33 @@ export function EvaluationHeader({
             </span>
           )}
           
-          {/* 结束原因 */}
+          {/* 结束原因显示 - 失败时显示完整错误信息 */}
           {evaluation?.endReason && status !== 'running' && (
-            <span className="text-xs text-gray-500" title={evaluation.endMessage || ''}>
-              ({evaluation.endReason === 'stopped' ? '用户中止' :
-                evaluation.endReason === 'error' ? '执行错误' :
-                evaluation.endReason === 'completed' ? '正常完成' :
-                evaluation.endReason})
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-500">
+                ({evaluation.endReason === 'stopped' ? '用户中止' :
+                  evaluation.endReason === 'error' ? '执行错误' :
+                  evaluation.endReason === 'completed' ? '正常完成' :
+                  evaluation.endReason})
+              </span>
+              {/* 失败时显示详细错误信息 */}
+              {status === 'failed' && (
+                <>
+                  {/* errorMessage 优先显示 */}
+                  {evaluation.errorMessage && (
+                    <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded max-w-lg truncate cursor-help" title={evaluation.errorMessage}>
+                      {evaluation.errorMessage.length > 80 ? evaluation.errorMessage.substring(0, 80) + '...' : evaluation.errorMessage}
+                    </span>
+                  )}
+                  {/* endMessage 作为补充（当没有 errorMessage 时） */}
+                  {!evaluation.errorMessage && evaluation.endMessage && (
+                    <span className="text-xs text-red-600 bg-red-50 px-2 py-0.5 rounded max-w-lg truncate cursor-help" title={evaluation.endMessage}>
+                      {evaluation.endMessage.length > 80 ? evaluation.endMessage.substring(0, 80) + '...' : evaluation.endMessage}
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
           )}
         </div>
       </div>
