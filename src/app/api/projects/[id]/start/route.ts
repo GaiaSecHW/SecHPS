@@ -22,6 +22,7 @@ import { generateId, generateIndexedId } from '@/lib/id-generator';
 import { UnifiedWorkflowExecutionEngine, createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
 import { topologicalSortDAG } from '@/lib/workflow/topology-sort';
 import type { UnifiedExecutionCallbacks, NodeExecutionResult, WorkflowExecutionResult, ModelConfigForExecution, UnifiedNodeDefinition } from '@/lib/workflow/types';
+import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
 
 // 启动项目评估（SSE 流式响应）
 export async function POST(
@@ -973,30 +974,17 @@ export async function POST(
                       },
                     });
                     
-                    // 收集失败阶段的错误信息
-                    const failedPhasesInfo = result.phaseResults
-                      .filter(p => p.status === 'failed')
-                      .map(p => `Phase ${p.phaseNumber} (${p.phaseName})`)
-                      .join(', ');
-                    
-                    const errorMessage = result.status !== 'completed'
-                      ? `工作流未完成。失败阶段: ${failedPhasesInfo || '未知'}`
-                      : null;
-                    
-                    // 更新评估状态
-                    await prisma.evaluationSession.update({
-                      where: { id: evaluation.id },
-                      data: {
-                        status: result.status === 'completed' ? 'completed' : 'failed',
-                        completedAt: new Date(),
-                        totalInputTokens: result.totalInputTokens,
-                        totalOutputTokens: result.totalOutputTokens,
-                        totalTokens: result.totalTokens,
-                        endReason: result.status === 'completed' ? 'completed' : 'error',
-                        endMessage: errorMessage,
-                        errorMessage: errorMessage,
-                      },
-                    });
+                    // 使用统一评估完成服务
+                    const projectPath = project.projectPath || process.cwd();
+                    if (result.status === 'completed') {
+                      await completeEvaluationSuccess(evaluation.id, id, projectPath, `FSM: ${result.phaseResults.length} phases`, { input: result.totalInputTokens, output: result.totalOutputTokens });
+                    } else {
+                      const failedPhasesInfo = result.phaseResults
+                        .filter(p => p.status === 'failed')
+                        .map(p => `Phase ${p.phaseNumber} (${p.phaseName})`)
+                        .join(', ');
+                      await completeEvaluationFailed(evaluation.id, id, projectPath, `工作流未完成。失败阶段: ${failedPhasesInfo || '未知'}`);
+                    }
                     
                     // 发送评估完成事件
                     emitEvaluationComplete(evaluation.id, {
@@ -1004,7 +992,7 @@ export async function POST(
                       totalDuration: result.totalDuration,
                       totalTokens: result.totalTokens,
                       totalCost: result.totalCost,
-                      message: errorMessage || 'FSM 工作流执行完成',
+                      message: result.status === 'completed' ? 'FSM 工作流执行完成' : 'FSM 工作流执行失败',
                     });
                     
                     // 更新项目状态
@@ -1012,24 +1000,13 @@ export async function POST(
                       where: { id },
                       data: { status: result.status === 'completed' ? 'completed' : 'failed' },
                     });
-                    
-                    // 处理队列
-                    const { processQueue } = await import('@/services/evaluation-queue');
-                    processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '处理队列失败', { error: err }));
                   },
                   onWorkflowError: async (error) => {
                     logger.errorNoUser(LOG_MODULES.FSM, `FSM 工作流错误: ${error.message}`);
                     
-                    await prisma.evaluationSession.update({
-                      where: { id: evaluation.id },
-                      data: {
-                        status: 'failed',
-                        errorMessage: error.message,
-                        completedAt: new Date(),
-                        endReason: 'error',
-                        endMessage: error.message,
-                      },
-                    });
+                    // 使用统一评估完成服务
+                    const projectPath = project.projectPath || process.cwd();
+                    await completeEvaluationFailed(evaluation.id, id, projectPath, error.message);
                     
                     // 发送评估完成事件（失败）
                     emitEvaluationComplete(evaluation.id, {
@@ -1043,10 +1020,6 @@ export async function POST(
                       where: { id },
                       data: { status: 'failed' },
                     });
-                    
-                    // 处理队列
-                    const { processQueue } = await import('@/services/evaluation-queue');
-                    processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '处理队列失败', { error: err }));
                   },
                   onTokenUsage: (data) => {
                     logger.debug(LOG_MODULES.FSM, `[FSM Async] Token 使用:`, data);
@@ -1062,10 +1035,9 @@ export async function POST(
                       cumulativeOutputTokens: data.cumulativeOutputTokens,
                     });
                   },
-                }
-              );
-              
-              // 执行 FSM
+                });
+                
+                // 执行 FSM
               await fsmService.execute();
               
             } catch (error) {
@@ -1793,20 +1765,13 @@ dagCopyResult = await copySkillsToProject(
                   reason: result.endReason || '工作流完成',
                 });
                 
-                // 更新评估状态
-                await prisma.evaluationSession.update({
-                  where: { id: dagEvaluation.id },
-                  data: {
-                    status: result.status === 'completed' ? 'completed' : 'failed',
-                    completedAt: new Date(),
-                    totalInputTokens: result.totalInputTokens,
-                    totalOutputTokens: result.totalOutputTokens,
-                    totalTokens: (result.totalInputTokens || 0) + (result.totalOutputTokens || 0),
-                    endReason: result.status === 'completed' ? 'completed' : 'error',
-                    endMessage: result.endMessage || 'DAG 工作流执行完成',
-                    errorMessage: result.status !== 'completed' ? result.endMessage : null,
-                  },
-                });
+                // 使用统一评估完成服务
+                const projectPath = project.projectPath || process.cwd();
+                if (result.status === 'completed') {
+                  await completeEvaluationSuccess(dagEvaluation.id, id, projectPath, `DAG: ${sortedNodes.length} nodes`, { input: result.totalInputTokens, output: result.totalOutputTokens });
+                } else {
+                  await completeEvaluationFailed(dagEvaluation.id, id, projectPath, result.endMessage || 'DAG 执行失败', result.endReason);
+                }
                 
                 // 更新项目状态
                 await prisma.project.update({
@@ -1821,26 +1786,14 @@ dagCopyResult = await copySkillsToProject(
                   totalTokens: (result.totalInputTokens || 0) + (result.totalOutputTokens || 0),
                   message: result.endMessage || 'DAG 工作流执行完成',
                 });
-                
-                // 处理队列
-                const { processQueue } = await import('@/services/evaluation-queue');
-                processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 处理队列失败', { error: err }));
               },
               
               onWorkflowError: async (error) => {
                 logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 工作流错误', { error: error.message });
                 
-                // 更新评估状态
-                await prisma.evaluationSession.update({
-                  where: { id: dagEvaluation.id },
-                  data: {
-                    status: 'failed',
-                    errorMessage: error.message,
-                    completedAt: new Date(),
-                    endReason: 'error',
-                    endMessage: error.message,
-                  },
-                });
+                // 使用统一评估完成服务
+                const projectPath = project.projectPath || process.cwd();
+                await completeEvaluationFailed(dagEvaluation.id, id, projectPath, error.message);
                 
                 // 更新项目状态
                 await prisma.project.update({
@@ -1854,10 +1807,6 @@ dagCopyResult = await copySkillsToProject(
                   error: error.message,
                   message: 'DAG 工作流执行失败',
                 });
-                
-                // 处理队列
-                const { processQueue } = await import('@/services/evaluation-queue');
-                processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 处理队列失败', { error: err }));
               },
             });
             

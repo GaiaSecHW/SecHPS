@@ -9,6 +9,7 @@ import { isAdmin } from '@/lib/api-auth';
 import { createFSMWorkflowExecutionService, type FSMExecutionCallbacks } from '@/lib/fsm';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { abortAgent, isAgentRunning } from '@/lib/agent-registry';
+import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
 
 /** Get active model config */
 async function getModelConfig() {
@@ -19,7 +20,7 @@ async function getModelConfig() {
 }
 
 /** Create FSM callbacks */
-function createCallbacks(id: string): FSMExecutionCallbacks {
+function createCallbacks(id: string, projectId: string, projectPath: string): FSMExecutionCallbacks {
   return {
     onPhaseStart: async (p, n) => logger.debug(LOG_MODULES.FSM, `Phase ${p} (${n}) start`),
     onPhaseChunk: () => {},
@@ -29,8 +30,18 @@ function createCallbacks(id: string): FSMExecutionCallbacks {
     onAgentZoneStart: async (a) => logger.info(LOG_MODULES.FSM, `AgentZone: ${a.join(',')}`),
     onAgentZoneProgress: (a, s) => logger.debug(LOG_MODULES.FSM, `Agent ${a}: ${s}`),
     onAgentZoneComplete: async (r) => logger.info(LOG_MODULES.FSM, `AgentZone done`, { details: r }),
-    onWorkflowComplete: async (r) => { logger.info(LOG_MODULES.FSM, `FSM done`, { details: r }); await prisma.evaluationSession.update({ where: { id }, data: { status: r.status === 'completed' ? 'completed' : 'failed', completedAt: new Date(), summary: `FSM: ${r.phaseResults.length} phases, ${r.agentZoneResults.length} agents, ${r.generatedReports.length} reports` } }); },
-    onWorkflowError: (e) => { logger.errorNoUser(LOG_MODULES.FSM, `FSM error: ${e.message}`); prisma.evaluationSession.update({ where: { id }, data: { status: 'failed', errorMessage: e.message, completedAt: new Date() } }).catch(() => {}); },
+    onWorkflowComplete: async (r) => {
+      logger.info(LOG_MODULES.FSM, `FSM done`, { details: r });
+      if (r.status === 'completed') {
+        await completeEvaluationSuccess(id, projectId, projectPath, `FSM: ${r.phaseResults.length} phases, ${r.agentZoneResults.length} agents, ${r.generatedReports.length} reports`, { input: r.totalInputTokens, output: r.totalOutputTokens });
+      } else {
+        await completeEvaluationFailed(id, projectId, projectPath, 'FSM 执行失败');
+      }
+    },
+    onWorkflowError: (e) => {
+      logger.errorNoUser(LOG_MODULES.FSM, `FSM error: ${e.message}`);
+      completeEvaluationFailed(id, projectId, projectPath, e.message).catch(() => {});
+    },
   };
 }
 
@@ -68,9 +79,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const fsmService = createFSMWorkflowExecutionService(
       { evaluationSessionId: id, projectId: evaluation.projectId, workflowId, fsmTemplateId, workspacePath, maxIterationsPerPhase, maxCostPerPhase, modelConfig },
-      createCallbacks(id)
+      createCallbacks(id, evaluation.projectId, workspacePath)
     );
-    fsmService.execute().catch(async (e) => { logger.errorNoUser(LOG_MODULES.FSM, `FSM failed: ${e}`); await prisma.evaluationSession.update({ where: { id }, data: { status: 'failed', errorMessage: String(e), completedAt: new Date() } }); });
+    fsmService.execute().catch(async (e) => {
+      logger.errorNoUser(LOG_MODULES.FSM, `FSM failed: ${e}`);
+      await completeEvaluationFailed(id, evaluation.projectId, workspacePath, String(e));
+    });
 
     return NextResponse.json({ success: true, message: 'FSM workflow started', evaluationId: id, config: { fsmTemplateId, fsmTemplateName: fsmTemplate.name, maxIterationsPerPhase, maxCostPerPhase, model: modelConfig.model, workspacePath } });
   } catch (error) {
