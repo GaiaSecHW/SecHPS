@@ -34,6 +34,12 @@ const DIR_COPY_RULES = {
   // data 目录：运行时不需要，可以排除
   'data': {
     mode: 'none',  // 不复制
+  },  // data 目录：运行时不需要，可以排除
+  'dataXXX': {
+    mode: 'none',  // 不复制
+  },
+    'backups': {
+    mode: 'none',  // 不复制
   },
   // prisma: 只复制必要文件（schema + 数据库）
   'prisma': {
@@ -136,6 +142,31 @@ function main() {
     console.error('❌ Standalone 目录不存在，请先运行 npm run build');
     process.exit(1);
   }
+
+  // 第一步：清理不应该存在的目录（Next.js 可能错误复制了）
+  console.log('🧹 清理不应该存在的目录...\n');
+  const CLEANUP_DIRS = [
+    'prisma_prod',
+    'dataXXX',
+    'backups',
+    'outputs',
+    'data',
+    'dev.db',
+    'prod_dev.db',
+  ];
+  
+  for (const dirName of CLEANUP_DIRS) {
+    const fullPath = path.join(STANDALONE_DIR, dirName);
+    if (fs.existsSync(fullPath)) {
+      if (fs.statSync(fullPath).isDirectory()) {
+        fs.rmSync(fullPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(fullPath);
+      }
+      console.log(`🗑️  已删除: ${dirName}`);
+    }
+  }
+  console.log('');
 
   let copiedCount = 0;
 

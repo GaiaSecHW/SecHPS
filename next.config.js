@@ -28,10 +28,18 @@ const nextConfig = {
       'src/examples/**',
       '.claude/**',
       'data/**',
+      'dataXXX/**',
+      'backups/**',
+      'outputs/**',
       'project/**',
       'test-results/**',
       'test-outputs/**',
       '.omc/**',
+      'prisma_prod/**',
+      'dev.db',
+      'prod_dev.db',
+      // 根目录多余数据库文件
+      '*.db',
       // 源代码不需要打包（已编译到 .next/server）
       'src/**',
       // 根目录测试相关
