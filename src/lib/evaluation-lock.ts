@@ -69,6 +69,7 @@ export function clearAllLocks(): void {
 /**
  * 恢复锁定状态（程序重启时调用）
  * 从数据库读取所有活跃评估，写回 Map
+ * 注意：如果同一项目有多个活跃评估，只保留最新的一个，并记录警告
  * @param prismaClient Prisma 客户端实例
  */
 export async function restoreLocksFromDatabase(prismaClient: any): Promise<void> {
@@ -82,18 +83,42 @@ export async function restoreLocksFromDatabase(prismaClient: any): Promise<void>
         id: true,
         projectId: true,
         startedAt: true,
+        status: true,
+      },
+      orderBy: {
+        startedAt: 'desc',  // 按启动时间降序，确保同一项目时保留最新的
       },
     });
     
-    // 写回 Map
+    // 检测同一项目的多评估情况
+    const projectEvalCounts = new Map<string, number>();
     for (const session of activeEvaluations) {
+      const count = projectEvalCounts.get(session.projectId) || 0;
+      projectEvalCounts.set(session.projectId, count + 1);
+    }
+    
+    // 记录警告：同一项目有多个活跃评估
+    for (const [projectId, count] of projectEvalCounts.entries()) {
+      if (count > 1) {
+        console.warn(`[EvaluationLock] 项目 ${projectId} 有 ${count} 个活跃评估，将只锁定最新的一个`);
+      }
+    }
+    
+    // 写回 Map（由于已按 startedAt 降序排序，后面的同项目评估会跳过）
+    const addedProjects = new Set<string>();
+    for (const session of activeEvaluations) {
+      if (addedProjects.has(session.projectId)) {
+        // 该项目已添加，跳过（避免覆盖）
+        continue;
+      }
       projectLockMap.set(session.projectId, {
         evaluationId: session.id,
         startedAt: session.startedAt || new Date(),
       });
+      addedProjects.add(session.projectId);
     }
     
-    console.log(`[EvaluationLock] 已从数据库恢复 ${activeEvaluations.length} 个锁定`);
+    console.log(`[EvaluationLock] 已从数据库恢复 ${addedProjects.size} 个锁定（共 ${activeEvaluations.length} 个评估）`);
   } catch (error) {
     console.error('[EvaluationLock] 恢复锁定状态失败:', error);
   }

@@ -80,6 +80,12 @@ export class UnifiedWorkflowExecutionEngine {
   
   /** 当前节点的 Skill IDs */
   private currentSkillIds: string[] = [];
+  
+  /** 当前正在执行的 Skill 信息（用于关联 Agent 工具） */
+  private currentExecutingSkills: Map<string, { executionId: string; skillId: string; skillName: string; toolUseId: string; startTime: number }> = new Map();
+  
+  /** Skill 名称到 executionId 的映射（用于 Agent 工具结果匹配） */
+  private skillNameToExecutionId: Map<string, string> = new Map();
 
   constructor(config: UnifiedExecutionConfig, callbacks: UnifiedExecutionCallbacks) {
     this.config = config;
@@ -317,6 +323,13 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     console.log(`[executeNode] node.skills: ${JSON.stringify(node.skills)}`);
     console.log(`[executeNode] node.vulnerabilityCategories: ${JSON.stringify(node.vulnerabilityCategories)}`);
 
+    // 清空本节点的 Skill 记录列表（每个节点独立记录）
+    this.currentSkillExecutionIds = [];
+    this.currentSkillIds = [];
+    this.currentExecutingSkills.clear();
+    this.skillNameToExecutionId.clear();
+    console.log(`[executeNode] 已清空 Skill 记录列表，准备记录本节点的 Skills`);
+
     // 调用节点开始回调
     await this.callbacks.onNodeStart(nodeIndex, nodeId, nodeName);
 
@@ -331,10 +344,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     // 创建节点执行记录（status='running'）- 让 token 更新能找到记录
     await this.createNodeExecutionRecord(node, nodeIndex, modelConfig);
     
-    // 为节点的 skills 创建 SkillExecution 记录
-    if (node.skills && node.skills.length > 0) {
-      await this.createSkillExecutions(node, nodeIndex);
-    }
+    // 注意：SkillExecution 记录在 Skill 工具调用时自动创建，不需要预先创建
 
     // 重试机制
     const maxRetries = this.config.maxRetries;
@@ -412,8 +422,45 @@ callbacks: {
               }).catch(err => console.error('[executeNode] 保存思考失败:', err));
             },
             onToolCall: (toolUseId, name, args) => {
-              // 子Agent交互日志
+              // 检测 Skill 工具调用，立即创建执行记录（startedAt = 精确时间）
+              if (name === 'Skill') {
+                // 获取 skill 名称（支持多种参数格式）
+                const skillName = (args as any)?.skill || (args as any)?.skill_name || (args as any)?.name;
+                if (skillName && typeof skillName === 'string') {
+                  console.log(`[executeNode] 检测到 Skill 调用: ${skillName}, toolUseId=${toolUseId}`);
+                  
+                  // 立即创建 SkillExecution 记录（startedAt = 精确时间）
+                  this.createSingleSkillExecution(skillName, toolUseId, nodeIndex, nodeName || 'unknown')
+                    .catch((err: Error) => console.error(`[executeNode] 创建 Skill 执行记录失败:`, err));
+                }
+              }
+              
+              // 检测 Agent 工具调用（子 Agent 执行 Skill），记录关联
               if (name === 'Agent' || name === 'task') {
+                const description = (args as any)?.description || '';
+                // 从 description 中提取 skill 名称（格式：执行xxx安全检测）
+                const skillMatch = description.match(/执行\s*([a-zA-Z0-9_-]+)\s*安全检测/);
+                if (skillMatch && skillMatch[1]) {
+                  const skillName = skillMatch[1];
+                  console.log(`[executeNode] 检测到 Agent 执行 Skill: ${skillName}, toolUseId=${toolUseId}`);
+                  
+                  // 根据 skill 名称找到对应的 SkillExecution
+                  const executionId = this.skillNameToExecutionId.get(skillName);
+                  const skillInfo = executionId ? this.currentExecutingSkills.get(skillName) : null;
+                  
+                  if (executionId && skillInfo) {
+                    // 记录 Agent toolUseId 和 SkillExecution 的关联
+                    this.currentExecutingSkills.set(toolUseId, {
+                      executionId,
+                      skillId: skillInfo.skillId,
+                      skillName,
+                      toolUseId,
+                      startTime: Date.now()
+                    });
+                  }
+                }
+                
+                // 子Agent交互日志
                 console.log('\n' + '='.repeat(80));
                 console.log('[子Agent交互] 工具调用:', name, toolUseId);
                 console.log('[子Agent交互] 参数:', JSON.stringify(args, null, 2));
@@ -430,6 +477,23 @@ callbacks: {
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
             onToolResult: (toolUseId, content, isError) => {
+              // 检测 Agent 工具结果（子 Agent 完成 = Skill 执行完成）
+              const executingSkill = this.currentExecutingSkills.get(toolUseId);
+              if (executingSkill) {
+                const skillName = executingSkill.skillName;
+                console.log(`[executeNode] Agent 工具返回，Skill ${skillName} 执行完成, toolUseId=${toolUseId}`);
+                
+                // 根据 skill 名称找到对应的 SkillExecution 并完成
+                const executionId = this.skillNameToExecutionId.get(skillName);
+                if (executionId) {
+                  this.completeSingleSkillExecutionByAgent(executionId, toolUseId, content, isError || false)
+                    .catch((err: Error) => console.error(`[executeNode] 完成 Skill 执行记录失败:`, err));
+                }
+                
+                // 清除关联记录
+                this.currentExecutingSkills.delete(toolUseId);
+              }
+              
               // 子Agent交互日志
               console.log('\n' + '='.repeat(80));
               console.log('[子Agent交互] 工具结果:', toolUseId, 'isError:', isError);
@@ -1365,16 +1429,26 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     this.currentSkillExecutionIds = [];
     this.currentSkillIds = [];
     
-    for (const skillName of skills) {
+    console.log(`[createSkillExecutions] 节点 ${node.label} 的 skills: ${JSON.stringify(skills)}`);
+    
+    for (const skillIdOrName of skills) {
       try {
-        // 查找 Skill ID
-        const skill = await prisma.skill.findFirst({
-          where: { name: skillName, isLatest: true },
+        // 尝试多种查找方式：skillId（精确匹配）或 skillName（模糊匹配）
+        let skill = await prisma.skill.findUnique({
+          where: { id: skillIdOrName },
           select: { id: true, name: true, displayName: true },
         });
         
+        // 如果用 ID 找不到，尝试用 name 查找
         if (!skill) {
-          console.log(`[createSkillExecutions] Skill 未找到: ${skillName}`);
+          skill = await prisma.skill.findFirst({
+            where: { name: skillIdOrName, isLatest: true },
+            select: { id: true, name: true, displayName: true },
+          });
+        }
+        
+        if (!skill) {
+          console.warn(`[createSkillExecutions] Skill 未找到: ${skillIdOrName}`);
           continue;
         }
         
@@ -1401,9 +1475,9 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         this.currentSkillExecutionIds.push(executionId);
         this.currentSkillIds.push(skill.id);
         
-        console.log(`[createSkillExecutions] Skill 执行记录已创建: ${skillName} (${skill.displayName}), executionId=${executionId}`);
+        console.log(`[createSkillExecutions] Skill 执行记录已创建: ${skill.name} (${skill.displayName}), executionId=${executionId}`);
       } catch (error) {
-        console.error(`[createSkillExecutions] 创建 Skill 执行记录失败: ${skillName}`, error);
+        console.error(`[createSkillExecutions] 创建 Skill 执行记录失败: ${skillIdOrName}`, error);
       }
     }
     
@@ -1411,9 +1485,148 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
   }
 
   /**
-   * 完成 SkillExecution 记录
+   * 创建单个 Skill 执行记录（Skill 工具调用时立即创建，精确时间）
+   */
+  private async createSingleSkillExecution(
+    skillName: string,
+    toolUseId: string,
+    nodeIndex: number,
+    nodeName: string
+  ): Promise<void> {
+    try {
+      // 查找 Skill
+      let skill = await prisma.skill.findFirst({
+        where: { name: skillName, isLatest: true },
+        select: { id: true, name: true, displayName: true },
+      });
+      
+      if (!skill) {
+        // 尝试用 displayName 查找
+        skill = await prisma.skill.findFirst({
+          where: { displayName: skillName, isLatest: true },
+          select: { id: true, name: true, displayName: true },
+        });
+      }
+      
+      if (!skill) {
+        console.warn(`[createSingleSkillExecution] Skill 未找到: ${skillName}`);
+        return;
+      }
+      
+      // 创建 SkillExecution 记录
+      const executionId = `sklexec-${this.config.evaluationSessionId}-${nodeIndex}-${toolUseId}`;
+      await prisma.skillExecution.create({
+        data: {
+          id: executionId,
+          skillId: skill.id,
+          projectId: this.config.projectId,
+          evaluationId: this.config.evaluationSessionId,
+          input: JSON.stringify({ nodeName, nodeIndex, skillName }),
+          status: 'running',
+          startedAt: new Date(),
+        },
+      });
+      
+      // 更新 Skill 的 execCount
+      await prisma.skill.update({
+        where: { id: skill.id },
+        data: { execCount: { increment: 1 }, updatedAt: new Date() },
+      });
+      
+      // 记录 Skill 名称到 executionId 的映射（用于 Agent 工具结果匹配）
+      this.skillNameToExecutionId.set(skill.name, executionId);
+      this.currentExecutingSkills.set(skill.name, {
+        executionId,
+        skillId: skill.id,
+        skillName: skill.name,
+        toolUseId,
+        startTime: Date.now()
+      });
+      
+      // 同时加入列表（节点完成时统计）
+      this.currentSkillExecutionIds.push(executionId);
+      this.currentSkillIds.push(skill.id);
+      
+      console.log(`[createSingleSkillExecution] Skill 执行记录已创建: ${skill.name}, executionId=${executionId}, startedAt=${new Date().toISOString()}`);
+    } catch (error) {
+      console.error(`[createSingleSkillExecution] 创建失败: ${skillName}`, error);
+    }
+  }
+
+  /**
+   * Agent 工具返回时完成对应的 SkillExecution（精确时间）
+   * 
+   * 当 Agent 工具结果返回时，根据 toolUseId 找到对应的 SkillExecution 并完成
+   * completedAt = Agent 工具结果返回时间（子 Agent 完成时间）
+   */
+  private async completeSingleSkillExecutionByAgent(
+    executionId: string,
+    toolUseId: string,
+    content: any,
+    isError: boolean
+  ): Promise<void> {
+    try {
+      const completedAt = new Date();
+      
+      // 获取 startedAt 计算 duration
+      const existing = await prisma.skillExecution.findUnique({
+        where: { id: executionId },
+        select: { startedAt: true, skillId: true },
+      });
+      
+      if (!existing) {
+        console.warn(`[completeSingleSkillExecutionByAgent] SkillExecution 不存在: ${executionId}`);
+        return;
+      }
+      
+      const duration = existing.startedAt
+        ? completedAt.getTime() - new Date(existing.startedAt).getTime()
+        : 0;
+      
+      // 解析结果中的漏洞数量
+      const resultStr = typeof content === 'string' ? content : JSON.stringify(content);
+      const findingsMatch = resultStr.match(/发现\s*(\d+)\s*个|found\s*(\d+)\s*vulnerabilit/i);
+      const findingsCount = findingsMatch ? (parseInt(findingsMatch[1]) || parseInt(findingsMatch[2]) || 0) : 0;
+      
+      // 更新 SkillExecution
+      await prisma.skillExecution.update({
+        where: { id: executionId },
+        data: {
+          status: isError ? 'failed' : 'completed',
+          completedAt,
+          duration,
+          output: resultStr.substring(0, 500),
+          findingsCount,
+          updatedAt: completedAt,
+        },
+      });
+      
+      // 更新 Skill 的 vulnerabilityCount
+      if (findingsCount > 0 && existing.skillId) {
+        await prisma.skill.update({
+          where: { id: existing.skillId },
+          data: { vulnerabilityCount: { increment: findingsCount }, updatedAt: completedAt },
+        });
+      }
+      
+      console.log(`[completeSingleSkillExecutionByAgent] Skill 执行完成: executionId=${executionId}, findings=${findingsCount}, duration=${duration}ms, completedAt=${completedAt.toISOString()}`);
+      
+      // 从列表中移除（避免节点完成时重复处理）
+      const index = this.currentSkillExecutionIds.indexOf(executionId);
+      if (index > -1) {
+        this.currentSkillExecutionIds.splice(index, 1);
+        this.currentSkillIds.splice(index, 1);
+      }
+    } catch (error) {
+      console.error(`[completeSingleSkillExecutionByAgent] 完成失败:`, error);
+    }
+  }
+
+  /**
+   * 完成 SkillExecution 记录（节点完成时统一完成所有记录）
    * 
    * 统计该节点发现的漏洞数量，更新 findingsCount
+   * completedAt = 节点完成时间（Skill 实际执行结束时间）
    */
   private async completeSkillExecutions(nodeIndex: number): Promise<void> {
     if (this.currentSkillExecutionIds.length === 0) {

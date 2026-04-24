@@ -156,7 +156,7 @@ function SessionDetailContent({
   const [isTodosExpanded, setIsTodosExpanded] = useState(false);  // 任务列表默认收缩
   const [selectedSessionVuln, setSelectedSessionVuln] = useState<any>(null);
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
-  const [isNodeMessagesExpanded, setIsNodeMessagesExpanded] = useState(false); // 节点消息区域默认收缩
+  const [isNodeMessagesExpanded, setIsNodeMessagesExpanded] = useState(true); // 节点消息区域默认展开（方便用户查看）
   const [isChildrenExpanded, setIsChildrenExpanded] = useState(false);
   const [isRalphLoopExpanded, setIsRalphLoopExpanded] = useState(false);
   const [vulnerabilitySummary, setVulnerabilitySummary] = useState<any>(null);
@@ -408,22 +408,8 @@ function SessionDetailContent({
   const fetchNodeData = async (nodeId: string, nodeStatus?: string) => {
     if (!evaluationId) return;
 
-    // 如果节点是 pending 状态，不加载任何数据
-    if (nodeStatus === 'pending') {
-      console.log('[NodeData] Node is pending, skip loading');
-      setNodeMessages([]);
-      setTodos([]);
-      setChildrenSessions([]);
-      setPreloadedAgentMessages({});
-      return;
-    }
-
-    // 如果节点已完成且已加载过，跳过重复加载
-    if (nodeStatus === 'completed' && loadedCompletedNodesRef.current.has(nodeId)) {
-      console.log('[NodeData] Node already loaded (completed), skip');
-      return;
-    }
-
+    // 即使节点是 pending 状态，也尝试加载（可能有历史数据）
+    // 只有真正没有数据时才显示空
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
@@ -451,7 +437,7 @@ function SessionDetailContent({
       setPreloadedAgentMessages(data.agentMessages || {});
       
       // 如果节点已完成，标记为已加载（不再重复）
-      if (nodeStatus === 'completed') {
+      if (nodeStatus === 'completed' || (data.messages && data.messages.length > 0)) {
         loadedCompletedNodesRef.current.add(nodeId);
       }
     } catch (err) {
@@ -505,25 +491,15 @@ function SessionDetailContent({
       // 选择节点
       setSelectedNodeId(nodeId);
       
-      // 根据状态决定加载策略
-      if (nodeStatus === 'pending') {
-        // 等待状态：不加载
-        setLoadingNodeMessages(false);
-        setNodeMessages([]);
-        setTodos([]);
-        setChildrenSessions([]);
-        setPreloadedAgentMessages({});
-      } else if (nodeStatus === 'running') {
-        // 运行中：加载一次 + 启动轮询
-        setLoadingNodeMessages(true);
-        await fetchNodeData(nodeId, 'running');
-        setLoadingNodeMessages(false);
+      // 始终尝试加载节点数据（即使状态是 pending，可能有历史数据）
+      setLoadingNodeMessages(true);
+      await fetchNodeData(nodeId, nodeStatus);
+      setLoadingNodeMessages(false);
+      
+      // 只有运行中的节点才启动轮询
+      if (nodeStatus === 'running') {
         startNodePolling(nodeId);
       } else {
-        // 已完成/失败：只加载一次，不轮询
-        setLoadingNodeMessages(true);
-        await fetchNodeData(nodeId, nodeStatus);
-        setLoadingNodeMessages(false);
         stopNodePolling();
       }
     }
@@ -1250,12 +1226,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-medium text-gray-700">
                           执行进度: 
-                          <span className="text-orange-600 ml-1">{nodeProgress.completed}</span>
+                          <span className="text-orange-600 ml-1">{nodeProgress.completed + (nodeProgress.skipped || 0)}</span>
                           <span className="text-gray-400"> / </span>
                           <span className="text-gray-900">{nodeProgress.total}</span>
                           <span className="text-gray-500 ml-1">节点</span>
                         </span>
-                        {/* 进度条 */}
+                        {/* 进度条 - 完成和跳过都算作已完成 */}
                         <div className="flex-1 max-w-xs">
                           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div 

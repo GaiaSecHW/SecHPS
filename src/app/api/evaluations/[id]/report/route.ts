@@ -217,16 +217,7 @@ export async function GET(
       logger.errorNoUser(LOG_MODULES.EVALUATION, '获取 Skills 执行记录失败:', { details: { error: String(err) } });
     }
     
-    // 3. 获取漏洞分类关联链
-    let vulnerabilityChain: any[] = [];
-    try {
-      vulnerabilityChain = await getVulnerabilityChain(evaluation.projectId, id);
-      logger.debug(LOG_MODULES.EVALUATION, '漏洞分类关联链:', { details: { count: vulnerabilityChain.length } });
-    } catch (err) {
-      logger.errorNoUser(LOG_MODULES.EVALUATION, '获取漏洞分类关联链失败:', { details: { error: String(err) } });
-    }
-    
-    // 4. 获取漏洞发现汇总（带分页和筛选）
+    // 3. 获取漏洞发现汇总（带分页和筛选）
     let vulnerabilitySummary: any = {
       total: 0,
       byType: [],
@@ -286,7 +277,6 @@ export async function GET(
         error: e.error,
       })),
       skillsStats,
-      vulnerabilityChain,
       vulnerabilitySummary,
     });
     
@@ -297,147 +287,6 @@ export async function GET(
       { status: 500 }
     );
   }
-}
-
-/**
- * 获取漏洞分类关联链
- * VulnerabilityCategory → VulnerabilityPattern → Skills
- */
-async function getVulnerabilityChain(projectId: string, evaluationId: string) {
-  // 获取本次评估执行的 Skills
-  const executedSkills = await prisma.skillExecution.findMany({
-    where: { evaluationId },
-    select: { skillId: true },
-  });
-  const skillIds = [...new Set(executedSkills.map(e => e.skillId))];
-  
-  if (skillIds.length === 0) {
-    return [];
-  }
-  
-  // 获取 Skills 关联的漏洞模式
-  const skills = await prisma.skill.findMany({
-    where: { id: { in: skillIds } },
-    select: {
-      id: true,
-      name: true,
-      displayName: true,
-      severity: true,
-      vulnerabilityPatternId: true,
-    },
-  });
-  
-  const patternIds = [...new Set(skills.filter(s => s.vulnerabilityPatternId).map(s => s.vulnerabilityPatternId))];
-  
-  if (patternIds.length === 0) {
-    return skills.map(s => ({
-      skillId: s.id,
-      skillName: s.name,
-      skillDisplayName: s.displayName,
-      skillSeverity: s.severity,
-      executed: true,
-    }));
-  }
-  
-  // 获取漏洞模式关联的分类
-  const patterns = await prisma.vulnerabilityPattern.findMany({
-    where: { id: { in: patternIds as string[] } },
-    select: {
-      id: true,
-      name: true,
-      displayName: true,
-      categoryId: true,
-    },
-  });
-  
-  const categoryIds = [...new Set(patterns.filter(p => p.categoryId).map(p => p.categoryId))];
-  
-  let categories: any[] = [];
-  if (categoryIds.length > 0) {
-    categories = await prisma.vulnerabilityCategory.findMany({
-      where: { id: { in: categoryIds as string[] } },
-      select: {
-        id: true,
-        name: true,
-        label: true,
-      },
-    });
-  }
-  
-  // 构建关联链
-  const chain: Array<{
-    categoryId: string | null;
-    categoryName: string;
-    patternId: string | null;
-    patternName: string;
-    skills: Array<{
-      skillId: string;
-      skillName: string;
-      skillDisplayName: string;
-      skillSeverity: string | null;
-      executed: boolean;
-    }>;
-  }> = [];
-  
-  // 按 Category → Pattern 分组
-  const categoryMap = new Map(categories.map(c => [c.id, c]));
-  const patternMap = new Map(patterns.map(p => [p.id, p]));
-  
-  const groupedByPattern = new Map<string, any[]>();
-  
-  for (const skill of skills) {
-    const patternId = skill.vulnerabilityPatternId;
-    if (!patternId) {
-      // 无关联模式的 Skill
-      groupedByPattern.set('__no_pattern__', [
-        ...(groupedByPattern.get('__no_pattern__') || []),
-        {
-          skillId: skill.id,
-          skillName: skill.name,
-          skillDisplayName: skill.displayName,
-          skillSeverity: skill.severity,
-          executed: true,
-        },
-      ]);
-    } else {
-      groupedByPattern.set(patternId, [
-        ...(groupedByPattern.get(patternId) || []),
-        {
-          skillId: skill.id,
-          skillName: skill.name,
-          skillDisplayName: skill.displayName,
-          skillSeverity: skill.severity,
-          executed: true,
-        },
-      ]);
-    }
-  }
-  
-  // 构建链
-  for (const [patternId, patternSkills] of groupedByPattern) {
-    if (patternId === '__no_pattern__') {
-      chain.push({
-        categoryId: null,
-        categoryName: '其他',
-        patternId: null,
-        patternName: '未分类',
-        skills: patternSkills,
-      });
-    } else {
-      const pattern = patternMap.get(patternId);
-      const category = pattern?.categoryId ? categoryMap.get(pattern.categoryId) : null;
-      
-      chain.push({
-        categoryId: category?.id || null,
-        categoryName: category?.label || category?.name || '未知分类',
-        patternId,
-        patternName: pattern?.displayName || pattern?.name || '未知模式',
-        skills: patternSkills,
-      });
-    }
-  }
-  
-  return chain;
 }
 
 /**

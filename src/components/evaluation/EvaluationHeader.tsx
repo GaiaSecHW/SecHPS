@@ -61,6 +61,8 @@ function StatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'running':
       return <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+    case 'preparing':
+      return <Loader2 className="w-4 h-4 text-orange-500 animate-spin" />;
     case 'completed':
       return <CheckCircle2 className="w-4 h-4 text-green-500" />;
     case 'failed':
@@ -112,10 +114,12 @@ export function EvaluationHeader({
                 <StatusIcon status={status} />
                 <span className={
                   status === 'running' ? 'text-blue-500' :
+                  status === 'preparing' ? 'text-orange-500' :
                   status === 'completed' ? 'text-green-500' :
                   status === 'failed' ? 'text-red-500' : 'text-gray-500'
                 }>
                   {status === 'running' ? '运行中' :
+                   status === 'preparing' ? '准备中' :
                    status === 'completed' ? '已完成' :
                    status === 'failed' ? '失败' :
                    status === 'cancelled' ? '已取消' : status}
@@ -138,8 +142,8 @@ export function EvaluationHeader({
             </button>
           )}
           
-          {/* 运行中操作 */}
-          {status === 'running' && (
+          {/* 运行中操作（包括准备中） */}
+          {(status === 'running' || status === 'preparing') && (
             <>
               {onAskProgress && (
                 <button
@@ -167,7 +171,7 @@ export function EvaluationHeader({
           )}
           
           {/* 删除 */}
-          {status !== 'running' && onDelete && (
+          {status !== 'running' && status !== 'preparing' && onDelete && (
             <button
               onClick={onDelete}
               className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 hover:bg-red-50 rounded border border-red-200"

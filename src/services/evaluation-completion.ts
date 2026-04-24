@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { parseAndSaveVulnerabilities } from '@/lib/vulnerability/parser';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { unlockProject } from '@/lib/evaluation-lock';
+import { updateSkillExecutionFindingsFromVulnerabilities, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
 
 const LOG_PREFIX = '[EvaluationCompletion]';
 
@@ -100,11 +101,40 @@ export async function completeEvaluation(
       if (result.errors.length > 0) {
         logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 漏洞入库错误`, { errors: result.errors });
       }
+      
+      // 漏洞入库后，更新 Skill 执行记录的 findingsCount
+      if (result.saved > 0) {
+        try {
+          const skillUpdateResult = await updateSkillExecutionFindingsFromVulnerabilities({
+            evaluationId,
+          });
+          logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Skill findingsCount 已更新`, {
+            updatedSkills: skillUpdateResult.updated,
+            totalVulns: skillUpdateResult.totalVulns,
+          });
+        } catch (skillUpdateError) {
+          logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Skill findingsCount 更新失败`, { error: skillUpdateError });
+        }
+      }
     } catch (vulnError) {
       // vulnerabilities.json 不存在或解析失败 - 不阻塞流程
       const errorMsg = vulnError instanceof Error ? vulnError.message : String(vulnError);
       vulnError = errorMsg;
       logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 漏洞入库跳过`, { error: errorMsg });
+    }
+    
+    // 清理未完成的 Skill 执行记录
+    try {
+      const cleanedCount = await completeAllPendingSkillExecutions({
+        evaluationId,
+        status: 'completed',
+        reason: '评估正常结束',
+      });
+      if (cleanedCount > 0) {
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 清理了 ${cleanedCount} 个未完成的 Skill 执行记录`);
+      }
+    } catch (cleanupError) {
+      logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Skill 执行记录清理失败`, { error: cleanupError });
     }
   }
 

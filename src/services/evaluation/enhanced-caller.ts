@@ -219,7 +219,8 @@ export class EnhancedEvaluationCaller {
         
         // 检测 Skill 工具调用，创建执行记录并更新统计
         if (name === 'Skill' && this.currentEvaluationId) {
-          const skillName = (input as any)?.skill_name || (input as any)?.name;
+          // 支持多种参数格式: skill, skill_name, skill_id, name
+          const skillName = (input as any)?.skill || (input as any)?.skill_name || (input as any)?.skill_id || (input as any)?.name;
           if (skillName) {
             console.log(`[EnhancedCaller] 检测到 Skill 调用: ${skillName}`);
             try {
@@ -420,6 +421,7 @@ export class EnhancedEvaluationCaller {
                 nodeLabel: this.currentWorkflowNodeId,  // 临时使用 ID 作为 label
                 nodeType: 'task',
                 status: 'running',
+                startedAt: new Date(),  // 添加：节点启动时间
                 opencodeSessionId: sessionId,
                 updatedAt: new Date(),
               },

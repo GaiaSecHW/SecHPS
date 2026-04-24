@@ -165,10 +165,12 @@ export async function POST(
     // ========================================
     
     // SSE 重连和队列启动不需要检查
+    let evaluationIdForLock: string | null = null;  // 用于锁定的 evaluationId
+    
     if (!isQueuedStart && !reconnectEvaluationId && !queuedEvaluationId) {
       // 尝试锁定项目
-      const evaluationId = generateId('eval');
-      const locked = await lockProject(id, evaluationId);
+      evaluationIdForLock = generateId('eval');
+      const locked = await lockProject(id, evaluationIdForLock);
       
       if (!locked) {
         // 项目已被锁定，返回错误
@@ -183,8 +185,36 @@ export async function POST(
         }, { status: 409 });
       }
       
-      // 锁定成功，evaluationId 已在 Map 中
-      // 后续代码会使用这个 evaluationId 创建评估记录
+      // 锁定成功，立即创建 preparing 状态的评估记录（让前端立即看到"准备中"）
+      // 只设置必要字段，后续流程会补充完整信息
+      await prisma.evaluationSession.create({
+        data: {
+          id: evaluationIdForLock,
+          projectId: id,
+          workflowId: workflowId,
+          agentTeamId: agentTeamId,
+          modelConfigId: modelId,
+          roleModels: roleModels ? JSON.stringify(roleModels) : null,
+          status: 'preparing',
+          providerType: 'pending',  // 临时值，后续更新
+          workflowType: 'pending',  // 临时值，后续更新
+          startedAt: new Date(),
+        },
+      });
+      
+      // 同时更新项目状态为 running
+      await prisma.project.update({
+        where: { id },
+        data: { status: 'running' },
+      });
+      
+      logger.info(LOG_MODULES.EVALUATION, '已创建 preparing 评估记录，前端可立即看到状态', { 
+        evaluationId: evaluationIdForLock, 
+        projectId: id 
+      });
+      
+      // evaluationIdForLock 已在 Map 中，评估记录已创建
+      // 后续代码如果需要排队，会更新这个记录的状态为 queued
     }
     
     // 检查并发限制（队列启动和 SSE 重连时跳过）
@@ -209,26 +239,40 @@ export async function POST(
           projectId: id 
         });
         
-        // 如果超出并发限制，创建排队状态的评估
+        // 如果超出并发限制，更新已创建的评估为排队状态
         if (activeCount >= maxConcurrent) {
-          logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
+          logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，更新评估为排队状态');
           
-          const queuedEvaluation = await tx.evaluationSession.create({
-            data: {
-              id: generateId('eval'),
-              projectId: id,
-              workflowId: workflowId,
-              agentTeamId: agentTeamId,
-              modelConfigId: modelId,
-              roleModels: roleModels ? JSON.stringify(roleModels) : null,
-              status: 'queued',
-              providerType: 'queued',
-            },
-          });
+          // 更新已创建的 preparing 评估为 queued 状态
+          if (evaluationIdForLock) {
+            await tx.evaluationSession.update({
+              where: { id: evaluationIdForLock },
+              data: {
+                status: 'queued',
+                providerType: 'queued',
+                workflowType: 'queued',
+              },
+            });
+          } else {
+            // 如果没有 evaluationIdForLock（队列启动场景），创建新的排队评估
+            const queuedEvaluation = await tx.evaluationSession.create({
+              data: {
+                id: generateId('eval'),
+                projectId: id,
+                workflowId: workflowId,
+                agentTeamId: agentTeamId,
+                modelConfigId: modelId,
+                roleModels: roleModels ? JSON.stringify(roleModels) : null,
+                status: 'queued',
+                providerType: 'queued',
+              },
+            });
+            evaluationIdForLock = queuedEvaluation.id;
+          }
           
           return {
             isQueued: true,
-            evaluation: queuedEvaluation,
+            evaluationId: evaluationIdForLock,
             queuePosition: activeCount - maxConcurrent + 1,
           };
         }
@@ -244,7 +288,7 @@ export async function POST(
       if (concurrencyResult.isQueued) {
         return NextResponse.json({
           message: '评估已加入排队队列',
-          evaluationId: concurrencyResult.evaluation!.id,
+          evaluationId: concurrencyResult.evaluationId!,
           status: 'queued',
           queuePosition: concurrencyResult.queuePosition!,
           maxConcurrent,
@@ -711,21 +755,40 @@ export async function POST(
         if (workflow?.workflowType === 'fsm') {
           logger.info(LOG_MODULES.EVALUATION, '检测到 FSM 工作流，切换到 FSM 异步执行模式');
           
-          // FSM 异步模式：创建评估记录（preparing 状态）
-          const evaluation = await prisma.evaluationSession.create({
-            data: {
-              id: generateId('eval'),
-              projectId: id,
-              workflowId: workflowId,
-              modelConfigId: modelId,
-              roleModels: roleModels ? JSON.stringify(roleModels) : null,
-              status: 'preparing',
-              providerType: modelConfig.providerType,
-              workflowType: 'fsm',
-            },
-          });
+          // FSM 异步模式：更新评估记录（补充完整信息）
+          // 如果 evaluationIdForLock 已存在，更新它；否则创建新的
+          let evaluationIdToUse = evaluationIdForLock || generateId('eval');
+          let evaluation;
           
-          logger.info(LOG_MODULES.EVALUATION, 'FSM 评估已创建，状态为 preparing', { evaluationId: evaluation.id });
+          if (evaluationIdForLock) {
+            // 更新已创建的 preparing 记录
+            evaluation = await prisma.evaluationSession.update({
+              where: { id: evaluationIdForLock },
+              data: {
+                providerType: modelConfig.providerType,
+                workflowType: 'fsm',
+              },
+              include: { Project: true },
+            });
+            logger.info(LOG_MODULES.EVALUATION, 'FSM 评估记录已更新', { evaluationId: evaluationIdForLock });
+          } else {
+            // 创建新的评估记录（重连或队列启动场景）
+            evaluation = await prisma.evaluationSession.create({
+              data: {
+                id: evaluationIdToUse,
+                projectId: id,
+                workflowId: workflowId,
+                modelConfigId: modelId,
+                roleModels: roleModels ? JSON.stringify(roleModels) : null,
+                status: 'preparing',
+                providerType: modelConfig.providerType,
+                workflowType: 'fsm',
+              },
+              include: { Project: true },
+            });
+            evaluationIdToUse = evaluation.id;
+            logger.info(LOG_MODULES.EVALUATION, 'FSM 评估已创建，状态为 preparing', { evaluationId: evaluation.id });
+          }
           
           // 立即更新项目状态为 running（防止前端显示旧状态）
           await prisma.project.update({
@@ -741,7 +804,7 @@ export async function POST(
           const stream = new ReadableStream({
             start(controller) {
               // 订阅所有评估事件
-              unsubscribe = subscribeToEvaluationEvents(evaluation.id, (event) => {
+              unsubscribe = subscribeToEvaluationEvents(evaluationIdToUse, (event) => {
                 try {
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
                   
@@ -1198,28 +1261,42 @@ export async function POST(
         
         logger.info(LOG_MODULES.EVALUATION, '检测到 DAG 工作流，切换到 DAG 异步执行模式');
         
-        // DAG 异步模式：创建评估记录（preparing 状态）
-        const dagEvaluation = await prisma.evaluationSession.create({
-          data: {
-            id: generateId('eval'),
-            projectId: id,
-            workflowId: workflowId,
-            agentTeamId: agentTeamId,
-            modelConfigId: modelId,
-            roleModels: roleModels ? JSON.stringify(roleModels) : null,
-            status: 'preparing',
-            providerType: modelConfig.providerType,
-            workflowType: 'dag',
-          },
-        });
+        // DAG 异步模式：更新评估记录（补充完整信息）
+        // 如果 evaluationIdForLock 已存在，更新它；否则创建新的
+        let dagEvaluationIdToUse = evaluationIdForLock || generateId('eval');
+        let dagEvaluation;
         
-        logger.info(LOG_MODULES.EVALUATION, 'DAG 评估已创建，状态为 preparing', { evaluationId: dagEvaluation.id });
-        
-        // 立即更新项目状态为 running（防止前端显示旧状态）
-        await prisma.project.update({
-          where: { id },
-          data: { status: 'running' },
-        });
+        if (evaluationIdForLock) {
+          // 更新已创建的 preparing 记录
+          dagEvaluation = await prisma.evaluationSession.update({
+            where: { id: evaluationIdForLock },
+            data: {
+              providerType: modelConfig.providerType,
+              workflowType: 'dag',
+              agentTeamId: agentTeamId,
+            },
+            include: { Project: true },
+          });
+          logger.info(LOG_MODULES.EVALUATION, 'DAG 评估记录已更新', { evaluationId: evaluationIdForLock });
+        } else {
+          // 创建新的评估记录（重连或队列启动场景）
+          dagEvaluation = await prisma.evaluationSession.create({
+            data: {
+              id: dagEvaluationIdToUse,
+              projectId: id,
+              workflowId: workflowId,
+              agentTeamId: agentTeamId,
+              modelConfigId: modelId,
+              roleModels: roleModels ? JSON.stringify(roleModels) : null,
+              status: 'preparing',
+              providerType: modelConfig.providerType,
+              workflowType: 'dag',
+            },
+            include: { Project: true },
+          });
+          dagEvaluationIdToUse = dagEvaluation.id;
+          logger.info(LOG_MODULES.EVALUATION, 'DAG 评估已创建，状态为 preparing', { evaluationId: dagEvaluation.id });
+        }
         
         // 创建 SSE 流响应（订阅 eventBus 事件）
         const { subscribeToEvaluationEvents } = await import('@/lib/event-bus');

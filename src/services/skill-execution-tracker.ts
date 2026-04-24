@@ -296,3 +296,110 @@ export async function completeAllPendingSkillExecutions(params: {
   console.log(`[SkillExecution] 已将 ${pendingExecutions.length} 个未完成的执行记录标记为 ${status}`);
   return pendingExecutions.length;
 }
+
+/**
+ * 根据实际入库的漏洞更新 Skill 执行记录的 findingsCount
+ * 在漏洞入库后调用，统计每个 Skill 发现的漏洞数量
+ */
+export async function updateSkillExecutionFindingsFromVulnerabilities(params: {
+  evaluationId: string;
+}): Promise<{ updated: number; totalVulns: number }> {
+  // 1. 查询本次评估的所有漏洞，按 skill 字段分组统计
+  const vulnerabilities = await prisma.vulnerability.findMany({
+    where: {
+      evaluationId: params.evaluationId,
+      vulnerable: true,  // 只统计真实漏洞
+    },
+    select: {
+      id: true,
+      skill: true,
+      skillExecutionId: true,
+    },
+  });
+  
+  if (vulnerabilities.length === 0) {
+    console.log(`[SkillExecution] 评估 ${params.evaluationId} 没有发现漏洞`);
+    return { updated: 0, totalVulns: 0 };
+  }
+  
+  // 2. 按 skill 名称分组统计
+  const skillVulnCounts = new Map<string, number>();
+  for (const vuln of vulnerabilities) {
+    const skillName = vuln.skill || 'unknown';
+    const count = skillVulnCounts.get(skillName) || 0;
+    skillVulnCounts.set(skillName, count + 1);
+  }
+  
+  console.log(`[SkillExecution] 漏洞统计: 总数=${vulnerabilities.length}, Skills=${skillVulnCounts.size}`);
+  skillVulnCounts.forEach((count, skill) => {
+    console.log(`  - ${skill}: ${count} 个漏洞`);
+  });
+  
+  // 3. 查询本次评估的所有 SkillExecution 记录
+  const skillExecutions = await prisma.skillExecution.findMany({
+    where: {
+      evaluationId: params.evaluationId,
+    },
+    include: {
+      Skill: {
+        select: { name: true },
+      },
+    },
+  });
+  
+  // 4. 创建 skill name -> skillExecution 的映射
+  const skillNameToExecution = new Map<string, { id: string; skillId: string }>();
+  for (const exec of skillExecutions) {
+    const skillName = exec.Skill?.name || '';
+    if (skillName) {
+      skillNameToExecution.set(skillName, { id: exec.id, skillId: exec.skillId });
+    }
+  }
+  
+  // 5. 更新 SkillExecution 的 findingsCount，并更新漏洞的 skillExecutionId
+  let updated = 0;
+  
+  for (const [skillName, vulnCount] of skillVulnCounts.entries()) {
+    const executionInfo = skillNameToExecution.get(skillName);
+    
+    if (executionInfo) {
+      // 更新 SkillExecution 的 findingsCount
+      await prisma.skillExecution.update({
+        where: { id: executionInfo.id },
+        data: {
+          findingsCount: vulnCount,
+          confirmedCount: vulnCount,  // 默认全部确认
+        },
+      });
+      
+      // 更新该 Skill 发现的所有漏洞的 skillExecutionId
+      await prisma.vulnerability.updateMany({
+        where: {
+          evaluationId: params.evaluationId,
+          skill: skillName,
+          vulnerable: true,
+        },
+        data: {
+          skillExecutionId: executionInfo.id,
+        },
+      });
+      
+      // 更新 Skill 的 vulnerabilityCount
+      await prisma.skill.update({
+        where: { id: executionInfo.skillId },
+        data: {
+          vulnerabilityCount: { increment: vulnCount },
+          updatedAt: new Date(),
+        },
+      });
+      
+      updated++;
+      console.log(`[SkillExecution] 更新 Skill=${skillName}, findingsCount=${vulnCount}`);
+    } else {
+      console.warn(`[SkillExecution] 未找到 Skill=${skillName} 的执行记录`);
+    }
+  }
+  
+  console.log(`[SkillExecution] 完成: 更新了 ${updated} 个 Skill 执行记录，总漏洞数 ${vulnerabilities.length}`);
+  return { updated, totalVulns: vulnerabilities.length };
+}

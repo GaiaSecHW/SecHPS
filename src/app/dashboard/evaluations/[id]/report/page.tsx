@@ -16,7 +16,6 @@ import {
   Shield,
   Key,
   GitBranch,
-  Database,
   Globe,
   Lock,
   Unlock,
@@ -91,20 +90,6 @@ interface SkillExecution {
   duration?: number;
   findingsCount: number;
   error?: string;
-}
-
-interface VulnerabilityChain {
-  categoryId: string | null;
-  categoryName: string;
-  patternId: string | null;
-  patternName: string;
-  skills: Array<{
-    skillId: string;
-    skillName: string;
-    skillDisplayName: string;
-    skillSeverity: string | null;
-    executed: boolean;
-  }>;
 }
 
 interface VulnerabilitySummary {
@@ -196,7 +181,6 @@ interface EvaluationReport {
     running: number;
     totalFindings: number;
   };
-  vulnerabilityChain: VulnerabilityChain[];
   vulnerabilitySummary: VulnerabilitySummary;
 }
 
@@ -467,7 +451,7 @@ export default function EvaluationReportPage({
     );
   }
 
-  const { evaluation, analysisReport, skillExecutions, skillsStats, vulnerabilityChain, vulnerabilitySummary } = report;
+  const { evaluation, analysisReport, skillExecutions, skillsStats, vulnerabilitySummary } = report;
 
   // 检查是否是 FSM 报告
   const isFSMReport = evaluation?.workflowType === 'fsm' || fsmReport !== null;
@@ -923,42 +907,6 @@ export default function EvaluationReportPage({
             </div>
           ) : (
             <p className="text-gray-500 text-sm">暂无 Skills 执行记录</p>
-          )}
-        </Section>
-
-        {/* 6. 漏洞分类关联链 */}
-        <Section
-          title="漏洞分类关联链"
-          icon={<Database className="h-5 w-5" />}
-          expanded={expandedSections.has('chain')}
-          onToggle={() => toggleSection('chain')}
-        >
-          {vulnerabilityChain.length > 0 ? (
-            <div className="space-y-3">
-              {vulnerabilityChain.map((chain, i) => (
-                <div key={i} className="bg-gray-50 rounded p-3">
-                  <div className="flex items-center space-x-2 text-sm font-medium text-gray-700">
-                    <span className="text-purple-600">{chain.categoryName}</span>
-                    <span className="text-gray-400">→</span>
-                    <span className="text-blue-600">{chain.patternName}</span>
-                  </div>
-                  <div className="mt-2 pl-4 space-y-1">
-                    {chain.skills.map((skill, j) => (
-                      <div key={j} className="flex items-center space-x-2 text-xs">
-                        {skill.executed ? (
-                          <CheckCircle2 className="h-3 w-3 text-green-500" />
-                        ) : (
-                          <div className="h-3 w-3 rounded-full border border-gray-300" />
-                        )}
-                        <span className="text-gray-700">{skill.skillDisplayName}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-sm">暂无漏洞分类关联链</p>
           )}
         </Section>
 
