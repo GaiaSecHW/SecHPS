@@ -1402,11 +1402,11 @@ dagCopyResult = await copySkillsToProject(
                 dagCopyResult.skillIds.push(...extra.skillIds);
               }
             } else {
-              // 全部节点都是手工/漏洞分类模式，按 ID 精确拷贝
+              // 全部节点都是手工/漏洞分类模式，按 ID 精确拷贝（模板由 saveSkillToDisk 内部自动获取）
               dagCopyResult = await copySkillsByIds(
                 project.projectPath || '',
                 dagUniqueSkillIds,
-                globalConfig?.skillOutputTemplate,
+                undefined,
                 projectTechStack
               );
               

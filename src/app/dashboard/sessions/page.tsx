@@ -1413,11 +1413,11 @@ toast.error(data.error || '更新项目失败');
                           setSelectedWorkflow(null);
                           setShowWorkflowModal(true);
                         }}
-                        disabled={project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued' || e.status === 'preparing')}
+                        disabled={startingProject === project.id || project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued' || e.status === 'preparing')}
                         className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play size={16} />
-                        <span>启动评估</span>
+                        <span>{startingProject === project.id ? '启动中...' : '启动评估'}</span>
                       </button>
                     )}
                     {/* 编辑按钮 - 只有项目所有者和管理员可见 */}
@@ -2718,6 +2718,9 @@ toast.error(data.error || '更新项目失败');
                     
                     // 保存 roleModels 的副本，因为后面会清空状态
                     const roleModelsToSubmit = [...roleModels];
+                    
+                    // 先设置 startingProject 以禁用卡片上的按钮
+                    setStartingProject(selectedProject.id);
                     
                     // 启动评估，传递 roleModels
                     await startProject(selectedProject.id, selectedWorkflow, roleModelsToSubmit);
