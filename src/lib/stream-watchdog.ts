@@ -10,6 +10,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { abortAgent, removeAgent } from '@/lib/agent-registry';
+import { unlockProject } from '@/lib/evaluation-lock';
 
 // ============================================================================
 // 类型定义
@@ -355,7 +356,10 @@ export class StreamWatchdog {
         data: { status: 'failed' },
       });
       
-      console.log(`[Watchdog] 已更新评估状态为 failed, tokens: input=${currentTokens?.totalInputTokens}, output=${currentTokens?.totalOutputTokens}`);
+      // 解锁项目（从全局 Map 中移除）
+      await unlockProject(this.config.projectId);
+      
+      console.log(`[Watchdog] 已更新评估状态为 failed, tokens: input=${currentTokens?.totalInputTokens}, output=${currentTokens?.totalOutputTokens}, 项目已解锁`);
     } catch (error) {
       console.error('[Watchdog] 更新数据库失败:', error);
     }
