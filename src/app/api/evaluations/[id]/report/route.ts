@@ -471,9 +471,9 @@ async function getVulnerabilitySummary(
       severity: true,
       status: true,
       cwe: true,
-      filePath: true,
-      lineStart: true,
-      lineEnd: true,
+      location: true,
+      POC: true,
+      vulnerable: true,
       description: true,
       createdAt: true,
       skill: true,
@@ -586,9 +586,9 @@ async function getVulnerabilitySummary(
       severity: v.severity,  // 严重程度
       status: v.status || 'new',
       cwe: v.cwe,
-      filePath: v.filePath,
-      lineStart: v.lineStart,
-      lineEnd: v.lineEnd,
+      location: v.location,
+      POC: v.POC,
+      vulnerable: v.vulnerable,
       description: v.description,
       createdAt: v.createdAt,  // 创建时间
       skillName,  // 发现该漏洞的 Skill 名称

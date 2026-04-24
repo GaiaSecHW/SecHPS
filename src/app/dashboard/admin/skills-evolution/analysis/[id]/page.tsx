@@ -39,8 +39,8 @@ interface CompactCase {
   vulnerabilityId: string;
   title: string;
   description: string;
-  filePath?: string;
-  codeSnippetPreview?: string;
+  location?: string;           // 问题代码位置
+  POCPreview?: string;         // POC 预览
   status: 'false_positive' | 'confirmed';
   markedAt: string;
 }
@@ -689,15 +689,15 @@ function EvolutionAnalysisContent() {
                       <p className="text-sm text-gray-600 mb-2">
                         {caseItem.description}
                       </p>
-                      {caseItem.filePath && (
+                      {caseItem.location && (
                         <p className="text-xs text-gray-500 flex items-center gap-1">
                           <Code size={12} />
-                          {caseItem.filePath}
+                          {caseItem.location}
                         </p>
                       )}
-                      {caseItem.codeSnippetPreview && (
+                      {caseItem.POCPreview && (
                         <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
-                          {caseItem.codeSnippetPreview}
+                          {caseItem.POCPreview}
                         </pre>
                       )}
                       <p className="text-xs text-gray-400 mt-2">
@@ -762,15 +762,15 @@ function EvolutionAnalysisContent() {
                       <p className="text-sm text-gray-600 mb-2">
                         {caseItem.description}
                       </p>
-                      {caseItem.filePath && (
+                      {caseItem.location && (
                         <p className="text-xs text-gray-500 flex items-center gap-1">
                           <Code size={12} />
-                          {caseItem.filePath}
+                          {caseItem.location}
                         </p>
                       )}
-                      {caseItem.codeSnippetPreview && (
+                      {caseItem.POCPreview && (
                         <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
-                          {caseItem.codeSnippetPreview}
+                          {caseItem.POCPreview}
                         </pre>
                       )}
                       <p className="text-xs text-gray-400 mt-2">

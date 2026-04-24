@@ -71,6 +71,7 @@
   },
   "devDependencies": {
     "@testing-library/react": "^16.3.2",
+    "@types/async-lock": "^1.4.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/eventsource": "^1.1.15",
     "@types/jsonwebtoken": "^9.0.7",
