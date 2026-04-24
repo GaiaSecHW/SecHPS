@@ -475,6 +475,20 @@ async function getVulnerabilitySummary(
       lineStart: true,
       lineEnd: true,
       description: true,
+      createdAt: true,
+      skill: true,
+      skillExecutionId: true,
+      SkillExecution: {
+        select: {
+          skillId: true,
+          Skill: {
+            select: {
+              name: true,
+              displayName: true,
+            },
+          },
+        },
+      },
     },
   });
   
@@ -558,18 +572,26 @@ async function getVulnerabilitySummary(
   // 构建明细列表（不含严重程度）
   const details = paginatedVulnerabilities.map(v => {
     const mapping = mapVulnerabilityType(v.type || '', patternMap);
+    // 获取 skill 名称：优先从 SkillExecution 关联，其次从 vulnerability.skill 字段
+    const skillName = v.SkillExecution?.Skill?.displayName || 
+                      v.SkillExecution?.Skill?.name || 
+                      v.skill || 
+                      '未知';
     return {
       id: v.id,
       type: mapping.categoryName,  // 使用映射后的标准分类名称
       patternName: mapping.patternName,  // 具体的漏洞模式名称
       originalType: v.type,  // 原始类型（AI 生成的）
       title: v.title,
+      severity: v.severity,  // 严重程度
       status: v.status || 'new',
       cwe: v.cwe,
       filePath: v.filePath,
       lineStart: v.lineStart,
       lineEnd: v.lineEnd,
       description: v.description,
+      createdAt: v.createdAt,  // 创建时间
+      skillName,  // 发现该漏洞的 Skill 名称
     };
   });
   

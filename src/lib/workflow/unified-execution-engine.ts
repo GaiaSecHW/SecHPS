@@ -73,6 +73,12 @@ export class UnifiedWorkflowExecutionEngine {
   
   /** 当前活跃的 agentId（用于子Agent流） */
   private activeAgentId: string | null = null;
+  
+  /** 当前节点的 SkillExecution IDs（用于追踪执行完成） */
+  private currentSkillExecutionIds: string[] = [];
+  
+  /** 当前节点的 Skill IDs */
+  private currentSkillIds: string[] = [];
 
   constructor(config: UnifiedExecutionConfig, callbacks: UnifiedExecutionCallbacks) {
     this.config = config;
@@ -325,6 +331,11 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
 
     // 创建节点执行记录（status='running'）- 让 token 更新能找到记录
     await this.createNodeExecutionRecord(node, nodeIndex, modelConfig);
+    
+    // 为节点的 skills 创建 SkillExecution 记录
+    if (node.skills && node.skills.length > 0) {
+      await this.createSkillExecutions(node, nodeIndex);
+    }
 
     // 重试机制
     const maxRetries = this.config.maxRetries;
@@ -569,6 +580,9 @@ callbacks: {
 
           // 保存节点执行记录到数据库
           await this.saveNodeExecutionToDB(nodeIndex, node, nodeResult, modelConfig);
+          
+          // 完成 SkillExecution 记录（统计漏洞数量）
+          await this.completeSkillExecutions(nodeIndex);
 
           return nodeResult;
         }
@@ -618,6 +632,9 @@ callbacks: {
       error: lastError?.message || '达到最大重试次数',
       errorStack: lastError?.stack || '',
     };
+
+    // 完成 SkillExecution 记录（标记失败）
+    await this.failSkillExecutions(lastError?.message || '节点执行失败');
 
     // 调用节点错误回调
     if (lastError) {
@@ -1318,6 +1335,180 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     } catch (error) {
       console.error(`[saveSkippedNodeExecution] 保存失败:`, error);
     }
+  }
+
+  /**
+   * 为节点创建 SkillExecution 记录
+   * 
+   * 每个 skill 创建一条独立的执行记录，支持同一 skill 多次执行
+   */
+  private async createSkillExecutions(
+    node: UnifiedNodeDefinition,
+    nodeIndex: number
+  ): Promise<void> {
+    const skills = node.skills || [];
+    this.currentSkillExecutionIds = [];
+    this.currentSkillIds = [];
+    
+    for (const skillName of skills) {
+      try {
+        // 查找 Skill ID
+        const skill = await prisma.skill.findFirst({
+          where: { name: skillName, isLatest: true },
+          select: { id: true, name: true, displayName: true },
+        });
+        
+        if (!skill) {
+          console.log(`[createSkillExecutions] Skill 未找到: ${skillName}`);
+          continue;
+        }
+        
+        // 创建 SkillExecution 记录
+        const executionId = `sklexec-${this.config.evaluationSessionId}-${nodeIndex}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        await prisma.skillExecution.create({
+          data: {
+            id: executionId,
+            skillId: skill.id,
+            projectId: this.config.projectId,
+            evaluationId: this.config.evaluationSessionId,
+            input: JSON.stringify({ nodeName: node.label, nodeIndex }),
+            status: 'running',
+            startedAt: new Date(),
+          },
+        });
+        
+        // 更新 Skill 的 execCount
+        await prisma.skill.update({
+          where: { id: skill.id },
+          data: { execCount: { increment: 1 }, updatedAt: new Date() },
+        });
+        
+        this.currentSkillExecutionIds.push(executionId);
+        this.currentSkillIds.push(skill.id);
+        
+        console.log(`[createSkillExecutions] Skill 执行记录已创建: ${skillName} (${skill.displayName}), executionId=${executionId}`);
+      } catch (error) {
+        console.error(`[createSkillExecutions] 创建 Skill 执行记录失败: ${skillName}`, error);
+      }
+    }
+    
+    console.log(`[createSkillExecutions] 共创建 ${this.currentSkillExecutionIds.length} 条 SkillExecution 记录`);
+  }
+
+  /**
+   * 完成 SkillExecution 记录
+   * 
+   * 统计该节点发现的漏洞数量，更新 findingsCount
+   */
+  private async completeSkillExecutions(nodeIndex: number): Promise<void> {
+    if (this.currentSkillExecutionIds.length === 0) {
+      return;
+    }
+    
+    const completedAt = new Date();
+    
+    // 统计本次评估中该节点发现的漏洞数量
+    let totalFindings = 0;
+    try {
+      // 从 Vulnerability 表统计（按 evaluationId）
+      totalFindings = await prisma.vulnerability.count({
+        where: { evaluationId: this.config.evaluationSessionId },
+      });
+    } catch (error) {
+      console.error(`[completeSkillExecutions] 统计漏洞数量失败:`, error);
+    }
+    
+    // 平均分配到每个 Skill（简化处理）
+    const findingsPerSkill = Math.ceil(totalFindings / this.currentSkillIds.length) || 0;
+    
+    for (let i = 0; i < this.currentSkillExecutionIds.length; i++) {
+      const executionId = this.currentSkillExecutionIds[i];
+      const skillId = this.currentSkillIds[i];
+      
+      try {
+        // 获取 startedAt 计算 duration
+        const existing = await prisma.skillExecution.findUnique({
+          where: { id: executionId },
+          select: { startedAt: true },
+        });
+        
+        const duration = existing?.startedAt
+          ? completedAt.getTime() - new Date(existing.startedAt).getTime()
+          : 0;
+        
+        // 更新 SkillExecution
+        await prisma.skillExecution.update({
+          where: { id: executionId },
+          data: {
+            status: 'completed',
+            completedAt,
+            duration,
+            findingsCount: findingsPerSkill,
+            updatedAt: completedAt,
+          },
+        });
+        
+        // 更新 Skill 的 vulnerabilityCount
+        if (findingsPerSkill > 0) {
+          await prisma.skill.update({
+            where: { id: skillId },
+            data: { vulnerabilityCount: { increment: findingsPerSkill }, updatedAt: completedAt },
+          });
+        }
+        
+        console.log(`[completeSkillExecutions] Skill 执行完成: executionId=${executionId}, duration=${duration}ms, findings=${findingsPerSkill}`);
+      } catch (error) {
+        console.error(`[completeSkillExecutions] 更新 Skill 执行记录失败: ${executionId}`, error);
+      }
+    }
+    
+    // 清空当前追踪
+    this.currentSkillExecutionIds = [];
+    this.currentSkillIds = [];
+    
+    console.log(`[completeSkillExecutions] 共完成 SkillExecution, totalFindings=${totalFindings}`);
+  }
+
+  /**
+   * 标记 SkillExecution 为失败状态
+   */
+  private async failSkillExecutions(error: string): Promise<void> {
+    if (this.currentSkillExecutionIds.length === 0) {
+      return;
+    }
+    
+    const completedAt = new Date();
+    
+    for (const executionId of this.currentSkillExecutionIds) {
+      try {
+        const existing = await prisma.skillExecution.findUnique({
+          where: { id: executionId },
+          select: { startedAt: true, skillId: true },
+        });
+        
+        const duration = existing?.startedAt
+          ? completedAt.getTime() - new Date(existing.startedAt).getTime()
+          : 0;
+        
+        await prisma.skillExecution.update({
+          where: { id: executionId },
+          data: {
+            status: 'failed',
+            completedAt,
+            duration,
+            error,
+            updatedAt: completedAt,
+          },
+        });
+        
+        console.log(`[failSkillExecutions] Skill 执行失败: executionId=${executionId}, error=${error}`);
+      } catch (err) {
+        console.error(`[failSkillExecutions] 更新 Skill 执行记录失败: ${executionId}`, err);
+      }
+    }
+    
+    this.currentSkillExecutionIds = [];
+    this.currentSkillIds = [];
   }
 
   /**

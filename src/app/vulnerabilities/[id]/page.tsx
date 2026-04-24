@@ -55,6 +55,7 @@ interface Vulnerability {
   Project?: {
     id: string;
     name: string;
+    userId?: string;
   };
   SkillExecution?: {
     id: string;
@@ -63,6 +64,13 @@ interface Vulnerability {
       id: string;
       name: string;
       displayName: string;
+    };
+  };
+  EvaluationSession?: {
+    id: string;
+    projectId: string;
+    Project?: {
+      userId: string;
     };
   };
 }

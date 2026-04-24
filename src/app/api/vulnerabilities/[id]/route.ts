@@ -6,7 +6,7 @@ import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth'
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/vulnerabilities/:id - 获取漏洞详情
-// 数据隔离：普通用户只能查看自己项目的漏洞，管理员可以查看所有
+// 数据隔离：普通用户只能查看自己项目的漏洞，或有权查看的评估会话中的漏洞
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -23,18 +23,12 @@ export async function GET(
     // 检查是否是管理员
     const userIsAdmin = isAdmin(payload);
 
-    // 构建查询条件
-    let where: any = { id };
-    if (!userIsAdmin) {
-      // 普通用户：通过 Project.userId 验证所有权
-      where.Project = { userId: payload.userId };
-    }
-
-    const vulnerability = await prisma.vulnerability.findFirst({
-      where,
+    // 先获取漏洞信息
+    const vulnerability = await prisma.vulnerability.findUnique({
+      where: { id },
       include: {
         Project: {
-          select: { id: true, name: true },
+          select: { id: true, name: true, userId: true },
         },
         SkillExecution: {
           select: {
@@ -43,11 +37,40 @@ export async function GET(
             Skill: { select: { id: true, name: true, displayName: true } },
           },
         },
+        EvaluationSession: {
+          select: { id: true, projectId: true, Project: { select: { userId: true } } },
+        },
       },
     });
 
     if (!vulnerability) {
       return NextResponse.json({ error: '漏洞不存在' }, { status: 404 });
+    }
+
+    // 权限检查：管理员可查看所有，普通用户需要验证权限
+    if (!userIsAdmin) {
+      // 检查用户是否有权限访问该漏洞
+      // 1. 用户是项目所有者（通过 Vulnerability.Project）
+      const isProjectOwner = vulnerability.Project?.userId === payload.userId;
+      
+      // 2. 用户是评估会话所属项目的所有者
+      const isEvalProjectOwner = vulnerability.EvaluationSession?.Project?.userId === payload.userId;
+      
+      // 3. 直接通过 projectId 检查
+      let isDirectProjectOwner = false;
+      if (vulnerability.projectId && !isProjectOwner && !isEvalProjectOwner) {
+        const project = await prisma.project.findFirst({
+          where: { id: vulnerability.projectId, userId: payload.userId },
+          select: { id: true },
+        });
+        isDirectProjectOwner = !!project;
+      }
+
+      const hasAccess = isProjectOwner || isEvalProjectOwner || isDirectProjectOwner;
+
+      if (!hasAccess) {
+        return NextResponse.json({ error: '无权限查看该漏洞' }, { status: 403 });
+      }
     }
 
     return NextResponse.json({

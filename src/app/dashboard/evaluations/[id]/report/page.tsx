@@ -126,12 +126,15 @@ interface VulnerabilitySummary {
     type: string;           // 映射后的标准分类名称
     patternName: string;    // 具体的漏洞模式名称
     originalType: string;   // 原始类型（AI 生成的）
+    severity: string;       // 严重程度
     status: string;
     cwe?: string | null;
     filePath?: string | null;
     lineStart?: number | null;
     lineEnd?: number | null;
     description?: string | null;
+    createdAt?: string | null;  // 创建时间
+    skillName?: string;     // 发现该漏洞的 Skill 名称
   }>;
   pagination: {
     page: number;
@@ -233,6 +236,25 @@ export default function EvaluationReportPage({
     { id: 'compliance', label: '合规报告', icon: <BookOpen className="h-4 w-4" /> },
     { id: 'attack-path', label: '攻击路径', icon: <Activity className="h-4 w-4" /> },
   ];
+
+  // 格式化耗时（自适应秒/分/小时）
+  const formatSkillDuration = (ms: number): string => {
+    if (ms <= 0) return '0s';
+    
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) {
+      const remainingMinutes = minutes % 60;
+      return remainingMinutes > 0 ? `${hours}h${remainingMinutes}m` : `${hours}h`;
+    }
+    if (minutes > 0) {
+      const remainingSeconds = seconds % 60;
+      return remainingSeconds > 0 ? `${minutes}m${remainingSeconds}s` : `${minutes}m`;
+    }
+    return `${seconds}s`;
+  };
 
   useEffect(() => {
     fetchReport();
@@ -857,8 +879,10 @@ export default function EvaluationReportPage({
                   <tr>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">状态</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">技能名称</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">发现数</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">加载时间</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">结束时间</th>
                     <th className="px-3 py-2 text-left font-medium text-gray-600">耗时</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-600">发现数</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -878,13 +902,19 @@ export default function EvaluationReportPage({
                       <td className="px-3 py-2 font-medium text-gray-900">
                         {exec.skillDisplayName || exec.skillName || '未知'}
                       </td>
+                      <td className="px-3 py-2 text-gray-500">
+                        {exec.startedAt ? new Date(exec.startedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">
+                        {exec.completedAt ? new Date(exec.completedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-'}
+                      </td>
+                      <td className="px-3 py-2 text-gray-500">
+                        {exec.duration ? formatSkillDuration(exec.duration) : '-'}
+                      </td>
                       <td className="px-3 py-2">
                         <span className={`font-medium ${exec.findingsCount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
                           {exec.findingsCount}
                         </span>
-                      </td>
-                      <td className="px-3 py-2 text-gray-500">
-                        {exec.duration ? `${exec.duration}ms` : '-'}
                       </td>
                     </tr>
                   ))}
@@ -1012,7 +1042,7 @@ export default function EvaluationReportPage({
                 </div>
               </div>
               
-              {vulnerabilitySummary.details.length > 0 ? (
+{vulnerabilitySummary.details.length > 0 ? (
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
@@ -1020,14 +1050,18 @@ export default function EvaluationReportPage({
                         <tr className="border-b border-gray-200">
                           <th className="text-left py-2 px-2 font-medium text-gray-600">漏洞类型</th>
                           <th className="text-left py-2 px-2 font-medium text-gray-600">标题</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-600">发现Skill</th>
                           <th className="text-left py-2 px-2 font-medium text-gray-600">状态</th>
                           <th className="text-left py-2 px-2 font-medium text-gray-600">CWE</th>
-                          <th className="text-left py-2 px-2 font-medium text-gray-600">位置</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {vulnerabilitySummary.details.map((vuln, index) => (
-                          <tr key={vuln.id || index} className="border-b border-gray-100 hover:bg-gray-50">
+                        {vulnerabilitySummary.details.map((vuln) => (
+                          <tr 
+                            key={vuln.id} 
+                            className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                            onClick={() => router.push(`/vulnerabilities/${vuln.id}`)}
+                          >
                             <td className="py-2 px-2">
                               <div className="text-gray-900">{vuln.type}</div>
                               {vuln.patternName !== vuln.type && (
@@ -1043,20 +1077,15 @@ export default function EvaluationReportPage({
                               )}
                             </td>
                             <td className="py-2 px-2">
+                              <span className="text-gray-700">{vuln.skillName || '-'}</span>
+                            </td>
+                            <td className="py-2 px-2">
                               <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(vuln.status)}`}>
                                 {getStatusLabel(vuln.status)}
                               </span>
                             </td>
                             <td className="py-2 px-2 text-xs text-gray-500">
                               {vuln.cwe || '-'}
-                            </td>
-                            <td className="py-2 px-2 text-xs text-gray-500">
-                              {vuln.filePath ? (
-                                <span title={vuln.filePath}>
-                                  {vuln.filePath.split('/').pop()}
-                                  {vuln.lineStart && `:${vuln.lineStart}`}
-                                </span>
-                              ) : '-'}
                             </td>
                           </tr>
                         ))}
