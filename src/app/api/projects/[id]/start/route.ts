@@ -113,43 +113,21 @@ export async function POST(
       logger.debug(LOG_MODULES.EVALUATION, '请求体解析失败或为空', { error: String(e) });
     }
 
-    logger.debug(LOG_MODULES.EVALUATION, 'start API 调用', { projectId: id, reconnectEvaluationId, bodyParsed, isSSEReconnect: !!reconnectEvaluationId, isQueuedStart });
+    logger.debug(LOG_MODULES.EVALUATION, 'start API 调用', { projectId: id, reconnectEvaluationId, bodyParsed, isSSEReconnect: !!reconnectEvaluationId });
     logger.debug(LOG_MODULES.EVALUATION, '启动评估参数', { workflowId, modelId, roleModelsCount: roleModels?.length || 0 });
 
-    // ========================================
-    // 第一件事：先创建评估记录（status='preparing'），锁定状态
-    // 这样其他并发请求进来时，能立刻看到这个评估
-    // ========================================
-    // SSE 重连和队列启动不需要创建新评估
-    let preEvaluation: { id: string } | null = null;
-    if (!reconnectEvaluationId && !isQueuedStart && !queuedEvaluationId) {
-      preEvaluation = await prisma.evaluationSession.create({
-        data: {
-          id: generateId('eval'),
-          projectId: id,
-          workflowId: workflowId,
-          modelConfigId: modelId,
-          roleModels: roleModels ? JSON.stringify(roleModels) : null,
-          status: 'preparing',
-        },
-        select: { id: true },
-      });
-      logger.info(LOG_MODULES.EVALUATION, '预先创建评估记录（锁定状态）', { evaluationId: preEvaluation.id, projectId: id });
-    }
-
-    // 获取项目信息
+    // 获取项目信息（包括运行中和准备中的评估）
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
         ProjectFile: true,
+        EvaluationSession: {
+          where: { status: { in: ['preparing', 'running'] } },
+        },
       },
     });
 
     if (!project) {
-      // 删除预先创建的评估记录
-      if (preEvaluation) {
-        await prisma.evaluationSession.delete({ where: { id: preEvaluation.id } });
-      }
       return NextResponse.json({ error: '项目不存在' }, { status: 404 });
     }
 
@@ -157,45 +135,7 @@ export async function POST(
     // 管理员可以启动任意用户的项目评估
     const isAdmin = payload.roles?.includes('admin');
     if (!reconnectEvaluationId && project.userId !== payload.userId && !isAdmin) {
-      // 删除预先创建的评估记录
-      if (preEvaluation) {
-        await prisma.evaluationSession.delete({ where: { id: preEvaluation.id } });
-      }
       return NextResponse.json({ error: '无权操作此项目' }, { status: 403 });
-    }
-
-    // ========================================
-    // 检查该项目是否有正在运行/准备中的评估（不包括刚创建的）
-    // ========================================
-    if (!isQueuedStart && !reconnectEvaluationId && !queuedEvaluationId && preEvaluation) {
-      const projectActiveEvaluations = await prisma.evaluationSession.count({
-        where: {
-          projectId: id,
-          status: { in: ['preparing', 'running', 'queued'] },
-          id: { not: preEvaluation.id }, // 排除刚创建的
-        },
-      });
-      
-      if (projectActiveEvaluations > 0) {
-        // 删除预先创建的评估记录
-        await prisma.evaluationSession.delete({ where: { id: preEvaluation.id } });
-        logger.warn(LOG_MODULES.EVALUATION, '该项目已有正在运行的评估，拒绝启动', {
-          projectId: id,
-          activeCount: projectActiveEvaluations,
-        });
-        return NextResponse.json({
-          error: '该项目已有正在运行的评估，请等待当前评估完成后再启动新的评估',
-          activeEvaluations: projectActiveEvaluations,
-        }, { status: 409 });
-      }
-      
-      // 更新项目状态为 running
-      await prisma.project.update({
-        where: { id },
-        data: { status: 'running' },
-      });
-      
-      logger.info(LOG_MODULES.EVALUATION, '项目状态已更新为 running', { projectId: id });
     }
 
     // 获取全局配置（优先激活配置，如果没有激活配置则使用第一个）
@@ -360,17 +300,12 @@ export async function POST(
       where: { projectId: id },
     });
 
-    // 检查是否有运行中或准备中的评估会话（用于 SSE 重连）
-    const activeEvaluations = await prisma.evaluationSession.findMany({
-      where: {
-        projectId: id,
-        status: { in: ['preparing', 'running'] }
-      },
-    });
+    // 检查是否有运行中或准备中的评估会话
+    const activeEvaluations = project.EvaluationSession || [];
     
     // 如果是 SSE 重连（提供了 evaluationId），且该评估正在运行或准备中
     if (reconnectEvaluationId) {
-      const targetEvaluation = activeEvaluations.find((e: { id: string; status: string }) => e.id === reconnectEvaluationId);
+      const targetEvaluation = activeEvaluations.find(e => e.id === reconnectEvaluationId);
       if (targetEvaluation) {
         // SSE 重连权限检查：评估所属项目必须是用户自己的，或者用户是管理员
         const userIsAdmin = payload.roles?.includes('admin') ?? false;
