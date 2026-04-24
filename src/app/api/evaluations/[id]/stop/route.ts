@@ -47,11 +47,34 @@ export async function POST(
       return NextResponse.json({ error: '无权操作此评估' }, { status: 403 });
     }
 
-    if (evaluation.status !== 'running') {
-      return NextResponse.json({ error: '评估会话不在运行中' }, { status: 400 });
+    // 检查评估状态：running 可以停止，queued 可以取消排队
+    if (evaluation.status !== 'running' && evaluation.status !== 'queued') {
+      return NextResponse.json({ error: '评估会话不在运行中或排队中' }, { status: 400 });
     }
 
-    // 尝试中止运行中的 Agent
+    // 如果是排队状态，直接取消（不需要中止 Agent）
+    if (evaluation.status === 'queued') {
+      await prisma.evaluationSession.update({
+        where: { id },
+        data: {
+          status: 'cancelled',
+          endReason: 'cancelled_from_queue',
+          endMessage: '用户取消排队',
+          completedAt: new Date(),
+          errorMessage: '用户取消排队',
+        },
+      });
+      
+      logger.debug(LOG_MODULES.EVALUATION, '排队评估已取消:', { details: { id } });
+      
+      return NextResponse.json({
+        success: true,
+        message: '排队已取消',
+        evaluationId: id,
+      });
+    }
+
+    // 运行中的评估：尝试中止 Agent
     const aborted = abortAgent(id);
     if (aborted) {
       logger.debug(LOG_MODULES.EVALUATION, '成功中止 Agent:', { details: { id } });

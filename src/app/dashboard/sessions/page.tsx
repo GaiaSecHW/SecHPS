@@ -805,6 +805,32 @@ setShowEditModal(true);
     toast(`环境 AI 渗透功能开发中\n\n目标环境: ${project.environmentUrl}`, { icon: '🔧' });
   };
 
+  // 取消排队中的评估
+  const cancelQueuedEvaluation = async (evaluationId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/evaluations/${evaluationId}/stop`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || '取消排队失败');
+        return;
+      }
+
+      toast.success('排队已取消');
+      await fetchProjects();
+    } catch (err) {
+      console.error('取消排队错误:', err);
+      toast.error('网络错误，请重试');
+    }
+  };
+
   const handleVulnerabilityManagement = async (project: Project, page: number = 1) => {
     setVulnerabilityProject(project);
     setShowVulnerabilityModal(true);
@@ -1290,6 +1316,16 @@ if (loading) {
                         )}
                       </div>
                       <div className="flex items-center space-x-2">
+                        {/* 排队中时显示取消排队按钮 */}
+                        {latestEval.status === 'queued' && (
+                          <button
+                            onClick={() => cancelQueuedEvaluation(latestEval.id)}
+                            className="text-xs text-yellow-700 hover:text-yellow-900 flex items-center space-x-1"
+                          >
+                            <XCircle size={12} />
+                            <span>取消排队</span>
+                          </button>
+                        )}
                         <Link
                           href={`/dashboard/sessions/${latestEval.id}?evaluationId=${latestEval.id}`}
                           className={`text-xs ${config.text} hover:opacity-80 flex items-center space-x-1`}
