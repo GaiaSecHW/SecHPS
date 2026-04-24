@@ -167,20 +167,18 @@ export async function POST(
     // ========================================
     // 检查该项目是否有正在运行/准备中的评估（不包括刚创建的）
     // ========================================
-    if (!isQueuedStart && !reconnectEvaluationId && !queuedEvaluationId) {
+    if (!isQueuedStart && !reconnectEvaluationId && !queuedEvaluationId && preEvaluation) {
       const projectActiveEvaluations = await prisma.evaluationSession.count({
         where: {
           projectId: id,
           status: { in: ['preparing', 'running', 'queued'] },
-          NOT: preEvaluation ? { id: preEvaluation.id } : undefined, // 排除刚创建的
+          id: { not: preEvaluation.id }, // 排除刚创建的
         },
       });
       
       if (projectActiveEvaluations > 0) {
         // 删除预先创建的评估记录
-        if (preEvaluation) {
-          await prisma.evaluationSession.delete({ where: { id: preEvaluation.id } });
-        }
+        await prisma.evaluationSession.delete({ where: { id: preEvaluation.id } });
         logger.warn(LOG_MODULES.EVALUATION, '该项目已有正在运行的评估，拒绝启动', {
           projectId: id,
           activeCount: projectActiveEvaluations,
