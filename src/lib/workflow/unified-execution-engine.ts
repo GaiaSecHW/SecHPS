@@ -1315,7 +1315,9 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         nodeLabel: node.label,
         nodeType: node.fsmPhase ? 'fsm_phase' : (node.type || 'custom'),
         status: result.status,
-        startedAt: new Date(this.startTime.getTime() + result.duration * nodeIndex),
+        // startedAt 应由 createNodeExecutionRecord 设置，这里用 startTime 作为默认值（仅用于创建新记录）
+        // 注意：如果 existing 存在，不会覆盖 startedAt
+        startedAt: this.startTime,  // 使用工作流开始时间作为基准
         completedAt: new Date(),
         updatedAt: new Date(),
         order: nodeIndex,
@@ -1342,9 +1344,12 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           updateData.modelConfigId = safeModelConfigId;
         }
         
-        // 强制设置 startedAt（确保节点启动时间被记录）
-        updateData.startedAt = new Date(this.startTime.getTime() + result.duration * nodeIndex);
-        console.log(`[saveNodeExecutionToDB] 设置 startedAt: ${node.label}`);
+        // ⚠️ 不覆盖 startedAt - 它由 createNodeExecutionRecord 设置（节点实际开始时间）
+        // 如果 startedAt 为空（异常情况），用当前时间作为 fallback
+        if (!existing.startedAt) {
+          updateData.startedAt = new Date(Date.now() - result.duration);  // 从完成时间倒推开始时间
+          console.log(`[saveNodeExecutionToDB] startedAt 为空，倒推设置: ${node.label}`);
+        }
         
         await prisma.nodeExecution.update({
           where: { id: existing.id },
