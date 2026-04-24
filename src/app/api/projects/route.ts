@@ -74,22 +74,33 @@ export async function GET(request: Request) {
 
     // 转换数据格式，添加漏洞数量和运行状态
     const projectsWithVulnCount = projects.map(project => {
-      // 计算评估状态
-      const runningCount = project.EvaluationSession?.filter((e: any) => e.status === 'running').length || 0;
-      const waitingCount = project.EvaluationSession?.filter((e: any) => e.status === 'preparing' || e.status === 'ready').length || 0;
+      // 计算评估状态（preparing 也算运行中）
+      const runningCount = project.EvaluationSession?.filter((e: any) => e.status === 'running' || e.status === 'preparing').length || 0;
+      const waitingCount = project.EvaluationSession?.filter((e: any) => e.status === 'ready' || e.status === 'queued').length || 0;
       const completedCount = project.EvaluationSession?.filter((e: any) => e.status === 'completed').length || 0;
       const failedCount = project.EvaluationSession?.filter((e: any) => e.status === 'failed' || e.status === 'cancelled').length || 0;
       
-      // 状态优先级：running > waiting > failed > completed
+      // 状态优先级：running > waiting > 最新评估状态
+      // 如果有运行中的评估，显示 running
+      // 如果有排队的评估，显示 waiting
+      // 否则显示最新评估的状态（按 startedAt 排序）
       let evaluationStatus = 'idle';
+      
+      // 先检查是否有运行中/排队中的评估
       if (runningCount > 0) {
         evaluationStatus = 'running';
       } else if (waitingCount > 0) {
-        evaluationStatus = 'waiting'; // 等候中
-      } else if (failedCount > 0) {
-        evaluationStatus = 'failed';
-      } else if (completedCount > 0) {
-        evaluationStatus = 'completed';
+        evaluationStatus = 'waiting';
+      } else {
+        // 没有运行/排队的，显示最新评估的状态
+        const allEvals = project.EvaluationSession || [];
+        if (allEvals.length > 0) {
+          // 按 startedAt 降序排序，取最新的评估状态
+          const latestEval = allEvals.sort((a: any, b: any) => 
+            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+          )[0];
+          evaluationStatus = latestEval.status || 'idle';
+        }
       }
       
       return {
@@ -98,7 +109,7 @@ export async function GET(request: Request) {
         vulnerabilityCount: project._count?.Vulnerability || 0,
         hasRunningEvaluation: runningCount > 0,
         hasWaitingEvaluation: waitingCount > 0,
-        evaluationStatus, // 新增：综合评估状态
+        evaluationStatus, // 新增：综合评估状态（与页面显示一致）
         evaluationCounts: { running: runningCount, waiting: waitingCount, completed: completedCount, failed: failedCount },
         userName: project.User?.name || null,
         userUsername: project.User?.username || null,

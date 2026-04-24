@@ -1050,18 +1050,26 @@ toast.error(data.error || '更新项目失败');
     }
   };
 
-  const getStatusText = (status: string) => {
+const getStatusText = (status: string) => {
     switch (status) {
       case 'running':
         return '运行中';
+      case 'preparing':
+        return '准备中';
       case 'waiting':
         return '准备中';
+      case 'queued':
+        return '排队中';
       case 'completed':
         return '已完成';
       case 'failed':
         return '失败';
+      case 'cancelled':
+        return '已中止';
+      case 'idle':
+        return '未评估';
       default:
-        return '待启动';
+        return '未评估';
     }
   };
 
@@ -1069,18 +1077,26 @@ toast.error(data.error || '更新项目失败');
     switch (status) {
       case 'running':
         return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'preparing':
+        return 'bg-orange-100 text-orange-800 border-orange-200';
       case 'waiting':
         return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'queued':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'completed':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'failed':
         return 'bg-red-100 text-red-800 border-red-200';
-      default:
+      case 'cancelled':
         return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'idle':
+        return 'bg-gray-100 text-gray-600 border-gray-200';
+      default:
+        return 'bg-gray-100 text-gray-600 border-gray-200';
     }
   };
 
-  if (loading) {
+if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <LoadingSpinner size="xl" />
