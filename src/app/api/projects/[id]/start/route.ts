@@ -182,43 +182,68 @@ export async function POST(
     }
     
     // 检查并发限制（队列启动和 SSE 重连时跳过）
-    // 注意：需要统计 preparing 和 running 状态，因为创建时是 preparing
+    // 使用数据库事务确保原子性，防止并发竞争导致超限
     // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查并发限制
-    // 并发限制按全局统计：整个系统最多允许 N 个并发评估
     const maxConcurrent = globalConfig?.maxConcurrentEvaluations || 3;
-    const activeCount = await prisma.evaluationSession.count({
-      where: { 
-        status: { in: ['preparing', 'running'] } 
-      },
-    });
     
-    logger.debug(LOG_MODULES.EVALUATION, '并发限制检查', { activeCount, maxConcurrent, isSSEReconnect: !!reconnectEvaluationId, projectId: id });
-    
-    // 如果超出并发限制且不是队列启动或 SSE 重连，创建排队状态的评估
-    if (!isQueuedStart && !reconnectEvaluationId && activeCount >= maxConcurrent) {
-      logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
-      
-      // 创建排队状态的评估会话
-      const queuedEvaluation = await prisma.evaluationSession.create({
-        data: {
-          id: generateId('eval'),
-          projectId: id,
-          workflowId: workflowId,
-          agentTeamId: agentTeamId,
-          modelConfigId: modelId, // 保存请求的模型配置ID
-          roleModels: roleModels ? JSON.stringify(roleModels) : null,
-          status: 'queued',
-          providerType: 'queued', // 标记为排队状态
-        },
+    // 如果不是队列启动或 SSE 重连，在事务中检查并发并创建评估
+    if (!isQueuedStart && !reconnectEvaluationId) {
+      // 使用事务确保并发检查和创建评估是原子操作
+      const concurrencyResult = await prisma.$transaction(async (tx) => {
+        // 在事务中检查当前活跃评估数量
+        const activeCount = await tx.evaluationSession.count({
+          where: { 
+            status: { in: ['preparing', 'running'] } 
+          },
+        });
+        
+        logger.debug(LOG_MODULES.EVALUATION, '并发限制检查（事务内）', { 
+          activeCount, 
+          maxConcurrent, 
+          projectId: id 
+        });
+        
+        // 如果超出并发限制，创建排队状态的评估
+        if (activeCount >= maxConcurrent) {
+          logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
+          
+          const queuedEvaluation = await tx.evaluationSession.create({
+            data: {
+              id: generateId('eval'),
+              projectId: id,
+              workflowId: workflowId,
+              agentTeamId: agentTeamId,
+              modelConfigId: modelId,
+              roleModels: roleModels ? JSON.stringify(roleModels) : null,
+              status: 'queued',
+              providerType: 'queued',
+            },
+          });
+          
+          return {
+            isQueued: true,
+            evaluation: queuedEvaluation,
+            queuePosition: activeCount - maxConcurrent + 1,
+          };
+        }
+        
+        // 未超出限制，返回可创建标记
+        return {
+          isQueued: false,
+          activeCount,
+        };
       });
       
-      return NextResponse.json({
-        message: '评估已加入排队队列',
-        evaluationId: queuedEvaluation.id,
-        status: 'queued',
-        queuePosition: activeCount - maxConcurrent + 1,
-        maxConcurrent,
-      }, { status: 202 }); // 202 Accepted 表示请求已接受但未处理
+      // 如果被排队，直接返回
+      if (concurrencyResult.isQueued) {
+        return NextResponse.json({
+          message: '评估已加入排队队列',
+          evaluationId: concurrencyResult.evaluation!.id,
+          status: 'queued',
+          queuePosition: concurrencyResult.queuePosition!,
+          maxConcurrent,
+        }, { status: 202 });
+      }
     }
 
     // 日志：检查全局配置
