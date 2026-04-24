@@ -132,7 +132,9 @@ export async function POST(
     }
 
     // 项目归属校验（SSE 重连时跳过，因为后续有评估归属检查）
-    if (!reconnectEvaluationId && project.userId !== payload.userId) {
+    // 管理员可以启动任意用户的项目评估
+    const isAdmin = payload.roles?.includes('admin');
+    if (!reconnectEvaluationId && project.userId !== payload.userId && !isAdmin) {
       return NextResponse.json({ error: '无权操作此项目' }, { status: 403 });
     }
 
