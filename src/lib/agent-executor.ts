@@ -2,18 +2,21 @@ import { prisma } from '@/lib/prisma';
 import { ClaudeAgentService, createClaudeAgentService } from '@/services/ai';
 import { ToolExecutor } from '@/lib/tool-executor';
 import { parseAIResponse, ParsedVulnerability, ParsedToolCall } from '@/lib/result-parser';
+import { updateContextWindowFromError, isContextOverflowError } from '@/lib/context-window-updater';
 
 export interface AgentExecutionContext {
   skillId: string;
   projectId: string;
   scanTaskId?: string;
   modelConfig: {
+    id?: string;  // ModelConfig ID，用于自动更新 contextWindow
     providerType: string;
     apiKey: string;
     apiBaseUrl: string;
     model: string;
     maxTokens?: number;      // 最大输出 token 数
     temperature?: number;    // 温度参数
+    contextWindow?: number;  // 模型的 context window，用于 SDK Compaction
   };
   maxToolCalls?: number;
   maxIterations?: number;
@@ -69,6 +72,7 @@ export class AgentExecutor {
       temperature: context.modelConfig.temperature ?? 0.3,
       cwd: context.cwd,
       allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'],
+      contextWindow: context.modelConfig.contextWindow,  // 传递 context window 用于 SDK Compaction
     });
 
     // 创建工具执行器
@@ -186,6 +190,12 @@ export class AgentExecutor {
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage = error instanceof Error ? error.message : '未知错误';
+
+      // 自动学习：如果是 context 超限错误，尝试更新数据库
+      if (this.context.modelConfig.id && isContextOverflowError(error)) {
+        console.log('[AgentExecutor] 检测到 context 超限错误，尝试自动学习 contextWindow');
+        updateContextWindowFromError(this.context.modelConfig.id, error).catch(() => {});
+      }
 
       // 更新执行记录
       if (this.executionId) {

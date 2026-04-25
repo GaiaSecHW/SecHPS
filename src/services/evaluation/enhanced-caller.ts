@@ -8,6 +8,7 @@ import { completeSkillExecution } from '@/services/skill-execution-tracker';
 import { updateAnalysisReport, parseAnalysisFromOutput } from '@/services/analysis-report';
 import { updateSkillExecutionLog } from '@/services/skill-execution-log';
 import { generateId } from '@/lib/id-generator';
+import { updateContextWindowFromError, isContextOverflowError } from '@/lib/context-window-updater';
 
 // ============================================
 // 日志工具
@@ -39,6 +40,7 @@ export interface ToolResult {
 }
 
 export interface EnhancedEvaluationConfig {
+  modelConfigId?: string;  // ModelConfig ID，用于自动更新 contextWindow
   providerType: 'claude' | 'openai';  // 数据库中只存储这两种类型
   apiKey: string;
   baseUrl?: string;
@@ -54,6 +56,7 @@ export interface EnhancedEvaluationConfig {
   allowDangerouslySkipPermissions?: boolean;
   resumeSession?: string;
   temperature?: number;  // 模型温度，默认 0.3
+  contextWindow?: number;  // 模型的 context window 大小，用于 autoCompactWindow
   workflowNodeId?: string;  // 工作流节点 ID，用于保存 session_id 到 NodeExecution 表
   allowedTools?: string[];  // 允许的工具列表（包含注册的 Skills）
   skills?: string[];  // Skills 配置（传递给子Agent）
@@ -107,6 +110,7 @@ export class EnhancedEvaluationCaller {
   private currentWorkflowNodeId: string | null = null;  // 当前工作流节点 ID
   private currentSkillExecutionId: string | null = null;  // 当前 Skill 执行记录 ID
   private currentSkillId: string | null = null;  // 当前执行的 Skill ID
+  private modelConfigId: string | null = null;  // ModelConfig ID，用于自动更新 contextWindow
   private aborted: boolean = false;  // 中止标志
 
   constructor(config: EnhancedEvaluationConfig) {
@@ -119,6 +123,9 @@ export class EnhancedEvaluationCaller {
     
     // 设置 workflowNodeId（用于保存 session_id 到 NodeExecution 表）
     this.currentWorkflowNodeId = config.workflowNodeId || null;
+    
+    // 保存 modelConfigId（用于自动更新 contextWindow）
+    this.modelConfigId = config.modelConfigId || null;
     
     // 确定 baseUrl
     let agentBaseUrl: string | undefined;
@@ -142,6 +149,7 @@ export class EnhancedEvaluationCaller {
       allowDangerouslySkipPermissions: config.allowDangerouslySkipPermissions,
       resumeSession: config.resumeSession,
       temperature: config.temperature ?? 0.7,  // 传递温度参数
+      contextWindow: config.contextWindow,  // 传递 context window 用于 SDK Compaction
       skills: config.skills,  // Skills 配置
       agents: config.agents,  // 子Agent定义（SDK官方推荐方式）
     });
@@ -393,7 +401,20 @@ export class EnhancedEvaluationCaller {
         }
         callbacks.onComplete(fullResponse);
       },
-      onError: callbacks.onError,
+      onError: (error: Error) => {
+        // 自动学习：如果是 context 超限错误，尝试更新数据库
+        if (this.modelConfigId && isContextOverflowError(error)) {
+          logInfo('检测到 context 超限错误，尝试自动学习 contextWindow');
+          updateContextWindowFromError(this.modelConfigId, error).then((updated) => {
+            if (updated) {
+              logInfo(`contextWindow 已自动更新为 ${updated}`);
+            }
+          }).catch((e) => {
+            logWarn('自动更新 contextWindow 失败:', e);
+          });
+        }
+        callbacks.onError(error);
+      },
       onSessionId: async (sessionId) => {
         console.log('[Evaluation] 捕获 SDK 会话 ID:', sessionId);
         console.log('[Evaluation] currentEvaluationId:', this.currentEvaluationId);
@@ -505,10 +526,12 @@ export class EnhancedEvaluationCaller {
  */
 export function createEnhancedEvaluationCaller(
   modelConfig: {
+    id?: string;  // ModelConfig ID，用于自动更新 contextWindow
     providerType: string;
     apiKey: string;
     apiBaseUrl: string;
     models: string;  // 可以是 JSON 数组字符串或单个模型名称
+    contextWindow?: number;  // 模型的 context window
   },
   workingDirectory?: string,
   sdkOptions?: {
@@ -542,11 +565,13 @@ export function createEnhancedEvaluationCaller(
   console.log(`[createEnhancedEvaluationCaller] providerType: ${providerType}, model: ${model}, apiBaseUrl: ${modelConfig.apiBaseUrl}`);
 
   const caller = new EnhancedEvaluationCaller({
+    modelConfigId: modelConfig.id,  // 传递 ModelConfig ID 用于自动更新 contextWindow
     providerType,
     apiKey: modelConfig.apiKey,
     baseUrl: modelConfig.apiBaseUrl || undefined,
     model,
     cwd: workingDirectory,
+    contextWindow: modelConfig.contextWindow,  // 传递 contextWindow
     // SDK 高级配置
     mcpServers: sdkOptions?.mcpServers,
     toolPermissions: sdkOptions?.toolPermissions,

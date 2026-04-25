@@ -3,8 +3,10 @@
 import { ClaudeAgentService, ClaudeAgentCallbacks, createClaudeAgentService, AppMcpServerConfig } from '@/services/ai';
 import { ConversationHistory } from './history';
 import { PromptBuilder, PromptContext } from './prompt';
+import { updateContextWindowFromError, isContextOverflowError } from '@/lib/context-window-updater';
 
 export interface EvaluationConfig {
+  modelConfigId?: string;  // ModelConfig ID，用于自动更新 contextWindow
   providerType: string;
   apiKey: string;
   baseUrl?: string;
@@ -13,6 +15,7 @@ export interface EvaluationConfig {
   cwd?: string;
   allowedTools?: string[]; // 可选：允许的工具列表
   mcpServers?: AppMcpServerConfig[]; // MCP 服务器配置
+  contextWindow?: number; // 模型的 context window，用于 SDK Compaction
 }
 
 export interface EvaluationCallbacks {
@@ -29,8 +32,11 @@ export class EvaluationCaller {
   private history: ConversationHistory;
   private promptBuilder: PromptBuilder;
   private currentEvaluationId: string | null = null;
+  private modelConfigId: string | null = null;  // ModelConfig ID，用于自动更新 contextWindow
 
   constructor(config: EvaluationConfig) {
+    // 保存 modelConfigId
+    this.modelConfigId = config.modelConfigId || null;
     // 默认工具列表
     const defaultTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'];
     
@@ -47,6 +53,7 @@ export class EvaluationCaller {
       baseUrl: config.baseUrl,
       allowedTools,
       mcpServers: config.mcpServers,  // MCP 服务器配置
+      contextWindow: config.contextWindow,  // 传递 context window 用于 SDK Compaction
     });
     this.history = new ConversationHistory();
     this.promptBuilder = new PromptBuilder();
@@ -101,12 +108,22 @@ export class EvaluationCaller {
         }
         callbacks.onComplete(fullResponse);
       },
-      onError: callbacks.onError,
+      onError: (error: Error) => {
+        // 自动学习：如果是 context 超限错误，尝试更新数据库
+        if (this.modelConfigId && isContextOverflowError(error)) {
+          updateContextWindowFromError(this.modelConfigId, error).catch(() => {});
+        }
+        callbacks.onError(error);
+      },
     };
 
     try {
       await this.agentService.sendPrompt(prompt, agentCallbacks);
     } catch (error) {
+      // 自动学习：如果是 context 超限错误，尝试更新数据库
+      if (this.modelConfigId && isContextOverflowError(error)) {
+        updateContextWindowFromError(this.modelConfigId, error).catch(() => {});
+      }
       callbacks.onError(error instanceof Error ? error : new Error(String(error)));
     }
   }
@@ -146,12 +163,22 @@ export class EvaluationCaller {
         }
         callbacks.onComplete(fullResponse);
       },
-      onError: callbacks.onError,
+      onError: (error: Error) => {
+        // 自动学习：如果是 context 超限错误，尝试更新数据库
+        if (this.modelConfigId && isContextOverflowError(error)) {
+          updateContextWindowFromError(this.modelConfigId, error).catch(() => {});
+        }
+        callbacks.onError(error);
+      },
     };
 
     try {
       await this.agentService.sendPrompt(prompt, agentCallbacks);
     } catch (error) {
+      // 自动学习：如果是 context 超限错误，尝试更新数据库
+      if (this.modelConfigId && isContextOverflowError(error)) {
+        updateContextWindowFromError(this.modelConfigId, error).catch(() => {});
+      }
       callbacks.onError(error instanceof Error ? error : new Error(String(error)));
     }
   }

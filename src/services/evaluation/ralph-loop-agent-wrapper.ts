@@ -625,10 +625,12 @@ export class RalphLoopAgent {
  */
 export function createRalphLoopAgent(
   modelConfig: {
+    id?: string;  // ModelConfig ID，用于自动更新 contextWindow
     providerType: string;
     apiKey: string;
     apiBaseUrl: string;
     models: string;
+    contextWindow?: number;  // 模型的 context window 大小
   },
   workingDirectory?: string,
   ralphConfig?: {
@@ -686,11 +688,13 @@ export function createRalphLoopAgent(
     modelConfig.providerType === 'claude' ? 'claude' : 'openai';
 
   const agent = new RalphLoopAgent({
+    modelConfigId: modelConfig.id,  // 传递 ModelConfig ID 用于自动更新 contextWindow
     providerType,
     apiKey: modelConfig.apiKey,
     baseUrl: modelConfig.apiBaseUrl || undefined,
     model,
     cwd: workingDirectory,
+    contextWindow: modelConfig.contextWindow,  // 传递 context window
     // SDK 高级配置
     mcpServers: sdkOptions?.mcpServers,
     toolPermissions: sdkOptions?.toolPermissions,
