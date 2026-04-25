@@ -7,9 +7,18 @@ import { verifyToken } from '@/lib/auth';
 import { SessionManager } from '@/services/session-manager';
 import { ClaudeAgentService } from '@/services/ai/claude-agent';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+
+/** Get active model config */
+async function getModelConfig() {
+  const m = await prisma.modelConfig.findFirst({ where: { isActive: true, isDefault: true } }) || await prisma.modelConfig.findFirst({ where: { isActive: true } });
+  if (!m) return null;
+  const models = JSON.parse(m.models || '[]');
+  return { id: m.id, apiKey: m.apiKey, model: models[0] || 'claude-sonnet-4-20250514', contextWindow: m.contextWindow ?? 0 };
+}
 
 export async function POST(
   request: Request,
@@ -38,6 +47,12 @@ export async function POST(
 
     const decodedProjectName = decodeURIComponent(projectName);
     const projectPath = decodedProjectName.replace(/-/g, '/');
+
+    // 获取模型配置
+    const modelConfig = await getModelConfig();
+    if (!modelConfig) {
+      return NextResponse.json({ error: '模型配置不存在' }, { status: 500 });
+    }
 
     const sessionManager = new SessionManager(projectPath);
     let currentSessionId = sessionId;
