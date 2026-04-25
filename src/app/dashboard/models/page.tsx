@@ -39,6 +39,7 @@ interface ModelConfig {
   isActive: boolean;
   isDefault: boolean;
   isPublic: boolean;
+  contextWindow: number;  // 学习到的上下文窗口大小
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +93,9 @@ export default function ModelsPage() {
     duration?: number;      // 响应时间(ms)
     timestamp: number;
   }>>({});
+
+  // Context Window 复位状态
+  const [resettingContextWindow, setResettingContextWindow] = useState<string | null>(null);
 
   // 表单数据
   const [formData, setFormData] = useState<ModelFormData>({
@@ -379,6 +383,28 @@ export default function ModelsPage() {
       });
     } finally {
       setTestingModelId(null);
+    }
+  };
+
+  // 复位 Context Window
+  const handleResetContextWindow = async (modelId: string) => {
+    try {
+      setResettingContextWindow(modelId);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/models/${modelId}/reset-context-window`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('复位失败');
+      setModels(models.map(m => m.id === modelId ? { ...m, contextWindow: 0 } : m));
+      if (editingModel?.id === modelId) setEditingModel({ ...editingModel, contextWindow: 0 });
+      setSuccess('Context Window 已复位');
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message);
+      setTimeout(() => setError(null), 3000);
+    } finally {
+      setResettingContextWindow(null);
     }
   };
 
@@ -890,6 +916,31 @@ export default function ModelsPage() {
                   </p>
                 </div>
               </div>
+
+              {/* Context Window - 只读显示（仅编辑模式） */}
+              {editingModel && (
+                <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Context Window</label>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-semibold text-gray-900">{editingModel?.contextWindow ?? 0}</span>
+                      <span className="text-sm text-gray-500">tokens</span>
+                    </div>
+                    {editingModel?.contextWindow > 0 && (
+                      <button 
+                        onClick={() => handleResetContextWindow(editingModel.id)} 
+                        disabled={resettingContextWindow === editingModel.id}
+                        className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {resettingContextWindow === editingModel.id ? '复位中...' : '复位'}
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    {editingModel?.contextWindow > 0 ? '已学习到的值，点击复位重新学习' : '未设置，下次调用超限时自动学习'}
+                  </p>
+                </div>
+              )}
 
               {/* 开关 */}
               <div className="flex flex-col gap-3">
