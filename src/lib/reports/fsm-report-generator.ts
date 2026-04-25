@@ -31,6 +31,9 @@ export interface FSMReportData {
     P7?: Phase7Output;
   };
   
+  // 用户编排的渗透测试节点（替代固定的 P6/Penetration）
+  userDefinedNodes: UserDefinedNodeOutput[];
+  
   // Agent Zone 结果
   agentResults: AgentZoneResult[];
   
@@ -39,6 +42,15 @@ export interface FSMReportData {
   
   // 统计摘要
   summary: FSMReportSummary;
+}
+
+interface UserDefinedNodeOutput {
+  nodeId: string;
+  nodeLabel: string;
+  nodeType: string;
+  status: string;
+  outputPath?: string;
+  order: number;
 }
 
 interface Phase1Output {
@@ -166,13 +178,16 @@ export async function generateFSMReport(
   // 2. 读取 Phase 输出
   const phaseOutputs = await readPhaseOutputs(workspacePath);
 
+  // 2.5 读取用户编排的渗透测试节点（替代固定的 fsm-node-penetration）
+  const userDefinedNodes = await readUserDefinedNodes(sessionId, workspacePath);
+
   // 3. 读取 Agent Zone 结果
   const agentResults = await readAgentZoneResults(workspacePath);
 
   // 4. 扫描 Workspace 报告
   const workspaceScanResult = await scanWorkspaceReports(workspacePath);
 
-  // 5. 计算摘要
+  // 5. 计算摘要（漏洞数据由前端动态读取）
   const summary = calculateSummary(phaseOutputs, agentResults, workspaceScanResult.vulnerabilities);
 
   // 6. 构建报告数据
@@ -184,6 +199,7 @@ export async function generateFSMReport(
     fsmTemplate: workflow?.FSMTemplate?.name || 'threat-modeling',
     generatedAt: new Date(),
     phaseOutputs,
+    userDefinedNodes,
     agentResults,
     workspaceVulnerabilities: workspaceScanResult.vulnerabilities,
     summary,
@@ -200,31 +216,60 @@ export async function generateFSMReport(
 
 /**
  * 读取 Phase 输出文件
- * 注意：使用 outputs/skills 替代 .claude/skills
+ * 从 outputs/phases 目录读取节点执行生成的 output.yaml 文件
  */
 async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['phaseOutputs']> {
-  const outputsPath = path.join(workspacePath, 'outputs', 'skills', 'threat-modeling', 'outputs');
   const phaseOutputs: FSMReportData['phaseOutputs'] = {};
+  const phasesPath = path.join(workspacePath, 'outputs', 'phases');
 
-  const phaseFiles = [
-    { phase: 'P1', file: 'P1_project_context.yaml' },
-    { phase: 'P2', file: 'P2_dfd_elements.yaml' },
-    { phase: 'P3', file: 'P3_boundary_context.yaml' },
-    { phase: 'P4', file: 'P4_security_gaps.yaml' },
-    { phase: 'P5', file: 'P5_threat_inventory.yaml' },
-    { phase: 'P6', file: 'P6_validated_risks.yaml' },
-    { phase: 'P7', file: 'P7_mitigation_plan.yaml' },
-  ];
+  // 检查目录是否存在
+  if (!fs.existsSync(phasesPath)) {
+    console.warn(`[readPhaseOutputs] 目录不存在: ${phasesPath}`);
+    return phaseOutputs;
+  }
 
-  for (const { phase, file } of phaseFiles) {
-    const filePath = path.join(outputsPath, file);
-    
+  // Phase 目录名称映射
+  const phaseDirMapping: Record<string, string> = {
+    '1-system-understanding': 'P1',
+    '1-系统理解': 'P1',
+    '2-security-assessment': 'P2',
+    '2-安全评估': 'P2',
+    '3-threat-analysis': 'P3',
+    '3-威胁分析': 'P3',
+    '4-report-generation': 'P4',
+    '4-报告生成': 'P4',
+    '5-phase-5': 'P5',
+    '6-phase-6': 'P6',
+    '7-phase-7': 'P7',
+    '6-penetration': 'P6',
+    '6-渗透测试': 'P6',
+  };
+
+  // 读取所有 phase 目录下的 output.yaml
+  const phaseDirs = fs.readdirSync(phasesPath);
+
+  for (const dirName of phaseDirs) {
+    // 跳过 eval-{id} 格式的目录（这些是每次评估的临时目录）
+    if (dirName.startsWith('eval-')) {
+      continue;
+    }
+
+    const phaseKey = phaseDirMapping[dirName] || dirName.match(/^(\d+)/)?.[1];
+    if (!phaseKey) {
+      continue;
+    }
+
+    const outputFilePath = path.join(phasesPath, dirName, 'output.yaml');
+
     try {
-      if (fs.existsSync(filePath)) {
-        const content = fs.readFileSync(filePath, 'utf-8');
+      if (fs.existsSync(outputFilePath)) {
+        const content = fs.readFileSync(outputFilePath, 'utf-8');
         const data = parseYaml(content);
         
-        switch (phase) {
+        // phaseKey 可能是 "P1" 或 "1"，统一处理
+        const normalizedPhase = phaseKey.startsWith('P') ? phaseKey : `P${phaseKey}`;
+
+        switch (normalizedPhase) {
           case 'P1':
             phaseOutputs.P1 = {
               projectContext: data.P1_project_context?.project_context || data.project_context,
@@ -232,6 +277,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               entryPointInventory: data.P1_project_context?.entry_point_inventory?.entry_points || data.entry_point_inventory?.entry_points || [],
               techStack: data.P1_project_context?.project_context?.tech_stack || [],
             };
+            console.log(`[readPhaseOutputs] P1 loaded from ${outputFilePath}`);
             break;
           case 'P2':
             phaseOutputs.P2 = {
@@ -239,6 +285,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               elementMapping: data.P2_dfd_elements?.element_mapping || [],
               l1Coverage: data.P2_dfd_elements?.l1_coverage?.coverage_percentage || data.l1_coverage?.coverage_percentage || 0,
             };
+            console.log(`[readPhaseOutputs] P2 loaded from ${outputFilePath}`);
             break;
           case 'P3':
             phaseOutputs.P3 = {
@@ -246,6 +293,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               zones: data.P3_boundary_context?.zones || data.zones || [],
               elementZoneMapping: data.P3_boundary_context?.element_zone_mapping || [],
             };
+            console.log(`[readPhaseOutputs] P3 loaded from ${outputFilePath}`);
             break;
           case 'P4':
             phaseOutputs.P4 = {
@@ -253,6 +301,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               gaps: data.P4_security_gaps?.gaps || data.gaps || [],
               securityScore: data.P4_security_gaps?.security_score?.overall_score || data.security_score?.overall_score || 0,
             };
+            console.log(`[readPhaseOutputs] P4 loaded from ${outputFilePath}`);
             break;
           case 'P5':
             phaseOutputs.P5 = {
@@ -260,6 +309,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               threatSummary: data.P5_threat_inventory?.threat_summary || data.threat_summary || {},
               elementCoverage: data.P5_threat_inventory?.element_coverage_verification?.coverage_percentage || 0,
             };
+            console.log(`[readPhaseOutputs] P5 loaded from ${outputFilePath}`);
             break;
           case 'P6':
             phaseOutputs.P6 = {
@@ -267,6 +317,7 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               pocDetails: data.P6_validated_risks?.poc_details || data.poc_details || [],
               riskSummary: data.P6_validated_risks?.risk_summary || data.risk_summary || {},
             };
+            console.log(`[readPhaseOutputs] P6 loaded from ${outputFilePath}`);
             break;
           case 'P7':
             phaseOutputs.P7 = {
@@ -274,16 +325,61 @@ async function readPhaseOutputs(workspacePath: string): Promise<FSMReportData['p
               coverageVerification: data.P7_mitigation_plan?.coverage_verification?.coverage_percentage || 0,
               implementationOrder: data.P7_mitigation_plan?.implementation_order?.priority_sequence || [],
             };
+            console.log(`[readPhaseOutputs] P7 loaded from ${outputFilePath}`);
             break;
         }
+      } else {
+        console.warn(`[readPhaseOutputs] output.yaml 不存在: ${outputFilePath}`);
       }
     } catch (err) {
       // 文件读取失败，继续处理其他文件
-      console.warn(`Failed to read ${phase} output: ${err}`);
+      console.warn(`[readPhaseOutputs] Failed to read ${dirName} output: ${err}`);
     }
   }
 
   return phaseOutputs;
+}
+
+/**
+ * 读取用户编排的渗透测试节点
+ * 
+ * FSM 的渗透测试阶段由用户编排的多个自定义节点组成，
+ * 而不是单个固定的 fsm-node-penetration。
+ * 这些节点的 ID 格式为 "wn-{timestamp}"。
+ * 
+ * 漏洞数据由前端动态从 Vulnerability 表读取，按 evaluationId 筛选。
+ */
+async function readUserDefinedNodes(
+  sessionId: string,
+  workspacePath: string
+): Promise<UserDefinedNodeOutput[]> {
+  // 从 NodeExecution 表读取该 session 的用户节点
+  const userNodeExecutions = await prisma.nodeExecution.findMany({
+    where: { 
+      evaluationSessionId: sessionId,
+      workflowNodeId: { startsWith: 'wn-' }  // 用户节点 ID 格式
+    },
+    orderBy: { order: 'asc' },
+    select: {
+      workflowNodeId: true,
+      nodeLabel: true,
+      nodeType: true,
+      status: true,
+      order: true,
+    },
+  });
+
+  console.log(`[readUserDefinedNodes] 找到 ${userNodeExecutions.length} 个用户节点`);
+
+  // 转换为输出格式
+  return userNodeExecutions.map(node => ({
+    nodeId: node.workflowNodeId,
+    nodeLabel: node.nodeLabel,
+    nodeType: node.nodeType,
+    status: node.status,
+    order: node.order,
+    outputPath: undefined,  // 可选：后续从 outputs/phases 读取
+  }));
 }
 
 /**
@@ -347,6 +443,9 @@ async function readAgentZoneResults(workspacePath: string): Promise<AgentZoneRes
 
 /**
  * 计算报告摘要
+ * 
+ * 注意：漏洞数据由前端动态从 Vulnerability 表读取，
+ * 此处的 workspaceVulnerabilities 来自 workspace 目录扫描（如 SAST 工具输出）。
  */
 function calculateSummary(
   phaseOutputs: FSMReportData['phaseOutputs'],
@@ -598,7 +697,7 @@ ${generateImplementationOrder(data.phaseOutputs.P7)}
  * 生成渗透测试计划
  */
 function generatePenTestPlan(data: FSMReportData): string {
-  const pocs = data.phaseOutputs.P6?.pocDetails || [];
+  const userNodes = data.userDefinedNodes || [];
   
   return `# Penetration Test Plan
 
@@ -607,43 +706,45 @@ function generatePenTestPlan(data: FSMReportData): string {
 
 ---
 
-## POC Details
+## 用户编排渗透测试节点
 
-${pocs.map(poc => `
-### ${poc.id}: ${poc.title || poc.id}
+共执行 **${userNodes.length}** 个用户编排的渗透测试节点：
 
-**Risk Reference**: ${poc.risk_ref || 'N/A'}
-
-**Description**:
-${poc.description || 'No description'}
-
-**POC Type**: ${poc.poc_type || 'N/A'}
-
-**Steps**:
-${poc.poc_steps?.map((s: any) => `${s.step}. ${s.action} (Expected: ${s.expected_result})`).join('\n') || 'Steps pending'}
-
-**Prerequisites**:
-${poc.prerequisites?.map((p: any) => `- ${p}`).join('\n') || 'None'}
-
-**Tools Required**:
-${poc.tools_required?.map((t: any) => `- ${t}`).join('\n') || 'Standard tools'}
-
----
-`).join('\n') || 'No POCs available'}
+| 节点 | 状态 | ID |
+|------|------|-----|
+${userNodes.map(n => `| ${n.nodeLabel} | ${n.status} | ${n.nodeId} |`).join('\n')}
 
 ---
 
-## Test Sequence
+### 节点详情
 
-1. **Authentication Testing** - Test authentication mechanisms
-2. **Authorization Testing** - Test access control
-3. **Input Validation Testing** - Test injection vulnerabilities
-4. **Session Management Testing** - Test session handling
-5. **Data Protection Testing** - Test data exposure
+${userNodes.map(node => `
+#### ${node.nodeLabel}
+
+- **节点 ID**: ${node.nodeId}
+- **执行状态**: ${node.status}
+- **漏洞发现**: 前端动态查询 Vulnerability 表，按 skillExecutionId 关联
+
+${node.outputPath ? `- **输出文件**: ${node.outputPath}` : ''}
+
+---
+`).join('\n') || '无用户编排节点'}
+
+---
+
+## 标准化测试序列
+
+1. **认证测试** - 测试认证机制
+2. **授权测试** - 测试访问控制
+3. **输入验证测试** - 测试注入漏洞
+4. **会话管理测试** - 测试会话处理
+5. **数据保护测试** - 测试数据泄露
 
 ---
 
 *Generated by FSM Threat Modeling Workflow*
+
+**注意**: 漏洞详情由前端动态从 Vulnerability 表读取，按 evaluationId 筛选，按 skillExecutionId 关联到对应节点。
 `;
 }
 

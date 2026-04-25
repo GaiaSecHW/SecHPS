@@ -133,9 +133,28 @@ export async function GET(
         // 检查是否是 FSM 工作流（有 FSMTemplate）
         if (workflow.FSMTemplate && workflow.FSMTemplate.nodes) {
           // FSM 工作流：从 FSMTemplate.nodes JSON 解析节点
+          // 并合并用户编排的节点（替换占位节点 fsm-node-penetration）
           try {
             const fsmNodes = JSON.parse(workflow.FSMTemplate.nodes);
-            workflowNodes = fsmNodes.map((node: any, index: number) => ({
+            
+            // 1. 过滤掉占位节点（skillPath=null && fsmPhase=6）
+            const filteredNodes = fsmNodes.filter((node: any) => {
+              const isPlaceholder = node.skillPath === null && node.fsmPhase === 6;
+              if (isPlaceholder) {
+                logger.debug(LOG_MODULES.EVALUATION, '过滤 FSM 占位节点', { nodeId: node.id, label: node.label });
+              }
+              return !isPlaceholder;
+            });
+            
+            // 2. 添加用户编排的 task 节点（在 fsmPhase=6 位置插入）
+            const userNodes = workflow.WorkflowNode.filter(n => n.type === 'task');
+            logger.debug(LOG_MODULES.EVALUATION, '找到用户编排节点', { count: userNodes.length });
+            
+            // 按 positionX 排序用户节点
+            const sortedUserNodes = [...userNodes].sort((a, b) => a.positionX - b.positionX);
+            
+            // 3. 构建 workflowNodes 列表
+            workflowNodes = filteredNodes.map((node: any, index: number) => ({
               id: node.id,
               label: node.label || `Phase ${node.fsmPhase}`,
               type: 'fsm_phase',
@@ -152,9 +171,38 @@ export async function GET(
               data: node,
             }));
             
-            logger.debug(LOG_MODULES.EVALUATION, 'FSM 节点加载完成', { 
+            // 4. 在 fsmPhase=5 之后、fsmPhase=7 之前插入用户节点
+            const p5Index = workflowNodes.findIndex(n => n.fsmPhase === 5);
+            const insertIndex = p5Index >= 0 ? p5Index + 1 : workflowNodes.length;
+            
+            for (let i = 0; i < sortedUserNodes.length; i++) {
+              const wn = sortedUserNodes[i];
+              const nodeData = wn.data ? JSON.parse(wn.data) : {};
+              const userNode = {
+                id: wn.id,
+                label: nodeData.label || '用户节点',
+                type: wn.type,
+                roleId: wn.roleId || null,
+                roleName: null,
+                roleColor: null,
+                fsmPhase: 6,  // 渗透测试阶段
+                fsmOrder: 6 + i * 0.1,  // 6.0, 6.1, 6.2...
+                fsmFixed: false,
+                skills: wn.skills ? JSON.parse(wn.skills) : [],
+                vulnerabilityCategories: wn.vulnerabilityCategories ? JSON.parse(wn.vulnerabilityCategories) : [],
+                description: nodeData.description || null,
+                skillPath: null,
+                data: nodeData,
+              };
+              workflowNodes.splice(insertIndex + i, 0, userNode);
+            }
+            
+            // 5. 按 fsmOrder 排序
+            workflowNodes.sort((a, b) => (a.fsmOrder || 0) - (b.fsmOrder || 0));
+            
+            logger.debug(LOG_MODULES.EVALUATION, 'FSM 节点加载完成（含用户节点）', { 
               nodeCount: workflowNodes.length,
-              phases: workflowNodes.map((n: any) => n.fsmPhase)
+              phases: workflowNodes.map((n: any) => `${n.label}(${n.fsmPhase})`)
             });
           } catch (e) {
             logger.error(LOG_MODULES.EVALUATION, '解析 FSMTemplate.nodes 失败', { error: String(e) });

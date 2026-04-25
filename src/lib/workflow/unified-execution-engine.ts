@@ -601,58 +601,52 @@ callbacks: {
           };
         }
 
-        // 成功完成
-        if (result.completionReason === 'verified' || result.text.length > 100) {
-          console.log(`[executeNode] 节点执行成功: iterations=${result.iterations}`);
+        // 成功完成 - 执行到这里说明节点没有被中止，写入输出
+        console.log(`[executeNode] 节点执行完成: completionReason=${result.completionReason}, iterations=${result.iterations}`);
 
-          // 确保 Token 数据正确（使用 result.totalUsage 作为最终值）
-          // 如果 onUsage 回调没有被正确调用，使用 result.totalUsage 作为备份
-          if (result.totalUsage && result.totalUsage.inputTokens > 0) {
-            console.log(`[executeNode] 使用 result.totalUsage 更新 nodeTokens: input=${result.totalUsage.inputTokens}, output=${result.totalUsage.outputTokens}`);
-            this.nodeTokens[nodeIndex] = {
-              input: result.totalUsage.inputTokens,
-              output: result.totalUsage.outputTokens,
-            };
-            // 重新计算所有节点的总累计值
-            this.cumulativeTokens.input = Object.values(this.nodeTokens)
-              .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
-            this.cumulativeTokens.output = Object.values(this.nodeTokens)
-              .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
-          }
-
-          // 写入 YAML 输出
-          const outputYamlPath = await this.writeNodeOutput(nodeIndex, node, result.text);
-
-          const nodeResult: NodeExecutionResult = {
-            nodeIndex,
-            nodeId,
-            nodeName,
-            status: 'completed',
-            outputYamlPath,
-            iterations: result.iterations,
-            retryCount,
-            duration: Date.now() - nodeStartTime,
-            inputTokens: result.totalUsage.inputTokens,
-            outputTokens: result.totalUsage.outputTokens,
-            modelName: modelConfig.name,
-            modelConfigId: modelConfig.id,
+        // 确保 Token 数据正确（使用 result.totalUsage 作为最终值）
+        // 如果 onUsage 回调没有被正确调用，使用 result.totalUsage 作为备份
+        if (result.totalUsage && result.totalUsage.inputTokens > 0) {
+          console.log(`[executeNode] 使用 result.totalUsage 更新 nodeTokens: input=${result.totalUsage.inputTokens}, output=${result.totalUsage.outputTokens}`);
+          this.nodeTokens[nodeIndex] = {
+            input: result.totalUsage.inputTokens,
+            output: result.totalUsage.outputTokens,
           };
-
-          // 调用节点完成回调
-          await this.callbacks.onNodeComplete(nodeIndex, nodeResult);
-
-          // 保存节点执行记录到数据库
-          await this.saveNodeExecutionToDB(nodeIndex, node, nodeResult, modelConfig);
-          
-          // 完成 SkillExecution 记录（统计漏洞数量）
-          await this.completeSkillExecutions(nodeIndex);
-
-          return nodeResult;
+          // 重新计算所有节点的总累计值
+          this.cumulativeTokens.input = Object.values(this.nodeTokens)
+            .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
+          this.cumulativeTokens.output = Object.values(this.nodeTokens)
+            .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
         }
 
-        // 未验证成功，需要重试
-        console.log(`[executeNode] 节点未验证成功，准备重试`);
-        lastError = new Error(`节点执行未完成验证: ${result.reason || '未知原因'}`);
+        // 写入 YAML 输出
+        const outputYamlPath = await this.writeNodeOutput(nodeIndex, node, result.text);
+
+        const nodeResult: NodeExecutionResult = {
+          nodeIndex,
+          nodeId,
+          nodeName,
+          status: 'completed',
+          outputYamlPath,
+          iterations: result.iterations,
+          retryCount,
+          duration: Date.now() - nodeStartTime,
+          inputTokens: result.totalUsage.inputTokens,
+          outputTokens: result.totalUsage.outputTokens,
+          modelName: modelConfig.name,
+          modelConfigId: modelConfig.id,
+        };
+
+        // 调用节点完成回调
+        await this.callbacks.onNodeComplete(nodeIndex, nodeResult);
+
+        // 保存节点执行记录到数据库
+        await this.saveNodeExecutionToDB(nodeIndex, node, nodeResult, modelConfig);
+        
+        // 完成 SkillExecution 记录（统计漏洞数量）
+        await this.completeSkillExecutions(nodeIndex);
+
+        return nodeResult;
 
       } catch (error) {
         const err = error instanceof Error ? error : new Error(String(error));
