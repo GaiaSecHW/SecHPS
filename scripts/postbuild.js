@@ -151,8 +151,9 @@ function main() {
     'backups',
     'outputs',
     'data',
-    'dev.db',
+    'uploads',
     'prod_dev.db',
+	'vulnerabilities'
   ];
   
   for (const dirName of CLEANUP_DIRS) {

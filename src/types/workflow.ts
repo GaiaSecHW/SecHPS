@@ -277,7 +277,7 @@ export const NODE_TYPES: NodeTypeDefinition[] = [
     label: 'Agent',
     category: 'action',
     icon: 'Cog',
-    description: '执行一个Agent（串行执行）',
+    description: '',
     color: '#3B82F6',
     inputs: [{ id: 'in', label: '输入', type: 'object', required: true }],
     outputs: [

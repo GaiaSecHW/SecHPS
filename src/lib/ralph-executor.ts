@@ -1,7 +1,7 @@
 // src/lib/ralph-executor.ts
 //
 // Unified Ralph Loop execution logic
-// Extracted from ralph-start route for reuse
+// Called by /api/projects/[id]/start (统一启动入口)
 //
 
 import { prisma } from '@/lib/prisma';

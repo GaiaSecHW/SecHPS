@@ -100,6 +100,8 @@ For each report:
 
 ## SYNTHESIZE Gate
 
+### 报告描述语言: 中文
+
 ### Report Content Structure
 
 #### 1. RISK-ASSESSMENT-REPORT.md (主报告)
@@ -329,8 +331,8 @@ output_files:
 
 ---
 
-##生成漏洞汇总文件
-将项目vulnerabilities目录下的漏洞文件进行合并(注意：同一个漏洞【sink与sources相同】不要重复合并，漏洞描述的英文要翻译成中文)，合并后的文件必须在项目根目录，且文件名为必须为vulnerabilities.json，vulnerabilities.json文件格式如下：{
+## 生成漏洞汇总文件
+将项目vulnerabilities目录下的多个漏洞文件合并成一个文件，文件内一个漏洞一条记录，合并后的文件必须在项目根目录，漏洞描述的英文要翻译成中文，且文件名为必须为vulnerabilities.json，vulnerabilities.json文件格式如下：{
 "summary": {
 "total": 漏洞总数,
 },
@@ -340,7 +342,7 @@ output_files:
 "type": "漏洞类型（如 SQL注入、XSS、CSRF、RCE、目录遍历）",
 "title": "漏洞标题",
 "description": "漏洞详细描述（污点传播路径[从入口到 Sink 的数据流]）,Web 入口- 入口类: com.example.controller.AdminController - HTTP 路径: POST /admin/exec - 参数来源: @RequestBody",
-"location": "所有涉及此漏洞的源代码",
+"location": "必须是所有涉及此漏洞的源代码",
 "POC":"[完整攻击请求 + 推导过程]",
 "skill": "发现此漏洞的工具或skill名称",
 "cwe_id": "CWE编号（如 CWE-89）"}

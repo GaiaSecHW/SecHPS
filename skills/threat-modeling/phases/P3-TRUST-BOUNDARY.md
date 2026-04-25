@@ -149,6 +149,7 @@ P3_boundary_context:
 
 - **Path**: `outputs/P3_boundary_context.yaml`
 - **Format**: YAML
+- **描述语言**: 中文
 
 ### Validation Criteria
 

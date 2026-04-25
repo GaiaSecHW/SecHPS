@@ -835,92 +835,13 @@ export async function POST(
           // 后台异步执行（不阻塞响应）
           void (async () => {
             try {
-              // Step 1: MCP decompile
+              // MCP decompile 已在同步阶段完成（lines 618-707），此处跳过
               emitPreparingProgress(evaluation.id, {
-                stage: 'mcp_start',
-                message: '开始执行 MCP decompile...',
+                stage: 'mcp_complete',
+                message: 'MCP decompile 已在启动前完成',
               });
               
-              if (project.projectPath) {
-                // 查找 AI4Java MCP 服务器配置
-                const ai4javaMcp = mcpServers.find(s => s.name === 'ai4java' && s.isEnabled);
-                
-                if (ai4javaMcp) {
-                  const mcpConfig = {
-                    name: ai4javaMcp.name,
-                    type: ai4javaMcp.type as 'local' | 'remote',
-                    command: ai4javaMcp.command ?? undefined,
-                    args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : undefined,
-                    url: ai4javaMcp.url ?? undefined,
-                    env: ai4javaMcp.env ? JSON.parse(ai4javaMcp.env) : undefined,
-                    timeout: 10 * 60 * 1000,
-                  };
-                  
-                  const isValidConfig = 
-                    (mcpConfig.type === 'local' && mcpConfig.command) ||
-                    (mcpConfig.type === 'remote' && mcpConfig.url);
-                  
-                  if (isValidConfig) {
-                    logger.info(LOG_MODULES.EVALUATION, '[FSM Async] 开始执行 decompileProject', {
-                      serverId: ai4javaMcp.id,
-                      serverName: ai4javaMcp.name,
-                      projectPath: project.projectPath,
-                    });
-                    
-                    const { callAi4JavaDecompileDirect } = await import('@/lib/mcp-client');
-                    const startTime = Date.now();
-                    
-                    const decompileResult = await callAi4JavaDecompileDirect(
-                      mcpConfig,
-                      project.projectPath
-                    );
-                    
-                    const duration = Date.now() - startTime;
-                    
-                    if (decompileResult.success) {
-                      logger.info(LOG_MODULES.EVALUATION, '[FSM Async] decompileProject 执行成功', {
-                        duration: `${duration}ms`,
-                        projectPath: project.projectPath,
-                      });
-                      emitPreparingProgress(evaluation.id, {
-                        stage: 'mcp_complete',
-                        message: 'MCP decompile 完成',
-                        duration,
-                      });
-                    } else {
-                      logger.warn(LOG_MODULES.EVALUATION, '[FSM Async] decompileProject 执行失败（继续启动评估）', {
-                        duration: `${duration}ms`,
-                        error: decompileResult.error,
-                      });
-                      emitPreparingProgress(evaluation.id, {
-                        stage: 'mcp_complete',
-                        message: 'MCP decompile 完成（有警告）',
-                        duration,
-                        error: decompileResult.error,
-                      });
-                    }
-                  } else {
-                    logger.warn(LOG_MODULES.EVALUATION, '[FSM Async] AI4Java MCP 配置不完整');
-                    emitPreparingProgress(evaluation.id, {
-                      stage: 'mcp_complete',
-                      message: 'MCP 配置不完整，跳过 decompile',
-                    });
-                  }
-                } else {
-                  logger.info(LOG_MODULES.EVALUATION, '[FSM Async] 未检测到 AI4Java MCP 服务器配置，跳过 decompileProject');
-                  emitPreparingProgress(evaluation.id, {
-                    stage: 'mcp_complete',
-                    message: '未配置 AI4Java MCP，跳过 decompile',
-                  });
-                }
-              } else {
-                emitPreparingProgress(evaluation.id, {
-                  stage: 'mcp_complete',
-                  message: '项目路径未设置，跳过 MCP',
-                });
-              }
-              
-              // Step 2: Skills 同步
+              // Step 1: Skills 同步
               emitPreparingProgress(evaluation.id, {
                 stage: 'skills_sync',
                 message: '开始同步 Skills 到项目目录...',
@@ -1337,95 +1258,14 @@ export async function POST(
         // 后台异步执行（不阻塞响应）
         void (async () => {
           try {
-            // ========================================
-            // Step 1: MCP decompile
-            // ========================================
+            // MCP decompile 已在同步阶段完成（lines 618-707），此处跳过
             emitPreparingProgress(dagEvaluation.id, {
-              stage: 'mcp_start',
-              message: '开始执行 MCP decompile...',
+              stage: 'mcp_complete',
+              message: 'MCP decompile 已在启动前完成',
             });
             
-            if (project.projectPath) {
-              // 查找 AI4Java MCP 服务器配置
-              const ai4javaMcp = mcpServers.find(s => s.name === 'ai4java' && s.isEnabled);
-              
-              if (ai4javaMcp) {
-                const mcpConfig = {
-                  name: ai4javaMcp.name,
-                  type: ai4javaMcp.type as 'local' | 'remote',
-                  command: ai4javaMcp.command ?? undefined,
-                  args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : undefined,
-                  url: ai4javaMcp.url ?? undefined,
-                  env: ai4javaMcp.env ? JSON.parse(ai4javaMcp.env) : undefined,
-                  timeout: 10 * 60 * 1000,
-                };
-                
-                const isValidConfig = 
-                  (mcpConfig.type === 'local' && mcpConfig.command) ||
-                  (mcpConfig.type === 'remote' && mcpConfig.url);
-                
-                if (isValidConfig) {
-                  logger.info(LOG_MODULES.EVALUATION, '[DAG Async] 开始执行 decompileProject', {
-                    serverId: ai4javaMcp.id,
-                    serverName: ai4javaMcp.name,
-                    projectPath: project.projectPath,
-                  });
-                  
-                  const { callAi4JavaDecompileDirect } = await import('@/lib/mcp-client');
-                  const startTime = Date.now();
-                  
-                  const decompileResult = await callAi4JavaDecompileDirect(
-                    mcpConfig,
-                    project.projectPath
-                  );
-                  
-                  const duration = Date.now() - startTime;
-                  
-                  if (decompileResult.success) {
-                    logger.info(LOG_MODULES.EVALUATION, '[DAG Async] decompileProject 执行成功', {
-                      duration: `${duration}ms`,
-                      projectPath: project.projectPath,
-                    });
-                    emitPreparingProgress(dagEvaluation.id, {
-                      stage: 'mcp_complete',
-                      message: 'MCP decompile 完成',
-                      duration,
-                    });
-                  } else {
-                    logger.warn(LOG_MODULES.EVALUATION, '[DAG Async] decompileProject 执行失败（继续启动评估）', {
-                      duration: `${duration}ms`,
-                      error: decompileResult.error,
-                    });
-                    emitPreparingProgress(dagEvaluation.id, {
-                      stage: 'mcp_complete',
-                      message: 'MCP decompile 完成（有警告）',
-                      duration,
-                      error: decompileResult.error,
-                    });
-                  }
-                } else {
-                  logger.warn(LOG_MODULES.EVALUATION, '[DAG Async] AI4Java MCP 配置不完整');
-                  emitPreparingProgress(dagEvaluation.id, {
-                    stage: 'mcp_complete',
-                    message: 'MCP 配置不完整，跳过 decompile',
-                  });
-                }
-              } else {
-                logger.info(LOG_MODULES.EVALUATION, '[DAG Async] 未检测到 AI4Java MCP 服务器配置，跳过 decompileProject');
-                emitPreparingProgress(dagEvaluation.id, {
-                  stage: 'mcp_complete',
-                  message: '未配置 AI4Java MCP，跳过 decompile',
-                });
-              }
-            } else {
-              emitPreparingProgress(dagEvaluation.id, {
-                stage: 'mcp_complete',
-                message: '项目路径未设置，跳过 MCP',
-              });
-            }
-            
             // ========================================
-            // Step 2: Skills 同步
+            // Step 1: Skills 同步
             // ========================================
             emitPreparingProgress(dagEvaluation.id, {
               stage: 'skills_sync',

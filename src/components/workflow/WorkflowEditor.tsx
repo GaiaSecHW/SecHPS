@@ -1101,13 +1101,14 @@ const [showPreview, setShowPreview] = useState(false);
         // 模式2：手工指定 Skills
         const skillIds: string[] = nodeData.skills ? JSON.parse(nodeData.skills) : [];
         if (skillIds.length > 0) {
-          userPrompt += `请执行以下安全检查任务，必须执行所有指定的 Skills：\n\n`;
-          userPrompt += `必须执行的 Skills：\n`;
+          userPrompt += `请执行以下安全检查任务，必须执行下面指定的所有 Skills：\n\n`;
           skillIds.forEach((id, i) => {
             const skill = availableSkills.find(s => s.id === id);
             userPrompt += `${i + 1}. ${skill ? (skill.displayName || skill.name) : id}\n`;
           });
-          userPrompt += '\n请确保以上所有 Skills 都被执行，且每个skill以独立子代理（Subagent）执行，不要遗漏。\n\n';
+          userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+		  userPrompt += '### 重要，必须严格按下面的要求执行。\n';
+          userPrompt += '请将任务分解成TODO列表，每个TODO用子代理（Subagent）执行，每个Subagent要独立运行，你的任务只有创建Subagent与监督Subagent进展，你禁止与项目经理干不相关的事，Subagent没有达到的你设定的目标，必须让Subagent重新执行。';
         }
       } else if (mode === 'vulnerability') {
         // 模式3：漏洞分类
@@ -1115,12 +1116,13 @@ const [showPreview, setShowPreview] = useState(false);
         if (cats.length > 0) {
           const matched = filterMatchedSkills(techStackFilteredSkills, cats);
           if (matched.length > 0) {
-            userPrompt += `请执行以下安全检查任务，必须执行所有匹配的 Skills：\n\n`;
-            userPrompt += `必须执行的 Skills：\n`;
+            userPrompt += `请执行以下安全检查任务，必须执行下面指定的所有 Skills：\n\n`;
             matched.forEach((s, i) => {
               userPrompt += `${i + 1}. ${s.displayName || s.name}\n`;
             });
-            userPrompt += '\n请确保以上所有 Skills 都被执行，且每个skill以独立子代理（Subagent）执行，不要遗漏。\n\n';
+            userPrompt += '\n请确保以上所有 Skills 都被执行，不要遗漏。\n\n';
+		  userPrompt += '### 重要，必须严格按下面的要求执行。\n';
+          userPrompt += '请将任务分解成TODO列表，每个TODO用子代理（Subagent）执行，每个Subagent要独立运行，你的任务只有创建Subagent与监督Subagent进展，你禁止与项目经理干不相关的事，Subagent没有达到的你设定的目标，必须让Subagent重新执行。';
           }
         }
       }

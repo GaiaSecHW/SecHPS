@@ -186,6 +186,7 @@ P5_threat_inventory:
 
 - **Path**: `outputs/P5_threat_inventory.yaml`
 - **Format**: YAML
+- **描述语言**: 中文
 
 ### Validation Criteria
 

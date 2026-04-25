@@ -162,6 +162,7 @@ P1_project_context:
 
 - **Path**: `outputs/P1_project_context.yaml`
 - **Format**: YAML
+- **描述语言**: 中文
 
 ### Validation Criteria
 

@@ -166,6 +166,7 @@ P4_security_gaps:
 
 - **Path**: `outputs/P4_security_gaps.yaml`
 - **Format**: YAML
+- **描述语言**: 中文
 
 ### Validation Criteria
 

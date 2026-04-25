@@ -186,6 +186,7 @@ P2_dfd_elements:
 
 - **Path**: `outputs/P2_dfd_elements.yaml`
 - **Format**: YAML
+- **描述语言**: 中文
 
 ### Validation Criteria
 
