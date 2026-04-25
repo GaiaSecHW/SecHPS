@@ -8,6 +8,7 @@ import { isAdmin } from '@/lib/api-auth';
 import { executeRalphLoop, getRalphModelConfig } from '@/lib/ralph-executor';
 import type { RalphLoopAgentConfig } from '@/services/evaluation';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { loadMcpServersForProject } from '@/lib/mcp-loader';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -52,6 +53,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: '自定义验证类型暂未实现' }, { status: 501 });
     }
 
+    // 加载 MCP 服务器配置
+    const mcpServers = await loadMcpServersForProject(evaluation.projectId, evaluation.Project.userId);
+    logger.debug(LOG_MODULES.MCP, 'Ralph 加载 MCP 配置', { count: mcpServers.length, names: mcpServers.map(m => m.name) });
+
+    // 加载系统提示词（从全局配置）
+    const globalConfig = await prisma.opencodeConfig.findFirst({ where: { isActive: true } });
+    const systemPrompt = globalConfig?.customSystemPrompt || undefined;
+    if (systemPrompt) {
+      logger.debug(LOG_MODULES.EVALUATION, 'Ralph 使用自定义系统提示词', { length: systemPrompt.length });
+    }
+
     const result = await executeRalphLoop({
       evaluationId: id,
       projectId: evaluation.projectId,
@@ -63,6 +75,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       taskDescription: evaluation.Project.OpencodeConfig?.taskDescription || undefined,
       modelConfig,
       ralphConfig: { maxIterations, maxTokens, maxCost, verifyCompletion },
+      mcpServers,  // 传递 MCP 配置
+      systemPrompt,  // 传递系统提示词
     });
 
     return NextResponse.json(result);
