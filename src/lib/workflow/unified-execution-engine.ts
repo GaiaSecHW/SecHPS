@@ -498,7 +498,11 @@ callbacks: {
               console.log('\n' + '='.repeat(80));
               console.log('[子Agent交互] 工具结果:', toolUseId, 'isError:', isError);
               const resultContent = typeof content === 'string' ? content : JSON.stringify(content, null, 2);
-              console.log(resultContent);
+              // 只输出前300个字符，避免日志过长
+              const truncatedContent = resultContent.length > 300 
+                ? resultContent.substring(0, 300) + '... (截断，总长度: ' + resultContent.length + ')'
+                : resultContent;
+              console.log(truncatedContent);
               console.log('='.repeat(80) + '\n');
               
               // 检查是否是 async_launched（子Agent启动）
@@ -857,6 +861,7 @@ callbacks: {
         skills: skillNames.length > 0 ? skillNames : undefined,  // 父 Agent 注册 Skills
         mcpServers,  // 父 Agent MCP 服务器配置
         agents,  // 子 Agent 定义（总是传递，让子 Agent 继承所有父配置）
+        settingSources: ['project'],  // 加载项目级 CLAUDE.md，子 Agent 自动继承
       }
     );
   }
@@ -1131,9 +1136,8 @@ ${previousOutputs || '(首个节点，无前序输出)'}
           console.log(`[buildNodePrompt] FSM Phase description 模式，提示词: ${prompt.slice(0, 100)}...`);
         } else {
           // manual 或 vulnerability 模式：根据 Skills 生成提示词（和自定义流程一样）
-          prompt = `请执行以下安全检查任务，必须执行所有指定的 Skills：
+          prompt = `请执行以下安全检查任务，必须执行下面指定的所有 Skills：
 
-必须执行的 Skills：
 ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 
 ---
@@ -1223,12 +1227,15 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       console.log(`[buildNodePrompt] description 模式，提示词: ${prompt.slice(0, 100)}...`);
     } else {
       // manual 或 vulnerability 模式：根据 Skills 生成提示词
-      prompt = `请执行以下安全检查任务，必须执行所有指定的 Skills：
+      prompt = `请执行以下安全检查任务，必须执行下面指定的所有 Skills：
 
-必须执行的 Skills：
 ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
 
-请确保以上所有 Skills 都被执行，且每个skill以独立子代理（Subagent）执行，不要遗漏。`;
+请确保以上所有 Skills 都被执行，不要遗漏。
+
+### 重要要求 ，必须严格按下面的要求执行。
+请将任务分解成TODO列表，每个TODO用子代理（Subagent）执行，每个Subagent要独立运行，你的任务只有创建Subagent与监督Subagent进展，你禁止与项目经理干不相关的事，Subagent没有达到的你设定的目标，必须让Subagent重新执行。
+`;
       console.log(`[buildNodePrompt] ${mode} 模式，生成 Skills 提示词，共 ${skills.length} 个 Skills`);
     }
 

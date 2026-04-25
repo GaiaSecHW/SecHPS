@@ -701,6 +701,11 @@ export class FSMWorkflowExecutionService {
       {
         maxIterations: 5,
         maxCost: 1.0,
+      },
+      {
+        settingSources: ['project'],  // 加载项目级 CLAUDE.md，子 Agent 自动继承
+        permissionMode: 'bypassPermissions',
+        allowDangerouslySkipPermissions: true,
       }
     );
 

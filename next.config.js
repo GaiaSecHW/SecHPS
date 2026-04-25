@@ -6,8 +6,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
-    instrumentation: true,  // 启用 instrumentation.ts
   },
+
+  // instrumentation 已稳定化，无需 experimental 配置
+  // instrumentation.ts 文件会自动被 Next.js 检测
   
   // API 路由最大执行时间（秒）
   allowedDevOrigins: ['172.31.31.229'],

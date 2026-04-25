@@ -140,15 +140,11 @@ export async function GET(
             // 1. 过滤掉占位节点（skillPath=null && fsmPhase=6）
             const filteredNodes = fsmNodes.filter((node: any) => {
               const isPlaceholder = node.skillPath === null && node.fsmPhase === 6;
-              if (isPlaceholder) {
-                logger.debug(LOG_MODULES.EVALUATION, '过滤 FSM 占位节点', { nodeId: node.id, label: node.label });
-              }
               return !isPlaceholder;
             });
             
             // 2. 添加用户编排的 task 节点（在 fsmPhase=6 位置插入）
             const userNodes = workflow.WorkflowNode.filter(n => n.type === 'task');
-            logger.debug(LOG_MODULES.EVALUATION, '找到用户编排节点', { count: userNodes.length });
             
             // 按 positionX 排序用户节点
             const sortedUserNodes = [...userNodes].sort((a, b) => a.positionX - b.positionX);
@@ -199,11 +195,6 @@ export async function GET(
             
             // 5. 按 fsmOrder 排序
             workflowNodes.sort((a, b) => (a.fsmOrder || 0) - (b.fsmOrder || 0));
-            
-            logger.debug(LOG_MODULES.EVALUATION, 'FSM 节点加载完成（含用户节点）', { 
-              nodeCount: workflowNodes.length,
-              phases: workflowNodes.map((n: any) => `${n.label}(${n.fsmPhase})`)
-            });
           } catch (e) {
             logger.error(LOG_MODULES.EVALUATION, '解析 FSMTemplate.nodes 失败', { error: String(e) });
           }

@@ -499,8 +499,6 @@ export class ClaudeAgentService {
           // 内容已在上面统一提取，这里不再重复处理
         } else {
           // 其他类型的消息 - 也要尝试提取内容
-          console.log('[ClaudeAgent] 📨 其他消息类型，尝试提取内容');
-          console.log('[ClaudeAgent] 📨 消息 keys:', Object.keys(msg));
           
           // 处理 type=user 消息
           if (msgType === 'user') {
