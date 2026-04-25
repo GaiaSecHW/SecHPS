@@ -40,8 +40,26 @@ export interface FSMReportData {
   // Workspace 报告扫描结果
   workspaceVulnerabilities: WorkspaceVulnerability[];
   
+  // 从数据库读取的漏洞数据（在漏洞入库后填充）
+  dbVulnerabilities: DbVulnerability[];
+  
   // 统计摘要
   summary: FSMReportSummary;
+}
+
+// 从数据库 Vulnerability 表读取的漏洞数据结构
+export interface DbVulnerability {
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  severity: string;
+  cwe: string | null;
+  location: string | null;
+  POC: string | null;
+  status: string;
+  skillExecutionId: string | null;
+  createdAt: Date;
 }
 
 interface UserDefinedNodeOutput {
@@ -148,6 +166,41 @@ const REPORT_FILES = [
 ];
 
 /**
+ * 从数据库读取漏洞数据
+ * 
+ * @param evaluationId - 评估会话 ID
+ * @returns 漏洞列表
+ */
+async function readVulnerabilitiesFromDatabase(evaluationId: string): Promise<DbVulnerability[]> {
+  try {
+    const vulnerabilities = await prisma.vulnerability.findMany({
+      where: { evaluationId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        type: true,
+        severity: true,
+        cwe: true,
+        location: true,
+        POC: true,
+        status: true,
+        skillExecutionId: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    
+    console.log(`[readVulnerabilitiesFromDatabase] 查询到 ${vulnerabilities.length} 个漏洞 for evaluationId=${evaluationId}`);
+    
+    return vulnerabilities;
+  } catch (error) {
+    console.warn(`[readVulnerabilitiesFromDatabase] 查询失败:`, error);
+    return [];
+  }
+}
+
+/**
  * 生成 FSM 报告
  */
 export async function generateFSMReport(
@@ -187,6 +240,9 @@ export async function generateFSMReport(
   // 4. 扫描 Workspace 报告
   const workspaceScanResult = await scanWorkspaceReports(workspacePath);
 
+  // 4.5 从数据库读取漏洞数据（在漏洞入库后可用）
+  const dbVulnerabilities = await readVulnerabilitiesFromDatabase(sessionId);
+
   // 5. 计算摘要（漏洞数据由前端动态读取）
   const summary = calculateSummary(phaseOutputs, agentResults, workspaceScanResult.vulnerabilities);
 
@@ -202,6 +258,7 @@ export async function generateFSMReport(
     userDefinedNodes,
     agentResults,
     workspaceVulnerabilities: workspaceScanResult.vulnerabilities,
+    dbVulnerabilities,
     summary,
   };
 
@@ -695,9 +752,74 @@ ${generateImplementationOrder(data.phaseOutputs.P7)}
 
 /**
  * 生成渗透测试计划
+ * 
+ * 根据数据库中的漏洞数据显示内容：
+ * - 无漏洞：显示"本次评估未发现渗透漏洞"
+ * - 有漏洞：列出每个漏洞的详细信息
  */
 function generatePenTestPlan(data: FSMReportData): string {
   const userNodes = data.userDefinedNodes || [];
+  const vulnerabilities = data.dbVulnerabilities || [];
+  
+  // 构建漏洞详情部分
+  let vulnerabilitySection = '';
+  
+  if (vulnerabilities.length === 0) {
+    vulnerabilitySection = `
+## 漏洞发现结果
+
+**本次评估未发现渗透漏洞**
+
+所有执行的渗透测试节点均未发现有效安全漏洞。
+`;
+  } else {
+    // 按严重性排序
+    const severityOrder = ['critical', 'high', 'medium', 'low', 'info'];
+    const sortedVulns = [...vulnerabilities].sort((a, b) => {
+      const orderA = severityOrder.indexOf(a.severity.toLowerCase()) || 5;
+      const orderB = severityOrder.indexOf(b.severity.toLowerCase()) || 5;
+      return orderA - orderB;
+    });
+    
+    vulnerabilitySection = `
+## 漏洞发现结果
+
+共发现 **${vulnerabilities.length}** 个漏洞：
+
+| ID | 标题 | 类型 | 严重性 | CWE | 状态 |
+|----|------|------|--------|-----|------|
+${sortedVulns.map(v => 
+  `| ${v.id} | ${v.title} | ${v.type} | ${v.severity.toUpperCase()} | ${v.cwe || 'N/A'} | ${v.status} |`
+).join('\n')}
+
+---
+
+### 漏洞详情
+
+${sortedVulns.map(v => `
+#### ${v.id}: ${v.title}
+
+**类型**: ${v.type}
+**严重性**: ${v.severity.toUpperCase()}
+**CWE**: ${v.cwe || 'N/A'}
+**状态**: ${v.status}
+**发现时间**: ${v.createdAt.toISOString()}
+
+**描述**:
+${v.description || '无详细描述'}
+
+**位置**:
+${v.location || '未指定'}
+
+**POC (Proof of Concept)**:
+${v.POC ? `\`\`\`
+${v.POC}
+\`\`\`` : '无 POC'}
+
+---
+`).join('\n')}
+`;
+  }
   
   return `# Penetration Test Plan
 
@@ -712,7 +834,7 @@ function generatePenTestPlan(data: FSMReportData): string {
 
 | 节点 | 状态 | ID |
 |------|------|-----|
-${userNodes.map(n => `| ${n.nodeLabel} | ${n.status} | ${n.nodeId} |`).join('\n')}
+${userNodes.map(n => `| ${n.nodeLabel} | ${n.status} | ${n.nodeId} |`).join('\n') || '| (无用户编排节点) | - | - |'}
 
 ---
 
@@ -723,28 +845,33 @@ ${userNodes.map(node => `
 
 - **节点 ID**: ${node.nodeId}
 - **执行状态**: ${node.status}
-- **漏洞发现**: 前端动态查询 Vulnerability 表，按 skillExecutionId 关联
 
-${node.outputPath ? `- **输出文件**: ${node.outputPath}` : ''}
+${node.outputPath ? `- **输出文件**: ${node.outputPath}` : '- **输出文件**: 未记录'}
 
 ---
-`).join('\n') || '无用户编排节点'}
+`).join('\n') || '(无用户编排节点详情)'}
+
+---
+
+${vulnerabilitySection}
 
 ---
 
 ## 标准化测试序列
 
-1. **认证测试** - 测试认证机制
-2. **授权测试** - 测试访问控制
-3. **输入验证测试** - 测试注入漏洞
-4. **会话管理测试** - 测试会话处理
-5. **数据保护测试** - 测试数据泄露
+本次渗透测试覆盖以下测试类别：
+
+1. **认证测试** - 测试认证机制（JWT、Session 等）
+2. **授权测试** - 测试访问控制（RBAC、权限边界）
+3. **输入验证测试** - 测试注入漏洞（SQL、XSS、命令注入）
+4. **会话管理测试** - 测试会话处理（Token 安全、Cookie 配置）
+5. **数据保护测试** - 测试数据泄露（敏感信息暴露、错误信息）
 
 ---
 
 *Generated by FSM Threat Modeling Workflow*
 
-**注意**: 漏洞详情由前端动态从 Vulnerability 表读取，按 evaluationId 筛选，按 skillExecutionId 关联到对应节点。
+**数据来源**: 漏洞数据存储在数据库 Vulnerability 表中，可通过 evaluationId='${data.sessionId}' 查询完整记录。
 `;
 }
 
@@ -1273,3 +1400,80 @@ export default {
   generateFSMReport,
   FSMReportGenerator,
 };
+
+/**
+ * 重新生成渗透测试计划报告
+ * 
+ * 在漏洞入库完成后调用，将实际的漏洞数据写入 PENETRATION-TEST-PLAN.md
+ * 
+ * @param evaluationId - 评估会话 ID
+ * @param workspacePath - 工作区路径
+ */
+export async function regeneratePenTestReport(
+  evaluationId: string,
+  workspacePath: string
+): Promise<void> {
+  console.log(`[regeneratePenTestReport] 重新生成渗透测试报告: evaluationId=${evaluationId}`);
+  
+  // 1. 从数据库读取漏洞数据
+  const vulnerabilities = await readVulnerabilitiesFromDatabase(evaluationId);
+  
+  // 2. 读取评估会话信息
+  const session = await prisma.evaluationSession.findUnique({
+    where: { id: evaluationId },
+    include: {
+      Project: { select: { id: true, name: true, displayName: true } },
+    },
+  });
+  
+  if (!session) {
+    console.warn(`[regeneratePenTestReport] 评估会话不存在: ${evaluationId}`);
+    return;
+  }
+  
+  // 3. 读取用户编排节点
+  const userDefinedNodes = await readUserDefinedNodes(evaluationId, workspacePath);
+  
+  // 4. 构建报告数据（最小化版本，只需要漏洞数据）
+  const reportData: FSMReportData = {
+    sessionId: evaluationId,
+    projectId: session.projectId,
+    projectName: session.Project?.displayName || session.Project?.name || 'Unknown',
+    workflowType: 'fsm',
+    fsmTemplate: 'threat-modeling',
+    generatedAt: new Date(),
+    phaseOutputs: {},
+    userDefinedNodes,
+    agentResults: [],
+    workspaceVulnerabilities: [],
+    dbVulnerabilities: vulnerabilities,
+    summary: {
+      totalThreats: 0,
+      verifiedRisks: 0,
+      mitigations: 0,
+      criticalCount: vulnerabilities.filter(v => v.severity === 'critical').length,
+      highCount: vulnerabilities.filter(v => v.severity === 'high').length,
+      mediumCount: vulnerabilities.filter(v => v.severity === 'medium').length,
+      lowCount: vulnerabilities.filter(v => v.severity === 'low').length,
+      agentFindings: 0,
+      workspaceFindings: 0,
+    },
+  };
+  
+  // 5. 生成报告内容
+  const reportContent = generatePenTestPlan(reportData);
+  
+  // 6. 写入文件
+  const reportsPath = path.join(workspacePath, '.claude', 'skills', 'threat-modeling', 'reports');
+  
+  // 确保目录存在
+  if (!fs.existsSync(reportsPath)) {
+    fs.mkdirSync(reportsPath, { recursive: true });
+  }
+  
+  const reportFilePath = path.join(reportsPath, 'PENETRATION-TEST-PLAN.md');
+  fs.writeFileSync(reportFilePath, reportContent, 'utf-8');
+  
+  console.log(`[regeneratePenTestReport] 报告已更新: ${reportFilePath}`);
+  console.log(`[regeneratePenTestReport] 漏洞数量: ${vulnerabilities.length}`);
+}
