@@ -517,6 +517,7 @@ model ModelConfig {
   models              String
   routeType           String?
   maxTokens           Int                   @default(32000)
+  contextWindow       Int                   @default(0) // 模型的 context window 大小，0 表示不启用动态计算
   temperature         Float                 @default(0.3)
   isActive            Boolean               @default(true)
   isDefault           Boolean               @default(false)
