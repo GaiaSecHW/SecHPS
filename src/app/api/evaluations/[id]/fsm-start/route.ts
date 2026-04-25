@@ -10,6 +10,7 @@ import { createFSMWorkflowExecutionService, type FSMExecutionCallbacks } from '@
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { abortAgent, isAgentRunning } from '@/lib/agent-registry';
 import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
+import { loadMcpServersForProject } from '@/lib/mcp-loader';
 
 /** Get active model config */
 async function getModelConfig() {
@@ -77,8 +78,31 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const maxIterationsPerPhase = body.maxIterationsPerPhase as number || 10;
     const maxCostPerPhase = body.maxCostPerPhase as number || 2.0;
 
+    // 加载 MCP 服务器配置
+    const mcpServers = await loadMcpServersForProject(evaluation.projectId, evaluation.Project.userId);
+    logger.debug(LOG_MODULES.MCP, 'FSM 加载 MCP 配置', { count: mcpServers.length, names: mcpServers.map(m => m.name) });
+
+    // 加载系统提示词（从全局配置）
+    const globalConfig = await prisma.opencodeConfig.findFirst({ where: { isActive: true } });
+    const systemPrompt = globalConfig?.customSystemPrompt || undefined;
+    if (systemPrompt) {
+      logger.debug(LOG_MODULES.EVALUATION, 'FSM 使用自定义系统提示词', { length: systemPrompt.length });
+    }
+
     const fsmService = createFSMWorkflowExecutionService(
-      { evaluationSessionId: id, projectId: evaluation.projectId, workflowId, fsmTemplateId, workspacePath, maxIterationsPerPhase, maxCostPerPhase, modelConfig },
+      { 
+        evaluationSessionId: id, 
+        projectId: evaluation.projectId, 
+        workflowId, 
+        fsmTemplateId, 
+        workspacePath, 
+        maxIterationsPerPhase, 
+        maxCostPerPhase, 
+        modelConfig,
+        userId: evaluation.Project.userId,  // 传递 userId 用于加载 MCP
+        mcpServers,  // 传递 MCP 配置
+        systemPrompt,  // 传递系统提示词
+      },
       createCallbacks(id, evaluation.projectId, workspacePath)
     );
     fsmService.execute().catch(async (e) => {
