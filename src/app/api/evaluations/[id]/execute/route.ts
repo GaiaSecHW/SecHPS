@@ -26,7 +26,7 @@ async function getModelConfig() {
 }
 
 /** FSM 执行引擎 */
-async function executeFSM(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined, userId: string) {
+async function executeFSM(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined, userId: string, systemPrompt?: string) {
   const fsmTemplateId = body.fsmTemplateId || evaluation.Workflow?.fsmTemplateId;
   if (!fsmTemplateId) throw new Error('FSM 模式需要指定 fsmTemplateId');
   const fsmTemplate = await prisma.fSMTemplate.findUnique({ where: { id: fsmTemplateId } });
@@ -67,6 +67,7 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
     maxIterationsPerPhase: body.maxIterationsPerPhase || 10, maxCostPerPhase: body.maxCostPerPhase || 2.0, modelConfig,
     userId,  // 传递 userId 用于加载 MCP
     mcpServers,  // 传递 MCP 配置（优先使用传入的，否则从数据库加载）
+    systemPrompt,  // 传递系统提示词
   }, callbacks);
 
   service.execute().catch(async (e) => {
@@ -76,7 +77,7 @@ async function executeFSM(id: string, evaluation: any, modelConfig: any, body: a
 }
 
 /** DAG 执行引擎 */
-async function executeDAG(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined) {
+async function executeDAG(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined, systemPrompt?: string) {
   const workflowId = evaluation.workflowId;
   if (!workflowId) throw new Error('DAG 模式需要 workflowId');
   
@@ -112,6 +113,7 @@ async function executeDAG(id: string, evaluation: any, modelConfig: any, body: a
     workspacePath: evaluation.Project.projectPath || process.cwd(),
     defaultModelConfig: { id: 'dag-default', name: modelConfig.model, ...modelConfig },
     mcpServers,  // MCP 配置传递给统一执行引擎
+    systemPrompt,  // 系统提示词传递给统一执行引擎
     maxIterationsPerNode: body.maxIterations || 10, maxRetries: 15, retryDelayMs: 60000,
   }, callbacks);
   engine.setNodes(nodes);
@@ -122,8 +124,8 @@ async function executeDAG(id: string, evaluation: any, modelConfig: any, body: a
 }
 
 /** Ralph 执行引擎 */
-async function executeRalph(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined) {
-  const agent = createRalphLoopAgent(modelConfig, evaluation.Project.projectPath, { maxIterations: body.maxIterations || 15, maxTokens: body.maxTokens || 100000, maxCost: body.maxCost || 5.0 }, { mcpServers });
+async function executeRalph(id: string, evaluation: any, modelConfig: any, body: any, mcpServers: McpServerConfigForExecution[] | undefined, systemPrompt?: string) {
+  const agent = createRalphLoopAgent(modelConfig, evaluation.Project.projectPath, { maxIterations: body.maxIterations || 15, maxTokens: body.maxTokens || 100000, maxCost: body.maxCost || 5.0 }, { mcpServers, systemPrompt });
   const context = { projectName: evaluation.Project.name, taskDescription: evaluation.Project.OpencodeConfig?.taskDescription, initialMessage: evaluation.Project.OpencodeConfig?.taskDescription, files: evaluation.Project.ProjectFile?.map((f: any) => ({ name: f.fileName, type: f.fileType, size: f.fileSize })) || [] };
   const callbacks: RalphLoopAgentCallbacks = {
     onChunk: () => {},
@@ -175,14 +177,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const mcpServers = evaluation.projectId && payload.userId
       ? await loadMcpServersForProject(evaluation.projectId, payload.userId)
       : undefined;
+    
+    // 加载系统提示词（从全局配置）
+    const globalConfig = await prisma.opencodeConfig.findFirst({ where: { isActive: true } });
+    const systemPrompt = globalConfig?.customSystemPrompt || undefined;
+    if (systemPrompt) {
+      logger.debug(LOG_MODULES.EVALUATION, '使用自定义系统提示词', { length: systemPrompt.length });
+    }
 
     // 更新为 running 状态
     await prisma.evaluationSession.update({ where: { id }, data: { status: 'running', startedAt: new Date() } });
 
     switch (workflowType) {
-      case 'fsm': await executeFSM(id, evaluation, modelConfig, body, mcpServers, payload.userId); break;
-      case 'dag': await executeDAG(id, evaluation, modelConfig, body, mcpServers); break;
-      case 'ralph': await executeRalph(id, evaluation, modelConfig, body, mcpServers); break;
+      case 'fsm': await executeFSM(id, evaluation, modelConfig, body, mcpServers, payload.userId, systemPrompt); break;
+      case 'dag': await executeDAG(id, evaluation, modelConfig, body, mcpServers, systemPrompt); break;
+      case 'ralph': await executeRalph(id, evaluation, modelConfig, body, mcpServers, systemPrompt); break;
       default: 
         await prisma.evaluationSession.update({ where: { id }, data: { status: 'ready', errorMessage: `未知的 workflowType: ${workflowType}` } });
         return NextResponse.json({ error: `未知的 workflowType: ${workflowType}` }, { status: 400 });
