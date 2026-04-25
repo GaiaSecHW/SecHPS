@@ -10,10 +10,187 @@
  * - 自动 Token 统计
  * - 支持用户上下文
  * - 支持超时控制
+ * - 自动裁剪历史消息（避免 token 超限）
  */
 
 import { prisma } from '@/lib/prisma';
 import type { TokenUsageContext, CallScene } from '@/types/call-scene';
+
+// ============================================================================
+// Token 裁剪配置
+// ============================================================================
+
+/** 默认 context window 大小 */
+export const DEFAULT_CONTEXT_WINDOW = 163804;
+
+/** 模型 context window 配置表 */
+export const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
+  'MiniMax-M2.5': 163804,
+  'MiniMax-M2.5-highspeed': 163804,
+  'MiniMax-M2.7': 204800,
+  'MiniMax-M2': 204800,
+  'claude-3-5-sonnet': 200000,
+  'claude-3-7-sonnet': 200000,
+  'gpt-4o': 128000,
+  'gpt-4-turbo': 128000,
+  'deepseek-v3': 163840,
+};
+
+/**
+ * 简化的 token 估算（不使用 tiktoken，仅估算）
+ * 规则：平均 1 token ≈ 4 字符
+ */
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
+}
+
+/**
+ * 估算消息列表的 token 数
+ */
+function estimateMessagesTokens(messages: Array<{ role: string; content: string | any[] }>): number {
+  let total = 0;
+  for (const message of messages) {
+    total += 4; // 消息格式开销
+    const content = message.content;
+    if (typeof content === 'string') {
+      total += estimateTokens(content);
+    } else if (Array.isArray(content)) {
+      for (const part of content) {
+        if (part.type === 'text' && part.text) {
+          total += estimateTokens(part.text);
+        }
+      }
+    }
+  }
+  return total;
+}
+
+/**
+ * 获取模型的 context window 大小
+ */
+export function getModelContextWindow(model: string): number {
+  const modelName = model.split('/').pop() || model;
+  for (const [key, window] of Object.entries(MODEL_CONTEXT_WINDOWS)) {
+    if (modelName.toLowerCase().includes(key.toLowerCase())) {
+      return window;
+    }
+  }
+  return DEFAULT_CONTEXT_WINDOW;
+}
+
+/**
+ * 裁剪历史消息（保留最近的对话）
+ * 
+ * @param messages 原始消息列表
+ * @param options 裁剪选项
+ * @returns 裁剪后的消息列表
+ */
+export function trimMessages(
+  messages: Array<{ role: string; content: string | any[] }>,
+  options: {
+    model?: string;
+    maxTokens?: number;
+    contextWindow?: number;
+    trimRatio?: number;
+    preserveSystem?: boolean;
+    minMessages?: number;
+  } = {}
+): Array<{ role: string; content: string | any[] }> {
+  const {
+    model,
+    maxTokens = 8000,
+    contextWindow,
+    trimRatio = 0.75,
+    preserveSystem = true,
+    minMessages = 2,
+  } = options;
+  
+  const windowSize = contextWindow || (model ? getModelContextWindow(model) : DEFAULT_CONTEXT_WINDOW);
+  const maxInputTokens = Math.floor((windowSize - maxTokens) * trimRatio);
+  
+  // 分离 system 和其他消息
+  const systemMessages: Array<{ role: string; content: string | any[] }> = [];
+  const otherMessages: Array<{ role: string; content: string | any[] }> = [];
+  
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemMessages.push(msg);
+    } else {
+      otherMessages.push(msg);
+    }
+  }
+  
+  const systemTokens = estimateMessagesTokens(systemMessages);
+  const availableForHistory = maxInputTokens - systemTokens;
+  
+  if (availableForHistory <= 0) {
+    console.warn(`[trimMessages] System prompt too large (${systemTokens} tokens)`);
+    return preserveSystem ? systemMessages : [];
+  }
+  
+  // 从最新消息开始保留
+  const trimmedHistory: Array<{ role: string; content: string | any[] }> = [];
+  let currentTokens = 0;
+  
+  for (let i = otherMessages.length - 1; i >= 0; i--) {
+    const msg = otherMessages[i];
+    const msgTokens = estimateMessagesTokens([msg]);
+    
+    if (currentTokens + msgTokens <= availableForHistory) {
+      trimmedHistory.unshift(msg);
+      currentTokens += msgTokens;
+    } else {
+      break;
+    }
+  }
+  
+  // 确保最少保留 minMessages 条
+  if (trimmedHistory.length < minMessages && otherMessages.length >= minMessages) {
+    const forcedMessages = otherMessages.slice(-minMessages);
+    trimmedHistory.length = 0;
+    trimmedHistory.push(...forcedMessages);
+    console.warn(`[trimMessages] Force keeping ${minMessages} messages`);
+  }
+  
+  const result = preserveSystem ? [...systemMessages, ...trimmedHistory] : trimmedHistory;
+  
+  console.log(`[trimMessages] ${messages.length} -> ${result.length} messages, ~${estimateMessagesTokens(result)} tokens`);
+  
+  return result;
+}
+
+/**
+ * 动态计算安全的 max_tokens
+ */
+export function calculateSafeMaxTokens(
+  messages: Array<{ role: string; content: string | any[] }>,
+  model: string,
+  options: {
+    contextWindow?: number;
+    bufferTokens?: number;
+    minOutputTokens?: number;
+    maxOutputTokens?: number;
+  } = {}
+): number {
+  const {
+    contextWindow,
+    bufferTokens = 1000,
+    minOutputTokens = 4096,
+    maxOutputTokens = 32000,
+  } = options;
+  
+  const windowSize = contextWindow || getModelContextWindow(model);
+  const inputTokens = estimateMessagesTokens(messages);
+  const available = windowSize - inputTokens - bufferTokens;
+  
+  if (available < minOutputTokens) {
+    console.warn(`[calculateSafeMaxTokens] Input large (${inputTokens} tokens), using minimum`);
+    return minOutputTokens;
+  }
+  
+  return Math.min(available, maxOutputTokens);
+}
 
 // ============================================================================
 // 超时常量配置

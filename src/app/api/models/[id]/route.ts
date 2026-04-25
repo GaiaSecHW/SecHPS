@@ -16,6 +16,7 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     models: JSON.parse(model.models),
     routeType: model.routeType,
     maxTokens: model.maxTokens ?? 4096,
+    contextWindow: model.contextWindow ?? 0,
     temperature: model.temperature ?? 0.7,
     isActive: model.isActive,
     isDefault: model.isDefault,
@@ -128,7 +129,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
 
     // 验证 providerType
     const validProviderTypes = ['claude', 'openai'];
@@ -187,6 +188,7 @@ export async function PUT(
     if (models !== undefined) updateData.models = JSON.stringify(models);
     if (routeType !== undefined) updateData.routeType = providerType === 'openai' ? routeType : null;
     if (maxTokens !== undefined) updateData.maxTokens = maxTokens;
+    if (contextWindow !== undefined) updateData.contextWindow = contextWindow;
     if (temperature !== undefined) updateData.temperature = temperature;
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isPublic !== undefined) updateData.isPublic = isPublic;

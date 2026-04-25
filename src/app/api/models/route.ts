@@ -20,6 +20,7 @@ function formatModel(model: any, includeApiKey: boolean = false) {
     models: JSON.parse(model.models),
     routeType: model.routeType,
     maxTokens: model.maxTokens ?? 4096,
+    contextWindow: model.contextWindow ?? 0,
     temperature: model.temperature ?? 0.7,
     isActive: model.isActive,
     isDefault: model.isDefault,
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
+    const { name, providerType, apiBaseUrl, apiKey, models, routeType, maxTokens, contextWindow, temperature, isActive, isPublic, isSystemModel, isDefault } = body;
 
     // 验证必填字段
     if (!name || !apiBaseUrl || !apiKey || !models) {
@@ -208,6 +209,7 @@ export async function POST(request: Request) {
         models: JSON.stringify(models),
         routeType: providerType === 'openai' ? routeType || 'default' : null,
         maxTokens: finalMaxTokens,
+        contextWindow: contextWindow ?? 0,
         temperature: finalTemperature,
         isActive: isActive !== undefined ? isActive : true,
         isDefault: isSystemModel && isDefault ? isDefault : false,  // 只有系统模型可设默认
