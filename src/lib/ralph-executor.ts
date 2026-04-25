@@ -8,6 +8,7 @@ import { prisma } from '@/lib/prisma';
 import { createRalphLoopAgent, parseAndSaveResults } from '@/services/evaluation';
 import { generateIndexedId } from '@/lib/id-generator';
 import type { RalphLoopAgentConfig, RalphLoopAgentCallbacks } from '@/services/evaluation';
+import type { AppMcpServerConfig } from '@/services/ai';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 export interface RalphExecuteInput {
@@ -32,6 +33,10 @@ export interface RalphExecuteInput {
     maxCost?: number;
     verifyCompletion?: RalphLoopAgentConfig['verifyCompletion'];
   };
+  // MCP 服务器配置（传递给 Claude Agent SDK）
+  mcpServers?: AppMcpServerConfig[];
+  // 系统提示词（传递给 Claude Agent SDK）
+  systemPrompt?: string;
 }
 
 export interface RalphExecuteResult {
@@ -87,13 +92,13 @@ export async function getRalphModelConfig() {
  * Core execution logic extracted from route
  */
 export async function executeRalphLoop(input: RalphExecuteInput): Promise<RalphExecuteResult> {
-  const { evaluationId, projectId, projectPath, projectName, projectDescription, environmentUrl, files, taskDescription, modelConfig, ralphConfig } = input;
+  const { evaluationId, projectId, projectPath, projectName, projectDescription, environmentUrl, files, taskDescription, modelConfig, ralphConfig, mcpServers, systemPrompt } = input;
 
   const maxIterations = ralphConfig.maxIterations || 15;
   const maxTokens = ralphConfig.maxTokens || 100000;
   const maxCost = ralphConfig.maxCost || 5.00;
 
-  // Create Ralph Loop Agent
+  // Create Ralph Loop Agent with MCP and systemPrompt
   const agent = createRalphLoopAgent(
     {
       providerType: modelConfig.providerType,
@@ -129,6 +134,14 @@ export async function executeRalphLoop(input: RalphExecuteInput): Promise<RalphE
       onContextSummarized: (data) => {
         logger.debug(LOG_MODULES.EVALUATION, `上下文已总结: ${data.summarizedIterations} 次迭代，节省 ${data.tokensSaved} tokens`);
       },
+    },
+    // SDK Options: MCP 服务器和系统提示词
+    {
+      mcpServers,
+      systemPrompt,
+      permissionMode: 'bypassPermissions',
+      allowDangerouslySkipPermissions: true,
+      settingSources: ['project'],
     }
   );
 
