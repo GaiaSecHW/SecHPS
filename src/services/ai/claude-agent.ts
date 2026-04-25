@@ -54,6 +54,7 @@ export interface ClaudeAgentConfig {
   resumeSession?: string;  // 恢复会话 ID
   settings?: { context_management?: boolean };  // 通过 settings 对象配置 context_management
   temperature?: number;  // 模型温度，默认 0.3
+  contextWindow?: number;  // 模型的 context window，用于 autoCompactWindow
   skills?: string[];  // Skills 配置（传递给子Agent）
   
   // 子Agent定义（Agent工具可调用的子Agent类型）
@@ -198,6 +199,35 @@ export class ClaudeAgentService {
       
       // 模型温度，默认 0.3
       temperature: this.config.temperature ?? 0.3,
+      
+      // SDK Compaction 配置 - autoCompactWindow
+      // 使用数据库 contextWindow 或默认 1M (避免过早压缩)
+      settings: {
+        autoCompactWindow: (this.config.contextWindow ?? 0) > 0 
+          ? this.config.contextWindow! 
+          : 1000000,
+      },
+      
+      // PreCompact Hook - 注入自定义摘要指令
+      hooks: {
+        PreCompact: [{
+          hooks: [async (input: any) => {
+            console.log('[SDK Compact] 触发压缩:', input.trigger);
+            return {
+              custom_instructions: '保留以下内容：关键决策和原因、代码片段和文件路径、错误及其修复方法、当前任务状态和进度'
+            };
+          }]
+        }],
+        PostCompact: [{
+          hooks: [async (input: any) => {
+            console.log('[SDK Compact] 压缩完成:', {
+              trigger: input.trigger,
+              summaryLength: input.compact_summary?.length || 0,
+            });
+            return {};
+          }]
+        }],
+      },
     } as any;
     
     // 配置 MCP 服务器
