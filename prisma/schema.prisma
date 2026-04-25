@@ -482,28 +482,30 @@ model LogFileRecord {
 }
 
 model McpServerConfig {
-  id        String   @id
-  userId    String
-  projectId String?
-  name      String
-  type      String
-  command   String?
-  args      String?
-  url       String?
-  env       String?
-  isEnabled Boolean  @default(true)
-  autoStart Boolean  @default(false)
-  isShared  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime
-  Project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([isShared])
-  @@index([name])
-  @@index([projectId])
-  @@index([userId])
-}
+    id           String   @id
+    userId       String
+    projectId    String?
+    name         String
+    type         String
+    command      String?
+    args         String?
+    url          String?
+    env          String?
+    tools        String?  // JSON 格式存储工具列表 [{name, description, inputSchema}]
+    isEnabled    Boolean  @default(true)
+    autoStart    Boolean  @default(false)
+    isShared     Boolean  @default(false)
+    lastTestedAt DateTime?  // 最后测试连接时间
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime
+    Project      Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+    @@index([isShared])
+    @@index([name])
+    @@index([projectId])
+    @@index([userId])
+  }
 
 model ModelConfig {
   id                  String                @id

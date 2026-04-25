@@ -14,6 +14,7 @@ export interface AppMcpServerConfig {
   env?: Record<string, string>;
   isEnabled?: boolean;
   autoStart?: boolean;
+  tools?: Array<{ name: string; description?: string; inputSchema?: any }>;  // 工具列表（从数据库读取）
 }
 
 /**
@@ -200,6 +201,7 @@ export class ClaudeAgentService {
     } as any;
     
     // 配置 MCP 服务器
+    let mcpServerNames: string[] = [];  // 保存 MCP 服务器名称列表
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {
       const mcpServers: Record<string, McpServerConfig> = {};
       for (const server of this.config.mcpServers) {
@@ -223,6 +225,7 @@ export class ClaudeAgentService {
       }
        if (Object.keys(mcpServers).length > 0) {
          options.mcpServers = mcpServers;
+        mcpServerNames = Object.keys(mcpServers);  // 保存服务器名称
         
         // 根据 MCP 服务器名称自动添加 allowedTools
         // 官方文档要求：MCP 工具必须通过 allowedTools 授权才能使用
@@ -240,15 +243,92 @@ export class ClaudeAgentService {
        }
      }
     
-    // 配置系统提示词
+    // 构建 MCP 工具说明（告知模型有哪些 MCP 工具可用）
+    let mcpToolsPrompt = '';
+    if (mcpServerNames.length > 0) {
+      // 收集所有工具的详细信息
+      const allTools: Array<{ serverName: string; toolName: string; description: string }> = [];
+      for (const server of this.config.mcpServers || []) {
+        if (server.tools && server.tools.length > 0) {
+          for (const tool of server.tools) {
+            allTools.push({
+              serverName: server.name,
+              toolName: tool.name,
+              description: tool.description || '无描述',
+            });
+          }
+        }
+      }
+
+      if (allTools.length > 0) {
+        mcpToolsPrompt = `\n\n## 可用的 MCP 工具
+
+以下 MCP 工具已连接，你可以直接调用：
+
+### 工具列表
+
+| 工具名称 | 所属服务器 | 功能描述 |
+|---------|-----------|---------|
+${allTools.map(t => `| mcp__${t.serverName}__${t.toolName} | ${t.serverName} | ${t.description} |`).join('\n')}
+
+### 工具详情
+
+${allTools.map(t => `
+**mcp__${t.serverName}__${t.toolName}**
+- 服务器: ${t.serverName}
+- 功能: ${t.description}
+- 调用格式: \`mcp__${t.serverName}__${t.toolName}(arguments)\`
+`).join('\n')}
+
+### 使用说明
+
+- MCP 工具名称格式为 "mcp__服务器名__工具名"
+- 你可以像调用其他工具一样调用 MCP 工具
+- MCP 工具由外部服务器提供，调用时需要等待响应
+- 如果工具调用失败，请检查参数是否正确并重试
+
+`;
+        console.log('[ClaudeAgentService] MCP 工具详情已生成:', allTools.length, '个工具');
+      } else {
+        // 如果没有工具详情，显示基本说明
+        mcpToolsPrompt = `\n\n## 可用的 MCP 服务器
+
+以下 MCP 服务器已连接：
+${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n')}
+
+**注意**: 工具列表尚未同步，请运行测试连接获取工具详情。
+
+`;
+        console.log('[ClaudeAgentService] MCP 服务器已配置，但无工具详情:', mcpServerNames.join(', '));
+      }
+    }
+    
+    // 配置系统提示词（追加 MCP 工具说明）
     if (this.config.systemPrompt) {
-      options.systemPrompt = this.config.systemPrompt;
-      console.log('[ClaudeAgentService] 已配置系统提示词:',
-        typeof this.config.systemPrompt === 'string'
-          ? this.config.systemPrompt.substring(0, 200) + '...'
-          : JSON.stringify(this.config.systemPrompt));
+      // 将 MCP 工具说明追加到系统提示词
+      const basePrompt = typeof this.config.systemPrompt === 'string'
+        ? this.config.systemPrompt
+        : this.config.systemPrompt;
+      
+      options.systemPrompt = basePrompt + mcpToolsPrompt;
+      console.log('[ClaudeAgentService] 已配置系统提示词（含 MCP 工具说明）:',
+        (typeof basePrompt === 'string' ? basePrompt.substring(0, 200) : JSON.stringify(basePrompt)) + '...');
+      if (mcpToolsPrompt) {
+        console.log('[ClaudeAgentService] MCP 工具说明已追加到系统提示词');
+        console.log('[ClaudeAgentService] MCP 工具说明内容:\n', mcpToolsPrompt);
+      }
+      // 打印完整的 system prompt（用于调试）
+      console.log('[ClaudeAgentService] 完整系统提示词长度:', options.systemPrompt?.length || 0);
+      console.log('[ClaudeAgentService] 完整系统提示词内容:\n', options.systemPrompt);
     } else {
-      console.log('[ClaudeAgentService] ⚠️  未配置系统提示词');
+      // 如果没有配置系统提示词，仅使用 MCP 工具说明
+      if (mcpToolsPrompt) {
+        options.systemPrompt = mcpToolsPrompt;
+        console.log('[ClaudeAgentService] 仅使用 MCP 工具说明作为系统提示词');
+        console.log('[ClaudeAgentService] MCP 工具说明内容:\n', mcpToolsPrompt);
+      } else {
+        console.log('[ClaudeAgentService] ⚠️  未配置系统提示词');
+      }
     }
     
     // 配置子Agent定义（Agent工具可调用）

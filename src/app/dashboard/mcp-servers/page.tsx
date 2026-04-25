@@ -60,7 +60,8 @@ export default function McpServersPage() {
     serverId: string;
     success: boolean;
     message: string;
-    tools?: string[];
+    tools?: Array<{ name: string; description?: string }>;
+    toolCount?: number;
   } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -315,6 +316,8 @@ export default function McpServersPage() {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
+          id: server.id,  // 添加服务器 ID，用于保存工具列表到数据库
+          name: server.name,
           type: server.type,
           command: server.command,
           args: server.args ? JSON.parse(server.args) : undefined,
@@ -683,8 +686,9 @@ export default function McpServersPage() {
                         <span
                           key={index}
                           className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                          title={tool.description || '无描述'}
                         >
-                          {tool}
+                          {tool.name}
                         </span>
                       ))}
                     </div>

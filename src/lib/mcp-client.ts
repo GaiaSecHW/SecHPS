@@ -197,6 +197,37 @@ export class LocalMcpClient {
     }
   }
 
+  /**
+   * 获取 MCP 服务器提供的工具列表
+   * @returns 工具列表 [{name, description, inputSchema}]
+   */
+  async listTools(): Promise<Array<{ name: string; description?: string; inputSchema?: any }>> {
+    if (!this.initialized) {
+      throw new Error('MCP 客户端未初始化');
+    }
+
+    try {
+      logger.info(LOG_MODULES.MCP, `[Local] 获取工具列表: ${this.serverName}`);
+
+      const response = await this.sendRequest('tools/list', {});
+
+      if (response.error) {
+        logger.warn(LOG_MODULES.MCP, `[Local] 获取工具列表失败`, { error: response.error.message });
+        return [];
+      }
+
+      const result = response.result as { tools?: Array<{ name: string; description?: string; inputSchema?: any }> };
+      const tools = result.tools || [];
+      
+      logger.info(LOG_MODULES.MCP, `[Local] 工具列表获取成功`, { count: tools.length, tools: tools.map(t => t.name) });
+      
+      return tools;
+    } catch (error) {
+      logger.errorNoUser(LOG_MODULES.MCP, `[Local] 获取工具列表异常`, { error: error instanceof Error ? error.message : String(error) });
+      return [];
+    }
+  }
+
   private sendRequest(method: string, params: Record<string, unknown>, timeout?: number): Promise<JsonRpcResponse> {
     return new Promise((resolve, reject) => {
       if (!this.process?.stdin) {
@@ -410,6 +441,37 @@ export class RemoteMcpClient {
     }
   }
 
+  /**
+   * 获取 MCP 服务器提供的工具列表
+   * @returns 工具列表 [{name, description, inputSchema}]
+   */
+  async listTools(): Promise<Array<{ name: string; description?: string; inputSchema?: any }>> {
+    if (!this.initialized) {
+      throw new Error('MCP 客户端未初始化');
+    }
+
+    try {
+      logger.info(LOG_MODULES.MCP, `[Remote] 获取工具列表: ${this.serverName}`);
+
+      const response = await this.sendRequest('tools/list', {});
+
+      if (response.error) {
+        logger.warn(LOG_MODULES.MCP, `[Remote] 获取工具列表失败`, { error: response.error.message });
+        return [];
+      }
+
+      const result = response.result as { tools?: Array<{ name: string; description?: string; inputSchema?: any }> };
+      const tools = result.tools || [];
+      
+      logger.info(LOG_MODULES.MCP, `[Remote] 工具列表获取成功`, { count: tools.length, tools: tools.map(t => t.name) });
+      
+      return tools;
+    } catch (error) {
+      logger.errorNoUser(LOG_MODULES.MCP, `[Remote] 获取工具列表异常`, { error: error instanceof Error ? error.message : String(error) });
+      return [];
+    }
+  }
+
   private sendRequest(method: string, params: Record<string, unknown>, timeout?: number): Promise<JsonRpcResponse> {
     return new Promise((resolve, reject) => {
       const id = ++this.requestId;
@@ -571,6 +633,77 @@ export async function callAi4JavaDecompileDirect(
 
   // 参数名使用 path（MCP 工具定义的参数名）
   return callMcpToolDirect(config, 'decompileProject', { path: projectRoot });
+}
+
+/**
+ * 获取 MCP 服务器工具列表
+ * 
+ * @param config MCP 服务器配置
+ * @returns 工具列表和连接状态
+ */
+export async function listMcpToolsDirect(
+  config: McpConfig
+): Promise<{ success: boolean; tools: Array<{ name: string; description?: string; inputSchema?: any }>; error?: string }> {
+  const startTime = Date.now();
+  
+  logger.info(LOG_MODULES.MCP, `[Direct] 获取 MCP 工具列表`, {
+    serverName: config.name,
+    serverType: config.type,
+  });
+
+  try {
+    let client: LocalMcpClient | RemoteMcpClient;
+
+    if (config.type === 'local') {
+      if (!config.command) {
+        return { success: false, tools: [], error: 'local 类型缺少 command 配置' };
+      }
+      client = new LocalMcpClient(config.name, {
+        command: config.command,
+        args: config.args,
+        env: config.env,
+        timeout: config.timeout || 60000,  // 测试连接默认 60 秒超时
+      });
+    } else if (config.type === 'remote') {
+      if (!config.url) {
+        return { success: false, tools: [], error: 'remote 类型缺少 url 配置' };
+      }
+      client = new RemoteMcpClient(config.name, {
+        url: config.url,
+        timeout: config.timeout || 60000,
+      });
+    } else {
+      return { success: false, tools: [], error: `不支持的 MCP 类型: ${config.type}` };
+    }
+
+    await client.connect();
+    const tools = await client.listTools();
+    await client.close();
+
+    const duration = Date.now() - startTime;
+    logger.info(LOG_MODULES.MCP, `[Direct] 工具列表获取完成`, {
+      success: true,
+      toolCount: tools.length,
+      duration: `${duration}ms`,
+      durationSeconds: (duration / 1000).toFixed(2),
+    });
+
+    return { success: true, tools };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    
+    logger.errorNoUser(LOG_MODULES.MCP, `[Direct] 工具列表获取异常`, {
+      error: errorMsg,
+      duration: `${duration}ms`,
+    });
+
+    return {
+      success: false,
+      tools: [],
+      error: errorMsg,
+    };
+  }
 }
 
 // ========================================

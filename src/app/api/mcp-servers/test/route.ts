@@ -1,12 +1,14 @@
 // src/app/api/mcp-servers/test/route.ts
-// MCP 服务器测试 API - 验证连通性并获取工具列表
+// MCP 服务器测试 API - 验证连通性并获取工具列表，成功后保存到数据库
 
 import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { listMcpToolsDirect } from '@/lib/mcp-client';
+import { prisma } from '@/lib/prisma';
 
-// POST /api/mcp-servers/test - 测试 MCP 服务器连接
+// POST /api/mcp-servers/test - 测试 MCP 服务器连接并获取工具列表
 export async function POST(request: Request) {
   // 使用统一认证中间件（需要 CONFIG_READ 权限）
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_READ });
@@ -16,132 +18,129 @@ export async function POST(request: Request) {
   const { payload } = auth;
 
   try {
-
     const body = await request.json();
-    const { type, command, args, url, env } = body;
+    const { id, type, command, args, url, env, name } = body;
 
-    logger.access(LOG_MODULES.MCP, payload, 'mcp:test', { type, command, url });
+    logger.access(LOG_MODULES.MCP, payload, 'mcp:test', { id, type, command, url, name });
 
-    // 根据类型测试连接
-    if (type === 'remote') {
-      return await testRemoteServer(url, env);
-    } else if (type === 'local') {
-      return await testLocalServer(command, args, env);
+    // 验证必填字段
+    if (!name) {
+      return NextResponse.json({ error: '服务器名称必填' }, { status: 400 });
+    }
+
+    if (type === 'remote' && !url) {
+      return NextResponse.json({ error: '远程服务器必须提供 URL' }, { status: 400 });
+    }
+
+    if (type === 'local' && !command) {
+      return NextResponse.json({ error: '本地服务器必须提供命令' }, { status: 400 });
+    }
+
+    // 构建 MCP 配置
+    const mcpConfig = {
+      name: name || 'test-server',
+      type: type as 'local' | 'remote',
+      command: command ?? undefined,
+      args: args ? (typeof args === 'string' ? JSON.parse(args) : args) : undefined,
+      url: url ?? undefined,
+      env: env ? (typeof env === 'string' ? JSON.parse(env) : env) : undefined,
+      timeout: 60000, // 测试连接 60 秒超时
+    };
+
+    logger.info(LOG_MODULES.MCP, '开始测试 MCP 连接', {
+      serverId: id,
+      serverName: mcpConfig.name,
+      serverType: mcpConfig.type,
+      hasCommand: !!mcpConfig.command,
+      hasUrl: !!mcpConfig.url,
+    });
+
+    // 获取工具列表（同时验证连接）
+    const result = await listMcpToolsDirect(mcpConfig);
+
+    if (result.success) {
+      const tools = result.tools.map(tool => ({
+        name: tool.name,
+        description: tool.description || '无描述',
+        inputSchema: tool.inputSchema || {},
+      }));
+
+      logger.info(LOG_MODULES.MCP, 'MCP 测试成功', {
+        serverId: id,
+        serverName: mcpConfig.name,
+        toolCount: tools.length,
+        tools: tools.map(t => t.name),
+      });
+
+      // 如果有服务器 ID，保存工具列表到数据库
+      if (id) {
+        try {
+          await prisma.mcpServerConfig.update({
+            where: { id },
+            data: {
+              tools: JSON.stringify(tools),
+              lastTestedAt: new Date(),
+              updatedAt: new Date(),
+            },
+          });
+          logger.info(LOG_MODULES.MCP, 'MCP 工具列表已保存到数据库', {
+            serverId: id,
+            toolCount: tools.length,
+          });
+        } catch (dbError) {
+          logger.warn(LOG_MODULES.MCP, 'MCP 工具列表保存失败', {
+            serverId: id,
+            error: dbError instanceof Error ? dbError.message : String(dbError),
+          });
+          // 不阻塞流程，继续返回结果
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        connected: true,
+        message: `成功连接到 MCP 服务器，发现 ${tools.length} 个工具`,
+        server: {
+          id,
+          name: mcpConfig.name,
+          type: mcpConfig.type,
+          url: mcpConfig.url,
+          command: mcpConfig.command,
+        },
+        tools,
+        toolCount: tools.length,
+        saved: !!id,  // 是否已保存到数据库
+      });
     } else {
-      return NextResponse.json(
-        { error: '不支持的 MCP 服务器类型' },
-        { status: 400 }
-      );
+      logger.warn(LOG_MODULES.MCP, 'MCP 测试失败', {
+        serverId: id,
+        serverName: mcpConfig.name,
+        error: result.error,
+      });
+
+      return NextResponse.json({
+        success: false,
+        connected: false,
+        error: result.error || '连接失败',
+        server: {
+          id,
+          name: mcpConfig.name,
+          type: mcpConfig.type,
+        },
+        tools: [],
+      });
     }
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.MCP, 'MCP 测试失败', error instanceof Error ? error.message : error);
+    logger.errorNoUser(LOG_MODULES.MCP, 'MCP 测试异常', error instanceof Error ? error.message : error);
     return NextResponse.json(
       { 
         error: '测试失败', 
-        details: error instanceof Error ? error.message : '未知错误' 
+        details: error instanceof Error ? error.message : '未知错误',
+        success: false,
+        connected: false,
+        tools: [],
       },
       { status: 500 }
     );
   }
-}
-
-// 测试远程 MCP 服务器 (SSE)
-async function testRemoteServer(url: string, env?: any) {
-  if (!url) {
-    return NextResponse.json(
-      { error: '远程服务器必须提供 URL' },
-      { status: 400 }
-    );
-  }
-
-  try {
-    // 验证 URL 格式
-    const parsedUrl = new URL(url);
-    logger.logNoUser(LOG_MODULES.MCP, '测试远程服务器连接', { url: parsedUrl.href });
-
-    // 尝试连接到 SSE 端点
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 1分钟超时
-
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/event-stream',
-      },
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return NextResponse.json({
-        success: false,
-        connected: false,
-        error: `服务器返回错误: ${response.status} ${response.statusText}`,
-      });
-    }
-
-    // 对于 SSE，我们只需要确认连接成功
-    // 获取工具列表需要完整的 MCP 协议实现
-    return NextResponse.json({
-      success: true,
-      connected: true,
-      message: '成功连接到 MCP 服务器',
-      server: {
-        type: 'remote',
-        url: url,
-      },
-      tools: [], // 需要完整的 MCP 客户端实现才能获取工具列表
-      note: '连接成功。获取工具列表需要完整的 MCP 客户端实现。',
-    });
-  } catch (error) {
-    logger.errorNoUser(LOG_MODULES.MCP, '远程服务器测试失败', error instanceof Error ? error.message : error);
-    
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        return NextResponse.json({
-          success: false,
-          connected: false,
-          error: '连接超时（10秒）',
-        });
-      }
-      
-      return NextResponse.json({
-        success: false,
-        connected: false,
-        error: `连接失败: ${error.message}`,
-      });
-    }
-
-    return NextResponse.json({
-      success: false,
-      connected: false,
-      error: '连接失败: 未知错误',
-    });
-  }
-}
-
-// 测试本地 MCP 服务器
-async function testLocalServer(command: string, args?: any, env?: any) {
-  if (!command) {
-    return NextResponse.json(
-      { error: '本地服务器必须提供命令' },
-      { status: 400 }
-    );
-  }
-
-  // 本地服务器测试需要实际执行命令
-  // 这里只做基本验证
-  return NextResponse.json({
-    success: true,
-    connected: false, // 本地服务器需要在实际运行时测试
-    message: '本地 MCP 服务器配置已验证',
-    server: {
-      type: 'local',
-      command: command,
-      args: args,
-    },
-    tools: [],
-    note: '本地 MCP 服务器需要在实际运行时测试连接和获取工具列表。',
-  });
 }

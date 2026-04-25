@@ -66,6 +66,7 @@ export async function loadMcpServersForProject(
       env: mcp.env ? parseEnv(mcp.env) : undefined,
       isEnabled: mcp.isEnabled,
       autoStart: mcp.autoStart,
+      tools: mcp.tools ? parseTools(mcp.tools) : undefined,  // 解析工具列表
     }));
 
     console.log(`[McpLoader] 加载 MCP 配置: 项目=${projectId}, 用户=${userId}`);
@@ -125,9 +126,17 @@ export async function loadMcpServersForUser(
       env: mcp.env ? parseEnv(mcp.env) : undefined,
       isEnabled: mcp.isEnabled,
       autoStart: mcp.autoStart,
+      tools: mcp.tools ? parseTools(mcp.tools) : undefined,  // 解析工具列表
     }));
 
     console.log(`[McpLoader] 加载用户 MCP 配置: 用户=${userId}, 合计=${mcpConfigs.length} 个`);
+
+    // 日志工具数量
+    for (const mcp of mcpConfigs) {
+      if (mcp.tools && mcp.tools.length > 0) {
+        console.log(`[McpLoader] MCP "${mcp.name}" 有 ${mcp.tools.length} 个工具: ${mcp.tools.map(t => t.name).join(', ')}`);
+      }
+    }
 
     return mcpConfigs;
   } catch (error) {
@@ -171,6 +180,18 @@ function parseEnv(envJson: string): Record<string, string> | undefined {
   try {
     const parsed = JSON.parse(envJson);
     return typeof parsed === 'object' ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * 解析 tools 字段（JSON 字符串）
+ */
+function parseTools(toolsJson: string): Array<{ name: string; description?: string; inputSchema?: any }> | undefined {
+  try {
+    const parsed = JSON.parse(toolsJson);
+    return Array.isArray(parsed) ? parsed : undefined;
   } catch {
     return undefined;
   }
