@@ -1096,6 +1096,7 @@ export async function POST(
                     emitEvaluationComplete(evaluation.id, {
                       status: 'failed',
                       error: error.message,
+                      errorMessage: error.message,  // 添加 errorMessage 字段（前端显示需要）
                       message: 'FSM 工作流执行失败',
                     });
                     
@@ -1152,6 +1153,7 @@ export async function POST(
               emitEvaluationComplete(evaluation.id, {
                 status: 'failed',
                 error: errorMsg,
+                errorMessage: errorMsg,  // 添加 errorMessage 字段（前端显示需要）
                 message: '评估准备过程失败',
               });
               
@@ -1164,6 +1166,10 @@ export async function POST(
               // 处理队列
               const { processQueue } = await import('@/services/evaluation-queue');
               processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '处理队列失败', { error: err }));
+              
+              // 解锁项目（清理 lockMap 残留）
+              await unlockProject(id);
+              logger.info(LOG_MODULES.EVALUATION, '[FSM Async] 项目已解锁（失败清理）', { projectId: id });
             }
           })();
           
@@ -1828,6 +1834,7 @@ dagCopyResult = await copySkillsToProject(
                 emitEvaluationComplete(dagEvaluation.id, {
                   status: 'failed',
                   error: error.message,
+                  errorMessage: error.message,  // 添加 errorMessage 字段（前端显示需要）
                   message: 'DAG 工作流执行失败',
                 });
               },
@@ -1869,6 +1876,7 @@ dagCopyResult = await copySkillsToProject(
             emitEvaluationComplete(dagEvaluation.id, {
               status: 'failed',
               error: errorMsg,
+              errorMessage: errorMsg,  // 添加 errorMessage 字段（前端显示需要）
               message: '评估准备过程失败',
             });
             
@@ -1881,6 +1889,10 @@ dagCopyResult = await copySkillsToProject(
             // 处理队列
             const { processQueue } = await import('@/services/evaluation-queue');
             processQueue().catch(err => logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 处理队列失败', { error: err }));
+            
+            // 解锁项目（清理 lockMap 残留）
+            await unlockProject(id);
+            logger.info(LOG_MODULES.EVALUATION, '[DAG Async] 项目已解锁（失败清理）', { projectId: id });
           }
         })();
         

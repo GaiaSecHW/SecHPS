@@ -16,7 +16,7 @@ async function getModelConfig() {
   const m = await prisma.modelConfig.findFirst({ where: { isActive: true, isDefault: true } }) || await prisma.modelConfig.findFirst({ where: { isActive: true } });
   if (!m) return null;
   const models = JSON.parse(m.models || '[]');
-  return { providerType: m.providerType, apiKey: m.apiKey, apiBaseUrl: m.apiBaseUrl, models: m.models, model: models[0] || 'claude-sonnet-4-20250514' };
+  return { id: m.id, providerType: m.providerType, apiKey: m.apiKey, apiBaseUrl: m.apiBaseUrl, models: m.models, model: models[0] || 'claude-sonnet-4-20250514', contextWindow: m.contextWindow ?? 0 };
 }
 
 /** Create FSM callbacks */

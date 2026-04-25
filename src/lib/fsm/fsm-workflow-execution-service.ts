@@ -44,10 +44,12 @@ export interface FSMExecutionConfig {
   maxIterationsPerPhase: number;
   maxCostPerPhase: number;
   modelConfig: {
+    id: string;  // ModelConfig ID，用于自动更新 contextWindow
     providerType: string;
     apiKey: string;
     apiBaseUrl: string;
     models: string;
+    contextWindow?: number;  // 模型的 context window 大小，用于 autoCompactWindow
   };
   systemPrompt?: string;  // 系统提示词
   roleModels?: { roleId: string; modelId: string }[];  // 角色模型配置
@@ -467,6 +469,7 @@ export class FSMWorkflowExecutionService {
       apiKey: this.config.modelConfig.apiKey,
       apiBaseUrl: this.config.modelConfig.apiBaseUrl,
       models: this.config.modelConfig.models,
+      contextWindow: this.config.modelConfig.contextWindow,  // 传递 context window
     };
 
     // 加载 MCP 配置：优先使用传入的配置，否则从数据库加载

@@ -68,6 +68,8 @@ export interface ModelConfigForExecution {
   apiBaseUrl?: string;
   /** 可用模型列表（JSON 字符串或数组） */
   models: string | string[];
+  /** 模型的 context window 大小，用于 autoCompactWindow */
+  contextWindow?: number;
 }
 
 // ============ 执行配置类型 ============
