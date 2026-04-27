@@ -378,9 +378,9 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     // 获取节点配置的 Skills（用于判断是否需要串行执行）
     const skills = await this.getNodeSkills(node);
     
-    // 多 Skill 串行执行模式：当 skills.length > 1 且不是 description 模式
-    if (skills.length > 1 && mode !== 'description') {
-      console.log(`[executeNode] 检测到多 Skill 节点 (${skills.length} 个)，启用串行执行模式`);
+    // Skill 串行执行模式：当 skills.length >= 1 且是 vulnerability/manual 模式
+    if (skills.length >= 1 && mode !== 'description') {
+      console.log(`[executeNode] 检测到 Skill 节点 (${skills.length} 个)，启用串行执行模式，mode=${mode}`);
       return await this.executeMultiSkillNode(nodeIndex, node, skills, modelConfig);
     }
     

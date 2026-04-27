@@ -1352,10 +1352,10 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       const config = statusConfig[actualStatus] || statusConfig.pending;
                       const StatusIcon = config.icon;
                       
-                      // 检测是否是目录节点（多 skill 节点）
+                      // 检测是否是目录节点（有 skill 且为 vulnerability/manual 模式）
                       const isDirectoryNode = node.skillLoadingMode && 
                         ['vulnerability', 'manual'].includes(node.skillLoadingMode) && 
-                        node.skills && node.skills.length > 1;
+                        node.skills && node.skills.length >= 1;
                       
                       // 计算目录节点的整体进度
                       const directoryProgress = isDirectoryNode && node.skillsDetails ? {
