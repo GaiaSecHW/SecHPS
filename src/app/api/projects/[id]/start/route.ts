@@ -1650,6 +1650,38 @@ dagCopyResult = await copySkillsToProject(
               message: `拓扑排序完成，共 ${sortedNodes.length} 个节点`,
             });
             
+            // ========================================
+            // Step 3.5: 为每个节点批量创建 SkillExecution 记录
+            // ========================================
+            for (const node of workflowNodes) {
+              const nodeData = node.data ? JSON.parse(node.data as string) : {};
+              const nodeSkills = node.skills ? JSON.parse(node.skills) : nodeData.skills;
+              const mode = nodeData.skillLoadingMode;
+              
+              // 只为 vulnerability/manual 模式的节点创建
+              if (nodeSkills && nodeSkills.length >= 1 && mode && ['vulnerability', 'manual'].includes(mode)) {
+                try {
+                  const { createSkillExecutionsForNode } = await import('@/services/skill-execution-tracker');
+                  await createSkillExecutionsForNode({
+                    evaluationId: dagEvaluation.id,
+                    nodeId: node.id,
+                    skills: nodeSkills,
+                    projectId: id,
+                  });
+                  logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 为节点创建 SkillExecution 记录', { 
+                    nodeId: node.id, 
+                    skillCount: nodeSkills.length 
+                  });
+                } catch (error) {
+                  logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 创建 SkillExecution 记录失败', { 
+                    nodeId: node.id, 
+                    error 
+                  });
+                  // 继续执行，不阻塞评估
+                }
+              }
+            }
+            
             // 写入 CLAUDE.md 全局模板到项目目录
             if (project.projectPath && globalConfig?.claudemdTemplate) {
               try {
