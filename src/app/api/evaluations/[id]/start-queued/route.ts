@@ -70,23 +70,8 @@ export async function POST(
     console.log(`[Start-Queued] ✓ 开始启动排队评估...`);
     logger.info(LOG_MODULES.EVALUATION, '启动排队评估:', { details: { id, projectId: evaluation.projectId, projectName } });
     
-    // 更新评估状态为 running
-    console.log(`[Start-Queued] 更新评估状态为 running...`);
-    await prisma.evaluationSession.update({
-      where: { id },
-      data: {
-        status: 'running',
-        startedAt: new Date(),
-      },
-    });
-    console.log(`[Start-Queued] ✓ 评估状态已更新为 running`);
-    
-    // 更新项目状态为 running
-    await prisma.project.update({
-      where: { id: evaluation.projectId },
-      data: { status: 'running' },
-    });
-    console.log(`[Start-Queued] ✓ 项目状态已更新为 running`);
+    // 注意：不在这里更新状态，让 start API 统一处理
+    // 这样避免竞态条件：start API 检查发现"已有评估运行"但实际上是刚更新的
     
     // 通过调用项目的 start API 启动评估
     const startUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/projects/${evaluation.projectId}/start`;
