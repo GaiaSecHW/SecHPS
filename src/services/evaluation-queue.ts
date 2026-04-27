@@ -10,6 +10,7 @@ import {
   emitQueueError,
 } from '@/lib/event-bus';
 import { unlockProject } from '@/lib/evaluation-lock';
+import { startQueuedEvaluation } from '@/services/start-evaluation';
 
 const LOG_PREFIX = '[EvaluationQueue]';
 
@@ -131,24 +132,15 @@ export async function processQueue(): Promise<void> {
         },
       });
       
-      // 触发排队评估的启动
-      // 通过内部 API 调用启动评估
+      // 触发排队评估的启动 - 直接调用服务函数（不走 HTTP）
       try {
-        const apiUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/evaluations/${queuedEvaluation.id}/start-queued`;
-        console.log(`${LOG_PREFIX} 调用 start-queued API: ${apiUrl}`);
+        console.log(`${LOG_PREFIX} 直接调用 startQueuedEvaluation 服务函数...`);
         
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            // 内部调用使用 X-Internal-Call 标记（不需要密钥）
-            'X-Internal-Call': 'true',
-          },
-        });
+        const result = await startQueuedEvaluation(queuedEvaluation.id);
         
-        console.log(`${LOG_PREFIX} start-queued API 响应: status=${response.status} ${response.statusText}`);
+        console.log(`${LOG_PREFIX} startQueuedEvaluation 结果: success=${result.success}, error=${result.error || '无'}`);
         
-        if (response.ok) {
+        if (result.success) {
           startedCount++;
           console.log(`${LOG_PREFIX} ✓ 排队评估启动成功! startedCount=${startedCount}`);
           
@@ -181,45 +173,21 @@ export async function processQueue(): Promise<void> {
             projectName,
           });
         } else {
-          // 解析完整错误响应
-          let errorDetails: string;
-          try {
-            const errorData = await response.json();
-            errorDetails = JSON.stringify(errorData, null, 2);
-            console.log(`${LOG_PREFIX} ✗ start-queued API 返回错误: ${errorDetails}`);
-          } catch {
-            errorDetails = `HTTP ${response.status}: ${response.statusText}`;
-            console.log(`${LOG_PREFIX} ✗ start-queued API 返回错误: ${errorDetails}`);
-          }
+          // 启动失败
+          const errorMessage = result.error || '启动失败';
           
           logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 启动排队评估失败`, {
             evaluationId: queuedEvaluation.id,
-            httpStatus: response.status,
-            errorDetails,
+            error: errorMessage,
           });
           
           // 发送队列错误事件
           emitQueueError({
             evaluationId: queuedEvaluation.id,
             projectName,
-            error: `队列启动失败 (HTTP ${response.status})`,
-            errorDetails,
+            error: errorMessage,
+            errorDetails: errorMessage,
           });
-          
-          // 标记为失败，记录详细错误信息
-          await prisma.evaluationSession.update({
-            where: { id: queuedEvaluation.id },
-            data: {
-              status: 'failed',
-              errorMessage: `队列启动失败 (HTTP ${response.status})`,
-              endReason: 'queue_start_failed',
-              endMessage: `调度队列启动失败详情:\n${errorDetails}\n\n时间: ${new Date().toISOString()}`,
-              completedAt: new Date(),
-            },
-          });
-          
-          // 释放项目锁（关键：让后续评估可以调度）
-          await unlockProject(queuedEvaluation.projectId);
           
           // 发送队列状态变化事件（失败）
           emitQueueStatusChange({
@@ -234,9 +202,9 @@ export async function processQueue(): Promise<void> {
           // 失败后继续尝试下一个排队评估（不中断循环）
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 继续尝试下一个排队评估`);
         }
-      } catch (fetchError) {
-        const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
-        const errorStack = fetchError instanceof Error ? fetchError.stack : '';
+      } catch (startError) {
+        const errorMessage = startError instanceof Error ? startError.message : String(startError);
+        const errorStack = startError instanceof Error ? startError.stack : '';
         
         logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 启动排队评估异常`, {
           evaluationId: queuedEvaluation.id,
@@ -252,7 +220,7 @@ export async function processQueue(): Promise<void> {
           errorDetails: errorStack || '无堆栈信息',
         });
         
-        // 标记为失败，记录完整异常信息
+        // 标记为失败
         await prisma.evaluationSession.update({
           where: { id: queuedEvaluation.id },
           data: {
@@ -264,10 +232,10 @@ export async function processQueue(): Promise<void> {
           },
         });
         
-        // 释放项目锁（关键：让后续评估可以调度）
+        // 释放项目锁
         await unlockProject(queuedEvaluation.projectId);
         
-        // 异常后继续尝试下一个排队评估（不中断循环）
+        // 异常后继续尝试下一个排队评估
         logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 继续尝试下一个排队评估`);
       }
     }
