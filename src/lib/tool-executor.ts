@@ -40,6 +40,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
+      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       return {
         success: false,
         output: null,
@@ -78,6 +79,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
+      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       return {
         success: true,
         output: { matches: [], count: 0, message: '未找到匹配项' },
@@ -104,6 +106,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
+      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       return {
         success: false,
         output: null,
@@ -140,6 +143,7 @@ const BUILTIN_TOOLS: Record<string, (params: Record<string, unknown>, context: T
         duration: Date.now() - startTime,
       };
     } catch (error) {
+      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       return {
         success: false,
         output: { stdout: '', stderr: error instanceof Error ? error.message : '执行失败' },
@@ -243,6 +247,7 @@ export class ToolExecutor {
         duration: Date.now() - startTime,
       };
     } catch (error) {
+      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       return {
         success: false,
         output: null,
@@ -279,6 +284,7 @@ export class ToolExecutor {
         duration: Date.now() - startTime,
       };
     } catch (error) {
+      console.error('[tool-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       return {
         success: false,
         output: null,

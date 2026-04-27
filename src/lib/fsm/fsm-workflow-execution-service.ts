@@ -671,6 +671,7 @@ export class FSMWorkflowExecutionService {
           results.push(result);
           this.callbacks.onAgentZoneProgress(agent.name, 'completed');
         } catch (error) {
+          console.error('[fsm/fsm-workflow-execution-service] 操作失败:', error instanceof Error ? error.message : String(error));
           results.push({
             agentName: agent.name,
             agentType: agent.type,

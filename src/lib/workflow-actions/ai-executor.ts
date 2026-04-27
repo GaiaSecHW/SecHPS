@@ -90,6 +90,7 @@ export async function executeAiProcess(
     };
   } catch (error) {
     logs.push(`[AI] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('[workflow-actions/ai-executor] AI处理失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       output: null,

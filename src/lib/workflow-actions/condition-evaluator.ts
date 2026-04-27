@@ -50,6 +50,7 @@ export async function executeConditionEvaluate(
     };
   } catch (error) {
     logs.push(`[Condition] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('[workflow-actions/condition-evaluator] 条件评估失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       output: { result: false },

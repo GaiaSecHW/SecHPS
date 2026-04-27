@@ -62,6 +62,7 @@ export async function executeScript(
     };
   } catch (error) {
     logs.push(`[Script] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('[workflow-actions/script-executor] 脚本执行失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       output: null,

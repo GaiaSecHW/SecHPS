@@ -93,6 +93,7 @@ export async function apiRequest<T = unknown>(
     const data = await response.json() as T;
     return { data, error: null };
   } catch (err) {
+    console.error('[api-client] 网络请求失败:', err instanceof Error ? err.message : String(err));
     return { 
       data: null, 
       error: err instanceof Error ? err.message : '网络请求失败' 

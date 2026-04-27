@@ -60,6 +60,7 @@ export function withMetrics(
 
       return response;
     } catch (error) {
+      console.error('[metrics-middleware] 请求处理失败:', error instanceof Error ? error.message : String(error));
       const duration = Date.now() - startTime;
 
       // 记录异常

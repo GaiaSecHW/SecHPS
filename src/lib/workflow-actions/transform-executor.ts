@@ -56,6 +56,7 @@ export async function executeTransform(
     };
   } catch (error) {
     logs.push(`[Transform] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('[workflow-actions/transform-executor] 数据转换失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       output: null,

@@ -123,6 +123,7 @@ export class FSMNodeExecutor {
       );
 
     } catch (error) {
+      console.error('[fsm/fsm-node-executor] 操作失败:', error instanceof Error ? error.message : String(error));
       await this.updateNodeStatus(context.executionId, node.id, 'failed');
       return this.createFailedResult(
         node.id,

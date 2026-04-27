@@ -258,6 +258,7 @@ export async function isValidDAG(workflowId: string): Promise<boolean> {
     await topologicalSortDAG(workflowId);
     return true;
   } catch (error) {
+    console.error('[topology-sort] DAG验证失败:', error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.message.includes('Cycle detected')) {
       return false;
     }

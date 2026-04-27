@@ -326,6 +326,7 @@ export class AgentExecutor {
         const result = await this.toolExecutor.execute(toolCall.tool, toolCall.parameters);
         results.push(`[${toolCall.tool}] 执行成功:\n${JSON.stringify(result, null, 2)}`);
       } catch (error) {
+        console.error('[agent-executor] 工具执行失败:', error instanceof Error ? error.message : String(error));
         const errorMsg = error instanceof Error ? error.message : '执行失败';
         results.push(`[${toolCall.tool}] 执行失败: ${errorMsg}`);
       }

@@ -225,6 +225,7 @@ export class ScanExecutor {
       };
 
     } catch (error) {
+      console.error('[scan-executor] 执行失败:', error instanceof Error ? error.message : String(error));
       return {
         skillId: skill.id,
         skillName: skill.displayName,

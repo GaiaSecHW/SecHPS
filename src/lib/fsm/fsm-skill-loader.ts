@@ -118,6 +118,7 @@ export async function loadFSMSkill(
     };
 
   } catch (error) {
+    console.error('[fsm/fsm-skill-loader] 操作失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       skillPath: '',

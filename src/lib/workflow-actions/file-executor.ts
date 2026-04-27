@@ -112,6 +112,7 @@ export async function executeFileOperation(
     };
   } catch (error) {
     logs.push(`[File] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('[workflow-actions/file-executor] 文件操作失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       output: null,

@@ -61,6 +61,7 @@ async function checkDatabase(): Promise<HealthCheckResult> {
       checkedAt: new Date(),
     };
   } catch (error) {
+    console.error('[health-check] 数据库健康检查失败:', error instanceof Error ? error.message : String(error));
     return {
       name: 'database',
       status: 'unhealthy',

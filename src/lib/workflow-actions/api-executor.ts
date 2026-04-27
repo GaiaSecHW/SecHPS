@@ -98,6 +98,7 @@ export async function executeApiCall(
     };
   } catch (error) {
     logs.push(`[API] Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.error('[workflow-actions/api-executor] API调用失败:', error instanceof Error ? error.message : String(error));
     return {
       success: false,
       output: null,

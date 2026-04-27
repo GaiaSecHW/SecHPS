@@ -64,6 +64,7 @@ export async function readPhaseOutput(
     };
 
   } catch (error) {
+    console.error('[fsm/phase-io] 操作失败:', error instanceof Error ? error.message : String(error));
     return null;
   }
 }
