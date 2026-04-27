@@ -165,6 +165,9 @@ export async function GET(
               description: node.description || null,
               skillPath: node.skillPath || null,
               data: node,
+              // FSM 顺序执行：前一阶段是前置，后一阶段是后继
+              prevNodeIds: index > 0 ? [filteredNodes[index - 1].id] : [],
+              nextNodeIds: index < filteredNodes.length - 1 ? [filteredNodes[index + 1].id] : [],
             }));
             
             // 4. 在 fsmPhase=5 之后、fsmPhase=7 之前插入用户节点
@@ -189,6 +192,9 @@ export async function GET(
                 description: nodeData.description || null,
                 skillPath: null,
                 data: nodeData,
+                // 用户节点关系
+                prevNodeIds: [],
+                nextNodeIds: [],
               };
               workflowNodes.splice(insertIndex + i, 0, userNode);
             }
@@ -219,6 +225,22 @@ export async function GET(
             
             const currentDegree = inDegree.get(edge.targetId) || 0;
             inDegree.set(edge.targetId, currentDegree + 1);
+          }
+          
+          // 构建节点关系映射（前置节点和后继节点）
+          const prevNodesMap: Map<string, string[]> = new Map();
+          const nextNodesMap: Map<string, string[]> = new Map();
+          
+          for (const edge of workflow.WorkflowEdge) {
+            // sourceId -> targetId: sourceId 的后继是 targetId
+            const nextList = nextNodesMap.get(edge.sourceId) || [];
+            nextList.push(edge.targetId);
+            nextNodesMap.set(edge.sourceId, nextList);
+            
+            // targetId 的前置是 sourceId
+            const prevList = prevNodesMap.get(edge.targetId) || [];
+            prevList.push(edge.sourceId);
+            prevNodesMap.set(edge.targetId, prevList);
           }
           
           // Kahn 算法拓扑排序
@@ -254,6 +276,12 @@ export async function GET(
           // 创建节点映射
           const nodeMap = new Map(workflow.WorkflowNode.map(n => [n.id, n]));
           
+          // 构建节点标签映射（用于关系显示）
+          const nodeLabelMap = new Map(workflow.WorkflowNode.map(n => [n.id, nData => {
+            const data = n.data ? JSON.parse(n.data) : {};
+            return data.label || data.name || `节点 ${n.id.substring(0, 8)}`;
+          }]));
+          
           // 按拓扑顺序构建节点列表
           workflowNodes = nodeOrder.map((nodeId, index) => {
             const node = nodeMap.get(nodeId);
@@ -274,6 +302,10 @@ export async function GET(
               label = nodeData.label || nodeData.name || `节点 ${node.id.substring(0, 8)}`;
             }
             
+            // 获取前置节点和后继节点列表
+            const prevNodeIds = prevNodesMap.get(node.id) || [];
+            const nextNodeIds = nextNodesMap.get(node.id) || [];
+            
             return {
               id: node.id,
               label,
@@ -286,6 +318,9 @@ export async function GET(
               skills: node.skills ? JSON.parse(node.skills) : [],
               vulnerabilityCategories: node.vulnerabilityCategories ? JSON.parse(node.vulnerabilityCategories) : [],
               data: nodeData,
+              // 节点关系
+              prevNodeIds,
+              nextNodeIds,
             };
           }).filter((n): n is NonNullable<typeof n> => n !== null);
           
@@ -367,6 +402,9 @@ export async function GET(
           // Token 信息
           inputTokens: exec?.inputTokens || null,
           outputTokens: exec?.outputTokens || null,
+          // 节点关系
+          prevNodeIds: wn.prevNodeIds || [],
+          nextNodeIds: wn.nextNodeIds || [],
         };
       });
     } else {
@@ -386,6 +424,9 @@ export async function GET(
         modelConfigId: exec.modelConfigId,
         inputTokens: exec.inputTokens,
         outputTokens: exec.outputTokens,
+        // 无工作流配置时，关系为空
+        prevNodeIds: [],
+        nextNodeIds: [],
       }));
     }
 

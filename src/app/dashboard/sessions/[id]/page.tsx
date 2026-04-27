@@ -1438,6 +1438,70 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                   </button>
                 </div>
                 
+                {/* 节点关系 - 显示前置和后继节点 */}
+                {(() => {
+                  const currentNode = workflowNodes.find((n: any) => n.id === selectedNodeId);
+                  if (!currentNode) return null;
+                  
+                  const prevNodes = (currentNode.prevNodeIds || []).map((id: string) => 
+                    workflowNodes.find((n: any) => n.id === id)
+                  ).filter(Boolean);
+                  const nextNodes = (currentNode.nextNodeIds || []).map((id: string) => 
+                    workflowNodes.find((n: any) => n.id === id)
+                  ).filter(Boolean);
+                  
+                  if (prevNodes.length === 0 && nextNodes.length === 0) return null;
+                  
+                  return (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
+                        <GitBranch size={16} className="text-orange-600" />
+                        <span>节点关系</span>
+                      </div>
+                      <div className="flex flex-wrap gap-4 text-xs">
+                        {/* 前置节点 */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">前置节点:</span>
+                          {prevNodes.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {prevNodes.map((n: any) => (
+                                <span 
+                                  key={n.id}
+                                  className="px-2 py-0.5 bg-green-100 text-green-700 rounded cursor-pointer hover:bg-green-200"
+                                  onClick={() => handleNodeClick(n.id)}
+                                >
+                                  {n.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">无</span>
+                          )}
+                        </div>
+                        {/* 后继节点 */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">后继节点:</span>
+                          {nextNodes.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {nextNodes.map((n: any) => (
+                                <span 
+                                  key={n.id}
+                                  className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded cursor-pointer hover:bg-blue-200"
+                                  onClick={() => handleNodeClick(n.id)}
+                                >
+                                  {n.label}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">无</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                
                 {loadingNodeMessages ? (
                   <div className="flex items-center justify-center py-8">
                     <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
