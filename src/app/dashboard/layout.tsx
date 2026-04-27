@@ -186,18 +186,20 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/users" icon={<Users size={20} />} collapsed={collapsed}>
                 用户管理
               </NavLink>
-              <NavLink href="/dashboard/roles" icon={<Settings size={20} />} collapsed={collapsed}>
+              {/* 角色权限菜单已隐藏 */}
+              {/* <NavLink href="/dashboard/roles" icon={<Settings size={20} />} collapsed={collapsed}>
                 角色权限
-              </NavLink>
+              </NavLink> */}
               <NavLink href="/dashboard/config" icon={<Cog size={20} />} collapsed={collapsed}>
                 系统配置
               </NavLink>
               <NavLink href="/dashboard/admin/broadcast" icon={<Megaphone size={20} />} collapsed={collapsed}>
                 通知广播
               </NavLink>
-<NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
+{/* 插件管理菜单已隐藏 */}
+              {/* <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
                 插件管理
-              </NavLink>
+              </NavLink> */}
               <NavLink href="/dashboard/admin/vulnerability-patterns" icon={<Shield size={20} />} collapsed={collapsed}>
                 漏洞模式
               </NavLink>
@@ -211,17 +213,19 @@ function DashboardLayoutContent({
                 Skills 治理
               </NavLink>
               <NavLink href="/dashboard/admin/autonomous-evolution" icon={<Brain size={20} />} collapsed={collapsed}>
-                执行进化管理
+                执行过程进化
               </NavLink>
               <NavLink href="/dashboard/tech-stack" icon={<Layers size={20} />} collapsed={collapsed}>
                 技术栈管理
               </NavLink>
-              <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
+              {/* 工具管理菜单已隐藏 */}
+              {/* <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
                 工具管理
-              </NavLink>
-              <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={20} />} collapsed={collapsed}>
+              </NavLink> */}
+              {/* 默认工具权限菜单已隐藏 */}
+              {/* <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={20} />} collapsed={collapsed}>
                 默认工具权限
-              </NavLink>
+              </NavLink> */}
               <NavLink href="/dashboard/admin/fsm-templates" icon={<Layers size={20} />} collapsed={collapsed}>
                 威胁建模配置
               </NavLink>
