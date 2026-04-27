@@ -263,9 +263,24 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     };
   }
   
-  // 有 running 状态的节点 -> 需要恢复（节点执行中断）
+  // 有 running 状态的节点 -> 检查是否真正中断
   if (statusCounts.running > 0) {
     const runningNode = nodeExecutions.find((n: any) => n.status === 'running');
+    
+    // 检查节点最近是否有活动（5分钟内有更新说明正在执行）
+    const updatedAt = runningNode?.updatedAt;
+    const ageMinutes = updatedAt ? (Date.now() - new Date(updatedAt).getTime()) / 60000 : Infinity;
+    
+    console.log(`${LOG_PREFIX} running 节点 ${runningNode?.nodeLabel}: updatedAt=${updatedAt}, ageMinutes=${ageMinutes.toFixed(2)}`);
+    
+    if (ageMinutes < 5) {
+      // 最近5分钟内有更新，节点正在执行，不需要恢复
+      console.log(`${LOG_PREFIX} 节点正在执行（${ageMinutes.toFixed(2)}分钟前有更新），跳过恢复`);
+      return null;
+    }
+    
+    // 超过5分钟无更新，节点真正中断，需要恢复
+    console.log(`${LOG_PREFIX} 节点已中断（${ageMinutes.toFixed(2)}分钟无更新），触发恢复`);
     return {
       evaluationId: evaluation.id,
       projectId: evaluation.projectId,
@@ -273,7 +288,7 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
       lastCompletedNodeIndex,
       nextNodeToExecute: runningNode ? nodeExecutions.indexOf(runningNode) : lastCompletedNodeIndex + 1,
       totalNodes: nodeExecutions.length,
-      recoveryReason: `节点 ${runningNode?.nodeLabel || '未知'} 执行中断`,
+      recoveryReason: `节点 ${runningNode?.nodeLabel || '未知'} 执行中断 (${ageMinutes.toFixed(0)}分钟无活动)`,
     };
   }
   
