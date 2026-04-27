@@ -227,8 +227,24 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     lastCompletedNodeIndex,
   });
   
-  // 所有节点已完成 -> 不需要恢复
+  // 所有节点已完成 -> 检查评估状态是否为 running（可能有子任务未完成）
   if (statusCounts.completed === nodeExecutions.length) {
+    // 如果评估状态是 running，说明可能有子任务未完成，触发恢复让大模型检查
+    if (evaluation.status === 'running') {
+      const lastCompletedNode = nodeExecutions[nodeExecutions.length - 1];
+      if (lastCompletedNode && lastCompletedNode.opencodeSessionId) {
+        console.log(`${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成但状态仍为 running，触发恢复检查子任务`);
+        return {
+          evaluationId: evaluation.id,
+          projectId: evaluation.projectId,
+          workflowType: evaluation.workflowType as 'fsm' | 'custom',
+          lastCompletedNodeIndex: nodeExecutions.length - 1,
+          nextNodeToExecute: nodeExecutions.length - 1, // 恢复最后一个节点
+          totalNodes: nodeExecutions.length,
+          recoveryReason: `检查子任务执行进度并继续完成`,
+        };
+      }
+    }
     logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成`);
     return null;
   }
@@ -357,10 +373,16 @@ async function recoverNodeConversation(
     });
     
     console.log(`${LOG_RECOVERY} ========== 发送恢复消息 ==========`);
-    console.log(`${LOG_RECOVERY} 消息: "继续执行未完成的工作，并返回当前进展。"`);
+    console.log(`${LOG_RECOVERY} 消息: "检查之前执行的子任务进度，继续完成未完成的任务。"`);
     
-    // 5. 发送恢复消息（使用 startEvaluation，传入恢复消息作为 initialMessage）
-    const recoveryMessage = '继续执行未完成的工作，并反馈工作进展。';
+    // 5. 发送恢复消息（提示大模型检查子任务并继续）
+    const recoveryMessage = `服务重启恢复。请检查之前执行的子任务（skill/agent）进度：
+1. 查看已执行的子任务列表和结果
+2. 找出未完成或失败的子任务
+3. 继续执行未完成的子任务
+4. 完成后报告整体进度
+
+请继续执行未完成的工作。`;
     
     // 6. 创建消息存储（用于保存到 JSONL）
     const messageStore = createEvaluationMessageStore(evaluation.projectId, evaluation.id);
