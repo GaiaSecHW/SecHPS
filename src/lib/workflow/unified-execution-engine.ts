@@ -1145,12 +1145,14 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         }
         
         // Skill 执行成功
-        console.log(`[executeMultiSkillNode] Skill ${skill.name} 执行完成: completionReason=${result.completionReason}, iterations=${result.iterations}`);
+        console.log(`[executeMultiSkillNode] Skill ${skill.name} 执行完成: completionReason=${result.completionReason}, iterations=${result.iterations}, textLength=${accumulatedAssistantText.length}`);
         
         totalIterations += result.iterations;
         
         // 更新 SkillExecution 为完成
+        console.log(`[executeMultiSkillNode] 调用 updateSkillExecutionStatus: executionId=${executionId}, skillId=${skill.skillId}, status=completed`);
         await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
+        console.log(`[executeMultiSkillNode] updateSkillExecutionStatus 完成`);
         
         skillResults.push({
           skillName: skill.name,
