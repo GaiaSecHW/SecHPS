@@ -276,12 +276,6 @@ export async function GET(
           // 创建节点映射
           const nodeMap = new Map(workflow.WorkflowNode.map(n => [n.id, n]));
           
-          // 构建节点标签映射（用于关系显示）
-          const nodeLabelMap = new Map(workflow.WorkflowNode.map(n => [n.id, nData => {
-            const data = n.data ? JSON.parse(n.data) : {};
-            return data.label || data.name || `节点 ${n.id.substring(0, 8)}`;
-          }]));
-          
           // 按拓扑顺序构建节点列表
           workflowNodes = nodeOrder.map((nodeId, index) => {
             const node = nodeMap.get(nodeId);
