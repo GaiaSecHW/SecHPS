@@ -359,8 +359,8 @@ async function recoverNodeConversation(
     console.log(`${LOG_RECOVERY} ========== 发送恢复消息 ==========`);
     console.log(`${LOG_RECOVERY} 消息: "检查之前执行的子任务进度，继续完成未完成的任务。"`);
     
-    // 5. 发送恢复消息（提示大模型检查子任务并继续）
-    const recoveryMessage = `服务重启恢复。请检查之前执行的子任务（skill/agent）进度：
+// 5. 发送恢复消息（提示大模型检查子任务并继续）
+    const recoveryMessage = `请反馈当前任务的进度：
 1. 查看已执行的子任务列表和结果
 2. 找出未完成或失败的子任务
 3. 继续执行未完成的子任务
