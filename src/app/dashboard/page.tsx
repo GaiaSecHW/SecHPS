@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { extractErrorMessage } from '@/lib/api-client';
+import { QueueMonitor } from '@/components/evaluation/QueueMonitor';
 
 interface Session {
   id: string;
@@ -363,6 +364,13 @@ export default function DashboardPage() {
           />
         </div>
       </div>
+
+      {/* 队列状态监控 - 管理员可见 */}
+      {isAdmin && (
+        <div className="mb-6">
+          <QueueMonitor showDetail autoRefresh refreshInterval={10000} maxQueueDisplay={5} />
+        </div>
+      )}
 
       {/* 统计卡片 - 漏洞统计 */}
       <div className="mb-6">

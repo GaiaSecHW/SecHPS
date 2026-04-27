@@ -23,6 +23,12 @@ export enum EventType {
   PHASE_START = 'phase_start',
   PREPARING_PROGRESS = 'preparing_progress',  // MCP/准备阶段进度
   EVALUATION_STARTED = 'evaluation_started',   // 评估正式开始
+  // 队列相关事件
+  QUEUE_STATUS_CHANGE = 'queue_status_change',   // 队列状态变化（任务入队/出队）
+  EVALUATION_QUEUED = 'evaluation_queued',       // 评估进入队列
+  EVALUATION_DEQUEUED = 'evaluation_dequeued',   // 评估从队列中启动
+  QUEUE_PROCESSING = 'queue_processing',         // 队列正在处理
+  QUEUE_ERROR = 'queue_error',                   // 队列处理错误
 }
 
 // 事件数据类型
@@ -93,6 +99,56 @@ export interface EvaluationStartedEvent {
   evaluationId: string;
   workflowType: 'fsm' | 'dag';
   message: string;
+  timestamp: number;
+}
+
+// 队列状态变化事件
+export interface QueueStatusChangeEvent {
+  activeCount: number;
+  queuedCount: number;
+  maxConcurrent: number;
+  trigger: 'enqueue' | 'dequeue' | 'complete' | 'fail' | 'processing';
+  evaluationId?: string;
+  projectName?: string;
+  timestamp: number;
+}
+
+// 评估入队事件
+export interface EvaluationQueuedEvent {
+  evaluationId: string;
+  projectId: string;
+  projectName: string;
+  queuePosition: number;
+  estimatedWaitTime?: number;  // 预估等待时间（秒）
+  timestamp: number;
+}
+
+// 评估出队（启动）事件
+export interface EvaluationDequeuedEvent {
+  evaluationId: string;
+  projectId: string;
+  projectName: string;
+  waitTime: number;  // 实际等待时间（秒）
+  timestamp: number;
+}
+
+// 队列处理事件
+export interface QueueProcessingEvent {
+  activeCount: number;
+  maxConcurrent: number;
+  nextEvaluation?: {
+    id: string;
+    projectName: string;
+  };
+  timestamp: number;
+}
+
+// 队列错误事件
+export interface QueueErrorEvent {
+  evaluationId: string;
+  projectName?: string;
+  error: string;
+  errorDetails?: string;  // 详细错误信息
   timestamp: number;
 }
 
@@ -234,6 +290,96 @@ export function emitEvaluationStarted(evaluationId: string, data: {
 }
 
 /**
+ * 发送队列状态变化事件
+ */
+export function emitQueueStatusChange(data: {
+  activeCount: number;
+  queuedCount: number;
+  maxConcurrent: number;
+  trigger: 'enqueue' | 'dequeue' | 'complete' | 'fail' | 'processing';
+  evaluationId?: string;
+  projectName?: string;
+}) {
+  const event: QueueStatusChangeEvent = {
+    ...data,
+    timestamp: Date.now(),
+  };
+  eventBus.emit(EventType.QUEUE_STATUS_CHANGE, event);
+  console.log(`[EventBus] Queue status change:`, data.trigger, `active=${data.activeCount}, queued=${data.queuedCount}`);
+}
+
+/**
+ * 发送评估入队事件
+ */
+export function emitEvaluationQueued(data: {
+  evaluationId: string;
+  projectId: string;
+  projectName: string;
+  queuePosition: number;
+  estimatedWaitTime?: number;
+}) {
+  const event: EvaluationQueuedEvent = {
+    ...data,
+    timestamp: Date.now(),
+  };
+  eventBus.emit(EventType.EVALUATION_QUEUED, event);
+  console.log(`[EventBus] Evaluation queued:`, data.evaluationId, `position=${data.queuePosition}`);
+}
+
+/**
+ * 发送评估出队（启动）事件
+ */
+export function emitEvaluationDequeued(data: {
+  evaluationId: string;
+  projectId: string;
+  projectName: string;
+  waitTime: number;
+}) {
+  const event: EvaluationDequeuedEvent = {
+    ...data,
+    timestamp: Date.now(),
+  };
+  eventBus.emit(EventType.EVALUATION_DEQUEUED, event);
+  console.log(`[EventBus] Evaluation dequeued:`, data.evaluationId, `waited=${data.waitTime}s`);
+}
+
+/**
+ * 发送队列处理事件
+ */
+export function emitQueueProcessing(data: {
+  activeCount: number;
+  maxConcurrent: number;
+  nextEvaluation?: {
+    id: string;
+    projectName: string;
+  };
+}) {
+  const event: QueueProcessingEvent = {
+    ...data,
+    timestamp: Date.now(),
+  };
+  eventBus.emit(EventType.QUEUE_PROCESSING, event);
+  console.log(`[EventBus] Queue processing:`, `active=${data.activeCount}/${data.maxConcurrent}`);
+}
+
+/**
+ * 发送队列错误事件
+ */
+export function emitQueueError(data: {
+  evaluationId: string;
+  projectName?: string;
+  error: string;
+  errorDetails?: string;
+}) {
+  const event: QueueErrorEvent = {
+    ...data,
+    timestamp: Date.now(),
+  };
+  eventBus.emit(EventType.QUEUE_ERROR, event);
+  console.error(`[EventBus] Queue error:`, data.evaluationId, data.error);
+}
+
+/**
  * 订阅 TODO 更新事件
  */
 export function onTodoUpdate(callback: (event: TodoUpdateEvent) => void) {
@@ -279,6 +425,38 @@ export function onPhaseTokenUsage(callback: (event: PhaseTokenUsageEvent) => voi
 export function onPhaseStart(callback: (event: PhaseStartEvent) => void) {
   eventBus.on(EventType.PHASE_START, callback);
   return () => eventBus.off(EventType.PHASE_START, callback);
+}
+
+/**
+ * 订阅队列状态变化事件
+ */
+export function onQueueStatusChange(callback: (event: QueueStatusChangeEvent) => void) {
+  eventBus.on(EventType.QUEUE_STATUS_CHANGE, callback);
+  return () => eventBus.off(EventType.QUEUE_STATUS_CHANGE, callback);
+}
+
+/**
+ * 订阅评估入队事件
+ */
+export function onEvaluationQueued(callback: (event: EvaluationQueuedEvent) => void) {
+  eventBus.on(EventType.EVALUATION_QUEUED, callback);
+  return () => eventBus.off(EventType.EVALUATION_QUEUED, callback);
+}
+
+/**
+ * 订阅评估出队事件
+ */
+export function onEvaluationDequeued(callback: (event: EvaluationDequeuedEvent) => void) {
+  eventBus.on(EventType.EVALUATION_DEQUEUED, callback);
+  return () => eventBus.off(EventType.EVALUATION_DEQUEUED, callback);
+}
+
+/**
+ * 订阅队列错误事件
+ */
+export function onQueueError(callback: (event: QueueErrorEvent) => void) {
+  eventBus.on(EventType.QUEUE_ERROR, callback);
+  return () => eventBus.off(EventType.QUEUE_ERROR, callback);
 }
 
 /**
@@ -473,6 +651,48 @@ export function subscribeToEvaluationEvents(
   };
   eventBus.on(EventType.EVALUATION_STARTED, startedHandler);
   unsubscribers.push(() => eventBus.off(EventType.EVALUATION_STARTED, startedHandler));
+
+  // 订阅评估入队事件
+  const queuedHandler = (event: EvaluationQueuedEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({
+        type: 'evaluation_queued',
+        projectId: event.projectId,
+        projectName: event.projectName,
+        queuePosition: event.queuePosition,
+        estimatedWaitTime: event.estimatedWaitTime,
+      });
+    }
+  };
+  eventBus.on(EventType.EVALUATION_QUEUED, queuedHandler);
+  unsubscribers.push(() => eventBus.off(EventType.EVALUATION_QUEUED, queuedHandler));
+
+  // 订阅评估出队事件
+  const dequeuedHandler = (event: EvaluationDequeuedEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({
+        type: 'evaluation_dequeued',
+        projectId: event.projectId,
+        projectName: event.projectName,
+        waitTime: event.waitTime,
+      });
+    }
+  };
+  eventBus.on(EventType.EVALUATION_DEQUEUED, dequeuedHandler);
+  unsubscribers.push(() => eventBus.off(EventType.EVALUATION_DEQUEUED, dequeuedHandler));
+
+  // 订阅队列错误事件
+  const queueErrorHandler = (event: QueueErrorEvent) => {
+    if (event.evaluationId === evaluationId) {
+      callback({
+        type: 'queue_error',
+        error: event.error,
+        errorDetails: event.errorDetails,
+      });
+    }
+  };
+  eventBus.on(EventType.QUEUE_ERROR, queueErrorHandler);
+  unsubscribers.push(() => eventBus.off(EventType.QUEUE_ERROR, queueErrorHandler));
 
   console.log(`[EventBus] SSE subscribed to evaluation ${evaluationId}`);
 

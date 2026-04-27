@@ -33,7 +33,8 @@ export async function POST(
   try {
     // 检查是否为内部调用（队列启动）
     const internalCallToken = request.headers.get('X-Internal-Token');
-    const isQueuedStart = internalCallToken === process.env.INTERNAL_API_SECRET;
+    const internalCall = request.headers.get('X-Internal-Call') === 'true';
+    const isQueuedStart = internalCallToken === process.env.INTERNAL_API_SECRET || internalCall;
     
     let payload: { userId: string; permissions: string[]; roles?: string[] } | null = null;
     

@@ -4,6 +4,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { emitQueueError } from '@/lib/event-bus';
+import { unlockProject } from '@/lib/evaluation-lock';
 
 /**
  * POST /api/evaluations/[id]/start-queued
@@ -47,12 +49,14 @@ export async function POST(
       return NextResponse.json({ error: '评估不存在' }, { status: 404 });
     }
     
+    const projectName = evaluation.Project?.name || '未知项目';
+    
     if (evaluation.status !== 'queued') {
       logger.debug(LOG_MODULES.EVALUATION, '评估状态不是 queued:', { details: { status: evaluation.status } });
-      return NextResponse.json({ error: '评估不在排队状态' }, { status: 400 });
+      return NextResponse.json({ error: '评估不在排队状态', currentStatus: evaluation.status }, { status: 400 });
     }
     
-    logger.debug(LOG_MODULES.EVALUATION, '启动排队评估:', { details: { id, projectId: evaluation.projectId } });
+    logger.info(LOG_MODULES.EVALUATION, '启动排队评估:', { details: { id, projectId: evaluation.projectId, projectName } });
     
     // 更新评估状态为 running
     await prisma.evaluationSession.update({
@@ -85,24 +89,41 @@ export async function POST(
     });
     
     if (!modelConfig) {
-      logger.debug(LOG_MODULES.EVALUATION, '没有可用的模型配置');
+      const errorMsg = '没有可用的模型配置';
+      logger.errorNoUser(LOG_MODULES.EVALUATION, errorMsg, { evaluationId: id });
+      
+      // 发送队列错误事件
+      emitQueueError({
+        evaluationId: id,
+        projectName,
+        error: errorMsg,
+        errorDetails: '启动排队评估时无法找到活跃的模型配置',
+      });
+      
       await prisma.evaluationSession.update({
         where: { id },
         data: {
           status: 'failed',
-          errorMessage: '没有可用的模型配置',
+          errorMessage: errorMsg,
+          endReason: 'no_model_config',
+          endMessage: `调度失败: 无法找到活跃的模型配置\n时间: ${new Date().toISOString()}`,
           completedAt: new Date(),
         },
       });
-      return NextResponse.json({ error: '没有可用的模型配置' }, { status: 400 });
+      
+      // 释放项目锁
+      await unlockProject(evaluation.projectId);
+      
+      return NextResponse.json({ error: errorMsg }, { status: 400 });
     }
     
-    // 调用 start API（使用内部标记绕过并发检查）
+    // 调用 start API（使用内部标记绕过并发检查和认证）
     const response = await fetch(startUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Internal-Queued-Start': 'true', // 标记为队列启动，绕过并发检查
+        'X-Internal-Call': 'true', // 内部调用，绕过认证
       },
       body: JSON.stringify({
         agentTeamId: evaluation.agentTeamId,
@@ -112,15 +133,41 @@ export async function POST(
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      logger.errorNoUser(LOG_MODULES.EVALUATION, '启动评估失败:', { details: { error: errorData } });
+      // 解析完整错误响应
+      let errorData: any;
+      let errorDetails: string;
+      try {
+        errorData = await response.json();
+        errorDetails = JSON.stringify(errorData, null, 2);
+      } catch {
+        errorData = { error: `HTTP ${response.status}` };
+        errorDetails = `HTTP ${response.status}: ${response.statusText}`;
+      }
       
-      // 恢复排队状态
+      const errorMessage = errorData.error || errorData.details?.error || '启动失败';
+      
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '启动评估失败:', {
+        evaluationId: id,
+        httpStatus: response.status,
+        errorData,
+      });
+      
+      // 发送队列错误事件
+      emitQueueError({
+        evaluationId: id,
+        projectName,
+        error: errorMessage,
+        errorDetails: errorDetails,
+      });
+      
+      // 恢复失败状态，记录详细错误
       await prisma.evaluationSession.update({
         where: { id },
         data: {
           status: 'failed',
-          errorMessage: errorData.error || '启动失败',
+          errorMessage: errorMessage,
+          endReason: 'start_api_failed',
+          endMessage: `start API 调用失败详情:\nHTTP状态: ${response.status}\n响应内容:\n${errorDetails}\n\n时间: ${new Date().toISOString()}`,
           completedAt: new Date(),
         },
       });
@@ -130,11 +177,18 @@ export async function POST(
         data: { status: 'idle' },
       });
       
-      return NextResponse.json({ error: errorData.error || '启动失败' }, { status: 500 });
+      // 释放项目锁
+      await unlockProject(evaluation.projectId);
+      
+      return NextResponse.json({ 
+        error: errorMessage,
+        details: errorData.details || errorData,
+        httpStatus: response.status,
+      }, { status: 500 });
     }
     
     const result = await response.json();
-    logger.debug(LOG_MODULES.EVALUATION, '评估启动成功:', { details: { result } });
+    logger.info(LOG_MODULES.EVALUATION, '评估启动成功:', { details: { evaluationId: id, result } });
     
     return NextResponse.json({
       message: '排队评估已启动',
@@ -143,7 +197,57 @@ export async function POST(
     });
     
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.EVALUATION, '启动排队评估异常:', { details: { error: String(error) } });
-    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    
+    logger.errorNoUser(LOG_MODULES.EVALUATION, '启动排队评估异常:', {
+      evaluationId: id,
+      error: errorMessage,
+      stack: errorStack,
+    });
+    
+    // 尝试发送队列错误事件并更新数据库状态
+    try {
+      const evaluation = await prisma.evaluationSession.findUnique({
+        where: { id },
+        include: { Project: { select: { name: true } } },
+      });
+      
+      if (evaluation) {
+        emitQueueError({
+          evaluationId: id,
+          projectName: evaluation.Project?.name || '未知项目',
+          error: errorMessage,
+          errorDetails: errorStack || '无堆栈信息',
+        });
+        
+        await prisma.evaluationSession.update({
+          where: { id },
+          data: {
+            status: 'failed',
+            errorMessage: `启动异常: ${errorMessage}`,
+            endReason: 'start_exception',
+            endMessage: `启动排队评估时发生异常:\n错误: ${errorMessage}\n堆栈: ${errorStack || '无'}\n时间: ${new Date().toISOString()}`,
+            completedAt: new Date(),
+          },
+        });
+        
+        await prisma.project.update({
+          where: { id: evaluation.projectId },
+          data: { status: 'idle' },
+        });
+        
+        // 释放项目锁
+        await unlockProject(evaluation.projectId);
+      }
+    } catch (dbError) {
+      logger.errorNoUser(LOG_MODULES.EVALUATION, '更新失败状态时出错:', { error: String(dbError) });
+    }
+    
+    return NextResponse.json({ 
+      error: '服务器内部错误',
+      details: errorMessage,
+      stack: errorStack,
+    }, { status: 500 });
   }
 }

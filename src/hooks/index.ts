@@ -46,3 +46,15 @@ export { useSkillCategories } from './useSkillCategories';
 
 // Ralph 事件
 export { useRalphEvents } from './use-ralph-events';
+
+// 队列状态
+export {
+  useQueueStatus,
+  useHasActiveEvaluations,
+} from './useQueueStatus';
+
+export type {
+  QueueStatus,
+  QueuedEvaluation,
+  UseQueueStatusReturn,
+} from './useQueueStatus';

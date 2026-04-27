@@ -2,6 +2,14 @@
 // 评估队列处理服务 - 管理并发限制和排队评估
 
 import { prisma } from '@/lib/prisma';
+import { logger, LOG_MODULES } from '@/lib/logger';
+import {
+  emitQueueStatusChange,
+  emitQueueProcessing,
+  emitEvaluationDequeued,
+  emitQueueError,
+} from '@/lib/event-bus';
+import { unlockProject } from '@/lib/evaluation-lock';
 
 const LOG_PREFIX = '[EvaluationQueue]';
 
@@ -39,13 +47,26 @@ export async function getMaxConcurrent(): Promise<number> {
  * 在评估完成或失败时调用
  */
 export async function processQueue(): Promise<void> {
-  console.log(`${LOG_PREFIX} 开始处理队列...`);
+  logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始处理队列...`);
   
   try {
     const activeCount = await getRunningCount();
     const maxConcurrent = await getMaxConcurrent();
+    const queuedCount = await getQueuedCount();
     
-    console.log(`${LOG_PREFIX} 当前活跃: ${activeCount}, 最大并发: ${maxConcurrent}`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 当前状态`, {
+      activeCount,
+      queuedCount,
+      maxConcurrent,
+    });
+    
+    // 发送队列处理事件
+    emitQueueStatusChange({
+      activeCount,
+      queuedCount,
+      maxConcurrent,
+      trigger: 'processing',
+    });
     
     // 如果还有空闲名额
     if (activeCount < maxConcurrent) {
@@ -61,7 +82,21 @@ export async function processQueue(): Promise<void> {
       });
       
       if (queuedEvaluation) {
-        console.log(`${LOG_PREFIX} 发现排队评估: ${queuedEvaluation.id}, 项目: ${queuedEvaluation.Project?.name}`);
+        const projectName = queuedEvaluation.Project?.name || '未知项目';
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现排队评估`, {
+          evaluationId: queuedEvaluation.id,
+          projectName,
+        });
+        
+        // 发送队列处理事件（包含下一个要启动的评估）
+        emitQueueProcessing({
+          activeCount,
+          maxConcurrent,
+          nextEvaluation: {
+            id: queuedEvaluation.id,
+            projectName,
+          },
+        });
         
         // 触发排队评估的启动
         // 通过内部 API 调用启动评估
@@ -76,30 +111,125 @@ export async function processQueue(): Promise<void> {
           });
           
           if (response.ok) {
-            console.log(`${LOG_PREFIX} 排队评估 ${queuedEvaluation.id} 已启动`);
+            // 计算等待时间
+            const waitTime = Math.round((Date.now() - queuedEvaluation.startedAt.getTime()) / 1000);
+            
+            logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 排队评估已启动`, {
+              evaluationId: queuedEvaluation.id,
+              waitTimeSeconds: waitTime,
+            });
+            
+            // 发送出队事件
+            emitEvaluationDequeued({
+              evaluationId: queuedEvaluation.id,
+              projectId: queuedEvaluation.projectId,
+              projectName,
+              waitTime,
+            });
+            
+            // 发送队列状态变化事件
+            emitQueueStatusChange({
+              activeCount: activeCount + 1,
+              queuedCount: queuedCount - 1,
+              maxConcurrent,
+              trigger: 'dequeue',
+              evaluationId: queuedEvaluation.id,
+              projectName,
+            });
           } else {
-            console.error(`${LOG_PREFIX} 启动排队评估失败: ${response.status}`);
-            // 标记为失败
+            // 解析完整错误响应
+            let errorDetails: string;
+            try {
+              const errorData = await response.json();
+              errorDetails = JSON.stringify(errorData, null, 2);
+            } catch {
+              errorDetails = `HTTP ${response.status}: ${response.statusText}`;
+            }
+            
+            logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 启动排队评估失败`, {
+              evaluationId: queuedEvaluation.id,
+              httpStatus: response.status,
+              errorDetails,
+            });
+            
+            // 发送队列错误事件
+            emitQueueError({
+              evaluationId: queuedEvaluation.id,
+              projectName,
+              error: `队列启动失败 (HTTP ${response.status})`,
+              errorDetails,
+            });
+            
+            // 标记为失败，记录详细错误信息
             await prisma.evaluationSession.update({
               where: { id: queuedEvaluation.id },
               data: {
                 status: 'failed',
-                errorMessage: '队列启动失败',
+                errorMessage: `队列启动失败 (HTTP ${response.status})`,
+                endReason: 'queue_start_failed',
+                endMessage: `调度队列启动失败详情:\n${errorDetails}\n\n时间: ${new Date().toISOString()}`,
                 completedAt: new Date(),
               },
             });
+            
+            // 释放项目锁（关键：让后续评估可以调度）
+            await unlockProject(queuedEvaluation.projectId);
+            
+            // 发送队列状态变化事件（失败）
+            emitQueueStatusChange({
+              activeCount,
+              queuedCount: queuedCount - 1,
+              maxConcurrent,
+              trigger: 'fail',
+              evaluationId: queuedEvaluation.id,
+              projectName,
+            });
           }
-        } catch (error) {
-          console.error(`${LOG_PREFIX} 启动排队评估异常:`, error);
+        } catch (fetchError) {
+          const errorMessage = fetchError instanceof Error ? fetchError.message : String(fetchError);
+          const errorStack = fetchError instanceof Error ? fetchError.stack : '';
+          
+          logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 启动排队评估异常`, {
+            evaluationId: queuedEvaluation.id,
+            error: errorMessage,
+            stack: errorStack,
+          });
+          
+          // 发送队列错误事件
+          emitQueueError({
+            evaluationId: queuedEvaluation.id,
+            projectName,
+            error: errorMessage,
+            errorDetails: errorStack || '无堆栈信息',
+          });
+          
+          // 标记为失败，记录完整异常信息
+          await prisma.evaluationSession.update({
+            where: { id: queuedEvaluation.id },
+            data: {
+              status: 'failed',
+              errorMessage: `队列启动异常: ${errorMessage}`,
+              endReason: 'queue_start_exception',
+              endMessage: `调度队列启动异常详情:\n错误: ${errorMessage}\n堆栈: ${errorStack || '无'}\n时间: ${new Date().toISOString()}`,
+              completedAt: new Date(),
+            },
+          });
+          
+          // 释放项目锁（关键：让后续评估可以调度）
+          await unlockProject(queuedEvaluation.projectId);
         }
       } else {
-        console.log(`${LOG_PREFIX} 没有排队评估`);
+        logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 没有排队评估`);
       }
     } else {
-      console.log(`${LOG_PREFIX} 无空闲名额，队列暂不处理`);
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 无空闲名额`, {
+        activeCount,
+        maxConcurrent,
+      });
     }
   } catch (error) {
-    console.error(`${LOG_PREFIX} 处理队列异常:`, error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 处理队列异常`, { error: errorMessage });
   }
 }
 
