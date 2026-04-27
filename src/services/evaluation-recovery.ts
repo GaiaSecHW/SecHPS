@@ -391,7 +391,7 @@ async function recoverNodeConversation(
               data: {
                 status: 'completed',
                 completedAt: new Date(),
-                lastActivity: new Date(),
+                updatedAt: new Date(),
               },
             });
             
@@ -407,7 +407,7 @@ async function recoverNodeConversation(
               data: {
                 status: 'failed',
                 completedAt: new Date(),
-                lastActivity: new Date(),
+                updatedAt: new Date(),
               },
             });
             
