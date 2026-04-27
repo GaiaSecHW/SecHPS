@@ -99,6 +99,20 @@ export async function recoverInterruptedEvaluations(): Promise<{
     
     for (const evaluation of runningEvaluations) {
       try {
+        console.log(`${LOG_PREFIX} 检查评估: ${evaluation.id}`);
+        console.log(`${LOG_PREFIX}   projectId: ${evaluation.projectId}`);
+        console.log(`${LOG_PREFIX}   workflowId: ${evaluation.workflowId}`);
+        console.log(`${LOG_PREFIX}   workflowType: ${evaluation.workflowType}`);
+        console.log(`${LOG_PREFIX}   Project: ${evaluation.Project ? '存在' : '不存在'}`);
+        console.log(`${LOG_PREFIX}   Workflow: ${evaluation.Workflow ? '存在' : '不存在'}`);
+        console.log(`${LOG_PREFIX}   NodeExecution 数量: ${evaluation.NodeExecution?.length || 0}`);
+        
+        if (evaluation.NodeExecution?.length > 0) {
+          evaluation.NodeExecution.forEach((n: any, i: number) => {
+            console.log(`${LOG_PREFIX}     Node[${i}]: ${n.nodeLabel} - status=${n.status}`);
+          });
+        }
+        
         // 2. 检查是否需要恢复
         const recoveryStatus = await checkRecoveryNeeded(evaluation);
         
@@ -149,7 +163,13 @@ export async function recoverInterruptedEvaluations(): Promise<{
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 恢复检查失败`, { error: errorMsg });
+    const errorStack = error instanceof Error ? error.stack : '';
+    logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 恢复检查失败`, { 
+      error: errorMsg,
+      stack: errorStack,
+    });
+    console.error(`${LOG_PREFIX} 恢复检查失败:`, errorMsg);
+    console.error(`${LOG_PREFIX} 错误堆栈:`, errorStack);
     return result;
   }
 }
