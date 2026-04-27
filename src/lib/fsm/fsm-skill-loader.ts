@@ -9,10 +9,10 @@ import path from 'path';
 import { prisma } from '@/lib/prisma';
 import { generateId } from '@/lib/id-generator';
 
-const DATA_SKILLS_PATH = path.join(process.cwd(), 'data', 'skills');
+const DATA_SKILLS_PATH = path.join(/*turbopackIgnore: true*/ process.cwd(), 'data', 'skills');
 // 使用 outputs/ 替代 .claude/
-const OUTPUTS_SKILLS_PATH = path.join(process.cwd(), 'outputs', 'skills');
-const OUTPUTS_PHASES_PATH = path.join(process.cwd(), 'outputs', 'phases');
+const OUTPUTS_SKILLS_PATH = path.join(/*turbopackIgnore: true*/ process.cwd(), 'outputs', 'skills');
+const OUTPUTS_PHASES_PATH = path.join(/*turbopackIgnore: true*/ process.cwd(), 'outputs', 'phases');
 
 export interface LoadResult {
   success: boolean;
@@ -48,8 +48,8 @@ export async function loadFSMSkill(
     // skillPath 格式: "skills/threat-modeling"
     // 直接拼接 process.cwd()
     const sourcePath = template.skillPath 
-      ? path.join(process.cwd(), template.skillPath)
-      : path.join(DATA_SKILLS_PATH, templateName);
+      ? path.join(/*turbopackIgnore: true*/ process.cwd(), template.skillPath)
+      : DATA_SKILLS_PATH;
     
     console.log(`[loadFSMSkill] skillPath from DB: ${template.skillPath}`);
     console.log(`[loadFSMSkill] resolved sourcePath: ${sourcePath}`);

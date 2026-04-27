@@ -420,6 +420,9 @@ async function executeFSMBackground(
       providerType: modelConfig.providerType,
       name: modelConfig.name,
       models: JSON.parse(modelConfig.models || '[]'),
+      apiKey: modelConfig.apiKey || '',
+      apiBaseUrl: modelConfig.apiBaseUrl || '',
+      contextWindow: modelConfig.contextWindow,
     };
 
     const fsmService = createFSMWorkflowExecutionService(
