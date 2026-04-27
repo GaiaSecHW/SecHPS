@@ -441,17 +441,10 @@ async function recoverNodeConversation(
               console.error(`${LOG_RECOVERY} 保存 assistant 响应失败:`, saveError);
             }
             
-            // 更新节点状态为 completed
-            await prisma.nodeExecution.update({
-              where: { id: runningNode.id },
-              data: {
-                status: 'completed',
-                completedAt: new Date(),
-                updatedAt: new Date(),
-              },
-            });
-            
-            logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话完成，节点状态已更新`);
+            // 注意：不在恢复时标记节点为 completed
+            // 让大模型自己决定什么时候完成所有子任务
+            // 节点状态会在正常执行流程中由 evaluation-completion 服务标记
+            logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话完成，等待大模型完成子任务`);
           },
           onError: async (error: Error) => {
             console.error(`${LOG_RECOVERY} ========== 恢复对话失败 ==========`);
