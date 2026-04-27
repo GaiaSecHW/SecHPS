@@ -22,11 +22,18 @@ export function isProjectLocked(projectId: string): string | null {
  * 锁定项目（开始评估时调用）
  * @param projectId 项目 ID
  * @param evaluationId 评估 ID
- * @returns true 表示成功锁定，false 表示项目已被锁定
+ * @returns true 表示成功锁定，false 表示项目已被其他评估锁定
  */
 export async function lockProject(projectId: string, evaluationId: string): Promise<boolean> {
   // 检查是否已被锁定
-  if (projectLockMap.has(projectId)) {
+  const existingLock = projectLockMap.get(projectId);
+  if (existingLock) {
+    // 如果锁定属于当前评估（恢复场景），允许继续
+    if (existingLock.evaluationId === evaluationId) {
+      console.log(`[EvaluationLock] 项目已被当前评估锁定: ${projectId} -> ${evaluationId}（恢复场景）`);
+      return true;
+    }
+    console.log(`[EvaluationLock] 项目已被其他评估锁定: ${projectId} -> ${existingLock.evaluationId}（当前: ${evaluationId}）`);
     return false;
   }
   
