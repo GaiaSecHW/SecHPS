@@ -1089,6 +1089,7 @@ model SkillExecution {
   skillId            String
   projectId          String
   evaluationId       String?
+  nodeId             String?
   scanTaskId         String?
   input              String
   output             String?
@@ -1114,6 +1115,7 @@ model SkillExecution {
   @@index([status])
   @@index([createdAt])
   @@index([evaluationId])
+  @@index([nodeId])
   @@index([projectId, status])
   @@index([skillId, status])
 }

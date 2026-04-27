@@ -354,6 +354,34 @@ export async function GET(
       }
     }
 
+    // 收集所有 skill IDs 并查询 displayName
+    const allSkillIds: string[] = [];
+    workflowNodes.forEach((wn: any) => {
+      if (wn.skills && Array.isArray(wn.skills)) {
+        wn.skills.forEach((skillId: string) => {
+          if (skillId && !allSkillIds.includes(skillId)) {
+            allSkillIds.push(skillId);
+          }
+        });
+      }
+    });
+
+    // 批量查询 Skill 表获取 displayName
+    const skillDetailsMap: Record<string, { id: string; name: string; displayName: string }> = {};
+    if (allSkillIds.length > 0) {
+      const skills = await prisma.skill.findMany({
+        where: { id: { in: allSkillIds } },
+        select: { id: true, name: true, displayName: true },
+      });
+      skills.forEach(skill => {
+        skillDetailsMap[skill.id] = {
+          id: skill.id,
+          name: skill.name,
+          displayName: skill.displayName,
+        };
+      });
+    }
+
     // 合并节点配置和执行状态
     // 如果有 workflowNodes，则基于 workflowNodes 显示所有节点
     // 否则，只显示 NodeExecution 记录
@@ -371,6 +399,13 @@ export async function GET(
         const exec = executionMap.get(wn.id);
         const modelFromRole = roleModelConfig[wn.roleId] || null;
         
+        // 构建 skillsDetails 数组
+        const skillsDetails = wn.skills && Array.isArray(wn.skills)
+          ? wn.skills
+              .map((skillId: string) => skillDetailsMap[skillId])
+              .filter((s: any) => s !== undefined)
+          : [];
+
         return {
           id: wn.id,
           workflowNodeId: wn.id,
@@ -382,6 +417,7 @@ export async function GET(
           fsmPhase: wn.fsmPhase,
           fsmOrder: wn.fsmOrder ?? index,
           skills: wn.skills,
+          skillsDetails,
           vulnerabilityCategories: wn.vulnerabilityCategories,
           // 执行状态
           status: exec?.status || 'pending',
