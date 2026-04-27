@@ -18,6 +18,7 @@ import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/
 import { lockProject, unlockProject } from '@/lib/evaluation-lock';
 import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import { createEnhancedEvaluationCaller } from '@/services/evaluation';
+import { createEvaluationMessageStore } from '@/services/evaluation-message-store';
 import type { ModelConfigForExecution, McpServerConfigForExecution, UnifiedNodeDefinition } from '@/lib/workflow/types';
 
 const LOG_PREFIX = '[EvaluationRecovery]';
@@ -361,6 +362,23 @@ async function recoverNodeConversation(
     // 5. 发送恢复消息（使用 startEvaluation，传入恢复消息作为 initialMessage）
     const recoveryMessage = '继续执行未完成的工作，并反馈工作进展。';
     
+    // 6. 创建消息存储（用于保存到 JSONL）
+    const messageStore = createEvaluationMessageStore(evaluation.projectId, evaluation.id);
+    await messageStore.initialize();
+    
+    // 7. 保存用户恢复消息到 JSONL
+    await messageStore.appendMessage({
+      role: 'user',
+      nodeId: runningNode.workflowNodeId,
+      nodeIndex: runningNode.order || 0,
+      content: recoveryMessage,
+      agentCallMsgId: null,
+    });
+    console.log(`${LOG_RECOVERY} 用户恢复消息已保存到 JSONL`);
+    
+    // 8. 收集 assistant 响应文本（用于保存）
+    let collectedResponse = '';
+    
     // 执行恢复（后台异步，不阻塞）
     void (async () => {
       try {
@@ -374,6 +392,8 @@ async function recoverNodeConversation(
             // 推送实时文本流
             console.log(`${LOG_RECOVERY} [chunk] ${text.substring(0, 100)}...`);
             emitMessageChunk(evaluation.id, text);
+            // 收集响应文本
+            collectedResponse += text;
           },
           onToolCall: (toolUseId: string, name: string, parameters: Record<string, unknown>) => {
             console.log(`${LOG_RECOVERY} [tool] ${name} (${toolUseId})`);
@@ -384,6 +404,20 @@ async function recoverNodeConversation(
           onComplete: async (fullResponse: string) => {
             console.log(`${LOG_RECOVERY} ========== 恢复对话完成 ==========`);
             console.log(`${LOG_RECOVERY} 响应长度: ${fullResponse.length}`);
+            
+            // 保存 assistant 响应到 JSONL
+            try {
+              await messageStore.appendMessage({
+                role: 'assistant',
+                nodeId: runningNode.workflowNodeId,
+                nodeIndex: runningNode.order || 0,
+                content: fullResponse,
+                agentCallMsgId: null,
+              });
+              console.log(`${LOG_RECOVERY} Assistant 响应已保存到 JSONL`);
+            } catch (saveError) {
+              console.error(`${LOG_RECOVERY} 保存 assistant 响应失败:`, saveError);
+            }
             
             // 更新节点状态为 completed
             await prisma.nodeExecution.update({
@@ -400,6 +434,21 @@ async function recoverNodeConversation(
           onError: async (error: Error) => {
             console.error(`${LOG_RECOVERY} ========== 恢复对话失败 ==========`);
             console.error(`${LOG_RECOVERY} 错误: ${error.message}`);
+            
+            // 保存错误信息到 JSONL（如果有部分响应）
+            if (collectedResponse) {
+              try {
+                await messageStore.appendMessage({
+                  role: 'assistant',
+                  nodeId: runningNode.workflowNodeId,
+                  nodeIndex: runningNode.order || 0,
+                  content: collectedResponse + `\n\n[错误: ${error.message}]`,
+                  agentCallMsgId: null,
+                });
+              } catch (saveError) {
+                console.error(`${LOG_RECOVERY} 保存部分响应失败:`, saveError);
+              }
+            }
             
             // 更新节点状态为 failed
             await prisma.nodeExecution.update({
