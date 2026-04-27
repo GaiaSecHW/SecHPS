@@ -930,6 +930,77 @@ export async function POST(
                 }
               }
               
+              // ========================================
+              // Step 2: 补充 FSM 初始化（与 DAG 保持一致）
+              // ========================================
+              
+              // 创建空的分析报告
+              try {
+                await createEmptyAnalysisReport({
+                  evaluationId: evaluation.id,
+                  projectId: id,
+                });
+                logger.debug(LOG_MODULES.EVALUATION, '[FSM Async] 已创建分析报告记录');
+              } catch (error) {
+                logger.errorNoUser(LOG_MODULES.EVALUATION, '[FSM Async] 创建分析报告记录失败', { error });
+              }
+              
+              // 创建 Skill 执行记录文件
+              if (project.projectPath && fsmCopyResult && fsmCopyResult.skillIds && fsmCopyResult.skillIds.length > 0) {
+                try {
+                  const workspaceDir = join(project.projectPath, 'workspace');
+                  try {
+                    await access(workspaceDir);
+                  } catch {
+                    await mkdir(workspaceDir, { recursive: true });
+                  }
+                  
+                  const skillsForLog = await prisma.skill.findMany({
+                    where: { id: { in: fsmCopyResult!.skillIds! } },
+                    select: { id: true, name: true, displayName: true, description: true },
+                  });
+                  
+                  const skillExecutionLog = {
+                    evaluationId: evaluation.id,
+                    projectId: id,
+                    startedAt: new Date().toISOString(),
+                    skills: skillsForLog.map(s => ({
+                      id: s.id,
+                      name: s.name,
+                      displayName: s.displayName,
+                      description: s.description,
+                      status: 'pending',
+                      startedAt: null,
+                      completedAt: null,
+                      findingsCount: 0,
+                    })),
+                  };
+                  
+                  const logPath = join(workspaceDir, 'skill-execution-log.json');
+                  await writeFile(logPath, JSON.stringify(skillExecutionLog, null, 2), 'utf-8');
+                  logger.debug(LOG_MODULES.SKILL, '[FSM Async] 已创建 Skill 执行记录文件', { path: logPath, skillCount: skillsForLog.length });
+                } catch (error) {
+                  logger.errorNoUser(LOG_MODULES.SKILL, '[FSM Async] 创建 Skill 执行记录文件失败', { error });
+                }
+              }
+              
+              // 记录经验引用
+              if (injectedExperiences.length > 0) {
+                try {
+                  await prisma.experienceUsageLog.createMany({
+                    data: injectedExperiences.map((e, index) => ({
+                      id: generateIndexedId('explog', index),
+                      experienceId: e.id,
+                      evaluationId: evaluation.id,
+                      projectId: id,
+                    })),
+                  });
+                  logger.debug(LOG_MODULES.EVALUATION, '[FSM Async] 已记录经验引用', { count: injectedExperiences.length });
+                } catch (error) {
+                  logger.errorNoUser(LOG_MODULES.EVALUATION, '[FSM Async] 记录经验引用失败', { error });
+                }
+              }
+              
               // Step 3: 更新状态为 running 并启动 FSM
               await prisma.evaluationSession.update({
                 where: { id: evaluation.id },

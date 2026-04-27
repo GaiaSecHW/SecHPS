@@ -5,8 +5,8 @@
  * 用于读写 workspace/skill-execution-log.json 文件
  */
 
-import { readFile, writeFile, access } from 'fs/promises';
-import { join } from 'path';
+import { readFile, writeFile, access, mkdir } from 'fs/promises';
+import { join, dirname } from 'path';
 
 export interface SkillExecutionLogEntry {
   id: string;
@@ -37,17 +37,36 @@ export async function updateSkillExecutionLog(
   projectPath: string,
   skillId: string,
   status: 'running' | 'completed' | 'failed',
-  findingsCount?: number
+  findingsCount?: number,
+  skillInfo?: { name: string; displayName?: string; description?: string }
 ): Promise<void> {
-  const logPath = join(projectPath, 'workspace', 'skill-execution-log.json');
+  const workspaceDir = join(projectPath, 'workspace');
+  const logPath = join(workspaceDir, 'skill-execution-log.json');
   
   try {
-    // 检查文件是否存在
-    await access(logPath);
+    // 确保 workspace 目录存在
+    try {
+      await access(workspaceDir);
+    } catch {
+      await mkdir(workspaceDir, { recursive: true });
+    }
     
-    // 读取现有日志
-    const content = await readFile(logPath, 'utf-8');
-    const log: SkillExecutionLog = JSON.parse(content);
+    let log: SkillExecutionLog;
+    
+    // 检查文件是否存在
+    try {
+      await access(logPath);
+      const content = await readFile(logPath, 'utf-8');
+      log = JSON.parse(content);
+    } catch {
+      // 文件不存在，创建空的日志结构
+      log = {
+        evaluationId: '',
+        projectId: '',
+        startedAt: new Date().toISOString(),
+        skills: [],
+      };
+    }
     
     // 找到对应的 Skill 并更新
     const skill = log.skills.find(s => s.id === skillId);
@@ -62,13 +81,23 @@ export async function updateSkillExecutionLog(
           skill.findingsCount = findingsCount;
         }
       }
-      
-      // 写回文件
-      await writeFile(logPath, JSON.stringify(log, null, 2), 'utf-8');
-      console.log(`[SkillExecutionLog] 已更新 Skill ${skillId} 状态为 ${status}`);
-    } else {
-      console.warn(`[SkillExecutionLog] 未找到 Skill ${skillId}`);
+    } else if (skillInfo) {
+      // Skill 不存在于日志中，添加新条目
+      log.skills.push({
+        id: skillId,
+        name: skillInfo.name,
+        displayName: skillInfo.displayName || null,
+        description: skillInfo.description || null,
+        status: status,
+        startedAt: status === 'running' ? new Date().toISOString() : null,
+        completedAt: status === 'completed' || status === 'failed' ? new Date().toISOString() : null,
+        findingsCount: findingsCount || 0,
+      });
     }
+    
+    // 写回文件
+    await writeFile(logPath, JSON.stringify(log, null, 2), 'utf-8');
+    console.log(`[SkillExecutionLog] 已更新 Skill ${skillId} 状态为 ${status}`);
   } catch (error) {
     console.error('[SkillExecutionLog] 更新失败:', error);
   }

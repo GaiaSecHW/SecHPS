@@ -650,10 +650,51 @@ export default function SessionsPage() {
         return;
       }
 
-      // SSE 流式响应：跳转到评估详情页
-      const data = await response.json();
-      if (data.evaluationId) {
-        router.push(`/dashboard/sessions/${projectId}?evaluationId=${data.evaluationId}`);
+      // SSE 流式响应：读取流并提取 evaluationId
+      const contentType = response.headers.get('content-type') || '';
+      
+      if (contentType.includes('text/event-stream')) {
+        // SSE 模式：解析流中的第一个事件获取 evaluationId
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            // 解析 SSE 格式: "data: {...}\n\n"
+            const lines = buffer.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const jsonStr = line.slice(6); // 移除 "data: " 前缀
+                if (jsonStr === '[DONE]') continue;
+                
+                try {
+                  const event = JSON.parse(jsonStr);
+                  if (event.evaluationId) {
+                    router.push(`/dashboard/sessions/${projectId}?evaluationId=${event.evaluationId}`);
+                    return;
+                  }
+                } catch {
+                  // JSON 解析失败，继续读取
+                }
+              }
+            }
+            
+            // 保留未完成的行
+            buffer = lines[lines.length - 1] || '';
+          }
+        }
+      } else {
+        // 非 SSE 模式（fallback）
+        const data = await response.json();
+        if (data.evaluationId) {
+          router.push(`/dashboard/sessions/${projectId}?evaluationId=${data.evaluationId}`);
+        }
       }
     }).catch((error) => {
       console.error('[启动评估错误]', error);
