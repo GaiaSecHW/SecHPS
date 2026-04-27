@@ -126,6 +126,7 @@ export async function POST(
     console.log(`[Start-Queued] 构建请求体: workflowId=${evaluation.workflowId}, agentTeamId=${evaluation.agentTeamId}, modelId=${modelConfig.id}, queuedEvaluationId=${id}`);
     
     const requestBody = JSON.stringify({
+      workflowId: evaluation.workflowId,  // 关键：传递 workflowId
       agentTeamId: evaluation.agentTeamId,
       modelId: modelConfig.id,
       queuedEvaluationId: id, // 传递排队评估ID，用于复用而不是创建新的
