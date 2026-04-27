@@ -1,53 +1,7 @@
-{
-  "active_plan": "D:\\claude-web-platform\\.sisyphus\\plans\\unified-workflow-execution.md",
-  "started_at": "2026-04-21T17:10:56.657Z",
-  "session_ids": [
-    "ses_252392ff4ffe8dNcV846w6wsy2",
-    "ses_24ec7b4d1ffe11UTOkdHs30Bb5",
-    "ses_24ec7a437ffeVMe1AcIbjuqxB2",
-    "ses_24ec78f02ffeiNVGwdUHuIHGYD",
-    "ses_24ec77904ffeXrTYNfJtWh8qd2",
-    "ses_24ea98bccffeelZmkMt6cGAk3M",
-    "ses_24ea156f8ffeWXwXauEkmRp9GE"
-  ],
-  "session_origins": {
-    "ses_252392ff4ffe8dNcV846w6wsy2": "direct",
-    "ses_24ec7b4d1ffe11UTOkdHs30Bb5": "appended",
-    "ses_24ec7a437ffeVMe1AcIbjuqxB2": "appended",
-    "ses_24ec78f02ffeiNVGwdUHuIHGYD": "appended",
-    "ses_24ec77904ffeXrTYNfJtWh8qd2": "appended",
-    "ses_24ea98bccffeelZmkMt6cGAk3M": "appended",
-    "ses_24ea156f8ffeWXwXauEkmRp9GE": "appended"
-  },
-  "plan_name": "unified-workflow-execution",
-  "agent": "atlas",
-  "task_sessions": {
-    "todo:1": {
-      "task_key": "todo:1",
-      "task_label": "1",
-      "task_title": "创建统一执行引擎类型定义",
-      "session_id": "ses_24ef8be4cffecXkzcR1jqbqrCu",
-      "agent": "Sisyphus-Junior",
-      "category": "quick",
-      "updated_at": "2026-04-21T17:14:16.467Z"
-    },
-    "final-wave:f1": {
-      "task_key": "final-wave:f1",
-      "task_label": "F1",
-      "task_title": "**Plan Compliance Audit** — `oracle`",
-      "session_id": "ses_24ec77904ffeXrTYNfJtWh8qd2",
-      "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-04-21T18:09:39.605Z"
-    },
-    "todo:6": {
-      "task_key": "todo:6",
-      "task_label": "6",
-      "task_title": "更新评估详情界面（需要修复）",
-      "session_id": "ses_24ea156f8ffeWXwXauEkmRp9GE",
-      "agent": "Sisyphus-Junior",
-      "category": "deep",
-      "updated_at": "2026-04-21T18:50:59.267Z"
-    }
-  }
+﻿{
+  "active_plan": "D:\\claude-web-platform\\.sisyphus\\plans\\add-context-window-config.md",
+  "started_at": "2026-04-25T07:12:13.206Z",
+  "session_ids": ["ses_245752115ffeKijRzqvhYLCp8b"],
+  "plan_name": "add-context-window-config",
+  "worktree_path": null
 }

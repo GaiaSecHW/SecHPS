@@ -1,0 +1,21 @@
+{
+  "sessionId": "eval-1776918813706-o0cymfcxu",
+  "projectId": "proj-1776595278830-rzkr0u9da",
+  "messageCount": 484,
+  "nodeIdRanges": {
+    "cmo9to2us000dpx45vezi1trn": {
+      "start": 0,
+      "end": 19
+    },
+    "cmo9to2ut000hpx4543mtypkb": {
+      "start": 20,
+      "end": 388
+    },
+    "cmo9to2ut000fpx45k6aa4mrj": {
+      "start": 389,
+      "end": 483
+    }
+  },
+  "lastActivity": "2026-04-23T05:21:54.532Z",
+  "createdAt": "2026-04-23T04:33:34.007Z"
+}

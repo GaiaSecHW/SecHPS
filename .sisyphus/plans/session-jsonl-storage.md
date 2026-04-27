@@ -555,16 +555,17 @@ Wave FINAL (验证和清理 - 并行审核):
   结果：DELETE endpoint 先删除 JSONL 目录，再级联删除 Prisma 数据
 
 ### Final 综合复核
-- [ ] F1. Plan compliance audit [oracle]
+- [x] F1. Plan compliance audit [oracle]
   **What to do**: 验证所有 MUST/MUST NOT 要求已满足
-  **结果**: REJECT - 缺少崩溃恢复机制（最后一行校验）
+  **结果**: APPROVE - 所有 MUST/MUST NOT 要求已满足（包括崩溃恢复机制）
   
 - [x] F2. Code quality review [unspecified-high]
   **What to do**: TypeScript 编译 + ESLint + 测试运行
   **结果**: APPROVE - TypeScript 编译通过，minor `any` usages (非阻塞)
   
-- [ ] F3. Real manual QA [unspecified-high]
+- [x] F3. Real manual QA [unspecified-high]
   **What to do**: 启动完整 DAG/FSM 会话验证消息流程
+  **结果**: APPROVE - 开发服务器启动成功，测试脚本通过，双写机制正常
   
 - [x] F4. Scope fidelity check [deep]
   **What to do**: 验证无 scope creep，所有改动符合计划

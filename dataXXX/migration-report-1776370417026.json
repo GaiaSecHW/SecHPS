@@ -1,0 +1,259 @@
+{
+  "timestamp": "2026-04-16T20:13:37.027Z",
+  "dryRun": true,
+  "confidenceThreshold": 0.8,
+  "summary": {
+    "total": 20,
+    "autoMigrated": 6,
+    "pendingReview": 11,
+    "failed": 3
+  },
+  "details": {
+    "autoMigrated": [
+      {
+        "skillId": "cmnrty5fm00021tkpi8wgql0u",
+        "skillName": "cmd-inject-java",
+        "originalTechStack": "[\"Java\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": "CWE-78",
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.85,
+        "reason": "从 techStack 数组第一个元素推断: Java | 关键词匹配: sql-injection | CWE 匹配: CWE-78"
+      },
+      {
+        "skillId": "cmnuv8b3d0001igjpjvs6we0p",
+        "skillName": "code-audit-agent",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"PHP\",\"JavaScript\",\"Node.js\",\"C#\",\".NET\",\"Ruby\",\"Rust\",\"C\",\"C++\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.85,
+        "reason": "从 techStack 数组第一个元素推断: Java | 关键词匹配: command-injection"
+      },
+      {
+        "skillId": "cmnuv8b6b000pigjp2551gftl",
+        "skillName": "code-audit-references-checklists-universal",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"PHP\",\"JavaScript\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-crypto-2",
+        "confidence": 0.85,
+        "reason": "从 techStack 数组第一个元素推断: Java | 关键词匹配: insecure-randomness"
+      },
+      {
+        "skillId": "cmnuv8b6r000tigjpqfjp8klf",
+        "skillName": "code-audit-references-core-attack_path_priority",
+        "originalTechStack": "[\"Java\",\"JavaScript\",\"Node.js\",\"C#\",\".NET\",\"Go\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-4",
+        "confidence": 0.85,
+        "reason": "从 techStack 数组第一个元素推断: Java | 关键词匹配: path-traversal"
+      },
+      {
+        "skillId": "cmnuv8b6z000vigjphi6ostef",
+        "skillName": "code-audit-references-core-benchmark_methodology",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"PHP\",\"JavaScript\",\"Node.js\",\"C#\",\".NET\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-sensitive-1",
+        "confidence": 0.85,
+        "reason": "从 techStack 数组第一个元素推断: Java | 关键词匹配: hardcoded-secrets"
+      },
+      {
+        "skillId": "cmnuv8b78000xigjpzwmauglc",
+        "skillName": "code-audit-references-core-bypass_strategies",
+        "originalTechStack": "[\"Java\",\"Go\",\"JavaScript\",\"Node.js\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-api-3",
+        "confidence": 0.85,
+        "reason": "从 techStack 数组第一个元素推断: Java | 关键词匹配: missing-rate-limiting"
+      }
+    ],
+    "pendingReview": [
+      {
+        "skillId": "cmnuv8b3p0003igjpklqrvqsr",
+        "skillName": "code-audit-references-cases-real_world_vulns",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"PHP\",\"JavaScript\",\"Node.js\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Java | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b3y0005igjp2snttkml",
+        "skillName": "code-audit-references-checklists-coverage_matrix",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"PHP\",\"JavaScript\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Java | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b450007igjpsb5avl4p",
+        "skillName": "code-audit-references-checklists-c_cpp",
+        "originalTechStack": "[\"C\",\"C++\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "C",
+        "inferredLanguageId": "cmnsce1s100041jg6uhp2vesz",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: C | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b4n000bigjpt00jpypp",
+        "skillName": "code-audit-references-checklists-go",
+        "originalTechStack": "[\"Go\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Go",
+        "inferredLanguageId": "cmnsce1sz00091jg6p8lvfj0v",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Go | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b4w000digjpgum5e7qw",
+        "skillName": "code-audit-references-checklists-java",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"JavaScript\",\"Node.js\",\"Rust\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Java | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b53000figjpiqfftqif",
+        "skillName": "code-audit-references-checklists-javascript",
+        "originalTechStack": "[\"Java\",\"Go\",\"JavaScript\",\"Node.js\",\"Rust\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Java | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b5c000higjpup3p17nl",
+        "skillName": "code-audit-references-checklists-php",
+        "originalTechStack": "[\"PHP\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "PHP",
+        "inferredLanguageId": "cmnsce1sl00071jg6ud4lbsiw",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: PHP | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b5l000jigjphceq2kvz",
+        "skillName": "code-audit-references-checklists-python",
+        "originalTechStack": "[\"Python\",\"Go\",\"JavaScript\",\"Node.js\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Python",
+        "inferredLanguageId": "cmnsce1r800001jg69jgy6d66",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Python | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b60000nigjpcczf2tll",
+        "skillName": "code-audit-references-checklists-rust",
+        "originalTechStack": "[\"Python\",\"Go\",\"JavaScript\",\"Node.js\",\"Rust\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Python",
+        "inferredLanguageId": "cmnsce1r800001jg69jgy6d66",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Python | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b6j000rigjp6eqf0y0c",
+        "skillName": "code-audit-references-core-anti_hallucination",
+        "originalTechStack": "[\"Python\",\"Go\",\"Rust\",\"Java\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Python",
+        "inferredLanguageId": "cmnsce1r800001jg69jgy6d66",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Python | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b7h000zigjp9ovi6s65",
+        "skillName": "code-audit-references-core-capability_baseline",
+        "originalTechStack": "[\"Java\",\"Python\",\"Go\",\"PHP\",\"JavaScript\",\"Node.js\",\"C#\",\".NET\",\"Ruby\",\"Rust\",\"C\",\"C++\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": "Java",
+        "inferredLanguageId": "cmnsce1rf00011jg62wiht19h",
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.6,
+        "reason": "从 techStack 数组第一个元素推断: Java | 基于 category 默认选择: code-audit"
+      }
+    ],
+    "failed": [
+      {
+        "skillId": "cmnrfugct000vlxvi52xzkdsp",
+        "skillName": "security-audit",
+        "originalTechStack": null,
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": null,
+        "inferredLanguageId": null,
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.3,
+        "reason": " | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b4e0009igjpvummc0j8",
+        "skillName": "code-audit-references-checklists-dotnet",
+        "originalTechStack": "[\"C#\",\".NET\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": null,
+        "inferredLanguageId": null,
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.3,
+        "reason": " | 基于 category 默认选择: code-audit"
+      },
+      {
+        "skillId": "cmnuv8b5s000ligjpg4wwegre",
+        "skillName": "code-audit-references-checklists-ruby",
+        "originalTechStack": "[\"JavaScript\",\"Node.js\",\"Ruby\",\"Go\"]",
+        "originalCategory": "code-audit",
+        "originalCwe": null,
+        "inferredLanguage": null,
+        "inferredLanguageId": null,
+        "inferredVulnPatternId": "vp-code-audit-3",
+        "confidence": 0.3,
+        "reason": " | 基于 category 默认选择: code-audit"
+      }
+    ]
+  }
+}

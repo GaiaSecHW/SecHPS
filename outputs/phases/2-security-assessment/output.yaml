@@ -1,0 +1,57 @@
+P2_dfd_elements:
+  dfd_elements:
+    external_interactors:
+      - id: EI-001
+        name: User
+        type: Human
+        description: Web application user
+      - id: EI-002
+        name: Claude API
+        type: External Service
+        description: AI model service
+    
+    processes:
+      - id: P-001
+        name: Authentication Process
+        description: User login and token validation
+        security_level: HIGH
+      - id: P-002
+        name: Session Management
+        description: Create and manage user sessions
+        security_level: HIGH
+    
+    data_stores:
+      - id: DS-001
+        name: SQLite Database
+        type: Database
+        description: Application database with user data
+        security_level: HIGH
+      - id: DS-002
+        name: Session Storage
+        type: Memory
+        description: Active session tokens
+    
+    data_flows:
+      - id: DF-001
+        source: EI-001
+        target: P-001
+        data: Credentials
+        protocol: HTTPS
+      - id: DF-002
+        source: P-001
+        target: DS-001
+        data: User data
+        protocol: Internal
+
+  element_mapping:
+    - dfd_element: P-001
+      code_element: src/lib/auth.ts
+      module_ref: M-001
+    - dfd_element: DS-001
+      code_element: prisma/dev.db
+      module_ref: M-003
+
+  l1_coverage:
+    coverage_percentage: 85
+    total_elements: 10
+    covered_elements: 8

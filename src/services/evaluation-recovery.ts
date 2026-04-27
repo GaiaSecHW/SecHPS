@@ -29,7 +29,7 @@ const LOG_PREFIX = '[EvaluationRecovery]';
 export interface RecoveryStatus {
   evaluationId: string;
   projectId: string;
-  workflowType: 'fsm' | 'custom';
+  workflowType: string | null;
   lastCompletedNodeIndex: number;
   nextNodeToExecute: number;
   totalNodes: number;
@@ -57,11 +57,12 @@ export async function recoverInterruptedEvaluations(): Promise<{
   };
   
   try {
-    // 1. 查找所有 running 状态的评估
+    // 1. 查找所有 preparing/running 状态的评估
+    // preparing 状态的评估可能刚创建就被中断，需要从头启动
     // 注意：EvaluationSession 没有 Workflow 关系，只有 workflowId 字段
-    const runningEvaluations = await prisma.evaluationSession.findMany({
+    const activeEvaluations = await prisma.evaluationSession.findMany({
       where: {
-        status: 'running',
+        status: { in: ['preparing', 'running'] },
       },
       include: {
         Project: {
@@ -95,9 +96,45 @@ export async function recoverInterruptedEvaluations(): Promise<{
       },
     });
     
-    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现 ${runningEvaluations.length} 个 running 状态的评估`);
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现 ${activeEvaluations.length} 个活跃评估 (preparing/running)`);
     
-    for (const evaluation of runningEvaluations) {
+    for (const evaluation of activeEvaluations) {
+      // 处理 preparing 状态的评估（从头启动）
+      if (evaluation.status === 'preparing') {
+        console.log(`${LOG_PREFIX} 检查 preparing 状态评估: ${evaluation.id}`);
+        
+        // 如果没有 NodeExecution，从头启动
+        if (!evaluation.NodeExecution || evaluation.NodeExecution.length === 0) {
+          console.log(`${LOG_PREFIX} preparing 评估无节点执行记录，从头启动`);
+          
+          try {
+            const prepResult = await recoverPreparingEvaluation(evaluation);
+            if (prepResult.success) {
+              result.recovered++;
+              console.log(`${LOG_PREFIX} ✅ preparing 评估 ${evaluation.id} 启动成功`);
+              result.details.push({
+                evaluationId: evaluation.id,
+                projectId: evaluation.projectId,
+                workflowType: evaluation.workflowType,
+                lastCompletedNodeIndex: -1,
+                nextNodeToExecute: 0,
+                totalNodes: 0,
+                recoveryReason: 'preparing状态从头启动',
+              });
+            } else {
+              result.failed++;
+              console.log(`${LOG_PREFIX} ❌ preparing 评估 ${evaluation.id} 启动失败: ${prepResult.error}`);
+            }
+          } catch (error) {
+            result.failed++;
+            console.log(`${LOG_PREFIX} ❌ preparing 评估 ${evaluation.id} 启动异常: ${error}`);
+          }
+          continue;
+        }
+        
+        // 有 NodeExecution，按正常恢复流程处理
+        console.log(`${LOG_PREFIX} preparing 评估有节点执行记录，按正常恢复流程处理`);
+      }
       try {
         console.log(`${LOG_PREFIX} 检查评估: ${evaluation.id}`);
         console.log(`${LOG_PREFIX}   projectId: ${evaluation.projectId}`);
@@ -175,6 +212,44 @@ export async function recoverInterruptedEvaluations(): Promise<{
     console.error(`${LOG_PREFIX} 恢复检查失败:`, errorMsg);
     console.error(`${LOG_PREFIX} 错误堆栈:`, errorStack);
     return result;
+  }
+}
+
+/**
+ * 恢复 preparing 状态的评估
+ * 
+ * preparing 状态的评估刚创建，还没有开始执行节点
+ * 恢复逻辑：将状态改为 queued，然后调用 startQueuedEvaluation
+ */
+async function recoverPreparingEvaluation(evaluation: any): Promise<{ success: boolean; error?: string }> {
+  console.log(`${LOG_PREFIX} 开始恢复 preparing 评估: ${evaluation.id}`);
+  
+  try {
+    // 1. 将评估状态改为 queued（放到队列第一个位置）
+    await prisma.evaluationSession.update({
+      where: { id: evaluation.id },
+      data: { 
+        status: 'queued',
+        lastActivity: new Date(),
+      },
+    });
+    
+    console.log(`${LOG_PREFIX} preparing 评估已改为 queued 状态`);
+    
+    // 2. 导入 startQueuedEvaluation 函数
+    const { startQueuedEvaluation } = await import('./start-evaluation');
+    
+    // 3. 启动评估（插队，放到队列第一个）
+    await startQueuedEvaluation(evaluation.id);
+    
+    console.log(`${LOG_PREFIX} preparing 评估启动成功`);
+    
+    return { success: true };
+    
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`${LOG_PREFIX} 恢复 preparing 评估失败: ${errorMsg}`);
+    return { success: false, error: errorMsg };
   }
 }
 

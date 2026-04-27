@@ -1,0 +1,52 @@
+P5_threat_inventory:
+  threats:
+    - id: T-001
+      stride_category: Spoofing
+      severity: HIGH
+      description: JWT token could be stolen via XSS
+      affected_element: EI-001
+      attack_vector: Cross-site scripting to steal localStorage token
+      likelihood: MEDIUM
+      impact: HIGH
+    - id: T-002
+      stride_category: Tampering
+      severity: HIGH
+      description: Database could be tampered via SQL injection
+      affected_element: DS-001
+      attack_vector: SQL injection in API routes
+      likelihood: LOW
+      impact: HIGH
+    - id: T-003
+      stride_category: Information Disclosure
+      severity: MEDIUM
+      description: Sensitive user data exposed in API responses
+      affected_element: P-002
+      attack_vector: Overly permissive API endpoints
+      likelihood: MEDIUM
+      impact: MEDIUM
+    - id: T-004
+      stride_category: Elevation of Privilege
+      severity: HIGH
+      description: Role escalation via permission manipulation
+      affected_element: P-001
+      attack_vector: Manipulating role assignment API
+      likelihood: LOW
+      impact: HIGH
+  
+  threat_summary:
+    by_stride:
+      Spoofing: 1
+      Tampering: 1
+      Repudiation: 0
+      Information Disclosure: 1
+      Denial of Service: 0
+      Elevation of Privilege: 1
+    by_severity:
+      HIGH: 3
+      MEDIUM: 1
+      LOW: 0
+  
+  element_coverage_verification:
+    coverage_percentage: 90
+    total_elements: 10
+    covered_elements: 9
