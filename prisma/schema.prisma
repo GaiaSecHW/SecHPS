@@ -1047,6 +1047,20 @@ model SkillEvolutionConfig {
   updatedAt            DateTime
 }
 
+model SkillEvolutionPrompt {
+  id           String   @id
+  promptKey    String   @unique           // 提示词标识: balance_analysis_system, balance_analysis_user, improvement_generation_system, improvement_generation_user
+  displayName  String                     // 显示名称
+  description  String?                     // 描述
+  content      String                      // 提示词内容（可编辑）
+  isActive     Boolean  @default(true)    // 是否激活（未激活则使用代码默认值）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+
+  @@index([promptKey])
+  @@index([isActive])
+}
+
 model SkillEvolutionTask {
   id                 String            @id
   skillId            String

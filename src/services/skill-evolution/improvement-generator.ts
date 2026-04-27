@@ -10,6 +10,7 @@ import type { TokenUsageContext } from '@/types/call-scene';
 import type { BalanceAnalysisResult } from './balance-analyzer';
 import type { CompactCase } from './case-extractor';
 import { DEFAULT_EVOLUTION_CONFIG } from './evolution-scheduler';
+import { getEvolutionPrompt } from './prompt-manager';
 
 // ============================================================================
 // Types
@@ -177,6 +178,71 @@ ${confirmedCases.slice(0, 3).map((c, i) =>
 请输出你的改进结果 JSON:`;
 }
 
+/**
+ * 从模板构建改进生成 Prompt（替换占位符）
+ */
+function buildImprovementPromptFromTemplate(
+  template: string,
+  skillContent: string,
+  analysisResult: BalanceAnalysisResult,
+  falsePositiveCases: CompactCase[],
+  confirmedCases: CompactCase[]
+): string {
+  const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_SKILL_CONTENT_LENGTH): string => {
+    if (content.length <= maxLen) return content;
+    return content.substring(0, maxLen) + '\n... (已截断)';
+  };
+
+  const formatPatterns = (patterns: string[]): string => {
+    if (patterns.length === 0) return '无';
+    return patterns.map((p, i) => `${i + 1}. ${p}`).join('\n');
+  };
+
+  const formatRecommendations = (recommendations: BalanceAnalysisResult['recommendations']): string => {
+    if (recommendations.length === 0) return '无具体改进建议';
+    
+    return recommendations.map((r, i) => {
+      const typeMap: Record<string, string> = {
+        'add_rule': '添加规则',
+        'modify_rule': '修改规则',
+        'add_exception': '添加排除条件',
+        'refine_pattern': '细化模式',
+      };
+      const impactMap: Record<string, string> = {
+        'reduce_false_positive': '减少误报',
+        'maintain_detection': '保持检测',
+        'both': '平衡改进',
+      };
+      
+      return `${i + 1}. **${typeMap[r.type] || r.type}**: ${r.description} (影响: ${impactMap[r.impact] || r.impact})`;
+    }).join('\n');
+  };
+
+  const formatCasesPreview = (cases: CompactCase[], label: string): string => {
+    if (cases.length === 0) return `无 ${label} 案例`;
+    return cases.slice(0, 3).map((c, i) => 
+      `案例 ${i + 1}: ${c.title}\n描述: ${c.description}`
+    ).join('\n\n');
+  };
+
+  // 如果模板为空，使用硬编码构建函数
+  if (!template || template.trim() === '') {
+    return buildImprovementPrompt(skillContent, analysisResult, falsePositiveCases, confirmedCases);
+  }
+
+  // 替换占位符
+  return template
+    .replace('{{SKILL_CONTENT}}', truncateContent(skillContent))
+    .replace('{{FALSE_POSITIVE_PATTERNS}}', formatPatterns(analysisResult.falsePositivePatterns))
+    .replace('{{FALSE_POSITIVE_CAUSES}}', formatPatterns(analysisResult.falsePositiveCauses))
+    .replace('{{CONFIRMED_PATTERNS}}', formatPatterns(analysisResult.confirmedPatterns))
+    .replace('{{CONFIRMED_STRENGTHS}}', formatPatterns(analysisResult.confirmedStrengths))
+    .replace('{{RECOMMENDATIONS}}', formatRecommendations(analysisResult.recommendations))
+    .replace('{{WARNINGS}}', analysisResult.warnings.length > 0 ? analysisResult.warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') : '无')
+    .replace('{{FALSE_POSITIVE_CASES_PREVIEW}}', formatCasesPreview(falsePositiveCases, '误报'))
+    .replace('{{CONFIRMED_CASES_PREVIEW}}', formatCasesPreview(confirmedCases, '正确发现'));
+}
+
 // ============================================================================
 // JSON 解析辅助函数（复用 balance-analyzer 的逻辑）
 // ============================================================================
@@ -334,7 +400,18 @@ export async function generateImprovement(
   options?: ImprovementGenerationOptions
 ): Promise<GeneratedImprovement> {
   try {
-    const prompt = buildImprovementPrompt(skillContent, analysisResult, falsePositiveCases, confirmedCases);
+    // 从数据库获取提示词（优先使用数据库配置）
+    const systemPrompt = await getEvolutionPrompt('improvement_generation_system');
+    const userPromptTemplate = await getEvolutionPrompt('improvement_generation_user_template');
+    
+    // 构建用户提示词
+    const prompt = buildImprovementPromptFromTemplate(
+      userPromptTemplate,
+      skillContent,
+      analysisResult,
+      falsePositiveCases,
+      confirmedCases
+    );
     
     console.log(`[ImprovementGenerator] 开始生成改进: skillId=${skillId}`);
     console.log(`[ImprovementGenerator] 分析结果: ${analysisResult.recommendations.length} 条建议`);
@@ -342,7 +419,7 @@ export async function generateImprovement(
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
       {
-        system: IMPROVEMENT_GENERATION_SYSTEM_PROMPT,
+        system: systemPrompt || IMPROVEMENT_GENERATION_SYSTEM_PROMPT, // fallback to hardcoded
         // max_tokens 和 temperature 从模型配置自动获取，除非明确指定
         ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),

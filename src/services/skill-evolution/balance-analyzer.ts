@@ -7,6 +7,7 @@ import { routeRequestWithDefaultModel } from '@/lib/model-client';
 import type { TokenUsageContext } from '@/types/call-scene';
 import type { CompactCase } from './case-extractor';
 import { DEFAULT_EVOLUTION_CONFIG } from './evolution-scheduler';
+import { getEvolutionPrompt } from './prompt-manager';
 
 // ============================================================================
 // Types
@@ -162,6 +163,59 @@ ${formatCases(confirmedCases, '正确发现')}
 {"falsePositivePatterns":["模式1","模式2"],"falsePositiveCauses":["原因1","原因2"],"confirmedPatterns":["模式1","模式2"],"confirmedStrengths":["规则1","规则2"],"recommendations":[{"type":"modify_rule","description":"...","impact":"reduce_false_positive"}],"warnings":["警告1"]}
 
 请输出你的分析结果 JSON:`;
+}
+
+/**
+ * 从模板构建分析 Prompt（替换占位符）
+ */
+function buildBalanceAnalysisPromptFromTemplate(
+  template: string,
+  skillContent: string,
+  falsePositives: CompactCase[],
+  confirmedCases: CompactCase[]
+): string {
+  const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_CONTENT_LENGTH): string => {
+    if (content.length <= maxLen) return content;
+    return content.substring(0, maxLen) + '\n... (已截断)';
+  };
+
+  const formatCases = (cases: CompactCase[], label: string): string => {
+    if (cases.length === 0) {
+      return `无 ${label} 案例`;
+    }
+    
+    return cases.map((c, i) => {
+      const parts = [
+        `### 案例 ${i + 1}: ${c.title}`,
+        `- **状态**: ${c.status === 'false_positive' ? '误报' : '正确发现'}`,
+        `- **描述**: ${c.description}`,
+      ];
+      
+      if (c.location) {
+        parts.push(`- **问题代码位置**: ${c.location}`);
+      }
+      
+      if (c.POCPreview) {
+        parts.push(`- **POC 预览**:`);
+        parts.push('```');
+        parts.push(c.POCPreview);
+        parts.push('```');
+      }
+      
+      return parts.join('\n');
+    }).join('\n\n');
+  };
+
+  // 如果模板为空，使用硬编码构建函数
+  if (!template || template.trim() === '') {
+    return buildBalanceAnalysisPrompt(skillContent, falsePositives, confirmedCases);
+  }
+
+  // 替换占位符
+  return template
+    .replace('{{SKILL_CONTENT}}', truncateContent(skillContent))
+    .replace('{{FALSE_POSITIVE_CASES}}', formatCases(falsePositives, '误报'))
+    .replace('{{CONFIRMED_CASES}}', formatCases(confirmedCases, '正确发现'));
 }
 
 // ============================================================================
@@ -320,14 +374,24 @@ export async function analyzeBalance(
   options?: BalanceAnalysisOptions
 ): Promise<BalanceAnalysisResult> {
   try {
-    const prompt = buildBalanceAnalysisPrompt(skillContent, falsePositives, confirmedCases);
+    // 从数据库获取提示词（优先使用数据库配置）
+    const systemPrompt = await getEvolutionPrompt('balance_analysis_system');
+    const userPromptTemplate = await getEvolutionPrompt('balance_analysis_user_template');
+    
+    // 构建用户提示词
+    const prompt = buildBalanceAnalysisPromptFromTemplate(
+      userPromptTemplate,
+      skillContent,
+      falsePositives,
+      confirmedCases
+    );
     
     console.log(`[BalanceAnalyzer] 开始分析: ${falsePositives.length} 误报, ${confirmedCases.length} 正确发现`);
     
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
       {
-        system: BALANCE_ANALYSIS_SYSTEM_PROMPT,
+        system: systemPrompt || BALANCE_ANALYSIS_SYSTEM_PROMPT, // fallback to hardcoded
         // max_tokens 和 temperature 从模型配置自动获取，除非明确指定
         ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),

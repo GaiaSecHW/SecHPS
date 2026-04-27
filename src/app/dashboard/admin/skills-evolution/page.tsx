@@ -27,6 +27,7 @@ import { AdminGuard } from '@/components/PermissionGuard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Alert } from '@/components/ui/Alert';
 import { SkillEvolutionArchitecture } from '@/components/skills/SkillEvolutionArchitecture';
+import { PromptManager } from '@/components/skills/PromptManager';
 
 // Types
 interface EvolutionOverview {
@@ -405,9 +406,12 @@ function SkillsEvolutionContent() {
       </div>
 
       {/* Evolution Architecture Diagram */}
-      <SkillEvolutionArchitecture />
+<SkillEvolutionArchitecture />
 
-      {/* Global Overview Cards */}
+        {/* LLM Prompts Configuration */}
+        <PromptManager />
+
+        {/* Global Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Skills */}
         <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
