@@ -227,23 +227,9 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     lastCompletedNodeIndex,
   });
   
-  // 所有节点已完成 -> 检查评估状态是否需要更新
+  // 所有节点已完成 -> 不需要恢复
   if (statusCounts.completed === nodeExecutions.length) {
-    // 如果评估状态仍然是 running，说明评估完成但没有更新状态
-    if (evaluation.status === 'running') {
-      console.log(`${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成但评估状态仍是 running，更新为 completed`);
-      await prisma.evaluationSession.update({
-        where: { id: evaluation.id },
-        data: {
-          status: 'completed',
-          completedAt: new Date(),
-          lastActivity: new Date(),
-          endReason: '所有节点执行完成',
-          endMessage: `完成 ${nodeExecutions.length} 个节点`,
-        },
-      });
-      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 状态已更新为 completed`);
-    }
+    logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成`);
     return null;
   }
   
