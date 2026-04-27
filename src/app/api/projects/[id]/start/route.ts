@@ -1180,7 +1180,18 @@ export async function POST(
             }
           })();
           
-          // 返回 SSE 流响应
+          // 队列启动时返回 JSON（不需要 SSE 流）
+          if (isQueuedStart || queuedEvaluationId) {
+            logger.info(LOG_MODULES.EVALUATION, '[FSM] 队列启动，返回 JSON 响应');
+            return NextResponse.json({
+              success: true,
+              evaluationId: evaluation.id,
+              workflowType: 'fsm',
+              message: 'FSM 评估已在后台启动',
+            });
+          }
+          
+          // 正常启动返回 SSE 流响应
           return new NextResponse(stream, {
             headers: {
               'Content-Type': 'text/event-stream',
@@ -1918,7 +1929,18 @@ dagCopyResult = await copySkillsToProject(
           }
         })();
         
-        // 返回 SSE 流响应
+        // 队列启动时返回 JSON（不需要 SSE 流）
+        if (isQueuedStart || queuedEvaluationId) {
+          logger.info(LOG_MODULES.EVALUATION, '[DAG] 队列启动，返回 JSON 响应');
+          return NextResponse.json({
+            success: true,
+            evaluationId: dagEvaluation.id,
+            workflowType: 'dag',
+            message: 'DAG 评估已在后台启动',
+          });
+        }
+        
+        // 正常启动返回 SSE 流响应
         return new NextResponse(dagStream, {
           headers: {
             'Content-Type': 'text/event-stream',
