@@ -13,10 +13,11 @@
 import { prisma } from '@/lib/prisma';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId, generateIndexedId } from '@/lib/id-generator';
-import { emitEvaluationStarted, emitPreparingProgress, emitEvaluationComplete } from '@/lib/event-bus';
+import { emitEvaluationStarted, emitPreparingProgress, emitEvaluationComplete, emitMessageChunk } from '@/lib/event-bus';
 import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
 import { lockProject, unlockProject } from '@/lib/evaluation-lock';
 import { loadMcpServersForProject } from '@/lib/mcp-loader';
+import { createEnhancedEvaluationCaller } from '@/services/evaluation';
 import type { ModelConfigForExecution, McpServerConfigForExecution, UnifiedNodeDefinition } from '@/lib/workflow/types';
 
 const LOG_PREFIX = '[EvaluationRecovery]';
@@ -85,6 +86,9 @@ export async function recoverInterruptedEvaluations(): Promise<{
             completedAt: true,
             inputTokens: true,
             outputTokens: true,
+            opencodeSessionId: true,  // 🔑 关键：用于恢复对话
+            modelConfigId: true,
+            modelName: true,
           },
         },
       },
@@ -103,7 +107,7 @@ export async function recoverInterruptedEvaluations(): Promise<{
         
         if (evaluation.NodeExecution?.length > 0) {
           evaluation.NodeExecution.forEach((n: any, i: number) => {
-            console.log(`${LOG_PREFIX}     Node[${i}]: ${n.nodeLabel} - status=${n.status}`);
+            console.log(`${LOG_PREFIX}     Node[${i}]: ${n.nodeLabel} - status=${n.status}, opencodeSessionId=${n.opencodeSessionId || '无'}`);
           });
         }
         
@@ -276,6 +280,153 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
 }
 
 /**
+ * 通过 opencodeSessionId 恢复节点对话
+ * 
+ * 核心恢复逻辑：
+ * 1. 找到 running 状态的节点
+ * 2. 使用该节点的 opencodeSessionId 恢复对话
+ * 3. 发送"继续执行未完成的工作"消息
+ * 4. 大模型会继续之前的执行
+ */
+async function recoverNodeConversation(
+  evaluation: any,
+  runningNode: any,
+  modelConfig: ModelConfigForExecution,
+  mcpServers: McpServerConfigForExecution[] | null
+): Promise<{ success: boolean; error?: string }> {
+  const LOG_RECOVERY = '[Recovery-Conversation]';
+  
+  console.log(`${LOG_RECOVERY} 开始通过 opencodeSessionId 恢复对话...`);
+  console.log(`${LOG_RECOVERY}   evaluationId: ${evaluation.id}`);
+  console.log(`${LOG_RECOVERY}   nodeId: ${runningNode.workflowNodeId}`);
+  console.log(`${LOG_RECOVERY}   nodeLabel: ${runningNode.nodeLabel}`);
+  console.log(`${LOG_RECOVERY}   opencodeSessionId: ${runningNode.opencodeSessionId}`);
+  
+  // 1. 检查是否有 opencodeSessionId
+  if (!runningNode.opencodeSessionId) {
+    console.log(`${LOG_RECOVERY} 节点没有 opencodeSessionId，无法恢复对话`);
+    return { success: false, error: '节点没有 opencodeSessionId' };
+  }
+  
+  const project = evaluation.Project;
+  
+  try {
+    // 2. 创建 EnhancedEvaluationCaller 并传入 resumeSession
+    console.log(`${LOG_RECOVERY} 创建 EnhancedEvaluationCaller...`);
+    
+    console.log(`${LOG_RECOVERY} 创建 EnhancedEvaluationCaller...`);
+    
+    const caller = createEnhancedEvaluationCaller(
+      {
+        id: modelConfig.id,
+        providerType: modelConfig.providerType,
+        apiKey: modelConfig.apiKey,
+        apiBaseUrl: modelConfig.apiBaseUrl || '',
+        models: typeof modelConfig.models === 'string' 
+          ? modelConfig.models 
+          : JSON.stringify(modelConfig.models),
+        contextWindow: modelConfig.contextWindow,
+      },
+      project.projectPath || process.cwd(),
+      {
+        resumeSession: runningNode.opencodeSessionId,  // 🔑 关键：传入 sessionId 恢复对话
+        workflowNodeId: runningNode.workflowNodeId,     // 用于更新节点执行状态
+        mcpServers: mcpServers || undefined,
+      }
+    );
+    
+    // 3. 更新评估状态为 running
+    await prisma.evaluationSession.update({
+      where: { id: evaluation.id },
+      data: {
+        status: 'running',
+        updatedAt: new Date(),
+      },
+    });
+    
+    // 4. 发送恢复事件
+    emitEvaluationStarted(evaluation.id, {
+      workflowType: evaluation.workflowType || 'custom',
+      message: `通过 opencodeSessionId 恢复对话，从节点 ${runningNode.nodeLabel} 继续`,
+    });
+    
+    console.log(`${LOG_RECOVERY} ========== 发送恢复消息 ==========`);
+    console.log(`${LOG_RECOVERY} 消息: "继续执行未完成的工作，并返回当前进展。"`);
+    
+    // 5. 发送恢复消息（使用 startEvaluation，传入恢复消息作为 initialMessage）
+    const recoveryMessage = '继续执行未完成的工作，并反馈工作进展。';
+    
+    // 执行恢复（后台异步，不阻塞）
+    void (async () => {
+      try {
+        await caller.startEvaluation(evaluation.id, evaluation.projectId, {
+          projectName: project.name,
+          projectDescription: project.description || undefined,
+          files: [],  // 恢复时不需要文件列表（已在 session 中）
+          initialMessage: recoveryMessage,  // 🔑 恢复消息
+        }, {
+          onChunk: (text: string) => {
+            // 推送实时文本流
+            console.log(`${LOG_RECOVERY} [chunk] ${text.substring(0, 100)}...`);
+            emitMessageChunk(evaluation.id, text);
+          },
+          onToolCall: (toolUseId: string, name: string, parameters: Record<string, unknown>) => {
+            console.log(`${LOG_RECOVERY} [tool] ${name} (${toolUseId})`);
+          },
+          onToolResult: (toolUseId: string, content: unknown, isError?: boolean) => {
+            console.log(`${LOG_RECOVERY} [tool-result] ${toolUseId} - isError=${isError}`);
+          },
+          onComplete: async (fullResponse: string) => {
+            console.log(`${LOG_RECOVERY} ========== 恢复对话完成 ==========`);
+            console.log(`${LOG_RECOVERY} 响应长度: ${fullResponse.length}`);
+            
+            // 更新节点状态为 completed
+            await prisma.nodeExecution.update({
+              where: { id: runningNode.id },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                updatedAt: new Date(),
+              },
+            });
+            
+            logger.info(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话完成，节点状态已更新`);
+          },
+          onError: async (error: Error) => {
+            console.error(`${LOG_RECOVERY} ========== 恢复对话失败 ==========`);
+            console.error(`${LOG_RECOVERY} 错误: ${error.message}`);
+            
+            // 更新节点状态为 failed
+            await prisma.nodeExecution.update({
+              where: { id: runningNode.id },
+              data: {
+                status: 'failed',
+                completedAt: new Date(),
+                updatedAt: new Date(),
+              },
+            });
+            
+            logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复对话失败`, { error: error.message });
+          },
+        });
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        console.error(`${LOG_RECOVERY} 恢复执行异常:`, err.message);
+        logger.error(LOG_MODULES.EVALUATION, `${LOG_RECOVERY} 恢复执行异常`, { error: err.message });
+      }
+    })();
+    
+    console.log(`${LOG_RECOVERY} 恢复消息已发送，等待响应...`);
+    return { success: true };
+    
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`${LOG_RECOVERY} 创建恢复 caller 失败:`, errorMsg);
+    return { success: false, error: errorMsg };
+  }
+}
+
+/**
  * 恢复评估执行
  */
 async function recoverEvaluation(
@@ -329,7 +480,28 @@ async function recoverEvaluation(
     // 5. 获取 MCP 配置
     const mcpServers = await loadMcpServersForProject(projectId, project.userId);
     
-    // 6. 根据工作流类型恢复执行
+    // 🔑 优先使用 opencodeSessionId 恢复对话（如果有 running 状态节点且有 sessionId）
+    const nodeExecutions = evaluation.NodeExecution || [];
+    const runningNode = nodeExecutions.find((n: any) => n.status === 'running');
+    
+    if (runningNode && runningNode.opencodeSessionId) {
+      console.log(`${LOG_PREFIX} 发现 running 节点有 opencodeSessionId，优先恢复对话`);
+      console.log(`${LOG_PREFIX}   nodeId: ${runningNode.workflowNodeId}`);
+      console.log(`${LOG_PREFIX}   opencodeSessionId: ${runningNode.opencodeSessionId}`);
+      
+      // 尝试通过 opencodeSessionId 恢复对话
+      const recoveryResult = await recoverNodeConversation(evaluation, runningNode, modelConfig, mcpServers);
+      
+      if (recoveryResult.success) {
+        console.log(`${LOG_PREFIX} opencodeSessionId 恢复对话成功`);
+        return { success: true };
+      } else {
+        console.log(`${LOG_PREFIX} opencodeSessionId 恢复对话失败: ${recoveryResult.error}`);
+        console.log(`${LOG_PREFIX} 继续使用节点重新执行方式恢复`);
+      }
+    }
+    
+    // 6. 根据工作流类型恢复执行（节点重新执行方式）
     if (workflow.workflowType === 'fsm') {
       return await recoverFSMEvaluation(evaluation, recoveryStatus, modelConfig, mcpServers);
     } else {
@@ -786,6 +958,3 @@ async function recoverDAGEvaluation(
     return { success: false, error: errorMsg };
   }
 }
-
-// 导入 emitMessageChunk（用于恢复时的实时流）
-import { emitMessageChunk } from '@/lib/event-bus';
