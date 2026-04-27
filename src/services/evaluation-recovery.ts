@@ -56,6 +56,7 @@ export async function recoverInterruptedEvaluations(): Promise<{
   
   try {
     // 1. 查找所有 running 状态的评估
+    // 注意：EvaluationSession 没有 Workflow 关系，只有 workflowId 字段
     const runningEvaluations = await prisma.evaluationSession.findMany({
       where: {
         status: 'running',
@@ -69,14 +70,8 @@ export async function recoverInterruptedEvaluations(): Promise<{
             userId: true,
           },
         },
-        Workflow: {
-          select: {
-            id: true,
-            name: true,
-            workflowType: true,
-            fsmTemplateId: true,
-          },
-        },
+        // ❌ EvaluationSession 没有 Workflow 关系
+        // Workflow: { ... } // 移除
         NodeExecution: {
           orderBy: { order: 'asc' },
           select: {
@@ -104,7 +99,6 @@ export async function recoverInterruptedEvaluations(): Promise<{
         console.log(`${LOG_PREFIX}   workflowId: ${evaluation.workflowId}`);
         console.log(`${LOG_PREFIX}   workflowType: ${evaluation.workflowType}`);
         console.log(`${LOG_PREFIX}   Project: ${evaluation.Project ? '存在' : '不存在'}`);
-        console.log(`${LOG_PREFIX}   Workflow: ${evaluation.Workflow ? '存在' : '不存在'}`);
         console.log(`${LOG_PREFIX}   NodeExecution 数量: ${evaluation.NodeExecution?.length || 0}`);
         
         if (evaluation.NodeExecution?.length > 0) {
@@ -291,7 +285,15 @@ async function recoverEvaluation(
   try {
     const projectId = evaluation.projectId;
     const project = evaluation.Project;
-    const workflow = evaluation.Workflow;
+    
+    // ❌ EvaluationSession 没有 Workflow 关系，需要用 workflowId 查询
+    if (!evaluation.workflowId) {
+      return { success: false, error: '评估没有关联工作流，无法恢复' };
+    }
+    
+    const workflow = await prisma.workflow.findUnique({
+      where: { id: evaluation.workflowId },
+    });
     
     if (!project || !workflow) {
       return { success: false, error: '缺少项目或工作流信息' };
@@ -417,11 +419,27 @@ async function recoverFSMEvaluation(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const project = evaluation.Project;
-    const workflow = evaluation.Workflow;
+    
+    // ❌ EvaluationSession 没有 Workflow 关系，需要用 workflowId 查询
+    if (!evaluation.workflowId) {
+      return { success: false, error: '评估没有关联工作流，无法恢复' };
+    }
+    
+    const workflow = await prisma.workflow.findUnique({
+      where: { id: evaluation.workflowId },
+    });
+    
+    if (!workflow) {
+      return { success: false, error: '工作流不存在' };
+    }
     
     logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始恢复 FSM 评估 ${evaluation.id}`);
     
     // 1. 加载 FSM 模板
+    if (!workflow.fsmTemplateId) {
+      return { success: false, error: 'FSM 工作流缺少模板ID' };
+    }
+    
     const fsmTemplate = await prisma.fSMTemplate.findUnique({
       where: { id: workflow.fsmTemplateId },
     });
@@ -600,7 +618,19 @@ async function recoverDAGEvaluation(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const project = evaluation.Project;
-    const workflow = evaluation.Workflow;
+    
+    // ❌ EvaluationSession 没有 Workflow 关系，需要用 workflowId 查询
+    if (!evaluation.workflowId) {
+      return { success: false, error: '评估没有关联工作流，无法恢复' };
+    }
+    
+    const workflow = await prisma.workflow.findUnique({
+      where: { id: evaluation.workflowId },
+    });
+    
+    if (!workflow) {
+      return { success: false, error: '工作流不存在' };
+    }
     
     logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始恢复 DAG 评估 ${evaluation.id}`);
     
