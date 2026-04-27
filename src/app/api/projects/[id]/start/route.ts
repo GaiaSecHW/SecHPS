@@ -215,6 +215,16 @@ export async function POST(
         if (activeCount >= maxConcurrent) {
           logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
           
+          // 获取 workflowType
+          let queuedWorkflowType = 'ralph';
+          if (workflowId) {
+            const workflow = await prisma.workflow.findUnique({
+              where: { id: workflowId },
+              select: { workflowType: true }
+            });
+            queuedWorkflowType = workflow?.workflowType || 'dag';
+          }
+          
           const queuedEvaluation = await tx.evaluationSession.create({
             data: {
               id: evaluationIdForLock || generateId('eval'),
@@ -225,7 +235,7 @@ export async function POST(
               roleModels: roleModels ? JSON.stringify(roleModels) : null,
               status: 'queued',
               providerType: 'queued',
-              workflowType: 'queued',
+              workflowType: queuedWorkflowType,
               startedAt: new Date(),
             },
           });
@@ -238,6 +248,16 @@ export async function POST(
         }
         
         // 未超出限制，创建 preparing 评估
+        // 获取 workflowType
+        let actualWorkflowType = 'ralph';
+        if (workflowId) {
+          const workflow = await prisma.workflow.findUnique({
+            where: { id: workflowId },
+            select: { workflowType: true }
+          });
+          actualWorkflowType = workflow?.workflowType || 'dag';
+        }
+        
         const preparingEvaluation = await tx.evaluationSession.create({
           data: {
             id: evaluationIdForLock || generateId('eval'),
@@ -248,7 +268,7 @@ export async function POST(
             roleModels: roleModels ? JSON.stringify(roleModels) : null,
             status: 'preparing',
             providerType: 'pending',
-            workflowType: 'pending',
+            workflowType: actualWorkflowType,
             startedAt: new Date(),
           },
         });
