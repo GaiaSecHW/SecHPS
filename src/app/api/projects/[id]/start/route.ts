@@ -525,11 +525,17 @@ export async function POST(
     // 设置系统提示词
     sdkOptions.systemPrompt = globalConfig.customSystemPrompt;
     
-    // 设置权限模式为 bypassPermissions，给予 Claude 所有权限
-    // 必须同时设置 allowDangerouslySkipPermissions: true
-    sdkOptions.permissionMode = 'bypassPermissions';
-    sdkOptions.allowDangerouslySkipPermissions = true;
-    logger.debug(LOG_MODULES.EVALUATION, '权限配置', { permissionMode: sdkOptions.permissionMode, allowDangerouslySkipPermissions: sdkOptions.allowDangerouslySkipPermissions });
+    // 设置权限模式 - 根据是否配置了 toolPermissions 决定
+    // 如果有权限配置，使用 default 模式让权限生效
+    // 如果没有权限配置，使用 bypassPermissions 模式
+    const hasToolPermissions = toolPermissions.length > 0;
+    sdkOptions.permissionMode = hasToolPermissions ? 'default' : 'bypassPermissions';
+    sdkOptions.allowDangerouslySkipPermissions = !hasToolPermissions;
+    logger.debug(LOG_MODULES.EVALUATION, '权限配置', { 
+      permissionMode: sdkOptions.permissionMode, 
+      allowDangerouslySkipPermissions: sdkOptions.allowDangerouslySkipPermissions,
+      toolPermissionsCount: toolPermissions.length 
+    });
 
     // 加载 MCP 服务器配置
     if (mcpServers.length > 0) {

@@ -129,6 +129,12 @@ export interface UnifiedExecutionConfig {
   techStackIds?: string[];
   /** MCP 服务器配置（传递给 Claude Agent SDK） */
   mcpServers?: McpServerConfigForExecution[];
+  /** 工具权限配置（传递给 Claude Agent SDK） */
+  toolPermissions?: Array<{
+    toolPattern: string;
+    permission: 'allow' | 'deny' | 'ask';
+    description?: string;
+  }>;
   /** 每个节点最大迭代次数 */
   maxIterationsPerNode: number;
   /** 最大重试次数 */

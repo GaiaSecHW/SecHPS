@@ -119,6 +119,15 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
       return { success: false, error: errorMsg };
     }
 
+    // Step 3.5: 加载项目工具权限配置
+    const toolPermissions = await prisma.toolPermission.findMany({
+      where: { projectId },
+    });
+    console.log(`${LOG_PREFIX} 工具权限配置: ${toolPermissions.length} 条`);
+    if (toolPermissions.length > 0) {
+      console.log(`${LOG_PREFIX} 权限规则: ${toolPermissions.map(p => `${p.toolPattern}:${p.permission}`).join(', ')}`);
+    }
+
     // Step 4: 获取工作流信息
     const workflowId = evaluation.workflowId;
     if (!workflowId) {
@@ -203,7 +212,12 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
         projectPath || '',
         modelConfig,
         globalConfig,
-        fsmTemplateId
+        fsmTemplateId,
+        toolPermissions.map(p => ({
+          toolPattern: p.toolPattern,
+          permission: p.permission,
+          description: p.description || undefined,
+        }))
       );
     } else {
       // DAG/Custom 流程：使用 DAG 执行服务
@@ -288,7 +302,8 @@ async function executeFSMBackground(
   projectPath: string,
   modelConfig: any,
   globalConfig: any,
-  fsmTemplateId: string
+  fsmTemplateId: string,
+  toolPermissions: Array<{ toolPattern: string; permission: string; description?: string }>
 ): Promise<void> {
   console.log(`${LOG_PREFIX} [Background] 开始 FSM 执行...`);
 
@@ -454,6 +469,11 @@ async function executeFSMBackground(
         modelConfig: modelConfigForExecution,
         systemPrompt: globalConfig.customSystemPrompt,
         roleModels: undefined,
+        toolPermissions: toolPermissions.map(p => ({
+          toolPattern: p.toolPattern,
+          permission: p.permission as 'allow' | 'deny' | 'ask',
+          description: p.description,
+        })),
       },
       {
         onPhaseStart: async (phase, phaseName) => {

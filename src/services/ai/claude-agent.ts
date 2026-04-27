@@ -163,17 +163,9 @@ export class ClaudeAgentService {
     const options: Options = {
       cwd: this.config.cwd,
       model: this.config.model,
-      allowedTools: this.config.allowedTools || [
-        'Read',
-        'Write',
-        'Edit',
-        'Glob',
-        'Grep',
-        'LS',
-        'Bash',
-        'Skill',
-      ],
-      disallowedTools: this.config.disallowedTools,
+      // 处理 toolPermissions 配置：转换为 SDK 支持的 allowedTools/disallowedTools
+      allowedTools: this.processAllowedTools(),
+      disallowedTools: this.processDisallowedTools(),
       abortController: this.abortController,
       env,
       // 设置源（加载 CLAUDE.md 和 MCP 配置）
@@ -182,11 +174,11 @@ export class ClaudeAgentService {
       // 'user' 加载 ~/.claude/ 配置（可能导致认证冲突）
       settingSources: this.config.settingSources || ['project'],
       
-      // 权限模式
-      permissionMode: this.config.permissionMode,
+      // 权限模式 - 根据 toolPermissions 配置决定
+      permissionMode: this.config.toolPermissions ? 'default' : this.config.permissionMode,
       
-      // 允许跳过权限检查（必须为 true 才能使用 bypassPermissions 模式）
-      allowDangerouslySkipPermissions: this.config.allowDangerouslySkipPermissions,
+      // 允许跳过权限检查（只有未配置 toolPermissions 时才跳过）
+      allowDangerouslySkipPermissions: this.config.toolPermissions ? false : this.config.allowDangerouslySkipPermissions,
       
       // 恢复会话
       resume: this.config.resumeSession,
@@ -788,6 +780,70 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
       (message as any).role === 'assistant' ||
       (message as any).subtype === 'assistant'
     );
+  }
+
+  /**
+   * 处理 toolPermissions 配置，生成 allowedTools 列表
+   * 
+   * 规则：
+   * - permission='allow' 的工具加入 allowedTools
+   * - 如果没有配置 toolPermissions，使用默认允许的工具列表
+   */
+  private processAllowedTools(): string[] {
+    const defaultAllowedTools = [
+      'Read',
+      'Write',
+      'Edit',
+      'Glob',
+      'Grep',
+      'LS',
+      'Bash',
+      'Skill',
+    ];
+
+    // 如果没有 toolPermissions 配置，使用默认或显式配置的 allowedTools
+    if (!this.config.toolPermissions || this.config.toolPermissions.length === 0) {
+      return this.config.allowedTools || defaultAllowedTools;
+    }
+
+    // 从 toolPermissions 提取 allow 的工具
+    const allowedFromPermissions = this.config.toolPermissions
+      .filter(p => p.permission === 'allow')
+      .map(p => p.toolPattern);
+
+    // 合并：显式配置的 allowedTools + permission=allow 的工具 + 默认工具
+    const explicitAllowed = this.config.allowedTools || [];
+    const merged = [...new Set([...explicitAllowed, ...allowedFromPermissions, ...defaultAllowedTools])];
+
+    console.log(`[ClaudeAgent] processAllowedTools: ${merged.length} 个工具`, merged.slice(0, 10).join(', ') + '...');
+    return merged;
+  }
+
+  /**
+   * 处理 toolPermissions 配置，生成 disallowedTools 列表
+   * 
+   * 规则：
+   * - permission='deny' 的工具加入 disallowedTools
+   */
+  private processDisallowedTools(): string[] {
+    // 如果没有 toolPermissions 配置，使用显式配置的 disallowedTools
+    if (!this.config.toolPermissions || this.config.toolPermissions.length === 0) {
+      return this.config.disallowedTools || [];
+    }
+
+    // 从 toolPermissions 提取 deny 的工具
+    const deniedFromPermissions = this.config.toolPermissions
+      .filter(p => p.permission === 'deny')
+      .map(p => p.toolPattern);
+
+    // 合并：显式配置的 disallowedTools + permission=deny 的工具
+    const explicitDisallowed = this.config.disallowedTools || [];
+    const merged = [...new Set([...explicitDisallowed, ...deniedFromPermissions])];
+
+    if (merged.length > 0) {
+      console.log(`[ClaudeAgent] processDisallowedTools: ${merged.length} 个工具被拒绝`, merged.join(', '));
+    }
+    return merged;
   }
 }
 

@@ -55,6 +55,11 @@ export interface FSMExecutionConfig {
   roleModels?: { roleId: string; modelId: string }[];  // 角色模型配置
   userId?: string;  // 用户 ID（用于加载 MCP 配置）
   mcpServers?: McpServerConfigForExecution[];  // MCP 服务器配置（可选，若传入则使用）
+  toolPermissions?: Array<{  // 工具权限配置（传递给 SDK）
+    toolPattern: string;
+    permission: 'allow' | 'deny' | 'ask';
+    description?: string;
+  }>;
 }
 
 // FSM 执行回调
@@ -494,6 +499,7 @@ export class FSMWorkflowExecutionService {
       maxIterationsPerNode: this.config.maxIterationsPerPhase,
       maxRetries: 15, // FSM 默认重试次数
       retryDelayMs: 60000, // 1 分钟重试间隔
+      toolPermissions: this.config.toolPermissions,  // 工具权限配置
       workflowConfig: {
         fsmTemplateSkillPath: this.fsmTemplate?.skillPath || undefined, // 传递 FSM Template skillPath 用于拼接节点 skillPath
       },

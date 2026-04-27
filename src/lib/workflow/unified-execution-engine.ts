@@ -876,8 +876,10 @@ callbacks: {
       },
       {
         systemPrompt: this.config.systemPrompt,
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
+        // 使用 toolPermissions 配置权限，而不是强制 bypass
+        toolPermissions: this.config.toolPermissions,
+        permissionMode: this.config.toolPermissions ? 'default' : 'bypassPermissions',
+        allowDangerouslySkipPermissions: !this.config.toolPermissions,  // 只有未配置权限时才跳过
         workflowNodeId: node.id,  // 传递 workflowNodeId，用于保存 session_id
         allowedTools,  // 父 Agent 工具权限
         skills: skillNames.length > 0 ? skillNames : undefined,  // 父 Agent 注册 Skills
