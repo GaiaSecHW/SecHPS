@@ -345,7 +345,7 @@ async function recoverNodeConversation(
       where: { id: evaluation.id },
       data: {
         status: 'running',
-        updatedAt: new Date(),
+        lastActivity: new Date(),
       },
     });
     
@@ -391,7 +391,7 @@ async function recoverNodeConversation(
               data: {
                 status: 'completed',
                 completedAt: new Date(),
-                updatedAt: new Date(),
+                lastActivity: new Date(),
               },
             });
             
@@ -407,7 +407,7 @@ async function recoverNodeConversation(
               data: {
                 status: 'failed',
                 completedAt: new Date(),
-                updatedAt: new Date(),
+                lastActivity: new Date(),
               },
             });
             
@@ -487,7 +487,7 @@ async function recoverEvaluation(
         where: { id: evaluation.id },
         data: {
           status: 'recovering',
-          updatedAt: new Date(),
+          lastActivity: new Date(),
         },
       });
       console.log(`${LOG_RECOVER}   状态更新成功: recovering`);
@@ -706,7 +706,7 @@ async function recoverFSMEvaluation(
       where: { id: evaluation.id },
       data: {
         status: 'running',
-        updatedAt: new Date(),
+        lastActivity: new Date(),
       },
     });
     
@@ -905,7 +905,7 @@ async function recoverDAGEvaluation(
       where: { id: evaluation.id },
       data: {
         status: 'running',
-        updatedAt: new Date(),
+        lastActivity: new Date(),
       },
     });
     
