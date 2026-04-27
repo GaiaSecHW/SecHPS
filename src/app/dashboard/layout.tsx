@@ -222,10 +222,9 @@ function DashboardLayoutContent({
               {/* <NavLink href="/dashboard/admin/tools" icon={<Cog size={20} />} collapsed={collapsed}>
                 工具管理
               </NavLink> */}
-              {/* 默认工具权限菜单已隐藏 */}
-              {/* <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={20} />} collapsed={collapsed}>
+              <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={20} />} collapsed={collapsed}>
                 默认工具权限
-              </NavLink> */}
+              </NavLink>
               <NavLink href="/dashboard/admin/fsm-templates" icon={<Layers size={20} />} collapsed={collapsed}>
                 威胁建模配置
               </NavLink>
