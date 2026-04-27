@@ -562,6 +562,9 @@ async function recoverEvaluation(
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.log(`${LOG_RECOVER} ❌ recoverEvaluation 异常: ${errorMsg}`);
+    console.log(`${LOG_RECOVER} 异常堆栈: ${errorStack}`);
     return { success: false, error: errorMsg };
   }
 }
@@ -827,6 +830,9 @@ async function recoverFSMEvaluation(
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.log(`[recoverFSMEvaluation] ❌ 异常: ${errorMsg}`);
+    console.log(`[recoverFSMEvaluation] 异常堆栈: ${errorStack}`);
     return { success: false, error: errorMsg };
   }
 }
@@ -1007,6 +1013,9 @@ async function recoverDAGEvaluation(
     
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.log(`[recoverDAGEvaluation] ❌ 异常: ${errorMsg}`);
+    console.log(`[recoverDAGEvaluation] 异常堆栈: ${errorStack}`);
     return { success: false, error: errorMsg };
   }
 }
