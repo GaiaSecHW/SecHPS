@@ -383,7 +383,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
           duration: Date.now() - nodeStartTime,
           inputTokens: 0,
           outputTokens: 0,
-          modelName: modelConfig.name,
+          modelName: this.getModelNameStr(modelConfig),
           modelConfigId: modelConfig.id,
           error: '用户中止',
           errorStack: '',
@@ -587,7 +587,7 @@ callbacks: {
                 nodeIndex,
                 nodeId,
                 nodeName,
-                modelName: modelConfig.name,
+                modelName: this.getModelNameStr(modelConfig),
                 modelConfigId: modelConfig.id,
                 inputTokens: usage.inputTokens || 0,
                 outputTokens: usage.outputTokens || 0,
@@ -616,7 +616,7 @@ callbacks: {
             duration: Date.now() - nodeStartTime,
             inputTokens: result.totalUsage.inputTokens,
             outputTokens: result.totalUsage.outputTokens,
-            modelName: modelConfig.name,
+            modelName: this.getModelNameStr(modelConfig),
             modelConfigId: modelConfig.id,
             error: '用户中止',
             errorStack: '',
@@ -655,7 +655,7 @@ callbacks: {
           duration: Date.now() - nodeStartTime,
           inputTokens: result.totalUsage.inputTokens,
           outputTokens: result.totalUsage.outputTokens,
-          modelName: modelConfig.name,
+          modelName: this.getModelNameStr(modelConfig),
           modelConfigId: modelConfig.id,
         };
 
@@ -706,7 +706,7 @@ callbacks: {
       duration: Date.now() - nodeStartTime,
       inputTokens: 0,
       outputTokens: 0,
-      modelName: modelConfig.name,
+      modelName: this.getModelNameStr(modelConfig),
       modelConfigId: modelConfig.id,
       error: lastError?.message || '达到最大重试次数',
       errorStack: lastError?.stack || '',
@@ -2018,7 +2018,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     this.tokenUpdatePending[nodeId] = {
       input: inputTokens,
       output: outputTokens,
-      modelName: modelConfig.name,
+      modelName: this.getModelNameStr(modelConfig),
       modelConfigId: modelConfig.id,
     };
     
