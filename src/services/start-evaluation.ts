@@ -10,6 +10,9 @@ import { generateId, generateIndexedId } from '@/lib/id-generator';
 import { copySkillsToProject } from '@/services/skill-files';
 import { mkdir, access, rm } from 'fs/promises';
 import { join } from 'path';
+import { createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
+import { generateNodeList } from '@/lib/workflow/node-list-generator';
+import type { UnifiedExecutionCallbacks } from '@/lib/workflow/types';
 
 const LOG_PREFIX = '[StartEvaluation]';
 
@@ -668,20 +671,143 @@ async function executeDAGBackground(
     });
 
     // Step 4: 调用 DAG 执行服务
-    // TODO: 实现 DAG 执行服务调用
-    console.log(`${LOG_PREFIX} [DAG-Background] DAG 执行服务待实现`);
+    console.log(`${LOG_PREFIX} [DAG-Background] 开始调用统一执行引擎...`);
 
-    // 暂时标记为完成（因为没有 DAG 执行服务）
-    await prisma.evaluationSession.update({
-      where: { id: evaluationId },
-      data: {
-        status: 'completed',
-        completedAt: new Date(),
-        endReason: 'DAG 执行完成',
+    // 获取完整的节点定义（包含 skills, vulnerabilityCategories）
+    const nodes = await generateNodeList(workflowId);
+    if (!nodes.length) {
+      console.log(`${LOG_PREFIX} [DAG-Background] Workflow 节点不存在`);
+      throw new Error('Workflow 节点不存在');
+    }
+    
+    console.log(`${LOG_PREFIX} [DAG-Background] 获取到 ${nodes.length} 个节点`);
+
+    // 构建 modelConfigForExecution
+    const modelConfigForExecution = {
+      id: modelConfig.id,
+      providerType: modelConfig.providerType,
+      name: modelConfig.name,
+      models: JSON.parse(modelConfig.models || '[]'),
+      apiKey: modelConfig.apiKey || '',
+      apiBaseUrl: modelConfig.apiBaseUrl || '',
+      contextWindow: modelConfig.contextWindow,
+    };
+
+    // 构建 callbacks
+    const callbacks: UnifiedExecutionCallbacks = {
+      onNodeStart: (i, _nid, n) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i}: ${n} 开始`);
+        emitPhaseStart(evaluationId, {
+          nodeIndex: i,
+          nodeId: _nid,
+          nodeName: n,
+          modelName: modelConfig.name,
+          totalNodes: nodes.length,
+        });
       },
-    });
+      onNodeChunk: (i, text) => {
+        emitMessageChunk(evaluationId, text);
+      },
+      onNodeToolCall: (i, tool) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} tool: ${tool}`);
+      },
+      onNodeComplete: (i) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} 完成`);
+        emitNodeComplete(evaluationId, nodes[i]?.id || `node-${i}`);
+      },
+      onNodeError: (i) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} 错误`);
+      },
+      onNodeRetry: (i, _nid, _n, retry, max) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] Node ${i} retry ${retry}/${max}`);
+      },
+      onWorkflowComplete: async (r) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] 工作流完成: ${r.status}`);
+        
+        if (r.status === 'completed') {
+          await completeEvaluationSuccess(evaluationId, projectId, projectPath, `DAG: ${r.nodeResults.length} nodes`, {
+            input: r.totalInputTokens,
+            output: r.totalOutputTokens,
+          });
+        } else {
+          await completeEvaluationFailed(evaluationId, projectId, projectPath, r.error || 'DAG 执行失败', r.endReason, r.endMessage);
+        }
+        
+        emitEvaluationComplete(evaluationId, {
+          status: r.status,
+          totalDuration: r.totalDuration,
+          totalTokens: r.totalTokens,
+          totalCost: r.totalCost,
+          message: r.status === 'completed' ? 'DAG 工作流执行完成' : 'DAG 工作流执行失败',
+        });
+        
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { status: r.status === 'completed' ? 'completed' : 'failed' },
+        });
+        
+        await unlockProject(projectId);
+      },
+      onWorkflowError: async (e) => {
+        console.log(`${LOG_PREFIX} [DAG-Background] 工作流错误: ${e.message}`);
+        
+        await completeEvaluationFailed(evaluationId, projectId, projectPath, e.message, 'error', e.stack);
+        
+        emitEvaluationComplete(evaluationId, {
+          status: 'failed',
+          error: e.message,
+          errorMessage: e.message,
+          message: 'DAG 工作流执行失败',
+        });
+        
+        await prisma.project.update({
+          where: { id: projectId },
+          data: { status: 'failed' },
+        });
+        
+        await unlockProject(projectId);
+      },
+      onTokenUsage: (data) => {
+        emitPhaseTokenUsage(evaluationId, {
+          nodeIndex: data.nodeIndex,
+          nodeName: data.nodeName,
+          modelName: data.modelName,
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          cumulativeInputTokens: data.cumulativeInputTokens,
+          cumulativeOutputTokens: data.cumulativeOutputTokens,
+        });
+      },
+    };
 
-    await unlockProject(projectId);
+    // 创建统一执行引擎
+    const engine = createUnifiedExecutionEngine({
+      evaluationSessionId: evaluationId,
+      projectId,
+      projectName: 'DAG Project',
+      workflowId,
+      workflowType: 'dag',
+      workspacePath: projectPath,
+      defaultModelConfig: modelConfigForExecution,
+      mcpServers: [],
+      systemPrompt: globalConfig.customSystemPrompt,
+      maxIterationsPerNode: 10,
+      maxRetries: 15,
+      retryDelayMs: 60000,
+    }, callbacks);
+    
+    engine.setNodes(nodes);
+    
+    // 执行（异步，不阻塞）
+    engine.execute().catch(async (e) => {
+      console.log(`${LOG_PREFIX} [DAG-Background] 执行异常: ${e.message}`);
+      
+      await completeEvaluationFailed(evaluationId, projectId, projectPath, e.message, 'error', e.stack);
+      
+      await unlockProject(projectId);
+    });
+    
+    console.log(`${LOG_PREFIX} [DAG-Background] DAG 执行引擎已启动`);
 
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

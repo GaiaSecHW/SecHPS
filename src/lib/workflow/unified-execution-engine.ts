@@ -262,6 +262,8 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         totalDuration: Date.now() - this.startTime.getTime(),
         totalInputTokens: this.cumulativeTokens.input,
         totalOutputTokens: this.cumulativeTokens.output,
+        totalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output,
+        totalCost: 0, // TODO: 计算实际成本
         startReason: '工作流开始执行',
         endReason,
         endMessage,
@@ -306,6 +308,8 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
         totalDuration: Date.now() - this.startTime.getTime(),
         totalInputTokens: this.cumulativeTokens.input,
         totalOutputTokens: this.cumulativeTokens.output,
+        totalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output,
+        totalCost: 0,
         startReason: '工作流开始执行',
         endReason: '执行异常',
         endMessage: err.message,

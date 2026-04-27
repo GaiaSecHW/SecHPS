@@ -110,8 +110,8 @@ export interface UnifiedExecutionConfig {
   projectName: string;
   /** 工作流 ID */
   workflowId: string;
-  /** 工作流类型 (fsm, custom) */
-  workflowType: 'fsm' | 'custom';
+  /** 工作流类型 (fsm, custom, dag) */
+  workflowType: 'fsm' | 'custom' | 'dag';
   /** 工作空间路径 */
   workspacePath: string;
   /** 系统提示词 */
@@ -244,7 +244,7 @@ export interface WorkflowExecutionResult {
   /** 工作流 ID */
   workflowId: string;
   /** 工作流类型 */
-  workflowType: 'fsm' | 'custom';
+  workflowType: 'fsm' | 'custom' | 'dag';
   /** 执行状态 */
   status: WorkflowExecutionStatus;
   /** 各节点执行结果 */
@@ -255,6 +255,10 @@ export interface WorkflowExecutionResult {
   totalInputTokens: number;
   /** 总输出 Token 数 */
   totalOutputTokens: number;
+  /** 总 Token 数 */
+  totalTokens: number;
+  /** 总成本 */
+  totalCost: number;
   /** 开始原因 */
   startReason?: string;
   /** 结束原因 */
