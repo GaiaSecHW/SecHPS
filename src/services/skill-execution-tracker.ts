@@ -175,6 +175,7 @@ export async function createSkillExecutionsForNode(params: {
             projectId,
             evaluationId,
             nodeId,  // 设置 nodeId 字段
+            order: index,  // 调用次序
             input: JSON.stringify({ mode: 'node_execution', nodeId }),
             status: 'pending',  // 初始状态为 pending
           },

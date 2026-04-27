@@ -185,6 +185,11 @@ function SessionDetailContent({
   const [nodeMessages, setNodeMessages] = useState<any[]>([]);
   const [loadingNodeMessages, setLoadingNodeMessages] = useState(false);
   
+  // Skill agent 消息
+  const [selectedSkillExecution, setSelectedSkillExecution] = useState<any>(null);
+  const [skillMessages, setSkillMessages] = useState<any[]>([]);
+  const [loadingSkillMessages, setLoadingSkillMessages] = useState(false);
+  
   // 刷新按钮冷却时间控制
   const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
   const [refreshCooldown, setRefreshCooldown] = useState(0);
@@ -407,6 +412,34 @@ function SessionDetailContent({
       setNodeMessages(data.messages || []);
     } catch (err) {
       setNodeMessages([]);
+    }
+  };
+
+  // 获取 Skill agent 消息
+  const fetchSkillMessages = async (executionId: string, nodeId: string) => {
+    if (!evaluationId || !executionId) return;
+
+    setLoadingSkillMessages(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(
+        `/api/evaluations/${evaluationId}/node-data?nodeId=${encodeURIComponent(nodeId)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      if (!response.ok) {
+        setSkillMessages([]);
+        return;
+      }
+
+      const data = await response.json();
+      // agentMessages 按 executionId 分组
+      const messages = data.agentMessages?.[executionId] || [];
+      setSkillMessages(messages);
+    } catch (err) {
+      setSkillMessages([]);
+    } finally {
+      setLoadingSkillMessages(false);
     }
   };
 
@@ -1353,9 +1386,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       const StatusIcon = config.icon;
                       
                       // 检测是否是目录节点（有 skill 且为 vulnerability/manual 模式）
+                      // vulnerability 模式：skillsDetails.length >= 1
+                      // manual 模式：skills.length >= 1
                       const isDirectoryNode = node.skillLoadingMode && 
                         ['vulnerability', 'manual'].includes(node.skillLoadingMode) && 
-                        node.skills && node.skills.length >= 1;
+                        ((node.skillLoadingMode === 'vulnerability' && node.skillsDetails && node.skillsDetails.length >= 1) ||
+                         (node.skillLoadingMode === 'manual' && node.skills && node.skills.length >= 1));
                       
                       // 计算目录节点的整体进度
                       const directoryProgress = isDirectoryNode && node.skillsDetails ? {
@@ -1490,8 +1526,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                       const SkillStatusIcon = skillStatusConfig.icon;
                                       return (
                                         <div 
-                                          key={skill.id || `skill-${skillIndex}`}
-                                          className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-gray-50"
+                                          key={skill.executionId || `skill-${skillIndex}`}
+                                          className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-gray-50 cursor-pointer hover:bg-gray-100"
+                                          onClick={() => {
+                                            setSelectedSkillExecution(skill);
+                                            fetchSkillMessages(skill.executionId, node.id);
+                                          }}
                                         >
                                           <SkillStatusIcon size={14} className={skillStatusConfig.color} />
                                           <span className="text-gray-700">
@@ -1526,9 +1566,87 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       );
                     })}
                   </div>
+)}
+              </div>
+            )}
+
+            {/* Skill Agent Messages Panel */}
+            {selectedSkillExecution && (
+              <div className="mb-6 bg-white rounded-lg border border-purple-300 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-semibold text-gray-900">
+                      {selectedSkillExecution.displayName || selectedSkillExecution.name}
+                    </span>
+                    <span className="text-sm text-gray-500 bg-purple-100 px-2 py-0.5 rounded">
+                      Skill Agent
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedSkillExecution(null);
+                      setSkillMessages([]);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
+                    title="关闭 Skill 详情"
+                  >
+                    <X size={14} />
+                    <span>关闭</span>
+                  </button>
+                </div>
+
+                {/* Skill 执行状态 */}
+                <div className="flex items-center gap-2 mb-4 text-xs">
+                  <span className={`px-2 py-1 rounded ${
+                    selectedSkillExecution.executionStatus === 'completed' ? 'bg-green-100 text-green-700' :
+                    selectedSkillExecution.executionStatus === 'running' ? 'bg-blue-100 text-blue-700' :
+                    selectedSkillExecution.executionStatus === 'failed' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-600'
+                  }`}>
+                    {selectedSkillExecution.executionStatus}
+                  </span>
+                  {selectedSkillExecution.executionOrder && (
+                    <span className="text-gray-500">order: {selectedSkillExecution.executionOrder}</span>
+                  )}
+                </div>
+
+                {/* Skill 消息列表 */}
+                {loadingSkillMessages ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                  </div>
+                ) : skillMessages.length > 0 ? (
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {skillMessages.map((msg: any, idx: number) => (
+                      <MessageBubble
+                        key={msg.id || `skill-msg-${idx}`}
+                        message={msg}
+                        onCopy={() => {
+                          navigator.clipboard.writeText(
+                            typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2)
+                          );
+                        }}
+                        onClick={() => {
+                          setSelectedMessage(msg);
+                          setMessageDetail({
+                            id: msg.id,
+                            role: msg.role,
+                            content: msg.content,
+                            createdAt: msg.createdAt,
+                            executionId: selectedSkillExecution.executionId,
+                          });
+                        }}
+                        isSelected={selectedMessage?.id === msg.id}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">暂无消息</p>
+                  </div>
                 )}
-               </div>
-             )}
+              </div>
+            )}
 
             {/* Node Detail Panel - 当选中节点时显示节点的消息、任务、子Agent */}
             {selectedNodeId && (

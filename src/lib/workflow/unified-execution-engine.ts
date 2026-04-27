@@ -381,7 +381,7 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     // Skill 串行执行模式：当 skills.length >= 1 且是 vulnerability/manual 模式
     if (skills.length >= 1 && mode !== 'description') {
       console.log(`[executeNode] 检测到 Skill 节点 (${skills.length} 个)，启用串行执行模式，mode=${mode}`);
-      return await this.executeMultiSkillNode(nodeIndex, node, skills, modelConfig);
+      return await this.executeMultiSkillNode(nodeIndex, node, modelConfig);
     }
     
     // 单 Skill 或 description 模式：保持原有执行逻辑
@@ -756,14 +756,61 @@ callbacks: {
   private async executeMultiSkillNode(
     nodeIndex: number,
     node: UnifiedNodeDefinition,
-    skills: Array<{ name: string; displayName: string }>,
     modelConfig: ModelConfigForExecution
   ): Promise<NodeExecutionResult> {
     const nodeStartTime = Date.now();
     const nodeName = node.label;
     const nodeId = node.id;
     
-    console.log(`[executeMultiSkillNode] 开始串行执行 ${skills.length} 个 Skills`);
+    // 查询该节点的所有 pending SkillExecution，按 order 排序
+    const pendingExecutions = await prisma.skillExecution.findMany({
+      where: {
+        evaluationId: this.config.evaluationSessionId,
+        nodeId: nodeId,
+        status: 'pending',
+      },
+      select: {
+        id: true,
+        skillId: true,
+        order: true,
+        Skill: {
+          select: {
+            name: true,
+            displayName: true,
+            content: true,
+          },
+        },
+      },
+      orderBy: { order: 'asc' },
+    });
+    
+    // 按 SkillExecution.order 顺序执行
+    const skills = pendingExecutions.map(exec => ({
+      executionId: exec.id,
+      skillId: exec.skillId,
+      order: exec.order,
+      name: exec.Skill?.name || '',
+      displayName: exec.Skill?.displayName || '',
+      content: exec.Skill?.content || '',
+    }));
+    
+    console.log(`[executeMultiSkillNode] 找到 ${skills.length} 个 pending SkillExecution，按 order 排序执行`);
+    if (skills.length === 0) {
+      console.log(`[executeMultiSkillNode] 无 pending SkillExecution，跳过`);
+      return {
+        nodeIndex,
+        nodeId,
+        nodeName,
+        status: 'completed',
+        iterations: 0,
+        retryCount: 0,
+        duration: Date.now() - nodeStartTime,
+        inputTokens: 0,
+        outputTokens: 0,
+        modelName: this.getModelNameStr(modelConfig),
+        modelConfigId: modelConfig.id,
+      };
+    }
     
     // 获取前序节点输出
     const previousOutputs = await this.getPreviousOutputs(nodeIndex);
@@ -893,75 +940,37 @@ callbacks: {
       }
       
       const skill = skills[skillIndex];
-      console.log(`[executeMultiSkillNode] ========== 执行 Skill ${skillIndex + 1}/${skills.length}: ${skill.displayName} ==========`);
+      console.log(`[executeMultiSkillNode] ========== 执行 Skill ${skillIndex + 1}/${skills.length}: ${skill.displayName} (order=${skill.order}) ==========`);
       
-      // 查询 Skill 详情（获取 content 字段）
-      let skillRecord = await prisma.skill.findFirst({
-        where: { name: skill.name, isLatest: true },
-        select: {
-          id: true,
-          name: true,
-          displayName: true,
-          content: true,
+      // skills 数组已包含所有信息，直接使用
+      const executionId = skill.executionId;
+      const skillOrder = skill.order;
+      const skillStartTime = Date.now();
+      
+      // 更新 SkillExecution 为 running
+      await prisma.skillExecution.update({
+        where: { id: executionId },
+        data: {
+          status: 'running',
+          startedAt: new Date(),
         },
       });
       
-      if (!skillRecord) {
-        // 尝试用 displayName 查找
-        skillRecord = await prisma.skill.findFirst({
-          where: { displayName: skill.displayName, isLatest: true },
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            content: true,
-          },
-        });
-      }
+      console.log(`[executeMultiSkillNode] SkillExecution 更新为 running: ${skill.displayName}, executionId=${executionId}, order=${skillOrder}`);
       
-      if (!skillRecord) {
-        console.warn(`[executeMultiSkillNode] Skill 未找到: ${skill.name}, 跳过`);
-        continue;
-      }
+      // 更新 Skill 的 execCount
+      await prisma.skill.update({
+        where: { id: skill.skillId },
+        data: { execCount: { increment: 1 }, updatedAt: new Date() },
+      });
       
-      // 创建 SkillExecution 记录（status='running'）
-      const executionId = `sklexec-${this.config.evaluationSessionId}-${nodeIndex}-${skillRecord.id}-${skillIndex}`;
-      const skillStartTime = Date.now();
-      
-      try {
-        await prisma.skillExecution.create({
-          data: {
-            id: executionId,
-            skillId: skillRecord.id,
-            projectId: this.config.projectId,
-            evaluationId: this.config.evaluationSessionId,
-            nodeId: nodeId,  // 设置 nodeId 字段
-            input: JSON.stringify({ nodeName, nodeIndex, skillName: skill.name, skillIndex }),
-            status: 'running',
-            startedAt: new Date(),
-          },
-        });
-        
-        // 更新 Skill 的 execCount
-        await prisma.skill.update({
-          where: { id: skillRecord.id },
-          data: { execCount: { increment: 1 }, updatedAt: new Date() },
-        });
-        
-        console.log(`[executeMultiSkillNode] SkillExecution 创建成功: ${skill.name}, executionId=${executionId}`);
-        
-        // 记录到当前追踪列表
-        this.currentSkillExecutionIds.push(executionId);
-        this.currentSkillIds.push(skillRecord.id);
-        this.skillNameToExecutionId.set(skill.name, executionId);
-        
-      } catch (createError) {
-        console.error(`[executeMultiSkillNode] 创建 SkillExecution 失败: ${skill.name}`, createError);
-        continue;
-      }
+      // 记录到当前追踪列表
+      this.currentSkillExecutionIds.push(executionId);
+      this.currentSkillIds.push(skill.skillId);
+      this.skillNameToExecutionId.set(skill.name, executionId);
       
       // 构建 skill 专属的 system prompt（使用 skill.content）
-      const skillSystemPrompt = skillRecord.content || `执行 ${skill.displayName} 安全检测`;
+      const skillSystemPrompt = skill.content || `执行 ${skill.displayName} 安全检测`;
       
       // 构建 skill 专属的用户提示词
       const skillUserPrompt = `
@@ -1017,8 +1026,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               
               accumulatedAssistantText += text;
               
-              // 写入 stream.jsonl
-              this.nodeStreamStore.appendToStream(nodeId, {
+              // 写入 skill agent 专属的 stream（agents/{executionId}.jsonl）
+              this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'text',
                 data: { text, skillName: skill.name, skillIndex, cumulativeLength: accumulatedAssistantText.length },
               }).catch(err => console.error('[executeMultiSkillNode] 保存文本失败:', err));
@@ -1030,7 +1039,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               // 更新活动时间
               updateActivityTime();
               
-              this.nodeStreamStore.appendToStream(nodeId, {
+              this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'thinking',
                 data: { text: thinking, skillName: skill.name, skillIndex },
               }).catch(err => console.error('[executeMultiSkillNode] 保存思考失败:', err));
@@ -1039,7 +1048,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               // 更新活动时间
               updateActivityTime();
               
-              this.nodeStreamStore.appendToStream(nodeId, {
+              this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'tool_use',
                 data: { toolUseId, name, args, skillName: skill.name, skillIndex },
               }).catch(err => console.error('[executeMultiSkillNode] 保存工具调用失败:', err));
@@ -1051,13 +1060,13 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               updateActivityTime();
               const resultData = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return {}; } })() : content;
               
-              this.nodeStreamStore.appendToStream(nodeId, {
+              this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'tool_result',
                 data: { toolUseId, content: resultData, isError, skillName: skill.name, skillIndex },
               }).catch(err => console.error('[executeMultiSkillNode] 保存工具结果失败:', err));
             },
             onComplete: () => {
-              this.nodeStreamStore.appendToStream(nodeId, {
+              this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'skill_complete',
                 data: { skillName: skill.name, skillIndex, text: accumulatedAssistantText },
               }).catch(err => console.error('[executeMultiSkillNode] 保存 skill_complete 失败:', err));
@@ -1121,11 +1130,11 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           console.log(`[executeMultiSkillNode] Skill ${skill.name} 被中止`);
           
           // 更新 SkillExecution 为失败
-          await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'failed', skillStartTime, '用户中止');
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, '用户中止');
           
           skillResults.push({
             skillName: skill.name,
-            skillId: skillRecord.id,
+            skillId: skill.skillId,
             executionId,
             status: 'failed',
             text: accumulatedAssistantText,
@@ -1141,11 +1150,11 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         totalIterations += result.iterations;
         
         // 更新 SkillExecution 为完成
-        await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'completed', skillStartTime, accumulatedAssistantText);
+        await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
         
         skillResults.push({
           skillName: skill.name,
-          skillId: skillRecord.id,
+          skillId: skill.skillId,
           executionId,
           status: 'completed',
           text: accumulatedAssistantText,
@@ -1161,11 +1170,11 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         stopProgressMonitor();
         
         // 更新 SkillExecution 为失败
-        await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'failed', skillStartTime, err.message);
+        await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, err.message);
         
         skillResults.push({
           skillName: skill.name,
-          skillId: skillRecord.id,
+          skillId: skill.skillId,
           executionId,
           status: 'failed',
           text: accumulatedAssistantText,
@@ -1574,8 +1583,10 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         }
         
         // 查询匹配这些 vulnerabilityPatternIds 的 Skills
+        // 过滤条件：isActive + isLatest + 技术栈匹配
         const whereClause: any = {
           isActive: true,
+          isLatest: true,  // 必须是最新的版本
           vulnerabilityPatternId: { in: patternIds },
         };
         
@@ -1595,7 +1606,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           },
         });
         
-        console.log(`[getNodeSkills] 查询到 ${skills.length} 个匹配漏洞分类的 Skills`);
+        console.log(`[getNodeSkills] 查询到 ${skills.length} 个匹配漏洞分类的 Skills (isActive + isLatest + 技术栈)`);
         return skills;
       } catch (error) {
         console.error(`[getNodeSkills] 查询失败:`, error);

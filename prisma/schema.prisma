@@ -865,15 +865,18 @@ model SessionMessage {
   id                  String            @id
   evaluationSessionId String
   workflowNodeId      String?
+  skillExecutionId    String?           // 关联到 SkillExecution（skill agent 的消息）
   role                String            // user, assistant, tool_call, tool_result 等
   content             String?           // 消息内容（可选，大内容存储在 JSONL）
   messageRef          String?           // JSONL 文件中的消息 ID（用于从文件读取内容）
   createdAt           DateTime          @default(now())
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+  SkillExecution      SkillExecution?   @relation(fields: [skillExecutionId], references: [id], onDelete: Cascade)
 
   @@index([workflowNodeId])
   @@index([evaluationSessionId])
   @@index([role])
+  @@index([skillExecutionId])
 }
 
 model SessionMeta {
@@ -1085,39 +1088,42 @@ model SkillEvolutionTask {
 }
 
 model SkillExecution {
-  id                 String             @id
-  skillId            String
-  projectId          String
-  evaluationId       String?
-  nodeId             String?
-  scanTaskId         String?
-  input              String
-  output             String?
-  status             String             @default("pending")
-  startedAt          DateTime?
-  completedAt        DateTime?
-  duration           Int?
-  error              String?
-  findingsCount      Int                @default(0)
-  confirmedCount     Int                @default(0)
-  falsePositiveCount Int                @default(0)
-  inputTokens        Int?
-  outputTokens       Int?
-  createdAt          DateTime           @default(now())
-  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id])
-  Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  ScanTask           ScanTask?          @relation(fields: [scanTaskId], references: [id])
-  Vulnerability      Vulnerability[]
+   id                 String             @id
+   skillId            String
+   projectId          String
+   evaluationId       String?
+   nodeId             String?
+   scanTaskId         String?
+   order              Int                @default(0)  // 调用次序
+   input              String
+   output             String?
+   status             String             @default("pending")
+   startedAt          DateTime?
+   completedAt        DateTime?
+   duration           Int?
+   error              String?
+   findingsCount      Int                @default(0)
+   confirmedCount     Int                @default(0)
+   falsePositiveCount Int                @default(0)
+   inputTokens        Int?
+   outputTokens       Int?
+   createdAt          DateTime           @default(now())
+   EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id])
+   Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
+   Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+   ScanTask           ScanTask?          @relation(fields: [scanTaskId], references: [id])
+   Vulnerability      Vulnerability[]
+   SessionMessages    SessionMessage[]   // skill agent 执行产生的消息
 
-  @@index([skillId])
-  @@index([projectId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([evaluationId])
-  @@index([nodeId])
-  @@index([projectId, status])
-  @@index([skillId, status])
+   @@index([skillId])
+   @@index([projectId])
+   @@index([status])
+   @@index([createdAt])
+   @@index([evaluationId])
+   @@index([nodeId])
+   @@index([projectId, status])
+   @@index([skillId, status])
+   @@index([order])
 }
 
 model SkillGovernanceConfig {

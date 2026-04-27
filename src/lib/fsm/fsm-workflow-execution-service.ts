@@ -199,19 +199,44 @@ export class FSMWorkflowExecutionService {
 
       // 1.6 为每个用户节点的 skills 创建 SkillExecution 记录
       // 在评估启动时批量创建，确保每个 skill 都有对应的执行记录
+      const { matchSkillsByCategoryValues } = await import('@/services/skill-matcher');
+      
+      // 查询项目技术栈
+      const project = await prisma.project.findUnique({
+        where: { id: this.config.projectId },
+        select: { techStack: true }
+      });
+      const projectTechStack = project?.techStack ? JSON.parse(project.techStack) : null;
+      
       for (const userNode of userNodes) {
+        const nodeData = userNode.data as Record<string, unknown> | undefined;
+        const mode = (nodeData?.skillLoadingMode as string) || 'description';
+        
+        let nodeSkills: string[] = [];
+        
+        // manual 模式：直接使用 userNode.skills
         if (userNode.skills && userNode.skills.length > 0) {
+          nodeSkills = userNode.skills;
+        }
+        
+        // vulnerability 模式：从 vulnerabilityCategories 查询匹配的 skills
+        if (mode === 'vulnerability' && userNode.vulnerabilityCategories && userNode.vulnerabilityCategories.length > 0) {
+          const matchedIds = await matchSkillsByCategoryValues(userNode.vulnerabilityCategories, projectTechStack);
+          nodeSkills = matchedIds;
+          console.log(`[execute] vulnerability 模式匹配: ${userNode.id} -> ${nodeSkills.length} skills`);
+        }
+        
+        if (nodeSkills.length > 0) {
           try {
             await createSkillExecutionsForNode({
               evaluationId: this.config.evaluationSessionId,
               nodeId: userNode.id,
-              skills: userNode.skills,
+              skills: nodeSkills,
               projectId: this.config.projectId,
             });
-            console.log(`[execute] 为节点 ${userNode.id} 创建了 ${userNode.skills.length} 个 SkillExecution 记录`);
+            console.log(`[execute] 为节点 ${userNode.id} 创建了 ${nodeSkills.length} 个 SkillExecution 记录`);
           } catch (error) {
-            // 批量创建失败则整个评估失败
-            throw new Error(`Failed to create SkillExecutions for node ${userNode.id}: ${error instanceof Error ? error.message : String(error)}`);
+            console.error(`[execute] 为节点 ${userNode.id} 创建 SkillExecution 失败:`, error);
           }
         }
       }

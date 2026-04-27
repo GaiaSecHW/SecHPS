@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { generateId, generateIndexedId } from '@/lib/id-generator';
+import { matchSkillsByCategoryValues } from '@/services/skill-matcher';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/nodes - 获取评估会话的节点执行状态
@@ -38,7 +39,7 @@ export async function GET(
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
       include: {
-        Project: { select: { userId: true, configId: true } },
+        Project: { select: { userId: true, configId: true, techStack: true } },
         NodeExecution: {
           orderBy: { order: 'asc' },
           select: {
@@ -356,7 +357,10 @@ export async function GET(
 
     // 收集所有 skill IDs 并查询 displayName
     const allSkillIds: string[] = [];
+    const vulnerabilityNodeSkills: Record<string, string[]> = {};  // vulnerability 模式节点的 skills
+    
     workflowNodes.forEach((wn: any) => {
+      // manual 模式：从 wn.skills 数组获取
       if (wn.skills && Array.isArray(wn.skills)) {
         wn.skills.forEach((skillId: string) => {
           if (skillId && !allSkillIds.includes(skillId)) {
@@ -364,7 +368,48 @@ export async function GET(
           }
         });
       }
+      
+      // vulnerability 模式：从 vulnerabilityCategories 查询匹配的 skills
+      const nodeData = wn.data;
+      if (nodeData?.skillLoadingMode === 'vulnerability' && wn.vulnerabilityCategories) {
+        let vulnCategories: string[] = [];
+        if (Array.isArray(wn.vulnerabilityCategories)) {
+          // 已经是数组，直接使用
+          vulnCategories = wn.vulnerabilityCategories;
+        } else if (typeof wn.vulnerabilityCategories === 'string') {
+          // 是字符串，需要解析
+          try {
+            vulnCategories = JSON.parse(wn.vulnerabilityCategories);
+          } catch {}
+        }
+        
+        if (vulnCategories.length > 0) {
+          // 将分类存起来，后面异步查询
+          vulnerabilityNodeSkills[wn.id] = vulnCategories;
+        }
+      }
     });
+    
+    // 异步查询 vulnerability 模式的 skills
+    const projectTechStack = evaluation.Project?.techStack 
+      ? JSON.parse(evaluation.Project.techStack) 
+      : null;
+    
+    for (const [nodeId, categories] of Object.entries(vulnerabilityNodeSkills)) {
+      try {
+        const matchedIds = await matchSkillsByCategoryValues(categories, projectTechStack);
+        matchedIds.forEach(skillId => {
+          if (!allSkillIds.includes(skillId)) {
+            allSkillIds.push(skillId);
+          }
+        });
+        // 存储匹配结果，后面构建 skillsDetails 时使用
+        vulnerabilityNodeSkills[nodeId] = matchedIds;
+      } catch (e) {
+        logger.warn(LOG_MODULES.EVALUATION, 'vulnerability 模式 skills 匹配失败:', { details: { nodeId, error: String(e) } });
+        vulnerabilityNodeSkills[nodeId] = [];
+      }
+    }
 
     // 批量查询 Skill 表获取 displayName
     const skillDetailsMap: Record<string, { id: string; name: string; displayName: string }> = {};
@@ -383,7 +428,7 @@ export async function GET(
     }
 
     // 查询 SkillExecution 获取每个节点的 skill 执行状态
-    const skillExecutionsByNode: Record<string, Record<string, { status: string; startedAt: string | null; completedAt: string | null }>> = {};
+    const skillExecutionsByNode: Record<string, Record<string, { id: string; status: string; order: number; startedAt: string | null; completedAt: string | null }>> = {};
     if (allSkillIds.length > 0 && evaluation.id) {
       const skillExecutions = await prisma.skillExecution.findMany({
         where: {
@@ -391,12 +436,15 @@ export async function GET(
           nodeId: { not: null },
         },
         select: {
+          id: true,
           skillId: true,
           nodeId: true,
           status: true,
+          order: true,  // 调用次序
           startedAt: true,
           completedAt: true,
         },
+        orderBy: { order: 'asc' },  // 按调用次序排序
       });
       
       skillExecutions.forEach(exec => {
@@ -405,7 +453,9 @@ export async function GET(
             skillExecutionsByNode[exec.nodeId] = {};
           }
           skillExecutionsByNode[exec.nodeId][exec.skillId] = {
+            id: exec.id,
             status: exec.status,
+            order: exec.order,
             startedAt: exec.startedAt?.toISOString() || null,
             completedAt: exec.completedAt?.toISOString() || null,
           };
@@ -430,24 +480,46 @@ export async function GET(
         const exec = executionMap.get(wn.id);
         const modelFromRole = roleModelConfig[wn.roleId] || null;
         
-        // 构建 skillsDetails 数组（包含执行状态）
-        const nodeSkillExecutions = skillExecutionsByNode[wn.id] || {};
-        const skillsDetails = wn.skills && Array.isArray(wn.skills)
-          ? wn.skills
-              .map((skillId: string) => {
-                const skillDetail = skillDetailsMap[skillId];
-                if (!skillDetail) return undefined;
-                const execStatus = nodeSkillExecutions[skillId];
-                return {
-                  ...skillDetail,
-                  executionStatus: execStatus?.status || 'pending',
-                  executionStartedAt: execStatus?.startedAt || null,
-                  executionCompletedAt: execStatus?.completedAt || null,
-                };
-              })
-              .filter((s: any) => s !== undefined)
-          : [];
+        // 直接从 SkillExecution 构建 skillsDetails（按 order 排序）
+        const nodeSkillExecutions = (skillExecutionsByNode[wn.id] 
+          ? Object.entries(skillExecutionsByNode[wn.id])
+              .map(([skillId, execStatus]) => ({
+                skillId,
+                ...execStatus,
+              }))
+              .sort((a, b) => a.order - b.order)
+          : []);
+        
+        // 构建 skillsDetails
+        const skillsDetails = nodeSkillExecutions
+          .map(execStatus => {
+            const skillDetail = skillDetailsMap[execStatus.skillId];
+            if (!skillDetail) return undefined;
+            return {
+              ...skillDetail,
+              executionId: execStatus.id,
+              executionOrder: execStatus.order,
+              executionStatus: execStatus.status,
+              executionStartedAt: execStatus.startedAt,
+              executionCompletedAt: execStatus.completedAt,
+            };
+          })
+          .filter((s: any) => s !== undefined);
 
+        // 解析 vulnerabilityCategories 为数组（前端需要）
+        let parsedVulnerabilityCategories: string[] = [];
+        if (wn.vulnerabilityCategories) {
+          if (Array.isArray(wn.vulnerabilityCategories)) {
+            // 已经是数组，直接使用
+            parsedVulnerabilityCategories = wn.vulnerabilityCategories;
+          } else if (typeof wn.vulnerabilityCategories === 'string') {
+            // 是字符串，需要解析
+            try {
+              parsedVulnerabilityCategories = JSON.parse(wn.vulnerabilityCategories);
+            } catch {}
+          }
+        }
+        
         return {
           id: wn.id,
           workflowNodeId: wn.id,
@@ -458,10 +530,10 @@ export async function GET(
           roleColor: wn.roleColor,
           fsmPhase: wn.fsmPhase,
           fsmOrder: wn.fsmOrder ?? index,
-          skills: wn.skills,
+          skills: skillsDetails.map((s: any) => s.id),  // 从 skillsDetails 提取 skillId 列表
           skillsDetails,
           skillLoadingMode: wn.data?.skillLoadingMode || null,
-          vulnerabilityCategories: wn.vulnerabilityCategories,
+          vulnerabilityCategories: parsedVulnerabilityCategories,  // 返回解析后的数组
           // 执行状态
           status: exec?.status || 'pending',
           skipped: exec?.skipped || false,

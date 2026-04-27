@@ -12,6 +12,7 @@ import { mkdir, access, rm } from 'fs/promises';
 import { join } from 'path';
 import { createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
 import { generateNodeList } from '@/lib/workflow/node-list-generator';
+import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import type { UnifiedExecutionCallbacks } from '@/lib/workflow/types';
 
 const LOG_PREFIX = '[StartEvaluation]';
@@ -128,6 +129,14 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
       console.log(`${LOG_PREFIX} 权限规则: ${toolPermissions.map(p => `${p.toolPattern}:${p.permission}`).join(', ')}`);
     }
 
+    // Step 3.6: 加载 MCP Servers 配置
+    const userId = evaluation.Project?.User?.id;
+    const mcpServers = userId ? await loadMcpServersForProject(projectId, userId) : [];
+    console.log(`${LOG_PREFIX} MCP Servers 配置: ${mcpServers.length} 个`);
+    if (mcpServers.length > 0) {
+      console.log(`${LOG_PREFIX} MCP Servers: ${mcpServers.map(m => m.name).join(', ')}`);
+    }
+
     // Step 4: 获取工作流信息
     const workflowId = evaluation.workflowId;
     if (!workflowId) {
@@ -227,7 +236,13 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
         workflowId,
         projectPath || '',
         modelConfig,
-        globalConfig
+        globalConfig,
+        mcpServers,
+        toolPermissions.map(p => ({
+          toolPattern: p.toolPattern,
+          permission: p.permission,
+          description: p.description || undefined,
+        }))
       );
     }
 
@@ -612,9 +627,12 @@ async function executeDAGBackground(
   workflowId: string,
   projectPath: string,
   modelConfig: any,
-  globalConfig: any
+  globalConfig: any,
+  mcpServers: any[],
+  toolPermissions: any[]
 ): Promise<void> {
   console.log(`${LOG_PREFIX} [DAG-Background] 开始 DAG 执行...`);
+  console.log(`${LOG_PREFIX} [DAG-Background] MCP Servers: ${mcpServers.length} 个`);
 
   try {
     // Step 1: 获取 WorkflowNode 定义
@@ -809,7 +827,8 @@ async function executeDAGBackground(
       workflowType: 'dag',
       workspacePath: projectPath,
       defaultModelConfig: modelConfigForExecution,
-      mcpServers: [],
+      mcpServers,  // MCP Servers 配置（从数据库加载）
+      toolPermissions,  // 工具权限配置
       systemPrompt: globalConfig.customSystemPrompt,
       maxIterationsPerNode: 10,
       maxRetries: 15,

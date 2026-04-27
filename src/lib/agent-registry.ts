@@ -1,27 +1,31 @@
 /**
  * 运行中的 Agent 注册表
  * 
- * 用于跟踪正在运行的 Ralph Loop Agent 实例，
+ * 用于跟踪正在运行的 Agent 实例（RalphLoopAgent 和 UnifiedExecutionEngine），
  * 以便在需要时能够中止它们。
  */
 
 import { RalphLoopAgent } from '@/services/evaluation';
+import { UnifiedWorkflowExecutionEngine } from '@/lib/workflow/unified-execution-engine';
+
+// Agent 类型定义（支持多种 agent）
+type AgentType = RalphLoopAgent | UnifiedWorkflowExecutionEngine;
 
 // 使用 Map 存储运行中的 agent，key 是 evaluationSessionId
-const runningAgents = new Map<string, RalphLoopAgent>();
+const runningAgents = new Map<string, AgentType>();
 
 /**
- * 注册一个运行中的 agent
+ * 注册一个运行中的 agent（支持 RalphLoopAgent 或 UnifiedExecutionEngine）
  */
-export function registerAgent(evaluationId: string, agent: RalphLoopAgent): void {
+export function registerAgent(evaluationId: string, agent: AgentType): void {
   runningAgents.set(evaluationId, agent);
-  console.log(`[AgentRegistry] 注册 agent: ${evaluationId}, 当前数量: ${runningAgents.size}`);
+  console.log(`[AgentRegistry] 注册 agent: ${evaluationId}, 类型: ${agent.constructor.name}, 当前数量: ${runningAgents.size}`);
 }
 
 /**
  * 获取 agent
  */
-export function getAgent(evaluationId: string): RalphLoopAgent | undefined {
+export function getAgent(evaluationId: string): AgentType | undefined {
   return runningAgents.get(evaluationId);
 }
 
@@ -43,7 +47,8 @@ export function removeAgent(evaluationId: string): boolean {
 export function abortAgent(evaluationId: string): boolean {
   const agent = runningAgents.get(evaluationId);
   if (agent) {
-    console.log(`[AgentRegistry] 中止 agent: ${evaluationId}`);
+    console.log(`[AgentRegistry] 中止 agent: ${evaluationId}, 类型: ${agent.constructor.name}`);
+    // UnifiedExecutionEngine 和 RalphLoopAgent 都有 abort() 方法
     agent.abort();
     runningAgents.delete(evaluationId);
     return true;
