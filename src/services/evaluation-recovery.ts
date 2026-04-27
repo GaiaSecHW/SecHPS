@@ -249,10 +249,18 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     return null;
   }
   
-  // 所有节点 pending -> 不需要恢复（可能是刚启动）
+  // 所有节点 pending -> 从头启动评估
   if (statusCounts.pending === nodeExecutions.length) {
-    logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 所有节点 pending，可能是刚启动`);
-    return null;
+    console.log(`${LOG_PREFIX} 评估 ${evaluation.id} 所有节点 pending，从头启动`);
+    return {
+      evaluationId: evaluation.id,
+      projectId: evaluation.projectId,
+      workflowType: evaluation.workflowType as 'fsm' | 'custom',
+      lastCompletedNodeIndex: -1,
+      nextNodeToExecute: 0,
+      totalNodes: nodeExecutions.length,
+      recoveryReason: `从头启动评估`,
+    };
   }
   
   // 有 running 状态的节点 -> 需要恢复（节点执行中断）
@@ -590,22 +598,58 @@ async function recoverEvaluation(
       console.log(`${LOG_RECOVER}   recoveryResult.success: ${recoveryResult.success}`);
       console.log(`${LOG_RECOVER}   recoveryResult.error: ${recoveryResult.error || '无'}`);
       
-      if (recoveryResult.success) {
+if (recoveryResult.success) {
         console.log(`${LOG_RECOVER} ✅ opencodeSessionId 恢复对话成功`);
         return { success: true };
       } else {
         console.log(`${LOG_RECOVER} ❌ opencodeSessionId 恢复对话失败: ${recoveryResult.error}`);
-        console.log(`${LOG_RECOVER} 继续使用节点重新执行方式恢复`);
+        console.log(`${LOG_RECOVER} 从头启动评估`);
+        
+        // 解锁项目
+        await unlockProject(projectId);
+        
+        // 改状态为 queued
+        await prisma.evaluationSession.update({
+          where: { id: evaluation.id },
+          data: {
+            status: 'queued',
+            lastActivity: new Date(),
+          },
+        });
+        
+        // 调用 startQueuedEvaluation 从头启动
+        const { startQueuedEvaluation } = await import('@/services/start-evaluation');
+        const startResult = await startQueuedEvaluation(evaluation.id);
+        
+        console.log(`${LOG_RECOVER} startQueuedEvaluation 结果: ${startResult.success}`);
+        
+        return { success: startResult.success, error: startResult.error };
       }
     } else {
       console.log(`${LOG_RECOVER} ⚠️ 没有找到有 opencodeSessionId 的 running 节点`);
-    }
-    
-    // 6. 根据工作流类型恢复执行（节点重新执行方式）
-    if (workflow.workflowType === 'fsm') {
-      return await recoverFSMEvaluation(evaluation, recoveryStatus, modelConfig, mcpServers);
-    } else {
-      return await recoverDAGEvaluation(evaluation, recoveryStatus, modelConfig, mcpServers);
+      
+      // 从头启动评估
+      console.log(`${LOG_RECOVER} 从头启动评估: 改状态为 queued，调用 startQueuedEvaluation`);
+      
+      // 解锁项目（startQueuedEvaluation 会重新锁定）
+      await unlockProject(projectId);
+      
+      // 改状态为 queued
+      await prisma.evaluationSession.update({
+        where: { id: evaluation.id },
+        data: {
+          status: 'queued',
+          lastActivity: new Date(),
+        },
+      });
+      
+      // 调用 startQueuedEvaluation 从头启动
+      const { startQueuedEvaluation } = await import('@/services/start-evaluation');
+      const startResult = await startQueuedEvaluation(evaluation.id);
+      
+      console.log(`${LOG_RECOVER} startQueuedEvaluation 结果: ${startResult.success}`);
+      
+      return { success: startResult.success, error: startResult.error };
     }
     
   } catch (error) {
