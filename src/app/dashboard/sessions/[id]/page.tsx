@@ -164,6 +164,7 @@ function SessionDetailContent({
   const [showAllChildMessages, setShowAllChildMessages] = useState(false);
   const [expandedToolResults, setExpandedToolResults] = useState<Set<string>>(new Set());
   const [expandedChildMessages, setExpandedChildMessages] = useState<Set<string>>(new Set());
+  const [expandedSkillDirectories, setExpandedSkillDirectories] = useState<Set<string>>(new Set());
   const [injectedExperiences, setInjectedExperiences] = useState<{ id: string; title: string; errorCategory: string; hitCount: number }[]>([]);
   const [experienceInjectionChecked, setExperienceInjectionChecked] = useState(false);
   
@@ -1289,7 +1290,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                   </div>
                 )}
                 
-                {isNodesExpanded && (
+{isNodesExpanded && (
                   <div className="space-y-2">
                     {workflowNodes.map((node: any, index: number) => {
                       // 计算执行时长
@@ -1310,10 +1311,39 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       const config = statusConfig[actualStatus] || statusConfig.pending;
                       const StatusIcon = config.icon;
                       
+                      // 检测是否是目录节点（多 skill 节点）
+                      const isDirectoryNode = node.skillLoadingMode && 
+                        ['vulnerability', 'manual'].includes(node.skillLoadingMode) && 
+                        node.skills && node.skills.length > 1;
+                      
+                      // 计算目录节点的整体进度
+                      const directoryProgress = isDirectoryNode && node.skillsDetails ? {
+                        total: node.skillsDetails.length,
+                        completed: node.skillsDetails.filter((s: any) => s.executionStatus === 'completed').length,
+                        running: node.skillsDetails.filter((s: any) => s.executionStatus === 'running').length,
+                        pending: node.skillsDetails.filter((s: any) => s.executionStatus === 'pending').length,
+                        failed: node.skillsDetails.filter((s: any) => s.executionStatus === 'failed').length,
+                      } : null;
+                      
+                      // 目录节点是否展开
+                      const isDirectoryExpanded = expandedSkillDirectories.has(node.id);
+                      
+                      // 切换目录展开状态
+                      const toggleDirectoryExpand = (e: React.MouseEvent) => {
+                        e.stopPropagation();
+                        const newSet = new Set(expandedSkillDirectories);
+                        if (newSet.has(node.id)) {
+                          newSet.delete(node.id);
+                        } else {
+                          newSet.add(node.id);
+                        }
+                        setExpandedSkillDirectories(newSet);
+                      };
+                      
                       return (
                         <div 
                           key={node.id || `node-${index}`} 
-                          className={`p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                          className={`p-3 rounded-lg border transition-all duration-200 ${
                             selectedNodeId === node.id 
                               ? 'bg-blue-100 border-blue-400 ring-2 ring-blue-300' 
                               : `${config.bg} ${config.border}`
@@ -1326,24 +1356,39 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                               {/* 状态图标 */}
                               <StatusIcon size={18} className={config.color} />
                               
+                              {/* 目录节点展开/收缩按钮 */}
+                              {isDirectoryNode && (
+                                <button
+                                  onClick={toggleDirectoryExpand}
+                                  className="p-1 hover:bg-gray-200 rounded transition-colors"
+                                  title={isDirectoryExpanded ? '收缩' : '展开'}
+                                >
+                                  {isDirectoryExpanded ? (
+                                    <ChevronDown size={16} className="text-gray-600" />
+                                  ) : (
+                                    <ChevronRight size={16} className="text-gray-600" />
+                                  )}
+                                </button>
+                              )}
+                              
                               {/* 节点信息 */}
                               <div className="flex-1">
-<div className="flex items-center gap-2">
-                                   <span className="text-sm font-medium text-gray-900">
-                                     {node.label || `节点 ${index + 1}`}
-                                   </span>
-                                   {/* 跳过标记 */}
-                                   {node.skipped && (
-                                     <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-300">
-                                       跳过
-                                     </span>
-                                   )}
-                                   {/* FSM 阶段编号 */}
-                                   {node.fsmPhase && (
-                                     <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                                       Phase {node.fsmPhase}
-                                     </span>
-                                   )}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {node.label || `节点 ${index + 1}`}
+                                  </span>
+                                  {/* 跳过标记 */}
+                                  {node.skipped && (
+                                    <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-300">
+                                      跳过
+                                    </span>
+                                  )}
+                                  {/* FSM 阶段编号 */}
+                                  {node.fsmPhase && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                      Phase {node.fsmPhase}
+                                    </span>
+                                  )}
                                   {/* 角色标签 */}
                                   {node.roleName && (
                                     <span 
@@ -1357,6 +1402,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                       {node.roleName}
                                     </span>
                                   )}
+                                  {/* 目录节点进度 */}
+                                  {isDirectoryNode && directoryProgress && !isDirectoryExpanded && (
+                                    <span className="text-xs text-gray-500">
+                                      已完成 {directoryProgress.completed} / {directoryProgress.total}
+                                    </span>
+                                  )}
                                 </div>
                                 
                                 {/* 详细信息 */}
@@ -1368,7 +1419,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                     </span>
                                   )}
                                   {/* Skills */}
-                                  {node.skills && node.skills.length > 0 && (
+                                  {!isDirectoryNode && node.skills && node.skills.length > 0 && (
                                     <span className="text-gray-400">
                                       Skills: {node.skills.length}
                                     </span>
@@ -1388,6 +1439,31 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                     <span>输出: {formatTokenNumber(node.outputTokens)}</span>
                                   )}
                                 </div>
+                                
+                                {/* 目录节点展开后的 skill 列表 */}
+                                {isDirectoryNode && isDirectoryExpanded && node.skillsDetails && (
+                                  <div className="mt-2 pl-4 space-y-1">
+                                    {node.skillsDetails.map((skill: any, skillIndex: number) => {
+                                      const skillStatus = skill.executionStatus || 'pending';
+                                      const skillStatusConfig = statusConfig[skillStatus as keyof typeof statusConfig] || statusConfig.pending;
+                                      const SkillStatusIcon = skillStatusConfig.icon;
+                                      return (
+                                        <div 
+                                          key={skill.id || `skill-${skillIndex}`}
+                                          className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-gray-50"
+                                        >
+                                          <SkillStatusIcon size={14} className={skillStatusConfig.color} />
+                                          <span className="text-gray-700">
+                                            {skill.displayName || skill.name || `Skill ${skillIndex + 1}`}
+                                          </span>
+                                          <span className={`ml-auto ${skillStatusConfig.color}`}>
+                                            {skillStatusConfig.label}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
                               </div>
                             </div>
                             
@@ -1404,12 +1480,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                 </span>
                               )}
                             </div>
-                           </div>
-                         </div>
-                       );
-                     })}
-                   </div>
-                 )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
                </div>
              )}
 

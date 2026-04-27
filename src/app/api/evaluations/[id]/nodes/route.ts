@@ -382,6 +382,37 @@ export async function GET(
       });
     }
 
+    // 查询 SkillExecution 获取每个节点的 skill 执行状态
+    const skillExecutionsByNode: Record<string, Record<string, { status: string; startedAt: string | null; completedAt: string | null }>> = {};
+    if (allSkillIds.length > 0 && evaluation.id) {
+      const skillExecutions = await prisma.skillExecution.findMany({
+        where: {
+          evaluationId: evaluation.id,
+          nodeId: { not: null },
+        },
+        select: {
+          skillId: true,
+          nodeId: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+        },
+      });
+      
+      skillExecutions.forEach(exec => {
+        if (exec.nodeId) {
+          if (!skillExecutionsByNode[exec.nodeId]) {
+            skillExecutionsByNode[exec.nodeId] = {};
+          }
+          skillExecutionsByNode[exec.nodeId][exec.skillId] = {
+            status: exec.status,
+            startedAt: exec.startedAt?.toISOString() || null,
+            completedAt: exec.completedAt?.toISOString() || null,
+          };
+        }
+      });
+    }
+
     // 合并节点配置和执行状态
     // 如果有 workflowNodes，则基于 workflowNodes 显示所有节点
     // 否则，只显示 NodeExecution 记录
@@ -399,10 +430,21 @@ export async function GET(
         const exec = executionMap.get(wn.id);
         const modelFromRole = roleModelConfig[wn.roleId] || null;
         
-        // 构建 skillsDetails 数组
+        // 构建 skillsDetails 数组（包含执行状态）
+        const nodeSkillExecutions = skillExecutionsByNode[wn.id] || {};
         const skillsDetails = wn.skills && Array.isArray(wn.skills)
           ? wn.skills
-              .map((skillId: string) => skillDetailsMap[skillId])
+              .map((skillId: string) => {
+                const skillDetail = skillDetailsMap[skillId];
+                if (!skillDetail) return undefined;
+                const execStatus = nodeSkillExecutions[skillId];
+                return {
+                  ...skillDetail,
+                  executionStatus: execStatus?.status || 'pending',
+                  executionStartedAt: execStatus?.startedAt || null,
+                  executionCompletedAt: execStatus?.completedAt || null,
+                };
+              })
               .filter((s: any) => s !== undefined)
           : [];
 
@@ -418,6 +460,7 @@ export async function GET(
           fsmOrder: wn.fsmOrder ?? index,
           skills: wn.skills,
           skillsDetails,
+          skillLoadingMode: wn.data?.skillLoadingMode || null,
           vulnerabilityCategories: wn.vulnerabilityCategories,
           // 执行状态
           status: exec?.status || 'pending',
