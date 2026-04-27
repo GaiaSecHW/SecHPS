@@ -24,6 +24,7 @@ import { loadFSMSkill } from './fsm-skill-loader';
 import { loadMcpServersForProject } from '@/lib/mcp-loader';
 import { generateIndexedId } from '@/lib/id-generator';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { createSkillExecutionsForNode } from '@/services/skill-execution-tracker';
 import type { FSMTemplate } from '@prisma/client';
 
 // FSM 验证结果
@@ -195,6 +196,25 @@ export class FSMWorkflowExecutionService {
       // 用户在编排界面添加的 task 节点，应该在渗透测试阶段执行
       const userNodes = await this.loadUserNodes();
       console.log(`[execute] 加载用户添加节点: ${userNodes.length} 个`);
+
+      // 1.6 为每个用户节点的 skills 创建 SkillExecution 记录
+      // 在评估启动时批量创建，确保每个 skill 都有对应的执行记录
+      for (const userNode of userNodes) {
+        if (userNode.skills && userNode.skills.length > 0) {
+          try {
+            await createSkillExecutionsForNode({
+              evaluationId: this.config.evaluationSessionId,
+              nodeId: userNode.id,
+              skills: userNode.skills,
+              projectId: this.config.projectId,
+            });
+            console.log(`[execute] 为节点 ${userNode.id} 创建了 ${userNode.skills.length} 个 SkillExecution 记录`);
+          } catch (error) {
+            // 批量创建失败则整个评估失败
+            throw new Error(`Failed to create SkillExecutions for node ${userNode.id}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+      }
 
       // 2. 加载 Skill 内容到 workspace
       if (this.fsmTemplate.skillPath) {

@@ -135,6 +135,63 @@ export async function createSkillExecutionsForEvaluation(params: {
 }
 
 /**
+ * 为单个节点批量创建 Skill 执行记录（pending 状态）
+ * 用于评估启动时为每个节点的每个 skill 创建 SkillExecution 记录
+ * 
+ * @param evaluationId 评估会话 ID
+ * @param nodeId 节点 ID
+ * @param skills Skill.id 数组
+ * @param projectId 项目 ID
+ * @returns 创建的执行记录 ID 数组
+ * @throws 如果批量创建失败则抛出异常
+ */
+export async function createSkillExecutionsForNode(params: {
+  evaluationId: string;
+  nodeId: string;
+  skills: string[];
+  projectId: string;
+}): Promise<string[]> {
+  const { evaluationId, nodeId, skills, projectId } = params;
+  
+  if (!skills || skills.length === 0) {
+    console.log(`[SkillExecution] 节点 ${nodeId} 没有 skills，跳过创建`);
+    return [];
+  }
+
+  const executionIds: string[] = [];
+
+  try {
+    // 使用 $transaction 批量创建，确保原子性
+    await prisma.$transaction(
+      skills.map((skillId, index) => {
+        // ID 格式: sklexec-{evaluationId}-{nodeId}-{skillId}-{index}
+        const executionId = `sklexec-${evaluationId}-${nodeId}-${skillId}-${index}`;
+        executionIds.push(executionId);
+
+        return prisma.skillExecution.create({
+          data: {
+            id: executionId,
+            skillId,
+            projectId,
+            evaluationId,
+            nodeId,  // 设置 nodeId 字段
+            input: JSON.stringify({ mode: 'node_execution', nodeId }),
+            status: 'pending',  // 初始状态为 pending
+          },
+        });
+      })
+    );
+
+    console.log(`[SkillExecution] 为节点 ${nodeId} 批量创建 ${executionIds.length} 个 pending 执行记录`);
+    return executionIds;
+  } catch (error) {
+    console.error(`[SkillExecution] 为节点 ${nodeId} 批量创建执行记录失败`, error);
+    // 批量创建失败则整个评估失败（抛出异常）
+    throw new Error(`Failed to create SkillExecutions for node ${nodeId}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
  * 获取评估会话的 Skill 执行记录
  * 按 skillId 去重，只保留每个 skill 的最新记录
  */
