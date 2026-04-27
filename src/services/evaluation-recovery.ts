@@ -644,7 +644,7 @@ async function recoverDAGEvaluation(
       projectId: evaluation.projectId,
       projectName: project.name,
       workflowId: workflow.id,
-      workflowType: 'dag' as const,
+      workflowType: 'custom' as const,  // DAG 使用 'custom' 类型
       workspacePath: project.projectPath || '',
       defaultModelConfig: modelConfig,
       mcpServers: mcpServers || undefined,
