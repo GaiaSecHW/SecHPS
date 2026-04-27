@@ -10,6 +10,7 @@ import {
   EyeOff,
   CheckCircle,
   XCircle,
+  X,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -28,9 +29,14 @@ interface PromptsResponse {
   total: number;
 }
 
-export function PromptManager() {
+interface PromptManagerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps) {
   const [prompts, setPrompts] = useState<EvolutionPrompt[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editContent, setEditContent] = useState<string>('');
   const [editActive, setEditActive] = useState<boolean>(true);
@@ -61,13 +67,16 @@ export function PromptManager() {
   };
 
   useEffect(() => {
-    fetchPrompts();
-  }, []);
+    if (isOpen) {
+      fetchPrompts();
+    }
+  }, [isOpen]);
 
   const handleEdit = (prompt: EvolutionPrompt) => {
     setEditingKey(prompt.promptKey);
     setEditContent(prompt.content);
     setEditActive(prompt.isActive);
+    setExpandedKey(null); // 关闭展开状态
   };
 
   const handleCancelEdit = () => {
@@ -137,170 +146,209 @@ export function PromptManager() {
 
   const toggleExpand = (promptKey: string) => {
     setExpandedKey(expandedKey === promptKey ? null : promptKey);
+    setEditingKey(null); // 关闭编辑状态
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center py-8">
-        <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
+  if (!isOpen) return null;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200">
-      {/* Header */}
-      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-900">LLM 提示词配置</h2>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">
-            {prompts.length} 个提示词
-          </span>
-          <button
-            onClick={handleSeed}
-            className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
-          >
-            <RefreshCw size={16} className="mr-1" />
-            初始化默认值
-          </button>
-        </div>
-      </div>
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50" 
+        onClick={onClose}
+      />
+      
+      {/* Modal */}
+      <div className="relative min-h-screen flex items-center justify-center p-4">
+        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileText className="h-6 w-6 text-gray-600" />
+              <h2 className="text-xl font-semibold text-gray-900">LLM 提示词配置</h2>
+              <span className="text-sm text-gray-500">
+                {prompts.length} 个提示词
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleSeed}
+                disabled={loading}
+                className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={`mr-1 ${loading ? 'animate-spin' : ''}`} />
+                初始化默认值
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+              >
+                <X size={20} />
+              </button>
+            </div>
+          </div>
 
-      {/* Prompt List */}
-      <div className="divide-y divide-gray-100">
-        {prompts.map((prompt) => (
-          <div key={prompt.promptKey} className="p-4">
-            {/* Header Row */}
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium text-gray-900">{prompt.displayName}</h3>
-                  {prompt.isActive ? (
-                    <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full flex items-center gap-1">
-                      <CheckCircle size={12} />
-                      已启用
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full flex items-center gap-1">
-                      <XCircle size={12} />
-                      使用默认
-                    </span>
-                  )}
-                </div>
-                {prompt.description && (
-                  <p className="text-sm text-gray-500 mt-1">{prompt.description}</p>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  Key: {prompt.promptKey}
-                </p>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6">
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <LoadingSpinner size="lg" />
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleExpand(prompt.promptKey)}
-                  className="inline-flex items-center px-2 py-1 text-sm text-gray-600 hover:text-gray-900"
-                >
-                  {expandedKey === prompt.promptKey ? (
-                    <EyeOff size={16} />
-                  ) : (
-                    <Eye size={16} />
-                  )}
-                  {expandedKey === prompt.promptKey ? '收起' : '查看'}
-                </button>
-                <button
-                  onClick={() => handleEdit(prompt)}
-                  className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
-                >
-                  编辑
-                </button>
+            ) : (
+              <div className="space-y-4">
+                {prompts.map((prompt) => (
+                  <div key={prompt.promptKey} className="border border-gray-200 rounded-lg p-4">
+                    {/* Header Row */}
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-gray-900">{prompt.displayName}</h3>
+                          {prompt.isActive ? (
+                            <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full flex items-center gap-1">
+                              <CheckCircle size={12} />
+                              已启用
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full flex items-center gap-1">
+                              <XCircle size={12} />
+                              使用默认
+                            </span>
+                          )}
+                        </div>
+                        {prompt.description && (
+                          <p className="text-sm text-gray-500 mt-1">{prompt.description}</p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          Key: {prompt.promptKey}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleExpand(prompt.promptKey)}
+                          className="inline-flex items-center px-2 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded"
+                        >
+                          {expandedKey === prompt.promptKey ? (
+                            <EyeOff size={16} className="mr-1" />
+                          ) : (
+                            <Eye size={16} className="mr-1" />
+                          )}
+                          {expandedKey === prompt.promptKey ? '收起' : '查看'}
+                        </button>
+                        <button
+                          onClick={() => handleEdit(prompt)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                        >
+                          编辑
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Expanded Content (View Mode) */}
+                    {expandedKey === prompt.promptKey && editingKey !== prompt.promptKey && (
+                      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                        <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono overflow-auto max-h-64">
+                          {prompt.content}
+                        </pre>
+                      </div>
+                    )}
+
+                    {/* Edit Mode */}
+                    {editingKey === prompt.promptKey && (
+                      <div className="mt-3 space-y-3">
+                        <div className="flex items-center gap-3">
+                          <label className="flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={editActive}
+                              onChange={(e) => setEditActive(e.target.checked)}
+                              className="rounded border-gray-300"
+                            />
+                            启用此提示词（启用后覆盖代码默认值）
+                          </label>
+                        </div>
+                        <textarea
+                          value={editContent}
+                          onChange={(e) => setEditContent(e.target.value)}
+                          rows={10}
+                          className="w-full p-3 text-sm font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder="输入提示词内容..."
+                        />
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-gray-500">
+                            使用 {'{{placeholder}}'} 占位符可动态替换内容
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleCancelEdit}
+                              className="px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900"
+                            >
+                              取消
+                            </button>
+                            <button
+                              onClick={() => handleSave(prompt.promptKey)}
+                              disabled={saving}
+                              className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {saving ? (
+                                <LoadingSpinner size="sm" />
+                              ) : (
+                                <Save size={16} className="mr-1" />
+                              )}
+                              保存
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Footer - Help Section */}
+          <div className="px-6 py-3 bg-blue-50 border-t border-blue-100">
+            <h4 className="text-sm font-medium text-blue-900 mb-2">占位符说明</h4>
+            <div className="grid grid-cols-2 gap-4 text-xs text-blue-800">
+              <div>
+                <p className="font-medium">平衡分析模板:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li><code className="bg-blue-100 px-1 rounded">{'{{SKILL_CONTENT}}'}</code> - Skill 定义内容</li>
+                  <li><code className="bg-blue-100 px-1 rounded">{'{{FALSE_POSITIVE_CASES}}'}</code> - 误报案例列表</li>
+                  <li><code className="bg-blue-100 px-1 rounded">{'{{CONFIRMED_CASES}}'}</code> - 正确发现案例列表</li>
+                </ul>
+              </div>
+              <div>
+                <p className="font-medium">改进生成模板:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li><code className="bg-blue-100 px-1 rounded">{'{{SKILL_CONTENT}}'}</code> - 原 Skill 内容</li>
+                  <li><code className="bg-blue-100 px-1 rounded">{'{{FALSE_POSITIVE_PATTERNS}}'}</code> - 误报模式</li>
+                  <li><code className="bg-blue-100 px-1 rounded">{'{{RECOMMENDATIONS}}'}</code> - 改进建议</li>
+                </ul>
               </div>
             </div>
-
-            {/* Expanded Content (View Mode) */}
-            {expandedKey === prompt.promptKey && editingKey !== prompt.promptKey && (
-              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono overflow-auto max-h-96">
-                  {prompt.content}
-                </pre>
-              </div>
-            )}
-
-            {/* Edit Mode */}
-            {editingKey === prompt.promptKey && (
-              <div className="mt-3 space-y-3">
-                <div className="flex items-center gap-3">
-                  <label className="flex items-center gap-2 text-sm text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={editActive}
-                      onChange={(e) => setEditActive(e.target.checked)}
-                      className="rounded border-gray-300"
-                    />
-                    启用此提示词（启用后覆盖代码默认值）
-                  </label>
-                </div>
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  rows={12}
-                  className="w-full p-3 text-sm font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="输入提示词内容..."
-                />
-                <div className="flex items-center justify-between">
-                  <p className="text-xs text-gray-500">
-                    使用 {'{{placeholder}}'} 占位符可动态替换内容
-                  </p>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleCancelEdit}
-                      className="px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900"
-                    >
-                      取消
-                    </button>
-                    <button
-                      onClick={() => handleSave(prompt.promptKey)}
-                      disabled={saving}
-                      className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {saving ? (
-                        <LoadingSpinner size="sm" />
-                      ) : (
-                        <Save size={16} className="mr-1" />
-                      )}
-                      保存
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Help Section */}
-      <div className="px-4 py-3 bg-blue-50 border-t border-blue-100">
-        <h4 className="text-sm font-medium text-blue-900 mb-2">占位符说明</h4>
-        <div className="grid grid-cols-2 gap-2 text-xs text-blue-800">
-          <div>
-            <p className="font-medium">平衡分析模板:</p>
-            <ul className="list-disc list-inside space-y-0.5">
-              <li><code className="bg-blue-100 px-1 rounded">{'{{SKILL_CONTENT}}'}</code> - Skill 定义内容</li>
-              <li><code className="bg-blue-100 px-1 rounded">{'{{FALSE_POSITIVE_CASES}}'}</code> - 误报案例列表</li>
-              <li><code className="bg-blue-100 px-1 rounded">{'{{CONFIRMED_CASES}}'}</code> - 正确发现案例列表</li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-medium">改进生成模板:</p>
-            <ul className="list-disc list-inside space-y-0.5">
-              <li><code className="bg-blue-100 px-1 rounded">{'{{SKILL_CONTENT}}'}</code> - 原 Skill 内容</li>
-              <li><code className="bg-blue-100 px-1 rounded">{'{{FALSE_POSITIVE_PATTERNS}}'}</code> - 误报模式</li>
-              <li><code className="bg-blue-100 px-1 rounded">{'{{RECOMMENDATIONS}}'}</code> - 改进建议</li>
-            </ul>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// 导出一个触发按钮组件
+export function PromptManagerButton() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+      >
+        <FileText size={16} className="mr-1" />
+        提示词配置
+      </button>
+      <PromptManagerModal isOpen={isOpen} onClose={() => setIsOpen(false)} />
+    </>
   );
 }

@@ -27,7 +27,7 @@ import { AdminGuard } from '@/components/PermissionGuard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Alert } from '@/components/ui/Alert';
 import { SkillEvolutionArchitecture } from '@/components/skills/SkillEvolutionArchitecture';
-import { PromptManager } from '@/components/skills/PromptManager';
+import { PromptManagerButton } from '@/components/skills/PromptManager';
 
 // Types
 interface EvolutionOverview {
@@ -408,8 +408,10 @@ function SkillsEvolutionContent() {
       {/* Evolution Architecture Diagram */}
 <SkillEvolutionArchitecture />
 
-        {/* LLM Prompts Configuration */}
-        <PromptManager />
+        {/* Prompt Config Button */}
+        <div className="flex justify-end">
+          <PromptManagerButton />
+        </div>
 
         {/* Global Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
