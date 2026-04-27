@@ -134,9 +134,11 @@ export async function recoverInterruptedEvaluations(): Promise<{
         
         if (recoveryResult.success) {
           result.recovered++;
+          console.log(`${LOG_PREFIX} ✅ 评估 ${evaluation.id} 恢复成功`);
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 恢复成功`);
         } else {
           result.failed++;
+          console.log(`${LOG_PREFIX} ❌ 评估 ${evaluation.id} 恢复失败: ${recoveryResult.error}`);
           logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 恢复失败`, {
             error: recoveryResult.error,
           });
@@ -145,6 +147,9 @@ export async function recoverInterruptedEvaluations(): Promise<{
       } catch (error) {
         result.failed++;
         const errorMsg = error instanceof Error ? error.message : String(error);
+        const errorStack = error instanceof Error ? error.stack : '';
+        console.log(`${LOG_PREFIX} ❌ 评估 ${evaluation.id} 恢复异常: ${errorMsg}`);
+        console.log(`${LOG_PREFIX} 异常堆栈: ${errorStack}`);
         logger.error(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 恢复异常`, {
           error: errorMsg,
         });
@@ -477,13 +482,20 @@ async function recoverEvaluation(
     
     console.log(`${LOG_RECOVER} Step 4: 更新评估状态为 recovering...`);
     // 2. 更新评估状态为恢复中
-    await prisma.evaluationSession.update({
-      where: { id: evaluation.id },
-      data: {
-        status: 'recovering',
-        updatedAt: new Date(),
-      },
-    });
+    try {
+      await prisma.evaluationSession.update({
+        where: { id: evaluation.id },
+        data: {
+          status: 'recovering',
+          updatedAt: new Date(),
+        },
+      });
+      console.log(`${LOG_RECOVER}   状态更新成功: recovering`);
+    } catch (dbError: any) {
+      console.log(`${LOG_RECOVER} ❌ 状态更新失败: ${dbError.message}`);
+      console.log(`${LOG_RECOVER}   错误详情: ${JSON.stringify(dbError)}`);
+      // 继续执行，不因状态更新失败而中断恢复
+    }
     
     console.log(`${LOG_RECOVER} Step 5: 发送恢复事件...`);
     // 3. 发送恢复事件
