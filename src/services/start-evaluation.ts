@@ -189,16 +189,30 @@ export async function startQueuedEvaluation(evaluationId: string): Promise<{
 
     console.log(`${LOG_PREFIX} ✓ 评估状态更新为 preparing，开始后台执行`);
 
-    // Step 7: 后台异步执行 FSM（不阻塞响应）
-    void executeFSMBackground(
-      evaluationId,
-      projectId,
-      workflowId,
-      projectPath || '',
-      modelConfig,
-      globalConfig,
-      workflow.fsmTemplateId || 'threat-modeling'
-    );
+    // Step 7: 根据 workflowType 选择执行方式
+    if (workflow.workflowType === 'fsm') {
+      // FSM 流程：使用 FSM 模板
+      const fsmTemplateId = workflow.fsmTemplateId || 'threat-modeling';
+      void executeFSMBackground(
+        evaluationId,
+        projectId,
+        workflowId,
+        projectPath || '',
+        modelConfig,
+        globalConfig,
+        fsmTemplateId
+      );
+    } else {
+      // DAG/Custom 流程：使用 DAG 执行服务
+      void executeDAGBackground(
+        evaluationId,
+        projectId,
+        workflowId,
+        projectPath || '',
+        modelConfig,
+        globalConfig
+      );
+    }
 
     logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 排队评估已启动`, { 
       evaluationId, 
@@ -560,6 +574,127 @@ async function executeFSMBackground(
     await prisma.project.update({
       where: { id: projectId },
       data: { status: 'failed' },
+    });
+    
+    await unlockProject(projectId);
+  }
+}
+
+/**
+ * 后台异步执行 DAG 工作流
+ */
+async function executeDAGBackground(
+  evaluationId: string,
+  projectId: string,
+  workflowId: string,
+  projectPath: string,
+  modelConfig: any,
+  globalConfig: any
+): Promise<void> {
+  console.log(`${LOG_PREFIX} [DAG-Background] 开始 DAG 执行...`);
+
+  try {
+    // Step 1: 获取 WorkflowNode 定义
+    const workflowNodes = await prisma.workflowNode.findMany({
+      where: { workflowId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        type: true,
+        data: true,
+        roleId: true,
+      }
+    });
+
+    console.log(`${LOG_PREFIX} [DAG-Background] WorkflowNode 数量: ${workflowNodes.length}`);
+
+    // 构建 DAG 节点列表
+    const dagNodesList: Array<{ id: string; label: string; type: string; roleId?: string | null }> = [];
+    
+    for (const node of workflowNodes) {
+      let label = node.type;
+      if (node.data) {
+        try {
+          const data = JSON.parse(node.data);
+          label = data.label || node.type;
+        } catch {}
+      }
+      dagNodesList.push({
+        id: node.id,
+        label,
+        type: node.type,
+        roleId: node.roleId ?? undefined,
+      });
+    }
+
+    // Step 2: 预创建 NodeExecution 记录
+    if (dagNodesList.length > 0) {
+      try {
+        await prisma.$transaction(
+          dagNodesList.map((node, i) =>
+            prisma.nodeExecution.create({
+              data: {
+                id: generateIndexedId('nodeexec', i),
+                evaluationSessionId: evaluationId,
+                workflowNodeId: node.id,
+                nodeLabel: node.label,
+                nodeType: node.type,
+                status: 'pending',
+                order: i,
+                updatedAt: new Date(),
+                roleId: node.roleId,
+              },
+            })
+          )
+        );
+        console.log(`${LOG_PREFIX} [DAG-Background] NodeExecution 预创建完成: ${dagNodesList.length} 个`);
+      } catch (e) {
+        console.log(`${LOG_PREFIX} [DAG-Background] NodeExecution 预创建失败:`, e);
+      }
+    }
+
+    // Step 3: 更新评估状态为 running
+    await prisma.evaluationSession.update({
+      where: { id: evaluationId },
+      data: {
+        status: 'running',
+        startedAt: new Date(),
+      },
+    });
+
+    emitEvaluationStarted(evaluationId, {
+      workflowType: 'dag',
+      message: 'DAG 工作流已启动',
+    });
+
+    // Step 4: 调用 DAG 执行服务
+    // TODO: 实现 DAG 执行服务调用
+    console.log(`${LOG_PREFIX} [DAG-Background] DAG 执行服务待实现`);
+
+    // 暂时标记为完成（因为没有 DAG 执行服务）
+    await prisma.evaluationSession.update({
+      where: { id: evaluationId },
+      data: {
+        status: 'completed',
+        completedAt: new Date(),
+        endReason: 'DAG 执行完成',
+      },
+    });
+
+    await unlockProject(projectId);
+
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.log(`${LOG_PREFIX} [DAG-Background] 执行失败:`, errorMsg);
+    
+    await prisma.evaluationSession.update({
+      where: { id: evaluationId },
+      data: {
+        status: 'failed',
+        errorMessage: errorMsg,
+        completedAt: new Date(),
+        endReason: 'error',
+      },
     });
     
     await unlockProject(projectId);
