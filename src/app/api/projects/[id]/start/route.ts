@@ -186,48 +186,19 @@ export async function POST(
         }, { status: 409 });
       }
       
-      // 锁定成功，立即创建 preparing 状态的评估记录（让前端立即看到"准备中"）
-      // 只设置必要字段，后续流程会补充完整信息
-      await prisma.evaluationSession.create({
-        data: {
-          id: evaluationIdForLock,
-          projectId: id,
-          workflowId: workflowId,
-          agentTeamId: agentTeamId,
-          modelConfigId: modelId,
-          roleModels: roleModels ? JSON.stringify(roleModels) : null,
-          status: 'preparing',
-          providerType: 'pending',  // 临时值，后续更新
-          workflowType: 'pending',  // 临时值，后续更新
-          startedAt: new Date(),
-        },
-      });
-      
-      // 同时更新项目状态为 running
-      await prisma.project.update({
-        where: { id },
-        data: { status: 'running' },
-      });
-      
-      logger.info(LOG_MODULES.EVALUATION, '已创建 preparing 评估记录，前端可立即看到状态', { 
-        evaluationId: evaluationIdForLock, 
-        projectId: id 
-      });
-      
-      // evaluationIdForLock 已在 Map 中，评估记录已创建
-      // 后续代码如果需要排队，会更新这个记录的状态为 queued
+      // 锁定成功，但不立即创建评估记录
+      // 先检查并发限制，再决定创建 preparing 还是 queued
     }
     
     // 检查并发限制（队列启动和 SSE 重连时跳过）
     // 使用数据库事务确保原子性，防止并发竞争导致超限
-    // SSE 重连只是订阅现有评估的事件，不创建新评估，所以不需要检查并发限制
     const maxConcurrent = globalConfig?.maxConcurrentEvaluations || 3;
     
     // 如果不是队列启动或 SSE 重连，在事务中检查并发并创建评估
     if (!isQueuedStart && !reconnectEvaluationId) {
       // 使用事务确保并发检查和创建评估是原子操作
       const concurrencyResult = await prisma.$transaction(async (tx) => {
-        // 在事务中检查当前活跃评估数量
+        // 在事务中检查当前活跃评估数量（不含当前请求）
         const activeCount = await tx.evaluationSession.count({
           where: { 
             status: { in: ['preparing', 'running'] } 
@@ -240,53 +211,71 @@ export async function POST(
           projectId: id 
         });
         
-        // 如果超出并发限制，更新已创建的评估为排队状态
+        // 如果超出并发限制，创建 queued 评估
         if (activeCount >= maxConcurrent) {
-          logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，更新评估为排队状态');
+          logger.debug(LOG_MODULES.EVALUATION, '超出并发限制，创建排队评估');
           
-          // 更新已创建的 preparing 评估为 queued 状态
-          if (evaluationIdForLock) {
-            await tx.evaluationSession.update({
-              where: { id: evaluationIdForLock },
-              data: {
-                status: 'queued',
-                providerType: 'queued',
-                workflowType: 'queued',
-              },
-            });
-          } else {
-            // 如果没有 evaluationIdForLock（队列启动场景），创建新的排队评估
-            const queuedEvaluation = await tx.evaluationSession.create({
-              data: {
-                id: generateId('eval'),
-                projectId: id,
-                workflowId: workflowId,
-                agentTeamId: agentTeamId,
-                modelConfigId: modelId,
-                roleModels: roleModels ? JSON.stringify(roleModels) : null,
-                status: 'queued',
-                providerType: 'queued',
-              },
-            });
-            evaluationIdForLock = queuedEvaluation.id;
-          }
+          const queuedEvaluation = await tx.evaluationSession.create({
+            data: {
+              id: evaluationIdForLock || generateId('eval'),
+              projectId: id,
+              workflowId: workflowId,
+              agentTeamId: agentTeamId,
+              modelConfigId: modelId,
+              roleModels: roleModels ? JSON.stringify(roleModels) : null,
+              status: 'queued',
+              providerType: 'queued',
+              workflowType: 'queued',
+              startedAt: new Date(),
+            },
+          });
           
           return {
             isQueued: true,
-            evaluationId: evaluationIdForLock,
+            evaluationId: queuedEvaluation.id,
             queuePosition: activeCount - maxConcurrent + 1,
           };
         }
         
-        // 未超出限制，返回可创建标记
+        // 未超出限制，创建 preparing 评估
+        const preparingEvaluation = await tx.evaluationSession.create({
+          data: {
+            id: evaluationIdForLock || generateId('eval'),
+            projectId: id,
+            workflowId: workflowId,
+            agentTeamId: agentTeamId,
+            modelConfigId: modelId,
+            roleModels: roleModels ? JSON.stringify(roleModels) : null,
+            status: 'preparing',
+            providerType: 'pending',
+            workflowType: 'pending',
+            startedAt: new Date(),
+          },
+        });
+        
+        // 同时更新项目状态为 running
+        await tx.project.update({
+          where: { id },
+          data: { status: 'running' },
+        });
+        
+        logger.info(LOG_MODULES.EVALUATION, '已创建 preparing 评估记录', { 
+          evaluationId: preparingEvaluation.id, 
+          projectId: id 
+        });
+        
         return {
           isQueued: false,
+          evaluationId: preparingEvaluation.id,
           activeCount,
         };
       });
       
       // 如果被排队，直接返回
       if (concurrencyResult.isQueued) {
+        // 释放项目锁（排队评估不需要锁）
+        await unlockProject(id);
+        
         return NextResponse.json({
           message: '评估已加入排队队列',
           evaluationId: concurrencyResult.evaluationId!,
@@ -295,6 +284,9 @@ export async function POST(
           maxConcurrent,
         }, { status: 202 });
       }
+      
+      // 更新 evaluationIdForLock（用于后续流程）
+      evaluationIdForLock = concurrencyResult.evaluationId;
     }
 
     // 日志：检查全局配置
