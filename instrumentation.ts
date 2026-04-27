@@ -64,13 +64,18 @@ export async function register() {
           console.log(`  ${index + 1}. ${session.id} - ${session.Project?.name || '未知'} - 入队时间: ${session.startedAt?.toISOString() || '未知'}`);
         });
         
-        // 触发队列调度
-        console.log(`${LOG_PREFIX} ========== 触发队列调度 ==========`);
-        await processQueue();
-        console.log(`${LOG_PREFIX} ========== 队列调度完成 ==========`);
+        // 延迟触发队列调度（不阻塞服务启动）
+        // 服务启动后 5 秒再调度，确保 API 路由已就绪
+        console.log(`${LOG_PREFIX} 将在 5 秒后触发队列调度（不阻塞启动）...`);
+        setTimeout(() => {
+          console.log(`${LOG_PREFIX} ========== 开始队列调度 ==========`);
+          processQueue()
+            .then(() => console.log(`${LOG_PREFIX} ========== 队列调度完成 ==========`))
+            .catch((err) => console.error(`${LOG_PREFIX} 队列调度失败:`, err));
+        }, 5000);
       }
       
-      console.log(`${LOG_PREFIX} 评估状态恢复完成`);
+      console.log(`${LOG_PREFIX} 评估状态恢复完成，服务继续启动...`);
       
     } catch (error) {
       console.error(`${LOG_PREFIX} 评估状态恢复失败:`, error);
