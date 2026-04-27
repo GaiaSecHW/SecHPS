@@ -52,6 +52,24 @@ export class UnifiedWorkflowExecutionEngine {
   private modelConfigCache: Map<string, ModelConfigForExecution> = new Map();
   
   /** 累计 Token 使用量 */
+  // Helper: 将 modelConfig.name/models 转成字符串
+  private getModelNameStr(modelConfig: any): string {
+    if (Array.isArray(modelConfig.name)) {
+      return modelConfig.name[0] || '';
+    }
+    if (Array.isArray(modelConfig.models)) {
+      try {
+        const models = typeof modelConfig.models === 'string' 
+          ? JSON.parse(modelConfig.models) 
+          : modelConfig.models;
+        if (Array.isArray(models) && models.length > 0) {
+          return models[0];
+        }
+      } catch {}
+    }
+    return modelConfig.name || '';
+  }
+
   private cumulativeTokens: { input: number; output: number } = { input: 0, output: 0 };
   
   /** 每个节点的 Token 使用量（避免重复累加） */
@@ -1393,7 +1411,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         updatedAt: new Date(),
         order: nodeIndex,
         modelConfigId: safeModelConfigId,  // 使用安全的 modelConfigId
-        modelName: modelConfig.name,
+        modelName: this.getModelNameStr(modelConfig),
         roleId: node.roleId ?? undefined,
         inputTokens: result.inputTokens || 0,
         outputTokens: result.outputTokens || 0,
@@ -1405,7 +1423,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           status: result.status,
           completedAt: new Date(),
           updatedAt: new Date(),
-          modelName: modelConfig.name,  // modelName 无外键约束，安全写入
+          modelName: this.getModelNameStr(modelConfig),  // modelName 无外键约束，安全写入
           inputTokens: result.inputTokens || 0,
           outputTokens: result.outputTokens || 0,
         };
@@ -2081,7 +2099,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         const updateData: any = {
           status: 'running',
           updatedAt: now,
-          modelName: modelConfig.name,  // modelName 无外键约束，安全写入
+          modelName: this.getModelNameStr(modelConfig),  // modelName 无外键约束，安全写入
         };
         
         // 只有 modelConfigId 存在时才写入（避免外键约束）
@@ -2112,7 +2130,7 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
             updatedAt: now,
             order: nodeIndex,
             modelConfigId: safeModelConfigId,  // 使用安全的 modelConfigId
-            modelName: modelConfig.name,
+            modelName: this.getModelNameStr(modelConfig),
             roleId: node.roleId ?? undefined,
             inputTokens: 0,
             outputTokens: 0,
