@@ -179,13 +179,83 @@ export async function recoverInterruptedEvaluations(): Promise<{
 }
 
 /**
+ * 检查节点内部的子任务进度
+ * 
+ * 通过分析 stream.jsonl 判断 skill 执行是否完成
+ */
+function checkNodeSubtaskProgress(
+  projectId: string,
+  evaluationId: string,
+  workflowNodeId: string
+): { hasSubtasks: boolean; isExecuting: boolean; totalSkills: number; progress: string } {
+  const fs = require('fs');
+  const path = require('path');
+  
+  // stream.jsonl 路径
+  const streamFile = path.join(process.cwd(), 'data', 'sessions', projectId, evaluationId, `node-${workflowNodeId}`, 'stream.jsonl');
+  
+  if (!fs.existsSync(streamFile)) {
+    return { hasSubtasks: false, isExecuting: false, totalSkills: 0, progress: '无子任务' };
+  }
+  
+  try {
+    const content = fs.readFileSync(streamFile, 'utf8');
+    const lines = content.split('\n').filter((l: string) => l.trim());
+    
+    // 搜索 skill 执行请求
+    const skillRequests: string[] = [];
+    lines.forEach((l: string) => {
+      try {
+        const obj = JSON.parse(l);
+        if (obj.data && obj.data.text && obj.data.text.includes('请执行 Skill:')) {
+          const match = obj.data.text.match(/请执行 Skill: ([\w-]+)/);
+          if (match) {
+            skillRequests.push(match[1]);
+          }
+        }
+      } catch(e) {}
+    });
+    
+    const totalSkills = skillRequests.length;
+    
+    if (totalSkills === 0) {
+      return { hasSubtasks: false, isExecuting: false, totalSkills: 0, progress: '无skill任务' };
+    }
+    
+    // 检查最后是否有完成标记（如"安全审计技能执行完成"）
+    const hasCompletionMarker = lines.some((l: string) => {
+      try {
+        const obj = JSON.parse(l);
+        return obj.data?.text?.includes('安全审计技能执行完成') ||
+               obj.data?.text?.includes('所有') && obj.data?.text?.includes('已成功执行完毕');
+      } catch(e) {
+        return false;
+      }
+    });
+    
+    // 如果有完成标记，说明已完成
+    if (hasCompletionMarker) {
+      return { hasSubtasks: true, isExecuting: false, totalSkills, progress: `${totalSkills}/${totalSkills} 完成` };
+    }
+    
+    // 如果没有完成标记，说明还在执行中
+    return { hasSubtasks: true, isExecuting: true, totalSkills, progress: `执行中 (${totalSkills} skills)` };
+    
+  } catch (error) {
+    console.error(`${LOG_PREFIX} 检查子任务进度失败:`, error);
+    return { hasSubtasks: false, isExecuting: false, totalSkills: 0, progress: '检查失败' };
+  }
+}
+
+/**
  * 检查评估是否需要恢复
  * 
  * 判断规则：
  * 1. 有 running 状态的 NodeExecution -> 需要恢复（节点执行中断）
  * 2. 有 pending 状态的 NodeExecution 且前面有 completed -> 需要恢复（后续节点未执行）
- * 3. 所有节点都是 pending -> 不需要恢复（可能是刚启动）
- * 4. 所有节点都是 completed -> 不需要恢复（已完成）
+ * 3. 节点状态是 completed 但子任务未完成 -> 需要恢复（子任务中断）
+ * 4. 所有节点都是 pending -> 不需要恢复（可能是刚启动）
+ * 5. 所有节点都是 completed 且子任务也完成 -> 不需要恢复（已完成）
  */
 async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | null> {
   const nodeExecutions = evaluation.NodeExecution || [];
@@ -227,8 +297,35 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     lastCompletedNodeIndex,
   });
   
-  // 所有节点已完成 -> 不需要恢复
+  // 所有节点已完成 -> 检查子任务进度
   if (statusCounts.completed === nodeExecutions.length) {
+    // 检查最后一个 completed 节点的子任务进度
+    const lastCompletedNode = nodeExecutions[lastCompletedNodeIndex];
+    
+    if (lastCompletedNode && lastCompletedNode.opencodeSessionId) {
+      const subtaskProgress = checkNodeSubtaskProgress(
+        evaluation.projectId,
+        evaluation.id,
+        lastCompletedNode.workflowNodeId
+      );
+      
+      console.log(`${LOG_PREFIX} 节点 ${lastCompletedNode.nodeLabel} 子任务进度: ${subtaskProgress.progress}`);
+      
+      // 如果子任务还在执行，需要恢复
+      if (subtaskProgress.hasSubtasks && subtaskProgress.isExecuting) {
+        console.log(`${LOG_PREFIX} 节点 ${lastCompletedNode.nodeLabel} 子任务未完成，需要恢复`);
+        return {
+          evaluationId: evaluation.id,
+          projectId: evaluation.projectId,
+          workflowType: evaluation.workflowType as 'fsm' | 'custom',
+          lastCompletedNodeIndex: lastCompletedNodeIndex - 1, // 前一个节点作为已完成
+          nextNodeToExecute: lastCompletedNodeIndex, // 当前节点需要恢复
+          totalNodes: nodeExecutions.length,
+          recoveryReason: `节点 ${lastCompletedNode.nodeLabel} 子任务未完成 (${subtaskProgress.progress})`,
+        };
+      }
+    }
+    
     logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成`);
     return null;
   }
