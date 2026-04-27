@@ -329,6 +329,11 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
    * - 重试间隔: 60000ms (1分钟)
    * - 每次重试调用 onNodeRetry 回调
    * - 达到最大重试次数后标记为失败
+   * 
+   * 多 Skill 串行执行：
+   * - 当节点有 skills 数组且长度 > 1 时，为每个 skill 创建独立的 agent 执行循环
+   * - 每个 skill 使用 skill.content 作为 system prompt
+   * - 每个 skill 执行完成后更新 SkillExecution 状态
    */
   private async executeNode(
     nodeIndex: number,
@@ -366,6 +371,20 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     // 创建节点执行记录（status='running'）- 让 token 更新能找到记录
     await this.createNodeExecutionRecord(node, nodeIndex, modelConfig);
     
+    // 检查是否需要多 Skill 串行执行
+    const nodeData = node.data as Record<string, unknown> | undefined;
+    const mode = (nodeData?.skillLoadingMode as string) || 'description';
+    
+    // 获取节点配置的 Skills（用于判断是否需要串行执行）
+    const skills = await this.getNodeSkills(node);
+    
+    // 多 Skill 串行执行模式：当 skills.length > 1 且不是 description 模式
+    if (skills.length > 1 && mode !== 'description') {
+      console.log(`[executeNode] 检测到多 Skill 节点 (${skills.length} 个)，启用串行执行模式`);
+      return await this.executeMultiSkillNode(nodeIndex, node, skills, modelConfig);
+    }
+    
+    // 单 Skill 或 description 模式：保持原有执行逻辑
     // 注意：SkillExecution 记录在 Skill 工具调用时自动创建，不需要预先创建
 
     // 重试机制
@@ -725,6 +744,461 @@ callbacks: {
     }
 
     return failedResult;
+  }
+
+  /**
+   * 执行多 Skill 节点（串行执行）
+   * 
+   * 当节点有 skills 数组且长度 > 1 时，为每个 skill 创建独立的 agent 执行循环
+   * 每个 skill 使用 skill.content 作为 system prompt
+   * 每个 skill 执行完成后更新 SkillExecution 状态
+   */
+  private async executeMultiSkillNode(
+    nodeIndex: number,
+    node: UnifiedNodeDefinition,
+    skills: Array<{ name: string; displayName: string }>,
+    modelConfig: ModelConfigForExecution
+  ): Promise<NodeExecutionResult> {
+    const nodeStartTime = Date.now();
+    const nodeName = node.label;
+    const nodeId = node.id;
+    
+    console.log(`[executeMultiSkillNode] 开始串行执行 ${skills.length} 个 Skills`);
+    
+    // 获取前序节点输出
+    const previousOutputs = await this.getPreviousOutputs(nodeIndex);
+    
+    // 累计 token 使用量
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalIterations = 0;
+    
+    // 存储每个 skill 的执行结果
+    const skillResults: Array<{
+      skillName: string;
+      skillId: string;
+      executionId: string;
+      status: 'completed' | 'failed';
+      text: string;
+      error?: string;
+    }> = [];
+    
+    // 串行执行每个 skill
+    for (let skillIndex = 0; skillIndex < skills.length; skillIndex++) {
+      if (this.aborted) {
+        console.log(`[executeMultiSkillNode] 检测到中止信号，停止执行`);
+        break;
+      }
+      
+      const skill = skills[skillIndex];
+      console.log(`[executeMultiSkillNode] ========== 执行 Skill ${skillIndex + 1}/${skills.length}: ${skill.displayName} ==========`);
+      
+      // 查询 Skill 详情（获取 content 字段）
+      let skillRecord = await prisma.skill.findFirst({
+        where: { name: skill.name, isLatest: true },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          content: true,
+        },
+      });
+      
+      if (!skillRecord) {
+        // 尝试用 displayName 查找
+        skillRecord = await prisma.skill.findFirst({
+          where: { displayName: skill.displayName, isLatest: true },
+          select: {
+            id: true,
+            name: true,
+            displayName: true,
+            content: true,
+          },
+        });
+      }
+      
+      if (!skillRecord) {
+        console.warn(`[executeMultiSkillNode] Skill 未找到: ${skill.name}, 跳过`);
+        continue;
+      }
+      
+      // 创建 SkillExecution 记录（status='running'）
+      const executionId = `sklexec-${this.config.evaluationSessionId}-${nodeIndex}-${skillRecord.id}-${skillIndex}`;
+      const skillStartTime = Date.now();
+      
+      try {
+        await prisma.skillExecution.create({
+          data: {
+            id: executionId,
+            skillId: skillRecord.id,
+            projectId: this.config.projectId,
+            evaluationId: this.config.evaluationSessionId,
+            nodeId: nodeId,  // 设置 nodeId 字段
+            input: JSON.stringify({ nodeName, nodeIndex, skillName: skill.name, skillIndex }),
+            status: 'running',
+            startedAt: new Date(),
+          },
+        });
+        
+        // 更新 Skill 的 execCount
+        await prisma.skill.update({
+          where: { id: skillRecord.id },
+          data: { execCount: { increment: 1 }, updatedAt: new Date() },
+        });
+        
+        console.log(`[executeMultiSkillNode] SkillExecution 创建成功: ${skill.name}, executionId=${executionId}`);
+        
+        // 记录到当前追踪列表
+        this.currentSkillExecutionIds.push(executionId);
+        this.currentSkillIds.push(skillRecord.id);
+        this.skillNameToExecutionId.set(skill.name, executionId);
+        
+      } catch (createError) {
+        console.error(`[executeMultiSkillNode] 创建 SkillExecution 失败: ${skill.name}`, createError);
+        continue;
+      }
+      
+      // 构建 skill 专属的 system prompt（使用 skill.content）
+      const skillSystemPrompt = skillRecord.content || `执行 ${skill.displayName} 安全检测`;
+      
+      // 构建 skill 专属的用户提示词
+      const skillUserPrompt = `
+# 执行 Skill: ${skill.displayName}
+
+## 项目信息
+- 项目名称: ${this.config.projectName}
+- 项目路径: ${this.config.workspacePath}
+
+## 前序节点输出
+${previousOutputs || '(首个节点，无前序输出)'}
+
+## 任务要求
+请执行 ${skill.displayName} 安全检测，按照 Skill 定义的要求完成检测任务。
+
+${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : ''}
+`;
+      
+      // 创建 skill 专属的 agent
+      const skillAgent = await this.createSkillAgent(modelConfig, node, skill.name, skillSystemPrompt);
+      this.currentAgent = skillAgent;
+      
+      // 累积助手响应文本
+      let accumulatedAssistantText = '';
+      let skillInputTokens = 0;
+      let skillOutputTokens = 0;
+      
+      try {
+        // 执行 skill agent
+        const result = await skillAgent.loop({
+          evaluationId: this.config.evaluationSessionId,
+          projectId: this.config.projectId,
+          workflowNodeId: node.id,
+          context: {
+            projectName: this.config.projectName,
+            taskDescription: skillUserPrompt,
+            initialMessage: skillUserPrompt,
+            files: [],
+          },
+          callbacks: {
+            onChunk: (text) => {
+              accumulatedAssistantText += text;
+              
+              // 写入 stream.jsonl
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'text',
+                data: { text, skillName: skill.name, skillIndex, cumulativeLength: accumulatedAssistantText.length },
+              }).catch(err => console.error('[executeMultiSkillNode] 保存文本失败:', err));
+              
+              // 调用外部回调
+              this.callbacks.onNodeChunk(nodeIndex, text);
+            },
+            onThinking: (thinking) => {
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'thinking',
+                data: { text: thinking, skillName: skill.name, skillIndex },
+              }).catch(err => console.error('[executeMultiSkillNode] 保存思考失败:', err));
+            },
+            onToolCall: (toolUseId, name, args) => {
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'tool_use',
+                data: { toolUseId, name, args, skillName: skill.name, skillIndex },
+              }).catch(err => console.error('[executeMultiSkillNode] 保存工具调用失败:', err));
+              
+              this.callbacks.onNodeToolCall(nodeIndex, name, args);
+            },
+            onToolResult: (toolUseId, content, isError) => {
+              const resultData = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return {}; } })() : content;
+              
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'tool_result',
+                data: { toolUseId, content: resultData, isError, skillName: skill.name, skillIndex },
+              }).catch(err => console.error('[executeMultiSkillNode] 保存工具结果失败:', err));
+            },
+            onComplete: () => {
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'skill_complete',
+                data: { skillName: skill.name, skillIndex, text: accumulatedAssistantText },
+              }).catch(err => console.error('[executeMultiSkillNode] 保存 skill_complete 失败:', err));
+            },
+            onError: (error) => {
+              console.error(`[executeMultiSkillNode] Skill ${skill.name} Agent 错误: ${error.message}`);
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'error',
+                data: { message: error.message, stack: error.stack, skillName: skill.name, skillIndex },
+              }).catch(err => console.error('[executeMultiSkillNode] 保存 error 失败:', err));
+            },
+            onUsage: (usage) => {
+              skillInputTokens = usage.inputTokens || 0;
+              skillOutputTokens = usage.outputTokens || 0;
+              
+              // 累加到节点总 token
+              totalInputTokens += skillInputTokens;
+              totalOutputTokens += skillOutputTokens;
+              
+              // 更新 nodeTokens
+              this.nodeTokens[nodeIndex] = {
+                input: totalInputTokens,
+                output: totalOutputTokens,
+              };
+              
+              // 更新累计 token
+              this.cumulativeTokens.input = Object.values(this.nodeTokens)
+                .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
+              this.cumulativeTokens.output = Object.values(this.nodeTokens)
+                .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
+              
+              // 实时推送 Token 使用量
+              this.callbacks.onTokenUsage({
+                nodeIndex,
+                nodeId,
+                nodeName,
+                modelName: this.getModelNameStr(modelConfig),
+                modelConfigId: modelConfig.id,
+                inputTokens: skillInputTokens,
+                outputTokens: skillOutputTokens,
+                totalTokens: skillInputTokens + skillOutputTokens,
+                cumulativeInputTokens: this.cumulativeTokens.input,
+                cumulativeOutputTokens: this.cumulativeTokens.output,
+                cumulativeTotalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output,
+              });
+            },
+            onRalphComplete: async () => {},
+          },
+        });
+        
+        this.currentAgent = null;
+        
+        // 检查执行结果
+        if (result.completionReason === 'aborted') {
+          console.log(`[executeMultiSkillNode] Skill ${skill.name} 被中止`);
+          
+          // 更新 SkillExecution 为失败
+          await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'failed', skillStartTime, '用户中止');
+          
+          skillResults.push({
+            skillName: skill.name,
+            skillId: skillRecord.id,
+            executionId,
+            status: 'failed',
+            text: accumulatedAssistantText,
+            error: '用户中止',
+          });
+          
+          continue;
+        }
+        
+        // Skill 执行成功
+        console.log(`[executeMultiSkillNode] Skill ${skill.name} 执行完成: completionReason=${result.completionReason}, iterations=${result.iterations}`);
+        
+        totalIterations += result.iterations;
+        
+        // 更新 SkillExecution 为完成
+        await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'completed', skillStartTime, accumulatedAssistantText);
+        
+        skillResults.push({
+          skillName: skill.name,
+          skillId: skillRecord.id,
+          executionId,
+          status: 'completed',
+          text: accumulatedAssistantText,
+        });
+        
+      } catch (skillError) {
+        const err = skillError instanceof Error ? skillError : new Error(String(skillError));
+        console.error(`[executeMultiSkillNode] Skill ${skill.name} 执行异常: ${err.message}`);
+        
+        this.currentAgent = null;
+        
+        // 更新 SkillExecution 为失败
+        await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'failed', skillStartTime, err.message);
+        
+        skillResults.push({
+          skillName: skill.name,
+          skillId: skillRecord.id,
+          executionId,
+          status: 'failed',
+          text: accumulatedAssistantText,
+          error: err.message,
+        });
+        
+        // 继续执行下一个 skill（不中断整个节点）
+        console.log(`[executeMultiSkillNode] Skill ${skill.name} 失败，继续执行下一个 Skill`);
+      }
+    }
+    
+    // 检查是否所有 skill 都执行完成
+    const completedCount = skillResults.filter(r => r.status === 'completed').length;
+    const failedCount = skillResults.filter(r => r.status === 'failed').length;
+    
+    console.log(`[executeMultiSkillNode] 串行执行完成: ${completedCount} 成功, ${failedCount} 失败`);
+    
+    // 确定节点状态
+    const nodeStatus: NodeExecutionStatus = this.aborted 
+      ? 'failed' 
+      : (failedCount > 0 && completedCount === 0) 
+        ? 'failed' 
+        : 'completed';
+    
+    // 合并所有 skill 的输出文本
+    const combinedOutput = skillResults
+      .map(r => `## ${r.skillName}\n\n${r.text}`)
+      .join('\n\n---\n\n');
+    
+    // 写入 YAML 输出
+    const outputYamlPath = await this.writeNodeOutput(nodeIndex, node, combinedOutput);
+    
+    const nodeResult: NodeExecutionResult = {
+      nodeIndex,
+      nodeId,
+      nodeName,
+      status: nodeStatus,
+      outputYamlPath,
+      iterations: totalIterations,
+      retryCount: 0,
+      duration: Date.now() - nodeStartTime,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      modelName: this.getModelNameStr(modelConfig),
+      modelConfigId: modelConfig.id,
+      error: failedCount > 0 ? `${failedCount} 个 Skill 执行失败` : undefined,
+      errorStack: undefined,
+    };
+    
+    // 调用节点完成回调
+    await this.callbacks.onNodeComplete(nodeIndex, nodeResult);
+    
+    // 保存节点执行记录到数据库
+    await this.saveNodeExecutionToDB(nodeIndex, node, nodeResult, modelConfig);
+    
+    // 清空当前追踪
+    this.currentSkillExecutionIds = [];
+    this.currentSkillIds = [];
+    
+    return nodeResult;
+  }
+
+  /**
+   * 创建 Skill 专属的 Agent
+   * 
+   * 为每个 skill 创建独立的 agent，使用 skill.content 作为 system prompt
+   */
+  private async createSkillAgent(
+    modelConfig: ModelConfigForExecution,
+    node: UnifiedNodeDefinition,
+    skillName: string,
+    skillSystemPrompt: string
+  ): Promise<RalphLoopAgent> {
+    console.log(`[createSkillAgent] Creating agent for skill: ${skillName}`);
+    console.log(`[createSkillAgent] Model: ${modelConfig.name}`);
+    console.log(`[createSkillAgent] WorkflowNodeId: ${node.id}`);
+    
+    // 基础工具权限（包含 Skill 工具）
+    const allowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
+    
+    // MCP 配置：从 config 获取并传递给 SDK
+    const mcpServers = this.config.mcpServers;
+    
+    // 获取 MCP 服务器名称列表（用于子 Agent 引用）
+    const mcpServerNames = mcpServers ? mcpServers.map(m => m.name) : [];
+    
+    // 创建子 Agent 定义
+    const agents: Record<string, any> = {};
+    
+    agents['general-purpose'] = {
+      description: '通用子Agent，继承父Agent的allowedTools、MCP和Skills',
+      prompt: 'You are a helpful assistant. Follow the instructions and use available tools.',
+      tools: allowedTools,
+      mcpServers: mcpServerNames.length > 0 ? mcpServerNames : undefined,
+      skills: [skillName],  // 只传递当前 skill
+      model: 'inherit',
+    };
+    
+    console.log(`[createSkillAgent] 配置子Agent 'general-purpose' 继承:`);
+    console.log(`  - allowedTools: ${allowedTools.join(', ')}`);
+    if (mcpServerNames.length > 0) {
+      console.log(`  - MCP Servers: ${mcpServerNames.join(', ')}`);
+    }
+    console.log(`  - Skills: ${skillName}`);
+    
+    return createRalphLoopAgent(
+      {
+        providerType: modelConfig.providerType,
+        apiKey: modelConfig.apiKey,
+        apiBaseUrl: modelConfig.apiBaseUrl || '',
+        models: typeof modelConfig.models === 'string' ? modelConfig.models : JSON.stringify(modelConfig.models),
+      },
+      this.config.workspacePath,
+      {
+        maxIterations: this.config.maxIterationsPerNode,
+      },
+      {
+        systemPrompt: skillSystemPrompt,  // 使用 skill.content 作为 system prompt
+        toolPermissions: this.config.toolPermissions,
+        permissionMode: this.config.toolPermissions ? 'default' : 'bypassPermissions',
+        allowDangerouslySkipPermissions: !this.config.toolPermissions,
+        workflowNodeId: node.id,
+        allowedTools,
+        skills: [skillName],  // 只注册当前 skill
+        mcpServers,
+        agents,
+        settingSources: ['project'],
+      }
+    );
+  }
+
+  /**
+   * 更新 SkillExecution 状态
+   * 
+   * 将 SkillExecution 的状态更新为 completed 或 failed
+   */
+  private async updateSkillExecutionStatus(
+    executionId: string,
+    skillId: string,
+    status: 'completed' | 'failed',
+    startTime: number,
+    outputOrError: string
+  ): Promise<void> {
+    const completedAt = new Date();
+    const duration = completedAt.getTime() - startTime;
+    
+    try {
+      await prisma.skillExecution.update({
+        where: { id: executionId },
+        data: {
+          status,
+          completedAt,
+          duration,
+          output: status === 'completed' ? outputOrError.substring(0, 500) : undefined,
+          error: status === 'failed' ? outputOrError : undefined,
+          updatedAt: completedAt,
+        },
+      });
+      
+      console.log(`[updateSkillExecutionStatus] SkillExecution 更新成功: executionId=${executionId}, status=${status}, duration=${duration}ms`);
+      
+    } catch (updateError) {
+      console.error(`[updateSkillExecutionStatus] 更新 SkillExecution 失败: ${executionId}`, updateError);
+    }
   }
 
   /**
