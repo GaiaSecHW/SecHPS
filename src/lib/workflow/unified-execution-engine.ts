@@ -783,10 +783,112 @@ callbacks: {
       error?: string;
     }> = [];
     
+    // ========================================
+    // 10分钟无响应处理逻辑
+    // ========================================
+    
+    /** 最后活动时间（用于检测无响应） */
+    let lastActivityTime = Date.now();
+    
+    /** 10分钟无响应阈值（毫秒） */
+    const NO_RESPONSE_THRESHOLD_MS = 10 * 60 * 1000; // 10分钟
+    
+    /** 检查间隔（毫秒） */
+    const CHECK_INTERVAL_MS = 60 * 1000; // 60秒
+    
+    /** 是否已发送过询问消息（避免重复发送） */
+    let inquirySent = false;
+    
+    /** 进度监控定时器 */
+    let progressMonitorTimer: NodeJS.Timeout | null = null;
+    
+    /** 当前执行的 skill 名称（用于日志） */
+    let currentExecutingSkillName = '';
+    
+    /**
+     * 更新最后活动时间
+     */
+    const updateActivityTime = () => {
+      lastActivityTime = Date.now();
+      if (inquirySent) {
+        // 收到响应后重置询问标志
+        inquirySent = false;
+        console.log(`[executeMultiSkillNode] 收到响应，重置询问标志`);
+      }
+    };
+    
+    /**
+     * 发送询问消息到 agent
+     * 通过写入 stream.jsonl 让前端可见
+     */
+    const sendInquiryMessage = async (skillName: string) => {
+      const inquiryMessage = `【系统询问】请报告当前执行进度，是否遇到问题？当前正在执行 Skill: ${skillName}`;
+      
+      console.log(`\n${'='.repeat(80)}`);
+      console.log(`[executeMultiSkillNode] ⚠️ 10分钟无响应，发送询问消息`);
+      console.log(`[executeMultiSkillNode] Skill: ${skillName}`);
+      console.log(`[executeMultiSkillNode] 消息: ${inquiryMessage}`);
+      console.log(`${'='.repeat(80)}\n`);
+      
+      // 写入 stream.jsonl（让前端可见）
+      await this.nodeStreamStore.appendToStream(nodeId, {
+        event: 'system_inquiry',
+        data: {
+          text: inquiryMessage,
+          skillName,
+          skillIndex: skills.findIndex(s => s.name === skillName),
+          timestamp: new Date().toISOString(),
+          reason: '10分钟无响应',
+        },
+      });
+      
+      inquirySent = true;
+    };
+    
+    /**
+     * 启动进度监控定时器
+     */
+    const startProgressMonitor = () => {
+      if (progressMonitorTimer) {
+        return; // 已启动
+      }
+      
+      progressMonitorTimer = setInterval(() => {
+        const now = Date.now();
+        const elapsedMs = now - lastActivityTime;
+        const elapsedMinutes = Math.floor(elapsedMs / 60000);
+        
+        if (elapsedMs >= NO_RESPONSE_THRESHOLD_MS && !inquirySent && currentExecutingSkillName) {
+          console.log(`[executeMultiSkillNode] 检测到 ${elapsedMinutes} 分钟无响应，准备发送询问`);
+          sendInquiryMessage(currentExecutingSkillName).catch(err => 
+            console.error(`[executeMultiSkillNode] 发送询问消息失败:`, err)
+          );
+        } else if (elapsedMinutes > 0 && elapsedMinutes < 10) {
+          // 每60秒输出一次状态（仅当超过1分钟时）
+          console.log(`[executeMultiSkillNode] 进度监控: ${elapsedMinutes} 分钟无新输出，Skill: ${currentExecutingSkillName}`);
+        }
+      }, CHECK_INTERVAL_MS);
+      
+      console.log(`[executeMultiSkillNode] 进度监控定时器已启动，检查间隔: ${CHECK_INTERVAL_MS / 1000}秒`);
+    };
+    
+    /**
+     * 停止进度监控定时器
+     */
+    const stopProgressMonitor = () => {
+      if (progressMonitorTimer) {
+        clearInterval(progressMonitorTimer);
+        progressMonitorTimer = null;
+        console.log(`[executeMultiSkillNode] 进度监控定时器已停止`);
+      }
+    };
+    
     // 串行执行每个 skill
     for (let skillIndex = 0; skillIndex < skills.length; skillIndex++) {
       if (this.aborted) {
         console.log(`[executeMultiSkillNode] 检测到中止信号，停止执行`);
+        // 停止进度监控定时器
+        stopProgressMonitor();
         break;
       }
       
@@ -882,6 +984,15 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       const skillAgent = await this.createSkillAgent(modelConfig, node, skill.name, skillSystemPrompt);
       this.currentAgent = skillAgent;
       
+      // 设置当前执行的 skill 名称（用于进度监控日志）
+      currentExecutingSkillName = skill.name;
+      
+      // 启动进度监控定时器
+      startProgressMonitor();
+      
+      // 重置活动时间（开始新的 skill 执行）
+      updateActivityTime();
+      
       // 累积助手响应文本
       let accumulatedAssistantText = '';
       let skillInputTokens = 0;
@@ -901,6 +1012,9 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           },
           callbacks: {
             onChunk: (text) => {
+              // 更新活动时间
+              updateActivityTime();
+              
               accumulatedAssistantText += text;
               
               // 写入 stream.jsonl
@@ -913,12 +1027,18 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               this.callbacks.onNodeChunk(nodeIndex, text);
             },
             onThinking: (thinking) => {
+              // 更新活动时间
+              updateActivityTime();
+              
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'thinking',
                 data: { text: thinking, skillName: skill.name, skillIndex },
               }).catch(err => console.error('[executeMultiSkillNode] 保存思考失败:', err));
             },
             onToolCall: (toolUseId, name, args) => {
+              // 更新活动时间
+              updateActivityTime();
+              
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'tool_use',
                 data: { toolUseId, name, args, skillName: skill.name, skillIndex },
@@ -927,6 +1047,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
             onToolResult: (toolUseId, content, isError) => {
+              // 更新活动时间
+              updateActivityTime();
               const resultData = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return {}; } })() : content;
               
               this.nodeStreamStore.appendToStream(nodeId, {
@@ -948,6 +1070,9 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               }).catch(err => console.error('[executeMultiSkillNode] 保存 error 失败:', err));
             },
             onUsage: (usage) => {
+              // 更新活动时间（token 使用也是活动）
+              updateActivityTime();
+              
               skillInputTokens = usage.inputTokens || 0;
               skillOutputTokens = usage.outputTokens || 0;
               
@@ -987,6 +1112,9 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         });
         
         this.currentAgent = null;
+        
+        // 停止进度监控定时器（skill 执行完成）
+        stopProgressMonitor();
         
         // 检查执行结果
         if (result.completionReason === 'aborted') {
@@ -1029,6 +1157,9 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         
         this.currentAgent = null;
         
+        // 停止进度监控定时器（skill 执行异常）
+        stopProgressMonitor();
+        
         // 更新 SkillExecution 为失败
         await this.updateSkillExecutionStatus(executionId, skillRecord.id, 'failed', skillStartTime, err.message);
         
@@ -1049,6 +1180,9 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     // 检查是否所有 skill 都执行完成
     const completedCount = skillResults.filter(r => r.status === 'completed').length;
     const failedCount = skillResults.filter(r => r.status === 'failed').length;
+    
+    // 停止进度监控定时器（所有 skill 执行完成）
+    stopProgressMonitor();
     
     console.log(`[executeMultiSkillNode] 串行执行完成: ${completedCount} 成功, ${failedCount} 失败`);
     
