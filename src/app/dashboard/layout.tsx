@@ -195,11 +195,8 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/admin/broadcast" icon={<Megaphone size={20} />} collapsed={collapsed}>
                 通知广播
               </NavLink>
-              <NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
+<NavLink href="/dashboard/plugins" icon={<Puzzle size={20} />} collapsed={collapsed}>
                 插件管理
-              </NavLink>
-              <NavLink href="/dashboard/claude" icon={<Clock size={20} />} collapsed={collapsed}>
-                Claude 会话
               </NavLink>
               <NavLink href="/dashboard/admin/vulnerability-patterns" icon={<Shield size={20} />} collapsed={collapsed}>
                 漏洞模式

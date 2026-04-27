@@ -25,10 +25,28 @@ const DIR_COPY_RULES = {
     mode: 'exclude-next',
     exclude: ['cache', 'dev', 'diagnostics', 'standalone', 'types', 'turbopack', 'trace', 'trace-build', 'build', 'export-marker.json', 'fallback-build-manifest.json', 'images-manifest.json', 'next-minimal-server.js.nft.json', 'next-server.js.nft.json', 'standalone.zip', 'required-server-files.js'],
   },
-  // 从 .next/node_modules 复制 Prisma 客户端
-  'next-node-modules': {
-    src: path.join(ROOT_DIR, '.next', 'node_modules'),
-    dest: '.next/node_modules',
+  // 从 node_modules 复制完整的 @prisma/client（包含 generator-build）
+  'prisma-client': {
+    src: path.join(ROOT_DIR, 'node_modules', '@prisma'),
+    dest: 'node_modules/@prisma',
+    mode: 'all',
+  },
+  // 复制 .prisma 客户端缓存
+  'prisma-cache': {
+    src: path.join(ROOT_DIR, 'node_modules', '.prisma'),
+    dest: 'node_modules/.prisma',
+    mode: 'all',
+  },
+  // ⭐ 复制 Prisma CLI（用于生产环境执行 db push）
+  'prisma-cli': {
+    src: path.join(ROOT_DIR, 'node_modules', 'prisma'),
+    dest: 'node_modules/prisma',
+    mode: 'all',
+  },
+  // ⭐ 复制 .bin 目录（CLI 入口脚本）
+  'node-bin': {
+    src: path.join(ROOT_DIR, 'node_modules', '.bin'),
+    dest: 'node_modules/.bin',
     mode: 'all',
   },
   // data 目录：运行时不需要，可以排除
@@ -121,6 +139,33 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
     return true;
   }
 
+  // 模式：selective - 只复制指定的文件
+  if (rules.mode === 'selective') {
+    const entries = fs.readdirSync(src, { withFileTypes: true });
+    fs.mkdirSync(dest, { recursive: true });
+    
+    for (const entry of entries) {
+      // 只复制 include 列表中的文件
+      if (rules.include && rules.include.includes(entry.name)) {
+        const srcPath = path.join(src, entry.name);
+        const destPath = path.join(dest, entry.name);
+        
+        if (entry.isDirectory()) {
+          fs.cpSync(srcPath, destPath, { recursive: true });
+          console.log(`  📂 ${entry.name}/`);
+        } else {
+          fs.copyFileSync(srcPath, destPath);
+          console.log(`  📄 ${entry.name}`);
+        }
+      } else {
+        console.log(`  ⏭️  跳过 ${entry.name} (不在 include 列表)`);
+      }
+    }
+    
+    console.log(`✅ ${dirName} -> ${rules.dest || dirName} (选择性复制)`);
+    return true;
+  }
+
   // 对于目录，直接复制
   if (fs.statSync(src).isDirectory()) {
     fs.mkdirSync(dest, { recursive: true });
@@ -180,6 +225,135 @@ function main() {
     }
   }
 
+  // ========================================
+  // 第二步：清理 Windows 专用文件（只保留 Linux）
+  // ========================================
+  console.log('\n🧹 清理 Windows/macOS 专用文件（只保留 Linux）...\n');
+  
+  // 使用 OpenNext.js 的最佳实践：正则匹配平台特定包
+  // 参考: https://github.com/opennextjs/opennextjs-aws/pull/1117
+  const NON_LINUX_PLATFORMS = ['darwin', 'win32', 'freebsd', 'android'];
+  const platformPattern = NON_LINUX_PLATFORMS.join('|');
+  
+  // 检测是否是非 Linux 平台包的目录名
+  function isNonLinuxPlatformDir(dirName) {
+    // 匹配多种格式：
+    // 1. {pkg}-{platform}-{arch}: sharp-win32-x64, esbuild-darwin-arm64
+    // 2. {arch}-{platform}: arm64-win32, x64-darwin
+    // 3. {platform}: windows, darwin
+    const patterns = [
+      new RegExp(`-(${platformPattern})-`, 'i'),     // -win32-, -darwin-
+      new RegExp(`^(${platformPattern})$`, 'i'),     // windows, darwin
+      new RegExp(`-(${platformPattern})$`, 'i'),     // -win32, -darwin
+      new RegExp(`^\\w+-(${platformPattern})$`, 'i'), // arm64-win32, x64-darwin
+    ];
+    return patterns.some(regex => regex.test(dirName));
+  }
+  
+  // 检测是否是 Windows 专用文件
+  function isWindowsOnlyFile(fileName) {
+    // Windows 专用：.dll.node, .exe, 包含 windows 的文件名
+    // 但要排除 schema-engine-*（这是 Linux db push 需要的）
+    if (fileName.startsWith('schema-engine-') && !fileName.includes('windows')) {
+      return false;  // Linux schema-engine 保留
+    }
+    return fileName.endsWith('.dll.node') || 
+           fileName.endsWith('.exe') ||
+           fileName.includes('windows');
+  }
+  
+  // 检测是否是 macOS 专用文件
+  function isDarwinOnlyFile(fileName) {
+    return fileName.includes('darwin') || fileName.endsWith('.dylib.node');
+  }
+  
+  // 检测是否是备份/临时文件（应删除）
+  function isBackupOrTempFile(fileName) {
+    return fileName.endsWith('.bak') ||
+           fileName.endsWith('.backup') ||
+           fileName.endsWith('.tmp') ||
+           fileName.includes('.tmp') ||
+           fileName.endsWith('.old');
+  }
+  
+  // 检测是否是备份目录
+  function isBackupDir(dirName) {
+    return dirName === '.backups' ||
+           dirName === 'backups' ||
+           dirName.endsWith('-backup') ||
+           dirName.endsWith('-bak');
+  }
+  
+  let cleanedFiles = 0;
+  let cleanedDirs = 0;
+  
+  // 清理整个 standalone 目录（不只是 node_modules）
+  function walkAndClean(dir) {
+    if (!fs.existsSync(dir)) return;
+    
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+      const relativePath = fullPath.replace(STANDALONE_DIR, '');
+      
+      if (entry.isDirectory()) {
+        // 检查目录名是否是非 Linux 平台包
+        if (isNonLinuxPlatformDir(entry.name)) {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+          console.log(`  🗑️  目录: ${relativePath}`);
+          cleanedDirs++;
+        }
+        // 删除备份目录（如 .backups, backups）
+        else if (isBackupDir(entry.name)) {
+          fs.rmSync(fullPath, { recursive: true, force: true });
+          console.log(`  🗑️  备份目录: ${relativePath}`);
+          cleanedDirs++;
+        }
+        else {
+          // 递归处理
+          walkAndClean(fullPath);
+        }
+      } else {
+        // 删除 Windows/macOS 专用文件
+        if (isWindowsOnlyFile(entry.name) || isDarwinOnlyFile(entry.name)) {
+          try {
+            fs.unlinkSync(fullPath);
+            console.log(`  🗑️  平台文件: ${relativePath}`);
+            cleanedFiles++;
+          } catch (err) {
+            console.log(`  ⚠️  删除失败: ${relativePath} - ${err.message}`);
+          }
+        }
+        // 删除备份/临时文件（所有平台都应删除）
+        else if (isBackupOrTempFile(entry.name)) {
+          try {
+            fs.unlinkSync(fullPath);
+            console.log(`  🗑️  备份文件: ${relativePath}`);
+            cleanedFiles++;
+          } catch (err) {
+            console.log(`  ⚠️  删除失败: ${relativePath} - ${err.message}`);
+          }
+        }
+      }
+    }
+  }
+  
+  // 从 standalone 根目录开始清理
+  walkAndClean(STANDALONE_DIR);
+  
+  // 统计清理结果
+  const totalCleaned = cleanedFiles + cleanedDirs;
+  console.log(`\n✅ 已清理 ${totalCleaned} 个非 Linux 文件/目录`);
+  console.log(`   - 文件: ${cleanedFiles}`);
+  console.log(`   - 目录: ${cleanedDirs}`);
+  
+  // 计算节省的空间
+  console.log(`📦 保留的 Linux 平台文件:`);
+  console.log(`   - libquery_engine-debian-openssl-3.0.x.so.node`);
+  console.log(`   - libquery_engine-linux-musl-openssl-3.0.x.so.node`);
+  console.log(`   - *-linux vendor 目录`);
+  
   console.log(`\n✨ 完成！共处理 ${copiedCount}/${Object.keys(DIR_COPY_RULES).length} 个目录`);
   console.log(`📁 输出目录: ${STANDALONE_DIR}`);
 }
