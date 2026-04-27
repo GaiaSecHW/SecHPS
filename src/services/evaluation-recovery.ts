@@ -433,29 +433,49 @@ async function recoverEvaluation(
   evaluation: any,
   recoveryStatus: RecoveryStatus
 ): Promise<{ success: boolean; error?: string }> {
+  const LOG_RECOVER = '[RecoverEvaluation]';
+  console.log(`${LOG_RECOVER} ========== 开始恢复评估 ==========`);
+  console.log(`${LOG_RECOVER}   evaluationId: ${evaluation.id}`);
+  console.log(`${LOG_RECOVER}   projectId: ${evaluation.projectId}`);
+  console.log(`${LOG_RECOVER}   workflowId: ${evaluation.workflowId}`);
+  console.log(`${LOG_RECOVER}   workflowType: ${evaluation.workflowType}`);
+  
   try {
     const projectId = evaluation.projectId;
     const project = evaluation.Project;
     
+    console.log(`${LOG_RECOVER} Step 1: 检查 workflowId...`);
+    
     // ❌ EvaluationSession 没有 Workflow 关系，需要用 workflowId 查询
     if (!evaluation.workflowId) {
+      console.log(`${LOG_RECOVER} ❌ 失败: 评估没有关联工作流`);
       return { success: false, error: '评估没有关联工作流，无法恢复' };
     }
     
+    console.log(`${LOG_RECOVER} Step 2: 查询 Workflow...`);
     const workflow = await prisma.workflow.findUnique({
       where: { id: evaluation.workflowId },
     });
     
+    console.log(`${LOG_RECOVER}   workflow: ${workflow ? '找到' : '未找到'}`);
+    console.log(`${LOG_RECOVER}   workflowType: ${workflow?.workflowType}`);
+    
     if (!project || !workflow) {
+      console.log(`${LOG_RECOVER} ❌ 失败: 缺少项目或工作流信息`);
       return { success: false, error: '缺少项目或工作流信息' };
     }
     
+    console.log(`${LOG_RECOVER} Step 3: 锁定项目...`);
     // 1. 锁定项目（防止并发恢复）
     const locked = await lockProject(projectId, evaluation.id);
+    console.log(`${LOG_RECOVER}   locked: ${locked}`);
+    
     if (!locked) {
+      console.log(`${LOG_RECOVER} ❌ 失败: 项目已被锁定，无法恢复`);
       return { success: false, error: '项目已被锁定，无法恢复' };
     }
     
+    console.log(`${LOG_RECOVER} Step 4: 更新评估状态为 recovering...`);
     // 2. 更新评估状态为恢复中
     await prisma.evaluationSession.update({
       where: { id: evaluation.id },
@@ -465,40 +485,60 @@ async function recoverEvaluation(
       },
     });
     
+    console.log(`${LOG_RECOVER} Step 5: 发送恢复事件...`);
     // 3. 发送恢复事件
     emitPreparingProgress(evaluation.id, {
       stage: 'evaluation_start',
       message: `开始恢复评估，从节点 ${recoveryStatus.nextNodeToExecute + 1} 继续`,
     });
     
+    console.log(`${LOG_RECOVER} Step 6: 获取模型配置...`);
     // 4. 获取模型配置
     const modelConfig = await getModelConfigForRecovery(evaluation);
+    console.log(`${LOG_RECOVER}   modelConfig: ${modelConfig ? '找到' : '未找到'}`);
+    
     if (!modelConfig) {
+      console.log(`${LOG_RECOVER} ❌ 失败: 无法获取模型配置`);
       return { success: false, error: '无法获取模型配置' };
     }
     
     // 5. 获取 MCP 配置
     const mcpServers = await loadMcpServersForProject(projectId, project.userId);
+    console.log(`${LOG_RECOVER}   mcpServers: ${mcpServers?.length || 0} 个`);
     
     // 🔑 优先使用 opencodeSessionId 恢复对话（如果有 running 状态节点且有 sessionId）
+    console.log(`${LOG_RECOVER} Step 7: 检查 running 节点...`);
     const nodeExecutions = evaluation.NodeExecution || [];
+    console.log(`${LOG_RECOVER}   nodeExecutions 数量: ${nodeExecutions.length}`);
+    
     const runningNode = nodeExecutions.find((n: any) => n.status === 'running');
+    console.log(`${LOG_RECOVER}   runningNode: ${runningNode ? '找到' : '未找到'}`);
+    
+    if (runningNode) {
+      console.log(`${LOG_RECOVER}   runningNode.workflowNodeId: ${runningNode.workflowNodeId}`);
+      console.log(`${LOG_RECOVER}   runningNode.nodeLabel: ${runningNode.nodeLabel}`);
+      console.log(`${LOG_RECOVER}   runningNode.opencodeSessionId: ${runningNode.opencodeSessionId || '无'}`);
+    }
     
     if (runningNode && runningNode.opencodeSessionId) {
-      console.log(`${LOG_PREFIX} 发现 running 节点有 opencodeSessionId，优先恢复对话`);
-      console.log(`${LOG_PREFIX}   nodeId: ${runningNode.workflowNodeId}`);
-      console.log(`${LOG_PREFIX}   opencodeSessionId: ${runningNode.opencodeSessionId}`);
+      console.log(`${LOG_RECOVER} ✅ 发现 running 节点有 opencodeSessionId，优先恢复对话`);
+      console.log(`${LOG_RECOVER}   opencodeSessionId: ${runningNode.opencodeSessionId}`);
       
       // 尝试通过 opencodeSessionId 恢复对话
       const recoveryResult = await recoverNodeConversation(evaluation, runningNode, modelConfig, mcpServers);
       
+      console.log(`${LOG_RECOVER}   recoveryResult.success: ${recoveryResult.success}`);
+      console.log(`${LOG_RECOVER}   recoveryResult.error: ${recoveryResult.error || '无'}`);
+      
       if (recoveryResult.success) {
-        console.log(`${LOG_PREFIX} opencodeSessionId 恢复对话成功`);
+        console.log(`${LOG_RECOVER} ✅ opencodeSessionId 恢复对话成功`);
         return { success: true };
       } else {
-        console.log(`${LOG_PREFIX} opencodeSessionId 恢复对话失败: ${recoveryResult.error}`);
-        console.log(`${LOG_PREFIX} 继续使用节点重新执行方式恢复`);
+        console.log(`${LOG_RECOVER} ❌ opencodeSessionId 恢复对话失败: ${recoveryResult.error}`);
+        console.log(`${LOG_RECOVER} 继续使用节点重新执行方式恢复`);
       }
+    } else {
+      console.log(`${LOG_RECOVER} ⚠️ 没有找到有 opencodeSessionId 的 running 节点`);
     }
     
     // 6. 根据工作流类型恢复执行（节点重新执行方式）
