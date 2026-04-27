@@ -847,9 +847,8 @@ export async function copySkillsByIds(
         continue;
       }
 
-      // 技术栈验证
+      // 技术栈验证（统一用 ID 比较）
       if (projectTechStack && projectTechStack.length > 0 && skill.techStackId) {
-        // Skill 有技术栈限制，检查是否匹配
         if (!projectTechStack.includes(skill.techStackId)) {
           result.invalidSkills?.push({
             skillId,
