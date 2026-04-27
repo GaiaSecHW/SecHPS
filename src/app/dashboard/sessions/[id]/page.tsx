@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   FileSearch,
   User,
+  RefreshCw,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -183,6 +184,10 @@ function SessionDetailContent({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [nodeMessages, setNodeMessages] = useState<any[]>([]);
   const [loadingNodeMessages, setLoadingNodeMessages] = useState(false);
+  
+  // 刷新按钮冷却时间控制
+  const [lastRefreshTime, setLastRefreshTime] = useState<Date | null>(null);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
 
   // 用 ref 持久保存子任务的 startedAt，防止轮询覆盖
   const childStartedAtRef = useRef<Record<string, string>>({});
@@ -512,6 +517,20 @@ function SessionDetailContent({
       stopNodePolling();
     };
   }, []);
+  
+  // 刷新按钮冷却倒计时
+  useEffect(() => {
+    if (refreshCooldown <= 0) return;
+    
+    const timer = setInterval(() => {
+      setRefreshCooldown(prev => {
+        if (prev <= 1) return 0;
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [refreshCooldown]);
 
   // 获取工作流节点列表（合并配置和执行状态）
   const fetchWorkflowNodes = async () => {
@@ -1208,17 +1227,39 @@ const fetchChildrenSessions = async (nodeId?: string) => {
             {/* Workflow Nodes - 显示所有节点（从工作流配置）合并执行状态 */}
             {workflowNodes.length > 0 && (
               <div className="mb-6">
-                <button
-                  onClick={() => setIsNodesExpanded(!isNodesExpanded)}
-                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
-                >
-                  <div className="flex items-center">
+                <div className="flex items-center justify-between mb-3">
+                  <button
+                    onClick={() => setIsNodesExpanded(!isNodesExpanded)}
+                    className="flex items-center text-lg font-semibold text-gray-900 hover:text-gray-700 transition-colors"
+                  >
                     <GitBranch size={18} className="mr-2 text-orange-600" />
                     节点列表 ({workflowNodes.length})
                     <span className="ml-2 text-xs text-gray-400 font-normal">点击节点查看消息</span>
-                  </div>
-                  {isNodesExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                </button>
+                    {isNodesExpanded ? <ChevronUp size={20} className="ml-2" /> : <ChevronDown size={20} className="ml-2" />}
+                  </button>
+                  
+                  {/* 刷新按钮 */}
+                  <button
+                    onClick={() => {
+                      if (refreshCooldown > 0) return;
+                      fetchWorkflowNodes();
+                      setLastRefreshTime(new Date());
+                      setRefreshCooldown(30);
+                    }}
+                    disabled={refreshCooldown > 0}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                      refreshCooldown > 0
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                    }`}
+                    title={refreshCooldown > 0 ? `${refreshCooldown}秒后可刷新` : '刷新节点数据'}
+                  >
+                    <RefreshCw size={14} />
+                    <span>
+                      {refreshCooldown > 0 ? `刷新 (${refreshCooldown}秒后)` : '刷新'}
+                    </span>
+                  </button>
+                </div>
                 
                 {/* 执行进度 */}
                 {nodeProgress && (
