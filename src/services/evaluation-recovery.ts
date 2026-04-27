@@ -227,24 +227,8 @@ async function checkRecoveryNeeded(evaluation: any): Promise<RecoveryStatus | nu
     lastCompletedNodeIndex,
   });
   
-  // 所有节点已完成 -> 检查评估状态是否为 running（可能有子任务未完成）
+  // 所有节点已完成 -> 不需要恢复
   if (statusCounts.completed === nodeExecutions.length) {
-    // 如果评估状态是 running，说明可能有子任务未完成，触发恢复让大模型检查
-    if (evaluation.status === 'running') {
-      const lastCompletedNode = nodeExecutions[nodeExecutions.length - 1];
-      if (lastCompletedNode && lastCompletedNode.opencodeSessionId) {
-        console.log(`${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成但状态仍为 running，触发恢复检查子任务`);
-        return {
-          evaluationId: evaluation.id,
-          projectId: evaluation.projectId,
-          workflowType: evaluation.workflowType as 'fsm' | 'custom',
-          lastCompletedNodeIndex: nodeExecutions.length - 1,
-          nextNodeToExecute: nodeExecutions.length - 1, // 恢复最后一个节点
-          totalNodes: nodeExecutions.length,
-          recoveryReason: `检查子任务执行进度并继续完成`,
-        };
-      }
-    }
     logger.debug(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 评估 ${evaluation.id} 所有节点已完成`);
     return null;
   }
