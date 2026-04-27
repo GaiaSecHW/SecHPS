@@ -1,10 +1,6 @@
 // instrumentation.ts
 // Next.js 服务启动钩子 - 恢复评估状态和触发队列调度
-
-import { restoreLocksFromDatabase } from './src/lib/evaluation-lock';
-import { processQueue } from './src/services/evaluation-queue';
-import { recoverInterruptedEvaluations } from './src/services/evaluation-recovery';
-import { prisma } from './src/lib/prisma';
+// 使用动态导入避免 Edge Runtime 加载 Node.js 模块
 
 const LOG_PREFIX = '[Instrumentation]';
 
@@ -18,6 +14,12 @@ const LOG_PREFIX = '[Instrumentation]';
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     console.log(`${LOG_PREFIX} 应用启动，恢复评估锁定状态...`);
+    
+    // 动态导入 Node.js 模块（避免 Edge Runtime 错误）
+    const { restoreLocksFromDatabase } = await import('./src/lib/evaluation-lock');
+    const { processQueue } = await import('./src/services/evaluation-queue');
+    const { recoverInterruptedEvaluations } = await import('./src/services/evaluation-recovery');
+    const { prisma } = await import('./src/lib/prisma');
     
     try {
       // Step 1: 恢复项目锁状态
