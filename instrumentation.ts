@@ -39,8 +39,8 @@ export async function register() {
       console.log(`${LOG_PREFIX} 发现 ${runningEvaluations.length} 个活跃评估`);
       
       if (runningEvaluations.length > 0) {
-        runningEvaluations.forEach((eval, index) => {
-          console.log(`  ${index + 1}. ${eval.id} - ${eval.Project?.name || '未知'} - 状态: ${eval.status}`);
+        runningEvaluations.forEach((session, index) => {
+          console.log(`  ${index + 1}. ${session.id} - ${session.Project?.name || '未知'} - 状态: ${session.status}`);
         });
       }
       
@@ -60,8 +60,8 @@ export async function register() {
       console.log(`${LOG_PREFIX} 发现 ${queuedEvaluations.length} 个排队评估`);
       
       if (queuedEvaluations.length > 0) {
-        queuedEvaluations.forEach((eval, index) => {
-          console.log(`  ${index + 1}. ${eval.id} - ${eval.Project?.name || '未知'} - 入队时间: ${eval.startedAt?.toISOString() || '未知'}`);
+        queuedEvaluations.forEach((session, index) => {
+          console.log(`  ${index + 1}. ${session.id} - ${session.Project?.name || '未知'} - 入队时间: ${session.startedAt?.toISOString() || '未知'}`);
         });
         
         // 触发队列调度
