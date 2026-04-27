@@ -1,7 +1,7 @@
 // src/components/evaluation/QueueMonitor.tsx
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Activity,
   Hourglass,
@@ -12,19 +12,21 @@ import {
   ListOrdered,
   Clock,
   Zap,
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useQueueStatus, QueuedEvaluation } from '@/hooks/useQueueStatus';
 import { formatBeijingTime } from '@/lib/beijing-time';
 
 interface QueueMonitorProps {
-  /** 是否显示详细排队列表 */
-  showDetail?: boolean;
   /** 是否自动刷新（默认 10 秒） */
   autoRefresh?: boolean;
   /** 刷新间隔（毫秒） */
   refreshInterval?: number;
-  /** 最大显示排队数量 */
-  maxQueueDisplay?: number;
+  /** 每页显示排队数量 */
+  pageSize?: number;
 }
 
 /**
@@ -33,26 +35,47 @@ interface QueueMonitorProps {
  * 显示当前评估队列状态：
  * - 运行中数量 / 最大并发
  * - 排队中数量
- * - 排队列表（项目名、排队位置、入队时间）
+ * - 排队列表（默认收缩，点击展开，支持分页）
  * 
  * @example
  * // 基础用法
  * <QueueMonitor />
  * 
- * // 显示详细排队列表
- * <QueueMonitor showDetail />
- * 
  * // 禁用自动刷新
  * <QueueMonitor autoRefresh={false} />
  */
 export function QueueMonitor({
-  showDetail = true,
   autoRefresh = true,
   refreshInterval = 10000,
-  maxQueueDisplay = 5,
+  pageSize = 5,
 }: QueueMonitorProps) {
   const { status, loading, error, refresh, hasActiveEvaluations, hasQueuedEvaluations, isQueueFull } =
     useQueueStatus(autoRefresh ? refreshInterval : 0);
+  
+  // 排队列表展开/收缩状态
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  // 分页状态
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // 计算分页信息
+  const totalItems = status?.queuedEvaluations?.length || 0;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const currentItems = status?.queuedEvaluations?.slice(startIndex, endIndex) || [];
+  
+  // 重置分页到第一页（当数据变化时）
+  const handleExpand = () => {
+    setIsExpanded(!isExpanded);
+    if (!isExpanded) {
+      setCurrentPage(1);
+    }
+  };
+  
+  // 分页导航
+  const goToPrevPage = () => setCurrentPage(Math.max(1, currentPage - 1));
+  const goToNextPage = () => setCurrentPage(Math.min(totalPages, currentPage + 1));
 
   // 格式化等待时间
   const formatWaitTime = (createdAt: Date): string => {
@@ -180,44 +203,89 @@ export function QueueMonitor({
         </div>
       )}
 
-      {/* 排队列表详情 */}
-      {showDetail && status?.queuedEvaluations && status.queuedEvaluations.length > 0 && (
+      {/* 排队列表详情（可展开/收缩） */}
+      {status && (
         <div className="border-t border-gray-100 pt-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center">
-            <ListOrdered size={16} className="mr-2 text-gray-500" />
-            排队评估列表
-            {status.queuedEvaluations.length > maxQueueDisplay && (
-              <span className="ml-2 text-xs text-gray-500">
-                (显示前 {maxQueueDisplay} 个)
-              </span>
-            )}
-          </h4>
+          {/* 可点击的标题 */}
+          <button
+            onClick={handleExpand}
+            className="w-full flex items-center justify-between text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+          >
+            <span className="flex items-center">
+              <ListOrdered size={16} className="mr-2 text-gray-500" />
+              排队评估列表
+              {hasQueuedEvaluations && (
+                <span className="ml-2 text-xs text-gray-500">
+                  ({status.queuedCount} 个)
+                </span>
+              )}
+            </span>
+            <span className="flex items-center text-gray-500">
+              {isExpanded ? (
+                <>
+                  <span className="mr-1 text-xs">收起</span>
+                  <ChevronUp size={16} />
+                </>
+              ) : (
+                <>
+                  <span className="mr-1 text-xs">展开</span>
+                  <ChevronDown size={16} />
+                </>
+              )}
+            </span>
+          </button>
           
-          <div className="space-y-2">
-            {status.queuedEvaluations.slice(0, maxQueueDisplay).map((evaluation, index) => (
-              <QueueItem
-                key={evaluation.id}
-                evaluation={evaluation}
-                index={index}
-                formatWaitTime={formatWaitTime}
-              />
-            ))}
-          </div>
-          
-          {status.queuedEvaluations.length > maxQueueDisplay && (
-            <p className="mt-2 text-xs text-gray-500 text-center">
-              还有 {status.queuedEvaluations.length - maxQueueDisplay} 个评估在队列中
-            </p>
+          {/* 展开的内容 */}
+          {isExpanded && (
+            <div className="mt-3">
+              {hasQueuedEvaluations ? (
+                <>
+                  {/* 排队列表 */}
+                  <div className="space-y-2">
+                    {currentItems.map((evaluation, index) => (
+                      <QueueItem
+                        key={evaluation.id}
+                        evaluation={evaluation}
+                        index={startIndex + index}
+                        formatWaitTime={formatWaitTime}
+                      />
+                    ))}
+                  </div>
+                  
+                  {/* 分页控制 */}
+                  {totalPages > 1 && (
+                    <div className="mt-3 flex items-center justify-between">
+                      <span className="text-xs text-gray-500">
+                        第 {currentPage} / {totalPages} 页，共 {totalItems} 个
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={goToPrevPage}
+                          disabled={currentPage === 1}
+                          className="flex items-center px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <ChevronLeft size={14} className="mr-0.5" />
+                          上一页
+                        </button>
+                        <button
+                          onClick={goToNextPage}
+                          disabled={currentPage === totalPages}
+                          className="flex items-center px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          下一页
+                          <ChevronRight size={14} className="ml-0.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 text-center py-2">
+                  当前没有排队等待的评估
+                </p>
+              )}
+            </div>
           )}
-        </div>
-      )}
-
-      {/* 无排队时的提示 */}
-      {showDetail && status && !hasQueuedEvaluations && (
-        <div className="border-t border-gray-100 pt-4">
-          <p className="text-sm text-gray-500 text-center py-2">
-            当前没有排队等待的评估
-          </p>
         </div>
       )}
 

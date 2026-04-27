@@ -368,7 +368,7 @@ export default function DashboardPage() {
       {/* 队列状态监控 - 管理员可见 */}
       {isAdmin && (
         <div className="mb-6">
-          <QueueMonitor showDetail autoRefresh refreshInterval={10000} maxQueueDisplay={5} />
+          <QueueMonitor autoRefresh refreshInterval={10000} pageSize={5} />
         </div>
       )}
 

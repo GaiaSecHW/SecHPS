@@ -757,12 +757,26 @@ export async function POST(
           logger.info(LOG_MODULES.EVALUATION, '检测到 FSM 工作流，切换到 FSM 异步执行模式');
           
           // FSM 异步模式：更新评估记录（补充完整信息）
-          // 如果 evaluationIdForLock 已存在，更新它；否则创建新的
-          let evaluationIdToUse = evaluationIdForLock || generateId('eval');
+          // 优先级：queuedEvaluationId（队列启动） > evaluationIdForLock（正常启动） > 生成新 ID
+          let evaluationIdToUse = queuedEvaluationId || evaluationIdForLock || generateId('eval');
           let evaluation;
           
-          if (evaluationIdForLock) {
-            // 更新已创建的 preparing 记录
+          if (queuedEvaluationId) {
+            // 队列启动场景：复用已有的排队评估记录
+            // 注意：start-queued API 已将状态更新为 running，这里补充完整信息
+            evaluation = await prisma.evaluationSession.update({
+              where: { id: queuedEvaluationId },
+              data: {
+                providerType: modelConfig.providerType,
+                workflowType: 'fsm',
+                modelConfigId: modelId,
+                roleModels: roleModels ? JSON.stringify(roleModels) : null,
+              },
+              include: { Project: true },
+            });
+            logger.info(LOG_MODULES.EVALUATION, 'FSM 队列评估记录已更新', { evaluationId: queuedEvaluationId });
+          } else if (evaluationIdForLock) {
+            // 正常启动场景：更新已创建的 preparing 记录
             evaluation = await prisma.evaluationSession.update({
               where: { id: evaluationIdForLock },
               data: {
@@ -773,7 +787,7 @@ export async function POST(
             });
             logger.info(LOG_MODULES.EVALUATION, 'FSM 评估记录已更新', { evaluationId: evaluationIdForLock });
           } else {
-            // 创建新的评估记录（重连或队列启动场景）
+            // 重连场景或其他特殊情况：创建新的评估记录
             evaluation = await prisma.evaluationSession.create({
               data: {
                 id: evaluationIdToUse,
@@ -1190,12 +1204,27 @@ export async function POST(
         logger.info(LOG_MODULES.EVALUATION, '检测到 DAG 工作流，切换到 DAG 异步执行模式');
         
         // DAG 异步模式：更新评估记录（补充完整信息）
-        // 如果 evaluationIdForLock 已存在，更新它；否则创建新的
-        let dagEvaluationIdToUse = evaluationIdForLock || generateId('eval');
+        // 优先级：queuedEvaluationId（队列启动） > evaluationIdForLock（正常启动） > 生成新 ID
+        let dagEvaluationIdToUse = queuedEvaluationId || evaluationIdForLock || generateId('eval');
         let dagEvaluation;
         
-        if (evaluationIdForLock) {
-          // 更新已创建的 preparing 记录
+        if (queuedEvaluationId) {
+          // 队列启动场景：复用已有的排队评估记录
+          // 注意：start-queued API 已将状态更新为 running，这里补充完整信息
+          dagEvaluation = await prisma.evaluationSession.update({
+            where: { id: queuedEvaluationId },
+            data: {
+              providerType: modelConfig.providerType,
+              workflowType: 'dag',
+              agentTeamId: agentTeamId,
+              modelConfigId: modelId,
+              roleModels: roleModels ? JSON.stringify(roleModels) : null,
+            },
+            include: { Project: true },
+          });
+          logger.info(LOG_MODULES.EVALUATION, 'DAG 队列评估记录已更新', { evaluationId: queuedEvaluationId });
+        } else if (evaluationIdForLock) {
+          // 正常启动场景：更新已创建的 preparing 记录
           dagEvaluation = await prisma.evaluationSession.update({
             where: { id: evaluationIdForLock },
             data: {
@@ -1207,7 +1236,7 @@ export async function POST(
           });
           logger.info(LOG_MODULES.EVALUATION, 'DAG 评估记录已更新', { evaluationId: evaluationIdForLock });
         } else {
-          // 创建新的评估记录（重连或队列启动场景）
+          // 重连场景或其他特殊情况：创建新的评估记录
           dagEvaluation = await prisma.evaluationSession.create({
             data: {
               id: dagEvaluationIdToUse,
