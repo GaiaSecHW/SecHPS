@@ -19,6 +19,8 @@ export async function POST(
 ) {
   const { id } = await params;
   
+  console.log(`\n[Start-Queued] ========== 收到启动请求 ==========`);
+  console.log(`[Start-Queued] evaluationId: ${id}`);
   logger.debug(LOG_MODULES.EVALUATION, '收到启动请求:', { details: { evaluationId: id } });
   
   // 检查是否为内部调用（支持两种方式：X-Internal-Token 或 X-Internal-Call）
@@ -26,13 +28,19 @@ export async function POST(
   const internalCall = request.headers.get('X-Internal-Call') === 'true';
   const isValidInternal = internalToken === process.env.INTERNAL_API_SECRET || internalCall;
   
+  console.log(`[Start-Queued] 内部调用检查: internalToken=${internalToken ? '有' : '无'}, internalCall=${internalCall}, isValid=${isValidInternal}`);
+  
   if (!isValidInternal) {
+    console.log(`[Start-Queued] ✗ 拒绝非内部调用`);
     logger.debug(LOG_MODULES.EVALUATION, '拒绝非内部调用');
     return NextResponse.json({ error: '仅允许内部调用' }, { status: 403 });
   }
   
+  console.log(`[Start-Queued] ✓ 内部调用验证通过`);
+  
   try {
     // 获取排队评估信息
+    console.log(`[Start-Queued] 查询评估信息...`);
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
       include: {
@@ -45,20 +53,25 @@ export async function POST(
     });
     
     if (!evaluation) {
+      console.log(`[Start-Queued] ✗ 评估不存在: ${id}`);
       logger.debug(LOG_MODULES.EVALUATION, '评估不存在:', { details: { id } });
       return NextResponse.json({ error: '评估不存在' }, { status: 404 });
     }
     
     const projectName = evaluation.Project?.name || '未知项目';
+    console.log(`[Start-Queued] 评估信息: projectId=${evaluation.projectId}, projectName=${projectName}, status=${evaluation.status}`);
     
     if (evaluation.status !== 'queued') {
+      console.log(`[Start-Queued] ✗ 评估状态不是 queued: ${evaluation.status}`);
       logger.debug(LOG_MODULES.EVALUATION, '评估状态不是 queued:', { details: { status: evaluation.status } });
       return NextResponse.json({ error: '评估不在排队状态', currentStatus: evaluation.status }, { status: 400 });
     }
     
+    console.log(`[Start-Queued] ✓ 开始启动排队评估...`);
     logger.info(LOG_MODULES.EVALUATION, '启动排队评估:', { details: { id, projectId: evaluation.projectId, projectName } });
     
     // 更新评估状态为 running
+    console.log(`[Start-Queued] 更新评估状态为 running...`);
     await prisma.evaluationSession.update({
       where: { id },
       data: {
@@ -66,21 +79,25 @@ export async function POST(
         startedAt: new Date(),
       },
     });
+    console.log(`[Start-Queued] ✓ 评估状态已更新为 running`);
     
     // 更新项目状态为 running
     await prisma.project.update({
       where: { id: evaluation.projectId },
       data: { status: 'running' },
     });
+    console.log(`[Start-Queued] ✓ 项目状态已更新为 running`);
     
     // 通过调用项目的 start API 启动评估
-    // 注意：这里需要重新触发完整的评估流程
     const startUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/projects/${evaluation.projectId}/start`;
+    console.log(`[Start-Queued] 调用 start API: ${startUrl}`);
     
     // 获取全局配置中的模型信息
     const globalConfig = await prisma.opencodeConfig.findFirst({
       where: { isActive: true },
     });
+    
+    console.log(`[Start-Queued] 全局配置: ${globalConfig ? `找到 (maxConcurrent=${globalConfig.maxConcurrentEvaluations})` : '未找到'}`);
     
     // 获取一个可用的模型配置
     const modelConfig = await prisma.modelConfig.findFirst({
@@ -88,8 +105,11 @@ export async function POST(
       orderBy: { createdAt: 'desc' },
     });
     
+    console.log(`[Start-Queued] 模型配置: ${modelConfig ? `找到 (${modelConfig.name}, provider=${modelConfig.providerType})` : '未找到'}`);
+    
     if (!modelConfig) {
       const errorMsg = '没有可用的模型配置';
+      console.log(`[Start-Queued] ✗ ${errorMsg}`);
       logger.errorNoUser(LOG_MODULES.EVALUATION, errorMsg, { evaluationId: id });
       
       // 发送队列错误事件
@@ -118,6 +138,15 @@ export async function POST(
     }
     
     // 调用 start API（使用内部标记绕过并发检查和认证）
+    console.log(`[Start-Queued] 构建请求体: workflowId=${evaluation.workflowId}, agentTeamId=${evaluation.agentTeamId}, modelId=${modelConfig.id}, queuedEvaluationId=${id}`);
+    
+    const requestBody = JSON.stringify({
+      agentTeamId: evaluation.agentTeamId,
+      modelId: modelConfig.id,
+      queuedEvaluationId: id, // 传递排队评估ID，用于复用而不是创建新的
+    });
+    
+    console.log(`[Start-Queued] 调用 start API...`);
     const response = await fetch(startUrl, {
       method: 'POST',
       headers: {
@@ -125,12 +154,10 @@ export async function POST(
         'X-Internal-Queued-Start': 'true', // 标记为队列启动，绕过并发检查
         'X-Internal-Call': 'true', // 内部调用，绕过认证
       },
-      body: JSON.stringify({
-        agentTeamId: evaluation.agentTeamId,
-        modelId: modelConfig.id,
-        queuedEvaluationId: id, // 传递排队评估ID，用于复用而不是创建新的
-      }),
+      body: requestBody,
     });
+    
+    console.log(`[Start-Queued] start API 响应: status=${response.status} ${response.statusText}`);
     
     if (!response.ok) {
       // 解析完整错误响应
@@ -188,7 +215,10 @@ export async function POST(
     }
     
     const result = await response.json();
+    console.log(`[Start-Queued] ✓ start API 返回成功: ${JSON.stringify(result, null, 2)}`);
     logger.info(LOG_MODULES.EVALUATION, '评估启动成功:', { details: { evaluationId: id, result } });
+    
+    console.log(`[Start-Queued] ========== 启动流程完成 ==========`);
     
     return NextResponse.json({
       message: '排队评估已启动',

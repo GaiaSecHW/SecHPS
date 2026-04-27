@@ -49,10 +49,12 @@ export async function getMaxConcurrent(): Promise<number> {
  * 改进：循环启动所有可启动的排队评估，直到名额用完
  */
 export async function processQueue(): Promise<void> {
+  console.log(`\n${LOG_PREFIX} ========== 开始处理队列 ==========`);
   logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 开始处理队列...`);
   
   try {
     const maxConcurrent = await getMaxConcurrent();
+    console.log(`${LOG_PREFIX} 最大并发限制: ${maxConcurrent}`);
     
     // 循环启动所有可启动的排队评估
     let startedCount = 0;
@@ -61,6 +63,7 @@ export async function processQueue(): Promise<void> {
       const activeCount = await getRunningCount();
       const queuedCount = await getQueuedCount();
       
+      console.log(`${LOG_PREFIX} 循环检查 #${startedCount + 1}: activeCount=${activeCount}, queuedCount=${queuedCount}, maxConcurrent=${maxConcurrent}`);
       logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 当前状态`, {
         activeCount,
         queuedCount,
@@ -78,19 +81,23 @@ export async function processQueue(): Promise<void> {
       
       // 如果没有空闲名额或没有排队评估，退出循环
       if (activeCount >= maxConcurrent || queuedCount === 0) {
+        console.log(`${LOG_PREFIX} 退出循环条件: activeCount(${activeCount}) >= maxConcurrent(${maxConcurrent}) ? ${activeCount >= maxConcurrent} : queuedCount(${queuedCount}) === 0 ? ${queuedCount === 0}`);
         if (activeCount >= maxConcurrent) {
+          console.log(`${LOG_PREFIX} 无空闲名额，退出循环`);
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 无空闲名额`, {
             activeCount,
             maxConcurrent,
           });
         }
         if (queuedCount === 0) {
+          console.log(`${LOG_PREFIX} 没有排队评估，退出循环`);
           logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 没有排队评估`);
         }
         break;
       }
       
       // 获取最早的排队评估
+      console.log(`${LOG_PREFIX} 查询最早的排队评估...`);
       const queuedEvaluation = await prisma.evaluationSession.findFirst({
         where: { status: 'queued' },
         orderBy: { startedAt: 'asc' },
@@ -102,11 +109,13 @@ export async function processQueue(): Promise<void> {
       });
       
       if (!queuedEvaluation) {
+        console.log(`${LOG_PREFIX} 查询返回空，退出循环`);
         logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 没有排队评估`);
         break;
       }
       
       const projectName = queuedEvaluation.Project?.name || '未知项目';
+      console.log(`${LOG_PREFIX} 发现排队评估: ID=${queuedEvaluation.id}, 项目=${projectName}, projectId=${queuedEvaluation.projectId}`);
       logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现排队评估`, {
         evaluationId: queuedEvaluation.id,
         projectName,
@@ -125,7 +134,10 @@ export async function processQueue(): Promise<void> {
       // 触发排队评估的启动
       // 通过内部 API 调用启动评估
       try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/evaluations/${queuedEvaluation.id}/start-queued`, {
+        const apiUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/evaluations/${queuedEvaluation.id}/start-queued`;
+        console.log(`${LOG_PREFIX} 调用 start-queued API: ${apiUrl}`);
+        
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -134,8 +146,11 @@ export async function processQueue(): Promise<void> {
           },
         });
         
+        console.log(`${LOG_PREFIX} start-queued API 响应: status=${response.status} ${response.statusText}`);
+        
         if (response.ok) {
           startedCount++;
+          console.log(`${LOG_PREFIX} ✓ 排队评估启动成功! startedCount=${startedCount}`);
           
           // 计算等待时间
           const waitTime = Math.round((Date.now() - queuedEvaluation.startedAt.getTime()) / 1000);
@@ -171,8 +186,10 @@ export async function processQueue(): Promise<void> {
           try {
             const errorData = await response.json();
             errorDetails = JSON.stringify(errorData, null, 2);
+            console.log(`${LOG_PREFIX} ✗ start-queued API 返回错误: ${errorDetails}`);
           } catch {
             errorDetails = `HTTP ${response.status}: ${response.statusText}`;
+            console.log(`${LOG_PREFIX} ✗ start-queued API 返回错误: ${errorDetails}`);
           }
           
           logger.errorNoUser(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 启动排队评估失败`, {
