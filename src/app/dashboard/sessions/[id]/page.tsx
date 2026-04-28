@@ -266,41 +266,6 @@ function SessionDetailContent({
     loadAllData();
   }, [evaluationId]);
 
-  useEffect(() => {
-    // 多 Agent 模式使用 evaluationId，旧模式使用 opencodeSessionId
-    if (!evaluationId) return;
-
-    // 主轮询逻辑：只在评估运行时轮询，完成后停止
-    let isPolling = true;
-    
-    const pollLoop = async () => {
-      while (isPolling) {
-        // 先获取评估状态
-        const evalData = await fetchEvaluation();
-        
-        // 如果评估已完成，停止轮询
-        if (evalData?.status === 'completed' || evalData?.status === 'cancelled' || evalData?.status === 'failed') {
-          console.log('[Poll] Evaluation completed, stopping polling');
-          // 最后一次完整刷新
-          fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
-          break;
-        }
-        
-        // 评估仍在运行，继续轮询节点状态
-        fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
-        
-        // 等待 10 秒后继续
-        await new Promise(r => setTimeout(r, 10000));
-      }
-    };
-    
-    pollLoop();
-
-    return () => {
-      isPolling = false;
-    };
-  }, [evaluationId]);
-
   const fetchEvaluation = async (): Promise<any> => {
     if (!evaluationId) return null;
 
