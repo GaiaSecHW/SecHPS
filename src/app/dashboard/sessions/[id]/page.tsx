@@ -1597,12 +1597,36 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                         }}
                         onClick={() => {
                           setSelectedMessage(msg);
+                          let parts: any[] = [];
+                          const content = msg.content;
+                          if (typeof content === 'string') {
+                            try {
+                              const parsed = JSON.parse(content);
+                              if (Array.isArray(parsed)) {
+                                parts = parsed;
+                              } else {
+                                parts = [{ type: 'text', text: content }];
+                              }
+                            } catch {
+                              parts = [{ type: 'text', text: content }];
+                            }
+                          } else if (Array.isArray(content)) {
+                            parts = content;
+                          } else if (content) {
+                            parts = [{ type: 'text', text: JSON.stringify(content, null, 2) }];
+                          }
                           setMessageDetail({
                             id: msg.id,
                             role: msg.role,
                             content: msg.content,
                             createdAt: msg.createdAt,
                             executionId: selectedSkillExecution.executionId,
+                            parts: parts,
+                            info: {
+                              id: msg.id,
+                              role: msg.role,
+                              time: { created: msg.createdAt },
+                            },
                           });
                         }}
                         isSelected={selectedMessage?.id === msg.id}
