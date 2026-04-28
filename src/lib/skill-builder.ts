@@ -66,9 +66,8 @@ export async function getStandardOutputTemplate(): Promise<string | null> {
  */
 const DEFAULT_OUTPUT_FORMAT = `### 检测结果
 - **漏洞类型**：[漏洞类型名称]
-- **位置**：[文件名:行号]
-- **描述**：[具体漏洞描述]
-- **风险等级**：[高危/中危/低危]`;
+- **漏洞代码**：[漏洞点到攻击入口的所有源代码]
+- **描述**：[具体漏洞描述]`;
 
 /**
  * 构建 Skill 系统提示词（给大模型的指令）
@@ -87,7 +86,7 @@ export function buildSystemPrompt(): string {
 2. ❌ **一级标题**（# 漏洞名称 / # Skill 名称）
    - 系统会自动添加 Skill 标题
 
-3. ❌ **## 输出格式** 或 **## 输出要求** 章节
+3. ❌ **## 输出格式** 或 **## 输出要求** 或 **## 工具要求** 章节
    - 系统会自动添加标准输出格式
 
 **你的输出应该直接从 ## 0. 角色定位 开始**
@@ -118,7 +117,6 @@ export function buildSystemPrompt(): string {
 ## 1. 漏洞概述
 - [漏洞类型] 的定义：[简要描述]
 - 常见危害：[真实案例]
-- CWE/CVE 参考：CWE-XXX
 
 ### 3. ## 输入格式
 明确 Agent 接收什么输入：
@@ -161,8 +159,7 @@ export function buildSystemPrompt(): string {
 
 **检测结果：**
 ❌ [漏洞类型] 风险：[描述]
-位置：[文件名:行号]
-风险等级：[高危/中危/低危]
+漏洞代码：[漏洞点到攻击入口的所有源代码]
 
 ### 4.2 隐蔽示例
 **看似安全的代码：**
@@ -180,23 +177,6 @@ export function buildSystemPrompt(): string {
 - **漏报陷阱**：[描述]
 - **边界情况**：[描述]
 
-### 8. ## 6. 参考资源（替代 CWE 独立章节）
-包含 CWE 链接、OWASP 指南：
-
-格式：
-## 6. 参考资源
-- CWE 编号和链接：CWE-XXX (https://cwe.mitre.org/data/definitions/XXX.html)
-- OWASP 指南：[链接]
-- 相关安全公告
-
-### 9. ## 工具要求
-列出 Agent 需要使用的工具名称。
-
-## 简洁原则
-
-- 只添加 Agent 不知道的内容
-- 用指令而非散文："查找..." 而非 "你应该查找..."
-
 ## 输出格式示例
 
 正确输出示例（直接从 ## 0. 角色定位 开始，无 YAML、无一级标题、无输出格式章节）：
@@ -213,7 +193,7 @@ export function buildSystemPrompt(): string {
 
 ## 输入格式
 你将接收：
-- 源代码文件（Java, Python, PHP）
+- 源代码文件（Java, Python, PHP, jar ,war）
 
 ## 2. 检测目标
 识别用户输入拼接 SQL 语句的风险点...
@@ -242,15 +222,7 @@ query = "SELECT * FROM users WHERE id = " + userId
 
 ## 5. 陷阱与边缘情况（最重要）
 - **误报陷阱 1**：ORM raw() 方法仍可能存在注入风险
-...
-
-## 6. 参考资源
-- CWE-89 (https://cwe.mitre.org/data/definitions/89.html)
-...
-
-## 工具要求
-- read_file
-- search_pattern`;
+`;
 }
 
 /**
@@ -271,7 +243,7 @@ export function buildUserPrompt(intent: SkillIntent): string {
 **以下内容绝对不要生成：**
 1. ❌ YAML frontmatter（--- name: xxx ---）
 2. ❌ 一级标题（# 漏洞名称）
-3. ❌ ## 输出格式 或 ## 输出要求 章节
+3. ❌ ## 输出格式 或 ## 输出要求 或 ## 工具要求 章节
 
 **直接从 ## 0. 角色定位 开始输出**
 
@@ -285,36 +257,27 @@ export function buildUserPrompt(intent: SkillIntent): string {
 2. **## 1. 漏洞概述**
    - 漏洞定义
    - 常见危害
-   - CWE/CVE 参考
 
-3. **## 输入格式**
+3. **## 2. 输入格式**
    - 源代码文件（[语言列表]）
    - 文件路径和上下文
 
-4. **## 2. 检测目标**
+4. **## 3. 检测目标**
    - 具体风险类型（3-5条）
 
-5. **## 3. 检测步骤**（细分结构）
-   - ### 3.1 入口识别
-   - ### 3.2 数据流追踪
-   - ### 3.3 漏洞确认
+5. **## 4. 检测步骤**（细分结构）
+   - ### 4.1 入口识别
+   - ### 4.2 数据流追踪
+   - ### 4.3 漏洞确认
 
-6. **## 4. 漏洞示例**（至少 2 个）
-   - ### 4.1 基础示例
-   - ### 4.2 隐蔽示例
+6. **## 5. 漏洞示例**（至少 2 个）
+   - ### 5.1 基础示例
+   - ### 5.2 隐蔽示例
 
-7. **## 5. 陷阱与边缘情况**
+7. **## 6. 陷阱与边缘情况**
    - 误报陷阱
    - 漏报陷阱
-   - 边界情况
-
-8. **## 6. 参考资源**
-   - CWE 编号和链接
-   - OWASP 指南
-
-9. **## 工具要求**
-   - read_file
-   - search_pattern`;
+   - 边界情况`;
 }
 
 /**
@@ -429,7 +392,7 @@ function cleanMarkdownContent(content: string): string {
     content = content.substring(titleMatch[0].length);
   }
   
-  // 使用正则移除所有 "## 输出格式" 或 "## 输出要求" 章节
+  // 使用正则移除所有 "## 输出格式" 或 "## 输出要求" 或 "## 工具要求"  章节
   // 正则说明：
   // - ##\s*输出格式 - 匹配章节标题
   // - [\s\S]*? - 非贪婪匹配任意内容（包括换行）
@@ -438,10 +401,12 @@ function cleanMarkdownContent(content: string): string {
   // 先处理开头的情况（前面没有换行）
   content = content.replace(/^##\s*输出格式[\s\S]*?(?=\n##|$)/gi, '');
   content = content.replace(/^##\s*输出要求[\s\S]*?(?=\n##|$)/gi, '');
+  content = content.replace(/^##\s*工具要求[\s\S]*?(?=\n##|$)/gi, '');
   
   // 再处理中间的情况（前面有换行）
   content = content.replace(/\n##\s*输出格式[\s\S]*?(?=\n##|$)/gi, '');
   content = content.replace(/\n##\s*输出要求[\s\S]*?(?=\n##|$)/gi, '');
+  content = content.replace(/\n##\s*工具要求[\s\S]*?(?=\n##|$)/gi, '');
   
   // 清理多余的空行
   content = content.replace(/\n{3,}/g, '\n\n');
@@ -526,7 +491,6 @@ description: |
 
 - [漏洞类型] 的定义：[简要描述漏洞本质]
 - 常见危害：[真实案例简述，如数据泄露、权限绕过等]
-- CWE/CVE 参考：CWE-XXX
 
 ## 输入格式
 
@@ -571,8 +535,7 @@ description: |
 
 **检测结果：**
 ❌ [漏洞类型] 风险：[具体描述]
-位置：[文件名:行号]
-风险等级：[高危/中危/低危]
+漏洞代码：[漏洞点到攻击入口的所有源代码]
 
 ### 4.2 隐蔽示例
 
@@ -583,8 +546,7 @@ description: |
 
 **检测结果：**
 ❌ [漏洞类型] 风险：[隐蔽原因描述]
-位置：[文件名:行号]
-风险等级：[高危/中危/低危]
+漏洞代码：[漏洞点到攻击入口的所有源代码]
 
 ## 5. 陷阱与边缘情况（最重要）
 
@@ -593,17 +555,7 @@ description: |
 - **漏报陷阱**：[容易遗漏的漏洞变体]
 - **边界情况**：[特殊情况的处理建议]
 
-## 6. 参考资源
-
-- CWE 编号和链接：CWE-XXX (https://cwe.mitre.org/data/definitions/XXX.html)
-- OWASP 指南：[相关 OWASP 页面链接]
-- 相关安全公告：[如有]
-
-## 工具要求
-
-- read_file：读取源代码文件
-- search_pattern：搜索关键代码模式
-- [其他必要工具]`;
+`;
 }
 
 /**
@@ -637,8 +589,6 @@ export function getSkillFormatGuide(): string {
 - ## 检查要点
 - ## 示例（至少 2 个） ⭐重要
 - ## 陷阱与边缘情况 ⭐
-- ## CWE 编号
-- ## 工具要求
 
 注意：YAML frontmatter 和输出格式由系统自动添加，无需手动编写。`;
 }
@@ -726,8 +676,7 @@ query = "SELECT * FROM users WHERE id = " + userId
 
 **检测结果：**
 ❌ SQL 注入风险：用户输入 userId 直接拼接
-位置：[文件名:行号]
-风险等级：高危
+漏洞代码：[漏洞点到攻击入口的所有源代码]
 
 ### 4.2 隐蔽示例
 **看似安全的代码：**
@@ -735,24 +684,14 @@ User.where("name = '" + name + "'")
 
 **检测结果：**
 ❌ SQL 注入风险：ORM raw 条件拼接
-位置：[文件名:行号]
-风险等级：高危
+漏洞代码：[漏洞点到攻击入口的所有源代码]
+
 
 ## 5. 陷阱与边缘情况（最重要）
 
 - **误报陷阱 1**：ORM 的 raw() 方法仍可能存在注入风险
 - **漏报陷阱**：使用预处理语句但动态拼接列名仍然危险
-- **边界情况**：某些 query builder 在特定用法下不安全
-
-## 6. 参考资源
-
-- CWE-89 (https://cwe.mitre.org/data/definitions/89.html)
-- OWASP SQL Injection
-
-## 工具要求
-
-- read_file
-- search_pattern`,
+- **边界情况**：某些 query builder 在特定用法下不安全`,
     },
     principles: [
       {
@@ -779,10 +718,6 @@ User.where("name = '" + name + "'")
         title: '✅ 陷阱与边缘情况',
         description: '列出误报陷阱、漏报陷阱、边界情况，帮助 Agent 避免常见错误判断。',
       },
-      {
-        title: '✅ 参考资源',
-        description: '包含 CWE 编号链接、OWASP 指南，方便 Agent 查阅权威资料。',
-      },
     ],
     mistakes: [
       {
@@ -803,12 +738,6 @@ User.where("name = '" + name + "'")
         right: '分为三个子步骤',
         rightCode: '## 3. 检测步骤\n### 3.1 入口识别\n### 3.2 数据流追踪\n### 3.3 漏洞确认',
       },
-      {
-        wrong: 'CWE 独立章节',
-        wrongCode: '## CWE 编号\nCWE-89',
-        right: '放入参考资源',
-        rightCode: '## 6. 参考资源\n- CWE-89 (链接)\n- OWASP 指南',
-      },
     ],
     sections: [
       { name: '## 0. 角色定位', highlight: true },
@@ -818,8 +747,6 @@ User.where("name = '" + name + "'")
       { name: '## 3. 检测步骤', highlight: true },
       { name: '## 4. 漏洞示例', highlight: true },
       { name: '## 5. 陷阱与边缘情况', highlight: true },
-      { name: '## 6. 参考资源' },
-      { name: '## 工具要求' },
     ],
   };
 }

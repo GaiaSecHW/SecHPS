@@ -60,3 +60,9 @@ data/sessions/
 
 # OMC tool state files
 .omc/
+/.sisyphus
+/.playwright-mcp
+/.sisyphus
+/tmp
+/prisma/migrations
+/scripts

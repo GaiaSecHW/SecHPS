@@ -17,7 +17,7 @@ import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/s
 import { createWatchdog, stopWatchdog, recordWatchdogActivity } from '@/lib/stream-watchdog';
 import { emitPreparingProgress, emitEvaluationStarted, emitEvaluationComplete, emitTodoUpdate, emitPhaseTokenUsage, emitPhaseStart, emitNodeComplete, emitMessageChunk } from '@/lib/event-bus';
 import { createEmptyAnalysisReport } from '@/services/analysis-report';
-import { createSkillExecutionsForEvaluation, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
+import { createSkillExecutionsForEvaluation, createSkillExecutionsForNode, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
 import { generateId, generateIndexedId } from '@/lib/id-generator';
 import { UnifiedWorkflowExecutionEngine, createUnifiedExecutionEngine } from '@/lib/workflow/unified-execution-engine';
 import { topologicalSortDAG } from '@/lib/workflow/topology-sort';
@@ -1432,12 +1432,20 @@ export async function POST(
             
             // 记录每个节点的漏洞分类匹配结果（用于错误提示）
             const nodeCategoryMatchResults: { nodeId: string; categories: string[]; matchedCount: number }[] = [];
+            
+            // 存储每个节点的 skill IDs（用于批量创建 SkillExecution）
+            const nodeSkillsMap: Record<string, string[]> = {};
 
             for (const node of workflowNodes) {
               // 模式 3：漏洞分类（多选）
               if (node.vulnerabilityCategories) {
                 let categoryValues: string[] = [];
-                try { categoryValues = JSON.parse(node.vulnerabilityCategories); } catch { /* ignore */ }
+                // 支持数组和字符串两种格式
+                if (Array.isArray(node.vulnerabilityCategories)) {
+                  categoryValues = node.vulnerabilityCategories;
+                } else if (typeof node.vulnerabilityCategories === 'string') {
+                  try { categoryValues = JSON.parse(node.vulnerabilityCategories); } catch { /* ignore */ }
+                }
                 if (categoryValues.length > 0) {
                   logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] Node 模式 3 - 漏洞分类', { nodeId: node.id, categories: categoryValues.join(', ') });
                   const matchedIds = await matchSkillsByCategoryValues(categoryValues, projectTechStack);
@@ -1448,6 +1456,9 @@ export async function POST(
                     categories: categoryValues,
                     matchedCount: matchedIds.length,
                   });
+                  
+                  // 保存每个节点的 skill IDs
+                  nodeSkillsMap[node.id] = matchedIds;
                   
                   // 模式3：如果筛选结果为空，抛出错误
                   if (matchedIds.length === 0) {
@@ -1466,14 +1477,18 @@ export async function POST(
               // 模式 2：手工指定
               if (node.skills) {
                 logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] Node 模式 2 - 手工指定 Skills', { nodeId: node.id });
-                try {
-                  const skillIds = JSON.parse(node.skills);
-                  if (Array.isArray(skillIds)) {
-                    allSkillIds.push(...skillIds);
-                    logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] Node 指定了 Skills', { nodeId: node.id, skillCount: skillIds.length });
-                  }
-                } catch {
-                  logger.warn(LOG_MODULES.EVALUATION, '[DAG Async] Node skills 字段 JSON 解析失败', { nodeId: node.id });
+                let skillIds: string[] = [];
+                // 支持数组和字符串两种格式
+                if (Array.isArray(node.skills)) {
+                  skillIds = node.skills;
+                } else if (typeof node.skills === 'string') {
+                  try { skillIds = JSON.parse(node.skills); } catch { }
+                }
+                if (skillIds.length > 0) {
+                  // 保存每个节点的 skill IDs
+                  nodeSkillsMap[node.id] = skillIds;
+                  allSkillIds.push(...skillIds);
+                  logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] Node 指定了 Skills', { nodeId: node.id, skillCount: skillIds.length });
                 }
                 continue;
               }
@@ -1975,8 +1990,40 @@ dagCopyResult = await copySkillsToProject(
             
             logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 统一执行引擎已创建', { nodeCount: sortedNodes.length });
             
+            // ========================================
+            // 批量创建 SkillExecution 记录（使用已计算好的 nodeSkillsMap）
+            // ========================================
+            for (const [nodeId, nodeSkills] of Object.entries(nodeSkillsMap)) {
+              if (nodeSkills.length > 0) {
+                try {
+                  await createSkillExecutionsForNode({
+                    evaluationId: dagEvaluation.id,
+                    nodeId: nodeId,
+                    skills: nodeSkills,
+                    projectId: id,
+                  });
+                  logger.debug(LOG_MODULES.EVALUATION, `[DAG Async] 为节点 ${nodeId} 创建 ${nodeSkills.length} 个 SkillExecution 记录`);
+                } catch (error) {
+                  logger.errorNoUser(LOG_MODULES.EVALUATION, `[DAG Async] 为节点 ${nodeId} 创建 SkillExecution 失败`, { error });
+                }
+              }
+            }
+            
+            // ========================================
+            // 注册 engine 到 agent-registry（支持中止功能）
+            // ========================================
+            const { registerAgent, removeAgent } = await import('@/lib/agent-registry');
+            registerAgent(dagEvaluation.id, dagEngine);
+            logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] Engine 已注册到 agent-registry');
+            
             // 执行 DAG
-            await dagEngine.execute();
+            try {
+              await dagEngine.execute();
+            } finally {
+              // 执行完成后移除注册（无论成功或失败）
+              removeAgent(dagEvaluation.id);
+              logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] Engine 已从 agent-registry 移除');
+            }
             
           } catch (error) {
             // 后台执行过程中的错误处理
