@@ -428,22 +428,23 @@ export async function GET(
     }
 
     // 查询 SkillExecution 获取每个节点的 skill 执行状态
-    const skillExecutionsByNode: Record<string, Record<string, { id: string; status: string; order: number; startedAt: string | null; completedAt: string | null }>> = {};
+    const skillExecutionsByNode: Record<string, Record<string, { id: string; status: string; order: number; startedAt: string | null; completedAt: string | null; duration: number | null }>> = {};
     if (allSkillIds.length > 0 && evaluation.id) {
       const skillExecutions = await prisma.skillExecution.findMany({
         where: {
           evaluationId: evaluation.id,
           nodeId: { not: null },
         },
-        select: {
-          id: true,
-          skillId: true,
-          nodeId: true,
-          status: true,
-          order: true,  // 调用次序
-          startedAt: true,
-          completedAt: true,
-        },
+select: {
+           id: true,
+           skillId: true,
+           nodeId: true,
+           status: true,
+           order: true,
+           startedAt: true,
+           completedAt: true,
+           duration: true,
+         },
         orderBy: { order: 'asc' },  // 按调用次序排序
       });
       
@@ -458,6 +459,7 @@ export async function GET(
             order: exec.order,
             startedAt: exec.startedAt?.toISOString() || null,
             completedAt: exec.completedAt?.toISOString() || null,
+            duration: exec.duration,
           };
         }
       });
@@ -502,6 +504,7 @@ export async function GET(
               executionStatus: execStatus.status,
               executionStartedAt: execStatus.startedAt,
               executionCompletedAt: execStatus.completedAt,
+              executionDuration: execStatus.duration,
             };
           })
           .filter((s: any) => s !== undefined);

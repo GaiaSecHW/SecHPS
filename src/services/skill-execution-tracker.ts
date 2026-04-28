@@ -197,9 +197,9 @@ export async function createSkillExecutionsForNode(params: {
  * 按 skillId 去重，只保留每个 skill 的最新记录
  */
 export async function getSkillExecutionsByEvaluation(evaluationId: string) {
-  // 获取所有执行记录
+  // 获取所有执行记录，按 order 排序
   const allExecutions = await prisma.skillExecution.findMany({
-    where: { evaluationId },
+    where: { evaluationId, nodeId: { not: null } },
     include: {
       Skill: {
         select: {
@@ -210,21 +210,10 @@ export async function getSkillExecutionsByEvaluation(evaluationId: string) {
         },
       },
     },
-    orderBy: { createdAt: 'desc' }, // 按时间倒序，最新的在前
+    orderBy: { order: 'asc' },
   });
   
-  // 按 skillId 去重，只保留最新的记录
-  const seenSkillIds = new Set<string>();
-  const uniqueExecutions = allExecutions.filter(exec => {
-    if (seenSkillIds.has(exec.skillId)) {
-      return false; // 已存在，跳过
-    }
-    seenSkillIds.add(exec.skillId);
-    return true;
-  });
-  
-  // 按创建时间正序返回（保持原有顺序）
-  return uniqueExecutions.reverse();
+  return allExecutions;
 }
 
 /**
