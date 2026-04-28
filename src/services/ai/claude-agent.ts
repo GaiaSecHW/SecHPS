@@ -638,6 +638,9 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
               console.log('[ClaudeAgent] 📨 user 消息包含 tool_use_result');
               console.log('[ClaudeAgent] 📨 tool_use_result keys:', Object.keys(msg.tool_use_result));
               console.log('[ClaudeAgent] 📨 msg keys:', Object.keys(msg));
+              console.log('[ClaudeAgent] 📨 parent_tool_use_id:', msg.parent_tool_use_id);
+              console.log('[ClaudeAgent] 📨 tool_use_id:', msg.tool_use_id);
+              console.log('[ClaudeAgent] 📨 tool_name:', msg.tool_name);
               
               const toolResultData = msg.tool_use_result;
               
