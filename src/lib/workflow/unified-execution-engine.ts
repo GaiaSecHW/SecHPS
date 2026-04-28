@@ -1310,7 +1310,19 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     console.log(`[createSkillAgent] Model: ${modelConfig.name}`);
     console.log(`[createSkillAgent] WorkflowNodeId: ${node.id}`);
     
-    const allowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'];
+    // 默认工具列表
+    const defaultAllowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'];
+    
+    // 减去被 deny 的工具
+    const deniedTools = this.config.toolPermissions
+      ? this.config.toolPermissions.filter(p => p.permission === 'deny').map(p => p.toolPattern)
+      : [];
+    
+    const allowedTools = defaultAllowedTools.filter(tool => !deniedTools.includes(tool));
+    
+    console.log(`[createSkillAgent] 默认工具: ${defaultAllowedTools.join(', ')}`);
+    console.log(`[createSkillAgent] 拒绝工具: ${deniedTools.join(', ')}`);
+    console.log(`[createSkillAgent] 最终工具: ${allowedTools.join(', ')}`);
     
     const mcpServers = this.config.mcpServers;
     
