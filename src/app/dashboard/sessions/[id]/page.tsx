@@ -209,48 +209,39 @@ function SessionDetailContent({
   useEffect(() => {
     if (!evaluationId) return;
     
-    // 所有数据加载放在一个串行流程，每次调用后休息3秒
+    // 所有数据加载放在一个串行流程
     const loadAllData = async () => {
       try {
         setLoading(true);
         
         // 1. 先获取评估基本信息（返回数据供后续使用）
         const evalData = await fetchEvaluation();
-        await new Promise(r => setTimeout(r, 3000));
-        
         const projectId = evalData?.projectId;
         console.log('[Init] After fetchEvaluation, projectId:', projectId, 'evalData exists:', !!evalData);
         
         // 2. 消息
         await fetchMessages();
-        await new Promise(r => setTimeout(r, 3000));
         
         // 3. 进度问题
         await fetchProgressQuestion();
-        await new Promise(r => setTimeout(r, 3000));
         
         // 4. 工作流节点
         await fetchWorkflowNodes();
-        await new Promise(r => setTimeout(r, 3000));
         
         console.log('[Init] projectId check:', projectId ? 'passed' : 'FAILED - will skip SSE');
         
         if (projectId) {
           // 5. 会话详情
           await fetchSessionDetail();
-          await new Promise(r => setTimeout(r, 3000));
           
           // 6. 任务列表
           await fetchTodos();
-          await new Promise(r => setTimeout(r, 3000));
           
           // 7. SDK项目
           await fetchSdkProjects();
-          await new Promise(r => setTimeout(r, 3000));
           
           // 8. 子会话
           await fetchChildrenSessions();
-          await new Promise(r => setTimeout(r, 3000));
           
           // 9. 广播
           await fetchBroadcast();
