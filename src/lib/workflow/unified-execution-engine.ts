@@ -1015,6 +1015,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       
       try {
         // 执行 skill agent
+        console.log(`[executeMultiSkillNode] 🚀 开始执行 skillAgent.loop(): ${skill.name}`);
         const result = await skillAgent.loop({
           evaluationId: this.config.evaluationSessionId,
           projectId: this.config.projectId,
@@ -1125,6 +1126,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             onRalphComplete: async () => {},
           },
         });
+        
+        console.log(`[executeMultiSkillNode] ✅ skillAgent.loop() 返回: ${skill.name}, completionReason=${result.completionReason}, iterations=${result.iterations}, textLength=${result.text?.length || 0}`);
         
         this.currentAgent = null;
         
