@@ -1326,8 +1326,17 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     
     const mcpServers = this.config.mcpServers;
     
-    const systemPrompt = `你是安全检测专家。使用预加载的 ${skillName} skill 执行检测。
-skill 已定义检测步骤和 ai4java MCP 工具用法。请按照 skill 内容使用 MCP 工具分析代码。`;
+    const systemPrompt = `你是安全检测专家。执行 ${skillName} 检测任务。
+
+## 重要：工具使用规则
+skill 内容中指定的 MCP 工具是**必须使用**的，禁止使用其他替代工具。
+
+ai4java MCP 工具：
+- mcp__ai4java__decompileProject：反编译项目
+- mcp__ai4java__scanClassMethodSource：扫描方法源码
+- mcp__ai4java__scanClassMethodAllPathSources：扫描调用链
+
+禁止使用 Glob/Grep 等通用工具替代 MCP 工具。`;
     
     return createRalphLoopAgent(
       {

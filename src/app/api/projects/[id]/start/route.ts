@@ -10,7 +10,7 @@ import { createRalphLoopAgent } from '@/services/evaluation';
 import { AppMcpServerConfig } from '@/services/ai/claude-agent';
 import { claudeProjectManager } from '@/lib/claude-project-sync';
 import { mkdir, writeFile, readFile, access, rm } from 'fs/promises';
-import { join } from 'path';
+import path, { join } from 'path';
 import { copySkillsToProject, copySkillsByIds } from '@/services/skill-files';
 import { matchSkillsByCategoryValues } from '@/services/skill-matcher';
 import { buildExperiencePromptWithMeta } from '@/services/autonomous-evolution/system-prompt-builder';
@@ -1510,17 +1510,23 @@ export async function POST(
             // 模式 1：拷贝所有技术栈匹配的 Skills，供 Agent 自主选择（模板由 saveSkillToDisk 内部自动获取）
             if (hasDescriptionModeNode) {
               logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 存在自定义描述节点，拷贝所有技术栈匹配的 Skills 供 Agent 自主选择');
-dagCopyResult = await copySkillsToProject(
-                  project.projectPath || '',
-                  payload.userId,
-                  undefined,
-                  projectTechStack
-                );
-              logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已拷贝 Skills 供模式 1 节点自主选择', { successCount: dagCopyResult.success });
+              
+              // Skills 拷贝到 workspacePath（Agent 工作目录）
+              const workspacePathForSkills = project.projectPath 
+                ? (project.projectPath.endsWith('\\workspace') ? project.projectPath : path.join(project.projectPath, 'workspace'))
+                : '';
+              
+              dagCopyResult = await copySkillsToProject(
+                workspacePathForSkills,
+                payload.userId,
+                undefined,
+                projectTechStack
+              );
+              logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已拷贝 Skills 供模式 1 节点自主选择', { successCount: dagCopyResult.success, path: workspacePathForSkills });
               
               // 同时追加模式 2/3 指定的 Skills（必须执行）
               if (dagUniqueSkillIds.length > 0) {
-                const extra = await copySkillsByIds(project.projectPath || '', dagUniqueSkillIds, undefined, projectTechStack);
+                const extra = await copySkillsByIds(workspacePathForSkills, dagUniqueSkillIds, undefined, projectTechStack);
                 
                 // 模式2：检查验证失败的 Skills
                 if (extra.invalidSkills && extra.invalidSkills.length > 0) {
