@@ -5,7 +5,6 @@ import { prisma } from '@/lib/prisma';
 import { verifyToken } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { generateId, generateIndexedId } from '@/lib/id-generator';
-import { matchSkillsByCategoryValues } from '@/services/skill-matcher';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
 // GET /api/evaluations/[id]/nodes - 获取评估会话的节点执行状态
@@ -355,63 +354,62 @@ export async function GET(
       }
     }
 
-    // 收集所有 skill IDs 并查询 displayName
+    // skillsDetails 直接从 SkillExecution 构建，不需要额外查询
+    
+    // 查询 SkillExecution 获取每个节点的 skill 执行状态（包含 Skill 信息）
+    const skillExecutionsByNode: Record<string, Record<string, { id: string; skillId: string; status: string; order: number; startedAt: string | null; completedAt: string | null; duration: number | null; Skill: { id: string; name: string; displayName: string } | null }>> = {};
     const allSkillIds: string[] = [];
-    const vulnerabilityNodeSkills: Record<string, string[]> = {};  // vulnerability 模式节点的 skills
     
-    workflowNodes.forEach((wn: any) => {
-      // manual 模式：从 wn.skills 数组获取
-      if (wn.skills && Array.isArray(wn.skills)) {
-        wn.skills.forEach((skillId: string) => {
-          if (skillId && !allSkillIds.includes(skillId)) {
-            allSkillIds.push(skillId);
-          }
-        });
-      }
+    if (evaluation.id) {
+      const skillExecutions = await prisma.skillExecution.findMany({
+        where: {
+          evaluationId: evaluation.id,
+          nodeId: { not: null },
+        },
+        select: {
+          id: true,
+          skillId: true,
+          nodeId: true,
+          status: true,
+          order: true,
+          startedAt: true,
+          completedAt: true,
+          duration: true,
+          Skill: {
+            select: {
+              id: true,
+              name: true,
+              displayName: true,
+            },
+          },
+        },
+        orderBy: { order: 'asc' },
+      });
       
-      // vulnerability 模式：从 vulnerabilityCategories 查询匹配的 skills
-      const nodeData = wn.data;
-      if (nodeData?.skillLoadingMode === 'vulnerability' && wn.vulnerabilityCategories) {
-        let vulnCategories: string[] = [];
-        if (Array.isArray(wn.vulnerabilityCategories)) {
-          // 已经是数组，直接使用
-          vulnCategories = wn.vulnerabilityCategories;
-        } else if (typeof wn.vulnerabilityCategories === 'string') {
-          // 是字符串，需要解析
-          try {
-            vulnCategories = JSON.parse(wn.vulnerabilityCategories);
-          } catch {}
-        }
-        
-        if (vulnCategories.length > 0) {
-          // 将分类存起来，后面异步查询
-          vulnerabilityNodeSkills[wn.id] = vulnCategories;
-        }
-      }
-    });
-    
-    // 异步查询 vulnerability 模式的 skills
-    const projectTechStack = evaluation.Project?.techStack 
-      ? JSON.parse(evaluation.Project.techStack) 
-      : null;
-    
-    for (const [nodeId, categories] of Object.entries(vulnerabilityNodeSkills)) {
-      try {
-        const matchedIds = await matchSkillsByCategoryValues(categories, projectTechStack);
-        matchedIds.forEach(skillId => {
-          if (!allSkillIds.includes(skillId)) {
-            allSkillIds.push(skillId);
+      skillExecutions.forEach(exec => {
+        if (exec.nodeId) {
+          if (!skillExecutionsByNode[exec.nodeId]) {
+            skillExecutionsByNode[exec.nodeId] = {};
           }
-        });
-        // 存储匹配结果，后面构建 skillsDetails 时使用
-        vulnerabilityNodeSkills[nodeId] = matchedIds;
-      } catch (e) {
-        logger.warn(LOG_MODULES.EVALUATION, 'vulnerability 模式 skills 匹配失败:', { details: { nodeId, error: String(e) } });
-        vulnerabilityNodeSkills[nodeId] = [];
-      }
+          skillExecutionsByNode[exec.nodeId][exec.skillId] = {
+            id: exec.id,
+            skillId: exec.skillId,
+            status: exec.status,
+            order: exec.order,
+            startedAt: exec.startedAt?.toISOString() || null,
+            completedAt: exec.completedAt?.toISOString() || null,
+            duration: exec.duration,
+            Skill: exec.Skill,
+          };
+          
+          if (!allSkillIds.includes(exec.skillId)) {
+            allSkillIds.push(exec.skillId);
+          }
+        }
+      });
     }
-
-    // 批量查询 Skill 表获取 displayName
+    
+    // 批量查询 Skill 表获取 displayName（用于兜底）
     const skillDetailsMap: Record<string, { id: string; name: string; displayName: string }> = {};
     if (allSkillIds.length > 0) {
       const skills = await prisma.skill.findMany({
@@ -423,45 +421,7 @@ export async function GET(
           id: skill.id,
           name: skill.name,
           displayName: skill.displayName,
-        };
-      });
-    }
-
-    // 查询 SkillExecution 获取每个节点的 skill 执行状态
-    const skillExecutionsByNode: Record<string, Record<string, { id: string; status: string; order: number; startedAt: string | null; completedAt: string | null; duration: number | null }>> = {};
-    if (allSkillIds.length > 0 && evaluation.id) {
-      const skillExecutions = await prisma.skillExecution.findMany({
-        where: {
-          evaluationId: evaluation.id,
-          nodeId: { not: null },
-        },
-select: {
-           id: true,
-           skillId: true,
-           nodeId: true,
-           status: true,
-           order: true,
-           startedAt: true,
-           completedAt: true,
-           duration: true,
-         },
-        orderBy: { order: 'asc' },  // 按调用次序排序
-      });
-      
-      skillExecutions.forEach(exec => {
-        if (exec.nodeId) {
-          if (!skillExecutionsByNode[exec.nodeId]) {
-            skillExecutionsByNode[exec.nodeId] = {};
-          }
-          skillExecutionsByNode[exec.nodeId][exec.skillId] = {
-            id: exec.id,
-            status: exec.status,
-            order: exec.order,
-            startedAt: exec.startedAt?.toISOString() || null,
-            completedAt: exec.completedAt?.toISOString() || null,
-            duration: exec.duration,
-          };
-        }
+};
       });
     }
 
@@ -492,13 +452,16 @@ select: {
               .sort((a, b) => a.order - b.order)
           : []);
         
-        // 构建 skillsDetails
+        // 构建 skillsDetails（直接使用 SkillExecution 中的 Skill 信息）
         const skillsDetails = nodeSkillExecutions
           .map(execStatus => {
-            const skillDetail = skillDetailsMap[execStatus.skillId];
-            if (!skillDetail) return undefined;
+            // 使用 SkillExecution 中的 Skill 信息，或兜底使用 skillDetailsMap
+            const skillInfo = execStatus.Skill || skillDetailsMap[execStatus.skillId];
+            if (!skillInfo) return undefined;
             return {
-              ...skillDetail,
+              id: skillInfo.id,
+              name: skillInfo.name,
+              displayName: skillInfo.displayName,
               executionId: execStatus.id,
               executionOrder: execStatus.order,
               executionStatus: execStatus.status,

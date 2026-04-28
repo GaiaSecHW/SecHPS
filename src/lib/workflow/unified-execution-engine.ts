@@ -1017,6 +1017,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       let accumulatedAssistantText = '';
       let skillInputTokens = 0;
       let skillOutputTokens = 0;
+      let skillCompletedInCallback = false;  // 标记是否在回调中已完成
       
       try {
         // 执行 skill agent
@@ -1088,7 +1089,16 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
                 data: { toolUseId, content: resultData, isError, skillName: skill.name, skillIndex },
               }).catch(err => console.error('[executeMultiSkillNode] 保存工具结果失败:', err));
             },
-            onComplete: () => {
+            onComplete: async () => {
+              console.log(`[executeMultiSkillNode] 🏁 onComplete 回调触发: ${skill.name}`);
+              
+              // 立即更新数据库状态为 completed
+              if (!skillCompletedInCallback) {
+                skillCompletedInCallback = true;
+                console.log(`[executeMultiSkillNode] onComplete 中更新状态: executionId=${executionId}, status=completed`);
+                await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
+              }
+              
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'skill_complete',
                 data: { skillName: skill.name, skillIndex, text: accumulatedAssistantText },
@@ -1193,10 +1203,13 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         
         totalIterations += result.iterations;
         
-        // 更新 SkillExecution 为完成
-        console.log(`[executeMultiSkillNode] 调用 updateSkillExecutionStatus: executionId=${executionId}, skillId=${skill.skillId}, status=completed`);
-        await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
-        console.log(`[executeMultiSkillNode] updateSkillExecutionStatus 完成`);
+        // 如果 onComplete 回调中已更新，跳过
+        if (!skillCompletedInCallback) {
+          console.log(`[executeMultiSkillNode] loop() 返回后更新状态: executionId=${executionId}, status=completed`);
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
+        } else {
+          console.log(`[executeMultiSkillNode] onComplete 已更新状态，跳过`);
+        }
         
         skillResults.push({
           skillName: skill.name,
@@ -1339,6 +1352,18 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       this.config.workspacePath,
       {
         maxIterations: this.config.maxIterationsPerNode,
+        // 检测完成关键词（任务完成、completed、done、finished）
+        verifyCompletion: ({ result }: any) => {
+          const text = result.text || '';
+          const completionKeywords = ['任务完成', '评估完成', '检测完成', 'completed', 'done', 'finished'];
+          const hasCompletionKeyword = completionKeywords.some(keyword => 
+            text.toLowerCase().includes(keyword.toLowerCase())
+          );
+          if (hasCompletionKeyword) {
+            return { complete: true, reason: '检测到完成关键词' };
+          }
+          return { complete: false };
+        },
       },
       {
         systemPrompt: skillSystemPrompt,  // 使用 skill.content 作为 system prompt
@@ -1381,7 +1406,6 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           duration,
           output: status === 'completed' ? outputOrError.substring(0, 500) : undefined,
           error: status === 'failed' ? outputOrError : undefined,
-          updatedAt: completedAt,
         },
       });
       
