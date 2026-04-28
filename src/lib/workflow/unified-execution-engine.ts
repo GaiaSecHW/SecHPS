@@ -969,10 +969,7 @@ callbacks: {
       this.currentSkillIds.push(skill.skillId);
       this.skillNameToExecutionId.set(skill.name, executionId);
       
-      // 构建 skill 专属的 system prompt（使用 skill.content）
-      const skillSystemPrompt = skill.content || `执行 ${skill.displayName} 安全检测`;
-      
-      // 构建 skill 专属的用户提示词
+      // 构建用户提示词（让 agent 调用 skill）
       const skillUserPrompt = `
 # 执行 Skill: ${skill.displayName}
 
@@ -984,7 +981,7 @@ callbacks: {
 ${previousOutputs || '(首个节点，无前序输出)'}
 
 ## 任务要求
-请执行 ${skill.displayName} 安全检测，按照 Skill 定义的要求完成检测任务。
+请调用 /${skill.name} skill 执行安全检测。
 
 ## 重要：完成标志
 完成任务后，必须在输出末尾明确声明：
@@ -994,8 +991,8 @@ ${previousOutputs || '(首个节点，无前序输出)'}
 ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : ''}
 `;
       
-      // 创建 skill 专属的 agent
-      const skillAgent = await this.createSkillAgent(modelConfig, node, skill.name, skillSystemPrompt);
+      // 创建 skill agent（不传 skillSystemPrompt，让 SDK 从 .claude/skills/ 加载）
+      const skillAgent = await this.createSkillAgent(modelConfig, node, skill.name);
       this.currentAgent = skillAgent;
       
       // 设置当前执行的 skill 名称（用于进度监控日志）
@@ -1307,40 +1304,18 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
   private async createSkillAgent(
     modelConfig: ModelConfigForExecution,
     node: UnifiedNodeDefinition,
-    skillName: string,
-    skillSystemPrompt: string
+    skillName: string
   ): Promise<RalphLoopAgent> {
     console.log(`[createSkillAgent] Creating agent for skill: ${skillName}`);
     console.log(`[createSkillAgent] Model: ${modelConfig.name}`);
     console.log(`[createSkillAgent] WorkflowNodeId: ${node.id}`);
     
-    // 基础工具权限（包含 Skill 工具）
-    const allowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
+    const allowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'];
     
-    // MCP 配置：从 config 获取并传递给 SDK
     const mcpServers = this.config.mcpServers;
     
-    // 获取 MCP 服务器名称列表（用于子 Agent 引用）
-    const mcpServerNames = mcpServers ? mcpServers.map(m => m.name) : [];
-    
-    // 创建子 Agent 定义
-    const agents: Record<string, any> = {};
-    
-    agents['general-purpose'] = {
-      description: '通用子Agent，继承父Agent的allowedTools、MCP和Skills',
-      prompt: 'You are a helpful assistant. Follow the instructions and use available tools.',
-      tools: allowedTools,
-      mcpServers: mcpServerNames.length > 0 ? mcpServerNames : undefined,
-      skills: [skillName],  // 只传递当前 skill
-      model: 'inherit',
-    };
-    
-    console.log(`[createSkillAgent] 配置子Agent 'general-purpose' 继承:`);
-    console.log(`  - allowedTools: ${allowedTools.join(', ')}`);
-    if (mcpServerNames.length > 0) {
-      console.log(`  - MCP Servers: ${mcpServerNames.join(', ')}`);
-    }
-    console.log(`  - Skills: ${skillName}`);
+    const systemPrompt = `你是安全检测专家。使用预加载的 ${skillName} skill 执行检测。
+skill 已定义检测步骤和 ai4java MCP 工具用法。请按照 skill 内容使用 MCP 工具分析代码。`;
     
     return createRalphLoopAgent(
       {
@@ -1352,7 +1327,6 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       this.config.workspacePath,
       {
         maxIterations: this.config.maxIterationsPerNode,
-        // 检测完成关键词（任务完成、completed、done、finished）
         verifyCompletion: ({ result }: any) => {
           const text = result.text || '';
           const completionKeywords = ['任务完成', '评估完成', '检测完成', 'completed', 'done', 'finished'];
@@ -1366,15 +1340,14 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         },
       },
       {
-        systemPrompt: skillSystemPrompt,  // 使用 skill.content 作为 system prompt
+        systemPrompt,
         toolPermissions: this.config.toolPermissions,
         permissionMode: this.config.toolPermissions ? 'default' : 'bypassPermissions',
         allowDangerouslySkipPermissions: !this.config.toolPermissions,
         workflowNodeId: node.id,
         allowedTools,
-        skills: [skillName],  // 只注册当前 skill
+        skills: [skillName],
         mcpServers,
-        agents,
         settingSources: ['project'],
       }
     );
