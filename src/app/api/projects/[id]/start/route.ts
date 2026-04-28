@@ -609,7 +609,6 @@ export async function POST(
         try {
           await access(target.path);
           await rm(target.path, { recursive: true, force: true });
-          logger.debug(LOG_MODULES.EVALUATION, '已清理目录', { path: target.path });
         } catch {
           // 不存在，跳过
         }

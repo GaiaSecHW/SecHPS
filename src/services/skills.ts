@@ -735,9 +735,7 @@ export function cleanupProjectSkills(projectPath: string): void {
   const skillsDir = path.join(projectPath, '.claude', 'skills');
   
   if (fs.existsSync(skillsDir)) {
-    // 删除整个目录
     fs.rmSync(skillsDir, { recursive: true, force: true });
-    console.log(`[Skills] 清理目录: ${skillsDir}`);
   }
 }
 
