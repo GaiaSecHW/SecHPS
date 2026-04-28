@@ -101,6 +101,7 @@ export const PERMISSIONS = {
   SKILL_GOVERNANCE_UPDATE: 'skill-governance:update',
   SKILL_MERGE: 'skill:merge',
   SKILL_APPROVE: 'skill:approve',
+  SKILL_EVOLUTION_MANAGE: 'skill-evolution:manage',
 
   // 漏洞权限
   VULNERABILITY_CREATE: 'vulnerability:create',

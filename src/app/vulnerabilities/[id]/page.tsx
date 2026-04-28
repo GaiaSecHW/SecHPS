@@ -85,17 +85,18 @@ const severityColors: Record<string, { bg: string; text: string; border: string 
 const statusColors: Record<string, { bg: string; text: string }> = {
   new: { bg: 'bg-purple-100', text: 'text-purple-700' },
   confirmed: { bg: 'bg-green-100', text: 'text-green-700' },
-  false_positive: { bg: 'bg-gray-100', text: 'text-gray-600' },
+  'false-positive': { bg: 'bg-gray-100', text: 'text-gray-600' },
+  false_positive: { bg: 'bg-gray-100', text: 'text-gray-600' }, // 兼容旧格式
   ignored: { bg: 'bg-gray-100', text: 'text-gray-500' },
   fixed: { bg: 'bg-blue-100', text: 'text-blue-700' },
   verified: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
 };
 
-// Status display names
 const statusNames: Record<string, string> = {
   new: '新发现',
   confirmed: '已确认',
-  false_positive: '误报',
+  'false-positive': '误报',
+  false_positive: '误报', // 兼容旧格式
   ignored: '已忽略',
   fixed: '已修复',
   verified: '已验证',
@@ -113,7 +114,7 @@ export default function VulnerabilityDetailPage() {
   // Confirmation dialogs
   const [confirmDialog, setConfirmDialog] = useState<{
     isOpen: boolean;
-    action: 'confirmed' | 'false_positive' | 'ignored' | null;
+    action: 'confirmed' | 'false-positive' | 'ignored' | null;
     loading: boolean;
   }>({ isOpen: false, action: null, loading: false });
 
@@ -156,15 +157,20 @@ export default function VulnerabilityDetailPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/vulnerabilities/${vulnId}`, {
-        method: 'PUT',
+      
+      // 调用对应的专用 API
+      const apiPath = confirmDialog.action === 'confirmed' 
+        ? `/api/vulnerabilities/${vulnId}/confirm`
+        : confirmDialog.action === 'false-positive'
+        ? `/api/vulnerabilities/${vulnId}/false-positive`
+        : `/api/vulnerabilities/${vulnId}`;
+
+      const response = await fetch(apiPath, {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          status: confirmDialog.action,
-        }),
       });
 
       if (!response.ok) {
@@ -182,7 +188,7 @@ export default function VulnerabilityDetailPage() {
   };
 
   // Open confirmation dialog
-  const openConfirmDialog = (action: 'confirmed' | 'false_positive' | 'ignored') => {
+  const openConfirmDialog = (action: 'confirmed' | 'false-positive' | 'ignored') => {
     setConfirmDialog({ isOpen: true, action, loading: false });
   };
 
@@ -273,7 +279,7 @@ export default function VulnerabilityDetailPage() {
                 确认漏洞
               </button>
               <button
-                onClick={() => openConfirmDialog('false_positive')}
+                onClick={() => openConfirmDialog('false-positive')}
                 className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 <XCircle size={16} className="mr-2" />
@@ -291,7 +297,7 @@ export default function VulnerabilityDetailPage() {
           {vulnerability.status === 'confirmed' && (
             <>
               <button
-                onClick={() => openConfirmDialog('false_positive')}
+                onClick={() => openConfirmDialog('false-positive')}
                 className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
               >
                 <XCircle size={16} className="mr-2" />
@@ -566,14 +572,14 @@ export default function VulnerabilityDetailPage() {
         message={
           confirmDialog.action === 'confirmed'
             ? '确定要将此漏洞标记为"已确认"吗？'
-            : confirmDialog.action === 'false_positive'
+            : confirmDialog.action === 'false-positive'
             ? '确定要将此漏洞标记为"误报"吗？标记后将不再追踪此漏洞。'
             : '确定要忽略此漏洞吗？忽略后将不再显示在漏洞列表中。'
         }
         confirmText={
           confirmDialog.action === 'confirmed'
             ? '确认漏洞'
-            : confirmDialog.action === 'false_positive'
+            : confirmDialog.action === 'false-positive'
             ? '标记误报'
             : '忽略'
         }

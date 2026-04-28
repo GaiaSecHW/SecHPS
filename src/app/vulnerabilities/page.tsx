@@ -94,7 +94,9 @@ function VulnerabilitiesPageContent() {
 
   // 从 URL 参数初始化状态
   const skillIdFromUrl = searchParams.get('skillId') || '';
-  const statusFromUrl = searchParams.get('status') || '';
+  // 标准化状态值：false_positive -> false-positive
+  const rawStatusFromUrl = searchParams.get('status') || '';
+  const statusFromUrl = rawStatusFromUrl === 'false_positive' ? 'false-positive' : rawStatusFromUrl;
 
   const [selectedSkillId, setSelectedSkillId] = useState(skillIdFromUrl);
   const [selectedStatus, setSelectedStatus] = useState(statusFromUrl);
@@ -217,7 +219,7 @@ function VulnerabilitiesPageContent() {
     { value: '', label: '全部' },
     { value: 'pending', label: '未确认' },
     { value: 'confirmed', label: '正确发现' },
-    { value: 'false_positive', label: '误报' },
+    { value: 'false-positive', label: '误报' },
     { value: 'new', label: '新建' },
     { value: 'fixed', label: '已修复' },
     { value: 'verified', label: '已验证' },

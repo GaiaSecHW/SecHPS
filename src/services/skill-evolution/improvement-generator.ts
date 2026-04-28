@@ -513,9 +513,18 @@ export async function generateImprovement(
       };
     }
     
-    // 保存到 SkillImprovement 表
-    const improvement = await prisma.skillImprovement.create({
-      data: {
+    // 保存到 SkillImprovement 表（使用 upsert 避免 taskId 唯一约束冲突）
+    const improvement = await prisma.skillImprovement.upsert({
+      where: { taskId: options?.taskId ?? '' },
+      update: {
+        falsePositiveCases: JSON.stringify(falsePositiveCases),
+        confirmedCases: JSON.stringify(confirmedCases),
+        analysis: JSON.stringify(analysisResult),
+        suggestions: JSON.stringify(analysisResult.recommendations),
+        improvedContent: improvementData.improvedContent,
+        status: 'pending',
+      },
+      create: {
         id: generateId('improve'),
         skillId,
         taskId: options?.taskId,
@@ -524,7 +533,7 @@ export async function generateImprovement(
         analysis: JSON.stringify(analysisResult),
         suggestions: JSON.stringify(analysisResult.recommendations),
         improvedContent: improvementData.improvedContent,
-        status: 'pending', // 等待人工审批
+        status: 'pending',
       },
     });
     
@@ -541,9 +550,18 @@ export async function generateImprovement(
   } catch (error) {
     console.error('[ImprovementGenerator] LLM 生成失败:', error);
     
-    // 即使失败，也创建一条记录（保持原内容）
-    const improvement = await prisma.skillImprovement.create({
-      data: {
+    // 即使失败，也更新记录（使用 upsert）
+    const improvement = await prisma.skillImprovement.upsert({
+      where: { taskId: options?.taskId ?? '' },
+      update: {
+        falsePositiveCases: JSON.stringify(falsePositiveCases),
+        confirmedCases: JSON.stringify(confirmedCases),
+        analysis: JSON.stringify(analysisResult),
+        suggestions: JSON.stringify(analysisResult.recommendations),
+        improvedContent: skillContent,
+        status: 'pending',
+      },
+      create: {
         id: generateId('improve'),
         skillId,
         taskId: options?.taskId,
@@ -551,7 +569,7 @@ export async function generateImprovement(
         confirmedCases: JSON.stringify(confirmedCases),
         analysis: JSON.stringify(analysisResult),
         suggestions: JSON.stringify(analysisResult.recommendations),
-        improvedContent: skillContent, // 保持原内容
+        improvedContent: skillContent,
         status: 'pending',
       },
     });

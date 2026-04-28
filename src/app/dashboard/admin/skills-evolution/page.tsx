@@ -345,7 +345,7 @@ function SkillsEvolutionContent() {
   };
 
   // Navigation handlers
-  const navigateToVulnerabilities = (skillId: string, status: 'false_positive' | 'confirmed') => {
+  const navigateToVulnerabilities = (skillId: string, status: 'false-positive' | 'confirmed') => {
     router.push(`/vulnerabilities?skillId=${skillId}&status=${status}`);
   };
 
@@ -381,12 +381,39 @@ function SkillsEvolutionContent() {
       const data = await response.json();
       toast.success('进化分析已完成');
       
-      // 跳转到进化任务详情页面查看结果
       if (data.taskId) {
         router.push(`/dashboard/admin/skills-evolution/analysis/${data.taskId}`);
       } else {
         fetchAllData();
       }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '触发失败');
+    }
+  };
+
+  // Re-trigger pending evolution task
+  const handleTriggerEvolution = async (skillId: string, taskId: string) => {
+    if (!confirm('确定要触发此任务的进化分析吗？')) {
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/evolution/tasks/${taskId}/trigger`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '触发失败');
+      }
+      
+      toast.success('进化分析已触发');
+      fetchAllData();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '触发失败');
     }
@@ -870,7 +897,7 @@ function SkillsEvolutionContent() {
                         触发进化
                       </button>
                       <button
-                        onClick={() => navigateToVulnerabilities(skill.skillId, 'false_positive')}
+                        onClick={() => navigateToVulnerabilities(skill.skillId, 'false-positive')}
                         className="inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
                       >
                         <XCircle size={16} className="mr-1" />
@@ -1032,13 +1059,22 @@ function SkillsEvolutionContent() {
                         <ExternalLink size={16} className="mr-1" />
                         Skill 详情
                       </button>
-                      {task.status === 'completed' && (
+                      {(task.status === 'completed' || task.status === 'rejected' || task.status === 'analyzing') && (
                         <button
                           onClick={() => navigateToAnalysis(task.id)}
                           className="inline-flex items-center px-3 py-1.5 text-sm bg-green-100 text-green-800 rounded hover:bg-green-200"
                         >
                           <Zap size={16} className="mr-1" />
-                          分析
+                          查看分析
+                        </button>
+                      )}
+                      {task.status === 'pending' && (
+                        <button
+                          onClick={() => handleTriggerEvolution(task.skillId, task.id)}
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+                        >
+                          <Play size={16} className="mr-1" />
+                          触发分析
                         </button>
                       )}
                     </div>
