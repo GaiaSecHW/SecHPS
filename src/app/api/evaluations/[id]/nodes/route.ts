@@ -444,11 +444,7 @@ export async function GET(
         
         // 直接从 SkillExecution 构建 skillsDetails（按 order 排序）
         const nodeSkillExecutions = (skillExecutionsByNode[wn.id] 
-          ? Object.entries(skillExecutionsByNode[wn.id])
-              .map(([skillId, execStatus]) => ({
-                skillId,
-                ...execStatus,
-              }))
+          ? Object.values(skillExecutionsByNode[wn.id])
               .sort((a, b) => a.order - b.order)
           : []);
         
