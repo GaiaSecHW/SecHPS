@@ -986,6 +986,11 @@ ${previousOutputs || '(首个节点，无前序输出)'}
 ## 任务要求
 请执行 ${skill.displayName} 安全检测，按照 Skill 定义的要求完成检测任务。
 
+## 重要：完成标志
+完成任务后，必须在输出末尾明确声明：
+- "任务完成" 或 "评估完成" 或 "检测完成"
+- 或 "completed" 或 "done" 或 "finished"
+
 ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : ''}
 `;
       
@@ -1016,17 +1021,28 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       try {
         // 执行 skill agent
         console.log(`[executeMultiSkillNode] 🚀 开始执行 skillAgent.loop(): ${skill.name}`);
-        const result = await skillAgent.loop({
-          evaluationId: this.config.evaluationSessionId,
-          projectId: this.config.projectId,
-          workflowNodeId: node.id,
-          context: {
-            projectName: this.config.projectName,
-            taskDescription: skillUserPrompt,
-            initialMessage: skillUserPrompt,
-            files: [],
-          },
-          callbacks: {
+        
+        // 设置超时（5分钟）
+        const SKILL_TIMEOUT_MS = 5 * 60 * 1000;
+        const timeoutPromise = new Promise<null>((resolve) => {
+          setTimeout(() => {
+            console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 执行超时 (5分钟)，强制结束`);
+            resolve(null);
+          }, SKILL_TIMEOUT_MS);
+        });
+        
+        const result = await Promise.race([
+          skillAgent.loop({
+            evaluationId: this.config.evaluationSessionId,
+            projectId: this.config.projectId,
+            workflowNodeId: node.id,
+            context: {
+              projectName: this.config.projectName,
+              taskDescription: skillUserPrompt,
+              initialMessage: skillUserPrompt,
+              files: [],
+            },
+            callbacks: {
             onChunk: (text) => {
               // 更新活动时间
               updateActivityTime();
@@ -1125,7 +1141,26 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             },
             onRalphComplete: async () => {},
           },
-        });
+        }),
+          timeoutPromise
+        ]);
+        
+        if (result === null) {
+          // 超时，强制结束
+          console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 超时，强制结束并更新状态`);
+          this.currentAgent = null;
+          stopProgressMonitor();
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, '执行超时 (5分钟)');
+          skillResults.push({
+            skillName: skill.name,
+            skillId: skill.skillId,
+            executionId,
+            status: 'failed',
+            text: accumulatedAssistantText,
+            error: '执行超时',
+          });
+          continue;
+        }
         
         console.log(`[executeMultiSkillNode] ✅ skillAgent.loop() 返回: ${skill.name}, completionReason=${result.completionReason}, iterations=${result.iterations}, textLength=${result.text?.length || 0}`);
         
