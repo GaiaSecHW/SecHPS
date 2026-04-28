@@ -69,11 +69,13 @@ export async function completeSkillExecution(params: {
     ? completedAt.getTime() - new Date(existing.startedAt).getTime()
     : 0;
   
+  const status = params.error ? 'failed' : 'completed';
+  
   // 更新执行记录
   await prisma.skillExecution.update({
     where: { id: params.executionId },
     data: {
-      status: params.error ? 'failed' : 'completed',
+      status,
       output: params.output,
       findingsCount: params.findingsCount || 0,
       confirmedCount: params.confirmedCount || 0,
@@ -85,18 +87,30 @@ export async function completeSkillExecution(params: {
     },
   });
 
-  // 更新 Skill 的 vulnerabilityCount
-  if (params.findingsCount && params.findingsCount > 0) {
+  // 更新 Skill 的统计
+  if (status === 'completed') {
+    // 获取当前 Skill 统计
+    const skill = await prisma.skill.findUnique({
+      where: { id: params.skillId },
+      select: { execCount: true, successExecCount: true },
+    });
+    
+    const newSuccessExecCount = (skill?.successExecCount || 0) + 1;
+    const newExecCount = skill?.execCount || 0;
+    const successRate = newExecCount > 0 ? newSuccessExecCount / newExecCount : null;
+    
     await prisma.skill.update({
       where: { id: params.skillId },
       data: {
-        vulnerabilityCount: { increment: params.findingsCount },
+        successExecCount: newSuccessExecCount,
+        successRate,
+        vulnerabilityCount: { increment: params.findingsCount || 0 },
         updatedAt: new Date(),
       },
     });
   }
 
-  console.log(`[SkillExecution] 完成执行记录: execution=${params.executionId}, findings=${params.findingsCount || 0}, duration=${duration}ms`);
+  console.log(`[SkillExecution] 完成执行记录: execution=${params.executionId}, status=${status}, findings=${params.findingsCount || 0}, duration=${duration}ms`);
 }
 
 /**
@@ -323,7 +337,14 @@ export async function completeAllPendingSkillExecutions(params: {
   
   const completedAt = new Date();
   
-  // 批量更新
+  // 按 skillId 分组统计
+  const skillCounts = new Map<string, number>();
+  for (const exec of pendingExecutions) {
+    const count = skillCounts.get(exec.skillId) || 0;
+    skillCounts.set(exec.skillId, count + 1);
+  }
+  
+  // 批量更新执行记录
   for (const exec of pendingExecutions) {
     const duration = exec.startedAt 
       ? completedAt.getTime() - new Date(exec.startedAt).getTime()
@@ -338,6 +359,29 @@ export async function completeAllPendingSkillExecutions(params: {
         error: status !== 'completed' ? reason : undefined,
       },
     });
+  }
+  
+  // 如果标记为 completed，更新 Skill 的 successExecCount 和 successRate
+  if (status === 'completed') {
+    for (const [skillId, count] of skillCounts.entries()) {
+      const skill = await prisma.skill.findUnique({
+        where: { id: skillId },
+        select: { execCount: true, successExecCount: true },
+      });
+      
+      const newSuccessExecCount = (skill?.successExecCount || 0) + count;
+      const newExecCount = skill?.execCount || 0;
+      const successRate = newExecCount > 0 ? newSuccessExecCount / newExecCount : null;
+      
+      await prisma.skill.update({
+        where: { id: skillId },
+        data: {
+          successExecCount: newSuccessExecCount,
+          successRate,
+          updatedAt: new Date(),
+        },
+      });
+    }
   }
   
   console.log(`[SkillExecution] 已将 ${pendingExecutions.length} 个未完成的执行记录标记为 ${status}`);

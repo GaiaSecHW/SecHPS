@@ -61,10 +61,13 @@ interface SkillNeedingEvolution {
   skillId: string;
   skillName: string;
   displayName: string;
-  precision: number;
-  falsePositiveCount: number;
-  confirmedCount: number;
   totalExecutions: number;
+  successExecCount: number;
+  successRate: number;
+  totalFindings: number;
+  confirmedCount: number;
+  falsePositiveCount: number;
+  precision: number;
 }
 
 interface EvolutionTask {
@@ -89,6 +92,12 @@ interface MetricsResponse {
   taskStats: TaskStats;
   config: EvolutionConfig;
   skillsNeedingEvolution: SkillNeedingEvolution[];
+  skillsPagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
 }
 
 interface TasksResponse {
@@ -155,6 +164,10 @@ function SkillsEvolutionContent() {
   // Pagination for tasks
   const [tasksPage, setTasksPage] = useState(1);
   const tasksLimit = 10;
+  
+  // Pagination for skills needing evolution
+  const [skillsPage, setSkillsPage] = useState(1);
+  const skillsLimit = 20;
 
   // Fetch all data on mount
   useEffect(() => {
@@ -168,6 +181,13 @@ function SkillsEvolutionContent() {
     }
   }, [tasksPage]);
 
+  // Fetch metrics when skills page changes
+  useEffect(() => {
+    if (!loading) {
+      fetchMetrics();
+    }
+  }, [skillsPage]);
+
   const fetchAllData = async () => {
     try {
       setLoading(true);
@@ -175,7 +195,7 @@ function SkillsEvolutionContent() {
       
       // Fetch metrics, tasks, and config in parallel
       const [metricsRes, tasksRes, configRes] = await Promise.all([
-        fetch('/api/skills/evolution/metrics', {
+        fetch(`/api/skills/evolution/metrics?skillsPage=${skillsPage}&skillsLimit=${skillsLimit}`, {
           headers: { Authorization: `Bearer ${token}` },
         }),
         fetch(`/api/skills/evolution/tasks?page=${tasksPage}&limit=${tasksLimit}`, {
@@ -230,6 +250,24 @@ function SkillsEvolutionContent() {
       setTasks(data);
     } catch (err) {
       console.error('Error fetching tasks:', err);
+    }
+  };
+
+  const fetchMetrics = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/evolution/metrics?skillsPage=${skillsPage}&skillsLimit=${skillsLimit}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch metrics');
+      }
+
+      const data = await response.json();
+      setMetrics(data);
+    } catch (err) {
+      console.error('Error fetching metrics:', err);
     }
   };
 
@@ -317,6 +355,41 @@ function SkillsEvolutionContent() {
 
   const navigateToAnalysis = (taskId: string) => {
     router.push(`/dashboard/admin/skills-governance/analysis-review/${taskId}`);
+  };
+
+  // Manual trigger evolution for a skill
+  const handleManualTriggerEvolution = async (skillId: string) => {
+    if (!confirm('确定要手动触发此 Skill 的进化分析吗？')) {
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/skills/${skillId}/analyze`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '触发失败');
+      }
+      
+      const data = await response.json();
+      toast.success('进化分析已完成');
+      
+      // 跳转到进化任务详情页面查看结果
+      if (data.taskId) {
+        router.push(`/dashboard/admin/skills-evolution/analysis/${data.taskId}`);
+      } else {
+        fetchAllData();
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '触发失败');
+    }
   };
 
   // Format precision as percentage
@@ -713,6 +786,15 @@ function SkillsEvolutionContent() {
           </div>
         </div>
         
+        {/* 触发条件说明 */}
+        <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+          <div className="text-xs text-blue-800">
+            <span className="font-medium">触发条件：</span> 有执行记录 + 有误报记录 + 精准率 &lt; {formatPrecision(metrics?.config.precisionThreshold || 0.7)}
+            <span className="mx-2 text-blue-400">|</span>
+            <span className="font-medium">精准率公式：</span> confirmedCount / (confirmedCount + falsePositiveCount)
+          </div>
+        </div>
+        
         <div className="divide-y divide-gray-200">
           {metrics?.skillsNeedingEvolution.length === 0 ? (
             <div className="p-8 text-center">
@@ -738,14 +820,28 @@ function SkillsEvolutionContent() {
                         <p className="text-sm text-gray-500">{skill.skillName}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-red-600">
-                          精准率: {formatPrecision(skill.precision)}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          执行: {skill.totalExecutions} 次
-                        </p>
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500">执行次数</p>
+                          <p className="font-medium text-gray-900">{skill.totalExecutions}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500">发现漏洞</p>
+                          <p className="font-medium text-gray-900">{skill.totalFindings}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500">已确认</p>
+                          <p className="font-medium text-green-600">{skill.confirmedCount}</p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-gray-500">误报</p>
+                          <p className="font-medium text-red-600">{skill.falsePositiveCount}</p>
+                        </div>
+                        <div className="text-center px-3 py-1 bg-red-50 rounded">
+                          <p className="text-xs text-gray-500">精准率</p>
+                          <p className="font-semibold text-red-600">{formatPrecision(skill.precision)}</p>
+                        </div>
                       </div>
                       {expandedSkill === skill.skillId ? (
                         <ChevronUp size={20} className="text-gray-400" />
@@ -758,39 +854,6 @@ function SkillsEvolutionContent() {
                 
                 {expandedSkill === skill.skillId && (
                   <div className="mt-4 pt-4 border-t border-gray-200 bg-gray-50 -mx-4 px-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div>
-                        <p className="text-xs text-gray-500">精准率</p>
-                        <p className="text-lg font-semibold text-red-600">
-                          {formatPrecision(skill.precision)}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">误报数</p>
-                        <button
-                          onClick={() => navigateToVulnerabilities(skill.skillId, 'false_positive')}
-                          className="text-lg font-semibold text-red-600 hover:underline cursor-pointer"
-                        >
-                          {skill.falsePositiveCount}
-                        </button>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">正确发现数</p>
-                        <button
-                          onClick={() => navigateToVulnerabilities(skill.skillId, 'confirmed')}
-                          className="text-lg font-semibold text-green-600 hover:underline cursor-pointer"
-                        >
-                          {skill.confirmedCount}
-                        </button>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">执行次数</p>
-                        <p className="text-lg font-semibold text-gray-900">
-                          {skill.totalExecutions}
-                        </p>
-                      </div>
-                    </div>
-                    
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => navigateToSkillDetail(skill.skillId)}
@@ -798,6 +861,13 @@ function SkillsEvolutionContent() {
                       >
                         <ExternalLink size={16} className="mr-1" />
                         详情
+                      </button>
+                      <button
+                        onClick={() => handleManualTriggerEvolution(skill.skillId)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                      >
+                        <Play size={16} className="mr-1" />
+                        触发进化
                       </button>
                       <button
                         onClick={() => navigateToVulnerabilities(skill.skillId, 'false_positive')}
@@ -820,6 +890,31 @@ function SkillsEvolutionContent() {
             ))
           )}
         </div>
+        
+        {/* Pagination for skills needing evolution */}
+        {metrics?.skillsPagination?.totalPages && metrics.skillsPagination.totalPages > 1 && (
+          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <span className="text-sm text-gray-500">
+              第 {skillsPage} / {metrics.skillsPagination.totalPages} 页 (共 {metrics.skillsPagination.total} 个)
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSkillsPage(Math.max(1, skillsPage - 1))}
+                disabled={skillsPage === 1}
+                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronDown size={16} className="rotate-90" />
+              </button>
+              <button
+                onClick={() => setSkillsPage(Math.min(metrics.skillsPagination.totalPages, skillsPage + 1))}
+                disabled={skillsPage === metrics.skillsPagination.totalPages}
+                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronUp size={16} className="rotate-90" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Evolution Task History */}

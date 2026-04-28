@@ -99,7 +99,7 @@ export async function getCompactCases(
       prisma.vulnerability.findMany({
         where: {
           skillExecutionId: { in: skillExecutionIds },
-          status: 'false_positive',
+          status: 'false-positive',
         },
         take: falsePositiveLimit,
         orderBy: { updatedAt: 'desc' },
@@ -135,7 +135,7 @@ export async function getCompactCases(
       prisma.vulnerability.count({
         where: {
           skillExecutionId: { in: skillExecutionIds },
-          status: 'false_positive',
+          status: 'false-positive',
         },
       }),
       // 正确发现总数

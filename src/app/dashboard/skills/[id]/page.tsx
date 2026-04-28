@@ -108,6 +108,8 @@ export default function SkillDetailPage() {
   const [vulnPage, setVulnPage] = useState(1);
   const [vulnTotal, setVulnTotal] = useState(0);
   const [vulnTotalPages, setVulnTotalPages] = useState(0);
+  const [vulnFilter, setVulnFilter] = useState<'all' | 'false-positive' | 'confirmed' | 'new'>('all');
+  const [vulnStats, setVulnStats] = useState<{ total: number; falsePositive: number; confirmed: number; new: number }>({ total: 0, falsePositive: 0, confirmed: 0, new: 0 });
   
   // ===== 版本管理相关状态 =====
   const [viewingVersionId, setViewingVersionId] = useState<string | null>(null); // 当前查看的版本 ID
@@ -124,12 +126,13 @@ export default function SkillDetailPage() {
   const [showNewVersionModal, setShowNewVersionModal] = useState(false); // 新版本弹窗
   
   // 获取漏洞列表
-  const fetchVulnerabilities = async (page: number = 1) => {
+  const fetchVulnerabilities = async (page: number = 1, status: 'all' | 'false-positive' | 'confirmed' | 'new' = 'all') => {
     if (!skillId) return;
     setVulnLoading(true);
+    setVulnFilter(status);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/skills/${skillId}/vulnerabilities?page=${page}&limit=10`, {
+      const response = await fetch(`/api/skills/${skillId}/vulnerabilities?page=${page}&limit=10&status=${status}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (response.ok) {
@@ -138,6 +141,9 @@ export default function SkillDetailPage() {
         setVulnTotal(data.pagination?.total || 0);
         setVulnTotalPages(data.pagination?.totalPages || 0);
         setVulnPage(page);
+        if (data.stats) {
+          setVulnStats(data.stats);
+        }
       }
     } catch (error) {
       console.error('获取漏洞列表失败:', error);
@@ -991,6 +997,180 @@ export default function SkillDetailPage() {
         ) : (
           /* 查看模式 */
           <div className="space-y-6">
+            {/* 关键指标（靠前显示） */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">版本</h3>
+                <p className="text-lg font-semibold text-gray-900">v{skill.version}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">执行次数</h3>
+                <p className="text-lg font-semibold text-gray-900">{skill.execCount}</p>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">发现问题</h3>
+                <button
+                  onClick={() => {
+                    setShowVulnerabilities(!showVulnerabilities);
+                    if (!showVulnerabilities) {
+                      fetchVulnerabilities(1, 'all');
+                    }
+                  }}
+                  className="text-lg font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                >
+                  {vulnStats.total || skill.vulnerabilityCount || 0} 个
+                  {showVulnerabilities ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">误报</h3>
+                <button
+                  onClick={() => {
+                    setShowVulnerabilities(true);
+                    fetchVulnerabilities(1, 'false-positive');
+                  }}
+                  className={`text-lg font-semibold flex items-center gap-1 ${(vulnStats.falsePositive || 0) > 0 ? 'text-orange-600 hover:text-orange-800 hover:underline' : 'text-gray-400'}`}
+                >
+                  {vulnStats.falsePositive || 0} 个
+                </button>
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">成功率</h3>
+                <p className="text-lg font-semibold text-gray-900">
+                  {skill.successRate ? `${(skill.successRate * 100).toFixed(1)}%` : 'N/A'}
+                  {skill.execCount > 0 && skill.successExecCount > 0 && (
+                    <span className="text-xs text-gray-500 ml-1">
+                      ({skill.successExecCount}/{skill.execCount})
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            
+            {/* 漏洞明细列表 */}
+            {showVulnerabilities && (
+              <div className="p-4 bg-white rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900">发现的漏洞明细</h4>
+                  <div className="flex items-center gap-4">
+                    {/* 筛选按钮 */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => fetchVulnerabilities(1, 'all')}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        全部 ({vulnStats.total})
+                      </button>
+                      <button
+                        onClick={() => fetchVulnerabilities(1, 'new')}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'new' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        新发现 ({vulnStats.new})
+                      </button>
+                      <button
+                        onClick={() => fetchVulnerabilities(1, 'confirmed')}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        已确认 ({vulnStats.confirmed})
+                      </button>
+                      <button
+                        onClick={() => fetchVulnerabilities(1, 'false-positive')}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'false-positive' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                      >
+                        误报 ({vulnStats.falsePositive})
+                      </button>
+                    </div>
+                    <span className="text-sm text-gray-500">当前 {vulnTotal} 条</span>
+                  </div>
+                </div>
+                
+                {vulnLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                  </div>
+                ) : vulnerabilities.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    暂无漏洞记录
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-3">
+                      {vulnerabilities.map((item, index) => (
+                        <div key={item.mappingId || index} className="p-3 bg-gray-50 rounded border border-gray-100 hover:border-gray-200">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  item.vulnerability?.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                                  item.vulnerability?.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                                  item.vulnerability?.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                  item.vulnerability?.severity === 'low' ? 'bg-blue-100 text-blue-700' :
+                                  'bg-gray-100 text-gray-700'
+                                }`}>
+                                  {item.vulnerability?.severity || 'info'}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                                  item.vulnerability?.status === 'false-positive' ? 'bg-orange-50 text-orange-600' :
+                                  item.vulnerability?.status === 'confirmed' ? 'bg-green-50 text-green-600' :
+                                  item.vulnerability?.status === 'fixed' ? 'bg-blue-50 text-blue-600' :
+                                  item.vulnerability?.status === 'verified' ? 'bg-purple-50 text-purple-600' :
+                                  'bg-gray-50 text-gray-600'
+                                }`}>
+                                  {item.vulnerability?.status === 'false-positive' ? '误报' :
+                                   item.vulnerability?.status === 'confirmed' ? '已确认' :
+                                   item.vulnerability?.status === 'fixed' ? '已修复' :
+                                   item.vulnerability?.status === 'verified' ? '已验证' :
+                                   '新发现'}
+                                </span>
+                                <span className="font-medium text-gray-900">{item.vulnerability?.title || '未命名漏洞'}</span>
+                              </div>
+                              <div className="mt-1 text-sm text-gray-600">
+                                {item.vulnerability?.type && <span className="mr-2">类型: {item.vulnerability.type}</span>}
+                                {item.vulnerability?.location && <span className="mr-2">位置: {item.vulnerability.location}</span>}
+                              </div>
+                              <div className="mt-1 text-xs text-gray-500">
+                                发现时间: {new Date(item.matchedAt).toLocaleString()}
+                                {item.evaluation?.project && <span className="ml-2">项目: {item.evaluation.project.name}</span>}
+                              </div>
+                            </div>
+                            <a
+                              href={`/vulnerabilities/${item.vulnerability?.id}`}
+                              className="px-2 py-1 rounded text-xs bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            >
+                              查看
+                            </a>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* 分页 */}
+                    {vulnTotalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-4">
+                        <button
+                          onClick={() => fetchVulnerabilities(vulnPage - 1, vulnFilter)}
+                          disabled={vulnPage === 1}
+                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        >
+                          上一页
+                        </button>
+                        <span className="text-sm text-gray-600">
+                          {vulnPage} / {vulnTotalPages}
+                        </span>
+                        <button
+                          onClick={() => fetchVulnerabilities(vulnPage + 1, vulnFilter)}
+                          disabled={vulnPage === vulnTotalPages}
+                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                        >
+                          下一页
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+            
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
@@ -1147,125 +1327,6 @@ export default function SkillDetailPage() {
                 </ReactMarkdown>
               </div>
             </div>
-
-            {/* 元信息 */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-gray-200">
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">版本</h3>
-                <p className="text-gray-900">v{skill.version}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">执行次数</h3>
-                <p className="text-gray-900">{skill.execCount}</p>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">发现问题</h3>
-                <button
-                  onClick={() => {
-                    setShowVulnerabilities(!showVulnerabilities);
-                    if (!showVulnerabilities && vulnerabilities.length === 0) {
-                      fetchVulnerabilities(1);
-                    }
-                  }}
-                  className="text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
-                >
-                  {skill.vulnerabilityCount || 0} 个
-                  {showVulnerabilities ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">成功率</h3>
-                <p className="text-gray-900">
-                  {skill.successRate ? `${(skill.successRate * 100).toFixed(1)}%` : 'N/A'}
-                  {skill.execCount > 0 && skill.successExecCount > 0 && (
-                    <span className="text-xs text-gray-500 ml-1">
-                      ({skill.successExecCount}/{skill.execCount})
-                    </span>
-                  )}
-                </p>
-              </div>
-            </div>
-            
-            {/* 漏洞明细列表 */}
-            {showVulnerabilities && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900">发现的漏洞明细</h4>
-                  <span className="text-sm text-gray-500">共 {vulnTotal} 条</span>
-                </div>
-                
-                {vulnLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                  </div>
-                ) : vulnerabilities.length === 0 ? (
-                  <div className="text-center py-8 text-gray-500">
-                    暂无漏洞记录
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-3">
-                      {vulnerabilities.map((item, index) => (
-                        <div key={item.mappingId || index} className="p-3 bg-white rounded border border-gray-100 hover:border-gray-200">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  item.vulnerability?.severity === 'critical' ? 'bg-red-100 text-red-700' :
-                                  item.vulnerability?.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                                  item.vulnerability?.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                  item.vulnerability?.severity === 'low' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-gray-100 text-gray-700'
-                                }`}>
-                                  {item.vulnerability?.severity || 'info'}
-                                </span>
-                                <span className="font-medium text-gray-900">{item.vulnerability?.title || '未命名漏洞'}</span>
-                              </div>
-                              <div className="mt-1 text-sm text-gray-600">
-                                {item.vulnerability?.type && <span className="mr-2">类型: {item.vulnerability.type}</span>}
-                                {item.vulnerability?.location && <span className="mr-2">位置: {item.vulnerability.location}</span>}
-                              </div>
-                              <div className="mt-1 text-xs text-gray-500">
-                                发现时间: {new Date(item.matchedAt).toLocaleString()}
-                                {item.evaluation?.project && <span className="ml-2">项目: {item.evaluation.project.name}</span>}
-                              </div>
-                            </div>
-                            <span className={`px-2 py-0.5 rounded text-xs ${
-                              item.matchType === 'exact' ? 'bg-green-50 text-green-600' :
-                              item.matchType === 'fuzzy' ? 'bg-yellow-50 text-yellow-600' :
-                              'bg-gray-50 text-gray-600'
-                            }`}>
-                              {item.matchType === 'exact' ? '精确匹配' : item.matchType === 'fuzzy' ? '模糊匹配' : '未匹配'}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    
-                    {/* 分页 */}
-                    {vulnTotalPages > 1 && (
-                      <div className="flex items-center justify-center gap-2 mt-4">
-                        <button
-                          onClick={() => fetchVulnerabilities(vulnPage - 1)}
-                          disabled={vulnPage === 1}
-                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                        >
-                          上一页
-                        </button>
-                        <span className="text-sm text-gray-600">{vulnPage} / {vulnTotalPages}</span>
-                        <button
-                          onClick={() => fetchVulnerabilities(vulnPage + 1)}
-                          disabled={vulnPage === vulnTotalPages}
-                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
-                        >
-                          下一页
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            )}
           </div>
         )}
       </div>

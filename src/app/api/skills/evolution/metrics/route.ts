@@ -14,6 +14,11 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Get pagination params
+    const { searchParams } = new URL(request.url);
+    const skillsPage = parseInt(searchParams.get('skillsPage') || '1');
+    const skillsLimit = parseInt(searchParams.get('skillsLimit') || '20');
+    
     // Get all skill metrics
     const skillMetrics = await getAllSkillMetrics();
     
@@ -38,10 +43,15 @@ export async function GET(request: Request) {
     const totalConfirmed = skillsWithData.reduce((sum, m) => sum + m.confirmedCount, 0);
     const totalFalsePositives = skillsWithData.reduce((sum, m) => sum + m.falsePositiveCount, 0);
     
-    // Find skills needing evolution (below threshold)
+    // Find skills needing evolution (below threshold AND has false positives)
     const skillsNeedingEvolution = skillMetrics.filter(
-      m => m.totalExecutions > 0 && m.precision < config.precisionThreshold
+      m => m.totalExecutions > 0 && m.falsePositiveCount > 0 && m.precision < config.precisionThreshold
     );
+    
+    // Apply pagination to skills needing evolution
+    const skillsTotal = skillsNeedingEvolution.length;
+    const skillsOffset = (skillsPage - 1) * skillsLimit;
+    const paginatedSkills = skillsNeedingEvolution.slice(skillsOffset, skillsOffset + skillsLimit);
     
     // Get evolution history count
     const evolutionHistoryCount = await prisma.skillEvolution.count();
@@ -54,7 +64,7 @@ export async function GET(request: Request) {
         totalFindings,
         totalConfirmed,
         totalFalsePositives,
-        skillsNeedingEvolution: skillsNeedingEvolution.length,
+        skillsNeedingEvolution: skillsTotal,
         evolutionHistoryCount,
       },
       taskStats,
@@ -65,15 +75,24 @@ export async function GET(request: Request) {
         maxDailyTasks: config.maxDailyTasks,
         isActive: config.isActive,
       },
-      skillsNeedingEvolution: skillsNeedingEvolution.slice(0, 10).map(m => ({
+      skillsNeedingEvolution: paginatedSkills.map(m => ({
         skillId: m.skillId,
         skillName: m.skillName,
         displayName: m.displayName,
-        precision: m.precision,
-        falsePositiveCount: m.falsePositiveCount,
-        confirmedCount: m.confirmedCount,
         totalExecutions: m.totalExecutions,
+        successExecCount: m.successExecCount,
+        successRate: m.successRate,
+        totalFindings: m.totalFindings,
+        confirmedCount: m.confirmedCount,
+        falsePositiveCount: m.falsePositiveCount,
+        precision: m.precision,
       })),
+      skillsPagination: {
+        total: skillsTotal,
+        page: skillsPage,
+        limit: skillsLimit,
+        totalPages: Math.ceil(skillsTotal / skillsLimit),
+      },
     });
   } catch (error) {
     console.error('[EvolutionMetricsAPI] Error fetching metrics:', error);

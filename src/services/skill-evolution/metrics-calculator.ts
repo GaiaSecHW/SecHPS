@@ -3,7 +3,7 @@
  * Skill 精准率/召回率计算服务
  * 
  * 功能：
- * 1. 计算单个 Skill 的精准率指标
+ * 1. 计算单个 Skill 的精准率指标（从 Vulnerability 表直接统计）
  * 2. 筛选低精准率的 Skill
  * 3. 支持时间范围过滤
  */
@@ -18,6 +18,8 @@ export interface SkillMetrics {
   skillName: string;
   displayName: string;
   totalExecutions: number;
+  successExecCount: number;
+  successRate: number;        // 成功率 = successExecCount / totalExecutions
   totalFindings: number;
   confirmedCount: number;
   falsePositiveCount: number;
@@ -28,6 +30,7 @@ export interface SkillMetrics {
 
 /**
  * 计算单个 Skill 的精准率指标
+ * 直接从 Vulnerability 表统计 status，更准确
  * 
  * @param skillId Skill ID
  * @param timeRange 可选的时间范围过滤
@@ -38,13 +41,13 @@ export async function calculateSkillMetrics(
   timeRange?: { start: Date; end: Date }
 ): Promise<SkillMetrics> {
   // 构建 where 条件
-  const whereClause: {
+  const executionWhereClause: {
     skillId: string;
     createdAt?: { gte: Date; lte: Date };
   } = { skillId };
   
   if (timeRange) {
-    whereClause.createdAt = {
+    executionWhereClause.createdAt = {
       gte: timeRange.start,
       lte: timeRange.end,
     };
@@ -64,40 +67,51 @@ export async function calculateSkillMetrics(
     throw new Error(`Skill not found: ${skillId}`);
   }
 
-  // 聚合执行数据
+  // 获取该 Skill 的所有执行记录 ID
   const executions = await prisma.skillExecution.findMany({
-    where: whereClause,
-    select: {
-      findingsCount: true,
-      confirmedCount: true,
-      falsePositiveCount: true,
-      status: true,
-    },
+    where: executionWhereClause,
+    select: { id: true, status: true },
   });
 
-  // 计算汇总数据
-  let totalExecutions = 0;
-  let totalFindings = 0;
-  let confirmedCount = 0;
-  let falsePositiveCount = 0;
-  let pendingCount = 0;
+  const executionIds = executions.map(e => e.id);
+  const totalExecutions = executions.length;
+  const pendingCount = executions.filter(e => e.status === 'pending').length;
+  const successExecCount = executions.filter(e => e.status === 'completed').length;
 
-  for (const exec of executions) {
-    totalExecutions++;
-    totalFindings += exec.findingsCount;
-    confirmedCount += exec.confirmedCount;
-    falsePositiveCount += exec.falsePositiveCount;
-    
-    // pending 状态的执行数
-    if (exec.status === 'pending') {
-      pendingCount++;
-    }
+  // 计算成功率
+  const successRate = totalExecutions > 0
+    ? successExecCount / totalExecutions
+    : 0;
+
+  // 从 Vulnerability 表统计 findings（通过 skillExecutionId）
+  const vulnWhereClause: {
+    skillExecutionId: { in: string[] };
+    createdAt?: { gte: Date; lte: Date };
+  } = { skillExecutionId: { in: executionIds } };
+  
+  if (timeRange) {
+    vulnWhereClause.createdAt = {
+      gte: timeRange.start,
+      lte: timeRange.end,
+    };
   }
 
+  // 统计 Vulnerability status
+  const vulnStats = await prisma.vulnerability.groupBy({
+    by: ['status'],
+    where: vulnWhereClause,
+    _count: { id: true },
+  });
+
+  const totalFindings = vulnStats.reduce((sum, s) => sum + s._count.id, 0);
+  const confirmedCount = vulnStats.find(s => s.status === 'confirmed')?._count.id || 0;
+  const falsePositiveCount = vulnStats.find(s => s.status === 'false-positive')?._count.id || 0;
+
   // 计算精准率: confirmed / (confirmed + falsePositive)
-  // 如果没有确认和误报数据，精准率为 0
-  const precision = (confirmedCount + falsePositiveCount) > 0
-    ? confirmedCount / (confirmedCount + falsePositiveCount)
+  // 只有在用户标记过的漏洞（confirmed 或 false-positive）才计入
+  const reviewedCount = confirmedCount + falsePositiveCount;
+  const precision = reviewedCount > 0
+    ? confirmedCount / reviewedCount
     : 0;
 
   // 计算误报率: falsePositive / totalFindings
@@ -110,6 +124,8 @@ export async function calculateSkillMetrics(
     skillName: skill.name,
     displayName: skill.displayName,
     totalExecutions,
+    successExecCount,
+    successRate,
     totalFindings,
     confirmedCount,
     falsePositiveCount,
