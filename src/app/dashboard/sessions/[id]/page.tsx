@@ -257,6 +257,37 @@ function SessionDetailContent({
     loadAllData();
   }, [evaluationId]);
 
+  // 定时轮询：评估运行时自动刷新（5秒间隔）
+  useEffect(() => {
+    if (!evaluationId) return;
+
+    let isPolling = true;
+    
+    const pollLoop = async () => {
+      while (isPolling) {
+        const evalData = await fetchEvaluation();
+        
+        // 评估完成后停止轮询
+        if (evalData?.status === 'completed' || evalData?.status === 'cancelled' || evalData?.status === 'failed') {
+          console.log('[Poll] Evaluation completed, stopping polling');
+          fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
+          break;
+        }
+        
+        // 运行中，刷新节点状态
+        fetchWorkflowNodes().catch(e => console.error('[Poll] fetchWorkflowNodes error:', e));
+        
+        await new Promise(r => setTimeout(r, 5000));  // 5秒间隔
+      }
+    };
+    
+    pollLoop();
+
+    return () => {
+      isPolling = false;
+    };
+  }, [evaluationId]);
+
   const fetchEvaluation = async (): Promise<any> => {
     if (!evaluationId) return null;
 

@@ -1332,8 +1332,10 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     const completedAt = new Date();
     const duration = completedAt.getTime() - startTime;
     
+    console.log(`[updateSkillExecutionStatus] 开始更新: executionId=${executionId}, skillId=${skillId}, status=${status}, duration=${duration}ms`);
+    
     try {
-      await prisma.skillExecution.update({
+      const result = await prisma.skillExecution.update({
         where: { id: executionId },
         data: {
           status,
@@ -1345,10 +1347,10 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         },
       });
       
-      console.log(`[updateSkillExecutionStatus] SkillExecution 更新成功: executionId=${executionId}, status=${status}, duration=${duration}ms`);
+      console.log(`[updateSkillExecutionStatus] ✅ 更新成功: executionId=${executionId}, status=${result.status}, completedAt=${result.completedAt}`);
       
     } catch (updateError) {
-      console.error(`[updateSkillExecutionStatus] 更新 SkillExecution 失败: ${executionId}`, updateError);
+      console.error(`[updateSkillExecutionStatus] ❌ 更新失败: executionId=${executionId}`, updateError);
     }
   }
 
