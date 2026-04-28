@@ -361,6 +361,10 @@ export class RalphLoopAgent {
               });
             },
             onComplete: async (fullResponse) => {
+              // 调用外部 onComplete 回调
+              if (callbacks.onComplete) {
+                await callbacks.onComplete(fullResponse);
+              }
               resolve({
                 text: fullResponse,
                 steps: [],
@@ -387,6 +391,11 @@ export class RalphLoopAgent {
               } as unknown as SimpleGenerateTextResult);
             },
             onError: (error) => {
+              // 调用外部 onError 回调
+              if (callbacks.onError) {
+                callbacks.onError(error);
+              }
+              
               // 区分致命错误和可恢复错误
               const isFatal =
                 error.message.includes('error_max_turns') ||
