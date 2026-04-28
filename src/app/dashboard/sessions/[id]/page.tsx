@@ -492,7 +492,9 @@ function SessionDetailContent({
       const node = workflowNodes.find((n: any) => n.id === nodeId);
       const nodeStatus = node?.status || 'pending';
       
-      // 选择节点
+      // 关闭 skill 详情，选择节点
+      setSelectedSkillExecution(null);
+      setSkillMessages([]);
       setSelectedNodeId(nodeId);
       
       // 始终尝试加载节点数据（即使状态是 pending，可能有历史数据）
@@ -1494,6 +1496,8 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                           key={skill.executionId || `skill-${skillIndex}`}
                                           className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-gray-50 cursor-pointer hover:bg-gray-100"
                                           onClick={() => {
+                                            setSelectedNodeId(null);  // 关闭节点详情
+                                            setNodeMessages([]);
                                             setSelectedSkillExecution(skill);
                                             fetchSkillMessages(skill.executionId, node.id);
                                           }}
