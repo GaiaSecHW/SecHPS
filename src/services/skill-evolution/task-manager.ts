@@ -41,6 +41,11 @@ export interface TaskDetail {
     name: string;
     displayName: string;
     content: string;
+    version: number;
+    execCount: number;
+    vulnerabilityCount: number;
+    successExecCount: number;
+    successRate: number | null;
   };
   improvement?: SkillImprovement | null;
 }
@@ -438,6 +443,11 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail | null> 
           name: true,
           displayName: true,
           content: true,
+          version: true,
+          execCount: true,
+          vulnerabilityCount: true,
+          successExecCount: true,
+          successRate: true,
         },
       },
       SkillImprovement: true,
@@ -455,6 +465,11 @@ export async function getTaskDetail(taskId: string): Promise<TaskDetail | null> 
       name: task.Skill?.name ?? '',
       displayName: task.Skill?.displayName ?? '',
       content: task.Skill?.content ?? '',
+      version: task.Skill?.version ?? 1,
+      execCount: task.Skill?.execCount ?? 0,
+      vulnerabilityCount: task.Skill?.vulnerabilityCount ?? 0,
+      successExecCount: task.Skill?.successExecCount ?? 0,
+      successRate: task.Skill?.successRate ?? null,
     },
     improvement: task.SkillImprovement,
   };

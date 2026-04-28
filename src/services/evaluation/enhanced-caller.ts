@@ -484,16 +484,15 @@ export class EnhancedEvaluationCaller {
         console.log('[EnhancedEvaluationCaller] 启动评估 - 发送给 Claude 的信息:');
         console.log('[EnhancedEvaluationCaller] - 项目名称:', context.projectName);
         console.log('[EnhancedEvaluationCaller] - 项目描述:', context.projectDescription || '无');
-        console.log('[EnhancedEvaluationCaller] - 环境URL:', context.environmentUrl || '无');
         console.log('[EnhancedEvaluationCaller] - 文件数:', context.files?.length || 0);
         console.log('[EnhancedEvaluationCaller] - 工作流名称:', context.workflowName || '无');
-        console.log('[EnhancedEvaluationCaller] ----------------------------------------');
-        console.log('[EnhancedEvaluationCaller] - 任务描述:', context.taskDescription?.substring(0, 200) || '无');
-        console.log('[EnhancedEvaluationCaller] ----------------------------------------');
-        console.log('[EnhancedEvaluationCaller] - 初始消息(用户提示词):', context.initialMessage?.substring(0, 300) || '无');
-        console.log('[EnhancedEvaluationCaller] ----------------------------------------');
-        console.log('[EnhancedEvaluationCaller] - 最终拼接的 prompt:', prompt.substring(0, 500) + '...');
-        console.log('[EnhancedEvaluationCaller] ========================================');
+        //console.log('[EnhancedEvaluationCaller] ----------------------------------------');
+        //console.log('[EnhancedEvaluationCaller] - 任务描述:', context.taskDescription?.substring(0, 200) || '无');
+        //console.log('[EnhancedEvaluationCaller] ----------------------------------------');
+        //console.log('[EnhancedEvaluationCaller] - 初始消息(用户提示词):', context.initialMessage?.substring(0, 300) || '无');
+        //console.log('[EnhancedEvaluationCaller] ----------------------------------------');
+        //console.log('[EnhancedEvaluationCaller] - 最终拼接的 prompt:', prompt.substring(0, 500) + '...');
+        //console.log('[EnhancedEvaluationCaller] ========================================');
 
         await this.agentService.sendPrompt(prompt, agentCallbacks);
       }

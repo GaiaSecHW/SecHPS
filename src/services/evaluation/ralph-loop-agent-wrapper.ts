@@ -168,10 +168,28 @@ export class RalphLoopAgent {
   private config: RalphLoopAgentConfig;
   private aborted: boolean = false;  // 中止标志
   private messageStore: EvaluationMessageStore | null = null;  // JSONL 消息存储
+  private progressInquiryPending: string | null = null;  // 待处理的进展询问消息
 
   constructor(config: RalphLoopAgentConfig) {
     this.config = config;
     this.caller = new EnhancedEvaluationCaller(config);
+  }
+
+  /**
+   * 注入进展询问消息
+   * 
+   * 超时时调用此方法，下一次迭代会包含进展询问
+   */
+  injectProgressInquiry(message: string): void {
+    this.progressInquiryPending = message;
+    console.log(`[RalphLoopAgent] 已注入进展询问: ${message.substring(0, 50)}...`);
+  }
+
+  /**
+   * 检查是否有待处理的进展询问
+   */
+  hasProgressInquiry(): boolean {
+    return this.progressInquiryPending !== null;
   }
 
   /**
@@ -301,16 +319,31 @@ export class RalphLoopAgent {
 
       // 构建本次迭代的 context（后续迭代追加反馈提示和经验指导）
       let iterationInitialMessage: string;
+      
+      // 检查是否有待处理的进展询问
+      const progressInquirySection = this.progressInquiryPending
+        ? `\n\n⚠️ 【系统询问进展】\n${this.progressInquiryPending}\n请如实汇报当前状态。\n`
+        : '';
+      
       if (iteration === 1) {
         iterationInitialMessage = context.initialMessage || context.taskDescription || '';
+        if (progressInquirySection) {
+          iterationInitialMessage += progressInquirySection;
+        }
       } else {
-        // 后续迭代：包含上一轮的经验指导（如果有）
+        // 后续迭代：包含上一轮的经验指导（如果有）和进展询问（如果有）
         const experienceSection = lastExperienceGuidance
           ? `\n\n${lastExperienceGuidance}\n`
           : '';
-        iterationInitialMessage = `继续工作。第 ${iteration - 1} 次尝试没有完成，请继续完成任务。如果任务已经完成，请明确说明。${experienceSection}\n\n原始任务：${context.taskDescription || context.initialMessage || ''}`;
+        iterationInitialMessage = `继续工作。第 ${iteration - 1} 次尝试没有完成，请继续完成任务。如果任务已经完成，请明确说明。${experienceSection}${progressInquirySection}\n\n原始任务：${context.taskDescription || context.initialMessage || ''}`;
         // 清除已使用的经验指导
         lastExperienceGuidance = undefined;
+      }
+      
+      // 清除已使用的进展询问
+      if (this.progressInquiryPending) {
+        console.log(`[Ralph Loop] 已将进展询问注入迭代 ${iteration}，清除标志`);
+        this.progressInquiryPending = null;
       }
 
       const iterationContext = {

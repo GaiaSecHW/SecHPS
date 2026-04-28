@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
   Bug,
@@ -96,6 +97,7 @@ export default function VulnerabilitiesPage() {
 }
 
 function VulnerabilitiesPageContent() {
+  const searchParams = useSearchParams();
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -110,6 +112,34 @@ function VulnerabilitiesPageContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(20);
   const [totalCount, setTotalCount] = useState(0);
+
+  // 自动选中 URL 参数中的漏洞
+  useEffect(() => {
+    const vulnId = searchParams.get('id');
+    if (vulnId && vulnerabilities.length > 0) {
+      const vuln = vulnerabilities.find(v => v.id === vulnId);
+      if (vuln) {
+        setSelectedVuln(vuln);
+      } else {
+        fetchVulnerabilityById(vulnId);
+      }
+    }
+  }, [searchParams, vulnerabilities]);
+
+  const fetchVulnerabilityById = async (vulnId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/vulnerabilities/${vulnId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedVuln(data.vulnerability);
+      }
+    } catch (err) {
+      console.error('获取漏洞详情失败:', err);
+    }
+  };
 
   useEffect(() => {
     fetchProjects();

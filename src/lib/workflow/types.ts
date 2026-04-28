@@ -95,6 +95,8 @@ export interface McpServerConfigForExecution {
   isEnabled?: boolean;
   /** 是否自动启动 */
   autoStart?: boolean;
+  /** MCP 工具列表 */
+  tools?: Array<{ name: string; description?: string; inputSchema?: any }>;
 }
 
 /**

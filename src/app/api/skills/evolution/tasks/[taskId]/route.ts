@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { getTaskDetail } from '@/services/skill-evolution/task-manager';
 import { compareEvolutionEffect } from '@/services/skill-evolution/effect-comparator';
+import type { CompactCase } from '@/services/skill-evolution/case-extractor';
+import type { BalanceAnalysisResult } from '@/services/skill-evolution/balance-analyzer';
 
 export async function GET(
   request: Request,
@@ -31,12 +33,43 @@ export async function GET(
     const { task, skill, improvement } = taskDetail;
 
     // 解析 analysisResult JSON
-    let analysisResult = null;
+    let analysisResult: BalanceAnalysisResult | null = null;
     if (task.analysisResult) {
       try {
         analysisResult = JSON.parse(task.analysisResult);
       } catch {
         // ignore parse error
+      }
+    }
+
+    // 解析 improvement 中的 JSON 字段
+    let falsePositiveCases: CompactCase[] = [];
+    let confirmedCases: CompactCase[] = [];
+    let analysis: BalanceAnalysisResult | null = null;
+    
+    if (improvement) {
+      try {
+        if (improvement.falsePositiveCases) {
+          falsePositiveCases = JSON.parse(improvement.falsePositiveCases);
+        }
+      } catch {
+        console.warn('Failed to parse falsePositiveCases');
+      }
+      
+      try {
+        if (improvement.confirmedCases) {
+          confirmedCases = JSON.parse(improvement.confirmedCases);
+        }
+      } catch {
+        console.warn('Failed to parse confirmedCases');
+      }
+      
+      try {
+        if (improvement.analysis) {
+          analysis = JSON.parse(improvement.analysis);
+        }
+      } catch {
+        console.warn('Failed to parse analysis');
       }
     }
 
@@ -77,12 +110,20 @@ export async function GET(
         name: skill.name,
         displayName: skill.displayName,
         content: skill.content,
+        version: skill.version,
+        execCount: skill.execCount,
+        vulnerabilityCount: skill.vulnerabilityCount,
+        successExecCount: skill.successExecCount,
+        successRate: skill.successRate,
       },
       improvement: improvement ? {
         id: improvement.id,
         skillId: improvement.skillId,
         taskId: improvement.taskId,
-        improvedContent: improvement.improvedContent,
+        improvedContent: improvement.improvedContent || '',
+        falsePositiveCases,
+        confirmedCases,
+        analysis,
         status: improvement.status,
         createdAt: improvement.createdAt,
       } : null,

@@ -354,7 +354,7 @@ function SkillsEvolutionContent() {
   };
 
   const navigateToAnalysis = (taskId: string) => {
-    router.push(`/dashboard/admin/skills-governance/analysis-review/${taskId}`);
+    router.push(`/dashboard/admin/skills-evolution/analysis/${taskId}`);
   };
 
   // Manual trigger evolution for a skill

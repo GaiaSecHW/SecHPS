@@ -977,9 +977,6 @@ callbacks: {
 - 项目名称: ${this.config.projectName}
 - 项目路径: ${this.config.workspacePath}
 
-## 前序节点输出
-${previousOutputs || '(首个节点，无前序输出)'}
-
 ## 任务要求
 请调用 /${skill.name} skill 执行安全检测。
 
@@ -1020,17 +1017,92 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         // 执行 skill agent
         console.log(`[executeMultiSkillNode] 🚀 开始执行 skillAgent.loop(): ${skill.name}`);
         
-        // 设置超时（5分钟）
-        const SKILL_TIMEOUT_MS = 5 * 60 * 1000;
-        const timeoutPromise = new Promise<null>((resolve) => {
-          setTimeout(() => {
-            console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 执行超时 (5分钟)，强制结束`);
-            resolve(null);
-          }, SKILL_TIMEOUT_MS);
-        });
+        // 超时询问进展机制（基于无活动时间）
+        const SKILL_TIMEOUT_MS = 30 * 60 * 1000;  // 30分钟无活动才触发
+        const MAX_INQUIRIES = 10;  // 最大询问次数
+        let inquiryCount = 0;
+        let skillStartTime = Date.now();
+        let skillLastActivityTime = Date.now();  // Skill 级别的活动时间
+        let timeoutTimerId: NodeJS.Timeout | null = null;
+        let forceAbort = false;  // 强制中止标志
         
-        const result = await Promise.race([
-          skillAgent.loop({
+        // 更新 Skill 活动时间（在回调中调用）
+        const updateSkillActivityTime = () => {
+          skillLastActivityTime = Date.now();
+          updateActivityTime();  // 也更新全局活动时间
+        };
+        
+        // 启动超时检查定时器（检查无活动时间）
+        const startTimeoutTimer = () => {
+          // 每1分钟检查一次是否有活动
+          timeoutTimerId = setTimeout(() => {
+            if (skillCompletedInCallback) {
+              console.log(`[executeMultiSkillNode] ⏰ 超时检查但 Skill 已完成，忽略`);
+              return;
+            }
+            
+            // 计算无活动时间
+            const idleTime = Date.now() - skillLastActivityTime;
+            const idleMinutes = Math.round(idleTime / 60000);
+            
+            console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 超时检查: 无活动 ${idleMinutes} 分钟, 阈值 ${SKILL_TIMEOUT_MS / 60000} 分钟`);
+            
+            // 只有真正无活动超过阈值才触发询问
+            if (idleTime >= SKILL_TIMEOUT_MS) {
+              inquiryCount++;
+              
+              if (inquiryCount <= MAX_INQUIRIES) {
+                console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 无活动超时，询问进展 (${inquiryCount}/${MAX_INQUIRIES})`);
+                
+                // 注入进展询问消息
+                skillAgent.injectProgressInquiry(
+                  `执行已超过 ${idleMinutes} 分钟无响应。\n` +
+                  `请立即汇报当前进展：\n` +
+                  `1) 已完成的工作内容\n` +
+                  `2) 当前正在执行的操作\n` +
+                  `3) 剩余工作及预计所需时间\n` +
+                  `如果任务已完成，请明确说明"任务完成"或"检测完成"。`
+                );
+                
+                // 发送 SSE 事件通知前端
+                this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
+                  event: 'progress_inquiry',
+                  data: { 
+                    skillName: skill.name, 
+                    skillIndex, 
+                    inquiryCount,
+                    maxInquiries: MAX_INQUIRIES,
+                    idleMinutes,
+                    message: `无活动 ${idleMinutes} 分钟，系统正在询问进展 (${inquiryCount}/${MAX_INQUIRIES})`
+                  },
+                }).catch(err => console.error('[executeMultiSkillNode] 保存 progress_inquiry 失败:', err));
+                
+                // 重置活动时间（询问后等待响应）
+                skillLastActivityTime = Date.now();
+                
+                // 继续检查
+                startTimeoutTimer();
+              } else {
+                console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 已询问 ${MAX_INQUIRIES} 次，强制结束`);
+                forceAbort = true;
+                
+                // 记录详细错误信息
+                const totalDuration = Math.round((Date.now() - skillStartTime) / 60000);
+                console.log(`[executeMultiSkillNode] 详细错误: 总执行 ${totalDuration} 分钟，输出 ${accumulatedAssistantText.length} 字符`);
+                
+                skillAgent.abort();
+              }
+            } else {
+              // 未达到超时阈值，继续检查
+              startTimeoutTimer();
+            }
+          }, 60 * 1000);  // 每1分钟检查一次
+        };
+        
+        // 启动第一个超时定时器
+        startTimeoutTimer();
+        
+        const result = await skillAgent.loop({
             evaluationId: this.config.evaluationSessionId,
             projectId: this.config.projectId,
             workflowNodeId: node.id,
@@ -1042,8 +1114,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             },
             callbacks: {
             onChunk: (text) => {
-              // 更新活动时间
-              updateActivityTime();
+              // 更新 Skill 活动时间（重置超时计时）
+              updateSkillActivityTime();
               
               accumulatedAssistantText += text;
               
@@ -1057,8 +1129,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               this.callbacks.onNodeChunk(nodeIndex, text);
             },
             onThinking: (thinking) => {
-              // 更新活动时间
-              updateActivityTime();
+              // 更新 Skill 活动时间（重置超时计时）
+              updateSkillActivityTime();
               
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'thinking',
@@ -1066,8 +1138,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               }).catch(err => console.error('[executeMultiSkillNode] 保存思考失败:', err));
             },
             onToolCall: (toolUseId, name, args) => {
-              // 更新活动时间
-              updateActivityTime();
+              // 更新 Skill 活动时间（重置超时计时）
+              updateSkillActivityTime();
               
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
                 event: 'tool_use',
@@ -1077,8 +1149,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               this.callbacks.onNodeToolCall(nodeIndex, name, args);
             },
             onToolResult: (toolUseId, content, isError) => {
-              // 更新活动时间
-              updateActivityTime();
+              // 更新 Skill 活动时间（重置超时计时）
+              updateSkillActivityTime();
               const resultData = typeof content === 'string' ? (() => { try { return JSON.parse(content); } catch { return {}; } })() : content;
               
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
@@ -1109,8 +1181,8 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               }).catch(err => console.error('[executeMultiSkillNode] 保存 error 失败:', err));
             },
             onUsage: (usage) => {
-              // 更新活动时间（token 使用也是活动）
-              updateActivityTime();
+              // 更新 Skill 活动时间（token 使用也是活动，重置超时计时）
+              updateSkillActivityTime();
               
               skillInputTokens = usage.inputTokens || 0;
               skillOutputTokens = usage.outputTokens || 0;
@@ -1148,23 +1220,39 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             },
             onRalphComplete: async () => {},
           },
-        }),
-          timeoutPromise
-        ]);
+        });
         
-        if (result === null) {
-          // 超时，强制结束
-          console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 超时，强制结束并更新状态`);
+        // 清除超时定时器（loop() 已返回）
+        if (timeoutTimerId) {
+          clearTimeout(timeoutTimerId);
+          timeoutTimerId = null;
+        }
+        
+        // 检查是否被强制中止
+        if (forceAbort) {
+          console.log(`[executeMultiSkillNode] ⏰ Skill ${skill.name} 被强制中止（超时询问次数已达上限）`);
           this.currentAgent = null;
           stopProgressMonitor();
-          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, '执行超时 (5分钟)');
+          
+          // 生成详细错误信息
+          const totalDuration = Math.round((Date.now() - skillStartTime) / 60000);
+          const detailedError = `Skill "${skill.name}" 执行超时中止:\n` +
+            `• 超时阈值: ${SKILL_TIMEOUT_MS / 60000} 分钟/次\n` +
+            `• 询问次数: ${MAX_INQUIRIES} 次（已全部无响应）\n` +
+            `• 总执行时间: ${totalDuration} 分钟\n` +
+            `• 输出长度: ${accumulatedAssistantText.length} 字符\n` +
+            `• 输入Token: ${skillInputTokens}, 输出Token: ${skillOutputTokens}\n` +
+            `• 可能原因: MCP工具响应慢、任务复杂、网络超时\n` +
+            `• 建议: 检查MCP服务器状态，增加超时时间，简化任务`;
+          
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, detailedError);
           skillResults.push({
             skillName: skill.name,
             skillId: skill.skillId,
             executionId,
             status: 'failed',
             text: accumulatedAssistantText,
-            error: '执行超时',
+            error: detailedError,
           });
           continue;
         }
@@ -1311,16 +1399,35 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     console.log(`[createSkillAgent] WorkflowNodeId: ${node.id}`);
     
     // 默认工具列表
-    const defaultAllowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'];
+    const defaultAllowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
+    
+    // 添加 MCP 工具名称到 allowedTools（必须！否则 SDK 不注册 MCP 工具）
+    const mcpToolNames: string[] = [];
+    if (this.config.mcpServers && this.config.mcpServers.length > 0) {
+      for (const mcp of this.config.mcpServers) {
+        if (mcp.tools && Array.isArray(mcp.tools)) {
+          for (const tool of mcp.tools) {
+            // MCP 工具名称格式: mcp__{serverName}__{toolName}
+            // tool 可能是 string 或 { name: string }
+            const toolName = typeof tool === 'string' ? tool : tool.name;
+            const mcpToolName = `mcp__${mcp.name}__${toolName}`;
+            mcpToolNames.push(mcpToolName);
+          }
+        }
+      }
+      console.log(`[createSkillAgent] MCP 工具名称: ${mcpToolNames.join(', ')}`);
+    }
     
     // 减去被 deny 的工具
     const deniedTools = this.config.toolPermissions
       ? this.config.toolPermissions.filter(p => p.permission === 'deny').map(p => p.toolPattern)
       : [];
     
-    const allowedTools = defaultAllowedTools.filter(tool => !deniedTools.includes(tool));
+    // 合并默认工具 + MCP 工具，过滤 denied
+    const allowedTools = [...defaultAllowedTools, ...mcpToolNames].filter(tool => !deniedTools.includes(tool));
     
     console.log(`[createSkillAgent] 默认工具: ${defaultAllowedTools.join(', ')}`);
+    console.log(`[createSkillAgent] MCP 工具: ${mcpToolNames.join(', ')}`);
     console.log(`[createSkillAgent] 拒绝工具: ${deniedTools.join(', ')}`);
     console.log(`[createSkillAgent] 最终工具: ${allowedTools.join(', ')}`);
     
@@ -1497,7 +1604,27 @@ ai4java MCP 工具：
     const skills = await this.getNodeSkills(node);
     
     // 基础工具权限（包含 Skill 工具）
-    const allowedTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
+    const baseTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill'];
+    
+// 添加 MCP 工具名称到 allowedTools（必须！否则 SDK 不注册 MCP 工具）
+    const mcpToolNames: string[] = [];
+    if (this.config.mcpServers && this.config.mcpServers.length > 0) {
+      for (const mcp of this.config.mcpServers) {
+        if (mcp.tools && Array.isArray(mcp.tools)) {
+          for (const tool of mcp.tools) {
+            const toolName = typeof tool === 'string' ? tool : tool.name;
+            const mcpToolName = `mcp__${mcp.name}__${toolName}`;
+            mcpToolNames.push(mcpToolName);
+          }
+        }
+      }
+    }
+    
+    // 合并基础工具 + MCP 工具
+    const allowedTools = [...baseTools, ...mcpToolNames];
+    
+    console.log(`[createNodeAgent] MCP 工具名称: ${mcpToolNames.join(', ')}`);
+    console.log(`[createNodeAgent] allowedTools: ${allowedTools.join(', ')}`);
     
     // Skills 注册：使用 SDK 的 skills 参数（直接传 skill name）
     const skillNames = skills.map(s => s.name);
@@ -1571,6 +1698,8 @@ ai4java MCP 工具：
         settingSources: ['project'],  // 加载项目级 CLAUDE.md，子 Agent 自动继承
       }
     );
+    
+    console.log(`[createNodeAgent] systemPrompt 传递完成: length=${this.config.systemPrompt?.length || 0}, preview=${(this.config.systemPrompt || '').substring(0, 100)}...`);
   }
 
 /**
@@ -1776,13 +1905,11 @@ ai4java MCP 工具：
     if (nodeType === 'start') {
       // 开始节点：使用 workflowConfig.startNodeDescription
       nodeDescription = this.config.workflowConfig?.startNodeDescription || 
-        node.description || 
-        '开始工作流执行，准备项目环境';
+        node.description ||  '开始执行';
     } else if (nodeType === 'end') {
       // 结束节点：使用 workflowConfig.endNodeDescription
       nodeDescription = this.config.workflowConfig?.endNodeDescription || 
-        node.description || 
-        '结束工作流执行，汇总所有结果';
+        node.description || '结束工作流执行，汇总所有结果';
     } else if (nodeType === 'fsm_phase' && node.fsmPhase) {
       // FSM Phase 节点：优先读取 Skill 文件内容
       // 如果 skillPath 为 null（如渗透测试节点），使用 description
@@ -1844,6 +1971,7 @@ ${previousOutputs || '(首个节点，无前序输出)'}
 `;
           console.log(`[buildNodePrompt] FSM Phase description 模式，提示词: ${prompt.slice(0, 100)}...`);
         } else {
+		throw new Error(`废弃代码2222`);
           // manual 或 vulnerability 模式：根据 Skills 生成提示词（和自定义流程一样）
           prompt = `请执行以下安全检查任务，必须执行下面指定的所有 Skills：
 
@@ -1905,9 +2033,6 @@ ${this.config.userPrompt ? `### 用户附加提示\n${this.config.userPrompt}` :
 - 节点类型: ${nodeType}
 - 节点描述: ${nodeDescription}
 
-## 前序节点输出
-${previousOutputs}
-
 ## 任务要求
 ${nodeDescription}
 
@@ -1935,6 +2060,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       prompt = `${nodeDescription}`;
       console.log(`[buildNodePrompt] description 模式，提示词: ${prompt.slice(0, 100)}...`);
     } else {
+	throw new Error(`废弃代码1111`);
       // manual 或 vulnerability 模式：根据 Skills 生成提示词
       prompt = `请执行以下安全检查任务，必须执行下面指定的所有 Skills：
 

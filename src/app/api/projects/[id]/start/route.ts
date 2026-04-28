@@ -584,12 +584,74 @@ export async function POST(
         const originalPrompt = sdkOptions.systemPrompt || '';
         sdkOptions.systemPrompt = expResult.prompt + '\n\n' + originalPrompt;
         injectedExperiences = expResult.experiences;
-        logger.debug(LOG_MODULES.EVALUATION, '已预注入自主进化经验到 System Prompt 开头', { count: expResult.count, experiences: expResult.experiences.map(e => ({ id: e.id, title: e.title, errorCategory: e.errorCategory, hitCount: e.hitCount })) });
+        logger.info(LOG_MODULES.EVALUATION, '已预注入自主进化经验到 System Prompt 开头', { 
+          count: expResult.count, 
+          experiences: expResult.experiences.map(e => ({ id: e.id, title: e.title, errorCategory: e.errorCategory, hitCount: e.hitCount })),
+          originalPromptLength: originalPrompt.length,
+          newPromptLength: sdkOptions.systemPrompt.length,
+          injectedPromptPreview: expResult.prompt.substring(0, 200) + '...'
+        });
       } else {
-        logger.debug(LOG_MODULES.EVALUATION, '无已启用的自主进化经验（isInjected=true 的记录为空）');
+        logger.info(LOG_MODULES.EVALUATION, '无已启用的自主进化经验（isInjected=true 的记录为空）');
       }
     } catch (err) {
       logger.warn(LOG_MODULES.EVALUATION, '注入自主进化经验失败', { error: err });
+    }
+
+    // ========================================
+    // 手动注入 CLAUDE.md 到 System Prompt（确保发送给大模型）
+    // ========================================
+    if (project.projectPath) {
+      const claudeMdPath = join(project.projectPath, 'CLAUDE.md');
+      try {
+        await access(claudeMdPath);
+        const claudeMdContent = await readFile(claudeMdPath, 'utf-8');
+        
+        if (claudeMdContent && claudeMdContent.trim().length > 0) {
+          // 将 CLAUDE.md 注入到 System Prompt 开头（最高优先级）
+          const originalPrompt = sdkOptions.systemPrompt || '';
+          sdkOptions.systemPrompt = `# 项目级指令（CLAUDE.md）
+
+${claudeMdContent}
+
+---
+
+${originalPrompt}`;
+          
+          logger.info(LOG_MODULES.EVALUATION, '已手动注入 CLAUDE.md 到 System Prompt 开头', {
+            claudeMdPath,
+            claudeMdLength: claudeMdContent.length,
+            newSystemPromptLength: sdkOptions.systemPrompt.length,
+            claudeMdPreview: claudeMdContent.substring(0, 200) + '...'
+          });
+        } else {
+          logger.warn(LOG_MODULES.EVALUATION, 'CLAUDE.md 文件为空，跳过注入', { claudeMdPath });
+        }
+      } catch (err) {
+        // CLAUDE.md 不存在，使用全局配置中的 claudemdTemplate
+        logger.warn(LOG_MODULES.EVALUATION, 'CLAUDE.md 文件不存在，尝试使用全局模板', { 
+          claudeMdPath, 
+          error: String(err),
+          hasTemplate: !!globalConfig?.claudemdTemplate
+        });
+        
+        // 如果全局配置有 CLAUDE.md 模板，使用模板
+        if (globalConfig?.claudemdTemplate) {
+          const originalPrompt = sdkOptions.systemPrompt || '';
+          sdkOptions.systemPrompt = `# 项目级指令（CLAUDE.md 全局模板）
+
+${globalConfig.claudemdTemplate}
+
+---
+
+${originalPrompt}`;
+          
+          logger.info(LOG_MODULES.EVALUATION, '已注入全局 CLAUDE.md 模板到 System Prompt', {
+            templateLength: globalConfig.claudemdTemplate.length,
+            newSystemPromptLength: sdkOptions.systemPrompt.length
+          });
+        }
+      }
     }
 
     // 设置源（加载 CLAUDE.md 和 Skills）

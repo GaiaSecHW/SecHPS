@@ -123,10 +123,10 @@ function buildBalanceAnalysisPrompt(
         parts.push(`- **问题代码位置**: ${c.location}`);
       }
       
-      if (c.POCPreview) {
-        parts.push(`- **POC 预览**:`);
+      if (c.sourceCodePreview) {
+        parts.push(`- **源代码预览**:`);
         parts.push('```');
-        parts.push(c.POCPreview);
+        parts.push(c.sourceCodePreview);
         parts.push('```');
       }
       
@@ -187,7 +187,7 @@ function buildBalanceAnalysisPromptFromTemplate(
     return cases.map((c, i) => {
       const parts = [
         `### 案例 ${i + 1}: ${c.title}`,
-        `- **状态**: ${c.status === 'false_positive' ? '误报' : '正确发现'}`,
+        `- **状态**: ${c.status === 'false-positive' ? '误报' : '正确发现'}`,
         `- **描述**: ${c.description}`,
       ];
       
@@ -195,10 +195,10 @@ function buildBalanceAnalysisPromptFromTemplate(
         parts.push(`- **问题代码位置**: ${c.location}`);
       }
       
-      if (c.POCPreview) {
-        parts.push(`- **POC 预览**:`);
+      if (c.sourceCodePreview) {
+        parts.push(`- **源代码预览**:`);
         parts.push('```');
-        parts.push(c.POCPreview);
+        parts.push(c.sourceCodePreview);
         parts.push('```');
       }
       

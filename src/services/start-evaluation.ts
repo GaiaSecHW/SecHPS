@@ -6,6 +6,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { emitQueueError, emitEvaluationStarted, emitPreparingProgress, emitPhaseStart, emitNodeComplete, emitMessageChunk, emitTodoUpdate, emitPhaseTokenUsage, emitEvaluationComplete } from '@/lib/event-bus';
 import { unlockProject } from '@/lib/evaluation-lock';
 import { completeEvaluationSuccess, completeEvaluationFailed } from '@/services/evaluation-completion';
+import { createSkillExecutionsForNode } from '@/services/skill-execution-tracker';
 import { generateId, generateIndexedId } from '@/lib/id-generator';
 import { copySkillsToProject } from '@/services/skill-files';
 import { mkdir, access, rm } from 'fs/promises';
@@ -719,6 +720,27 @@ async function executeDAGBackground(
     }
     
     console.log(`${LOG_PREFIX} [DAG-Background] 获取到 ${nodes.length} 个节点`);
+
+    // ========================================
+    // Step 4.1: 预创建 SkillExecution 记录（关键！）
+    // ========================================
+    for (const node of nodes) {
+      const nodeSkills = node.skills || [];
+      
+      if (nodeSkills.length > 0) {
+        try {
+          await createSkillExecutionsForNode({
+            evaluationId,
+            nodeId: node.id,
+            skills: nodeSkills,
+            projectId,
+          });
+          console.log(`${LOG_PREFIX} [DAG-Background] 为节点 ${node.id} (${node.label}) 创建 ${nodeSkills.length} 个 SkillExecution 记录`);
+        } catch (error) {
+          console.error(`${LOG_PREFIX} [DAG-Background] 为节点 ${node.id} 创建 SkillExecution 失败:`, error);
+        }
+      }
+    }
 
     // 构建 modelConfigForExecution
     const modelConfigForExecution = {

@@ -305,6 +305,7 @@ export function buildFullSkill(
     lines.push('---');
     lines.push(`name: ${skillName}`);
     lines.push(`description: ${description}`);
+	lines.push('allowed-tools: mcp__ai4java__decompileProject mcp__ai4java__scanClassMethodSource mcp__ai4java__scanClassMethodAllPathSources');
     lines.push('---');
     lines.push('');
   }
