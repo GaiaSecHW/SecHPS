@@ -14,6 +14,8 @@ import { getEvolutionConfig } from './evolution-scheduler';
 import { analyzeBalance } from './balance-analyzer';
 import { generateImprovement } from './improvement-generator';
 import { getCompactCases } from './case-extractor';
+import { runBacktest, getBacktestDetailRows } from './backtest-validator';
+import { createEvolutionAttempt } from './evolution-attempt-manager';
 import type { SkillEvolutionTask, Skill, SkillImprovement } from '@prisma/client';
 import type { BalanceAnalysisResult } from './balance-analyzer';
 import type { CompactCase } from './case-extractor';
@@ -254,19 +256,30 @@ export async function rejectTask(
 // ============================================================================
 
 /**
- * 处理单个进化任务
+ * 处理单个进化任务（带反馈驱动重试）
  * 
  * 流程：
  * 1. 获取任务和 Skill
- * 2. 获取精简案例（误报 + 正确发现）
- * 3. 运行平衡分析
- * 4. 生成改进内容
- * 5. 更新任务状态
+ * 2. 状态更新: pending → analyzing
+ * 3. 获取精简案例（混合策略：失败案例必须包含）
+ * 4. 运行平衡分析（传递上次失败信息）
+ * 5. 生成改进内容（传递上次失败信息）
+ * 6. 自动回测验证
+ * 7. 判断回测结果 → 不达标记录失败信息跳回步骤 3，达标完成任务
+ * 8. 最多重试 10 次
  * 
  * @param taskId 任务 ID
  * @returns 处理结果
  */
 export async function processEvolutionTask(taskId: string): Promise<TaskProcessResult> {
+  const MAX_RETRY_COUNT = 10;
+  
+  let lastFailureReason: string | null = null;
+  let lastMissedCases: CompactCase[] = [];
+  let lastRemainingFalsePositives: CompactCase[] = [];
+  let attemptNumber = 0;
+  let successfulAttemptId: string | null = null;
+  
   try {
     // 1. 获取任务
     const task = await prisma.skillEvolutionTask.findUnique({
@@ -284,17 +297,11 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
     });
 
     if (!task) {
-      return {
-        success: false,
-        error: `Task not found: ${taskId}`,
-      };
+      return { success: false, error: `Task not found: ${taskId}` };
     }
 
     if (task.status !== 'pending' && task.status !== 'analyzing') {
-      return {
-        success: false,
-        error: `Task status is not pending or analyzing: ${task.status}`,
-      };
+      return { success: false, error: `Task status is not pending or analyzing: ${task.status}` };
     }
 
     // 2. 开始处理（状态 → analyzing）
@@ -306,102 +313,205 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
     const skill = task.Skill;
     if (!skill) {
       await rejectTask(taskId, 'Skill not found', `Skill ID: ${task.skillId}`);
-      return {
-        success: false,
-        error: 'Skill not found',
-      };
+      return { success: false, error: 'Skill not found' };
     }
 
     const skillContent = skill.content || '';
-
     if (!skillContent) {
       await rejectTask(taskId, 'Skill content is empty');
-      return {
-        success: false,
-        error: 'Skill content is empty',
-      };
+      return { success: false, error: 'Skill content is empty' };
     }
 
     // 4. 获取进化配置
     const config = await getEvolutionConfig();
 
-    // 5. 获取精简案例
-    console.log(`[TaskManager] Getting compact cases for skill ${skill.id}`);
-    const casesResult = await getCompactCases(skill.id, {
-      falsePositiveLimit: config.falsePositiveLimit,
-      confirmedLimit: config.confirmedLimit,
-      maxDescriptionLength: config.maxDescriptionLength,
-      codeSnippetLines: config.codeSnippetLines,
-    });
+    // ========== 重试循环：最多 10 次 ==========
+    while (attemptNumber < MAX_RETRY_COUNT) {
+      attemptNumber++;
+      console.log(`[TaskManager] Attempt ${attemptNumber}/${MAX_RETRY_COUNT} for task ${taskId}`);
 
-    const falsePositives = casesResult.falsePositives;
-    const confirmedCases = casesResult.confirmedCases;
+      // 3. 获取精简案例（混合策略）
+      // 第1次：全量获取
+      // 第N次：必须包含上次失败案例 + 可更新其他案例
+      let falsePositives: CompactCase[];
+      let confirmedCases: CompactCase[];
 
-    // 检查是否有足够的案例
-    if (falsePositives.length === 0) {
-      await rejectTask(taskId, 'No false positive cases available');
+      if (attemptNumber === 1) {
+        // 第1次：全量获取
+        const casesResult = await getCompactCases(skill.id, {
+          falsePositiveLimit: config.falsePositiveLimit,
+          confirmedLimit: config.confirmedLimit,
+          maxDescriptionLength: config.maxDescriptionLength,
+          codeSnippetLines: config.codeSnippetLines,
+        });
+        falsePositives = casesResult.falsePositives;
+        confirmedCases = casesResult.confirmedCases;
+      } else {
+        // 第N次：混合策略 - 失败案例必须包含
+        const casesResult = await getCompactCases(skill.id, {
+          falsePositiveLimit: config.falsePositiveLimit,
+          confirmedLimit: config.confirmedLimit,
+          maxDescriptionLength: config.maxDescriptionLength,
+          codeSnippetLines: config.codeSnippetLines,
+        });
+        
+        // 合并：上次失败案例 + 新获取的案例（去重）
+        const fpIds = new Set(lastRemainingFalsePositives.map(c => c.vulnerabilityId));
+        const ccIds = new Set(lastMissedCases.map(c => c.vulnerabilityId));
+        
+        // 失败案例必须包含
+        falsePositives = [
+          ...lastRemainingFalsePositives,
+          ...casesResult.falsePositives.filter(c => !fpIds.has(c.vulnerabilityId))
+        ];
+        confirmedCases = [
+          ...lastMissedCases,
+          ...casesResult.confirmedCases.filter(c => !ccIds.has(c.vulnerabilityId))
+        ];
+      }
+
+      // 检查是否有足够的案例
+      if (falsePositives.length === 0) {
+        lastFailureReason = 'No false positive cases available for analysis';
+        console.log(`[TaskManager] ${lastFailureReason}, attempt ${attemptNumber}`);
+        continue;
+      }
+
+      if (confirmedCases.length === 0) {
+        lastFailureReason = 'No confirmed cases available for analysis';
+        console.log(`[TaskManager] ${lastFailureReason}, attempt ${attemptNumber}`);
+        continue;
+      }
+
+      console.log(`[TaskManager] Using ${falsePositives.length} FP cases, ${confirmedCases.length} CC cases`);
+
+      // 4. 运行平衡分析（传递失败信息）
+      console.log(`[TaskManager] Running balance analysis for task ${taskId}`);
+      const analysisResult = await analyzeBalance(
+        skillContent,
+        falsePositives,
+        confirmedCases,
+        {
+          previousFailure: lastFailureReason ?? undefined,
+          missedCases: lastMissedCases,
+          remainingFalsePositives: lastRemainingFalsePositives,
+        }
+      );
+
+      console.log(`[TaskManager] Analysis complete: ${analysisResult.recommendations.length} recommendations`);
+
+      // 5. 生成改进内容（传递失败信息）
+      console.log(`[TaskManager] Generating improvement for task ${taskId}`);
+      let improvementResult;
+      try {
+        improvementResult = await generateImprovement(
+          skill.id,
+          skillContent,
+          analysisResult,
+          falsePositives,
+          confirmedCases,
+          {
+            taskId,
+            previousFailure: lastFailureReason ?? undefined,
+            missedCases: lastMissedCases,
+            remainingFalsePositives: lastRemainingFalsePositives,
+          }
+        );
+      } catch (genError) {
+        lastFailureReason = genError instanceof Error ? genError.message : 'Failed to generate improvement';
+        console.log(`[TaskManager] Improvement generation failed: ${lastFailureReason}`);
+        continue;
+      }
+
+      if (!improvementResult.improvementId || !improvementResult.improvedContent) {
+        lastFailureReason = 'Improvement generation returned empty result';
+        console.log(`[TaskManager] ${lastFailureReason}`);
+        continue;
+      }
+
+      console.log(`[TaskManager] Improvement generated: ${improvementResult.improvementId}`);
+
+      // 6. 自动回测验证
+      console.log(`[TaskManager] Running backtest validation for task ${taskId}`);
+      
+      const backtestResult = await runBacktest(
+        improvementResult.improvedContent,
+        falsePositives,
+        confirmedCases,
+        { maxCases: Math.max(falsePositives.length, confirmedCases.length) }
+      );
+
+      const backtestDetailRows = getBacktestDetailRows(backtestResult);
+
+      console.log(`[TaskManager] Backtest result: passed=${backtestResult.isSuccessful}, exclusionRate=${(backtestResult.summary.falsePositiveExclusionRate * 100).toFixed(1)}%, missed=${backtestResult.summary.confirmedMissed}`);
+
+      // 提取失败案例信息（用于下次重试）
+      lastMissedCases = backtestResult.confirmedResults
+        .filter(r => !r.passed)
+        .map(r => r.case);
+      lastRemainingFalsePositives = backtestResult.falsePositiveResults
+        .filter(r => !r.passed)
+        .map(r => r.case);
+
+      // 创建 EvolutionAttempt 记录
+      const attemptId = await createEvolutionAttempt({
+        taskId,
+        attemptNumber,
+        falsePositiveCasesUsed: falsePositives,
+        confirmedCasesUsed: confirmedCases,
+        falsePositivePatterns: analysisResult.falsePositivePatterns,
+        confirmedPatterns: analysisResult.confirmedPatterns,
+        recommendations: analysisResult.recommendations,
+        improvedContent: improvementResult.improvedContent,
+        changeSummary: improvementResult.changeSummary,
+        backtestResult,
+        backtestDetailRows,
+        isPassed: backtestResult.isSuccessful,
+        failureReason: backtestResult.isSuccessful ? undefined : backtestResult.recommendation,
+        missedCasesInfo: lastMissedCases.length > 0 ? lastMissedCases : undefined,
+        remainingFalsePositive: lastRemainingFalsePositives.length > 0 ? lastRemainingFalsePositives : undefined,
+      });
+
+      // 7. 判断回测结果
+      if (!backtestResult.isSuccessful) {
+        lastFailureReason = backtestResult.recommendation;
+        console.log(`[TaskManager] Backtest failed: ${lastFailureReason}`);
+        console.log(`[TaskManager] Missed ${lastMissedCases.length} cases, ${lastRemainingFalsePositives.length} FP remaining`);
+        continue;
+      }
+
+      // 回测达标，完成任务
+      console.log(`[TaskManager] Backtest passed! Completing task ${taskId}`);
+      successfulAttemptId = attemptId;
+
+      // 8. 完成任务
+      await completeTask(taskId, improvementResult.improvementId, analysisResult);
+
       return {
-        success: false,
-        error: 'No false positive cases available for analysis',
+        success: true,
+        improvementId: improvementResult.improvementId,
       };
     }
 
-    if (confirmedCases.length === 0) {
-      await rejectTask(taskId, 'No confirmed cases available');
-      return {
-        success: false,
-        error: 'No confirmed cases available for analysis',
-      };
-    }
+    // 10次都失败
+    const finalError = `Max retry count (${MAX_RETRY_COUNT}) reached. Last failure: ${lastFailureReason}`;
+    console.error(`[TaskManager] Task processing failed after ${MAX_RETRY_COUNT} attempts: ${finalError}`);
+    
+    await rejectTask(taskId, 'Max retry count reached', finalError);
 
-    console.log(`[TaskManager] Found ${falsePositives.length} false positives, ${confirmedCases.length} confirmed cases`);
-
-    // 6. 运行平衡分析
-    console.log(`[TaskManager] Running balance analysis for task ${taskId}`);
-    const analysisResult = await analyzeBalance(
-      skillContent,
-      falsePositives,
-      confirmedCases
-    );
-
-    console.log(`[TaskManager] Analysis complete: ${analysisResult.recommendations.length} recommendations`);
-
-    // 7. 生成改进内容
-    console.log(`[TaskManager] Generating improvement for task ${taskId}`);
-    const improvementResult = await generateImprovement(
-      skill.id,
-      skillContent,
-      analysisResult,
-      falsePositives,
-      confirmedCases,
-      { taskId }
-    );
-
-    console.log(`[TaskManager] Improvement generated: ${improvementResult.improvementId}`);
-
-    // 8. 完成任务
-    await completeTask(taskId, improvementResult.improvementId, analysisResult);
-
-    return {
-      success: true,
-      improvementId: improvementResult.improvementId,
-    };
+    return { success: false, error: finalError };
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`[TaskManager] Task processing failed: ${errorMessage}`);
 
-    // 尝试拒绝任务
     try {
       await rejectTask(taskId, 'Processing failed', errorMessage);
     } catch {
       // 任务可能不存在，忽略
     }
 
-    return {
-      success: false,
-      error: errorMessage,
-    };
+    return { success: false, error: errorMessage };
   }
 }
 

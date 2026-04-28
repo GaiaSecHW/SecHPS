@@ -156,11 +156,7 @@ function VulnerabilitiesPageContent() {
 
       const params = new URLSearchParams();
       if (selectedSkillId) {
-        // Note: API doesn't support skillId filter directly, but we can filter by skill name
-        const skill = skills.find(s => s.id === selectedSkillId);
-        if (skill) {
-          params.append('search', skill.name);
-        }
+        params.append('skillId', selectedSkillId);
       }
       if (selectedStatus) {
         params.append('status', selectedStatus);

@@ -209,12 +209,12 @@ export function buildDateRangeFilter(
  */
 export function buildStatusFilter(
   statuses?: string[]
-): { in: string[] } | undefined {
+): { status: { in: string[] } } | undefined {
   if (!statuses || statuses.length === 0) {
     return undefined;
   }
 
-  return { in: statuses };
+  return { status: { in: statuses } };
 }
 
 /**

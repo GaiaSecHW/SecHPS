@@ -22,10 +22,16 @@ import {
   Loader2,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   ExternalLink,
   Zap,
   Shield,
   Bug,
+  History,
+  Layers,
+  Database,
+  Lightbulb,
+  Play,
 } from 'lucide-react';
 import { AdminGuard } from '@/components/PermissionGuard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -146,6 +152,47 @@ interface ApiResponse {
 }
 
 // ============================================================================
+// Evolution Attempt Types
+// ============================================================================
+
+interface EvolutionAttemptSummary {
+  id: string;
+  taskId: string;
+  attemptNumber: number;
+  isPassed: boolean;
+  status: string;
+  falsePositiveExclusionRate: number;
+  confirmedMissed: number;
+  failureReason: string | null;
+  createdAt: string;
+}
+
+interface EvolutionAttemptDetail {
+  id: string;
+  taskId: string;
+  attemptNumber: number;
+  falsePositiveCasesUsed: CompactCase[];
+  confirmedCasesUsed: CompactCase[];
+  falsePositivePatterns: string[];
+  confirmedPatterns: string[];
+  recommendations: BalanceAnalysisResult['recommendations'];
+  improvedContent: string;
+  changeSummary: string[];
+  backtestSummary: BacktestSummary;
+  backtestDetailRows: BacktestDetailRow[];
+  falsePositiveExclusionRate: number;
+  confirmedMissed: number;
+  failureReason: string | null;
+  missedCasesInfo: CompactCase[];
+  remainingFalsePositive: CompactCase[];
+  isPassed: boolean;
+  status: string;
+  createdAt: string;
+}
+
+type TabKey = 'overview' | 'cases' | 'analysis' | 'improvement' | 'history' | 'actions';
+
+// ============================================================================
 // Diff Modal Component
 // ============================================================================
 
@@ -158,6 +205,69 @@ interface DiffModalProps {
   improvedLabel: string;
 }
 
+interface DiffLine {
+  type: 'same' | 'added' | 'removed' | 'modified';
+  oldLine?: string;
+  newLine?: string;
+  oldLineNum: number | null;
+  newLineNum: number | null;
+}
+
+function computeLCSDiff(oldContent: string, newContent: string): DiffLine[] {
+  const oldLines = oldContent.split('\n');
+  const newLines = newContent.split('\n');
+  
+  const m = oldLines.length;
+  const n = newLines.length;
+  
+  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
+  
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      if (oldLines[i - 1] === newLines[j - 1]) {
+        dp[i][j] = dp[i - 1][j - 1] + 1;
+      } else {
+        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
+      }
+    }
+  }
+  
+  const result: DiffLine[] = [];
+  let i = m, j = n;
+  
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i - 1] === newLines[j - 1]) {
+      result.unshift({
+        type: 'same',
+        oldLine: oldLines[i - 1],
+        newLine: newLines[j - 1],
+        oldLineNum: i,
+        newLineNum: j,
+      });
+      i--;
+      j--;
+    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
+      result.unshift({
+        type: 'added',
+        newLine: newLines[j - 1],
+        oldLineNum: null,
+        newLineNum: j,
+      });
+      j--;
+    } else if (i > 0) {
+      result.unshift({
+        type: 'removed',
+        oldLine: oldLines[i - 1],
+        oldLineNum: i,
+        newLineNum: null,
+      });
+      i--;
+    }
+  }
+  
+  return result;
+}
+
 function DiffModal({
   isOpen,
   onClose,
@@ -166,54 +276,68 @@ function DiffModal({
   originalLabel,
   improvedLabel,
 }: DiffModalProps) {
-  const [viewMode, setViewMode] = useState<'side-by-side' | 'inline'>('side-by-side');
-
-  // Simple diff computation
-  const computeDiff = (before: string, after: string) => {
-    const beforeLines = before.split('\n');
-    const afterLines = after.split('\n');
-    
-    const maxLen = Math.max(beforeLines.length, afterLines.length);
-    const diffLines: Array<{
-      type: 'same' | 'added' | 'removed' | 'modified';
-      before?: string;
-      after?: string;
-      lineNum: number;
-    }> = [];
-
-    for (let i = 0; i < maxLen; i++) {
-      const beforeLine = beforeLines[i];
-      const afterLine = afterLines[i];
-
-      if (beforeLine === afterLine) {
-        diffLines.push({ type: 'same', before: beforeLine, after: afterLine, lineNum: i + 1 });
-      } else if (beforeLine === undefined) {
-        diffLines.push({ type: 'added', after: afterLine, lineNum: i + 1 });
-      } else if (afterLine === undefined) {
-        diffLines.push({ type: 'removed', before: beforeLine, lineNum: i + 1 });
-      } else {
-        diffLines.push({ type: 'modified', before: beforeLine, after: afterLine, lineNum: i + 1 });
-      }
-    }
-
-    return diffLines;
+  const [viewMode, setViewMode] = useState<'side-by-side' | 'inline' | 'diff-only'>('inline');
+  const [showSameLines, setShowSameLines] = useState(true);
+  
+  const diffLines = computeLCSDiff(originalContent || '', improvedContent || '');
+  
+  const stats = {
+    added: diffLines.filter(l => l.type === 'added').length,
+    removed: diffLines.filter(l => l.type === 'removed').length,
+    same: diffLines.filter(l => l.type === 'same').length,
   };
+  
+  const filteredLines = showSameLines ? diffLines : diffLines.filter(l => l.type !== 'same');
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <GitCompare size={20} className="text-indigo-600" />
             <h2 className="text-lg font-semibold text-gray-900">Skill 内容对比</h2>
+            
+            {/* Stats */}
+            <div className="flex items-center gap-3 text-xs">
+              <span className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                +{stats.added} 新增
+              </span>
+              <span className="px-2 py-1 bg-red-100 text-red-700 rounded">
+                -{stats.removed} 删除
+              </span>
+              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
+                {stats.same} 相同
+              </span>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Toggle same lines */}
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showSameLines}
+                onChange={(e) => setShowSameLines(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              显示相同行
+            </label>
+            
             {/* View Mode Toggle */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('inline')}
+                className={`px-3 py-1 rounded text-sm transition-colors ${
+                  viewMode === 'inline'
+                    ? 'bg-white shadow text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                内联对比
+              </button>
               <button
                 onClick={() => setViewMode('side-by-side')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
@@ -225,14 +349,14 @@ function DiffModal({
                 并排对比
               </button>
               <button
-                onClick={() => setViewMode('inline')}
+                onClick={() => setViewMode('diff-only')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
-                  viewMode === 'inline'
+                  viewMode === 'diff-only'
                     ? 'bg-white shadow text-gray-900'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                内联对比
+                仅差异
               </button>
             </div>
 
@@ -246,105 +370,167 @@ function DiffModal({
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto">
           {viewMode === 'side-by-side' ? (
-            <div className="grid grid-cols-2 gap-4">
-              {/* Original */}
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
-                  <FileText size={16} className="text-gray-500" />
-                  <span className="font-medium text-gray-700">{originalLabel}</span>
+            <div className="overflow-auto max-h-[70vh]">
+              {/* Sticky Headers */}
+              <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200 sticky top-0 z-10">
+                <div className="px-4 py-2 bg-red-50 border-b border-red-200 flex items-center gap-2">
+                  <FileText size={16} className="text-red-500" />
+                  <span className="font-medium text-red-700">{originalLabel}</span>
                 </div>
-                <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">
-                  {originalContent || '暂无内容'}
-                </pre>
-              </div>
-
-              {/* Improved */}
-              <div className="border border-green-200 rounded-lg overflow-hidden">
                 <div className="px-4 py-2 bg-green-50 border-b border-green-200 flex items-center gap-2">
-                  <FileText size={16} className="text-green-600" />
+                  <FileText size={16} className="text-green-500" />
                   <span className="font-medium text-green-700">{improvedLabel}</span>
                 </div>
-                <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">
-                  {improvedContent || '暂无内容'}
-                </pre>
+              </div>
+              {/* Content - each row spans both columns */}
+              <div className="font-mono text-sm">
+                {filteredLines.map((line, idx) => (
+                  <div key={idx} className="grid grid-cols-2 gap-0 divide-x divide-gray-200">
+                    {/* Original column */}
+                    <div className={`flex ${
+                      line.type === 'removed' ? 'bg-red-100' :
+                      line.type === 'same' ? 'bg-white' :
+                      'bg-gray-50'
+                    }`}>
+                      <span className={`px-2 py-1 text-xs select-none min-w-[50px] text-right ${
+                        line.oldLineNum ? 'text-gray-400 bg-gray-100 border-r border-gray-200' : 'text-transparent'
+                      }`}>
+                        {line.oldLineNum || ''}
+                      </span>
+                      <span className={`px-3 py-1 flex-1 whitespace-pre ${
+                        line.type === 'removed' ? 'text-red-700' :
+                        line.type === 'same' ? 'text-gray-700' :
+                        'text-gray-400 italic'
+                      }`}>
+                        {line.oldLine || (line.type === 'added' ? '' : '')}
+                      </span>
+                    </div>
+                    {/* Improved column */}
+                    <div className={`flex ${
+                      line.type === 'added' ? 'bg-green-100' :
+                      line.type === 'same' ? 'bg-white' :
+                      'bg-gray-50'
+                    }`}>
+                      <span className={`px-2 py-1 text-xs select-none min-w-[50px] text-right ${
+                        line.newLineNum ? 'text-gray-400 bg-gray-100 border-r border-gray-200' : 'text-transparent'
+                      }`}>
+                        {line.newLineNum || ''}
+                      </span>
+                      <span className={`px-3 py-1 flex-1 whitespace-pre ${
+                        line.type === 'added' ? 'text-green-700' :
+                        line.type === 'same' ? 'text-gray-700' :
+                        'text-gray-400 italic'
+                      }`}>
+                        {line.newLine || (line.type === 'removed' ? '' : '')}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : (
-            /* Inline Diff View */
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
-                <FileText size={16} className="text-gray-500" />
-                <span className="font-medium text-gray-700">内联对比视图</span>
-                <div className="ml-auto flex items-center gap-3 text-xs">
+          ) : viewMode === 'inline' ? (
+            <div className="p-4">
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-3 text-xs sticky top-0">
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 bg-red-200 rounded"></span>
-                    删除
+                    删除 (-{stats.removed})
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 bg-green-200 rounded"></span>
-                    新增
+                    新增 (+{stats.added})
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 bg-yellow-200 rounded"></span>
-                    修改
+                    <span className="w-3 h-3 bg-white border border-gray-300 rounded"></span>
+                    相同 ({stats.same})
+                  </span>
+                  <span className="ml-auto text-gray-500">
+                    总行数: {diffLines.length}
                   </span>
                 </div>
+                <div className="overflow-auto max-h-[60vh] font-mono text-sm">
+                  {filteredLines.map((line, idx) => (
+                    <div key={idx} className={`flex ${
+                      line.type === 'removed' ? 'bg-red-100 border-l-4 border-red-500' :
+                      line.type === 'added' ? 'bg-green-100 border-l-4 border-green-500' :
+                      'bg-white'
+                    }`}>
+                      <span className="px-2 py-1 text-xs text-gray-400 bg-gray-50 min-w-[50px] text-right select-none border-r border-gray-200">
+                        {line.oldLineNum || ''}
+                      </span>
+                      <span className="px-2 py-1 text-xs text-gray-400 bg-gray-50 min-w-[50px] text-right select-none border-r border-gray-200">
+                        {line.newLineNum || ''}
+                      </span>
+                      <span className={`px-4 py-1 flex-1 whitespace-pre ${
+                        line.type === 'removed' ? 'text-red-700' :
+                        line.type === 'added' ? 'text-green-700' :
+                        'text-gray-600'
+                      }`}>
+                        {line.type === 'removed' && <span className="text-red-500 font-bold mr-2">−</span>}
+                        {line.type === 'added' && <span className="text-green-500 font-bold mr-2">+</span>}
+                        {line.type === 'same' && <span className="text-gray-300 mr-2"> </span>}
+                        {line.oldLine || line.newLine}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="overflow-auto max-h-[400px]">
-                {computeDiff(originalContent, improvedContent).map((line, idx) => (
-                  <div
-                    key={idx}
-                    className={`flex items-stretch font-mono text-sm ${
-                      line.type === 'removed' ? 'bg-red-50' :
-                      line.type === 'added' ? 'bg-green-50' :
-                      line.type === 'modified' ? 'bg-yellow-50' :
-                      ''
-                    }`}
-                  >
-                    <span className="px-2 py-1 bg-gray-100 text-gray-400 text-xs min-w-[40px] text-right select-none">
-                      {line.lineNum}
-                    </span>
-                    {line.type === 'removed' && (
-                      <span className="px-4 py-1 text-red-700 flex-1">
-                        <span className="text-red-400 mr-2">-</span>
-                        {line.before}
+            </div>
+          ) : (
+            /* Diff-only view */
+            <div className="p-4">
+              <div className="border border-indigo-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-200 flex items-center gap-2">
+                  <Target size={16} className="text-indigo-500" />
+                  <span className="font-medium text-indigo-700">仅显示差异内容（{stats.added + stats.removed} 处变更）</span>
+                </div>
+                <div className="overflow-auto max-h-[60vh] font-mono text-sm">
+                  {diffLines.filter(l => l.type !== 'same').map((line, idx) => (
+                    <div key={idx} className={`flex ${
+                      line.type === 'removed' ? 'bg-red-50' : 'bg-green-50'
+                    }`}>
+                      <span className={`px-2 py-1 text-xs min-w-[60px] text-right select-none ${
+                        line.type === 'removed' ? 'text-red-400 bg-red-100' : 'text-green-400 bg-green-100'
+                      }`}>
+                        {line.oldLineNum ? `L${line.oldLineNum}` : ''}
+                        {line.newLineNum ? `L${line.newLineNum}` : ''}
                       </span>
-                    )}
-                    {line.type === 'added' && (
-                      <span className="px-4 py-1 text-green-700 flex-1">
-                        <span className="text-green-400 mr-2">+</span>
-                        {line.after}
+                      <span className={`px-4 py-1 flex-1 whitespace-pre ${
+                        line.type === 'removed' ? 'text-red-700 bg-red-100' : 'text-green-700 bg-green-100'
+                      }`}>
+                        {line.type === 'removed' && (
+                          <span className="inline-flex items-center px-1 py-0.5 bg-red-200 text-red-800 rounded text-xs mr-2">
+                            删除
+                          </span>
+                        )}
+                        {line.type === 'added' && (
+                          <span className="inline-flex items-center px-1 py-0.5 bg-green-200 text-green-800 rounded text-xs mr-2">
+                            新增
+                          </span>
+                        )}
+                        {line.oldLine || line.newLine}
                       </span>
-                    )}
-                    {line.type === 'modified' && (
-                      <>
-                        <span className="px-4 py-1 text-red-700 flex-1 border-r border-gray-200">
-                          <span className="text-red-400 mr-2">-</span>
-                          {line.before}
-                        </span>
-                        <span className="px-4 py-1 text-green-700 flex-1">
-                          <span className="text-green-400 mr-2">+</span>
-                          {line.after}
-                        </span>
-                      </>
-                    )}
-                    {line.type === 'same' && (
-                      <span className="px-4 py-1 text-gray-700 flex-1">
-                        <span className="text-gray-300 mr-2"> </span>
-                        {line.before}
-                      </span>
-                    )}
-                  </div>
-                ))}
+                    </div>
+                  ))}
+                  {stats.added + stats.removed === 0 && (
+                    <div className="p-8 text-center text-gray-500">
+                      <CheckCircle size={32} className="mx-auto mb-2 text-green-500" />
+                      <p>两个版本内容完全相同，无差异</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="text-xs text-gray-500">
+            使用 LCS（最长公共子序列）算法计算差异
+          </div>
           <button
             onClick={onClose}
             className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
@@ -374,24 +560,31 @@ function EvolutionAnalysisContent() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   
-  // UI state
-  const [showDiffModal, setShowDiffModal] = useState(false);
+  // UI state - Tabs
+  const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expandedFalsePositives, setExpandedFalsePositives] = useState(false);
   const [expandedConfirmed, setExpandedConfirmed] = useState(false);
+  const [expandedAnalysis, setExpandedAnalysis] = useState(true);
+  const [expandedImprovementPlan, setExpandedImprovementPlan] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [showRejectInput, setShowRejectInput] = useState(false);
-  const [expandedSteps, setExpandedSteps] = useState(false);
-  const [expandedAnalysis, setExpandedAnalysis] = useState(false);
-  const [expandedImprovementPlan, setExpandedImprovementPlan] = useState(false);
+  const [showDiffModal, setShowDiffModal] = useState(false);
+  const [expandedBacktest, setExpandedBacktest] = useState(false);
   
-  // Backtest state
+  // Evolution attempts state
+  const [attempts, setAttempts] = useState<EvolutionAttemptSummary[]>([]);
+  const [selectedAttempt, setSelectedAttempt] = useState<EvolutionAttemptDetail | null>(null);
+  const [loadingAttempts, setLoadingAttempts] = useState(false);
+  const [expandedAttemptDetail, setExpandedAttemptDetail] = useState(false);
+  
+  // Backtest state (for current run)
   const [backtestLoading, setBacktestLoading] = useState(false);
   const [backtestResult, setBacktestResult] = useState<BacktestResult | null>(null);
   const [backtestDetailRows, setBacktestDetailRows] = useState<BacktestDetailRow[]>([]);
-  const [expandedBacktest, setExpandedBacktest] = useState(false);
 
   useEffect(() => {
     fetchTaskDetail();
+    fetchAttempts();
   }, [taskId]);
 
   const fetchTaskDetail = async () => {
@@ -401,7 +594,6 @@ function EvolutionAnalysisContent() {
       
       const token = localStorage.getItem('token');
       
-      // Fetch task detail from evolution tasks API
       const response = await fetch(`/api/skills/evolution/tasks/${taskId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -422,6 +614,48 @@ function EvolutionAnalysisContent() {
       toast.error(err instanceof Error ? err.message : '获取数据失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAttempts = async () => {
+    try {
+      setLoadingAttempts(true);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`/api/skills/evolution/tasks/${taskId}/attempts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAttempts(data.attempts || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch attempts:', err);
+    } finally {
+      setLoadingAttempts(false);
+    }
+  };
+
+  const fetchAttemptDetail = async (attemptId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`/api/skills/evolution/tasks/${taskId}/attempts/${attemptId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedAttempt(data.attempt);
+        setExpandedAttemptDetail(true);
+      }
+    } catch (err) {
+      toast.error('获取尝试详情失败');
     }
   };
 
@@ -742,774 +976,987 @@ function EvolutionAnalysisContent() {
         </div>
       )}
 
-      {/* Evolution Execution Steps */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div 
-          className="px-4 py-3 bg-cyan-50 border-b border-cyan-200 flex items-center justify-between cursor-pointer hover:bg-cyan-100 transition-colors"
-          onClick={() => setExpandedSteps(!expandedSteps)}
-        >
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-5 w-5 text-cyan-600" />
-            <h2 className="text-lg font-semibold text-gray-900">进化执行步骤（从历史案例到改进内容）</h2>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-cyan-600 bg-cyan-100/50 px-2 py-1 rounded">
-              漏洞记录 → 案例筛选 → LLM分析 → Skill修改
-            </span>
-            <span className={`px-2 py-1 text-xs rounded-full ${
-              task.status === 'completed' ? 'bg-green-100 text-green-800' :
-              task.status === 'analyzing' ? 'bg-yellow-100 text-yellow-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {task.status === 'completed' ? '已完成' : task.status === 'analyzing' ? '分析中' : '待处理'}
-            </span>
-            <button className="p-1 hover:bg-cyan-200 rounded transition-colors">
-              {expandedSteps ? (
-                <ChevronUp size={20} className="text-cyan-600" />
-              ) : (
-                <ChevronDown size={20} className="text-cyan-600" />
-              )}
-            </button>
-          </div>
+      {/* Tab Navigation */}
+      <div className="bg-white rounded-lg shadow border border-gray-200">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px">
+            {[
+              { key: 'overview', label: '概览', icon: BarChart3 },
+              { key: 'cases', label: '案例', icon: Database },
+              { key: 'analysis', label: '分析', icon: Sparkles },
+              { key: 'improvement', label: '改进', icon: FileText },
+              { key: 'history', label: '尝试历史', icon: History },
+              { key: 'actions', label: '操作', icon: Zap },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as TabKey)}
+                className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  activeTab === tab.key
+                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                <tab.icon size={16} />
+                {tab.label}
+                {tab.key === 'history' && attempts.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                    {attempts.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </nav>
         </div>
-        
-        {expandedSteps && (
-          <div className="p-4">
-            <div className="space-y-4">
-              {/* Step 1: Get Cases */}
-              <div className="flex items-start gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  task.status === 'completed' || task.status === 'analyzing' 
-                    ? 'bg-green-100 text-green-600' 
-                    : 'bg-gray-100 text-gray-400'
-                }`}>
-                  1
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">
-                      提取历史案例（从漏洞记录中筛选误报和正确发现）
-                    </h3>
-                    {task.status !== 'pending' && (
-                      <CheckCircle size={16} className="text-green-600" />
-                    )}
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg text-xs">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="text-gray-500 mb-1">数据来源</p>
-                        <p className="text-gray-700">Skill 执行记录 → 漏洞表</p>
-                      </div>
-                      <div className="text-gray-400">→</div>
-                      <div>
-                        <p className="text-gray-500 mb-1">筛选结果</p>
-                        <p className="text-gray-700">
-                          误报案例: {improvement?.falsePositiveCases?.length || 0} 个
-                          <br />
-                          正确发现: {improvement?.confirmedCases?.length || 0} 个
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
 
-              {/* Step 2: Balance Analysis */}
-              <div className="flex items-start gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  task.status === 'completed' || task.status === 'analyzing'
-                    ? 'bg-green-100 text-green-600'
-                    : 'bg-gray-100 text-gray-400'
-                }`}>
-                  2
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">
-                      LLM 分析案例（归纳误报原因和正确发现模式）
-                    </h3>
-                    {task.status !== 'pending' && (
-                      <CheckCircle size={16} className="text-green-600" />
-                    )}
+        <div className="p-6">
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6">
+              {/* Evolution Steps Card */}
+              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 bg-cyan-50 border-b border-cyan-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5 text-cyan-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">进化执行步骤</h2>
                   </div>
-                  <div className="bg-gray-50 p-3 rounded-lg text-xs">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="text-gray-500 mb-1">输入数据</p>
-                        <p className="text-gray-700">
-                          Skill 内容 + 案例数据
-                        </p>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-cyan-600 bg-cyan-100/50 px-2 py-1 rounded">
+                      漏洞记录 → 案例筛选 → LLM分析 → Skill修改
+                    </span>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      task.status === 'completed' ? 'bg-green-100 text-green-800' :
+                      task.status === 'analyzing' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {task.status === 'completed' ? '已完成' : task.status === 'analyzing' ? '分析中' : '待处理'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="p-4">
+                  {/* Step 1: Get Cases */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      task.status === 'completed' || task.status === 'analyzing' 
+                        ? 'bg-green-100 text-green-600' 
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      1
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-sm font-medium text-gray-900">
+                          提取历史案例（从漏洞记录中筛选误报和正确发现）
+                        </h3>
+                        {task.status !== 'pending' && (
+                          <CheckCircle size={16} className="text-green-600" />
+                        )}
                       </div>
-                      <div className="text-gray-400">→</div>
-                      <div>
-                        <p className="text-gray-500 mb-1">分析结果</p>
-                        <p className="text-gray-700">
-                          误报模式: {analysis?.falsePositivePatterns?.length || 0} 个
-                          <br />
-                          正确发现模式: {analysis?.confirmedPatterns?.length || 0} 个
-                          <br />
-                          改进建议: {analysis?.recommendations?.length || 0} 条
-                        </p>
+                      <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <p className="text-gray-500 mb-1">数据来源</p>
+                            <p className="text-gray-700">Skill 执行记录 → 漏洞表</p>
+                          </div>
+                          <div className="text-gray-400">→</div>
+                          <div>
+                            <p className="text-gray-500 mb-1">筛选结果</p>
+                            <p className="text-gray-700">
+                              误报案例: {improvement?.falsePositiveCases?.length || 0} 个
+                              <br />
+                              正确发现: {improvement?.confirmedCases?.length || 0} 个
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Step 3: Generate Improvement */}
-              <div className="flex items-start gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  task.status === 'completed'
-                    ? 'bg-green-100 text-green-600'
-                    : task.status === 'analyzing'
-                    ? 'bg-yellow-100 text-yellow-600'
-                    : 'bg-gray-100 text-gray-400'
-                }`}>
-                  3
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-sm font-medium text-gray-900">
-                      LLM 生成改进内容（根据分析建议修改 Skill）
-                    </h3>
-                    {task.status === 'completed' && (
-                      <CheckCircle size={16} className="text-green-600" />
-                    )}
-                    {task.status === 'analyzing' && (
-                      <Loader2 size={16} className="text-yellow-600 animate-spin" />
-                    )}
-                  </div>
-                  <div className="bg-gray-50 p-3 rounded-lg text-xs">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="text-gray-500 mb-1">输入数据</p>
-                        <p className="text-gray-700">
-                          分析结果 + 原始 Skill
-                          <br />
-                          + 改进建议
-                        </p>
+                  {/* Step 2: Balance Analysis */}
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      task.status === 'completed' || task.status === 'analyzing'
+                        ? 'bg-green-100 text-green-600'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      2
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-sm font-medium text-gray-900">
+                          LLM 分析案例（归纳误报原因和正确发现模式）
+                        </h3>
+                        {task.status !== 'pending' && (
+                          <CheckCircle size={16} className="text-green-600" />
+                        )}
                       </div>
-                      <div className="text-gray-400">→</div>
-                      <div>
-                        <p className="text-gray-500 mb-1">输出结果</p>
-                        <p className="text-gray-700">
-                          {improvement?.improvedContent 
-                            ? `改进后内容 (${improvement.improvedContent.length} 字符)`
-                            : '待生成'}
-                        </p>
+                      <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <p className="text-gray-500 mb-1">输入数据</p>
+                            <p className="text-gray-700">
+                              Skill 内容 + 案例数据
+                            </p>
+                          </div>
+                          <div className="text-gray-400">→</div>
+                          <div>
+                            <p className="text-gray-500 mb-1">分析结果</p>
+                            <p className="text-gray-700">
+                              误报模式: {analysis?.falsePositivePatterns?.length || 0} 个
+                              <br />
+                              正确发现模式: {analysis?.confirmedPatterns?.length || 0} 个
+                              <br />
+                              改进建议: {analysis?.recommendations?.length || 0} 条
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Step 3: Generate Improvement */}
+                  <div className="flex items-start gap-4">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      task.status === 'completed'
+                        ? 'bg-green-100 text-green-600'
+                        : task.status === 'analyzing'
+                        ? 'bg-yellow-100 text-yellow-600'
+                        : 'bg-gray-100 text-gray-400'
+                    }`}>
+                      3
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <h3 className="text-sm font-medium text-gray-900">
+                          LLM 生成改进内容（根据分析建议修改 Skill）
+                        </h3>
+                        {task.status === 'completed' && (
+                          <CheckCircle size={16} className="text-green-600" />
+                        )}
+                        {task.status === 'analyzing' && (
+                          <Loader2 size={16} className="text-yellow-600 animate-spin" />
+                        )}
+                      </div>
+                      <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                        <div className="flex items-center gap-4">
+                          <div>
+                            <p className="text-gray-500 mb-1">输入数据</p>
+                            <p className="text-gray-700">
+                              分析结果 + 原始 Skill
+                              <br />
+                              + 改进建议
+                            </p>
+                          </div>
+                          <div className="text-gray-400">→</div>
+                          <div>
+                            <p className="text-gray-500 mb-1">输出结果</p>
+                            <p className="text-gray-700">
+                              {improvement?.improvedContent 
+                                ? `改进后内容 (${improvement.improvedContent.length} 字符)`
+                                : '待生成'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">进化前精准率</span>
+                      <span className={`font-medium ${
+                        (task.precisionBefore ?? 0) >= 0.7 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {formatPrecision(task.precisionBefore)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </div>
+</div>
             </div>
+          )}
 
-            {/* Summary */}
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-500">进化前精准率</span>
-                <span className={`font-medium ${
-                  (task.precisionBefore ?? 0) >= 0.7 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {formatPrecision(task.precisionBefore)}
+          {/* Cases Tab */}
+      {activeTab === 'cases' && (
+        <div className="space-y-6">
+          {/* False Positive Cases */}
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <XCircle className="h-5 w-5 text-red-600" />
+                <h2 className="text-lg font-semibold text-gray-900">误报案例</h2>
+                <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                  {improvement?.falsePositiveCases?.length || 0} 个
                 </span>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* False Positive Cases */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <XCircle className="h-5 w-5 text-red-600" />
-            <h2 className="text-lg font-semibold text-gray-900">误报案例</h2>
-            <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
-              {improvement?.falsePositiveCases?.length || 0} 个
-            </span>
-          </div>
-          <button
-            onClick={() => setExpandedFalsePositives(!expandedFalsePositives)}
-            className="p-1 hover:bg-red-100 rounded transition-colors"
-          >
-            {expandedFalsePositives ? (
-              <ChevronUp size={20} className="text-red-600" />
-            ) : (
-              <ChevronDown size={20} className="text-red-600" />
-            )}
-          </button>
-        </div>
-        
-        {expandedFalsePositives && (
-          <div className="divide-y divide-gray-200">
-            {!improvement?.falsePositiveCases || improvement.falsePositiveCases.length === 0 ? (
-              <div className="p-8 text-center">
-                <XCircle className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">暂无误报案例</p>
-              </div>
-            ) : (
-              improvement.falsePositiveCases.map((caseItem, index) => (
-                <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">
-                          误报
-                        </span>
-                        <span className="font-medium text-gray-900">{caseItem.title}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {caseItem.description}
-                      </p>
-                      {caseItem.location && (
-                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                          <Code size={12} />
-                          {caseItem.location}
-                        </p>
-                      )}
-                      {caseItem.sourceCodePreview && (
-                        <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
-                          {caseItem.sourceCodePreview}
-                        </pre>
-                      )}
-                      <p className="text-xs text-gray-400 mt-2">
-                        标记时间: {new Date(caseItem.markedAt).toLocaleString('zh-CN')}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/dashboard/admin/vulnerabilities?id=${caseItem.vulnerabilityId}`}
-                      className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
-                    >
-                      <Bug size={14} className="mr-1" />
-                      详情
-                    </Link>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Confirmed Cases */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-600" />
-            <h2 className="text-lg font-semibold text-gray-900">正确发现案例</h2>
-            <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-              {improvement?.confirmedCases?.length || 0} 个
-            </span>
-          </div>
-          <button
-            onClick={() => setExpandedConfirmed(!expandedConfirmed)}
-            className="p-1 hover:bg-green-100 rounded transition-colors"
-          >
-            {expandedConfirmed ? (
-              <ChevronUp size={20} className="text-green-600" />
-            ) : (
-              <ChevronDown size={20} className="text-green-600" />
-            )}
-          </button>
-        </div>
-        
-        {expandedConfirmed && (
-          <div className="divide-y divide-gray-200">
-            {!improvement?.confirmedCases || improvement.confirmedCases.length === 0 ? (
-              <div className="p-8 text-center">
-                <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-                <p className="mt-2 text-sm text-gray-600">暂无正确发现案例</p>
-              </div>
-            ) : (
-              improvement.confirmedCases.map((caseItem, index) => (
-                <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded font-medium">
-                          正确发现
-                        </span>
-                        <span className="font-medium text-gray-900">{caseItem.title}</span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {caseItem.description}
-                      </p>
-                      {caseItem.location && (
-                        <p className="text-xs text-gray-500 flex items-center gap-1">
-                          <Code size={12} />
-                          {caseItem.location}
-                        </p>
-                      )}
-                      {caseItem.sourceCodePreview && (
-                        <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
-                          {caseItem.sourceCodePreview}
-                        </pre>
-                      )}
-                      <p className="text-xs text-gray-400 mt-2">
-                        标记时间: {new Date(caseItem.markedAt).toLocaleString('zh-CN')}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/dashboard/admin/vulnerabilities?id=${caseItem.vulnerabilityId}`}
-                      className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-green-100 text-green-800 rounded hover:bg-green-200"
-                    >
-                      <Bug size={14} className="mr-1" />
-                      详情
-                    </Link>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* LLM Analysis Result */}
-      {analysis && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-          <div 
-            className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between cursor-pointer hover:bg-purple-100 transition-colors"
-            onClick={() => setExpandedAnalysis(!expandedAnalysis)}
-          >
-            <div className="flex items-center gap-2">
-              <Sparkles size={20} className="text-purple-600" />
-              <h2 className="text-lg font-semibold text-gray-900">LLM 分析案例（归纳误报原因和正确发现模式）</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-purple-600 bg-purple-100/50 px-2 py-1 rounded">
-                案例数据 → LLM归纳 → 模式 + 建议
-              </span>
-              <button className="p-1 hover:bg-purple-200 rounded transition-colors">
-                {expandedAnalysis ? (
-                  <ChevronUp size={20} className="text-purple-600" />
+              <button
+                onClick={() => setExpandedFalsePositives(!expandedFalsePositives)}
+                className="p-1 hover:bg-red-100 rounded transition-colors"
+              >
+                {expandedFalsePositives ? (
+                  <ChevronUp size={20} className="text-red-600" />
                 ) : (
-                  <ChevronDown size={20} className="text-purple-600" />
+                  <ChevronDown size={20} className="text-red-600" />
                 )}
               </button>
             </div>
-          </div>
-          
-          {expandedAnalysis && (
-            <div className="p-6">
-              {/* False Positive Patterns */}
-              {analysis.falsePositivePatterns.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <AlertTriangle size={16} className="text-red-500" />
-                    误报模式
-                  </h3>
-                  <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-red-50 p-3 rounded-lg">
-                    {analysis.falsePositivePatterns.map((pattern, i) => (
-                      <li key={i}>{pattern}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* False Positive Causes */}
-              {analysis.falsePositiveCauses.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">误报原因</h3>
-                  <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
-                    {analysis.falsePositiveCauses.map((cause, i) => (
-                      <li key={i}>{cause}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Confirmed Patterns */}
-              {analysis.confirmedPatterns.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <CheckCircle size={16} className="text-green-500" />
-                    正确发现模式
-                  </h3>
-                  <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-green-50 p-3 rounded-lg">
-                    {analysis.confirmedPatterns.map((pattern, i) => (
-                      <li key={i}>{pattern}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Confirmed Strengths */}
-              {analysis.confirmedStrengths.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2">必须保留的规则</h3>
-                  <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-blue-50 p-3 rounded-lg">
-                    {analysis.confirmedStrengths.map((strength, i) => (
-                      <li key={i}>{strength}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {/* Recommendations */}
-              {analysis.recommendations.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <Target size={16} className="text-blue-500" />
-                    改进建议
-                  </h3>
-                  <div className="space-y-2">
-                    {analysis.recommendations.map((rec, i) => (
-                      <div key={i} className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded font-medium">
-                            {getRecommendationTypeLabel(rec.type)}
-                          </span>
-                          <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                            {getImpactLabel(rec.impact)}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-700">{rec.description}</p>
-                      </div>
-                    ))}
+            
+            {expandedFalsePositives && (
+              <div className="divide-y divide-gray-200">
+                {!improvement?.falsePositiveCases || improvement.falsePositiveCases.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <XCircle className="mx-auto h-12 w-12 text-gray-400" />
+                    <p className="mt-2 text-sm text-gray-600">暂无误报案例</p>
                   </div>
-                </div>
-              )}
+                ) : (
+                  improvement.falsePositiveCases.map((caseItem, index) => (
+                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">
+                              误报
+                            </span>
+                            <span className="font-medium text-gray-900">{caseItem.title}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {caseItem.description}
+                          </p>
+                          {caseItem.location && (
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <Code size={12} />
+                              {caseItem.location}
+                            </p>
+                          )}
+                          {caseItem.sourceCodePreview && (
+                            <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
+                              {caseItem.sourceCodePreview}
+                            </pre>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            标记时间: {new Date(caseItem.markedAt).toLocaleString('zh-CN')}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/dashboard/admin/vulnerabilities?id=${caseItem.vulnerabilityId}`}
+                          className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        >
+                          <Bug size={14} className="mr-1" />
+                          详情
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
 
-              {/* Warnings */}
-              {analysis.warnings.length > 0 && (
-                <div className="mb-6">
-                  <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                    <AlertTriangle size={16} className="text-yellow-500" />
-                    警告
-                  </h3>
-                  <ul className="list-disc list-inside text-sm text-yellow-700 space-y-1 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                    {analysis.warnings.map((warning, i) => (
-                      <li key={i}>{warning}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Improved Skill Content Preview */}
-      {improvement && improvement.improvedContent && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-          <div 
-            className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-center justify-between cursor-pointer hover:bg-green-100 transition-colors"
-            onClick={() => setExpandedImprovementPlan(!expandedImprovementPlan)}
-          >
-            <div className="flex items-center gap-2">
-              <FileText size={20} className="text-green-600" />
-              <h2 className="text-lg font-semibold text-gray-900">改进方案（LLM 根据分析结果修改 Skill 内容）</h2>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-green-600 bg-green-100/50 px-2 py-1 rounded">
-                原Skill + 分析建议 → 改进后Skill
-              </span>
-              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(improvement.status)}`}>
-                {improvement.status === 'pending' ? '待审批' :
-                 improvement.status === 'applied' ? '已应用' :
-                 improvement.status === 'rejected' ? '已拒绝' : improvement.status}
-              </span>
-              <button className="p-1 hover:bg-green-200 rounded transition-colors">
-                {expandedImprovementPlan ? (
+          {/* Confirmed Cases */}
+          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+            <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <h2 className="text-lg font-semibold text-gray-900">正确发现案例</h2>
+                <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                  {improvement?.confirmedCases?.length || 0} 个
+                </span>
+              </div>
+              <button
+                onClick={() => setExpandedConfirmed(!expandedConfirmed)}
+                className="p-1 hover:bg-green-100 rounded transition-colors"
+              >
+                {expandedConfirmed ? (
                   <ChevronUp size={20} className="text-green-600" />
                 ) : (
                   <ChevronDown size={20} className="text-green-600" />
                 )}
               </button>
             </div>
+            
+            {expandedConfirmed && (
+              <div className="divide-y divide-gray-200">
+                {!improvement?.confirmedCases || improvement.confirmedCases.length === 0 ? (
+                  <div className="p-8 text-center">
+                    <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
+                    <p className="mt-2 text-sm text-gray-600">暂无正确发现案例</p>
+                  </div>
+                ) : (
+                  improvement.confirmedCases.map((caseItem, index) => (
+                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded font-medium">
+                              正确发现
+                            </span>
+                            <span className="font-medium text-gray-900">{caseItem.title}</span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-2">
+                            {caseItem.description}
+                          </p>
+                          {caseItem.location && (
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <Code size={12} />
+                              {caseItem.location}
+                            </p>
+                          )}
+                          {caseItem.sourceCodePreview && (
+                            <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
+                              {caseItem.sourceCodePreview}
+                            </pre>
+                          )}
+                          <p className="text-xs text-gray-400 mt-2">
+                            标记时间: {new Date(caseItem.markedAt).toLocaleString('zh-CN')}
+                          </p>
+                        </div>
+                        <Link
+                          href={`/dashboard/admin/vulnerabilities?id=${caseItem.vulnerabilityId}`}
+                          className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-green-100 text-green-800 rounded hover:bg-green-200"
+                        >
+                          <Bug size={14} className="mr-1" />
+                          详情
+                        </Link>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Analysis Tab */}
+      {activeTab === 'analysis' && analysis && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center gap-2">
+            <Sparkles size={20} className="text-purple-600" />
+            <h2 className="text-lg font-semibold text-gray-900">LLM 分析结果</h2>
           </div>
           
-          {expandedImprovementPlan && (
-            <div className="p-6">
-              <div className="mb-4 flex items-center gap-2">
-                <span className="text-xs text-gray-500">
-                  创建时间: {new Date(improvement.createdAt).toLocaleString('zh-CN')}
-                </span>
-                <span className="text-xs text-gray-400">
-                  内容长度: {improvement.improvedContent.length} 字符
-                </span>
+          <div className="p-6">
+            {/* False Positive Patterns */}
+            {analysis.falsePositivePatterns.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-red-500" />
+                  误报模式
+                </h3>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-red-50 p-3 rounded-lg">
+                  {analysis.falsePositivePatterns.map((pattern, i) => (
+                    <li key={i}>{pattern}</li>
+                  ))}
+                </ul>
               </div>
+            )}
 
-              <button
-                onClick={() => setShowDiffModal(true)}
-                className="inline-flex items-center px-4 py-2 bg-indigo-100 text-indigo-800 rounded-lg hover:bg-indigo-200 transition-colors mb-4"
-              >
-                <GitCompare size={16} className="mr-2" />
-                查看内容对比
-              </button>
+            {/* False Positive Causes */}
+            {analysis.falsePositiveCauses.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">误报原因</h3>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
+                  {analysis.falsePositiveCauses.map((cause, i) => (
+                    <li key={i}>{cause}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-              {/* Quick preview of improved content */}
-              <div className="border border-green-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-2 bg-green-50 border-b border-green-200 flex items-center gap-2">
-                  <FileText size={16} className="text-green-600" />
-                  <span className="font-medium text-green-700">改进后内容（前 500 字符预览）</span>
+            {/* Confirmed Patterns */}
+            {analysis.confirmedPatterns.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <CheckCircle size={16} className="text-green-500" />
+                  正确发现模式
+                </h3>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-green-50 p-3 rounded-lg">
+                  {analysis.confirmedPatterns.map((pattern, i) => (
+                    <li key={i}>{pattern}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Confirmed Strengths */}
+            {analysis.confirmedStrengths.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">必须保留的规则</h3>
+                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-blue-50 p-3 rounded-lg">
+                  {analysis.confirmedStrengths.map((strength, i) => (
+                    <li key={i}>{strength}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Recommendations */}
+            {analysis.recommendations.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Target size={16} className="text-blue-500" />
+                  改进建议
+                </h3>
+                <div className="space-y-2">
+                  {analysis.recommendations.map((rec, i) => (
+                    <div key={i} className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded font-medium">
+                          {getRecommendationTypeLabel(rec.type)}
+                        </span>
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                          {getImpactLabel(rec.impact)}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700">{rec.description}</p>
+                    </div>
+                  ))}
                 </div>
-                <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-32 whitespace-pre-wrap font-mono">
-                  {improvement.improvedContent.substring(0, 500)}
-                  {improvement.improvedContent.length > 500 && '\n... (内容已截断，点击上方按钮查看完整对比)'}
-                </pre>
               </div>
-            </div>
-          )}
+            )}
+
+            {/* Warnings */}
+            {analysis.warnings.length > 0 && (
+              <div className="mb-6">
+                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-yellow-500" />
+                  警告
+                </h3>
+                <ul className="list-disc list-inside text-sm text-yellow-700 space-y-1 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                  {analysis.warnings.map((warning, i) => (
+                    <li key={i}>{warning}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Backtest Validation */}
-      {improvement && improvement.status === 'pending' && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-purple-600" />
-              <h2 className="text-lg font-semibold text-gray-900">回测验证</h2>
-              {backtestResult && (
-                <span className={`px-2 py-1 text-xs rounded-full ${
-                  backtestResult.isSuccessful ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                  {backtestResult.isSuccessful ? '验证成功' : '验证失败'}
+      {/* Improvement Tab */}
+      {activeTab === 'improvement' && (
+        <div className="space-y-6">
+          {/* Improved Skill Content */}
+          {improvement && improvement.improvedContent && (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-center gap-2">
+                <FileText size={20} className="text-green-600" />
+                <h2 className="text-lg font-semibold text-gray-900">改进方案</h2>
+                <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(improvement.status)}`}>
+                  {improvement.status === 'pending' ? '待审批' :
+                   improvement.status === 'applied' ? '已应用' :
+                   improvement.status === 'rejected' ? '已拒绝' : improvement.status}
                 </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleRunBacktest}
-                disabled={backtestLoading}
-                className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
-              >
-                {backtestLoading ? (
-                  <>
-                    <Loader2 size={14} className="mr-2 animate-spin" />
-                    正在验证...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw size={14} className="mr-2" />
-                    运行回测
-                  </>
-                )}
-              </button>
-              {backtestResult && (
-                <button
-                  onClick={() => setExpandedBacktest(!expandedBacktest)}
-                  className="p-1 hover:bg-purple-100 rounded transition-colors"
-                >
-                  {expandedBacktest ? (
-                    <ChevronUp size={20} className="text-purple-600" />
-                  ) : (
-                    <ChevronDown size={20} className="text-purple-600" />
-                  )}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {backtestResult && expandedBacktest && (
-            <div className="p-4">
-              {/* Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="p-3 bg-gray-50 rounded-lg">
-                  <p className="text-xs text-gray-500">总案例数</p>
-                  <p className="text-lg font-semibold text-gray-900">{backtestResult.summary.totalCases}</p>
-                </div>
-                <div className="p-3 bg-green-50 rounded-lg">
-                  <p className="text-xs text-gray-500">通过数</p>
-                  <p className="text-lg font-semibold text-green-600">{backtestResult.summary.passedCount}</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-lg">
-                  <p className="text-xs text-gray-500">失败数</p>
-                  <p className="text-lg font-semibold text-red-600">{backtestResult.summary.failedCount}</p>
-                </div>
-                <div className="p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs text-gray-500">回测精准率</p>
-                  <p className="text-lg font-semibold text-blue-600">
-                    {(backtestResult.summary.backtestPrecision * 100).toFixed(1)}%
-                  </p>
-                </div>
               </div>
-
-              {/* Detailed metrics */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-xs text-gray-500">误报已修复</p>
-                  <p className="text-lg font-semibold text-green-600">{backtestResult.summary.falsePositiveFixed}</p>
-                </div>
-                <div className="p-3 bg-red-50 rounded-lg border border-red-200">
-                  <p className="text-xs text-gray-500">误报仍存在</p>
-                  <p className="text-lg font-semibold text-red-600">{backtestResult.summary.falsePositiveRemaining}</p>
-                </div>
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <p className="text-xs text-gray-500">正确发现已检出</p>
-                  <p className="text-lg font-semibold text-green-600">{backtestResult.summary.confirmedDetected}</p>
-                </div>
-                <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
-                  <p className="text-xs text-gray-500">正确发现漏检</p>
-                  <p className="text-lg font-semibold text-orange-600">{backtestResult.summary.confirmedMissed}</p>
-                </div>
-              </div>
-
-              {/* Improvement Score */}
-              <div className="mb-6 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-indigo-700">改进分数</span>
-                  <span className={`text-lg font-semibold ${
-                    backtestResult.summary.improvementScore >= 0.7 ? 'text-green-600' : 
-                    backtestResult.summary.improvementScore >= 0.5 ? 'text-yellow-600' : 'text-red-600'
-                  }`}>
-                    {(backtestResult.summary.improvementScore * 100).toFixed(1)}%
+              
+              <div className="p-6">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="text-xs text-gray-500">
+                    创建时间: {new Date(improvement.createdAt).toLocaleString('zh-CN')}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    内容长度: {improvement.improvedContent.length} 字符
                   </span>
                 </div>
-              </div>
 
-              {/* Recommendation */}
-              <div className={`p-4 rounded-lg mb-6 ${
-                backtestResult.isSuccessful ? 'bg-green-50 border border-green-200' : 'bg-orange-50 border border-orange-200'
-              }`}>
-                <div className="flex items-start gap-2">
-                  {backtestResult.isSuccessful ? (
-                    <CheckCircle size={18} className="text-green-600 mt-0.5" />
-                  ) : (
-                    <AlertTriangle size={18} className="text-orange-600 mt-0.5" />
-                  )}
-                  <p className={`text-sm ${backtestResult.isSuccessful ? 'text-green-700' : 'text-orange-700'}`}>
-                    {backtestResult.recommendation}
-                  </p>
-                </div>
-              </div>
+                <button
+                  onClick={() => setShowDiffModal(true)}
+                  className="inline-flex items-center px-4 py-2 bg-indigo-100 text-indigo-800 rounded-lg hover:bg-indigo-200 transition-colors mb-4"
+                >
+                  <GitCompare size={16} className="mr-2" />
+                  查看内容对比
+                </button>
 
-              {/* Detailed Cases Table */}
-              {backtestDetailRows.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-                    <Target size={16} className="text-purple-500" />
-                    详细案例验证结果
-                  </h3>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">案例标题</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">案例类型</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">预期行为</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">新版本行为</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">结果</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">原因</th>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {backtestDetailRows.map((row, idx) => (
-                          <tr key={idx} className={row.passed ? 'bg-green-50/30' : 'bg-red-50/30'}>
-                            <td className="px-3 py-2 text-sm text-gray-900">{row.caseTitle}</td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-0.5 text-xs rounded ${
-                                row.caseType === '误报案例' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                              }`}>
-                                {row.caseType}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-sm text-gray-600">{row.expectedAction}</td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-0.5 text-xs rounded ${
-                                row.newSkillAction === '已报告' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'
-                              }`}>
-                                {row.newSkillAction}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2">
-                              {row.passed ? (
-                                <CheckCircle size={16} className="text-green-600" />
-                              ) : (
-                                <XCircle size={16} className="text-red-600" />
-                              )}
-                            </td>
-                            <td className="px-3 py-2 text-sm text-gray-600 max-w-xs truncate">{row.reason}</td>
-                            <td className="px-3 py-2">
-                              <Link
-                                href={`/dashboard/admin/vulnerabilities?id=${row.vulnerabilityId}`}
-                                className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
-                              >
-                                <ExternalLink size={12} className="mr-1" />
-                                详情
-                              </Link>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <div className="border border-green-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 bg-green-50 border-b border-green-200 flex items-center gap-2">
+                    <FileText size={16} className="text-green-600" />
+                    <span className="font-medium text-green-700">改进后内容（前 500 字符预览）</span>
                   </div>
+                  <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-32 whitespace-pre-wrap font-mono">
+                    {improvement.improvedContent.substring(0, 500)}
+                    {improvement.improvedContent.length > 500 && '\n... (内容已截断，点击上方按钮查看完整对比)'}
+                  </pre>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
-          {!backtestResult && !backtestLoading && (
-            <div className="p-8 text-center">
-              <Shield className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">点击"运行回测"验证改进效果</p>
-              <p className="mt-1 text-xs text-gray-400">回测将使用新 Skill 内容分析历史案例，验证改进是否有效</p>
+          {/* Backtest Validation */}
+          {improvement && improvement.status === 'pending' && (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-purple-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">回测验证</h2>
+                  {backtestResult && (
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      backtestResult.isSuccessful ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {backtestResult.isSuccessful ? '验证成功' : '验证失败'}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleRunBacktest}
+                    disabled={backtestLoading}
+                    className="inline-flex items-center px-3 py-1.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
+                  >
+                    {backtestLoading ? (
+                      <>
+                        <Loader2 size={14} className="mr-2 animate-spin" />
+                        正在验证...
+                      </>
+                    ) : (
+                      <>
+                        <RefreshCw size={14} className="mr-2" />
+                        运行回测
+                      </>
+                    )}
+                  </button>
+                  {backtestResult && (
+                    <button
+                      onClick={() => setExpandedBacktest(!expandedBacktest)}
+                      className="p-1 hover:bg-purple-100 rounded transition-colors"
+                    >
+                      {expandedBacktest ? (
+                        <ChevronUp size={20} className="text-purple-600" />
+                      ) : (
+                        <ChevronDown size={20} className="text-purple-600" />
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {backtestResult && expandedBacktest && (
+                <div className="p-4">
+                  {/* Summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="p-3 bg-gray-50 rounded-lg">
+                      <p className="text-xs text-gray-500">总案例数</p>
+                      <p className="text-lg font-semibold text-gray-900">{backtestResult.summary.totalCases}</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg">
+                      <p className="text-xs text-gray-500">通过数</p>
+                      <p className="text-lg font-semibold text-green-600">{backtestResult.summary.passedCount}</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg">
+                      <p className="text-xs text-gray-500">失败数</p>
+                      <p className="text-lg font-semibold text-red-600">{backtestResult.summary.failedCount}</p>
+                    </div>
+                    <div className="p-3 bg-blue-50 rounded-lg">
+                      <p className="text-xs text-gray-500">回测精准率</p>
+                      <p className="text-lg font-semibold text-blue-600">
+                        {(backtestResult.summary.backtestPrecision * 100).toFixed(1)}%
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Detailed metrics */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                      <p className="text-xs text-gray-500">误报已修复</p>
+                      <p className="text-lg font-semibold text-green-600">{backtestResult.summary.falsePositiveFixed}</p>
+                    </div>
+                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                      <p className="text-xs text-gray-500">误报仍存在</p>
+                      <p className="text-lg font-semibold text-red-600">{backtestResult.summary.falsePositiveRemaining}</p>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                      <p className="text-xs text-gray-500">正确发现已检出</p>
+                      <p className="text-lg font-semibold text-green-600">{backtestResult.summary.confirmedDetected}</p>
+                    </div>
+                    <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                      <p className="text-xs text-gray-500">正确发现漏检</p>
+                      <p className="text-lg font-semibold text-orange-600">{backtestResult.summary.confirmedMissed}</p>
+                    </div>
+                  </div>
+
+                  {/* Improvement Score */}
+                  <div className="mb-6 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-indigo-700">改进分数</span>
+                      <span className={`text-lg font-semibold ${
+                        backtestResult.summary.improvementScore >= 0.7 ? 'text-green-600' : 
+                        backtestResult.summary.improvementScore >= 0.5 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {(backtestResult.summary.improvementScore * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Recommendation */}
+                  <div className={`p-4 rounded-lg mb-6 ${
+                    backtestResult.isSuccessful ? 'bg-green-50 border border-green-200' : 'bg-orange-50 border border-orange-200'
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {backtestResult.isSuccessful ? (
+                        <CheckCircle size={18} className="text-green-600 mt-0.5" />
+                      ) : (
+                        <AlertTriangle size={18} className="text-orange-600 mt-0.5" />
+                      )}
+                      <p className={`text-sm ${backtestResult.isSuccessful ? 'text-green-700' : 'text-orange-700'}`}>
+                        {backtestResult.recommendation}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Detailed Cases Table */}
+                  {backtestDetailRows.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                        <Target size={16} className="text-purple-500" />
+                        详细案例验证结果
+                      </h3>
+                      <div className="mb-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                        <span className="font-medium">验证目标：</span>
+                        <span className="text-green-600 mx-1">确认是漏洞→仍能扫描出来 ✓</span>
+                        <span className="text-red-600 mx-1">误报（非漏洞）→不再报告 ✓</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">案例标题</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人工判定</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">新版本预期</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">新版本实际</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">结果</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">LLM判断原因</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {backtestDetailRows.map((row, idx) => (
+                              <tr key={idx} className={row.passed ? 'bg-green-50/30' : 'bg-red-50/30'}>
+                                <td className="px-3 py-2 text-sm text-gray-900">{row.caseTitle}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`px-2 py-0.5 text-xs rounded ${
+                                    row.caseType === '误报案例' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {row.caseType === '误报案例' ? '确认非漏洞（误报）' : '确认是漏洞'}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-600">{row.expectedAction}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`px-2 py-0.5 text-xs rounded ${
+                                    row.newSkillAction === '已报告' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'
+                                  }`}>
+                                    {row.newSkillAction}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  {row.passed ? (
+                                    <span className="inline-flex items-center gap-1 text-green-600">
+                                      <CheckCircle size={14} />
+                                      {row.caseType === '误报案例' ? '不再报告' : '仍能检出'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-red-600">
+                                      <XCircle size={14} />
+                                      {row.caseType === '误报案例' ? '仍报告(失败)' : '漏检(失败)'}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-sm text-gray-600 max-w-xs truncate">{row.reason}</td>
+                                <td className="px-3 py-2">
+                                  <Link
+                                    href={`/dashboard/admin/vulnerabilities?id=${row.vulnerabilityId}`}
+                                    className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                                  >
+                                    <ExternalLink size={12} className="mr-1" />
+                                    详情
+                                  </Link>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!backtestResult && !backtestLoading && (
+                <div className="p-8 text-center">
+                  <Shield className="mx-auto h-12 w-12 text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-600">点击"运行回测"验证改进效果</p>
+                  <p className="mt-1 text-xs text-gray-400">回测将使用新 Skill 内容分析历史案例，验证改进是否有效</p>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
-      {/* Action Buttons */}
-      {improvement && improvement.status === 'pending' && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            <Zap size={20} className="text-yellow-600" />
-            审批操作
-          </h2>
-
-          {/* Reject Reason Input */}
-          {showRejectInput && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                拒绝原因 <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
-                rows={3}
-                placeholder="请填写拒绝此改进的原因..."
-              />
+      {/* History Tab - Evolution Attempts */}
+      {activeTab === 'history' && (
+        <div className="space-y-6">
+          {loadingAttempts ? (
+            <div className="p-8 text-center">
+              <Loader2 className="mx-auto h-8 w-8 animate-spin text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">加载尝试历史...</p>
+            </div>
+          ) : attempts.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+              <History className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">暂无进化尝试记录</p>
+              <p className="mt-1 text-xs text-gray-400">任务开始后将记录每次尝试的过程和结果</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <History size={20} className="text-gray-600" />
+                  进化尝试历史
+                  <span className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-full">
+                    共 {attempts.length} 次
+                  </span>
+                </h2>
+              </div>
+              
+              <div className="divide-y divide-gray-200">
+                {attempts.map((attempt) => (
+                  <div 
+                    key={attempt.id} 
+                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    onClick={() => fetchAttemptDetail(attempt.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
+                          attempt.isPassed 
+                            ? 'bg-green-100 text-green-600' 
+                            : 'bg-red-100 text-red-600'
+                        }`}>
+                          #{attempt.attemptNumber}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 text-xs rounded ${
+                              attempt.isPassed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }`}>
+                              {attempt.isPassed ? '达标' : '未达标'}
+                            </span>
+                            <span className="text-sm font-medium text-gray-900">
+                              排除率: {(attempt.falsePositiveExclusionRate * 100).toFixed(1)}%
+                            </span>
+                            <span className="text-sm text-gray-600">
+                              漏检: {attempt.confirmedMissed} 个
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {new Date(attempt.createdAt).toLocaleString('zh-CN')}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {attempt.failureReason && (
+                          <span className="text-xs text-red-600 truncate max-w-xs">
+                            {attempt.failureReason}
+                          </span>
+                        )}
+                        <button className="p-1 hover:bg-gray-200 rounded">
+                          <ChevronRight size={16} className="text-gray-400" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          <div className="flex items-center gap-4">
-            <button
-              onClick={handleApplyImprovement}
-              disabled={submitting}
-              className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 size={16} className="mr-2 animate-spin" />
-                  处理中...
-                </>
-              ) : (
-                <>
-                  <CheckCircle size={16} className="mr-2" />
-                  应用改进
-                </>
-              )}
-            </button>
-
-            {!showRejectInput ? (
-              <button
-                onClick={() => setShowRejectInput(true)}
-                disabled={submitting}
-                className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
-              >
-                <XCircle size={16} className="mr-2" />
-                拒绝改进
-              </button>
-            ) : (
-              <>
+          {/* Selected Attempt Detail */}
+          {selectedAttempt && expandedAttemptDetail && (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers size={20} className="text-indigo-600" />
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    尝试 #{selectedAttempt.attemptNumber} 详情
+                  </h2>
+                </div>
                 <button
-                  onClick={handleRejectImprovement}
-                  disabled={submitting || !rejectReason.trim()}
-                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  onClick={() => setExpandedAttemptDetail(false)}
+                  className="p-1 hover:bg-indigo-100 rounded transition-colors"
+                >
+                  <ChevronUp size={20} className="text-indigo-600" />
+                </button>
+              </div>
+              
+              <div className="p-6 space-y-6">
+                {/* Summary */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="p-3 bg-gray-50 rounded-lg">
+                    <p className="text-xs text-gray-500">状态</p>
+                    <p className={`text-lg font-semibold ${selectedAttempt.isPassed ? 'text-green-600' : 'text-red-600'}`}>
+                      {selectedAttempt.isPassed ? '达标' : '未达标'}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg">
+                    <p className="text-xs text-gray-500">误报排除率</p>
+                    <p className={`text-lg font-semibold ${
+                      selectedAttempt.falsePositiveExclusionRate >= 0.5 ? 'text-green-600' : 'text-yellow-600'
+                    }`}>
+                      {(selectedAttempt.falsePositiveExclusionRate * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="p-3 bg-orange-50 rounded-lg">
+                    <p className="text-xs text-gray-500">漏检数</p>
+                    <p className={`text-lg font-semibold ${
+                      selectedAttempt.confirmedMissed === 0 ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {selectedAttempt.confirmedMissed}
+                    </p>
+                  </div>
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-gray-500">回测通过率</p>
+                    <p className="text-lg font-semibold text-blue-600">
+                      {selectedAttempt.backtestSummary ? 
+                        `${((selectedAttempt.backtestSummary.passedCount / selectedAttempt.backtestSummary.totalCases) * 100).toFixed(1)}%` 
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Failure Reason */}
+                {selectedAttempt.failureReason && (
+                  <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle size={18} className="text-red-600 mt-0.5" />
+                      <div>
+                        <h3 className="text-sm font-medium text-red-700">失败原因</h3>
+                        <p className="text-sm text-red-600 mt-1">{selectedAttempt.failureReason}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Cases Used */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <Database size={16} className="text-gray-500" />
+                    使用的案例集
+                  </h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                      <p className="text-xs text-gray-500 mb-2">误报案例 ({selectedAttempt.falsePositiveCasesUsed?.length || 0} 个)</p>
+                      <div className="space-y-1">
+                        {selectedAttempt.falsePositiveCasesUsed?.slice(0, 5).map((c, i) => (
+                          <p key={i} className="text-xs text-gray-700 truncate">{c.title}</p>
+                        ))}
+                        {selectedAttempt.falsePositiveCasesUsed?.length > 5 && (
+                          <p className="text-xs text-gray-400">... 还有 {selectedAttempt.falsePositiveCasesUsed.length - 5} 个</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                      <p className="text-xs text-gray-500 mb-2">正确发现案例 ({selectedAttempt.confirmedCasesUsed?.length || 0} 个)</p>
+                      <div className="space-y-1">
+                        {selectedAttempt.confirmedCasesUsed?.slice(0, 5).map((c, i) => (
+                          <p key={i} className="text-xs text-gray-700 truncate">{c.title}</p>
+                        ))}
+                        {selectedAttempt.confirmedCasesUsed?.length > 5 && (
+                          <p className="text-xs text-gray-400">... 还有 {selectedAttempt.confirmedCasesUsed.length - 5} 个</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Missed Cases Info */}
+                {selectedAttempt.missedCasesInfo && selectedAttempt.missedCasesInfo.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-red-700 mb-3 flex items-center gap-2">
+                      <XCircle size={16} className="text-red-500" />
+                      漏检案例详情
+                    </h3>
+                    <div className="space-y-2">
+                      {selectedAttempt.missedCasesInfo.map((c, i) => (
+                        <div key={i} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                          <p className="text-sm font-medium text-red-700">{c.title}</p>
+                          <p className="text-xs text-red-600 mt-1">{c.description}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Remaining False Positives */}
+                {selectedAttempt.remainingFalsePositive && selectedAttempt.remainingFalsePositive.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-orange-700 mb-3 flex items-center gap-2">
+                      <AlertTriangle size={16} className="text-orange-500" />
+                      未排除的误报案例
+                    </h3>
+                    <div className="space-y-2">
+                      {selectedAttempt.remainingFalsePositive.slice(0, 5).map((c, i) => (
+                        <div key={i} className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                          <p className="text-sm font-medium text-orange-700">{c.title}</p>
+                          <p className="text-xs text-orange-600 mt-1">{c.description}</p>
+                        </div>
+                      ))}
+                      {selectedAttempt.remainingFalsePositive.length > 5 && (
+                        <p className="text-xs text-gray-400">... 还有 {selectedAttempt.remainingFalsePositive.length - 5} 个</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Improved Content Preview */}
+                {selectedAttempt.improvedContent && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                      <FileText size={16} className="text-gray-500" />
+                      生成的改进内容（前 300 字符）
+                    </h3>
+                    <pre className="p-3 bg-gray-100 rounded-lg text-xs overflow-x-auto max-h-24 whitespace-pre-wrap">
+                      {selectedAttempt.improvedContent.substring(0, 300)}
+                      {selectedAttempt.improvedContent.length > 300 && '\n...'}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Actions Tab */}
+      {activeTab === 'actions' && (
+        <div className="space-y-6">
+          {improvement && improvement.status === 'pending' && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                <Zap size={20} className="text-yellow-600" />
+                审批操作
+              </h2>
+
+              {showRejectInput && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    拒绝原因 <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    rows={3}
+                    placeholder="请填写拒绝此改进的原因..."
+                  />
+                </div>
+              )}
+
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={handleApplyImprovement}
+                  disabled={submitting}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                 >
                   {submitting ? (
                     <>
@@ -1518,55 +1965,95 @@ function EvolutionAnalysisContent() {
                     </>
                   ) : (
                     <>
-                      <XCircle size={16} className="mr-2" />
-                      确认拒绝
+                      <CheckCircle size={16} className="mr-2" />
+                      应用改进
                     </>
                   )}
                 </button>
-                <button
-                  onClick={() => {
-                    setShowRejectInput(false);
-                    setRejectReason('');
-                  }}
-                  disabled={submitting}
-                  className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
-                >
-                  取消
-                </button>
-              </>
-            )}
-          </div>
 
-          <p className="mt-4 text-xs text-gray-500">
-            应用改进将创建新的 Skill 版本，拒绝改进将保留当前版本不变。
-          </p>
+                {!showRejectInput ? (
+                  <button
+                    onClick={() => setShowRejectInput(true)}
+                    disabled={submitting}
+                    className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
+                  >
+                    <XCircle size={16} className="mr-2" />
+                    拒绝改进
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={handleRejectImprovement}
+                      disabled={submitting || !rejectReason.trim()}
+                      className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+                    >
+                      {submitting ? (
+                        <>
+                          <Loader2 size={16} className="mr-2 animate-spin" />
+                          处理中...
+                        </>
+                      ) : (
+                        <>
+                          <XCircle size={16} className="mr-2" />
+                          确认拒绝
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowRejectInput(false);
+                        setRejectReason('');
+                      }}
+                      disabled={submitting}
+                      className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
+                    >
+                      取消
+                    </button>
+                  </>
+                )}
+              </div>
+
+              <p className="mt-4 text-xs text-gray-500">
+                应用改进将创建新的 Skill 版本，拒绝改进将保留当前版本不变。
+              </p>
+            </div>
+          )}
+
+          {improvement && improvement.status !== 'pending' && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <div className="flex items-center gap-3">
+                {improvement.status === 'applied' ? (
+                  <>
+                    <CheckCircle size={24} className="text-green-600" />
+                    <div>
+                      <h3 className="font-semibold text-green-700">改进已应用</h3>
+                      <p className="text-sm text-gray-600">新版本已创建，Skill 内容已更新</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <XCircle size={24} className="text-red-600" />
+                    <div>
+                      <h3 className="font-semibold text-red-700">改进已拒绝</h3>
+                      <p className="text-sm text-gray-600">Skill 内容保持不变</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!improvement && (
+            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+              <Clock className="mx-auto h-12 w-12 text-gray-400" />
+              <p className="mt-2 text-sm text-gray-600">改进方案尚未生成</p>
+              <p className="mt-1 text-xs text-gray-400">等待任务完成后可进行审批操作</p>
+            </div>
+          )}
         </div>
       )}
-
-      {/* Already Processed Status */}
-      {improvement && improvement.status !== 'pending' && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-          <div className="flex items-center gap-3">
-            {improvement.status === 'applied' ? (
-              <>
-                <CheckCircle size={24} className="text-green-600" />
-                <div>
-                  <h3 className="font-semibold text-green-700">改进已应用</h3>
-                  <p className="text-sm text-gray-600">新版本已创建，Skill 内容已更新</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <XCircle size={24} className="text-red-600" />
-                <div>
-                  <h3 className="font-semibold text-red-700">改进已拒绝</h3>
-                  <p className="text-sm text-gray-600">Skill 内容保持不变</p>
-                </div>
-              </>
-            )}
-          </div>
         </div>
-      )}
+      </div>
 
       {/* Diff Modal */}
       <DiffModal
@@ -1580,10 +2067,6 @@ function EvolutionAnalysisContent() {
     </div>
   );
 }
-
-// ============================================================================
-// Page Component with AdminGuard
-// ============================================================================
 
 export default function EvolutionAnalysisPage() {
   return (

@@ -25,6 +25,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId') || undefined;
+    const skillId = searchParams.get('skillId') || undefined;
     const status = searchParams.get('status')?.split(',') || undefined;
     const severity = searchParams.get('severity')?.split(',') || undefined;
     const type = searchParams.get('type') || undefined;
@@ -35,6 +36,18 @@ export async function GET(request: Request) {
     const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
 
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
+
+    // 如果有 skillId，获取 skill 名称用于过滤
+    let skillFilter: any = undefined;
+    if (skillId) {
+      const skill = await prisma.skill.findUnique({
+        where: { id: skillId },
+        select: { name: true },
+      });
+      if (skill) {
+        skillFilter = { skill: skill.name };
+      }
+    }
 
     // 数据隔离：普通用户只能查看自己项目的漏洞
     let projectFilter: any = undefined;
@@ -60,13 +73,16 @@ export async function GET(request: Request) {
       }
     }
 
+    const dateRange = buildDateRangeFilter(startDate, endDate);
+
     // 构建查询条件
     const where = combineWhereClauses(
       projectFilter,
+      skillFilter,
       buildStatusFilter(status),
       severity ? { severity: { in: severity } } : undefined,
       type ? { type } : undefined,
-      { createdAt: buildDateRangeFilter(startDate, endDate) },
+      dateRange ? { createdAt: dateRange } : undefined,
       search ? {
         OR: [
           { title: { contains: search } },

@@ -32,10 +32,6 @@ export async function PATCH(
       return NextResponse.json({ error: '未找到配置' }, { status: 404 });
     }
 
-    if (existingConfig.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
     // Validate URL format if provided
     if (baseURL) {
       try {
@@ -167,18 +163,14 @@ export async function DELETE(
       return NextResponse.json({ error: '未找到配置' }, { status: 404 });
     }
 
-    if (existingConfig.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-    }
-
-    // Check if this is the only config for the user
-    const userConfigCount = await prisma.opencodeConfig.count({
-      where: { userId: payload.userId },
+    // Check if this is the only active config
+    const activeConfigCount = await prisma.opencodeConfig.count({
+      where: { isActive: true },
     });
 
-    if (userConfigCount <= 1) {
+    if (activeConfigCount <= 1 && existingConfig.isActive) {
       return NextResponse.json(
-        { error: '无法删除最后一个配置，您必须至少保留一个配置。' },
+        { error: '无法删除最后一个活跃配置，您必须至少保留一个活跃配置。' },
         { status: 400 }
       );
     }

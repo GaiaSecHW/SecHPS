@@ -37,6 +37,7 @@ export interface BacktestResult {
     failedCount: number;
     backtestPrecision: number;
     improvementScore: number;
+    falsePositiveExclusionRate: number;
   };
   isSuccessful: boolean;
   recommendation: string;
@@ -285,20 +286,25 @@ export async function runBacktest(
 
   const backtestPrecision = totalCases > 0 ? passedCount / totalCases : 0;
 
-  const improvementScore = (falsePositiveFixed / limitedFP.length) * 0.6 + 
-                           (confirmedDetected / limitedCC.length) * 0.4;
+  const falsePositiveExclusionRate = limitedFP.length > 0 
+    ? falsePositiveFixed / limitedFP.length 
+    : 0;
 
-  const isSuccessful = improvementScore >= 0.7 && confirmedMissed <= 1;
+  const improvementScore = (falsePositiveExclusionRate) * 0.6 + 
+                           (limitedCC.length > 0 ? confirmedDetected / limitedCC.length : 0) * 0.4;
+
+  // 达标标准：漏检数 = 0 且 排除率 >= 50%
+  const isSuccessful = confirmedMissed === 0 && falsePositiveExclusionRate >= 0.5;
 
   let recommendation: string;
   if (isSuccessful) {
-    recommendation = `回测验证成功：${falsePositiveFixed}/${limitedFP.length} 误报已修复，${confirmedDetected}/${limitedCC.length} 正确发现仍可检测。建议应用此改进。`;
-  } else if (confirmedMissed > 1) {
-    recommendation = `回测验证失败：新版本漏检了 ${confirmedMissed} 个正确发现案例，可能影响召回率。建议谨慎应用或重新调整改进内容。`;
-  } else if (falsePositiveRemaining > limitedFP.length * 0.5) {
-    recommendation = `回测验证部分成功：仍有 ${falsePositiveRemaining} 个误报未修复，改进效果有限。建议检查改进内容是否正确。`;
+    recommendation = `回测验证成功：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}% (${falsePositiveFixed}/${limitedFP.length})，正确发现全部检出 (${confirmedDetected}/${limitedCC.length})。`;
+  } else if (confirmedMissed > 0) {
+    recommendation = `回测失败：漏检 ${confirmedMissed} 个确认问题（不允许漏检），必须重新进化。`;
+  } else if (falsePositiveExclusionRate < 0.5) {
+    recommendation = `回测失败：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}% (${falsePositiveFixed}/${limitedFP.length}) < 50%，未达标，必须重新进化。`;
   } else {
-    recommendation = `回测验证结果：改进分数 ${improvementScore.toFixed(2)}，建议根据实际情况决定是否应用。`;
+    recommendation = `回测结果：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}%，漏检数 ${confirmedMissed}。`;
   }
 
   return {
@@ -314,6 +320,7 @@ export async function runBacktest(
       failedCount,
       backtestPrecision,
       improvementScore,
+      falsePositiveExclusionRate,
     },
     isSuccessful,
     recommendation,

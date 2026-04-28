@@ -607,6 +607,7 @@ model OpencodeConfig {
   updatedAt                DateTime
   defaultToolPermissions   String?
   Project                  Project[]
+  User                     User[]
 
   @@index([isActive])
 }
@@ -1079,10 +1080,39 @@ model SkillEvolutionTask {
   completedAt        DateTime?
   Skill              Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
   SkillImprovement   SkillImprovement?
+  EvolutionAttempt   EvolutionAttempt[]
 
   @@index([createdAt])
   @@index([status])
   @@index([skillId])
+}
+
+model EvolutionAttempt {
+  id                      String             @id
+  taskId                  String
+  attemptNumber           Int
+  falsePositiveCasesUsed  String?
+  confirmedCasesUsed      String?
+  falsePositivePatterns   String?
+  confirmedPatterns       String?
+  recommendations         String?
+  improvedContent         String?
+  changeSummary           String?
+  backtestSummary         String?
+  falsePositiveExclusionRate Float?
+  confirmedMissed         Int                @default(0)
+  backtestDetailRows      String?
+  failureReason           String?
+  missedCasesInfo         String?
+  remainingFalsePositive  String?
+  isPassed                Boolean            @default(false)
+  status                  String             @default("pending")
+  createdAt               DateTime           @default(now())
+  SkillEvolutionTask      SkillEvolutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([attemptNumber])
+  @@index([status])
 }
 
 model SkillExecution {

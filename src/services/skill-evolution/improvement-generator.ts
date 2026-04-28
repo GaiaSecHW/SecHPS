@@ -20,10 +20,13 @@ import { getEvolutionPrompt } from './prompt-manager';
  * 改进生成选项
  */
 export interface ImprovementGenerationOptions {
-  context?: TokenUsageContext;          // Token 使用上下文
-  maxTokens?: number;                   // 最大 token 数
-  temperature?: number;                 // 温度参数
-  taskId?: string;                      // 关联的 SkillEvolutionTask ID
+  context?: TokenUsageContext;
+  maxTokens?: number;
+  temperature?: number;
+  taskId?: string;
+  previousFailure?: string;
+  missedCases?: CompactCase[];
+  remainingFalsePositives?: CompactCase[];
 }
 
 /**
@@ -186,7 +189,8 @@ function buildImprovementPromptFromTemplate(
   skillContent: string,
   analysisResult: BalanceAnalysisResult,
   falsePositiveCases: CompactCase[],
-  confirmedCases: CompactCase[]
+  confirmedCases: CompactCase[],
+  options?: ImprovementGenerationOptions
 ): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_SKILL_CONTENT_LENGTH): string => {
     if (content.length <= maxLen) return content;
@@ -225,13 +229,61 @@ function buildImprovementPromptFromTemplate(
     ).join('\n\n');
   };
 
+  // 构建失败信息部分（用于反馈驱动）
+  const buildFailureContext = (): string => {
+    if (!options?.previousFailure && 
+        (!options?.missedCases || options.missedCases.length === 0) &&
+        (!options?.remainingFalsePositives || options.remainingFalsePositives.length === 0)) {
+      return '';
+    }
+
+    const parts = ['## 上次尝试失败信息（必须修复！）'];
+    
+    if (options.previousFailure) {
+      parts.push(`\n### 失败原因\n${options.previousFailure}`);
+    }
+    
+    if (options.missedCases && options.missedCases.length > 0) {
+      parts.push('\n### 漏检问题（硬性要求 - 必须修复）');
+      parts.push('以下确认的漏洞案例未被检出：');
+      options.missedCases.forEach((c, i) => {
+        parts.push(`${i + 1}. **${c.title}**: ${c.description}`);
+        if (c.sourceCodePreview) {
+          parts.push(`   代码预览: ${c.sourceCodePreview.substring(0, 100)}...`);
+        }
+      });
+      parts.push('\n**请分析这些案例为什么未被检出，确保改进后能够检出所有这些案例。**');
+    }
+    
+    if (options.remainingFalsePositives && options.remainingFalsePositives.length > 0) {
+      parts.push('\n### 误报排除问题');
+      parts.push('以下案例仍被误报，排除率未达标：');
+      options.remainingFalsePositives.forEach((c, i) => {
+        parts.push(`${i + 1}. **${c.title}**: ${c.description}`);
+      });
+      parts.push('\n**请分析为什么这些案例仍被误报，加强排除规则。**');
+    }
+
+    parts.push('\n## 本次改进重点');
+    parts.push('1. **首先确保漏检案例能够检出**（这是硬性要求，不允许任何漏检）');
+    parts.push('2. **其次提高误报排除率至 50% 以上**');
+    
+    return parts.join('\n');
+  };
+
+  const failureContext = buildFailureContext();
+
   // 如果模板为空，使用硬编码构建函数
   if (!template || template.trim() === '') {
-    return buildImprovementPrompt(skillContent, analysisResult, falsePositiveCases, confirmedCases);
+    const basePrompt = buildImprovementPrompt(skillContent, analysisResult, falsePositiveCases, confirmedCases);
+    if (failureContext) {
+      return failureContext + '\n\n' + basePrompt;
+    }
+    return basePrompt;
   }
 
   // 替换占位符
-  return template
+  let prompt = template
     .replace('{{SKILL_CONTENT}}', truncateContent(skillContent))
     .replace('{{FALSE_POSITIVE_PATTERNS}}', formatPatterns(analysisResult.falsePositivePatterns))
     .replace('{{FALSE_POSITIVE_CAUSES}}', formatPatterns(analysisResult.falsePositiveCauses))
@@ -241,6 +293,13 @@ function buildImprovementPromptFromTemplate(
     .replace('{{WARNINGS}}', analysisResult.warnings.length > 0 ? analysisResult.warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') : '无')
     .replace('{{FALSE_POSITIVE_CASES_PREVIEW}}', formatCasesPreview(falsePositiveCases, '误报'))
     .replace('{{CONFIRMED_CASES_PREVIEW}}', formatCasesPreview(confirmedCases, '正确发现'));
+
+  // 添加失败信息（如果有）
+  if (failureContext) {
+    prompt = failureContext + '\n\n' + prompt;
+  }
+
+  return prompt;
 }
 
 // ============================================================================
@@ -410,7 +469,8 @@ export async function generateImprovement(
       skillContent,
       analysisResult,
       falsePositiveCases,
-      confirmedCases
+      confirmedCases,
+      options
     );
     
     console.log(`[ImprovementGenerator] 开始生成改进: skillId=${skillId}`);

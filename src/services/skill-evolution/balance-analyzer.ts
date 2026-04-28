@@ -40,9 +40,12 @@ export interface BalanceAnalysisResult {
  * 平衡分析选项
  */
 export interface BalanceAnalysisOptions {
-  context?: TokenUsageContext;          // Token 使用上下文
-  maxTokens?: number;                   // 最大 token 数
-  temperature?: number;                 // 温度参数
+  context?: TokenUsageContext;
+  maxTokens?: number;
+  temperature?: number;
+  previousFailure?: string;
+  missedCases?: CompactCase[];
+  remainingFalsePositives?: CompactCase[];
 }
 
 /**
@@ -172,7 +175,8 @@ function buildBalanceAnalysisPromptFromTemplate(
   template: string,
   skillContent: string,
   falsePositives: CompactCase[],
-  confirmedCases: CompactCase[]
+  confirmedCases: CompactCase[],
+  options?: BalanceAnalysisOptions
 ): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_CONTENT_LENGTH): string => {
     if (content.length <= maxLen) return content;
@@ -206,16 +210,63 @@ function buildBalanceAnalysisPromptFromTemplate(
     }).join('\n\n');
   };
 
+  // 构建失败信息部分（用于反馈驱动）
+  const buildFailureContext = (): string => {
+    if (!options?.previousFailure && 
+        (!options?.missedCases || options.missedCases.length === 0) &&
+        (!options?.remainingFalsePositives || options.remainingFalsePositives.length === 0)) {
+      return '';
+    }
+
+    const parts = ['## 上次尝试失败信息（重要！）'];
+    
+    if (options.previousFailure) {
+      parts.push(`\n### 失败原因\n${options.previousFailure}`);
+    }
+    
+    if (options.missedCases && options.missedCases.length > 0) {
+      parts.push('\n### 漏检问题（必须修复）');
+      parts.push('以下确认的漏洞案例未被检出，这是硬性要求：');
+      options.missedCases.forEach((c, i) => {
+        parts.push(`${i + 1}. ${c.title}: ${c.description}`);
+      });
+      parts.push('\n**请分析为什么这些案例未被检出，确保改进后能够检出。**');
+    }
+    
+    if (options.remainingFalsePositives && options.remainingFalsePositives.length > 0) {
+      parts.push('\n### 误报排除问题');
+      parts.push('以下案例仍被误报，需要加强排除规则：');
+      options.remainingFalsePositives.forEach((c, i) => {
+        parts.push(`${i + 1}. ${c.title}: ${c.description}`);
+      });
+    }
+    
+    return parts.join('\n');
+  };
+
+  const failureContext = buildFailureContext();
+
   // 如果模板为空，使用硬编码构建函数
   if (!template || template.trim() === '') {
-    return buildBalanceAnalysisPrompt(skillContent, falsePositives, confirmedCases);
+    const basePrompt = buildBalanceAnalysisPrompt(skillContent, falsePositives, confirmedCases);
+    if (failureContext) {
+      return failureContext + '\n\n' + basePrompt;
+    }
+    return basePrompt;
   }
 
   // 替换占位符
-  return template
+  let prompt = template
     .replace('{{SKILL_CONTENT}}', truncateContent(skillContent))
     .replace('{{FALSE_POSITIVE_CASES}}', formatCases(falsePositives, '误报'))
     .replace('{{CONFIRMED_CASES}}', formatCases(confirmedCases, '正确发现'));
+
+  // 添加失败信息（如果有）
+  if (failureContext) {
+    prompt = failureContext + '\n\n' + prompt;
+  }
+
+  return prompt;
 }
 
 // ============================================================================
@@ -383,7 +434,8 @@ export async function analyzeBalance(
       userPromptTemplate,
       skillContent,
       falsePositives,
-      confirmedCases
+      confirmedCases,
+      options
     );
     
     console.log(`[BalanceAnalyzer] 开始分析: ${falsePositives.length} 误报, ${confirmedCases.length} 正确发现`);
