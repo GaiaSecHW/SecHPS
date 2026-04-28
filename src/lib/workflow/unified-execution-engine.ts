@@ -996,6 +996,12 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
       // 设置当前执行的 skill 名称（用于进度监控日志）
       currentExecutingSkillName = skill.name;
       
+      // 写入用户输入消息到 agent stream（第一条消息）
+      await this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
+        event: 'user',
+        data: { text: skillUserPrompt, skillName: skill.name, skillIndex },
+      });
+      
       // 启动进度监控定时器
       startProgressMonitor();
       
