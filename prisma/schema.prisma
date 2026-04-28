@@ -584,7 +584,6 @@ model NotificationChannel {
 
 model OpencodeConfig {
   id                       String    @id
-  userId                   String
   name                     String
   baseURL                  String    @default("http://localhost:54321")
   description              String?
@@ -607,10 +606,9 @@ model OpencodeConfig {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime
   defaultToolPermissions   String?
-  User                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   Project                  Project[]
 
-  @@index([userId])
+  @@index([isActive])
 }
 
 model Permission {
