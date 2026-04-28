@@ -147,20 +147,43 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
 
     // 方式3: 查找独立的 JSON 对象
     if (!parsed) {
+      // 改进：找到第一个完整的 JSON 对象（平衡的括号）
       const jsonStart = content.indexOf('{');
-      const jsonEnd = content.lastIndexOf('}');
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        const jsonStr = content.substring(jsonStart, jsonEnd + 1);
-        try {
-          // 清理可能的问题字符
-          const cleaned = jsonStr
-            .replace(/[\u0000-\u001F]/g, '') // 移除控制字符
-            .replace(/\\n/g, '\n') // 处理转义换行
-            .replace(/\\r/g, '\r')
-            .replace(/\\t/g, '\t');
-          parsed = JSON.parse(cleaned);
-        } catch (e) {
-          console.warn('[Backtest] Failed to parse inline JSON:', e);
+      if (jsonStart !== -1) {
+        let braceCount = 0;
+        let jsonEnd = -1;
+        for (let i = jsonStart; i < content.length; i++) {
+          if (content[i] === '{') braceCount++;
+          else if (content[i] === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              jsonEnd = i;
+              break;
+            }
+          }
+        }
+        
+        if (jsonEnd !== -1) {
+          const jsonStr = content.substring(jsonStart, jsonEnd + 1);
+          try {
+            // 清理可能的问题字符
+            let cleaned = jsonStr
+              .replace(/[\u0000-\u001F]/g, '')
+              .replace(/\\n/g, '\n')
+              .replace(/\\r/g, '\r')
+              .replace(/\\t/g, '\t');
+            
+            // 尝试修复常见的 JSON 格式问题
+            // 修复未加引号的属性名 (shouldReport: -> "shouldReport":)
+            cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
+            // 修复单引号字符串 -> 双引号
+            cleaned = cleaned.replace(/'/g, '"');
+            
+            parsed = JSON.parse(cleaned);
+          } catch (e) {
+            console.warn('[Backtest] Failed to parse inline JSON:', e);
+            console.warn('[Backtest] Attempted JSON string:', jsonStr.substring(0, 200));
+          }
         }
       }
     }
