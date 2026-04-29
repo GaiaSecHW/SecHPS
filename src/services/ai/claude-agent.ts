@@ -136,8 +136,8 @@ export class ClaudeAgentService {
     // 构建环境变量
     const env: Record<string, string | undefined> = {
       ...process.env,
-      // MCP 工具调用超时设置为 10 分钟（默认 60 秒）
-      CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: '600000',
+      // MCP 工具调用超时设置为 2 小时（默认 60 秒）
+      CLAUDE_CODE_STREAM_CLOSE_TIMEOUT: '7200000',
       // 将所有模型相关环境变量设置为父Agent的模型，确保子Agent使用相同模型
       ANTHROPIC_MODEL: this.config.model,
       ANTHROPIC_SMALL_FAST_MODEL: this.config.model,

@@ -78,7 +78,7 @@ export class AgentExecutor {
     // 创建工具执行器
     this.toolExecutor = new ToolExecutor({
       projectId: context.projectId,
-      timeout: 600000, // 10 分钟
+      timeout: 7200000, // 2 小时
     });
   }
 

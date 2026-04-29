@@ -1018,7 +1018,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         console.log(`[executeMultiSkillNode] 🚀 开始执行 skillAgent.loop(): ${skill.name}`);
         
         // 超时询问进展机制（基于无活动时间）
-        const SKILL_TIMEOUT_MS = 30 * 60 * 1000;  // 30分钟无活动才触发
+        const SKILL_TIMEOUT_MS = 7200000;  // 2小时无活动才触发
         const MAX_INQUIRIES = 10;  // 最大询问次数
         let inquiryCount = 0;
         let skillStartTime = Date.now();

@@ -29,7 +29,7 @@ export interface McpConfig {
   args?: string[];
   url?: string;      // remote 类型必填
   env?: Record<string, string>;
-  timeout?: number;  // 超时时间（毫秒），默认 10 分钟
+  timeout?: number;  // 超时时间（毫秒），默认 2 小时
 }
 
 // MCP 工具调用结果
@@ -80,7 +80,7 @@ export class LocalMcpClient {
   constructor(serverName: string, config: { command: string; args?: string[]; env?: Record<string, string>; timeout?: number }) {
     this.serverName = serverName;
     this.config = {
-      timeout: 10 * 60 * 1000, // 默认 10 分钟超时
+      timeout: 7200000, // 默认 2 小时超时
       ...config,
     };
   }
@@ -307,7 +307,7 @@ export class RemoteMcpClient {
 
   constructor(serverName: string, config: { url: string; timeout?: number }) {
     this.serverName = serverName;
-    this.timeout = config.timeout || 10 * 60 * 1000;
+    this.timeout = config.timeout || 7200000;
     
     // 解析 URL，构建 SSE 和 Message 端点
     // MCP SSE 协议标准：

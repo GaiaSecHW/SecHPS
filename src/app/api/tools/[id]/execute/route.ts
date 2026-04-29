@@ -49,7 +49,7 @@ export async function POST(
     // 创建执行器并执行
     const executor = new ToolExecutor({
       projectId: projectId || 'default',
-      timeout: tool.timeout || 600000, // 默认10分钟
+      timeout: tool.timeout || 7200000, // 默认2小时
     });
 
     const result = await executor.execute(id, parameters || {});

@@ -718,7 +718,7 @@ ${originalPrompt}`;
           args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : undefined,
           url: ai4javaMcp.url ?? undefined,
           env: ai4javaMcp.env ? JSON.parse(ai4javaMcp.env) : undefined,
-          timeout: 10 * 60 * 1000, // 10 分钟超时
+          timeout: 7200000, // 2 小时超时
         };
         
         // 验证配置完整性

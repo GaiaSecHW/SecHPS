@@ -21,9 +21,9 @@ export interface WatchdogConfig {
   /** 项目 ID */
   projectId: string;
   
-  /** 空闲超时时间（毫秒），默认 5 分钟 */
+  /** 空闲超时时间（毫秒），默认 2 小时 */
   idleTimeout?: number;
-  /** 最大运行时间（毫秒），默认 30 分钟 */
+  /** 最大运行时间（毫秒），默认 2 小时 */
   maxRunTime?: number;
   /** 心跳检查间隔（毫秒），默认 30 秒 */
   heartbeatInterval?: number;
@@ -71,10 +71,10 @@ export interface TimeoutDetail {
 // 默认配置
 // ============================================================================
 
-/** 默认空闲超时：5 分钟 */
-const DEFAULT_IDLE_TIMEOUT = 5 * 60 * 1000;
-/** 默认最大运行时间：30 分钟 */
-const DEFAULT_MAX_RUN_TIME = 30 * 60 * 1000;
+/** 默认空闲超时：2 小时 */
+const DEFAULT_IDLE_TIMEOUT = 7200000;
+/** 默认最大运行时间：2 小时 */
+const DEFAULT_MAX_RUN_TIME = 7200000;
 /** 默认心跳间隔：30 秒 */
 const DEFAULT_HEARTBEAT_INTERVAL = 30 * 1000;
 

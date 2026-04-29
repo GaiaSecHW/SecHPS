@@ -196,12 +196,12 @@ export function calculateSafeMaxTokens(
 // 超时常量配置
 // ============================================================================
 
-/** 统一超时时间：10分钟（与 MCP 一致） */
-export const DEFAULT_TIMEOUT_MS = 600000;
-/** 长时间任务超时：10分钟 */
-export const LONG_TIMEOUT_MS = 600000;
-/** 测试超时：10分钟 */
-export const TEST_TIMEOUT_MS = 600000;
+/** 统一超时时间：2小时（Skill 进化等长时间任务） */
+export const DEFAULT_TIMEOUT_MS = 7200000;
+/** 长时间任务超时：2小时 */
+export const LONG_TIMEOUT_MS = 7200000;
+/** 测试超时：2小时 */
+export const TEST_TIMEOUT_MS = 7200000;
 
 // ============================================================================
 // 错误类型
