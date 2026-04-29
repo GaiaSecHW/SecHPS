@@ -1405,10 +1405,13 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
     const mcpToolNames: string[] = [];
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {
       for (const mcp of this.config.mcpServers) {
+        // 使用 mcp__{serverName}__* 格式授权所有 MCP 工具
+        // 不依赖 mcp.tools 字段（可能为空）
+        mcpToolNames.push(`mcp__${mcp.name}__*`);
+        
+        // 如果有具体的工具列表，也添加具体的工具名称
         if (mcp.tools && Array.isArray(mcp.tools)) {
           for (const tool of mcp.tools) {
-            // MCP 工具名称格式: mcp__{serverName}__{toolName}
-            // tool 可能是 string 或 { name: string }
             const toolName = typeof tool === 'string' ? tool : tool.name;
             const mcpToolName = `mcp__${mcp.name}__${toolName}`;
             mcpToolNames.push(mcpToolName);
@@ -1610,6 +1613,10 @@ ai4java MCP 工具：
     const mcpToolNames: string[] = [];
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {
       for (const mcp of this.config.mcpServers) {
+        // 使用 mcp__{serverName}__* 格式授权所有 MCP 工具
+        mcpToolNames.push(`mcp__${mcp.name}__*`);
+        
+        // 如果有具体的工具列表，也添加具体的工具名称
         if (mcp.tools && Array.isArray(mcp.tools)) {
           for (const tool of mcp.tools) {
             const toolName = typeof tool === 'string' ? tool : tool.name;

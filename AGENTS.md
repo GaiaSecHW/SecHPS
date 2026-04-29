@@ -135,3 +135,27 @@ npm run test    # vitest
 ```
 
 配置: `vitest.config.ts`, 环境: node
+
+## Linux 部署注意事项
+
+**重要**: `@anthropic-ai/claude-agent-sdk` 依赖平台原生二进制文件（可选依赖）。
+
+部署时 **不能使用** `--omit=optional` 或 `--production` 标志，否则会报错：
+```
+Native CLI binary for linux-x64 not found
+```
+
+正确安装方式：
+```bash
+# 生产环境部署
+npm install                    # ✅ 正确
+npm install --omit=optional    # ❌ 错误（会跳过 SDK 二进制）
+npm ci --production            # ❌ 错误（同上）
+```
+
+如果已安装缺依赖，手动补装：
+```bash
+npm install @anthropic-ai/claude-agent-sdk-linux-x64@0.2.123
+# ARM 服务器用 linux-arm64
+npm install @anthropic-ai/claude-agent-sdk-linux-arm64@0.2.123
+```
