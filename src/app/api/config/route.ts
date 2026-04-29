@@ -99,7 +99,6 @@ export async function POST(request: Request) {
     const config = await prisma.opencodeConfig.create({
       data: {
         id: generateId('config'),
-        userId: payload.userId,
         name,
         baseURL: baseURL || '',
         projectUploadDir: projectUploadDir || null,

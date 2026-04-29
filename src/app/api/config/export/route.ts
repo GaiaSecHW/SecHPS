@@ -15,10 +15,10 @@ export async function GET(request: Request) {
 
   try {
 
-    // 获取用户的活跃配置 + 技术栈选项（并行）
+    // 获取活跃配置 + 技术栈选项（并行）
     const [config, techStackOptions] = await Promise.all([
       prisma.opencodeConfig.findFirst({
-        where: { userId: payload.userId, isActive: true },
+        where: { isActive: true },
       }),
       prisma.techStackOption.findMany({
         orderBy: [{ category: 'asc' }, { sortOrder: 'asc' }, { name: 'asc' }],

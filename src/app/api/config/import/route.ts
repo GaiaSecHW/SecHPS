@@ -29,9 +29,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // 找到当前活跃配置
+    // 找到当前活跃配置（全局配置）
     const activeConfig = await prisma.opencodeConfig.findFirst({
-      where: { userId: payload.userId, isActive: true },
+      where: { isActive: true },
     });
 
     if (!activeConfig) {
