@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { hasPermission } from '@/lib/permissions';
 import { PERMISSIONS } from '@/types/permissions';
+import { DeveloperGuard } from '@/components/PermissionGuard';
 
 interface McpServerUser {
   id: string;
@@ -48,6 +49,14 @@ interface McpServer {
 }
 
 export default function McpServersPage() {
+  return (
+    <DeveloperGuard>
+      <McpServersContent />
+    </DeveloperGuard>
+  );
+}
+
+function McpServersContent() {
   const router = useRouter();
 
   const [servers, setServers] = useState<McpServer[]>([]);

@@ -78,6 +78,36 @@ export function AdminGuard({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * 开发者权限守卫组件
+ * 检查用户是否是 developer 或 admin
+ */
+export function DeveloperGuard({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { isAuthenticated, loading, user } = useAuth();
+
+  if (!loading && !isAuthenticated) {
+    router.push('/login');
+    return null;
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  const isDeveloper = user?.roles?.includes('developer') || user?.roles?.includes('admin');
+  
+  if (!isDeveloper) {
+    return <AccessDenied message="此功能仅对开发者角色开放" />;
+  }
+
+  return <>{children}</>;
+}
+
+/**
  * 无权限访问提示组件
  */
 export function AccessDenied({ message = '您没有权限访问此页面' }: { message?: string }) {

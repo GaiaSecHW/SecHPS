@@ -1726,7 +1726,7 @@ function EvolutionAnalysisContent() {
                     className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
                     onClick={() => fetchAttemptDetail(attempt.id)}
                   >
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium ${
                           attempt.isPassed 
@@ -1754,17 +1754,19 @@ function EvolutionAnalysisContent() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {attempt.failureReason && (
-                          <span className="text-xs text-red-600 truncate max-w-xs">
-                            {attempt.failureReason}
-                          </span>
-                        )}
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <button className="p-1 hover:bg-gray-200 rounded">
                           <ChevronRight size={16} className="text-gray-400" />
                         </button>
                       </div>
                     </div>
+                    {attempt.failureReason && !attempt.isPassed && (
+                      <div className="mt-3 ml-14 p-2 bg-red-50 rounded border border-red-200">
+                        <p className="text-xs text-red-700">
+                          <span className="font-medium">失败原因：</span>{attempt.failureReason}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

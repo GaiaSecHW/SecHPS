@@ -139,23 +139,27 @@ function DashboardLayoutContent({
             我的项目
           </NavLink>
 
-          {/* 工作流 */}
-          {!collapsed && (
-            <div className="pt-4 pb-1">
-              <p className="text-xs text-gray-500 uppercase tracking-wider px-2">工作流</p>
-            </div>
+          {/* 开发者视图 - 仅 developer 和 admin 可见 */}
+          {(user?.roles?.includes('developer') || user?.roles?.includes('admin')) && (
+            <>
+              {!collapsed && (
+                <div className="pt-4 pb-1">
+                  <p className="text-xs text-gray-500 uppercase tracking-wider px-2">开发者视图</p>
+                </div>
+              )}
+              {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
+              
+              <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />} collapsed={collapsed}>
+                开发者编排
+              </NavLink>
+              <NavLink href="/dashboard/skills" icon={<Award size={20} />} collapsed={collapsed}>
+                Skills 管理
+              </NavLink>
+              <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />} collapsed={collapsed}>
+                MCP 服务器
+              </NavLink>
+            </>
           )}
-          {collapsed && <div className="pt-2 border-t border-gray-800 mx-2" />}
-          
-          <NavLink href="/dashboard/workflows" icon={<GitBranch size={20} />} collapsed={collapsed}>
-            工作流编排
-          </NavLink>
-          <NavLink href="/dashboard/skills" icon={<Award size={20} />} collapsed={collapsed}>
-            Skills 管理
-          </NavLink>
-          <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />} collapsed={collapsed}>
-            MCP 服务器
-          </NavLink>
 
           {/* 个人中心 */}
           {!collapsed && (

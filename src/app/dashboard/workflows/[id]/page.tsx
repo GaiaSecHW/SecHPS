@@ -125,7 +125,7 @@ export default function WorkflowEditPage() {
 
       if (!workflowResponse.ok) {
         const data = await workflowResponse.json();
-        setError(data.error || '获取Agent编排失败');
+        setError(data.error || '获取编排详情失败');
         setLoading(false);
         return;
       }

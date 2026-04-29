@@ -49,7 +49,6 @@ export async function GET(request: Request) {
       progressQuestion: config.progressQuestion,
       skillOutputTemplate: config.skillOutputTemplate,
       claudemdTemplate: config.claudemdTemplate,
-      mcpServers: config.mcpServers,
       keybinds: config.keybinds,
       modelPreferences: config.modelPreferences,
       // 技术栈选项（不含 id/createdAt/updatedAt，导入时重建）

@@ -54,18 +54,28 @@ export interface BacktestDetailRow {
   vulnerabilityId: string;
 }
 
-const BACKTEST_SYSTEM_PROMPT = `你是一个安全检测专家，负责模拟 Skill 对特定案例进行分析。
+const BACKTEST_SYSTEM_PROMPT = `你是一个安全检测专家。
 
-**任务**：
-判断给定的案例是否应该被报告为漏洞。
+**任务**：判断给定案例是否应被报告为漏洞。
 
-**输出格式**：
-只输出 JSON 对象：{"shouldReport": true/false, "reason": "简短原因"}
+**输出要求**：
+必须只输出一行 JSON，不要有任何其他文字、分析过程或解释。
+格式：{"shouldReport":true,"reason":"简短原因"}
 
-**重要**：
-- shouldReport: true 表示 Skill 应该报告此案例为漏洞
-- shouldReport: false 表示 Skill 不应该报告此案例（排除误报）
-- reason: 简短说明判断理由（1-2句话）`;
+或：{"shouldReport":false,"reason":"简短原因"}
+
+**禁止输出**：
+- 不要输出思考过程
+- 不要输出分析步骤
+- 不要输出代码片段
+- 不要输出 markdown 格式
+- 不要输出任何非 JSON 内容
+
+**示例正确输出**：
+{"shouldReport":true,"reason":"用户输入直接拼接到 Runtime.exec，存在命令注入漏洞"}
+{"shouldReport":false,"reason":"参数经过安全过滤，不存在漏洞"}
+
+现在开始分析，只输出 JSON：`;
 
 function buildBacktestPrompt(skillContent: string, caseItem: CompactCase): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_SKILL_CONTENT_LENGTH): string => {
@@ -84,9 +94,7 @@ ${truncateContent(skillContent)}
 ${caseItem.location ? `- **代码位置**: ${caseItem.location}` : ''}
 ${caseItem.sourceCodePreview ? `- **源代码预览**:\n\`\`\`\n${caseItem.sourceCodePreview}\n\`\`\`` : ''}
 
-**问题**: 根据 Skill 定义，这个案例是否应该被报告为漏洞？
-
-请输出 JSON:`;
+根据 Skill 定义判断此案例是否应报告为漏洞。只输出 JSON，不要分析过程：`;
 }
 
 async function testSingleCase(skillContent: string, caseItem: CompactCase): Promise<{
@@ -120,6 +128,13 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
 
     console.log('[Backtest] LLM response:', content);
 
+    // 去掉思考标签包裹的内容（只保留标签外的 JSON）
+    content = content.replace(/<think[^>]*>[\s\S]*?<\/think>/gi, '');
+    content = content.replace(/<thinking[^>]*>[\s\S]*?<\/thinking>/gi, '');
+    content = content.trim();
+
+    console.log('[Backtest] After removing think tags:', content);
+
     // 尝试多种方式解析 JSON
     let parsed: { shouldReport?: boolean; reason?: string } | null = null;
 
@@ -145,11 +160,14 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
       }
     }
 
-    // 方式3: 查找独立的 JSON 对象
+    // 方式3: 查找包含 shouldReport 的 JSON 对象
     if (!parsed) {
-      // 改进：找到第一个完整的 JSON 对象（平衡的括号）
-      const jsonStart = content.indexOf('{');
-      if (jsonStart !== -1) {
+      // 优先查找包含 shouldReport 的对象
+      const shouldReportPattern = /{\s*"shouldReport"\s*:/i;
+      const match = content.match(shouldReportPattern);
+      
+      if (match && match.index !== undefined) {
+        const jsonStart = match.index;
         let braceCount = 0;
         let jsonEnd = -1;
         for (let i = jsonStart; i < content.length; i++) {
@@ -174,10 +192,19 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
               .replace(/\\t/g, '\t');
             
             // 尝试修复常见的 JSON 格式问题
+            console.log('[Backtest] Original JSON string:', JSON.stringify(cleaned));
+            
+            // 修复 = 为 : 并添加引号 (command = "whoami" -> "command": "whoami")
+            cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*/g, '$1"$2": ');
+            console.log('[Backtest] After = replacement:', JSON.stringify(cleaned));
+            
+            // 移除值末尾的分号 ("whoami"; -> "whoami")
+            cleaned = cleaned.replace(/"\s*;\s*([},])/g, '"$1');
+            console.log('[Backtest] After semicolon removal:', JSON.stringify(cleaned));
+            
             // 修复未加引号的属性名 (shouldReport: -> "shouldReport":)
             cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)(\s*:)/g, '$1"$2"$3');
-            // 修复单引号字符串 -> 双引号
-            cleaned = cleaned.replace(/'/g, '"');
+            console.log('[Backtest] Final cleaned:', JSON.stringify(cleaned));
             
             parsed = JSON.parse(cleaned);
           } catch (e) {
@@ -191,12 +218,30 @@ async function testSingleCase(skillContent: string, caseItem: CompactCase): Prom
     // 方式4: 根据关键词判断
     if (!parsed) {
       const lowerContent = content.toLowerCase();
+      
+      // 显式的 JSON 格式关键词
       if (lowerContent.includes('shouldreport: true') || 
           lowerContent.includes('should report') && lowerContent.includes('true')) {
-        parsed = { shouldReport: true, reason: 'Parsed from text' };
+        parsed = { shouldReport: true, reason: 'Parsed from text keyword' };
       } else if (lowerContent.includes('shouldreport: false') ||
                  lowerContent.includes('should report') && lowerContent.includes('false')) {
-        parsed = { shouldReport: false, reason: 'Parsed from text' };
+        parsed = { shouldReport: false, reason: 'Parsed from text keyword' };
+      }
+      // 根据分析结论推断
+      else if (lowerContent.includes('应该报告') || 
+               lowerContent.includes('应报告') ||
+               lowerContent.includes('是漏洞') ||
+               lowerContent.includes('确认漏洞') ||
+               lowerContent.includes('符合漏洞') ||
+               lowerContent.includes('需要报告')) {
+        parsed = { shouldReport: true, reason: 'Inferred from analysis (should report)' };
+      } else if (lowerContent.includes('不应报告') ||
+                 lowerContent.includes('不应该报告') ||
+                 lowerContent.includes('误报') ||
+                 lowerContent.includes('非漏洞') ||
+                 lowerContent.includes('排除') ||
+                 lowerContent.includes('不满足漏洞')) {
+        parsed = { shouldReport: false, reason: 'Inferred from analysis (false positive)' };
       }
     }
 
@@ -321,13 +366,13 @@ export async function runBacktest(
 
   let recommendation: string;
   if (isSuccessful) {
-    recommendation = `回测验证成功：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}% (${falsePositiveFixed}/${limitedFP.length})，正确发现全部检出 (${confirmedDetected}/${limitedCC.length})。`;
+    recommendation = `验证通过！改进后的 Skill 排除了 ${falsePositiveFixed} 个误报（占 ${limitedFP.length} 个误报案例的 ${(falsePositiveExclusionRate * 100).toFixed(1)}%），同时仍能正确检出所有 ${confirmedDetected} 个真实漏洞。`;
   } else if (confirmedMissed > 0) {
-    recommendation = `回测失败：漏检 ${confirmedMissed} 个确认问题（不允许漏检），必须重新进化。`;
+    recommendation = `验证失败：改进后的 Skill 未能检出 ${confirmedMissed} 个真实漏洞（共 ${limitedCC.length} 个真实漏洞案例）。漏检真实漏洞是严重问题，会导致安全隐患被忽略，必须重新改进 Skill。`;
   } else if (falsePositiveExclusionRate < 0.5) {
-    recommendation = `回测失败：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}% (${falsePositiveFixed}/${limitedFP.length}) < 50%，未达标，必须重新进化。`;
+    recommendation = `验证失败：改进后的 Skill 仅排除了 ${falsePositiveFixed} 个误报（排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}%），低于 50% 的达标要求。误报仍太多，需要进一步优化 Skill 以减少误报。`;
   } else {
-    recommendation = `回测结果：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}%，漏检数 ${confirmedMissed}。`;
+    recommendation = `验证结果：排除率 ${(falsePositiveExclusionRate * 100).toFixed(1)}%，漏检数 ${confirmedMissed}。`;
   }
 
   return {

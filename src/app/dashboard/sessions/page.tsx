@@ -148,6 +148,8 @@ export default function SessionsPage() {
   const [vulnerabilities, setVulnerabilities] = useState<any[]>([]);
   const [loadingVulnerabilities, setLoadingVulnerabilities] = useState(false);
   const [selectedVulnerability, setSelectedVulnerability] = useState<any | null>(null);
+  const [showFalsePositiveModal, setShowFalsePositiveModal] = useState(false);
+  const [falsePositiveReason, setFalsePositiveReason] = useState('');
   const [vulnPage, setVulnPage] = useState(1);
   const [vulnTotalCount, setVulnTotalCount] = useState(0);
   const vulnPageSize = 10;
@@ -913,6 +915,13 @@ setShowEditModal(true);
   };
 
   const handleVulnerabilityStatusChange = async (vulnId: string, action: string) => {
+    // 如果是标记误报，弹出输入框
+    if (action === 'false-positive') {
+      setShowFalsePositiveModal(true);
+      setFalsePositiveReason('');
+      return;
+    }
+    
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/vulnerabilities/${vulnId}/${action}`, {
@@ -927,6 +936,41 @@ setShowEditModal(true);
         toast.error(data.error || '操作失败');
         return;
       }
+      
+      // 刷新漏洞列表
+      if (vulnerabilityProject) {
+        handleVulnerabilityManagement(vulnerabilityProject);
+      }
+      setSelectedVulnerability(null);
+    } catch (err) {
+      toast.error('操作失败，请重试');
+    }
+  };
+
+  // 提交误报标记（带原因）
+  const handleSubmitFalsePositive = async () => {
+    if (!selectedVulnerability) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/vulnerabilities/${selectedVulnerability.id}/false-positive`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ reason: falsePositiveReason.trim() || null }),
+      });
+      
+      if (!response.ok) {
+        const data = await response.json();
+        toast.error(data.error || '操作失败');
+        return;
+      }
+      
+      setShowFalsePositiveModal(false);
+      setFalsePositiveReason('');
+      toast.success('已标记为误报');
       
       // 刷新漏洞列表
       if (vulnerabilityProject) {
@@ -2894,6 +2938,42 @@ if (loading) {
                   <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.POC}</pre>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 误报原因输入弹窗 */}
+      {showFalsePositiveModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">标记为误报</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              请输入误报原因（可选）。此原因将用于后续的 Skill 进化改进。
+            </p>
+            <textarea
+              value={falsePositiveReason}
+              onChange={(e) => setFalsePositiveReason(e.target.value)}
+              placeholder="例如：该代码已进行输入验证，不存在漏洞..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              rows={4}
+            />
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowFalsePositiveModal(false);
+                  setFalsePositiveReason('');
+                }}
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSubmitFalsePositive}
+                className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
+              >
+                确认标记
+              </button>
             </div>
           </div>
         </div>

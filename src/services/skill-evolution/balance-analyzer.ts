@@ -122,6 +122,11 @@ function buildBalanceAnalysisPrompt(
         `- **描述**: ${c.description}`,
       ];
       
+      // 误报原因（仅误报案例显示）
+      if (c.status === 'false-positive' && c.falsePositiveReason) {
+        parts.push(`- **误报原因**: ${c.falsePositiveReason}`);
+      }
+      
       if (c.location) {
         parts.push(`- **问题代码位置**: ${c.location}`);
       }
@@ -194,6 +199,11 @@ function buildBalanceAnalysisPromptFromTemplate(
         `- **状态**: ${c.status === 'false-positive' ? '误报' : '正确发现'}`,
         `- **描述**: ${c.description}`,
       ];
+      
+      // 误报原因（仅误报案例显示）
+      if (c.status === 'false-positive' && c.falsePositiveReason) {
+        parts.push(`- **误报原因**: ${c.falsePositiveReason}`);
+      }
       
       if (c.location) {
         parts.push(`- **问题代码位置**: ${c.location}`);

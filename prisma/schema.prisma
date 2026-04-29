@@ -20,7 +20,6 @@ model AgentDefinition {
   systemPrompt    String?
   allowedTools    String?
   skills          String?
-  mcpServers      String?
   isActive        Boolean           @default(true)
   isBuiltin       Boolean           @default(false)
   createdAt       DateTime          @default(now())
@@ -588,7 +587,6 @@ model OpencodeConfig {
   baseURL                  String    @default("http://localhost:54321")
   description              String?
   isActive                 Boolean   @default(true)
-  mcpServers               String?
   keybinds                 String?
   modelPreferences         String?
   projectUploadDir         String?
@@ -1523,6 +1521,7 @@ model Vulnerability {
   vulnerable                Boolean?                    @default(true) // 是否为真实漏洞 (来自 JSON.vulnerable)
   fixSuggestion             String?                     // 修复建议（手动填写）
   status                    String                      @default("new")
+  falsePositiveReason       String?                     // 误报原因（标记为误报时填写）
   confirmedBy               String?
   confirmedAt               DateTime?
   fixedBy                   String?

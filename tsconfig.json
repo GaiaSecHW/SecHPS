@@ -16,9 +16,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
+    "jsx": "preserve",
     "incremental": true,
-"plugins": [
+    "plugins": [
       {
         "name": "next"
       }
@@ -50,7 +50,8 @@
     "src/lib/claude-router",
     "src/examples",
     "tmp",
-    "scripts","uploads",
+    "scripts",
+    "uploads",
     "data",
     "prisma",
     "docs",

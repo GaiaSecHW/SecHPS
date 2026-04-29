@@ -12,15 +12,23 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_READ });
+    // 验证 Token（不检查权限，因为 GET 有特殊权限逻辑）
+    const auth = authenticateRequest(request);
     if (!auth.success) {
       return authErrorResponse(auth);
     }
     const payload = auth.payload;
 
-    // 获取用户
+    // 检查权限（可以查看自己，或者有用户读取权限）
+    const canReadOthers = hasPermission(payload.permissions, PERMISSIONS.USER_READ);
     const { id } = await params;
+    const isSelf = payload.userId === id;
+
+    if (!canReadOthers && !isSelf) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+    }
+
+    // 获取用户
     const user = await prisma.user.findUnique({
       where: { id },
       include: {

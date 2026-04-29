@@ -14,7 +14,7 @@ export interface MCPServer {
 
 export interface ModelPreference {
   id: string;
-  provider: string; // e.g., 'openai', 'anthropic', 'local'
+  provider: string;
   model: string;
   isDefault: boolean;
   settings?: {
@@ -33,11 +33,10 @@ export interface OpencodeConfig {
   name: string;
   baseURL: string;
   projectUploadDir?: string;
-  taskDescription?: string; // 任务描述（Markdown格式）
+  taskDescription?: string;
   description?: string;
   isActive: boolean;
-  mcpServers?: MCPServer[];
-  modelPreferences?: string; // 格式: "providerID/modelID"
+  modelPreferences?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,8 +48,7 @@ export interface CreateConfigRequest {
   taskDescription?: string;
   description?: string;
   isActive?: boolean;
-  mcpServers?: MCPServer[];
-  modelPreferences?: string; // 格式: "providerID/modelID"
+  modelPreferences?: string;
 }
 
 export interface UpdateConfigRequest extends Partial<CreateConfigRequest> {
@@ -64,8 +62,7 @@ export interface ConfigFormData {
   taskDescription?: string;
   description: string;
   isActive: boolean;
-  mcpServers: MCPServer[];
-  modelPreferences?: string; // 格式: "providerID/modelID"
+  modelPreferences?: string;
 }
 
 export type ConfigModalMode = 'create' | 'edit';

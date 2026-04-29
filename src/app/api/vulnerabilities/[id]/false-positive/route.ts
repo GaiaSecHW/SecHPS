@@ -19,6 +19,8 @@ export async function POST(
     const payload = auth.payload;
 
     const { id } = await params;
+    const body = await request.json();
+    const { reason } = body; // 误报原因（可选）
 
     // 检查是否是管理员
     const userIsAdmin = isAdmin(payload);
@@ -41,6 +43,7 @@ export async function POST(
       where: { id },
       data: {
         status: 'false-positive',
+        falsePositiveReason: reason || null, // 存储误报原因
         confirmedBy: payload.userId,
         confirmedAt: new Date(),
       },
@@ -54,7 +57,7 @@ export async function POST(
       });
     }
 
-    logger.update(LOG_MODULES.VULNERABILITY, payload, id, { action: 'false-positive' });
+    logger.update(LOG_MODULES.VULNERABILITY, payload, id, { action: 'false-positive', reason });
 
     return NextResponse.json({ vulnerability: updated });
   } catch (error) {

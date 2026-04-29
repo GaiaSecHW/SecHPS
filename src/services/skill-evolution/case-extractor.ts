@@ -12,6 +12,7 @@ export interface CompactCase {
   location?: string;
   sourceCodePreview?: string;
   status: 'false-positive' | 'confirmed';
+  falsePositiveReason?: string; // 误报原因（仅误报案例有）
   markedAt: Date;
 }
 
@@ -110,6 +111,7 @@ export async function getCompactCases(
           location: true,
           POC: true,
           status: true,
+          falsePositiveReason: true, // 误报原因
           updatedAt: true,
         },
       }),
@@ -147,8 +149,36 @@ export async function getCompactCases(
       }),
     ]);
 
-  // 转换为 CompactCase 格式
-  const toCompactCase = (
+  // 转换误报案例为 CompactCase 格式（包含误报原因）
+  const toFalsePositiveCase = (
+    v: {
+      id: string;
+      title: string;
+      description: string;
+      location: string | null;
+      POC: string | null;
+      status: string;
+      falsePositiveReason: string | null;
+      updatedAt: Date;
+    },
+    maxLength: number,
+    snippetLines: number
+  ): CompactCase => ({
+    vulnerabilityId: v.id,
+    title: v.title,
+    description:
+      v.description.length > maxLength
+        ? v.description.slice(0, maxLength)
+        : v.description,
+    location: v.location ?? undefined,
+    sourceCodePreview: extractKeyLines(v.location, snippetLines),
+    status: v.status as 'false-positive',
+    falsePositiveReason: v.falsePositiveReason ?? undefined,
+    markedAt: v.updatedAt,
+  });
+
+  // 转换正确发现案例为 CompactCase 格式
+  const toConfirmedCase = (
     v: {
       id: string;
       title: string;
@@ -169,16 +199,16 @@ export async function getCompactCases(
         : v.description,
     location: v.location ?? undefined,
     sourceCodePreview: extractKeyLines(v.location, snippetLines),
-    status: v.status as 'false-positive' | 'confirmed',
+    status: v.status as 'confirmed',
     markedAt: v.updatedAt,
   });
 
   return {
     falsePositives: falsePositives.map((v) =>
-      toCompactCase(v, maxDescriptionLength, codeSnippetLines)
+      toFalsePositiveCase(v, maxDescriptionLength, codeSnippetLines)
     ),
     confirmedCases: confirmedCases.map((v) =>
-      toCompactCase(v, maxDescriptionLength, codeSnippetLines)
+      toConfirmedCase(v, maxDescriptionLength, codeSnippetLines)
     ),
     totalFalsePositives,
     totalConfirmed,

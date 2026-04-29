@@ -56,7 +56,6 @@ export async function POST(request: Request) {
         ...(body.progressQuestion !== undefined && { progressQuestion: body.progressQuestion ? String(body.progressQuestion) : null }),
         ...(body.skillOutputTemplate !== undefined && { skillOutputTemplate: body.skillOutputTemplate ? String(body.skillOutputTemplate) : null }),
         ...(body.claudemdTemplate !== undefined && { claudemdTemplate: body.claudemdTemplate ? String(body.claudemdTemplate) : null }),
-        ...(body.mcpServers !== undefined && { mcpServers: body.mcpServers ? String(body.mcpServers) : null }),
         ...(body.keybinds !== undefined && { keybinds: body.keybinds ? String(body.keybinds) : null }),
         ...(body.modelPreferences !== undefined && { modelPreferences: body.modelPreferences ? String(body.modelPreferences) : null }),
       },

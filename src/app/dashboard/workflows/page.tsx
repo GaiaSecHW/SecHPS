@@ -8,6 +8,7 @@ import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, Ale
 import { WorkflowStatus } from '@/types/workflow';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { DeveloperGuard } from '@/components/PermissionGuard';
 
 interface Workflow {
   id: string;
@@ -28,6 +29,14 @@ interface Workflow {
 }
 
 export default function WorkflowsPage() {
+  return (
+    <DeveloperGuard>
+      <WorkflowsContent />
+    </DeveloperGuard>
+  );
+}
+
+function WorkflowsContent() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -102,7 +111,7 @@ export default function WorkflowsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || '获取Agent编排列表失败');
+        setError(data.error || '获取编排列表失败');
         setLoading(false);
         return;
       }
@@ -455,9 +464,9 @@ export default function WorkflowsPage() {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Agent编排管理</h1>
+          <h1 className="text-2xl font-bold text-gray-900">开发者编排</h1>
           <p className="mt-1 text-sm text-gray-600">
-            创建和管理Agent编排
+            创建和管理开发者编排
           </p>
         </div>
 
@@ -556,7 +565,7 @@ export default function WorkflowsPage() {
         </div>
       </div>
 
-      {/* Agent列表 */}
+      {/* 编排列表 */}
       {filteredWorkflows.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <FileText className="mx-auto h-12 w-12 text-gray-400" />
@@ -566,7 +575,7 @@ export default function WorkflowsPage() {
           <p className="mt-2 text-sm text-gray-600">
             {searchQuery || statusFilter !== 'all'
               ? '尝试调整搜索条件或筛选器'
-              : '创建您的第一个Agent开始编排'}
+              : '创建您的第一个开发者编排'}
           </p>
         </div>
       ) : (
@@ -746,7 +755,7 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* 新建Agent对话框 */}
+      {/* 新建编排对话框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">

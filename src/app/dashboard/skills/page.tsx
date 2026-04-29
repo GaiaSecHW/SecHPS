@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptionsWithIds';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { DeveloperGuard } from '@/components/PermissionGuard';
 
 interface Skill {
   id: string;
@@ -63,9 +64,11 @@ interface Skill {
 
 export default function SkillsPage() {
   return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <SkillsPageContent />
-    </Suspense>
+    <DeveloperGuard>
+      <Suspense fallback={<LoadingSpinner />}>
+        <SkillsPageContent />
+      </Suspense>
+    </DeveloperGuard>
   );
 }
 

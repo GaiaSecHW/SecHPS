@@ -12,7 +12,6 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate and check permission
     const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_UPDATE });
     if (!auth.success) {
       return authErrorResponse(auth);
@@ -20,10 +19,7 @@ export async function PATCH(
     const { payload } = auth;
 
     const { id } = await params;
-    const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, mcpServers, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate, maxConcurrentEvaluations, defaultToolPermissions } = body;
-
-    // Check if config exists and belongs to user
+    
     const existingConfig = await prisma.opencodeConfig.findUnique({
       where: { id },
     });
@@ -32,15 +28,15 @@ export async function PATCH(
       return NextResponse.json({ error: '未找到配置' }, { status: 404 });
     }
 
+    const body = await request.json();
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate, maxConcurrentEvaluations, defaultToolPermissions } = body;
+
     // Validate URL format if provided
     if (baseURL) {
       try {
         new URL(baseURL);
       } catch {
-        return NextResponse.json(
-          { error: '无效的 baseURL 格式' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: '无效的 baseURL 格式' }, { status: 400 });
       }
     }
 
@@ -48,16 +44,12 @@ export async function PATCH(
     if (maxConcurrentEvaluations !== undefined) {
       const concurrentLimit = parseInt(maxConcurrentEvaluations);
       if (concurrentLimit < 1 || concurrentLimit > 10) {
-        return NextResponse.json(
-          { error: '并发限制必须在 1-10 之间' },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: '并发限制必须在 1-10 之间' }, { status: 400 });
       }
     }
 
     // Validate JSON object fields
     const jsonObjectFields = [
-      { value: mcpServers, name: 'mcpServers' },
       { value: keybinds, name: 'keybinds' },
     ];
     for (const field of jsonObjectFields) {
@@ -93,35 +85,22 @@ export async function PATCH(
         ...(taskDescription !== undefined && { taskDescription }),
         ...(description !== undefined && { description }),
         ...(isActive !== undefined && { isActive }),
-        ...(mcpServers !== undefined && { mcpServers: JSON.stringify(mcpServers) }),
         ...(keybinds !== undefined && { keybinds: JSON.stringify(keybinds) }),
-        // modelPreferences 是字符串格式 "providerID/modelID"，直接存储
         ...(modelPreferences !== undefined && { modelPreferences }),
-        // workflowConfig 是 JSON 字符串，直接存储
         ...(workflowConfig !== undefined && { workflowConfig }),
-        // 进展询问消息配置
         ...(progressQuestion !== undefined && { progressQuestion }),
-        // 自定义系统提示词
         ...(customSystemPrompt !== undefined && { customSystemPrompt }),
-        // Skill 标准输出模板
         ...(skillOutputTemplate !== undefined && { skillOutputTemplate }),
-        // CLAUDE.md 全局模板
         ...(claudemdTemplate !== undefined && { claudemdTemplate }),
-        // 并发限制
         ...(maxConcurrentEvaluations !== undefined && { maxConcurrentEvaluations: parseInt(maxConcurrentEvaluations) }),
-        // 全局工具权限配置
         ...(defaultToolPermissions !== undefined && { defaultToolPermissions }),
       },
     });
 
     logger.debug(LOG_MODULES.CONFIG, '更新配置:', { 
-      details: { 
-        id: config.id, 
-        progressQuestion: config.progressQuestion ? `${config.progressQuestion.substring(0, 30)}...` : null 
-      } 
+      details: { id: config.id, progressQuestion: config.progressQuestion ? `${config.progressQuestion.substring(0, 30)}...` : null } 
     });
 
-    // Record audit log
     await prisma.auditLog.create({
       data: {
         id: generateId('audit'),
@@ -145,7 +124,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Authenticate and check permission
     const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.CONFIG_DELETE });
     if (!auth.success) {
       return authErrorResponse(auth);
@@ -154,7 +132,6 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Check if config exists and belongs to user
     const existingConfig = await prisma.opencodeConfig.findUnique({
       where: { id },
     });
@@ -163,24 +140,18 @@ export async function DELETE(
       return NextResponse.json({ error: '未找到配置' }, { status: 404 });
     }
 
-    // Check if this is the only active config
     const activeConfigCount = await prisma.opencodeConfig.count({
       where: { isActive: true },
     });
 
     if (activeConfigCount <= 1 && existingConfig.isActive) {
-      return NextResponse.json(
-        { error: '无法删除最后一个活跃配置，您必须至少保留一个活跃配置。' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: '无法删除最后一个活跃配置，您必须至少保留一个活跃配置。' }, { status: 400 });
     }
 
-    // Delete config
     await prisma.opencodeConfig.delete({
       where: { id },
     });
 
-    // Record audit log
     await prisma.auditLog.create({
       data: {
         id: generateId('audit'),
