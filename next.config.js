@@ -77,6 +77,13 @@ const nextConfig = {
     ],
   },
   
+  // 强制包含必要的 Next.js 内部文件
+  outputFileTracingIncludes: {
+    '**/*': [
+      'node_modules/next/dist/lib/metadata/**',
+    ],
+  },
+  
   // 生产优化
   productionBrowserSourceMaps: false, // 禁用 sourcemap 减小体积
   

@@ -18,6 +18,12 @@ const STANDALONE_DIR = path.join(ROOT_DIR, '.next/standalone');
 
 // 需要复制到 standalone 输出目录的目录
 const DIR_COPY_RULES = {
+  // ⭐ 复制完整的 next 模块（确保所有依赖文件存在）
+  'next-module': {
+    src: path.join(ROOT_DIR, 'node_modules', 'next'),
+    dest: 'node_modules/next',
+    mode: 'all',
+  },
   // 从 .next 复制必要文件（排除 cache, dev 等）
   'next-files': {
     src: path.join(ROOT_DIR, '.next'),
