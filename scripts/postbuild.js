@@ -24,6 +24,158 @@ const DIR_COPY_RULES = {
     dest: 'node_modules/next',
     mode: 'all',
   },
+  // ⭐ 复制 @anthropic-ai SDK（claude-agent-sdk 和 sdk）
+  'anthropic-sdk': {
+    src: path.join(ROOT_DIR, 'node_modules', '@anthropic-ai'),
+    dest: 'node_modules/@anthropic-ai',
+    mode: 'all',
+  },
+  // ⭐ 复制 @google/genai SDK
+  'google-genai': {
+    src: path.join(ROOT_DIR, 'node_modules', '@google'),
+    dest: 'node_modules/@google',
+    mode: 'all',
+  },
+  // ⭐ 复制 openai SDK
+  'openai-sdk': {
+    src: path.join(ROOT_DIR, 'node_modules', 'openai'),
+    dest: 'node_modules/openai',
+    mode: 'all',
+  },
+  // ⭐ 复制 bcryptjs
+  'bcryptjs': {
+    src: path.join(ROOT_DIR, 'node_modules', 'bcryptjs'),
+    dest: 'node_modules/bcryptjs',
+    mode: 'all',
+  },
+  // ⭐ 复制 jsonwebtoken
+  'jsonwebtoken': {
+    src: path.join(ROOT_DIR, 'node_modules', 'jsonwebtoken'),
+    dest: 'node_modules/jsonwebtoken',
+    mode: 'all',
+  },
+  // ⭐ 复制 ws (WebSocket)
+  'ws': {
+    src: path.join(ROOT_DIR, 'node_modules', 'ws'),
+    dest: 'node_modules/ws',
+    mode: 'all',
+  },
+  // ⭐ 复制 @huggingface/tokenizers
+  'huggingface-tokenizers': {
+    src: path.join(ROOT_DIR, 'node_modules', '@huggingface'),
+    dest: 'node_modules/@huggingface',
+    mode: 'all',
+  },
+  // ⭐ 复制 tiktoken
+  'tiktoken': {
+    src: path.join(ROOT_DIR, 'node_modules', 'tiktoken'),
+    dest: 'node_modules/tiktoken',
+    mode: 'all',
+  },
+  // ⭐ 复制 @xyflow/react
+  'xyflow': {
+    src: path.join(ROOT_DIR, 'node_modules', '@xyflow'),
+    dest: 'node_modules/@xyflow',
+    mode: 'all',
+  },
+  // ⭐ 复制 fastify 相关
+  'fastify': {
+    src: path.join(ROOT_DIR, 'node_modules', 'fastify'),
+    dest: 'node_modules/fastify',
+    mode: 'all',
+  },
+  'fastify-plugin': {
+    src: path.join(ROOT_DIR, 'node_modules', 'fastify-plugin'),
+    dest: 'node_modules/fastify-plugin',
+    mode: 'all',
+  },
+  '@fastify': {
+    src: path.join(ROOT_DIR, 'node_modules', '@fastify'),
+    dest: 'node_modules/@fastify',
+    mode: 'all',
+  },
+  // ⭐ 复制压缩工具
+  'adm-zip': {
+    src: path.join(ROOT_DIR, 'node_modules', 'adm-zip'),
+    dest: 'node_modules/adm-zip',
+    mode: 'all',
+  },
+  'archiver': {
+    src: path.join(ROOT_DIR, 'node_modules', 'archiver'),
+    dest: 'node_modules/archiver',
+    mode: 'all',
+  },
+  // ⭐ 复制其他关键依赖
+  'yaml': {
+    src: path.join(ROOT_DIR, 'node_modules', 'yaml'),
+    dest: 'node_modules/yaml',
+    mode: 'all',
+  },
+  'json5': {
+    src: path.join(ROOT_DIR, 'node_modules', 'json5'),
+    dest: 'node_modules/json5',
+    mode: 'all',
+  },
+  'jsonrepair': {
+    src: path.join(ROOT_DIR, 'node_modules', 'jsonrepair'),
+    dest: 'node_modules/jsonrepair',
+    mode: 'all',
+  },
+  'dompurify': {
+    src: path.join(ROOT_DIR, 'node_modules', 'dompurify'),
+    dest: 'node_modules/dompurify',
+    mode: 'all',
+  },
+  'lru-cache': {
+    src: path.join(ROOT_DIR, 'node_modules', 'lru-cache'),
+    dest: 'node_modules/lru-cache',
+    mode: 'all',
+  },
+  'uuid': {
+    src: path.join(ROOT_DIR, 'node_modules', 'uuid'),
+    dest: 'node_modules/uuid',
+    mode: 'all',
+  },
+  'undici': {
+    src: path.join(ROOT_DIR, 'node_modules', 'undici'),
+    dest: 'node_modules/undici',
+    mode: 'all',
+  },
+  'stream-chain': {
+    src: path.join(ROOT_DIR, 'node_modules', 'stream-chain'),
+    dest: 'node_modules/stream-chain',
+    mode: 'all',
+  },
+  'stream-json': {
+    src: path.join(ROOT_DIR, 'node_modules', 'stream-json'),
+    dest: 'node_modules/stream-json',
+    mode: 'all',
+  },
+  'dotenv': {
+    src: path.join(ROOT_DIR, 'node_modules', 'dotenv'),
+    dest: 'node_modules/dotenv',
+    mode: 'all',
+  },
+  'async-lock': {
+    src: path.join(ROOT_DIR, 'node_modules', 'async-lock'),
+    dest: 'node_modules/async-lock',
+    mode: 'all',
+  },
+  'eventsource': {
+    src: path.join(ROOT_DIR, 'node_modules', 'eventsource'),
+    dest: 'node_modules/eventsource',
+    mode: 'all',
+  },
+  'google-auth-library': {
+    src: path.join(ROOT_DIR, 'node_modules', 'google-auth-library'),
+    dest: 'node_modules/google-auth-library',
+    mode: 'all',
+  },
+  'node-pty': {
+    src: path.join(ROOT_DIR, 'node_modules', 'node-pty'),
+    dest: 'node_modules/node-pty',
+    mode: 'all',
+  },
   // 从 .next 复制必要文件（排除 cache, dev 等）
   'next-files': {
     src: path.join(ROOT_DIR, '.next'),
