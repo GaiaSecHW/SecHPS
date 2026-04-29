@@ -30,6 +30,12 @@ const DIR_COPY_RULES = {
     dest: 'node_modules/@anthropic-ai',
     mode: 'all',
   },
+  // ⭐ 复制 claude-agent-sdk Linux binary (生产环境需要)
+  'claude-agent-sdk-linux-x64': {
+    src: path.join(ROOT_DIR, 'node_modules', '@anthropic-ai', 'claude-agent-sdk-linux-x64'),
+    dest: 'node_modules/@anthropic-ai/claude-agent-sdk-linux-x64',
+    mode: 'all',
+  },
   // ⭐ 复制 @google/genai SDK
   'google-genai': {
     src: path.join(ROOT_DIR, 'node_modules', '@google'),
