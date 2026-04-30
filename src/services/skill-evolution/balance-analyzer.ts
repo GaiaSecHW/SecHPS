@@ -73,6 +73,12 @@ interface ParsedAnalysisResult {
     impact?: string;
   }>;
   warnings?: string[];
+  finalRecommendations?: Array<{
+    type?: string;
+    description?: string;
+    impact?: string;
+  }>;
+  additionalWarnings?: string[];
 }
 
 // ============================================================================
@@ -128,13 +134,9 @@ function buildBalanceAnalysisPrompt(
       }
       
       if (c.location) {
-        parts.push(`- **问题代码位置**: ${c.location}`);
-      }
-      
-      if (c.sourceCodePreview) {
-        parts.push(`- **源代码预览**:`);
+        parts.push(`- **源代码**:`);
         parts.push('```');
-        parts.push(c.sourceCodePreview);
+        parts.push(c.location);
         parts.push('```');
       }
       
@@ -206,13 +208,9 @@ function buildBalanceAnalysisPromptFromTemplate(
       }
       
       if (c.location) {
-        parts.push(`- **问题代码位置**: ${c.location}`);
-      }
-      
-      if (c.sourceCodePreview) {
-        parts.push(`- **源代码预览**:`);
+        parts.push(`- **源代码**:`);
         parts.push('```');
-        parts.push(c.sourceCodePreview);
+        parts.push(c.location);
         parts.push('```');
       }
       
@@ -503,10 +501,196 @@ export async function analyzeBalance(
   }
 }
 
-// ============================================================================
-// 导出
-// ============================================================================
+/**
+ * 分批分析 Skill 的误报和正确发现
+ * 将案例分成多批，每批独立分析，最后合并结果
+ *
+ * @param skillContent Skill 定义内容
+ * @param falsePositives 误报案例列表
+ * @param confirmedCases 正确发现案例列表
+ * @param options 分析选项（包含 batchSize）
+ * @returns 合并后的平衡分析结果
+ */
+export async function analyzeInBatches(
+  skillContent: string,
+  falsePositives: CompactCase[],
+  confirmedCases: CompactCase[],
+  options?: BalanceAnalysisOptions & { batchSize?: number }
+): Promise<BalanceAnalysisResult> {
+  const batchSize = options?.batchSize ?? 2;
+  const batchResults: BalanceAnalysisResult[] = [];
+
+  const fpBatches: CompactCase[][] = [];
+  const ccBatches: CompactCase[][] = [];
+
+  for (let i = 0; i < confirmedCases.length; i += batchSize) {
+    ccBatches.push(confirmedCases.slice(i, i + batchSize));
+  }
+
+  if (falsePositives.length <= batchSize) {
+    fpBatches.push(falsePositives);
+  } else {
+    for (let i = 0; i < falsePositives.length; i += batchSize) {
+      fpBatches.push(falsePositives.slice(i, i + batchSize));
+    }
+  }
+
+  const totalBatches = Math.max(fpBatches.length, ccBatches.length);
+
+  const fpPerBatch = falsePositives.length <= batchSize ? falsePositives : null;
+
+  console.log(`[BalanceAnalyzer] 分批分析: ${falsePositives.length}个误报, ${confirmedCases.length}个正确发现, 共${totalBatches}批次`);
+  console.log(`[BalanceAnalyzer] 误报分配策略: ${falsePositives.length <= batchSize ? '每批包含全部误报' : '按批次轮流分配'}`);
+
+  for (let i = 0; i < totalBatches; i++) {
+    let fpBatch: CompactCase[];
+    const ccBatch = ccBatches[i] ?? [];
+
+    if (fpPerBatch) {
+      fpBatch = fpPerBatch;
+    } else {
+      fpBatch = fpBatches[i] ?? [];
+    }
+
+    if (fpBatch.length === 0 && ccBatch.length === 0) continue;
+
+    console.log(`[BalanceAnalyzer] 分析批次 ${i + 1}/${totalBatches}: ${fpBatch.length}个误报 + ${ccBatch.length}个正确发现`);
+
+    const batchResult = await analyzeBalance(skillContent, fpBatch, ccBatch, {
+      ...options,
+      previousFailure: i === 0 ? options?.previousFailure : undefined,
+      missedCases: i === 0 ? options?.missedCases : undefined,
+      remainingFalsePositives: i === 0 ? options?.remainingFalsePositives : undefined,
+    });
+
+    batchResults.push(batchResult);
+  }
+
+  const mergedResult = mergeBatchResults(batchResults);
+
+  if (batchResults.length > 1) {
+    console.log(`[BalanceAnalyzer] 综合 ${batchResults.length} 批次结果，生成最终建议`);
+    const synthesisResult = await synthesizeResults(skillContent, mergedResult);
+    return synthesisResult;
+  }
+
+  return mergedResult;
+}
+
+function mergeBatchResults(results: BalanceAnalysisResult[]): BalanceAnalysisResult {
+  const allFpPatterns: string[] = [];
+  const allFpCauses: string[] = [];
+  const allCcPatterns: string[] = [];
+  const allCcStrengths: string[] = [];
+  const allRecommendations: BalanceAnalysisResult['recommendations'] = [];
+  const allWarnings: string[] = [];
+
+  for (const r of results) {
+    allFpPatterns.push(...r.falsePositivePatterns);
+    allFpCauses.push(...r.falsePositiveCauses);
+    allCcPatterns.push(...r.confirmedPatterns);
+    allCcStrengths.push(...r.confirmedStrengths);
+    allRecommendations.push(...r.recommendations);
+    allWarnings.push(...r.warnings);
+  }
+
+  const uniqueFpPatterns = [...new Set(allFpPatterns)];
+  const uniqueFpCauses = [...new Set(allFpCauses)];
+  const uniqueCcPatterns = [...new Set(allCcPatterns)];
+  const uniqueCcStrengths = [...new Set(allCcStrengths)];
+  const uniqueWarnings = [...new Set(allWarnings)];
+
+  const recommendationMap = new Map<string, BalanceAnalysisResult['recommendations'][0]>();
+  for (const rec of allRecommendations) {
+    const key = `${rec.type}:${rec.description}`;
+    if (!recommendationMap.has(key)) {
+      recommendationMap.set(key, rec);
+    }
+  }
+
+  return {
+    falsePositivePatterns: uniqueFpPatterns,
+    falsePositiveCauses: uniqueFpCauses,
+    confirmedPatterns: uniqueCcPatterns,
+    confirmedStrengths: uniqueCcStrengths,
+    recommendations: [...recommendationMap.values()],
+    warnings: uniqueWarnings,
+  };
+}
+
+async function synthesizeResults(
+  skillContent: string,
+  mergedResult: BalanceAnalysisResult
+): Promise<BalanceAnalysisResult> {
+  const SYNTHESIS_PROMPT = `请根据以下多批次分析结果，综合生成最终的改进建议。
+
+## Skill 定义
+\`\`\`
+${skillContent.substring(0, 2000)}
+\`\`\`
+
+## 多批次分析汇总
+
+### 误报模式（去重后）
+${mergedResult.falsePositivePatterns.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
+
+### 误报原因（去重后）
+${mergedResult.falsePositiveCauses.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
+
+### 正确发现模式（去重后）
+${mergedResult.confirmedPatterns.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
+
+### 必须保留的规则（去重后）
+${mergedResult.confirmedStrengths.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
+
+### 已有建议（去重后）
+${mergedResult.recommendations.map((r, i) => `${i + 1}. ${r.description}`).join('\n') || '无'}
+
+请综合以上信息，生成最终改进建议。只输出 JSON，格式：
+{"finalRecommendations":[{"type":"modify_rule","description":"...","impact":"both"}],"additionalWarnings":["..."]}`;
+
+  try {
+    const response = await routeRequestWithDefaultModel(
+      [{ role: 'user', content: SYNTHESIS_PROMPT }],
+      {
+        context: {
+          userId: 'system',
+          scene: 'skill-optimize',
+          description: '分批分析结果综合',
+        },
+      }
+    );
+
+    let content = '';
+    if (response?.content?.[0]?.text) {
+      content = response.content[0].text;
+    } else if (response?.choices?.[0]?.message?.content) {
+      content = response.choices[0].message.content;
+    }
+
+    const parsed = parseJsonFromContent(content);
+
+    if (parsed?.finalRecommendations) {
+      const finalRecs = parsed.finalRecommendations.map((r: { type?: string; description?: string; impact?: string }) => ({
+        type: (r.type as BalanceAnalysisResult['recommendations'][0]['type']) ?? 'modify_rule',
+        description: r.description ?? '',
+        impact: (r.impact as BalanceAnalysisResult['recommendations'][0]['impact']) ?? 'both',
+      }));
+
+      return {
+        ...mergedResult,
+        recommendations: finalRecs.length > 0 ? finalRecs : mergedResult.recommendations,
+        warnings: [...mergedResult.warnings, ...(parsed.additionalWarnings ?? [])],
+      };
+    }
+  } catch (error) {
+    console.warn('[BalanceAnalyzer] 综合分析失败，使用合并结果:', error);
+  }
+
+  return mergedResult;
+}
 
 export default {
   analyzeBalance,
+  analyzeInBatches,
 };

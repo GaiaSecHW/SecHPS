@@ -46,8 +46,8 @@ interface CompactCase {
   title: string;
   description: string;
   location?: string;
-  sourceCodePreview?: string;
   status: 'false-positive' | 'confirmed';
+  falsePositiveReason?: string;
   markedAt: string;
 }
 
@@ -560,6 +560,11 @@ function EvolutionAnalysisContent() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   
+  const [realtimeCases, setRealtimeCases] = useState<{
+    falsePositives: CompactCase[];
+    confirmedCases: CompactCase[];
+  } | null>(null);
+  
   // UI state - Tabs
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expandedFalsePositives, setExpandedFalsePositives] = useState(false);
@@ -609,11 +614,37 @@ function EvolutionAnalysisContent() {
       setTask(data.task);
       setSkill(data.skill);
       setImprovement(data.improvement);
+      
+      if (data.task.status === 'analyzing' && data.skill?.id && !data.improvement?.falsePositiveCases?.length) {
+        fetchRealtimeCases(data.skill.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '获取数据失败');
       toast.error(err instanceof Error ? err.message : '获取数据失败');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchRealtimeCases = async (skillId: string) => {
+    try {
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`/api/skills/${skillId}/cases`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setRealtimeCases({
+          falsePositives: data.falsePositives || [],
+          confirmedCases: data.confirmedCases || [],
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch realtime cases:', err);
     }
   };
 
@@ -1049,7 +1080,7 @@ function EvolutionAnalysisContent() {
                         <h3 className="text-sm font-medium text-gray-900">
                           提取历史案例（从漏洞记录中筛选误报和正确发现）
                         </h3>
-                        {task.status !== 'pending' && (
+                        {(task.status === 'completed' || task.status === 'analyzing') && (
                           <CheckCircle size={16} className="text-green-600" />
                         )}
                       </div>
@@ -1063,9 +1094,9 @@ function EvolutionAnalysisContent() {
                           <div>
                             <p className="text-gray-500 mb-1">筛选结果</p>
                             <p className="text-gray-700">
-                              误报案例: {improvement?.falsePositiveCases?.length || 0} 个
+                              误报案例: {realtimeCases?.falsePositives?.length || improvement?.falsePositiveCases?.length || 0} 个
                               <br />
-                              正确发现: {improvement?.confirmedCases?.length || 0} 个
+                              正确发现: {realtimeCases?.confirmedCases?.length || improvement?.confirmedCases?.length || 0} 个
                             </p>
                           </div>
                         </div>
@@ -1087,8 +1118,11 @@ function EvolutionAnalysisContent() {
                         <h3 className="text-sm font-medium text-gray-900">
                           LLM 分析案例（归纳误报原因和正确发现模式）
                         </h3>
-                        {task.status !== 'pending' && (
+                        {task.status === 'completed' && (
                           <CheckCircle size={16} className="text-green-600" />
+                        )}
+                        {task.status === 'analyzing' && (
+                          <Loader2 size={16} className="text-yellow-600 animate-spin" />
                         )}
                       </div>
                       <div className="bg-gray-50 p-3 rounded-lg text-xs">
@@ -1188,7 +1222,7 @@ function EvolutionAnalysisContent() {
                 <XCircle className="h-5 w-5 text-red-600" />
                 <h2 className="text-lg font-semibold text-gray-900">误报案例</h2>
                 <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
-                  {improvement?.falsePositiveCases?.length || 0} 个
+                  {realtimeCases?.falsePositives?.length || improvement?.falsePositiveCases?.length || 0} 个
                 </span>
               </div>
               <button
@@ -1205,13 +1239,17 @@ function EvolutionAnalysisContent() {
             
             {expandedFalsePositives && (
               <div className="divide-y divide-gray-200">
-                {!improvement?.falsePositiveCases || improvement.falsePositiveCases.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <XCircle className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-600">暂无误报案例</p>
-                  </div>
-                ) : (
-                  improvement.falsePositiveCases.map((caseItem, index) => (
+                {(() => {
+                  const fpCases = realtimeCases?.falsePositives || improvement?.falsePositiveCases || [];
+                  if (fpCases.length === 0) {
+                    return (
+                      <div className="p-8 text-center">
+                        <XCircle className="mx-auto h-12 w-12 text-gray-400" />
+                        <p className="mt-2 text-sm text-gray-600">暂无误报案例</p>
+                      </div>
+                    );
+                  }
+                  return fpCases.map((caseItem, index) => (
                     <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -1225,15 +1263,15 @@ function EvolutionAnalysisContent() {
                             {caseItem.description}
                           </p>
                           {caseItem.location && (
-                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                              <Code size={12} />
+                            <pre className="text-xs text-gray-500 p-2 bg-gray-100 rounded overflow-x-auto max-h-32">
                               {caseItem.location}
-                            </p>
-                          )}
-                          {caseItem.sourceCodePreview && (
-                            <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
-                              {caseItem.sourceCodePreview}
                             </pre>
+                          )}
+                          {caseItem.falsePositiveReason && (
+                            <p className="text-xs text-orange-600 mt-2 flex items-center gap-1">
+                              <AlertTriangle size={12} />
+                              误报原因: {caseItem.falsePositiveReason}
+                            </p>
                           )}
                           <p className="text-xs text-gray-400 mt-2">
                             标记时间: {new Date(caseItem.markedAt).toLocaleString('zh-CN')}
@@ -1248,8 +1286,8 @@ function EvolutionAnalysisContent() {
                         </Link>
                       </div>
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
             )}
           </div>
@@ -1261,7 +1299,7 @@ function EvolutionAnalysisContent() {
                 <CheckCircle className="h-5 w-5 text-green-600" />
                 <h2 className="text-lg font-semibold text-gray-900">正确发现案例</h2>
                 <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                  {improvement?.confirmedCases?.length || 0} 个
+                  {realtimeCases?.confirmedCases?.length || improvement?.confirmedCases?.length || 0} 个
                 </span>
               </div>
               <button
@@ -1278,13 +1316,17 @@ function EvolutionAnalysisContent() {
             
             {expandedConfirmed && (
               <div className="divide-y divide-gray-200">
-                {!improvement?.confirmedCases || improvement.confirmedCases.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-                    <p className="mt-2 text-sm text-gray-600">暂无正确发现案例</p>
-                  </div>
-                ) : (
-                  improvement.confirmedCases.map((caseItem, index) => (
+                {(() => {
+                  const ccCases = realtimeCases?.confirmedCases || improvement?.confirmedCases || [];
+                  if (ccCases.length === 0) {
+                    return (
+                      <div className="p-8 text-center">
+                        <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
+                        <p className="mt-2 text-sm text-gray-600">暂无正确发现案例</p>
+                      </div>
+                    );
+                  }
+                  return ccCases.map((caseItem, index) => (
                     <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
@@ -1298,14 +1340,8 @@ function EvolutionAnalysisContent() {
                             {caseItem.description}
                           </p>
                           {caseItem.location && (
-                            <p className="text-xs text-gray-500 flex items-center gap-1">
-                              <Code size={12} />
+                            <pre className="text-xs text-gray-500 p-2 bg-gray-100 rounded overflow-x-auto max-h-32">
                               {caseItem.location}
-                            </p>
-                          )}
-                          {caseItem.sourceCodePreview && (
-                            <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto max-h-32">
-                              {caseItem.sourceCodePreview}
                             </pre>
                           )}
                           <p className="text-xs text-gray-400 mt-2">
@@ -1321,8 +1357,8 @@ function EvolutionAnalysisContent() {
                         </Link>
                       </div>
                     </div>
-                  ))
-                )}
+                  ));
+                })()}
               </div>
             )}
           </div>

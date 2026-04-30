@@ -94,7 +94,7 @@ export async function POST(request: Request) {
         executorConfig: executorConfig ? JSON.stringify(executorConfig) : null,
         requiresPermission: requiresPermission ?? false,
         allowedInSandbox: allowedInSandbox ?? true,
-        timeout: timeout ?? 30000,
+        timeout: timeout ?? 7200000, // 默认2小时
         isBuiltin: false,
         updatedAt: new Date(),
       },

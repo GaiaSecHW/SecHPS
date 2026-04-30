@@ -248,8 +248,8 @@ function buildImprovementPromptFromTemplate(
       parts.push('以下确认的漏洞案例未被检出：');
       options.missedCases.forEach((c, i) => {
         parts.push(`${i + 1}. **${c.title}**: ${c.description}`);
-        if (c.sourceCodePreview) {
-          parts.push(`   代码预览: ${c.sourceCodePreview.substring(0, 100)}...`);
+        if (c.location) {
+          parts.push(`   源代码: ${c.location.substring(0, 100)}...`);
         }
       });
       parts.push('\n**请分析这些案例为什么未被检出，确保改进后能够检出所有这些案例。**');

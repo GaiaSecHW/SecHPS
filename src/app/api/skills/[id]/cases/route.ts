@@ -21,13 +21,11 @@ export async function GET(
   const falsePositiveLimit = url.searchParams.get('falsePositiveLimit');
   const confirmedLimit = url.searchParams.get('confirmedLimit');
   const maxDescriptionLength = url.searchParams.get('maxDescriptionLength');
-  const codeSnippetLines = url.searchParams.get('codeSnippetLines');
 
   const options: GetCompactCasesOptions = {};
   if (falsePositiveLimit) options.falsePositiveLimit = parseInt(falsePositiveLimit, 10);
   if (confirmedLimit) options.confirmedLimit = parseInt(confirmedLimit, 10);
   if (maxDescriptionLength) options.maxDescriptionLength = parseInt(maxDescriptionLength, 10);
-  if (codeSnippetLines) options.codeSnippetLines = parseInt(codeSnippetLines, 10);
 
   try {
     const result = await getCompactCases(id, options);
@@ -39,8 +37,8 @@ export async function GET(
         title: fp.title,
         description: fp.description,
         location: fp.location,
-        sourceCodePreview: fp.sourceCodePreview,
         status: fp.status,
+        falsePositiveReason: fp.falsePositiveReason,
         markedAt: fp.markedAt.toISOString(),
       })),
       confirmedCases: result.confirmedCases.map(cc => ({
@@ -48,7 +46,6 @@ export async function GET(
         title: cc.title,
         description: cc.description,
         location: cc.location,
-        sourceCodePreview: cc.sourceCodePreview,
         status: cc.status,
         markedAt: cc.markedAt.toISOString(),
       })),

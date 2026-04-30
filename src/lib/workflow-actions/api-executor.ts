@@ -54,7 +54,7 @@ export async function executeApiCall(
       headers,
       signal: config.timeout
         ? AbortSignal.timeout(config.timeout)
-        : AbortSignal.timeout(30000),
+        : AbortSignal.timeout(7200000), // 默认2小时
     };
 
     // 添加请求体

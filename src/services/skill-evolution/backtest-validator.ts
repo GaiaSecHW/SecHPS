@@ -91,8 +91,7 @@ ${truncateContent(skillContent)}
 ## 待分析案例
 - **标题**: ${caseItem.title}
 - **描述**: ${caseItem.description}
-${caseItem.location ? `- **代码位置**: ${caseItem.location}` : ''}
-${caseItem.sourceCodePreview ? `- **源代码预览**:\n\`\`\`\n${caseItem.sourceCodePreview}\n\`\`\`` : ''}
+${caseItem.location ? `- **源代码**:\n\`\`\`\n${caseItem.location}\n\`\`\`` : ''}
 
 根据 Skill 定义判断此案例是否应报告为漏洞。只输出 JSON，不要分析过程：`;
 }

@@ -294,8 +294,8 @@ async function executeTransformScript(
     output;
   `;
 
-  const script = new vm.Script(wrappedCode, { timeout: 5000 } as any);
-  return script.runInContext(context, { timeout: 5000 } as any);
+  const script = new vm.Script(wrappedCode, { timeout: 7200000 } as any);
+  return script.runInContext(context, { timeout: 7200000 } as any);
 }
 
 /**

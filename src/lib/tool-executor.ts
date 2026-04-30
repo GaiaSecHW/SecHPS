@@ -237,7 +237,7 @@ export class ToolExecutor {
       const command = `${scriptPath} ${args}`;
 
       const { stdout, stderr } = await execAsync(command, {
-        timeout: this.context.timeout || 600000, // 默认10分钟
+        timeout: this.context.timeout || 7200000, // 默认2小时
         cwd: this.context.workingDirectory,
       });
 

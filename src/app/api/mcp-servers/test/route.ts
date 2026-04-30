@@ -44,7 +44,7 @@ export async function POST(request: Request) {
       args: args ? (typeof args === 'string' ? JSON.parse(args) : args) : undefined,
       url: url ?? undefined,
       env: env ? (typeof env === 'string' ? JSON.parse(env) : env) : undefined,
-      timeout: 60000, // 测试连接 60 秒超时
+      timeout: 7200000, // 测试连接2小时超时
     };
 
     logger.info(LOG_MODULES.MCP, '开始测试 MCP 连接', {

@@ -15,7 +15,7 @@ export async function executeScript(
 
   try {
     logs.push(`[Script] Language: ${config.language}`);
-    logs.push(`[Script] Timeout: ${config.timeout || 5000}ms`);
+    logs.push(`[Script] Timeout: ${config.timeout || 7200000}ms`);
 
     // 安全检查：禁止危险操作
     const dangerousPatterns = [
@@ -108,7 +108,7 @@ async function executeJavaScript(
   `;
 
   // 使用 Node.js 执行（带超时）
-  const timeout = config.timeout || 5000;
+  const timeout = config.timeout || 7200000; // 默认2小时
 
   try {
     // 使用 vm 模块创建隔离环境

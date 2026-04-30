@@ -11,7 +11,7 @@
 
 import { prisma } from '@/lib/prisma';
 import { getEvolutionConfig } from './evolution-scheduler';
-import { analyzeBalance } from './balance-analyzer';
+import { analyzeInBatches } from './balance-analyzer';
 import { generateImprovement } from './improvement-generator';
 import { getCompactCases } from './case-extractor';
 import { runBacktest, getBacktestDetailRows } from './backtest-validator';
@@ -342,7 +342,6 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
           falsePositiveLimit: config.falsePositiveLimit,
           confirmedLimit: config.confirmedLimit,
           maxDescriptionLength: config.maxDescriptionLength,
-          codeSnippetLines: config.codeSnippetLines,
         });
         falsePositives = casesResult.falsePositives;
         confirmedCases = casesResult.confirmedCases;
@@ -352,7 +351,6 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
           falsePositiveLimit: config.falsePositiveLimit,
           confirmedLimit: config.confirmedLimit,
           maxDescriptionLength: config.maxDescriptionLength,
-          codeSnippetLines: config.codeSnippetLines,
         });
         
         // 合并：上次失败案例 + 新获取的案例（去重）
@@ -385,13 +383,14 @@ export async function processEvolutionTask(taskId: string): Promise<TaskProcessR
 
       console.log(`[TaskManager] Using ${falsePositives.length} FP cases, ${confirmedCases.length} CC cases`);
 
-      // 4. 运行平衡分析（传递失败信息）
+      // 4. 运行分批平衡分析（每批 2误报 + 2正确发现）
       console.log(`[TaskManager] Running balance analysis for task ${taskId}`);
-      const analysisResult = await analyzeBalance(
+      const analysisResult = await analyzeInBatches(
         skillContent,
         falsePositives,
         confirmedCases,
         {
+          batchSize: 2,
           previousFailure: lastFailureReason ?? undefined,
           missedCases: lastMissedCases,
           remainingFalsePositives: lastRemainingFalsePositives,

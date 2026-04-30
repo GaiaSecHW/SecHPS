@@ -15,6 +15,17 @@
 
 import { prisma } from '@/lib/prisma';
 import type { TokenUsageContext, CallScene } from '@/types/call-scene';
+import { Agent, setGlobalDispatcher } from 'undici';
+
+// 设置全局 undici agent，延长 headers/body timeout 以支持长时间请求
+setGlobalDispatcher(new Agent({
+  headersTimeout: 7200000,
+  bodyTimeout: 7200000,
+  keepAliveTimeout: 7200000,
+  keepAliveMaxTimeout: 7200000,
+}));
+
+console.log('[ModelClient] Undici agent configured: headersTimeout=7200000ms, bodyTimeout=7200000ms');
 
 // ============================================================================
 // Token 裁剪配置

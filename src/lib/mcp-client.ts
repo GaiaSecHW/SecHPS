@@ -662,7 +662,7 @@ export async function listMcpToolsDirect(
         command: config.command,
         args: config.args,
         env: config.env,
-        timeout: config.timeout || 60000,  // 测试连接默认 60 秒超时
+        timeout: config.timeout || 7200000, // 测试连接默认2小时超时
       });
     } else if (config.type === 'remote') {
       if (!config.url) {
