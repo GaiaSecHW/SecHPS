@@ -1472,11 +1472,10 @@ function EvolutionAnalysisContent() {
                 <div className="border border-green-200 rounded-lg overflow-hidden">
                   <div className="px-4 py-2 bg-green-50 border-b border-green-200 flex items-center gap-2">
                     <FileText size={16} className="text-green-600" />
-                    <span className="font-medium text-green-700">改进后内容（前 500 字符预览）</span>
+                    <span className="font-medium text-green-700">改进后内容（完整）</span>
                   </div>
-                  <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-32 whitespace-pre-wrap font-mono">
-                    {improvement.improvedContent.substring(0, 500)}
-                    {improvement.improvedContent.length > 500 && '\n... (内容已截断，点击上方按钮查看完整对比)'}
+                  <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
+                    {improvement.improvedContent}
                   </pre>
                 </div>
               </div>
@@ -1915,11 +1914,10 @@ function EvolutionAnalysisContent() {
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
                       <FileText size={16} className="text-gray-500" />
-                      生成的改进内容（前 300 字符）
+                      生成的改进内容（完整）
                     </h3>
-                    <pre className="p-3 bg-gray-100 rounded-lg text-xs overflow-x-auto max-h-24 whitespace-pre-wrap">
-                      {selectedAttempt.improvedContent.substring(0, 300)}
-                      {selectedAttempt.improvedContent.length > 300 && '\n...'}
+                    <pre className="p-3 bg-gray-100 rounded-lg text-xs overflow-x-auto max-h-[400px] whitespace-pre-wrap">
+                      {selectedAttempt.improvedContent}
                     </pre>
                   </div>
                 )}
