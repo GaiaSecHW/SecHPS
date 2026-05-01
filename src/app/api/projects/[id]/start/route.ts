@@ -549,6 +549,10 @@ export async function POST(
         isEnabled: server.isEnabled,
         autoStart: server.autoStart,
       }));
+      console.log(`[TRACE MCP] start/route.ts: sdkOptions.mcpServers 已设置，数量=${sdkOptions.mcpServers.length}`);
+      console.log(`[TRACE MCP] start/route.ts: MCP 服务器名称: ${sdkOptions.mcpServers.map(s => s.name).join(', ')}`);
+    } else {
+      console.log(`[TRACE MCP] start/route.ts: mcpServers.length=0，未设置 sdkOptions.mcpServers`);
     }
 
     // 加载工具权限配置
@@ -1153,6 +1157,9 @@ ${originalPrompt}`;
                   modelConfig,
                   systemPrompt: sdkOptions.systemPrompt,
                   roleModels: roleModels || undefined,
+                  mcpServers: sdkOptions.mcpServers,
+                  userId: payload.userId,
+                  toolPermissions: sdkOptions.toolPermissions,
                 },
                 {
                   onPhaseStart: async (phase, phaseName) => {
@@ -1853,11 +1860,21 @@ ${originalPrompt}`;
               systemPrompt: sdkOptions.systemPrompt,
               roleModels: roleModels || undefined,
               defaultModelConfig: dagDefaultModelConfig,
+              mcpServers: sdkOptions.mcpServers,
+              userId: payload.userId,
+              toolPermissions: sdkOptions.toolPermissions,
               maxIterationsPerNode: 15,
               maxRetries: 15,
               retryDelayMs: 60000,
               workflowConfig: workflowConfigParsed || undefined,
             };
+            
+            console.log(`[TRACE MCP] start/route.ts DAG: dagEngineConfig.mcpServers=${dagEngineConfig.mcpServers?.length || 0}个`);
+            if (dagEngineConfig.mcpServers && dagEngineConfig.mcpServers.length > 0) {
+              console.log(`[TRACE MCP] start/route.ts DAG: MCP服务器=${dagEngineConfig.mcpServers.map(s => s.name).join(', ')}`);
+            } else {
+              console.log(`[TRACE MCP] start/route.ts DAG: ⚠️ MCP配置为空！`);
+            }
             
             logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 统一执行引擎配置', {
               evaluationSessionId: dagEvaluation.id,

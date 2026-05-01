@@ -104,10 +104,21 @@ export class ClaudeAgentService {
     if (!config.model) {
       throw new Error('ClaudeAgentService 必须配置 model 参数，未设置模型将无法执行。');
     }
+    
+    console.log(`[TRACE MCP] claude-agent.ts: config.mcpServers=${config.mcpServers?.length || 0}个`);
+    if (config.mcpServers && config.mcpServers.length > 0) {
+      console.log(`[TRACE MCP] claude-agent.ts: MCP服务器=${config.mcpServers.map(s => s.name).join(', ')}`);
+      console.log(`[TRACE MCP] claude-agent.ts: 第一个MCP详情=${JSON.stringify(config.mcpServers[0])}`);
+    } else {
+      console.log(`[TRACE MCP] claude-agent.ts: ⚠️ config.mcpServers 为空！`);
+    }
+    
     this.config = {
       model: config.model,
       ...config,
     };
+    
+    console.log(`[TRACE MCP] claude-agent.ts: this.config.mcpServers=${this.config.mcpServers?.length || 0}个`);
   }
 
   /**

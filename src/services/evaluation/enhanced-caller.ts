@@ -121,6 +121,14 @@ export class EnhancedEvaluationCaller {
     logInfo(`工作目录: ${config.cwd || '未设置'}`);
     logInfo(`系统提示词类型: ${typeof config.systemPrompt}`);
     
+    console.log(`[TRACE MCP] enhanced-caller.ts: config.mcpServers=${config.mcpServers?.length || 0}个`);
+    if (config.mcpServers && config.mcpServers.length > 0) {
+      console.log(`[TRACE MCP] enhanced-caller.ts: MCP服务器=${config.mcpServers.map(s => s.name).join(', ')}`);
+      console.log(`[TRACE MCP] enhanced-caller.ts: 第一个MCP详情=${JSON.stringify(config.mcpServers[0])}`);
+    } else {
+      console.log(`[TRACE MCP] enhanced-caller.ts: ⚠️ config.mcpServers 为空！`);
+    }
+    
     // 设置 workflowNodeId（用于保存 session_id 到 NodeExecution 表）
     this.currentWorkflowNodeId = config.workflowNodeId || null;
     

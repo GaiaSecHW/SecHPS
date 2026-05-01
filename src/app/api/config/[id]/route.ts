@@ -111,6 +111,13 @@ export async function PATCH(
       },
     });
 
+    // 如果并发限制变更，触发队列处理（启动等待中的评估）
+    if (maxConcurrentEvaluations !== undefined) {
+      const { processQueue } = await import('@/services/evaluation-queue');
+      processQueue().catch(e => logger.errorNoUser(LOG_MODULES.EVALUATION, '队列处理失败', { error: e }));
+      logger.info(LOG_MODULES.CONFIG, '并发限制已更新，触发队列处理', { maxConcurrent: parseInt(maxConcurrentEvaluations) });
+    }
+
     return NextResponse.json({ config });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.CONFIG, '更新配置错误:', { details: error });

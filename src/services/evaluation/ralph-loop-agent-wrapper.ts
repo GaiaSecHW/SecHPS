@@ -713,6 +713,14 @@ export function createRalphLoopAgent(
     agents?: Record<string, AgentDefinition>;  // 子Agent定义（SDK官方推荐方式）
   }
 ): RalphLoopAgent {
+  console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: sdkOptions.mcpServers=${sdkOptions?.mcpServers?.length || 0}个`);
+  if (sdkOptions?.mcpServers && sdkOptions.mcpServers.length > 0) {
+    console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: MCP服务器=${sdkOptions.mcpServers.map(s => s.name).join(', ')}`);
+    console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: 第一个MCP详情=${JSON.stringify(sdkOptions.mcpServers[0])}`);
+  } else {
+    console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: ⚠️ sdkOptions.mcpServers 为空！`);
+  }
+  
   // 解析模型名称
   let model: string;
   try {
@@ -751,6 +759,8 @@ export function createRalphLoopAgent(
     // Ralph Loop 配置
     ...ralphConfig,
   });
+  
+  console.log(`[TRACE MCP] ralph-loop-agent-wrapper.ts: RalphLoopAgent已创建，MCP传递完成`);
 
   if (workingDirectory) {
     agent.setWorkingDirectory(workingDirectory);

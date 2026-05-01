@@ -127,6 +127,10 @@ export async function POST(request: Request) {
           },
         });
 
+    // 触发队列处理（启动等待中的评估）
+    const { processQueue } = await import('@/services/evaluation-queue');
+    processQueue().catch(e => logger.errorNoUser(LOG_MODULES.EVALUATION, '队列处理失败', { error: e }));
+
     return NextResponse.json({ config }, { status: 201 });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.CONFIG, '创建配置失败', { details: { error: String(error) } });

@@ -1602,6 +1602,13 @@ ai4java MCP 工具：
     console.log(`[createNodeAgent] Creating agent for node ${nodeIndex}: ${node.label}`);
     console.log(`[createNodeAgent] Model: ${modelConfig.name}`);
     console.log(`[createNodeAgent] WorkflowNodeId: ${node.id}`);
+    
+    console.log(`[TRACE MCP] unified-execution-engine.ts: this.config.mcpServers=${this.config.mcpServers?.length || 0}个`);
+    if (this.config.mcpServers && this.config.mcpServers.length > 0) {
+      console.log(`[TRACE MCP] unified-execution-engine.ts: MCP服务器=${this.config.mcpServers.map(s => s.name).join(', ')}`);
+    } else {
+      console.log(`[TRACE MCP] unified-execution-engine.ts: ⚠️ this.config.mcpServers 为空！`);
+    }
 
     // 动态查询节点配置的 Skills
     const skills = await this.getNodeSkills(node);
@@ -1677,6 +1684,12 @@ ai4java MCP 工具：
     }
     if (mcpServers && mcpServers.length > 0) {
       console.log(`[createNodeAgent] MCP 服务器: ${mcpServers.map(m => m.name).join(', ')}`);
+    }
+    
+    console.log(`[TRACE MCP] unified-execution-engine.ts: 调用 createRalphLoopAgent，mcpServers=${mcpServers?.length || 0}个`);
+    if (mcpServers && mcpServers.length > 0) {
+      console.log(`[TRACE MCP] unified-execution-engine.ts: 传递给RalphLoopAgent的MCP=${mcpServers.map(s => s.name).join(', ')}`);
+      console.log(`[TRACE MCP] unified-execution-engine.ts: 第一个MCP详情: ${JSON.stringify(mcpServers[0])}`);
     }
 
     return createRalphLoopAgent(
