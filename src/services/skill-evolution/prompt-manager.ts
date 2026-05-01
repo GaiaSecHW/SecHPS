@@ -36,75 +36,71 @@ export interface EvolutionPrompt {
 
 const DEFAULT_PROMPTS: Record<PromptKey, { displayName: string; description: string; content: string }> = {
   balance_analysis_system: {
-    displayName: '平衡分析 - 系统提示词',
-    description: '用于分析 Skill 误报和正确发现案例的系统角色设定',
-    content: `你是一个安全检测专家，负责分析 Skill 的误报和正确发现案例，给出平衡改进建议。
+    displayName: '平衡分析 - 系统提示词（方案A：只分析误报）',
+    description: '只分析误报案例，正确案例用于回测验证而非分析',
+    content: `你是一个安全检测专家，负责分析 Skill 的误报案例，给出排除规则建议。
 
 **重要概念**:
 - **Skill**: AI 助手使用的技能定义，包含触发条件、执行规则、参考知识等
 - **误报 (False Positive)**: Skill 判断为漏洞，但实际不是漏洞的案例
-- **正确发现 (Confirmed)**: Skill 判断为漏洞，且确实是漏洞的案例
-- **平衡改进**: 既要减少误报，又要保持对真正漏洞的检测能力
+- **改进目标**: 找出误报的共同特点，生成排除规则，减少误报
 
 **分析目标**:
 1. 找出误报的共同特点，理解为什么误判
-2. 找出正确发现的共同特点，确认 Skill 哪些规则是正确的
-3. 给出改进建议，既能减少误报，又不影响正确发现
-4. 指出可能影响召回率的改进，需要特别注意
+2. 分析这些误报案例的共性模式
+3. 给出具体的排除规则建议
+4. 指出改进可能带来的风险
 
 **输出格式要求**:
 你必须只输出一个有效的 JSON 对象，不要输出任何其他文字、解释或 markdown 标记。
-JSON 必须包含以下字段：falsePositivePatterns, falsePositiveCauses, confirmedPatterns, confirmedStrengths, recommendations, warnings。`,
+JSON 必须包含以下字段：falsePositivePatterns, falsePositiveCauses, recommendations, warnings。
+confirmedPatterns 和 confirmedStrengths 返回空数组。`,
   },
 
   balance_analysis_user_template: {
-    displayName: '平衡分析 - 用户提示词模板',
-    description: '构建用户提示词的模板，使用 {{placeholder}} 占位符',
-    content: `请分析以下 Skill 的误报和正确发现案例：
+    displayName: '平衡分析 - 用户提示词模板（方案A）',
+    description: '只分析误报案例的模板，正确案例用于回测',
+    content: `请分析以下 Skill 的误报案例：
 
 ## Skill 定义
 \`\`\`
 {{SKILL_CONTENT}}
 \`\`\`
 
-## 误报案例（要避免的）
+## 误报案例（需要排除）
 {{FALSE_POSITIVE_CASES}}
-→ 这些被误判为漏洞，实际上不是
-
-## 正确发现案例（要保留的）
-{{CONFIRMED_CASES}}
-→ 这些是真正的漏洞，必须能继续发现
+→ 这些被误判为漏洞，实际上不是漏洞
 
 请分析：
-1. 误报的共同特点是什么？为什么误判？
-2. 正确发现的共同特点是什么？Skill 哪些规则是正确的？
-3. 如何改进 Skill，既能减少误报，又不影响正确发现？
-4. 有哪些改进可能影响召回率？需要特别注意什么？
+1. 这些误报案例的共同特点是什么？
+2. 为什么 Skill 会误判这些案例？
+3. 如何添加排除规则来避免这些误报？
+4. 添加排除规则可能带来什么风险？
 
 ## 输出格式
 
 **重要**: 只输出 JSON 对象，不要输出任何其他内容。不要使用 markdown 代码块标记。
 
 示例输出格式:
-{"falsePositivePatterns":["模式1","模式2"],"falsePositiveCauses":["原因1","原因2"],"confirmedPatterns":["模式1","模式2"],"confirmedStrengths":["规则1","规则2"],"recommendations":[{"type":"modify_rule","description":"...","impact":"reduce_false_positive"}],"warnings":["警告1"]}
+{"falsePositivePatterns":["模式1","模式2"],"falsePositiveCauses":["原因1","原因2"],"confirmedPatterns":[],"confirmedStrengths":[],"recommendations":[{"type":"add_exception","description":"添加排除规则：XXX","impact":"reduce_false_positive"}],"warnings":["排除规则可能影响对YYY场景的检测"]}
 
 请输出你的分析结果 JSON:`,
   },
 
   improvement_generation_system: {
-    displayName: '改进生成 - 系统提示词',
-    description: '用于根据分析结果改进 Skill 内容的系统角色设定',
-    content: `你是一个安全检测专家，负责根据分析结果改进 Skill 定义。
+    displayName: '改进生成 - 系统提示词（方案A）',
+    description: '只根据误报分析改进 Skill，正确案例用于回测验证',
+    content: `你是一个安全检测专家，负责根据误报分析结果改进 Skill 定义。
 
 **重要概念**:
 - **Skill**: AI 助手使用的技能定义，包含触发条件、执行规则、参考知识、示例等
-- **改进目标**: 根据误报分析和正确发现分析，改进 Skill 内容，减少误报同时保持检测能力
+- **改进目标**: 根据误报分析，添加排除规则来减少误报
 
 **改进原则**:
-1. **保守改进**: 优先添加排除规则，而非删除检测规则
+1. **添加排除规则**: 在"陷阱与边缘情况"或"常见误报排除"章节添加新的排除条件
 2. **保持格式**: 改进后的内容必须保持原有 Markdown 格式和章节结构
-3. **明确变更**: 在"陷阱与边缘情况"或"常见误报排除"章节添加新的排除规则
-4. **不破坏核心**: 不要删除核心检测规则，只添加更精确的条件
+3. **具体明确**: 排除规则要具体，能准确识别误报模式
+4. **不破坏核心**: 不要删除原有的检测规则，只添加更精确的条件
 
 **输出格式要求**:
 你必须只输出一个有效的 JSON 对象，不要输出任何其他文字、解释或 markdown 标记。
@@ -114,16 +110,16 @@ improvedContent 必须是完整的 Skill Markdown 内容，保持原有格式。
   },
 
   improvement_generation_user_template: {
-    displayName: '改进生成 - 用户提示词模板',
-    description: '构建改进生成用户提示词的模板，使用 {{placeholder}} 占位符',
-    content: `请根据以下分析结果改进 Skill 内容：
+    displayName: '改进生成 - 用户提示词模板（方案A）',
+    description: '只根据误报分析生成改进，正确案例用于回测',
+    content: `请根据以下误报分析结果改进 Skill 内容：
 
 ## 原始 Skill 定义
 \`\`\`markdown
 {{SKILL_CONTENT}}
 \`\`\`
 
-## 分析结果
+## 误报分析结果
 
 ### 误报模式（需要排除）
 {{FALSE_POSITIVE_PATTERNS}}
@@ -131,40 +127,29 @@ improvedContent 必须是完整的 Skill Markdown 内容，保持原有格式。
 ### 误报原因
 {{FALSE_POSITIVE_CAUSES}}
 
-### 正确发现模式（需要保留）
-{{CONFIRMED_PATTERNS}}
-
-### 必须保留的规则
-{{CONFIRMED_STRENGTHS}}
-
-### 改进建议
+### 排除规则建议
 {{RECOMMENDATIONS}}
 
 ### 已有警告
 {{WARNINGS}}
 
-## 参考案例（可选）
-
-### 误报案例示例（前3个）
+## 误报案例示例（前3个）
 {{FALSE_POSITIVE_CASES_PREVIEW}}
-
-### 正确发现案例示例（前3个）
-{{CONFIRMED_CASES_PREVIEW}}
 
 ## 改进要求
 
 1. **保持原有格式**: 改进后的内容必须是完整的 Markdown 格式，包含所有原有章节
 2. **添加排除规则**: 在"常见误报排除"或"陷阱与边缘情况"章节添加新的排除条件
-3. **不删除核心规则**: 不要删除原有的检测规则，只添加更精确的条件
+3. **不删除核心规则**: 不要删除原有的检测规则，只添加更精确的排除条件
 4. **变更说明**: 在 changeSummary 中列出所有变更点
-5. **警告提示**: 如果改进可能影响召回率，在 warnings 中说明
+5. **警告提示**: 如果改进可能影响对某些场景的检测，在 warnings 中说明
 
 ## 输出格式
 
 **重要**: 只输出 JSON 对象，不要输出任何其他内容。不要使用 markdown 代码块标记。
 
 示例输出格式:
-{"improvedContent":"完整的改进后 Skill Markdown 内容...","changeSummary":["添加了 XX 排除规则","细化了 YY 检测条件"],"warnings":["此改进可能影响对 ZZ 场景的检测"]}
+{"improvedContent":"完整的改进后 Skill Markdown 内容...","changeSummary":["添加了 XX 排除规则","细化了 YY 排除条件"],"warnings":["此排除规则可能影响对 ZZ 场景的检测"]}
 
 请输出你的改进结果 JSON:`,
   },

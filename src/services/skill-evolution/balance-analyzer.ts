@@ -85,51 +85,48 @@ interface ParsedAnalysisResult {
 // Prompt 模板
 // ============================================================================
 
-const BALANCE_ANALYSIS_SYSTEM_PROMPT = `你是一个安全检测专家，负责分析 Skill 的误报和正确发现案例，给出平衡改进建议。
+const BALANCE_ANALYSIS_SYSTEM_PROMPT = `你是一个安全检测专家，负责分析 Skill 的误报案例，给出排除规则建议。
 
 **重要概念**:
 - **Skill**: AI 助手使用的技能定义，包含触发条件、执行规则、参考知识等
 - **误报 (False Positive)**: Skill 判断为漏洞，但实际不是漏洞的案例
-- **正确发现 (Confirmed)**: Skill 判断为漏洞，且确实是漏洞的案例
-- **平衡改进**: 既要减少误报，又要保持对真正漏洞的检测能力
+- **改进目标**: 找出误报的共同特点，生成排除规则，减少误报
 
 **分析目标**:
 1. 找出误报的共同特点，理解为什么误判
-2. 找出正确发现的共同特点，确认 Skill 哪些规则是正确的
-3. 给出改进建议，既能减少误报，又不影响正确发现
-4. 指出可能影响召回率的改进，需要特别注意
+2. 分析这些误报案例的共性模式
+3. 给出具体的排除规则建议
+4. 指出改进可能带来的风险
 
 **输出格式要求**:
 你必须只输出一个有效的 JSON 对象，不要输出任何其他文字、解释或 markdown 标记。
-JSON 必须包含以下字段：falsePositivePatterns, falsePositiveCauses, confirmedPatterns, confirmedStrengths, recommendations, warnings。`;
+JSON 必须包含以下字段：falsePositivePatterns, falsePositiveCauses, confirmedPatterns, confirmedStrengths, recommendations, warnings。
+confirmedPatterns 和 confirmedStrengths 返回空数组。`;
 
 /**
- * 构建分析 Prompt
+ * 构建分析 Prompt（方案A：只分析误报）
  */
 function buildBalanceAnalysisPrompt(
   skillContent: string,
-  falsePositives: CompactCase[],
-  confirmedCases: CompactCase[]
+  falsePositives: CompactCase[]
 ): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_CONTENT_LENGTH): string => {
     if (content.length <= maxLen) return content;
     return content.substring(0, maxLen) + '\n... (已截断)';
   };
 
-  const formatCases = (cases: CompactCase[], label: string): string => {
+  const formatCases = (cases: CompactCase[]): string => {
     if (cases.length === 0) {
-      return `无 ${label} 案例`;
+      return '无误报案例';
     }
     
     return cases.map((c, i) => {
       const parts = [
         `### 案例 ${i + 1}: ${c.title}`,
-        `- **状态**: ${c.status === 'false-positive' ? '误报' : '正确发现'}`,
         `- **描述**: ${c.description}`,
       ];
       
-      // 误报原因（仅误报案例显示）
-      if (c.status === 'false-positive' && c.falsePositiveReason) {
+      if (c.falsePositiveReason) {
         parts.push(`- **误报原因**: ${c.falsePositiveReason}`);
       }
       
@@ -144,45 +141,40 @@ function buildBalanceAnalysisPrompt(
     }).join('\n\n');
   };
 
-  return `请分析以下 Skill 的误报和正确发现案例：
+  return `请分析以下 Skill 的误报案例：
 
 ## Skill 定义
 \`\`\`
 ${truncateContent(skillContent)}
 \`\`\`
 
-## 误报案例（要避免的）
-${formatCases(falsePositives, '误报')}
-→ 这些被误判为漏洞，实际上不是
-
-## 正确发现案例（要保留的）
-${formatCases(confirmedCases, '正确发现')}
-→ 这些是真正的漏洞，必须能继续发现
+## 误报案例（需要排除）
+${formatCases(falsePositives)}
+→ 这些被误判为漏洞，实际上不是漏洞
 
 请分析：
-1. 误报的共同特点是什么？为什么误判？
-2. 正确发现的共同特点是什么？Skill 哪些规则是正确的？
-3. 如何改进 Skill，既能减少误报，又不影响正确发现？
-4. 有哪些改进可能影响召回率？需要特别注意什么？
+1. 这些误报案例的共同特点是什么？
+2. 为什么 Skill 会误判这些案例？
+3. 如何添加排除规则来避免这些误报？
+4. 添加排除规则可能带来什么风险？
 
 ## 输出格式
 
 **重要**: 只输出 JSON 对象，不要输出任何其他内容。不要使用 markdown 代码块标记。
 
 示例输出格式:
-{"falsePositivePatterns":["模式1","模式2"],"falsePositiveCauses":["原因1","原因2"],"confirmedPatterns":["模式1","模式2"],"confirmedStrengths":["规则1","规则2"],"recommendations":[{"type":"modify_rule","description":"...","impact":"reduce_false_positive"}],"warnings":["警告1"]}
+{"falsePositivePatterns":["模式1","模式2"],"falsePositiveCauses":["原因1","原因2"],"confirmedPatterns":[],"confirmedStrengths":[],"recommendations":[{"type":"add_exception","description":"添加排除规则","impact":"reduce_false_positive"}],"warnings":["可能的风险"]}
 
 请输出你的分析结果 JSON:`;
 }
 
 /**
- * 从模板构建分析 Prompt（替换占位符）
+ * 从模板构建分析 Prompt（替换占位符，方案A：只分析误报）
  */
 function buildBalanceAnalysisPromptFromTemplate(
   template: string,
   skillContent: string,
   falsePositives: CompactCase[],
-  confirmedCases: CompactCase[],
   options?: BalanceAnalysisOptions
 ): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_CONTENT_LENGTH): string => {
@@ -190,20 +182,18 @@ function buildBalanceAnalysisPromptFromTemplate(
     return content.substring(0, maxLen) + '\n... (已截断)';
   };
 
-  const formatCases = (cases: CompactCase[], label: string): string => {
+  const formatCases = (cases: CompactCase[]): string => {
     if (cases.length === 0) {
-      return `无 ${label} 案例`;
+      return '无误报案例';
     }
     
     return cases.map((c, i) => {
       const parts = [
         `### 案例 ${i + 1}: ${c.title}`,
-        `- **状态**: ${c.status === 'false-positive' ? '误报' : '正确发现'}`,
         `- **描述**: ${c.description}`,
       ];
       
-      // 误报原因（仅误报案例显示）
-      if (c.status === 'false-positive' && c.falsePositiveReason) {
+      if (c.falsePositiveReason) {
         parts.push(`- **误报原因**: ${c.falsePositiveReason}`);
       }
       
@@ -256,18 +246,17 @@ function buildBalanceAnalysisPromptFromTemplate(
 
   // 如果模板为空，使用硬编码构建函数
   if (!template || template.trim() === '') {
-    const basePrompt = buildBalanceAnalysisPrompt(skillContent, falsePositives, confirmedCases);
+    const basePrompt = buildBalanceAnalysisPrompt(skillContent, falsePositives);
     if (failureContext) {
       return failureContext + '\n\n' + basePrompt;
     }
     return basePrompt;
   }
 
-  // 替换占位符
+  // 替换占位符（只替换误报相关）
   let prompt = template
     .replace('{{SKILL_CONTENT}}', truncateContent(skillContent))
-    .replace('{{FALSE_POSITIVE_CASES}}', formatCases(falsePositives, '误报'))
-    .replace('{{CONFIRMED_CASES}}', formatCases(confirmedCases, '正确发现'));
+    .replace('{{FALSE_POSITIVE_CASES}}', formatCases(falsePositives));
 
   // 添加失败信息（如果有）
   if (failureContext) {
@@ -418,18 +407,16 @@ function createDefaultResult(): BalanceAnalysisResult {
 // ============================================================================
 
 /**
- * 分析 Skill 的误报和正确发现，给出平衡改进建议
+ * 分析 Skill 的误报案例，给出排除规则建议（方案A）
  *
  * @param skillContent Skill 定义内容
  * @param falsePositives 误报案例列表
- * @param confirmedCases 正确发现案例列表
  * @param options 分析选项
  * @returns 平衡分析结果
  */
 export async function analyzeBalance(
   skillContent: string,
   falsePositives: CompactCase[],
-  confirmedCases: CompactCase[],
   options?: BalanceAnalysisOptions
 ): Promise<BalanceAnalysisResult> {
   try {
@@ -442,23 +429,21 @@ export async function analyzeBalance(
       userPromptTemplate,
       skillContent,
       falsePositives,
-      confirmedCases,
       options
     );
     
-    console.log(`[BalanceAnalyzer] 开始分析: ${falsePositives.length} 误报, ${confirmedCases.length} 正确发现`);
+    console.log(`[BalanceAnalyzer] 开始分析: ${falsePositives.length} 误报案例`);
     
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
       {
-        system: systemPrompt || BALANCE_ANALYSIS_SYSTEM_PROMPT, // fallback to hardcoded
-        // max_tokens 和 temperature 从模型配置自动获取，除非明确指定
+        system: systemPrompt || BALANCE_ANALYSIS_SYSTEM_PROMPT,
         ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         context: options?.context ?? {
           userId: 'system',
           scene: 'skill-optimize',
-          description: 'Skill 平衡分析',
+          description: 'Skill 误报分析',
         },
       }
     );
@@ -477,21 +462,21 @@ export async function analyzeBalance(
       return createDefaultResult();
     }
     
-    // 构建结果
+    // 构建结果（confirmedPatterns 和 confirmedStrengths 返回空数组）
     const result: BalanceAnalysisResult = {
       falsePositivePatterns: parsed.falsePositivePatterns ?? [],
       falsePositiveCauses: parsed.falsePositiveCauses ?? [],
-      confirmedPatterns: parsed.confirmedPatterns ?? [],
-      confirmedStrengths: parsed.confirmedStrengths ?? [],
+      confirmedPatterns: [],
+      confirmedStrengths: [],
       recommendations: (parsed.recommendations ?? []).map((r) => ({
-        type: (r.type as BalanceAnalysisResult['recommendations'][0]['type']) ?? 'modify_rule',
+        type: (r.type as BalanceAnalysisResult['recommendations'][0]['type']) ?? 'add_exception',
         description: r.description ?? '',
-        impact: (r.impact as BalanceAnalysisResult['recommendations'][0]['impact']) ?? 'both',
+        impact: (r.impact as BalanceAnalysisResult['recommendations'][0]['impact']) ?? 'reduce_false_positive',
       })),
       warnings: parsed.warnings ?? [],
     };
     
-    console.log(`[BalanceAnalyzer] 分析完成: ${result.recommendations.length} 条建议`);
+    console.log(`[BalanceAnalyzer] 分析完成: ${result.recommendations.length} 条排除规则建议`);
     
     return result;
     
@@ -502,14 +487,14 @@ export async function analyzeBalance(
 }
 
 /**
- * 分批分析 Skill 的误报和正确发现
- * 将案例分成多批，每批独立分析，最后合并结果
+ * 分批分析 Skill 的误报案例（方案A）
+ * 正确案例仍传入用于回测，但分析阶段只分析误报
  *
  * @param skillContent Skill 定义内容
  * @param falsePositives 误报案例列表
- * @param confirmedCases 正确发现案例列表
+ * @param confirmedCases 正确发现案例列表（用于回测验证，不参与分析）
  * @param options 分析选项（包含 batchSize）
- * @returns 合并后的平衡分析结果
+ * @returns 平衡分析结果
  */
 export async function analyzeInBatches(
   skillContent: string,
@@ -520,12 +505,8 @@ export async function analyzeInBatches(
   const batchSize = options?.batchSize ?? 2;
   const batchResults: BalanceAnalysisResult[] = [];
 
+  // 只对误报案例分批，正确案例不参与分析
   const fpBatches: CompactCase[][] = [];
-  const ccBatches: CompactCase[][] = [];
-
-  for (let i = 0; i < confirmedCases.length; i += batchSize) {
-    ccBatches.push(confirmedCases.slice(i, i + batchSize));
-  }
 
   if (falsePositives.length <= batchSize) {
     fpBatches.push(falsePositives);
@@ -535,28 +516,20 @@ export async function analyzeInBatches(
     }
   }
 
-  const totalBatches = Math.max(fpBatches.length, ccBatches.length);
+  const totalBatches = fpBatches.length;
 
-  const fpPerBatch = falsePositives.length <= batchSize ? falsePositives : null;
-
-  console.log(`[BalanceAnalyzer] 分批分析: ${falsePositives.length}个误报, ${confirmedCases.length}个正确发现, 共${totalBatches}批次`);
-  console.log(`[BalanceAnalyzer] 误报分配策略: ${falsePositives.length <= batchSize ? '每批包含全部误报' : '按批次轮流分配'}`);
+  console.log(`[BalanceAnalyzer] 分批分析: ${falsePositives.length}个误报案例, 共${totalBatches}批次`);
+  console.log(`[BalanceAnalyzer] 正确发现案例: ${confirmedCases.length}个（用于回测验证，不参与分析）`);
 
   for (let i = 0; i < totalBatches; i++) {
-    let fpBatch: CompactCase[];
-    const ccBatch = ccBatches[i] ?? [];
+    const fpBatch = fpBatches[i];
 
-    if (fpPerBatch) {
-      fpBatch = fpPerBatch;
-    } else {
-      fpBatch = fpBatches[i] ?? [];
-    }
+    if (fpBatch.length === 0) continue;
 
-    if (fpBatch.length === 0 && ccBatch.length === 0) continue;
+    console.log(`[BalanceAnalyzer] 分析批次 ${i + 1}/${totalBatches}: ${fpBatch.length}个误报案例`);
 
-    console.log(`[BalanceAnalyzer] 分析批次 ${i + 1}/${totalBatches}: ${fpBatch.length}个误报 + ${ccBatch.length}个正确发现`);
-
-    const batchResult = await analyzeBalance(skillContent, fpBatch, ccBatch, {
+    // 只传递误报案例进行分析（方案A）
+    const batchResult = await analyzeBalance(skillContent, fpBatch, {
       ...options,
       previousFailure: i === 0 ? options?.previousFailure : undefined,
       missedCases: i === 0 ? options?.missedCases : undefined,
@@ -622,14 +595,14 @@ async function synthesizeResults(
   skillContent: string,
   mergedResult: BalanceAnalysisResult
 ): Promise<BalanceAnalysisResult> {
-  const SYNTHESIS_PROMPT = `请根据以下多批次分析结果，综合生成最终的改进建议。
+  const SYNTHESIS_PROMPT = `请根据以下多批次误报分析结果，综合生成最终的排除规则建议。
 
 ## Skill 定义
 \`\`\`
 ${skillContent.substring(0, 2000)}
 \`\`\`
 
-## 多批次分析汇总
+## 多批次误报分析汇总
 
 ### 误报模式（去重后）
 ${mergedResult.falsePositivePatterns.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
@@ -637,17 +610,11 @@ ${mergedResult.falsePositivePatterns.map((p, i) => `${i + 1}. ${p}`).join('\n') 
 ### 误报原因（去重后）
 ${mergedResult.falsePositiveCauses.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
 
-### 正确发现模式（去重后）
-${mergedResult.confirmedPatterns.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
-
-### 必须保留的规则（去重后）
-${mergedResult.confirmedStrengths.map((p, i) => `${i + 1}. ${p}`).join('\n') || '无'}
-
-### 已有建议（去重后）
+### 已有排除规则建议（去重后）
 ${mergedResult.recommendations.map((r, i) => `${i + 1}. ${r.description}`).join('\n') || '无'}
 
-请综合以上信息，生成最终改进建议。只输出 JSON，格式：
-{"finalRecommendations":[{"type":"modify_rule","description":"...","impact":"both"}],"additionalWarnings":["..."]}`;
+请综合以上信息，生成最终排除规则建议。只输出 JSON，格式：
+{"finalRecommendations":[{"type":"add_exception","description":"...","impact":"reduce_false_positive"}],"additionalWarnings":["..."]}`;
 
   try {
     const response = await routeRequestWithDefaultModel(
@@ -656,7 +623,7 @@ ${mergedResult.recommendations.map((r, i) => `${i + 1}. ${r.description}`).join(
         context: {
           userId: 'system',
           scene: 'skill-optimize',
-          description: '分批分析结果综合',
+          description: '分批误报分析结果综合',
         },
       }
     );
@@ -672,9 +639,9 @@ ${mergedResult.recommendations.map((r, i) => `${i + 1}. ${r.description}`).join(
 
     if (parsed?.finalRecommendations) {
       const finalRecs = parsed.finalRecommendations.map((r: { type?: string; description?: string; impact?: string }) => ({
-        type: (r.type as BalanceAnalysisResult['recommendations'][0]['type']) ?? 'modify_rule',
+        type: (r.type as BalanceAnalysisResult['recommendations'][0]['type']) ?? 'add_exception',
         description: r.description ?? '',
-        impact: (r.impact as BalanceAnalysisResult['recommendations'][0]['impact']) ?? 'both',
+        impact: (r.impact as BalanceAnalysisResult['recommendations'][0]['impact']) ?? 'reduce_false_positive',
       }));
 
       return {

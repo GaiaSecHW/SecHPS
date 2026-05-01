@@ -63,17 +63,17 @@ interface LlmResponse {
 // Prompt 模板
 // ============================================================================
 
-const IMPROVEMENT_GENERATION_SYSTEM_PROMPT = `你是一个安全检测专家，负责根据分析结果改进 Skill 定义。
+const IMPROVEMENT_GENERATION_SYSTEM_PROMPT = `你是一个安全检测专家，负责根据误报分析结果改进 Skill 定义。
 
 **重要概念**:
 - **Skill**: AI 助手使用的技能定义，包含触发条件、执行规则、参考知识、示例等
-- **改进目标**: 根据误报分析和正确发现分析，改进 Skill 内容，减少误报同时保持检测能力
+- **改进目标**: 根据误报分析，添加排除规则来减少误报
 
 **改进原则**:
-1. **保守改进**: 优先添加排除规则，而非删除检测规则
+1. **添加排除规则**: 在"陷阱与边缘情况"或"常见误报排除"章节添加新的排除条件
 2. **保持格式**: 改进后的内容必须保持原有 Markdown 格式和章节结构
-3. **明确变更**: 在"陷阱与边缘情况"或"常见误报排除"章节添加新的排除规则
-4. **不破坏核心**: 不要删除核心检测规则，只添加更精确的条件
+3. **具体明确**: 排除规则要具体，能准确识别误报模式
+4. **不破坏核心**: 不要删除原有的检测规则，只添加更精确的条件
 
 **输出格式要求**:
 你必须只输出一个有效的 JSON 对象，不要输出任何其他文字、解释或 markdown 标记。
@@ -82,13 +82,12 @@ JSON 必须包含以下字段：improvedContent, changeSummary, warnings。
 improvedContent 必须是完整的 Skill Markdown 内容，保持原有格式。`;
 
 /**
- * 构建改进生成 Prompt
+ * 构建改进生成 Prompt（方案A：只基于误报分析）
  */
 function buildImprovementPrompt(
   skillContent: string,
   analysisResult: BalanceAnalysisResult,
-  falsePositiveCases: CompactCase[],
-  confirmedCases: CompactCase[]
+  falsePositiveCases: CompactCase[]
 ): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_SKILL_CONTENT_LENGTH): string => {
     if (content.length <= maxLen) return content;
@@ -97,7 +96,7 @@ function buildImprovementPrompt(
 
   const formatRecommendations = (recommendations: BalanceAnalysisResult['recommendations']): string => {
     if (recommendations.length === 0) {
-      return '无具体改进建议';
+      return '无具体排除规则建议';
     }
     
     return recommendations.map((r, i) => {
@@ -107,13 +106,8 @@ function buildImprovementPrompt(
         'add_exception': '添加排除条件',
         'refine_pattern': '细化模式',
       };
-      const impactMap: Record<string, string> = {
-        'reduce_false_positive': '减少误报',
-        'maintain_detection': '保持检测',
-        'both': '平衡改进',
-      };
       
-      return `${i + 1}. **${typeMap[r.type] || r.type}**: ${r.description} (影响: ${impactMap[r.impact] || r.impact})`;
+      return `${i + 1}. **${typeMap[r.type] || r.type}**: ${r.description}`;
     }).join('\n');
   };
 
@@ -124,14 +118,14 @@ function buildImprovementPrompt(
     return patterns.map((p, i) => `${i + 1}. ${p}`).join('\n');
   };
 
-  return `请根据以下分析结果改进 Skill 内容：
+  return `请根据以下误报分析结果改进 Skill 内容：
 
 ## 原始 Skill 定义
 \`\`\`markdown
 ${truncateContent(skillContent)}
 \`\`\`
 
-## 分析结果
+## 误报分析结果
 
 ### 误报模式（需要排除）
 ${formatPatterns(analysisResult.falsePositivePatterns, '误报模式')}
@@ -139,57 +133,43 @@ ${formatPatterns(analysisResult.falsePositivePatterns, '误报模式')}
 ### 误报原因
 ${formatPatterns(analysisResult.falsePositiveCauses, '误报原因')}
 
-### 正确发现模式（需要保留）
-${formatPatterns(analysisResult.confirmedPatterns, '正确发现模式')}
-
-### 必须保留的规则
-${formatPatterns(analysisResult.confirmedStrengths, '必须保留的规则')}
-
-### 改进建议
+### 排除规则建议
 ${formatRecommendations(analysisResult.recommendations)}
 
 ### 已有警告
 ${analysisResult.warnings.length > 0 ? analysisResult.warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') : '无'}
 
-## 参考案例（可选）
-
-### 误报案例示例（前3个）
+## 误报案例示例（前3个）
 ${falsePositiveCases.slice(0, 3).map((c, i) => 
   `案例 ${i + 1}: ${c.title}\n描述: ${c.description}`
 ).join('\n\n') || '无误报案例'}
-
-### 正确发现案例示例（前3个）
-${confirmedCases.slice(0, 3).map((c, i) => 
-  `案例 ${i + 1}: ${c.title}\n描述: ${c.description}`
-).join('\n\n') || '无正确发现案例'}
 
 ## 改进要求
 
 1. **保持原有格式**: 改进后的内容必须是完整的 Markdown 格式，包含所有原有章节
 2. **添加排除规则**: 在"常见误报排除"或"陷阱与边缘情况"章节添加新的排除条件
-3. **不删除核心规则**: 不要删除原有的检测规则，只添加更精确的条件
+3. **不删除核心规则**: 不要删除原有的检测规则，只添加更精确的排除条件
 4. **变更说明**: 在 changeSummary 中列出所有变更点
-5. **警告提示**: 如果改进可能影响召回率，在 warnings 中说明
+5. **警告提示**: 如果改进可能影响对某些场景的检测，在 warnings 中说明
 
 ## 输出格式
 
 **重要**: 只输出 JSON 对象，不要输出任何其他内容。不要使用 markdown 代码块标记。
 
 示例输出格式:
-{"improvedContent":"完整的改进后 Skill Markdown 内容...","changeSummary":["添加了 XX 排除规则","细化了 YY 检测条件"],"warnings":["此改进可能影响对 ZZ 场景的检测"]}
+{"improvedContent":"完整的改进后 Skill Markdown 内容...","changeSummary":["添加了 XX 排除规则","细化了 YY 排除条件"],"warnings":["此排除规则可能影响对 ZZ 场景的检测"]}
 
 请输出你的改进结果 JSON:`;
 }
 
 /**
- * 从模板构建改进生成 Prompt（替换占位符）
+ * 从模板构建改进生成 Prompt（替换占位符，方案A）
  */
 function buildImprovementPromptFromTemplate(
   template: string,
   skillContent: string,
   analysisResult: BalanceAnalysisResult,
   falsePositiveCases: CompactCase[],
-  confirmedCases: CompactCase[],
   options?: ImprovementGenerationOptions
 ): string {
   const truncateContent = (content: string, maxLen: number = DEFAULT_EVOLUTION_CONFIG.MAX_SKILL_CONTENT_LENGTH): string => {
@@ -203,7 +183,7 @@ function buildImprovementPromptFromTemplate(
   };
 
   const formatRecommendations = (recommendations: BalanceAnalysisResult['recommendations']): string => {
-    if (recommendations.length === 0) return '无具体改进建议';
+    if (recommendations.length === 0) return '无具体排除规则建议';
     
     return recommendations.map((r, i) => {
       const typeMap: Record<string, string> = {
@@ -212,18 +192,13 @@ function buildImprovementPromptFromTemplate(
         'add_exception': '添加排除条件',
         'refine_pattern': '细化模式',
       };
-      const impactMap: Record<string, string> = {
-        'reduce_false_positive': '减少误报',
-        'maintain_detection': '保持检测',
-        'both': '平衡改进',
-      };
       
-      return `${i + 1}. **${typeMap[r.type] || r.type}**: ${r.description} (影响: ${impactMap[r.impact] || r.impact})`;
+      return `${i + 1}. **${typeMap[r.type] || r.type}**: ${r.description}`;
     }).join('\n');
   };
 
-  const formatCasesPreview = (cases: CompactCase[], label: string): string => {
-    if (cases.length === 0) return `无 ${label} 案例`;
+  const formatCasesPreview = (cases: CompactCase[]): string => {
+    if (cases.length === 0) return '无误报案例';
     return cases.slice(0, 3).map((c, i) => 
       `案例 ${i + 1}: ${c.title}\n描述: ${c.description}`
     ).join('\n\n');
@@ -275,24 +250,21 @@ function buildImprovementPromptFromTemplate(
 
   // 如果模板为空，使用硬编码构建函数
   if (!template || template.trim() === '') {
-    const basePrompt = buildImprovementPrompt(skillContent, analysisResult, falsePositiveCases, confirmedCases);
+    const basePrompt = buildImprovementPrompt(skillContent, analysisResult, falsePositiveCases);
     if (failureContext) {
       return failureContext + '\n\n' + basePrompt;
     }
     return basePrompt;
   }
 
-  // 替换占位符
+  // 替换占位符（只替换误报相关）
   let prompt = template
     .replace('{{SKILL_CONTENT}}', truncateContent(skillContent))
     .replace('{{FALSE_POSITIVE_PATTERNS}}', formatPatterns(analysisResult.falsePositivePatterns))
     .replace('{{FALSE_POSITIVE_CAUSES}}', formatPatterns(analysisResult.falsePositiveCauses))
-    .replace('{{CONFIRMED_PATTERNS}}', formatPatterns(analysisResult.confirmedPatterns))
-    .replace('{{CONFIRMED_STRENGTHS}}', formatPatterns(analysisResult.confirmedStrengths))
     .replace('{{RECOMMENDATIONS}}', formatRecommendations(analysisResult.recommendations))
     .replace('{{WARNINGS}}', analysisResult.warnings.length > 0 ? analysisResult.warnings.map((w, i) => `${i + 1}. ${w}`).join('\n') : '无')
-    .replace('{{FALSE_POSITIVE_CASES_PREVIEW}}', formatCasesPreview(falsePositiveCases, '误报'))
-    .replace('{{CONFIRMED_CASES_PREVIEW}}', formatCasesPreview(confirmedCases, '正确发现'));
+    .replace('{{FALSE_POSITIVE_CASES_PREVIEW}}', formatCasesPreview(falsePositiveCases));
 
   // 添加失败信息（如果有）
   if (failureContext) {
@@ -440,13 +412,13 @@ function createDefaultImprovement(skillContent: string): LlmImprovementResponse 
 // ============================================================================
 
 /**
- * 基于平衡分析结果生成改进后的 Skill 内容
+ * 基于误报分析结果生成改进后的 Skill 内容（方案A）
  *
  * @param skillId Skill ID
  * @param skillContent 原始 Skill 内容
  * @param analysisResult 平衡分析结果
  * @param falsePositiveCases 误报案例列表
- * @param confirmedCases 正确发现案例列表
+ * @param confirmedCases 正确发现案例列表（用于回测验证，不参与改进生成）
  * @param options 生成选项
  * @returns 生成的改进结果
  */
@@ -463,24 +435,23 @@ export async function generateImprovement(
     const systemPrompt = await getEvolutionPrompt('improvement_generation_system');
     const userPromptTemplate = await getEvolutionPrompt('improvement_generation_user_template');
     
-    // 构建用户提示词
+    // 构建用户提示词（只使用误报案例）
     const prompt = buildImprovementPromptFromTemplate(
       userPromptTemplate,
       skillContent,
       analysisResult,
       falsePositiveCases,
-      confirmedCases,
       options
     );
     
     console.log(`[ImprovementGenerator] 开始生成改进: skillId=${skillId}`);
-    console.log(`[ImprovementGenerator] 分析结果: ${analysisResult.recommendations.length} 条建议`);
+    console.log(`[ImprovementGenerator] 分析结果: ${analysisResult.recommendations.length} 条排除规则建议`);
+    console.log(`[ImprovementGenerator] 正确发现案例: ${confirmedCases.length}个（用于回测验证）`);
     
     const response = await routeRequestWithDefaultModel(
       [{ role: 'user', content: prompt }],
       {
-        system: systemPrompt || IMPROVEMENT_GENERATION_SYSTEM_PROMPT, // fallback to hardcoded
-        // max_tokens 和 temperature 从模型配置自动获取，除非明确指定
+        system: systemPrompt || IMPROVEMENT_GENERATION_SYSTEM_PROMPT,
         ...(options?.maxTokens ? { max_tokens: options.maxTokens } : {}),
         ...(options?.temperature !== undefined ? { temperature: options.temperature } : {}),
         context: options?.context ?? {
