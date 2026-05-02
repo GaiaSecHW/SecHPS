@@ -82,14 +82,13 @@ export async function POST(
       );
     }
 
-    if (type !== 'local' && type !== 'remote') {
+    if (!['local', 'sse', 'http'].includes(type)) {
       return NextResponse.json(
-        { error: 'Type must be "local" or "remote"' },
+        { error: 'Type must be "local", "sse", or "http"' },
         { status: 400 }
       );
     }
 
-    // 验证本地服务器必须提供 command
     if (type === 'local' && !command) {
       return NextResponse.json(
         { error: 'Command is required for local MCP servers' },
@@ -97,10 +96,9 @@ export async function POST(
       );
     }
 
-    // 验证远程服务器必须提供 url
-    if (type === 'remote' && !url) {
+    if ((type === 'sse' || type === 'http') && !url) {
       return NextResponse.json(
-        { error: 'URL is required for remote MCP servers' },
+        { error: 'URL is required for sse/http MCP servers' },
         { status: 400 }
       );
     }
