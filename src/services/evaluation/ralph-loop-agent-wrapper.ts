@@ -86,9 +86,6 @@ export interface RalphLoopAgentConfig extends EnhancedEvaluationConfig {
  * Ralph Loop Agent 回调
  */
 export interface RalphLoopAgentCallbacks extends EnhancedEvaluationCallbacks {
-  /**
-   * Ralph 完成回调
-   */
   onRalphComplete?: (result: {
     text: string;
     iterations: number;
@@ -101,60 +98,39 @@ export interface RalphLoopAgentCallbacks extends EnhancedEvaluationCallbacks {
       totalTokens: number;
     };
   }) => void | Promise<void>;
-
-  /**
-   * 经验查询回调 - 当错误发生时查询到相关经验
-   */
   onExperienceQueried?: (data: {
     errorContext: ErrorContext;
     matches: ExperienceMatch[];
     guidancePrompt: string;
     iteration: number;
   }) => void | Promise<void>;
+  onMaxTokensTruncated?: (data: {
+    iteration: number;
+    stopReason: string;
+    compactionTriggered: boolean;
+    textLength: number;
+  }) => void | Promise<void>;
+  onStopReason?: (data: { stopReason: string | null; terminalReason?: string }) => void;
+  onCompaction?: (data: { trigger: string; summaryLength: number }) => void;
 }
 
 /**
  * Ralph Loop Agent 结果
  */
 export interface RalphLoopAgentResult {
-  /**
-   * 最终文本输出
-   */
   readonly text: string;
-
-  /**
-   * 迭代次数
-   */
   readonly iterations: number;
-
-  /**
-   * 完成原因
-   */
   readonly completionReason: 'verified' | 'max-iterations' | 'aborted';
-
-  /**
-   * 完成原因或反馈
-   */
   readonly reason?: string;
-
-  /**
-   * 最后一次迭代的结果
-   */
   readonly result: SimpleGenerateTextResult;
-
-  /**
-   * 所有迭代的结果
-   */
   readonly allResults: SimpleGenerateTextResult[];
-
-  /**
-   * 聚合的 token 使用量
-   */
   readonly totalUsage: {
     inputTokens: number;
     outputTokens: number;
     totalTokens: number;
   };
+  readonly stopReason?: string | null;
+  readonly compactionTriggered?: boolean;
 }
 
 /**
@@ -284,7 +260,10 @@ export class RalphLoopAgent {
     let totalUsage = this.createEmptyUsage();
     let completionReason: RalphLoopAgentResult['completionReason'] = 'max-iterations';
     let reason: string | undefined;
-    let lastExperienceGuidance: string | undefined;  // 存储上一轮错误查询到的经验指导
+    let lastExperienceGuidance: string | undefined;
+    let lastStopReason: string | null = null;
+    let lastCompactionTriggered: boolean = false;
+    let iterationCompactionTriggered: boolean = false;
     
     // 初始化 JSONL 消息存储
     this.messageStore = createEvaluationMessageStore(projectId, evaluationId);
@@ -373,9 +352,6 @@ export class RalphLoopAgent {
             onToolCall: callbacks.onToolCall,
             onToolResult: callbacks.onToolResult,
             onUsage: (usage) => {
-              // 注意：上游 claude-agent.ts 返回的 usage 是累计值（cumulative）
-              // 所以这里使用 Math.max 而不是累加，避免重复计算
-              // 参考：https://docs.anthropic.com/en/api/streaming
               iterationUsage = {
                 inputTokens: Math.max(iterationUsage.inputTokens, usage.inputTokens || 0),
                 outputTokens: Math.max(iterationUsage.outputTokens, usage.outputTokens || 0),
@@ -385,13 +361,22 @@ export class RalphLoopAgent {
                 本次: { input: usage.inputTokens, output: usage.outputTokens },
                 累计: iterationUsage,
               });
-              
-              // 传递给上层回调（累计值）
               callbacks.onUsage?.({
                 ...usage,
                 inputTokens: iterationUsage.inputTokens,
                 outputTokens: iterationUsage.outputTokens,
               });
+            },
+            onStopReason: (data) => {
+              console.log(`[Ralph Loop] 迭代 ${iteration} stop_reason:`, data.stopReason, 'terminal_reason:', data.terminalReason);
+              lastStopReason = data.stopReason;
+              callbacks.onStopReason?.(data);
+            },
+            onCompaction: (data) => {
+              console.log(`[Ralph Loop] 迭代 ${iteration} Compaction 触发:`, data.trigger, 'summaryLength:', data.summaryLength);
+              iterationCompactionTriggered = true;
+              lastCompactionTriggered = true;
+              callbacks.onCompaction?.(data);
             },
             onComplete: async (fullResponse) => {
               // 调用外部 onComplete 回调
@@ -429,6 +414,22 @@ export class RalphLoopAgent {
                 callbacks.onError(error);
               }
               
+              // 检查是否是 AbortError（用户主动中止）
+              if (error.name === 'AbortError' || error.message.includes('abort') || error.message.includes('Abort')) {
+                console.log(`[Ralph Loop] 检测到 AbortError，立即中止迭代`);
+                this.aborted = true;
+                resolve({
+                  text: '',
+                  steps: [],
+                  usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+                  response: { messages: [] },
+                  experimental_providerMetadata: undefined,
+                  warnings: undefined,
+                  request: { messages: [] },
+                } as unknown as SimpleGenerateTextResult);
+                return;
+              }
+
               // 区分致命错误和可恢复错误
               const isFatal =
                 error.message.includes('error_max_turns') ||
@@ -471,6 +472,14 @@ export class RalphLoopAgent {
       );
 
       allResults.push(result);
+
+      // 立即检查中止状态（AbortError 或用户中止）
+      if (this.isAborted()) {
+        console.log('[Ralph Loop] 检测到中止信号，立即停止循环');
+        completionReason = 'aborted';
+        reason = '用户中止';
+        break;
+      }
 
 // 如果有经验查询 Promise，等待结果并处理
       if (experienceQueryPromise) {
@@ -517,6 +526,29 @@ export class RalphLoopAgent {
         reason = '用户中止';
         break;
       }
+
+      // 检查 max_tokens 截断
+      if (lastStopReason === 'max_tokens') {
+        console.log(`[Ralph Loop] 迭代 ${iteration} stop_reason=max_tokens, compactionTriggered=${iterationCompactionTriggered}`);
+        
+        // 发送 SSE 事件通知前端截断状态
+        if (callbacks.onMaxTokensTruncated) {
+          await callbacks.onMaxTokensTruncated({
+            iteration,
+            stopReason: 'max_tokens',
+            compactionTriggered: iterationCompactionTriggered,
+            textLength: result.text?.length || 0,
+          });
+        }
+        
+        // 如果 Compaction 未触发且输出长度足够，继续迭代让 Agent 补充内容
+        if (!iterationCompactionTriggered && (result.text?.length || 0) > 100) {
+          console.log(`[Ralph Loop] max_tokens 截断但输出长度 ${result.text?.length || 0} > 100，继续迭代补充内容`);
+        }
+      }
+
+      // 重置迭代级别的 Compaction 标记
+      iterationCompactionTriggered = false;
 
       // 更新总 token 使用量
       const iterationUsage = aggregateStepUsage(result);
@@ -635,6 +667,8 @@ export class RalphLoopAgent {
       result: finalResult,
       allResults,
       totalUsage,
+      stopReason: lastStopReason,
+      compactionTriggered: lastCompactionTriggered,
     };
 
     // 调用 Ralph 完成回调
@@ -691,7 +725,7 @@ export function createRalphLoopAgent(
   sdkOptions?: {
     mcpServers?: Array<{
       name: string;
-      type: 'local' | 'remote';
+      type: 'local' | 'sse' | 'http';
       command?: string;
       args?: string[];
       url?: string;
