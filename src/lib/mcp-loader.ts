@@ -59,14 +59,14 @@ export async function loadMcpServersForProject(
     // 转换为 SDK 格式
     const mcpConfigs: AppMcpServerConfig[] = uniqueMcps.map(mcp => ({
       name: mcp.name,
-      type: mcp.type as 'local' | 'remote',
+      type: mcp.type as 'local' | 'sse' | 'http',
       command: mcp.command || undefined,
       args: mcp.args ? parseArgs(mcp.args) : undefined,
       url: mcp.url || undefined,
       env: mcp.env ? parseEnv(mcp.env) : undefined,
       isEnabled: mcp.isEnabled,
       autoStart: mcp.autoStart,
-      tools: mcp.tools ? parseTools(mcp.tools) : undefined,  // 解析工具列表
+      tools: mcp.tools ? parseTools(mcp.tools) : undefined,
     }));
 
     console.log(`[McpLoader] 加载 MCP 配置: 项目=${projectId}, 用户=${userId}`);
@@ -119,14 +119,14 @@ export async function loadMcpServersForUser(
 
     const mcpConfigs: AppMcpServerConfig[] = uniqueMcps.map(mcp => ({
       name: mcp.name,
-      type: mcp.type as 'local' | 'remote',
+      type: mcp.type as 'local' | 'sse' | 'http',
       command: mcp.command || undefined,
       args: mcp.args ? parseArgs(mcp.args) : undefined,
       url: mcp.url || undefined,
       env: mcp.env ? parseEnv(mcp.env) : undefined,
       isEnabled: mcp.isEnabled,
       autoStart: mcp.autoStart,
-      tools: mcp.tools ? parseTools(mcp.tools) : undefined,  // 解析工具列表
+      tools: mcp.tools ? parseTools(mcp.tools) : undefined,
     }));
 
     console.log(`[McpLoader] 加载用户 MCP 配置: 用户=${userId}, 合计=${mcpConfigs.length} 个`);
@@ -203,7 +203,7 @@ function parseTools(toolsJson: string): Array<{ name: string; description?: stri
  */
 export function convertMcpConfigsToSdkFormat(
   mcpConfigs: AppMcpServerConfig[]
-): Record<string, { type: 'stdio' | 'sse'; command?: string; args?: string[]; env?: Record<string, string>; url?: string }> {
+): Record<string, { type: 'stdio' | 'sse' | 'http'; command?: string; args?: string[]; env?: Record<string, string>; url?: string; headers?: Record<string, string> }> {
   const sdkMcpServers: Record<string, any> = {};
   
   for (const server of mcpConfigs) {
@@ -215,9 +215,14 @@ export function convertMcpConfigsToSdkFormat(
           args: server.args,
           env: server.env,
         };
-      } else if (server.type === 'remote' && server.url) {
+      } else if (server.type === 'sse' && server.url) {
         sdkMcpServers[server.name] = {
           type: 'sse',
+          url: server.url,
+        };
+      } else if (server.type === 'http' && server.url) {
+        sdkMcpServers[server.name] = {
+          type: 'http',
           url: server.url,
         };
       }

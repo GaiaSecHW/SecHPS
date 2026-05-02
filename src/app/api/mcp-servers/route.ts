@@ -129,14 +129,13 @@ export async function POST(request: Request) {
     }
 
     // 验证类型
-    if (!['local', 'remote'].includes(type)) {
+    if (!['local', 'sse', 'http'].includes(type)) {
       return NextResponse.json(
-        { error: 'type 必须是 local 或 remote' },
+        { error: 'type 必须是 local、sse 或 http' },
         { status: 400 }
       );
     }
 
-    // 验证配置完整性
     if (type === 'local' && !command) {
       return NextResponse.json(
         { error: 'local 类型必须提供 command' },
@@ -144,9 +143,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (type === 'remote' && !url) {
+    if ((type === 'sse' || type === 'http') && !url) {
       return NextResponse.json(
-        { error: 'remote 类型必须提供 url' },
+        { error: 'sse/http 类型必须提供 url' },
         { status: 400 }
       );
     }

@@ -28,18 +28,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '服务器名称必填' }, { status: 400 });
     }
 
-    if (type === 'remote' && !url) {
-      return NextResponse.json({ error: '远程服务器必须提供 URL' }, { status: 400 });
+    if ((type === 'sse' || type === 'http') && !url) {
+      return NextResponse.json({ error: 'sse/http 服务器必须提供 URL' }, { status: 400 });
     }
 
     if (type === 'local' && !command) {
       return NextResponse.json({ error: '本地服务器必须提供命令' }, { status: 400 });
     }
 
-    // 构建 MCP 配置
     const mcpConfig = {
       name: name || 'test-server',
-      type: type as 'local' | 'remote',
+      type: type as 'local' | 'sse' | 'http',
       command: command ?? undefined,
       args: args ? (typeof args === 'string' ? JSON.parse(args) : args) : undefined,
       url: url ?? undefined,

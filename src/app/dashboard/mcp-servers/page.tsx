@@ -34,7 +34,7 @@ interface McpServerUser {
 interface McpServer {
   id: string;
   name: string;
-  type: 'local' | 'remote';
+  type: 'local' | 'sse' | 'http';
   command?: string;
   args?: string;
   url?: string;
@@ -83,7 +83,7 @@ function McpServersContent() {
   // 表单状态
   const [formData, setFormData] = useState({
     name: '',
-    type: 'local' as 'local' | 'remote',
+    type: 'local' as 'local' | 'sse' | 'http',
     command: '',
     args: '',
     url: '',
@@ -177,7 +177,7 @@ function McpServersContent() {
             return;
           }
         }
-      } else if (formData.type === 'remote') {
+      } else if (formData.type === 'sse' || formData.type === 'http') {
         body.url = formData.url;
       }
 
@@ -746,16 +746,18 @@ function McpServersContent() {
                     </label>
                     <select
                       value={formData.type}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const v = e.target.value;
                         setFormData({
                           ...formData,
-                          type: e.target.value as 'local' | 'remote',
-                        })
-                      }
+                          type: v as 'local' | 'sse' | 'http',
+                        });
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
-                      <option value="local">本地 (Local)</option>
-                      <option value="remote">远程 (Remote/SSE)</option>
+                      <option value="local">本地 (Local/stdio)</option>
+                      <option value="sse">远程 SSE (旧版)</option>
+                      <option value="http">远程 Streamable HTTP</option>
                     </select>
                   </div>
 
@@ -797,10 +799,10 @@ function McpServersContent() {
                     </>
                   )}
 
-                  {formData.type === 'remote' && (
+                  {(formData.type === 'sse' || formData.type === 'http') && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        URL (SSE 端点) *
+                        URL {formData.type === 'sse' ? '(SSE 端点)' : '(MCP 端点)'} *
                       </label>
                       <input
                         type="url"
@@ -809,8 +811,8 @@ function McpServersContent() {
                           setFormData({ ...formData, url: e.target.value })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        placeholder="http://localhost:9999/sse"
-                        required={formData.type === 'remote'}
+                        placeholder={formData.type === 'sse' ? "http://localhost:9999/sse" : "http://localhost:9999/mcp"}
+                        required={formData.type === 'sse' || formData.type === 'http'}
                       />
                     </div>
                   )}

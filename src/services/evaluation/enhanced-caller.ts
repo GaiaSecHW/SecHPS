@@ -65,9 +65,9 @@ export interface EnhancedEvaluationConfig {
 
 export interface EnhancedEvaluationCallbacks {
   onChunk: (text: string) => void;
-  onThinking?: (thinking: string) => void;  // 扩展思考回调
-  onToolCall: (toolUseId: string, name: string, parameters: Record<string, unknown>) => void;  // 添加 toolUseId 参数
-  onToolResult: (toolUseId: string, content: unknown, isError?: boolean) => void;  // 改用 toolUseId 和 isError
+  onThinking?: (thinking: string) => void;
+  onToolCall: (toolUseId: string, name: string, parameters: Record<string, unknown>) => void;
+  onToolResult: (toolUseId: string, content: unknown, isError?: boolean) => void;
   onComplete: (fullResponse: string) => void;
   onError: (error: Error) => void;
   onNodeStatusChange?: (nodeId: string, status: string, nodeLabel?: string, nodeType?: string) => void;
@@ -84,7 +84,9 @@ export interface EnhancedEvaluationCallbacks {
       cacheCreationInputTokens: number;
       costUSD: number;
     }>;
-  }) => void;  // Token 使用量回调
+  }) => void;
+  onStopReason?: (data: { stopReason: string | null; terminalReason?: string }) => void;
+  onCompaction?: (data: { trigger: string; summaryLength: number }) => void;
 }
 
 export interface WorkflowNode {

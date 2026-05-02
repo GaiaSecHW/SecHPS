@@ -79,23 +79,14 @@ export interface ModelConfigForExecution {
  * 从数据库 McpServerConfig 模型转换而来
  */
 export interface McpServerConfigForExecution {
-  /** MCP 名称 */
   name: string;
-  /** MCP 类型 */
-  type: 'local' | 'remote';
-  /** 本地命令 */
+  type: 'local' | 'sse' | 'http';
   command?: string;
-  /** 命令参数 */
   args?: string[];
-  /** 远程 URL */
   url?: string;
-  /** 环境变量 */
   env?: Record<string, string>;
-  /** 是否启用 */
   isEnabled?: boolean;
-  /** 是否自动启动 */
   autoStart?: boolean;
-  /** MCP 工具列表 */
   tools?: Array<{ name: string; description?: string; inputSchema?: any }>;
 }
 
@@ -209,34 +200,22 @@ export interface UnifiedExecutionCallbacks {
  * 节点执行结果
  */
 export interface NodeExecutionResult {
-  /** 节点索引 */
   nodeIndex: number;
-  /** 节点 ID */
   nodeId: string;
-  /** 节点名称 */
   nodeName: string;
-  /** 执行状态 */
   status: NodeExecutionStatus;
-  /** 输出 YAML 文件路径 */
   outputYamlPath?: string;
-  /** 迭代次数 */
   iterations: number;
-  /** 重试次数 */
   retryCount: number;
-  /** 执行时长（毫秒） */
   duration: number;
-  /** 输入 Token 数 */
   inputTokens: number;
-  /** 输出 Token 数 */
   outputTokens: number;
-  /** 使用的模型名称 */
   modelName: string;
-  /** 使用的模型配置 ID */
   modelConfigId: string;
-  /** 错误信息 */
   error?: string;
-  /** 错误堆栈 */
   errorStack?: string;
+  stopReason?: string | null;
+  compactionTriggered?: boolean;
 }
 
 /**

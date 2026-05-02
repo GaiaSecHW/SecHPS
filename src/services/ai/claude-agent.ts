@@ -7,14 +7,14 @@ import { query, Options, SDKMessage, SDKResultSuccess, SDKResultError, McpServer
  */
 export interface AppMcpServerConfig {
   name: string;
-  type: 'local' | 'remote';
+  type: 'local' | 'sse' | 'http';
   command?: string;
   args?: string[];
   url?: string;
   env?: Record<string, string>;
   isEnabled?: boolean;
   autoStart?: boolean;
-  tools?: Array<{ name: string; description?: string; inputSchema?: any }>;  // 工具列表（从数据库读取）
+  tools?: Array<{ name: string; description?: string; inputSchema?: any }>;
 }
 
 /**
@@ -64,14 +64,14 @@ export interface ClaudeAgentConfig {
 
 export interface ClaudeAgentCallbacks {
   onChunk?: (text: string) => void;
-  onText?: (text: string) => void;  // 文本内容
-  onThinking?: (thinking: string) => void;  // 扩展思考
-  onToolUse?: (id: string, name: string, input: Record<string, unknown>) => void;  // 工具调用
-  onToolResult?: (toolUseId: string, content: unknown, isError?: boolean) => void;  // 工具结果
+  onText?: (text: string) => void;
+  onThinking?: (thinking: string) => void;
+  onToolUse?: (id: string, name: string, input: Record<string, unknown>) => void;
+  onToolResult?: (toolUseId: string, content: unknown, isError?: boolean) => void;
   onComplete?: (fullResponse: string) => void;
   onError?: (error: Error) => void;
   onMessage?: (message: SDKMessage) => void;
-  onSessionId?: (sessionId: string) => void;  // 捕获 SDK 返回的会话 ID
+  onSessionId?: (sessionId: string) => void;
   onUsage?: (usage: {
     inputTokens: number;
     outputTokens: number;
@@ -85,7 +85,9 @@ export interface ClaudeAgentCallbacks {
       cacheCreationInputTokens: number;
       costUSD: number;
     }>;
-  }) => void;  // 捕获 SDK 返回的 token 使用量
+  }) => void;
+  onStopReason?: (data: { stopReason: string | null; terminalReason?: string }) => void;
+  onCompaction?: (data: { trigger: string; summaryLength: number }) => void;
 }
 
 /**
@@ -227,6 +229,10 @@ export class ClaudeAgentService {
               trigger: input.trigger,
               summaryLength: input.compact_summary?.length || 0,
             });
+            callbacks.onCompaction?.({
+              trigger: input.trigger || 'unknown',
+              summaryLength: input.compact_summary?.length || 0,
+            });
             return {};
           }]
         }],
@@ -234,23 +240,26 @@ export class ClaudeAgentService {
     } as any;
     
     // 配置 MCP 服务器
-    let mcpServerNames: string[] = [];  // 保存 MCP 服务器名称列表
+    let mcpServerNames: string[] = [];
     if (this.config.mcpServers && this.config.mcpServers.length > 0) {
       const mcpServers: Record<string, McpServerConfig> = {};
       for (const server of this.config.mcpServers) {
         if (server.isEnabled !== false) {
           if (server.type === 'local' && server.command) {
-            // 本地 MCP 服务器 (stdio)
             mcpServers[server.name] = {
               type: 'stdio',
               command: server.command,
               args: server.args,
               env: server.env,
             };
-          } else if (server.type === 'remote' && server.url) {
-            // 远程 MCP 服务器 (SSE)
+          } else if (server.type === 'sse' && server.url) {
             mcpServers[server.name] = {
               type: 'sse',
+              url: server.url,
+            };
+          } else if (server.type === 'http' && server.url) {
+            mcpServers[server.name] = {
+              type: 'http',
               url: server.url,
             };
           }
@@ -258,16 +267,12 @@ export class ClaudeAgentService {
       }
        if (Object.keys(mcpServers).length > 0) {
          options.mcpServers = mcpServers;
-        mcpServerNames = Object.keys(mcpServers);  // 保存服务器名称
+        mcpServerNames = Object.keys(mcpServers);
         
-        // 根据 MCP 服务器名称自动添加 allowedTools
-        // 官方文档要求：MCP 工具必须通过 allowedTools 授权才能使用
-        // 格式：mcp__<server-name>__* 表示允许该服务器的所有工具
         const mcpAllowedTools = Object.keys(mcpServers).map(
           serverName => `mcp__${serverName}__*`
         );
         
-        // 合并到现有的 allowedTools
         if (mcpAllowedTools.length > 0) {
           const existingTools = options.allowedTools || [];
           options.allowedTools = [...existingTools, ...mcpAllowedTools];
@@ -557,18 +562,20 @@ ${mcpServerNames.map(name => `- **${name}**: mcp__${name}__工具名`).join('\n'
         }
 
         // 处理不同类型的消息
-        if (this.isResultSuccess(message)) {
-          // 成功结果消息
+if (this.isResultSuccess(message)) {
           fullResponse = message.result || '';
           if (message.result) {
             callbacks.onChunk?.(message.result);
           }
           
-          // SDKResultSuccess 包含 total_cost_usd 和 modelUsage
           const msg = message as any;
+          const stopReason = msg.stop_reason;
+          const terminalReason = msg.terminal_reason;
           const totalCostUsd = msg.total_cost_usd || 0;
           
-          // 回调最终累计的 token 使用量
+          console.log('[ClaudeAgent] stop_reason:', stopReason, 'terminal_reason:', terminalReason);
+          callbacks.onStopReason?.({ stopReason, terminalReason });
+          
           const usageData = {
             inputTokens: accumulatedInputTokens,
             outputTokens: accumulatedOutputTokens,

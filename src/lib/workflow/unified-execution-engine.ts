@@ -93,6 +93,12 @@ export class UnifiedWorkflowExecutionEngine {
   /** 当前活跃的 agentId（用于子Agent流） */
   private activeAgentId: string | null = null;
   
+  /** 当前节点的 stop_reason（用于状态追踪） */
+  private currentStopReason: string | null = null;
+  
+  /** 当前节点是否触发 Compaction */
+  private currentCompactionTriggered: boolean = false;
+  
   /** 当前节点的 SkillExecution IDs（用于追踪执行完成） */
   private currentSkillExecutionIds: string[] = [];
   
@@ -355,7 +361,9 @@ setNodes(nodes: UnifiedNodeDefinition[]): void {
     this.currentSkillIds = [];
     this.currentExecutingSkills.clear();
     this.skillNameToExecutionId.clear();
-    console.log(`[executeNode] 已清空 Skill 记录列表，准备记录本节点的 Skills`);
+    this.currentStopReason = null;
+    this.currentCompactionTriggered = false;
+    console.log(`[executeNode] 已清空 Skill 记录列表和状态变量，准备记录本节点的 Skills`);
 
     // 调用节点开始回调
     await this.callbacks.onNodeStart(nodeIndex, nodeId, nodeName);
@@ -584,28 +592,19 @@ callbacks: {
               }).catch(err => console.error('[executeNode] 保存 error 失败:', err));
             },
             onUsage: (usage) => {
-              // SDK 返回的是当前节点的累计值
               this.nodeTokens[nodeIndex] = {
                 input: usage.inputTokens || 0,
                 output: usage.outputTokens || 0,
               };
-              
-              // 计算所有节点的总累计值
               this.cumulativeTokens.input = Object.values(this.nodeTokens)
                 .reduce((sum: number, t: any) => sum + (t.input || 0), 0);
               this.cumulativeTokens.output = Object.values(this.nodeTokens)
                 .reduce((sum: number, t: any) => sum + (t.output || 0), 0);
-              
-              // 实时更新 NodeExecution 表的 Token
               this.updateNodeExecutionTokensDebounced(nodeId, usage.inputTokens || 0, usage.outputTokens || 0, modelConfig);
-              
-              // 写入 token_usage 到 stream.jsonl
               this.nodeStreamStore.appendToStream(nodeId, {
                 event: 'token_usage',
                 data: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
               }).catch(err => console.error('[executeNode] 保存 token_usage 失败:', err));
-              
-              // 实时推送 Token 使用量
               this.callbacks.onTokenUsage({
                 nodeIndex,
                 nodeId,
@@ -619,6 +618,29 @@ callbacks: {
                 cumulativeOutputTokens: this.cumulativeTokens.output,
                 cumulativeTotalTokens: this.cumulativeTokens.input + this.cumulativeTokens.output,
               });
+            },
+            onStopReason: (data) => {
+              console.log(`[executeNode] stop_reason: ${data.stopReason}, terminal_reason: ${data.terminalReason}`);
+              this.currentStopReason = data.stopReason;
+            },
+            onCompaction: (data) => {
+              console.log(`[executeNode] Compaction 触发: trigger=${data.trigger}, summaryLength=${data.summaryLength}`);
+              this.currentCompactionTriggered = true;
+            },
+            onMaxTokensTruncated: async (data) => {
+              console.log(`[executeNode] max_tokens 截断: iteration=${data.iteration}, compactionTriggered=${data.compactionTriggered}, textLength=${data.textLength}`);
+              this.nodeStreamStore.appendToStream(nodeId, {
+                event: 'max_tokens_truncated',
+                data: {
+                  nodeIndex,
+                  nodeId,
+                  stopReason: 'max_tokens',
+                  compactionTriggered: data.compactionTriggered,
+                  textLength: data.textLength,
+                  iteration: data.iteration,
+                  message: '输出达到 token 限制，继续下一轮迭代补充内容',
+                },
+              }).catch(err => console.error('[executeNode] 保存 max_tokens_truncated 失败:', err));
             },
             onRalphComplete: async () => {},
           },
@@ -680,6 +702,8 @@ callbacks: {
           outputTokens: result.totalUsage.outputTokens,
           modelName: this.getModelNameStr(modelConfig),
           modelConfigId: modelConfig.id,
+          stopReason: result.stopReason,
+          compactionTriggered: result.compactionTriggered,
         };
 
         // 调用节点完成回调
@@ -2241,39 +2265,37 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
         nodeLabel: node.label,
         nodeType: node.fsmPhase ? 'fsm_phase' : (node.type || 'custom'),
         status: result.status,
-        // startedAt 应由 createNodeExecutionRecord 设置，这里用 startTime 作为默认值（仅用于创建新记录）
-        // 注意：如果 existing 存在，不会覆盖 startedAt
-        startedAt: this.startTime,  // 使用工作流开始时间作为基准
+        startedAt: this.startTime,
         completedAt: new Date(),
         updatedAt: new Date(),
         order: nodeIndex,
-        modelConfigId: safeModelConfigId,  // 使用安全的 modelConfigId
+        modelConfigId: safeModelConfigId,
         modelName: this.getModelNameStr(modelConfig),
         roleId: node.roleId ?? undefined,
         inputTokens: result.inputTokens || 0,
         outputTokens: result.outputTokens || 0,
+        stopReason: result.stopReason || null,
+        compactionTriggered: result.compactionTriggered || false,
       };
 
       if (existing) {
-        // 更新现有记录
         const updateData: any = {
           status: result.status,
           completedAt: new Date(),
           updatedAt: new Date(),
-          modelName: this.getModelNameStr(modelConfig),  // modelName 无外键约束，安全写入
+          modelName: this.getModelNameStr(modelConfig),
           inputTokens: result.inputTokens || 0,
           outputTokens: result.outputTokens || 0,
+          stopReason: result.stopReason || null,
+          compactionTriggered: result.compactionTriggered || false,
         };
         
-        // 只有 modelConfigId 存在时才写入（避免外键约束）
         if (safeModelConfigId) {
           updateData.modelConfigId = safeModelConfigId;
         }
         
-        // ⚠️ 不覆盖 startedAt - 它由 createNodeExecutionRecord 设置（节点实际开始时间）
-        // 如果 startedAt 为空（异常情况），用当前时间作为 fallback
         if (!existing.startedAt) {
-          updateData.startedAt = new Date(Date.now() - result.duration);  // 从完成时间倒推开始时间
+          updateData.startedAt = new Date(Date.now() - result.duration);
           console.log(`[saveNodeExecutionToDB] startedAt 为空，倒推设置: ${node.label}`);
         }
         

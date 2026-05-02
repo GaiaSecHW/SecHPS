@@ -544,8 +544,8 @@ model NodeExecution {
   nodeLabel           String
   nodeType            String
   status              String            @default("pending")
-  skipped             Boolean           @default(false)  // 是否跳过执行
-  skipReason          String?           // 跳过原因
+  skipped             Boolean           @default(false)
+  skipReason          String?
   startedAt           DateTime?
   completedAt         DateTime?
   order               Int               @default(0)
@@ -557,6 +557,8 @@ model NodeExecution {
   opencodeSessionId   String?
   inputTokens         Int?
   outputTokens        Int?
+  stopReason          String?
+  compactionTriggered Boolean           @default(false)
   ModelConfig         ModelConfig?      @relation(fields: [modelConfigId], references: [id])
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 

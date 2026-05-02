@@ -3,7 +3,7 @@
 export interface MCPServer {
   id: string;
   name: string;
-  type: 'local' | 'remote';
+  type: 'local' | 'sse' | 'http';
   url?: string;
   command?: string;
   args?: string[];

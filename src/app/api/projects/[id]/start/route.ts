@@ -541,7 +541,7 @@ export async function POST(
     if (mcpServers.length > 0) {
       sdkOptions.mcpServers = mcpServers.map((server: any) => ({
         name: server.name,
-        type: server.type as 'local' | 'remote',
+        type: server.type as 'local' | 'sse' | 'http',
         command: server.command || undefined,
         args: server.args ? JSON.parse(server.args) : undefined,
         url: server.url || undefined,
@@ -702,7 +702,7 @@ ${originalPrompt}`;
       // ========================================
       // 调用 AI4Java MCP 的 decompileProject 工具
       // 直接调用 MCP，不经过大模型/SDK
-      // 支持 local 和 remote MCP
+      // 支持 local、sse、http MCP
       // 等待 MCP 完成后再启动评估
       // ========================================
       logger.info(LOG_MODULES.EVALUATION, '[MCP] 开始检查 AI4Java MCP 服务器配置', {
@@ -717,7 +717,7 @@ ${originalPrompt}`;
         // 构建 MCP 配置（null 转换为 undefined）
         const mcpConfig = {
           name: ai4javaMcp.name,
-          type: ai4javaMcp.type as 'local' | 'remote',
+          type: ai4javaMcp.type as 'local' | 'sse' | 'http',
           command: ai4javaMcp.command ?? undefined,
           args: ai4javaMcp.args ? JSON.parse(ai4javaMcp.args) : undefined,
           url: ai4javaMcp.url ?? undefined,
@@ -728,7 +728,7 @@ ${originalPrompt}`;
         // 验证配置完整性
         const isValidConfig = 
           (mcpConfig.type === 'local' && mcpConfig.command) ||
-          (mcpConfig.type === 'remote' && mcpConfig.url);
+          ((mcpConfig.type === 'sse' || mcpConfig.type === 'http') && mcpConfig.url);
         
         if (!isValidConfig) {
           logger.warn(LOG_MODULES.EVALUATION, '[MCP] AI4Java MCP 配置不完整', {
@@ -786,7 +786,7 @@ ${originalPrompt}`;
       } else {
         logger.info(LOG_MODULES.EVALUATION, '[MCP] 未检测到 AI4Java MCP 服务器配置，跳过 decompileProject', {
           availableServers: mcpServers.map(s => s.name),
-          hint: '请在 MCP 服务器管理中添加名为 "ai4java" 的 MCP 服务器（支持 local 和 remote）',
+          hint: '请在 MCP 服务器管理中添加名为 "ai4java" 的 MCP 服务器（支持 local、sse、http）',
         });
       }
     }
@@ -1742,6 +1742,125 @@ ${originalPrompt}`;
                 logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已写入 CLAUDE.md 模板', { path: claudeMdPath });
               } catch (error) {
                 logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 写入 CLAUDE.md 失败', { error });
+              }
+            }
+            
+            // 生成 .mcp.json 文件（从数据库 MCP 配置导出）
+            if (project.projectPath && sdkOptions.mcpServers && sdkOptions.mcpServers.length > 0) {
+              try {
+                const mcpJsonPath = join(project.projectPath, '.mcp.json');
+                const mcpJsonContent: Record<string, any> = {};
+                
+                for (const server of sdkOptions.mcpServers) {
+                  const serverConfig: Record<string, any> = {};
+                  
+                  if (server.type === 'local' || server.command) {
+                    serverConfig.type = 'stdio';
+                    if (server.command) serverConfig.command = server.command;
+                    if (server.args) serverConfig.args = server.args;
+                  } else if (server.type === 'sse' && server.url) {
+                    serverConfig.type = 'sse';
+                    serverConfig.url = server.url;
+                  } else if (server.type === 'http' && server.url) {
+                    serverConfig.type = 'http';
+                    serverConfig.url = server.url;
+                  } else if (server.url) {
+                    serverConfig.type = 'http';
+                    serverConfig.url = server.url;
+                  }
+                  
+                  if (server.env) serverConfig.env = server.env;
+                  
+                  mcpJsonContent[server.name] = serverConfig;
+                }
+                
+                const mcpJson = JSON.stringify({ mcpServers: mcpJsonContent }, null, 2);
+                await writeFile(mcpJsonPath, mcpJson, 'utf-8');
+                logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已生成 .mcp.json', { 
+                  path: mcpJsonPath, 
+                  serverCount: Object.keys(mcpJsonContent).length,
+                  servers: Object.keys(mcpJsonContent)
+                });
+              } catch (error) {
+                logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 生成 .mcp.json 失败', { error });
+              }
+            }
+            
+            // 生成 .claude/settings.json 文件（如果不存在或 permissions 为空）
+            if (project.projectPath) {
+              try {
+                const claudeDir = join(project.projectPath, '.claude');
+                const settingsPath = join(claudeDir, 'settings.json');
+                
+                let shouldGenerate = false;
+                let existingSettings: Record<string, any> = {};
+                
+                // 检查是否已存在
+                try {
+                  await access(settingsPath);
+                  const existingContent = await readFile(settingsPath, 'utf-8');
+                  existingSettings = JSON.parse(existingContent);
+                  
+                  // 检查 permissions 是否为空
+                  const hasAllowPerms = existingSettings.permissions?.allow?.length > 0;
+                  const hasDenyPerms = existingSettings.permissions?.deny?.length > 0;
+                  
+                  // 如果 permissions 为空且 globalConfig 有配置，则重新生成
+                  if (!hasAllowPerms && !hasDenyPerms && globalConfig?.defaultToolPermissions) {
+                    shouldGenerate = true;
+                    logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] settings.json permissions 为空，重新生成', { path: settingsPath });
+                  } else {
+                    logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] settings.json 已存在且有内容，跳过生成', { 
+                      path: settingsPath, 
+                      allowCount: existingSettings.permissions?.allow?.length || 0,
+                      denyCount: existingSettings.permissions?.deny?.length || 0,
+                    });
+                  }
+                } catch {
+                  // 文件不存在，需要生成
+                  shouldGenerate = true;
+                  await mkdir(claudeDir, { recursive: true });
+                }
+                
+                if (shouldGenerate) {
+                  const settingsContent: Record<string, any> = {
+                    $schema: 'https://json.schemastore.org/claude-code-settings.json',
+                    permissions: {
+                      allow: [],
+                      deny: [],
+                    },
+                  };
+                  
+                  // 从全局配置加载默认工具权限
+                  if (globalConfig?.defaultToolPermissions) {
+                    try {
+                      const defaultPerms = JSON.parse(globalConfig.defaultToolPermissions);
+                      for (const perm of defaultPerms) {
+                        if (perm.permission === 'allow') {
+                          settingsContent.permissions.allow.push(perm.toolPattern);
+                        } else if (perm.permission === 'deny') {
+                          settingsContent.permissions.deny.push(perm.toolPattern);
+                        }
+                      }
+                      logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已加载默认工具权限', { 
+                        allowCount: settingsContent.permissions.allow.length,
+                        denyCount: settingsContent.permissions.deny.length,
+                      });
+                    } catch (parseErr) {
+                      logger.warn(LOG_MODULES.EVALUATION, '[DAG Async] 解析默认工具权限失败', { error: parseErr });
+                    }
+                  }
+                  
+                  const settingsJson = JSON.stringify(settingsContent, null, 2);
+                  await writeFile(settingsPath, settingsJson, 'utf-8');
+                  logger.debug(LOG_MODULES.EVALUATION, '[DAG Async] 已生成 .claude/settings.json', { 
+                    path: settingsPath,
+                    allowCount: settingsContent.permissions.allow.length,
+                    denyCount: settingsContent.permissions.deny.length,
+                  });
+                }
+              } catch (error) {
+                logger.errorNoUser(LOG_MODULES.EVALUATION, '[DAG Async] 生成 .claude/settings.json 失败', { error });
               }
             }
             

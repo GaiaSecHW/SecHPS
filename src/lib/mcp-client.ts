@@ -1,9 +1,10 @@
 /**
  * MCP Client - 直接调用 MCP 服务器工具
  * 
- * 支持两种 MCP 类型：
+ * 支持三种 MCP 类型：
  * 1. Local MCP（Stdio）- 通过子进程 stdin/stdout JSON-RPC 通信
- * 2. Remote MCP（SSE）- 通过 HTTP/SSE 直接通信
+ * 2. Remote MCP（SSE）- 通过 HTTP/SSE 直接通信（旧版协议）
+ * 3. Remote MCP（Streamable HTTP）- 通过 HTTP POST/GET 直接通信（新版协议）
  * 
  * 不经过大模型/SDK，直接调用工具
  */
@@ -24,10 +25,10 @@ async function getEventSource() {
 // MCP 服务器配置（统一接口）
 export interface McpConfig {
   name: string;
-  type: 'local' | 'remote';
+  type: 'local' | 'sse' | 'http';
   command?: string;  // local 类型必填
   args?: string[];
-  url?: string;      // remote 类型必填
+  url?: string;      // sse/http 类型必填
   env?: Record<string, string>;
   timeout?: number;  // 超时时间（毫秒），默认 2 小时
 }
@@ -533,6 +534,237 @@ export class RemoteMcpClient {
 }
 
 // ========================================
+// Streamable HTTP MCP Client（新版协议）
+// ========================================
+
+/**
+ * Streamable HTTP MCP 客户端类
+ * 通过 HTTP POST/GET 与远程 MCP 服务器通信（MCP 2025-06-18 协议）
+ * 
+ * MCP Streamable HTTP 协议：
+ * - POST /mcp - 发送 JSON-RPC 请求，响应可以是 JSON 或 SSE stream
+ * - GET /mcp - 打开 SSE stream（可选）
+ * - Accept header 必须包含 application/json 和 text/event-stream
+ */
+export class StreamableHttpClient {
+  private endpoint: string;
+  private requestId = 0;
+  private sessionId?: string;
+  private initialized = false;
+  private serverName: string;
+  private timeout: number;
+
+  constructor(serverName: string, config: { url: string; timeout?: number }) {
+    this.serverName = serverName;
+    this.timeout = config.timeout || 7200000;
+    this.endpoint = config.url.replace(/\/$/, '');
+  }
+
+  async connect(): Promise<void> {
+    logger.info(LOG_MODULES.MCP, `[StreamableHTTP] 连接 MCP 服务器: ${this.serverName}`, {
+      endpoint: this.endpoint,
+    });
+
+    const initRequest = {
+      jsonrpc: '2.0',
+      id: this.nextId(),
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-03-26',
+        capabilities: { tools: {} },
+        clientInfo: { name: 'ai4web-mcp-client', version: '1.0.0' },
+      },
+    };
+
+    const response = await this.postRequest(initRequest);
+    
+    if (response.error) {
+      throw new Error(`初始化失败: ${response.error.message}`);
+    }
+
+    if (response.result) {
+      logger.info(LOG_MODULES.MCP, `[StreamableHTTP] MCP 服务器 ${this.serverName} 初始化成功`, {
+        result: response.result,
+        sessionId: this.sessionId,
+      });
+
+      const initializedNotification = {
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+        params: {},
+      };
+
+      await this.postNotification(initializedNotification);
+      this.initialized = true;
+    }
+  }
+
+  async listTools(): Promise<Array<{ name: string; description?: string; inputSchema?: any }>> {
+    if (!this.initialized) {
+      throw new Error('MCP 客户端未初始化');
+    }
+
+    const request = {
+      jsonrpc: '2.0',
+      id: this.nextId(),
+      method: 'tools/list',
+      params: {},
+    };
+
+    const response = await this.postRequest(request);
+
+    if (response.error) {
+      throw new Error(`获取工具列表失败: ${response.error.message}`);
+    }
+
+    const result = response.result as { tools?: Array<{ name: string; description?: string; inputSchema?: any }> } | undefined;
+    const tools = result?.tools || [];
+    logger.info(LOG_MODULES.MCP, `[StreamableHTTP] 获取工具列表成功`, {
+      serverName: this.serverName,
+      toolCount: tools.length,
+    });
+
+    return tools;
+  }
+
+  async callTool(toolName: string, args: Record<string, unknown>): Promise<McpToolResult> {
+    if (!this.initialized) {
+      throw new Error('MCP 客户端未初始化');
+    }
+
+    const request = {
+      jsonrpc: '2.0',
+      id: this.nextId(),
+      method: 'tools/call',
+      params: { name: toolName, arguments: args },
+    };
+
+    const response = await this.postRequest(request);
+
+    if (response.error) {
+      return {
+        success: false,
+        error: response.error.message,
+        isError: true,
+      };
+    }
+
+    const result = response.result as { content?: unknown[]; isError?: boolean } | undefined;
+    const content = result?.content || [];
+    const isError = result?.isError || false;
+
+    return {
+      success: !isError,
+      content,
+      error: isError ? '工具执行返回错误' : undefined,
+      isError,
+    };
+  }
+
+  async close(): Promise<void> {
+    if (this.sessionId) {
+      try {
+        await fetch(this.endpoint, {
+          method: 'DELETE',
+          headers: {
+            'Mcp-Session-Id': this.sessionId,
+          },
+        });
+        logger.info(LOG_MODULES.MCP, `[StreamableHTTP] 已终止会话: ${this.serverName}`);
+      } catch (error) {
+        logger.warn(LOG_MODULES.MCP, `[StreamableHTTP] 终止会话失败`, { error });
+      }
+    }
+    this.initialized = false;
+  }
+
+  private nextId(): number {
+    return ++this.requestId;
+  }
+
+  private async postRequest(request: any): Promise<JsonRpcResponse> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json, text/event-stream',
+    };
+
+    if (this.sessionId) {
+      headers['Mcp-Session-Id'] = this.sessionId;
+    }
+
+    const response = await fetch(this.endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP 错误: ${response.status} ${response.statusText}`);
+    }
+
+    const sessionIdHeader = response.headers.get('Mcp-Session-Id');
+    if (sessionIdHeader) {
+      this.sessionId = sessionIdHeader;
+      logger.debug(LOG_MODULES.MCP, `[StreamableHTTP] 收到 Session ID`, { sessionId: this.sessionId });
+    }
+
+    const contentType = response.headers.get('Content-Type') || '';
+
+    if (contentType.includes('application/json')) {
+      const data = await response.json();
+      return data as JsonRpcResponse;
+    } else if (contentType.includes('text/event-stream')) {
+      return this.handleSseResponse(response, request.id);
+    } else {
+      throw new Error(`未知的响应类型: ${contentType}`);
+    }
+  }
+
+  private async postNotification(notification: any): Promise<void> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (this.sessionId) {
+      headers['Mcp-Session-Id'] = this.sessionId;
+    }
+
+    const response = await fetch(this.endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(notification),
+    });
+
+    if (!response.ok && response.status !== 202) {
+      logger.warn(LOG_MODULES.MCP, `[StreamableHTTP] 发送通知返回非 202 状态`, { status: response.status });
+    }
+  }
+
+  private async handleSseResponse(response: Response, requestId: number): Promise<JsonRpcResponse> {
+    const text = await response.text();
+    const lines = text.split('\n');
+    
+    for (const line of lines) {
+      if (line.startsWith('data:')) {
+        const data = line.substring(5).trim();
+        if (data) {
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.id === requestId) {
+              return parsed as JsonRpcResponse;
+            }
+          } catch (e) {
+            logger.warn(LOG_MODULES.MCP, `[StreamableHTTP] 解析 SSE 数据失败`, { data });
+          }
+        }
+      }
+    }
+
+    throw new Error('SSE 响应中未找到匹配的响应');
+  }
+}
+
+// ========================================
 // 统一调用函数
 // ========================================
 
@@ -561,7 +793,7 @@ export async function callMcpToolDirect(
   });
 
   try {
-    let client: LocalMcpClient | RemoteMcpClient;
+    let client: LocalMcpClient | RemoteMcpClient | StreamableHttpClient;
 
     if (config.type === 'local') {
       if (!config.command) {
@@ -573,11 +805,19 @@ export async function callMcpToolDirect(
         env: config.env,
         timeout: config.timeout,
       });
-    } else if (config.type === 'remote') {
+    } else if (config.type === 'sse') {
       if (!config.url) {
-        return { success: false, error: 'remote 类型缺少 url 配置', isError: true };
+        return { success: false, error: 'sse 类型缺少 url 配置', isError: true };
       }
       client = new RemoteMcpClient(config.name, {
+        url: config.url,
+        timeout: config.timeout,
+      });
+    } else if (config.type === 'http') {
+      if (!config.url) {
+        return { success: false, error: 'http 类型缺少 url 配置', isError: true };
+      }
+      client = new StreamableHttpClient(config.name, {
         url: config.url,
         timeout: config.timeout,
       });
@@ -652,7 +892,7 @@ export async function listMcpToolsDirect(
   });
 
   try {
-    let client: LocalMcpClient | RemoteMcpClient;
+    let client: LocalMcpClient | RemoteMcpClient | StreamableHttpClient;
 
     if (config.type === 'local') {
       if (!config.command) {
@@ -664,11 +904,19 @@ export async function listMcpToolsDirect(
         env: config.env,
         timeout: config.timeout || 7200000, // 测试连接默认2小时超时
       });
-    } else if (config.type === 'remote') {
+    } else if (config.type === 'sse') {
       if (!config.url) {
-        return { success: false, tools: [], error: 'remote 类型缺少 url 配置' };
+        return { success: false, tools: [], error: 'sse 类型缺少 url 配置' };
       }
       client = new RemoteMcpClient(config.name, {
+        url: config.url,
+        timeout: config.timeout || 60000,
+      });
+    } else if (config.type === 'http') {
+      if (!config.url) {
+        return { success: false, tools: [], error: 'http 类型缺少 url 配置' };
+      }
+      client = new StreamableHttpClient(config.name, {
         url: config.url,
         timeout: config.timeout || 60000,
       });

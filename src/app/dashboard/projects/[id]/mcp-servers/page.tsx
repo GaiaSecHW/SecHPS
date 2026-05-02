@@ -17,7 +17,7 @@ import {
 interface McpServer {
   id: string;
   name: string;
-  type: 'local' | 'remote';
+  type: 'local' | 'sse' | 'http';
   command?: string;
   args?: string;
   url?: string;
@@ -42,7 +42,7 @@ export default function McpServersPage() {
   // 表单状态
   const [formData, setFormData] = useState({
     name: '',
-    type: 'local' as 'local' | 'remote',
+    type: 'local' as 'local' | 'sse' | 'http',
     command: '',
     args: '',
     url: '',
@@ -270,17 +270,18 @@ export default function McpServersPage() {
               </label>
               <select
                 value={formData.type}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    type: e.target.value as 'local' | 'remote',
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="local">本地服务器 (stdio)</option>
-                <option value="remote">远程服务器 (SSE)</option>
-              </select>
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      type: e.target.value as 'local' | 'sse' | 'http',
+                    })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="local">本地服务器 (stdio)</option>
+                  <option value="sse">远程 SSE (旧版)</option>
+                  <option value="http">远程 Streamable HTTP</option>
+                </select>
             </div>
 
             {formData.type === 'local' ? (
@@ -332,7 +333,7 @@ export default function McpServersPage() {
             ) : (
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  URL *
+                  URL {formData.type === 'sse' ? '(SSE 端点)' : '(MCP 端点)'} *
                 </label>
                 <input
                   type="url"
@@ -340,7 +341,7 @@ export default function McpServersPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, url: e.target.value })
                   }
-                  placeholder="例如: http://localhost:8080/sse"
+                  placeholder={formData.type === 'sse' ? "例如: http://localhost:8080/sse" : "例如: http://localhost:8080/mcp"}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   required
                 />

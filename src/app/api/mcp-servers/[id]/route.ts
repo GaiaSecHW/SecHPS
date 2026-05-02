@@ -130,9 +130,9 @@ export async function PATCH(
     }
 
     if (body.type !== undefined) {
-      if (!['local', 'remote'].includes(body.type)) {
+      if (!['local', 'sse', 'http'].includes(body.type)) {
         return NextResponse.json(
-          { error: 'type 必须是 local 或 remote' },
+          { error: 'type 必须是 local、sse 或 http' },
           { status: 400 }
         );
       }
