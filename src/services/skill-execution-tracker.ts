@@ -211,9 +211,8 @@ export async function createSkillExecutionsForNode(params: {
  * 按 skillId 去重，只保留每个 skill 的最新记录
  */
 export async function getSkillExecutionsByEvaluation(evaluationId: string) {
-  // 获取所有执行记录，按 order 排序
   const allExecutions = await prisma.skillExecution.findMany({
-    where: { evaluationId, nodeId: { not: null } },
+    where: { evaluationId },
     include: {
       Skill: {
         select: {
@@ -224,10 +223,27 @@ export async function getSkillExecutionsByEvaluation(evaluationId: string) {
         },
       },
     },
-    orderBy: { order: 'asc' },
+    orderBy: [{ order: 'asc' }, { startedAt: 'asc' }],
   });
   
-  return allExecutions;
+  const skillToExecution = new Map<string, typeof allExecutions[0]>();
+  
+  for (const exec of allExecutions) {
+    const skillId = exec.skillId;
+    const existing = skillToExecution.get(skillId);
+    
+    if (!existing) {
+      skillToExecution.set(skillId, exec);
+    } else {
+      if (exec.findingsCount > existing.findingsCount) {
+        skillToExecution.set(skillId, exec);
+      } else if (exec.findingsCount === existing.findingsCount && exec.nodeId && !existing.nodeId) {
+        skillToExecution.set(skillId, exec);
+      }
+    }
+  }
+  
+  return Array.from(skillToExecution.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 }
 
 /**

@@ -2609,26 +2609,13 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
     
     const completedAt = new Date();
     
-    // 统计本次评估中该节点发现的漏洞数量
     let totalFindings = 0;
-    try {
-      // 从 Vulnerability 表统计（按 evaluationId）
-      totalFindings = await prisma.vulnerability.count({
-        where: { evaluationId: this.config.evaluationSessionId },
-      });
-    } catch (error) {
-      console.error(`[completeSkillExecutions] 统计漏洞数量失败:`, error);
-    }
-    
-    // 平均分配到每个 Skill（简化处理）
-    const findingsPerSkill = Math.ceil(totalFindings / this.currentSkillIds.length) || 0;
     
     for (let i = 0; i < this.currentSkillExecutionIds.length; i++) {
       const executionId = this.currentSkillExecutionIds[i];
       const skillId = this.currentSkillIds[i];
       
       try {
-        // 获取 startedAt 计算 duration
         const existing = await prisma.skillExecution.findUnique({
           where: { id: executionId },
           select: { startedAt: true },
@@ -2638,33 +2625,39 @@ ${skills.map((s, i) => `${i + 1}. ${s.displayName}`).join('\n')}
           ? completedAt.getTime() - new Date(existing.startedAt).getTime()
           : 0;
         
-        // 更新 SkillExecution
+        const findingsCount = await prisma.vulnerability.count({
+          where: {
+            evaluationId: this.config.evaluationSessionId,
+            skillExecutionId: executionId,
+          },
+        });
+        
+        totalFindings += findingsCount;
+        
         await prisma.skillExecution.update({
           where: { id: executionId },
           data: {
             status: 'completed',
             completedAt,
             duration,
-            findingsCount: findingsPerSkill,
+            findingsCount,
             updatedAt: completedAt,
           },
         });
         
-        // 更新 Skill 的 vulnerabilityCount
-        if (findingsPerSkill > 0) {
+        if (findingsCount > 0) {
           await prisma.skill.update({
             where: { id: skillId },
-            data: { vulnerabilityCount: { increment: findingsPerSkill }, updatedAt: completedAt },
+            data: { vulnerabilityCount: { increment: findingsCount }, updatedAt: completedAt },
           });
         }
         
-        console.log(`[completeSkillExecutions] Skill 执行完成: executionId=${executionId}, duration=${duration}ms, findings=${findingsPerSkill}`);
+        console.log(`[completeSkillExecutions] Skill 执行完成: executionId=${executionId}, duration=${duration}ms, findings=${findingsCount}`);
       } catch (error) {
         console.error(`[completeSkillExecutions] 更新 Skill 执行记录失败: ${executionId}`, error);
       }
     }
     
-    // 清空当前追踪
     this.currentSkillExecutionIds = [];
     this.currentSkillIds = [];
     
