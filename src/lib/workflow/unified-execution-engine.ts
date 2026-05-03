@@ -1189,7 +1189,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
               if (!skillCompletedInCallback) {
                 skillCompletedInCallback = true;
                 console.log(`[executeMultiSkillNode] onComplete 中更新状态: executionId=${executionId}, status=completed`);
-                await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText, skill.name);
+                await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
               }
               
               this.nodeStreamStore.appendToAgentStream(nodeId, executionId, {
@@ -1269,7 +1269,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
             `• 可能原因: MCP工具响应慢、任务复杂、网络超时\n` +
             `• 建议: 检查MCP服务器状态，增加超时时间，简化任务`;
           
-          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, detailedError, skill.name);
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, detailedError);
           skillResults.push({
             skillName: skill.name,
             skillId: skill.skillId,
@@ -1293,7 +1293,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
           console.log(`[executeMultiSkillNode] Skill ${skill.name} 被中止`);
           
           // 更新 SkillExecution 为失败
-          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, '用户中止', skill.name);
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, '用户中止');
           
           skillResults.push({
             skillName: skill.name,
@@ -1315,7 +1315,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         // 如果 onComplete 回调中已更新，跳过
         if (!skillCompletedInCallback) {
           console.log(`[executeMultiSkillNode] loop() 返回后更新状态: executionId=${executionId}, status=completed`);
-          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText, skill.name);
+          await this.updateSkillExecutionStatus(executionId, skill.skillId, 'completed', skillStartTime, accumulatedAssistantText);
         } else {
           console.log(`[executeMultiSkillNode] onComplete 已更新状态，跳过`);
         }
@@ -1338,7 +1338,7 @@ ${this.config.userPrompt ? `## 用户附加提示\n${this.config.userPrompt}` : 
         stopProgressMonitor();
         
         // 更新 SkillExecution 为失败
-        await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, err.message, skill.name);
+        await this.updateSkillExecutionStatus(executionId, skill.skillId, 'failed', skillStartTime, err.message);
         
         skillResults.push({
           skillName: skill.name,
@@ -1518,8 +1518,7 @@ ai4java MCP 工具：
     skillId: string,
     status: 'completed' | 'failed',
     startTime: number,
-    outputOrError: string,
-    skillName?: string
+    outputOrError: string
   ): Promise<void> {
     const completedAt = new Date();
     const duration = completedAt.getTime() - startTime;
@@ -1527,43 +1526,18 @@ ai4java MCP 工具：
     console.log(`[updateSkillExecutionStatus] 开始更新: executionId=${executionId}, skillId=${skillId}, status=${status}, duration=${duration}ms`);
     
     try {
-      let findingsCount = 0;
-      
-      if (status === 'completed' && outputOrError.length > 100) {
-        try {
-          const { saveVulnerabilitiesFromSkillOutput } = await import('@/lib/vulnerability/parser');
-          findingsCount = await saveVulnerabilitiesFromSkillOutput(
-            outputOrError,
-            this.config.projectId,
-            this.config.evaluationSessionId,
-            executionId,
-            skillName
-          );
-          
-          if (findingsCount > 0) {
-            await prisma.skill.update({
-              where: { id: skillId },
-              data: { vulnerabilityCount: { increment: findingsCount }, updatedAt: completedAt },
-            });
-          }
-        } catch (vulnError) {
-          console.warn(`[updateSkillExecutionStatus] 漏洞入库失败:`, vulnError);
-        }
-      }
-      
       const result = await prisma.skillExecution.update({
         where: { id: executionId },
         data: {
           status,
           completedAt,
           duration,
-          findingsCount,
           output: status === 'completed' ? outputOrError.substring(0, 500) : undefined,
           error: status === 'failed' ? outputOrError : undefined,
         },
       });
       
-      console.log(`[updateSkillExecutionStatus] ✅ 更新成功: executionId=${executionId}, status=${result.status}, findingsCount=${findingsCount}, completedAt=${result.completedAt}`);
+      console.log(`[updateSkillExecutionStatus] ✅ 更新成功: executionId=${executionId}, status=${result.status}, completedAt=${result.completedAt}`);
       
     } catch (updateError) {
       console.error(`[updateSkillExecutionStatus] ❌ 更新失败: executionId=${executionId}`, updateError);

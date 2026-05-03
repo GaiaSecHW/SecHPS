@@ -78,37 +78,67 @@ export async function completeEvaluation(
     return { success: false, vulnSaved: 0, error: `更新状态失败: ${dbError}` };
   }
 
-  // 2. 如果评估成功完成，补充遗漏的漏洞（增量入库已处理大部分）
+  // 2. 如果评估成功完成，聚合漏洞并入库
   if (status === 'completed') {
     const vulnerabilitiesPath = `${projectPath}/vulnerabilities.json`;
     
-    // 2.1 统计已入库漏洞
-    const existingVulns = await prisma.vulnerability.count({ where: { evaluationId } });
-    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 已入库漏洞数`, { count: existingVulns });
+    // 2.1 先聚合所有阶段输出中的漏洞数据到 vulnerabilities.json
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 聚合阶段输出中的漏洞数据`);
+    try {
+      const aggregated = await aggregateVulnerabilitiesFromOutputs(projectPath, vulnerabilitiesPath);
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 聚合完成`, {
+        total: aggregated.summary.total,
+        critical: aggregated.summary.critical,
+        high: aggregated.summary.high,
+        medium: aggregated.summary.medium,
+        low: aggregated.summary.low,
+      });
+    } catch (aggregateError) {
+      logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 聚合漏洞数据失败`, { error: aggregateError });
+      // 继续尝试读取已有的 vulnerabilities.json
+    }
     
-    // 2.2 如果增量入库遗漏，尝试从 outputs/phases 补充
-    if (existingVulns === 0) {
-      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 尝试从 outputs/phases 补充漏洞`);
-      try {
-        const aggregated = await aggregateVulnerabilitiesFromOutputs(projectPath, vulnerabilitiesPath);
-        if (aggregated.summary.total > 0) {
-          const result = await parseAndSaveVulnerabilities(vulnerabilitiesPath, projectId, evaluationId);
-          vulnSaved = result.saved;
-          logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 补充入库完成`, { saved: result.saved });
-          
-          if (result.saved > 0) {
-            try {
-              await updateSkillExecutionFindingsFromVulnerabilities({ evaluationId });
-            } catch (skillUpdateError) {
-              logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Skill findingsCount 更新失败`, { error: skillUpdateError });
-            }
-          }
-        }
-      } catch (aggregateError) {
-        logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 补充漏洞失败`, { error: aggregateError });
+    // 2.2 解析并入库漏洞
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 检查漏洞文件`, { path: vulnerabilitiesPath });
+    
+    try {
+      const result = await parseAndSaveVulnerabilities(
+        vulnerabilitiesPath,
+        projectId,
+        evaluationId
+      );
+      
+      vulnSaved = result.saved;
+      
+      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 漏洞入库完成`, {
+        saved: result.saved,
+        skipped: result.skipped,
+        errors: result.errors.length,
+      });
+      
+      if (result.errors.length > 0) {
+        logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 漏洞入库错误`, { errors: result.errors });
       }
-    } else {
-      vulnSaved = existingVulns;
+      
+      // 漏洞入库后，更新 Skill 执行记录的 findingsCount
+      if (result.saved > 0) {
+        try {
+          const skillUpdateResult = await updateSkillExecutionFindingsFromVulnerabilities({
+            evaluationId,
+          });
+          logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Skill findingsCount 已更新`, {
+            updatedSkills: skillUpdateResult.updated,
+            totalVulns: skillUpdateResult.totalVulns,
+          });
+        } catch (skillUpdateError) {
+          logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} Skill findingsCount 更新失败`, { error: skillUpdateError });
+        }
+      }
+    } catch (vulnError) {
+      // vulnerabilities.json 不存在或解析失败 - 不阻塞流程
+      const errorMsg = vulnError instanceof Error ? vulnError.message : String(vulnError);
+      vulnError = errorMsg;
+      logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 漏洞入库跳过`, { error: errorMsg });
     }
     
     // 清理未完成的 Skill 执行记录
