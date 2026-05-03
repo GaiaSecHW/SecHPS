@@ -8,7 +8,7 @@
 //
 
 import { prisma } from '@/lib/prisma';
-import { parseAndSaveVulnerabilities, aggregateVulnerabilitiesFromOutputs } from '@/lib/vulnerability/parser';
+import { parseAndSaveVulnerabilitiesFromDir, aggregateVulnerabilitiesFromOutputs } from '@/lib/vulnerability/parser';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { unlockProject } from '@/lib/evaluation-lock';
 import { updateSkillExecutionFindingsFromVulnerabilities, completeAllPendingSkillExecutions } from '@/services/skill-execution-tracker';
@@ -78,32 +78,16 @@ export async function completeEvaluation(
     return { success: false, vulnSaved: 0, error: `更新状态失败: ${dbError}` };
   }
 
-  // 2. 如果评估成功完成，聚合漏洞并入库
+  // 2. 如果评估成功完成，从 vulnerabilities/ 目录读取漏洞文件入库
   if (status === 'completed') {
-    const vulnerabilitiesPath = `${projectPath}/vulnerabilities.json`;
+    const vulnDirPath = `${projectPath}/vulnerabilities`;
     
-    // 2.1 先聚合所有阶段输出中的漏洞数据到 vulnerabilities.json
-    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 聚合阶段输出中的漏洞数据`);
-    try {
-      const aggregated = await aggregateVulnerabilitiesFromOutputs(projectPath, vulnerabilitiesPath);
-      logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 聚合完成`, {
-        total: aggregated.summary.total,
-        critical: aggregated.summary.critical,
-        high: aggregated.summary.high,
-        medium: aggregated.summary.medium,
-        low: aggregated.summary.low,
-      });
-    } catch (aggregateError) {
-      logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 聚合漏洞数据失败`, { error: aggregateError });
-      // 继续尝试读取已有的 vulnerabilities.json
-    }
-    
-    // 2.2 解析并入库漏洞
-    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 检查漏洞文件`, { path: vulnerabilitiesPath });
+    // 2.1 从 vulnerabilities/ 目录逐个读取 {skill名称}-{UUID}.json
+    logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 从 vulnerabilities/ 目录读取漏洞文件`, { path: vulnDirPath });
     
     try {
-      const result = await parseAndSaveVulnerabilities(
-        vulnerabilitiesPath,
+      const result = await parseAndSaveVulnerabilitiesFromDir(
+        vulnDirPath,
         projectId,
         evaluationId
       );
@@ -135,7 +119,6 @@ export async function completeEvaluation(
         }
       }
     } catch (vulnError) {
-      // vulnerabilities.json 不存在或解析失败 - 不阻塞流程
       const errorMsg = vulnError instanceof Error ? vulnError.message : String(vulnError);
       vulnError = errorMsg;
       logger.warn(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 漏洞入库跳过`, { error: errorMsg });
