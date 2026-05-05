@@ -20,8 +20,10 @@ import AsyncLock from 'async-lock';
 
 const lock = new AsyncLock();
 
-// 数据根目录
-const DATA_ROOT = process.env.DATA_ROOT || path.join(process.cwd(), 'data');
+// 数据根目录 - 使用 resolve 避免触发 Next.js 文件追踪分析
+const DATA_ROOT = process.env.DATA_ROOT
+  ? path.resolve(process.env.DATA_ROOT)
+  : path.resolve(process.cwd(), 'data');
 
 export interface StreamEvent {
   event: string;
