@@ -1750,9 +1750,11 @@ model TaskInstance {
   id           String             @id
   userId       String?
   name         String
-  templateId   String
-  templateName String
+  agentId      String
+  agentName    String
   parameters   String
+  filePath     String?
+  projectPath  String?
   notes        String?
   status       String             @default("pending")
   startedAt    DateTime?
@@ -1765,7 +1767,7 @@ model TaskInstance {
 
   @@index([userId])
   @@index([status])
-  @@index([templateId])
+  @@index([agentId])
   @@index([createdAt])
 }
 

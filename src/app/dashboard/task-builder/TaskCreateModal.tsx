@@ -1,71 +1,121 @@
 'use client';
 
-import { useState } from 'react';
-import { X, CheckCircle2, ArrowRight, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, CheckCircle2, ArrowRight, ArrowLeft, Upload, File, Loader2 } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import TemplateSelector from './TemplateSelector';
-import ParameterForm from './ParameterForm';
-import { TASK_TEMPLATES, getTemplateById } from './templates';
-import { TaskFormData } from './types';
+import toast from 'react-hot-toast';
+
+interface Agent {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  category: string;
+  model: string;
+  skills: string | null;
+  isBuiltin: boolean;
+}
+
+interface TaskFormData {
+  name: string;
+  agentId: string;
+  agentName: string;
+  notes: string;
+}
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (formData: TaskFormData) => void;
+  onSubmit: (formData: TaskFormData, file: File | null) => Promise<void>;
 }
 
 const STEPS = [
-  { id: 'select', label: '选择模板' },
-  { id: 'configure', label: '填写参数' },
+  { id: 'select', label: '选择 Agent' },
+  { id: 'configure', label: '配置任务' },
 ] as const;
 
 type StepId = typeof STEPS[number]['id'];
 
 const initialFormData: TaskFormData = {
-  templateId: '',
-  template: undefined,
-  parameters: {},
+  name: '',
+  agentId: '',
+  agentName: '',
   notes: '',
 };
 
 export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [currentStep, setCurrentStep] = useState<StepId>('select');
   const [formData, setFormData] = useState<TaskFormData>(initialFormData);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep);
 
-  const handleTemplateSelect = (templateId: string) => {
-    const template = getTemplateById(templateId);
-    if (template) {
-      const defaultParams: Record<string, string> = {};
-      template.parameters.forEach(p => {
-        if (p.defaultValue) {
-          defaultParams[p.name] = p.defaultValue;
-        }
+  useEffect(() => {
+    if (isOpen) {
+      fetchAgents();
+    }
+  }, [isOpen]);
+
+  const fetchAgents = async () => {
+    setLoadingAgents(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/agent-definitions', {
+        headers: { Authorization: `Bearer ${token}` },
       });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAgents(data.agents || []);
+      } else {
+        toast.error('获取 Agent 列表失败');
+      }
+    } catch {
+      toast.error('网络错误');
+    } finally {
+      setLoadingAgents(false);
+    }
+  };
+
+  const handleAgentSelect = (agentId: string) => {
+    const agent = agents.find(a => a.id === agentId);
+    if (agent) {
       setFormData({
-        templateId,
-        template,
-        parameters: defaultParams,
-        notes: '',
+        ...formData,
+        agentId,
+        agentName: agent.displayName || agent.name,
       });
     }
   };
 
-  const handleParameterChange = (name: string, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      parameters: { ...prev.parameters, [name]: value },
-    }));
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const maxSize = 100 * 1024 * 1024;
+      if (file.size > maxSize) {
+        toast.error('文件大小不能超过 100MB');
+        return;
+      }
+      setSelectedFile(file);
+      if (!formData.name) {
+        setFormData({ ...formData, name: file.name.split('.')[0] });
+      }
+    }
   };
 
-  const handleNotesChange = (notes: string) => {
-    setFormData(prev => ({ ...prev, notes }));
+  const handleRemoveFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleNext = () => {
-    if (currentStep === 'select' && formData.templateId) {
+    if (currentStep === 'select' && formData.agentId) {
       setCurrentStep('configure');
     }
   };
@@ -77,19 +127,14 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   };
 
   const handleSubmit = async () => {
-    if (!formData.template) return;
-
-    const missingParams = formData.template.parameters
-      .filter(p => p.required && !formData.parameters[p.name]?.trim())
-      .map(p => p.label);
-
-    if (missingParams.length > 0) {
-      throw new Error(`请填写必填参数: ${missingParams.join(', ')}`);
+    if (!formData.name.trim()) {
+      toast.error('请输入任务名称');
+      return;
     }
 
     setIsSubmitting(true);
     try {
-      await onSubmit(formData);
+      await onSubmit(formData, selectedFile);
       resetAndClose();
     } catch {
       setIsSubmitting(false);
@@ -99,25 +144,14 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const resetAndClose = () => {
     setCurrentStep('select');
     setFormData(initialFormData);
+    setSelectedFile(null);
     setIsSubmitting(false);
     onClose();
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      resetAndClose();
-    }
-  };
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={resetAndClose}
-      size="xl"
-      showCloseButton={false}
-    >
-      <div onKeyDown={handleKeyDown} className="flex flex-col h-full">
-        {/* Header */}
+    <Modal isOpen={isOpen} onClose={resetAndClose} size="xl" showCloseButton={false}>
+      <div className="flex flex-col h-full">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">创建任务实例</h2>
@@ -162,29 +196,128 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
           {currentStep === 'select' && (
-            <TemplateSelector
-              templates={TASK_TEMPLATES}
-              selectedId={formData.templateId}
-              onSelect={handleTemplateSelect}
-              compact
-            />
+            <div className="space-y-4">
+              <p className="text-sm text-gray-600">选择 Agent：</p>
+              {loadingAgents ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 size={24} className="animate-spin text-blue-600" />
+                </div>
+              ) : agents.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  暂无可用 Agent，请联系管理员创建
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {agents.map((agent) => (
+                    <div
+                      key={agent.id}
+                      onClick={() => handleAgentSelect(agent.id)}
+                      className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                        formData.agentId === agent.id
+                          ? 'bg-blue-50 border-blue-500 shadow-md'
+                          : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-gray-900">
+                          {agent.displayName || agent.name}
+                        </span>
+                        {formData.agentId === agent.id && (
+                          <CheckCircle2 size={16} className="text-blue-600" />
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">
+                        {agent.description || '无描述'}
+                      </p>
+                      <div className="flex gap-1 mt-2">
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                          {agent.category}
+                        </span>
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                          {agent.model}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
-          {currentStep === 'configure' && formData.template && (
-            <ParameterForm
-              template={formData.template}
-              parameters={formData.parameters}
-              notes={formData.notes || ''}
-              onParameterChange={handleParameterChange}
-              onNotesChange={handleNotesChange}
-              compact
-            />
+
+          {currentStep === 'configure' && (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-sm text-green-800">
+                  已选择 Agent：<span className="font-medium">{formData.agentName}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  任务名称 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="输入任务名称"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  上传文件 <span className="text-gray-500 text-xs ml-1">(可选，最大 100MB)</span>
+                </label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                {selectedFile ? (
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                    <File size={16} className="text-gray-600" />
+                    <span className="text-sm text-gray-700 flex-1 truncate">{selectedFile.name}</span>
+                    <span className="text-xs text-gray-500">
+                      {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                    </span>
+                    <button
+                      onClick={handleRemoveFile}
+                      className="p-1 text-red-600 hover:text-red-800 rounded"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full p-3 border-2 border-dashed border-gray-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 text-gray-600"
+                  >
+                    <Upload size={16} />
+                    <span className="text-sm">点击上传文件</span>
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  备注说明 <span className="text-gray-500 text-xs ml-1">(可选)</span>
+                </label>
+                <textarea
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="添加任务备注..."
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 resize-none"
+                />
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Footer */}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200 bg-gray-50">
           <button
             onClick={handlePrevious}
@@ -198,7 +331,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           {currentStep === 'select' ? (
             <button
               onClick={handleNext}
-              disabled={!formData.templateId}
+              disabled={!formData.agentId}
               className="flex items-center gap-1 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               下一步
@@ -207,10 +340,10 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           ) : (
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || !formData.name.trim()}
               className="flex items-center gap-2 px-4 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isSubmitting && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />}
+              {isSubmitting && <Loader2 size={14} className="animate-spin" />}
               创建任务
             </button>
           )}
