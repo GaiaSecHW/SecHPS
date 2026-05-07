@@ -19,6 +19,8 @@ export async function POST(request: NextRequest) {
     const agentName = formData.get('agentName') as string;
     const parameters = formData.get('parameters') as string;
     const notes = formData.get('notes') as string | null;
+    const skills = formData.get('skills') as string | null;
+    const scripts = formData.get('scripts') as string | null;
     const file = formData.get('file') as File | null;
 
     if (!name || !agentId) {
@@ -51,6 +53,8 @@ export async function POST(request: NextRequest) {
         agentName,
         parameters: parameters || '{}',
         filePath,
+        skills,
+        scripts,
         notes,
         status: 'pending',
         updatedAt: new Date(),

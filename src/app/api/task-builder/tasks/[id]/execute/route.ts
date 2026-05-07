@@ -23,7 +23,7 @@ export async function POST(
       return NextResponse.json({ error: '任务不存在' }, { status: 404 });
     }
 
-    if (task.status !== 'pending') {
+    if (!['pending', 'completed', 'failed'].includes(task.status)) {
       return NextResponse.json({ error: '任务状态不允许执行' }, { status: 400 });
     }
 
@@ -32,8 +32,14 @@ export async function POST(
       data: {
         status: 'running',
         startedAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
         updatedAt: new Date(),
       },
+    });
+
+    await prisma.taskExecutionLog.deleteMany({
+      where: { taskId: id },
     });
 
     executeTaskMock(id).catch(async (error) => {

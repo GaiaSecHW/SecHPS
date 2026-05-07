@@ -16,6 +16,8 @@ interface TaskInstance {
   parameters: string;
   filePath: string | null;
   projectPath: string | null;
+  skills: string | null;
+  scripts: string | null;
   notes: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   startedAt: string | null;
@@ -30,6 +32,8 @@ interface TaskFormData {
   agentId: string;
   agentName: string;
   notes: string;
+  selectedSkills: string[];
+  selectedScripts: string[];
 }
 
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
@@ -91,6 +95,8 @@ export default function TaskBuilderPage() {
       form.append('agentId', formData.agentId);
       form.append('agentName', formData.agentName);
       form.append('notes', formData.notes || '');
+      form.append('skills', formData.selectedSkills.join(','));
+      form.append('scripts', formData.selectedScripts.join(','));
       if (file) {
         form.append('file', file);
       }
@@ -277,6 +283,15 @@ export default function TaskBuilderPage() {
                             >
                               <Play size={14} />
                               执行
+                            </button>
+                          )}
+                          {(task.status === 'completed' || task.status === 'failed') && (
+                            <button
+                              onClick={() => handleRunTask(task.id)}
+                              className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                            >
+                              <RefreshCw size={14} />
+                              重新执行
                             </button>
                           )}
                           <button

@@ -16,11 +16,21 @@ interface Agent {
   isBuiltin: boolean;
 }
 
+interface Skill {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string | null;
+  cwe: string | null;
+}
+
 interface TaskFormData {
   name: string;
   agentId: string;
   agentName: string;
   notes: string;
+  selectedSkills: string[];
+  selectedScripts: string[];
 }
 
 interface Props {
@@ -31,6 +41,7 @@ interface Props {
 
 const STEPS = [
   { id: 'select', label: '选择 Agent' },
+  { id: 'resources', label: '注入资源' },
   { id: 'configure', label: '配置任务' },
 ] as const;
 
@@ -41,13 +52,18 @@ const initialFormData: TaskFormData = {
   agentId: '',
   agentName: '',
   notes: '',
+  selectedSkills: [],
+  selectedScripts: [],
 };
 
 export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [currentStep, setCurrentStep] = useState<StepId>('select');
   const [formData, setFormData] = useState<TaskFormData>(initialFormData);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [availableScripts, setAvailableScripts] = useState<string[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [loadingResources, setLoadingResources] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +94,28 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       toast.error('网络错误');
     } finally {
       setLoadingAgents(false);
+    }
+  };
+
+  const fetchResources = async () => {
+    setLoadingResources(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/task-builder/available-resources', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSkills(data.skills || []);
+        setAvailableScripts(data.scripts || []);
+      } else {
+        toast.error('获取资源列表失败');
+      }
+    } catch {
+      toast.error('网络错误');
+    } finally {
+      setLoadingResources(false);
     }
   };
 
@@ -114,14 +152,33 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     }
   };
 
+  const toggleSkill = (skillId: string) => {
+    const newSkills = formData.selectedSkills.includes(skillId)
+      ? formData.selectedSkills.filter(id => id !== skillId)
+      : [...formData.selectedSkills, skillId];
+    setFormData({ ...formData, selectedSkills: newSkills });
+  };
+
+  const toggleScript = (scriptName: string) => {
+    const newScripts = formData.selectedScripts.includes(scriptName)
+      ? formData.selectedScripts.filter(name => name !== scriptName)
+      : [...formData.selectedScripts, scriptName];
+    setFormData({ ...formData, selectedScripts: newScripts });
+  };
+
   const handleNext = () => {
     if (currentStep === 'select' && formData.agentId) {
+      fetchResources();
+      setCurrentStep('resources');
+    } else if (currentStep === 'resources') {
       setCurrentStep('configure');
     }
   };
 
   const handlePrevious = () => {
     if (currentStep === 'configure') {
+      setCurrentStep('resources');
+    } else if (currentStep === 'resources') {
       setCurrentStep('select');
     }
   };
@@ -246,6 +303,91 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
             </div>
           )}
 
+          {currentStep === 'resources' && (
+            <div className="space-y-6">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <p className="text-sm text-blue-800">
+                  为 Agent <span className="font-medium">{formData.agentName}</span> 注入额外的 Skills 和脚本
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择 Skills <span className="text-gray-500 text-xs ml-1">(可选，多选)</span>
+                </label>
+                {loadingResources ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 size={20} className="animate-spin text-blue-600" />
+                  </div>
+                ) : skills.length === 0 ? (
+                  <p className="text-sm text-gray-500">暂无可用 Skills</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {skills.map((skill) => (
+                      <div
+                        key={skill.id}
+                        onClick={() => toggleSkill(skill.id)}
+                        className={`p-2 rounded border cursor-pointer transition-all ${
+                          formData.selectedSkills.includes(skill.id)
+                            ? 'bg-blue-50 border-blue-500'
+                            : 'bg-white border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-900">
+                            {skill.displayName}
+                          </span>
+                          {formData.selectedSkills.includes(skill.id) && (
+                            <CheckCircle2 size={14} className="text-blue-600" />
+                          )}
+                        </div>
+                        {skill.description && (
+                          <p className="text-xs text-gray-600 mt-1 line-clamp-1">
+                            {skill.description}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  选择脚本文件 <span className="text-gray-500 text-xs ml-1">(可选，多选)</span>
+                </label>
+                {loadingResources ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 size={20} className="animate-spin text-blue-600" />
+                  </div>
+                ) : availableScripts.length === 0 ? (
+                  <p className="text-sm text-gray-500">暂无可用脚本文件</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {availableScripts.map((script) => (
+                      <div
+                        key={script}
+                        onClick={() => toggleScript(script)}
+                        className={`p-2 rounded border cursor-pointer transition-all ${
+                          formData.selectedScripts.includes(script)
+                            ? 'bg-blue-50 border-blue-500'
+                            : 'bg-white border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-gray-900">{script}</span>
+                          {formData.selectedScripts.includes(script) && (
+                            <CheckCircle2 size={14} className="text-blue-600" />
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {currentStep === 'configure' && (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-3">
@@ -328,10 +470,10 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
             上一步
           </button>
 
-          {currentStep === 'select' ? (
+          {currentStep === 'select' || currentStep === 'resources' ? (
             <button
               onClick={handleNext}
-              disabled={!formData.agentId}
+              disabled={currentStep === 'select' && !formData.agentId}
               className="flex items-center gap-1 px-4 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               下一步

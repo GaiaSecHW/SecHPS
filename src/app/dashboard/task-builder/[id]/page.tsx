@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, Pause, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import toast from 'react-hot-toast';
 
 interface TaskInstance {
   id: string;
@@ -14,6 +15,8 @@ interface TaskInstance {
   parameters: string;
   filePath: string | null;
   projectPath: string | null;
+  skills: string | null;
+  scripts: string | null;
   notes: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   startedAt: string | null;
@@ -108,9 +111,11 @@ export default function TaskDetailPage() {
         throw new Error(errorData.error || '执行失败');
       }
 
+      toast.success('任务已开始执行');
       await fetchTaskDetail(taskId);
     } catch (error) {
       console.error('执行失败:', error);
+      toast.error(error instanceof Error ? error.message : '执行失败');
     }
   };
 
@@ -249,6 +254,38 @@ export default function TaskDetailPage() {
             <h2 className="text-lg font-semibold text-red-900">错误信息</h2>
           </div>
           <p className="text-sm text-red-700">{task.errorMessage}</p>
+        </div>
+      )}
+
+      {task.skills && (
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings size={20} className="text-gray-600" />
+            <h2 className="text-lg font-semibold text-gray-900">注入的 Skills</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {task.skills.split(',').map((skillId) => (
+              <span key={skillId} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-sm">
+                {skillId}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {task.scripts && (
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText size={20} className="text-gray-600" />
+            <h2 className="text-lg font-semibold text-gray-900">注入的脚本</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {task.scripts.split(',').map((script) => (
+              <span key={script} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-md text-sm">
+                {script}
+              </span>
+            ))}
+          </div>
         </div>
       )}
 
