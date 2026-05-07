@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
+import eventBus from '@/lib/event-bus';
 
 const MOCK_LOG_MESSAGES = [
   { level: 'info', message: '任务开始执行', details: '正在初始化执行环境...' },
@@ -13,7 +14,11 @@ const MOCK_LOG_MESSAGES = [
   { level: 'success', message: '任务执行完成', details: '执行耗时: 2分35秒' },
 ];
 
-export async function executeTaskMock(taskId: string): Promise<void> {
+export async function executeTaskMock(
+  taskId: string,
+  mergedSkills?: string,
+  mergedScripts?: string
+): Promise<void> {
   const task = await prisma.taskInstance.findUnique({
     where: { id: taskId },
   });
@@ -21,6 +26,13 @@ export async function executeTaskMock(taskId: string): Promise<void> {
   if (!task) {
     throw new Error('任务不存在');
   }
+
+  eventBus.emit(`task:${taskId}`, {
+    level: 'info',
+    message: '任务开始执行',
+    details: `Agent: ${task.agentName}`,
+    timestamp: new Date(),
+  });
 
   for (let i = 0; i < MOCK_LOG_MESSAGES.length; i++) {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -37,6 +49,13 @@ export async function executeTaskMock(taskId: string): Promise<void> {
         details,
       },
     });
+
+    eventBus.emit(`task:${taskId}`, {
+      level: logData.level,
+      message: logData.message,
+      details,
+      timestamp: new Date(),
+    });
   }
 
   await prisma.taskInstance.update({
@@ -45,6 +64,21 @@ export async function executeTaskMock(taskId: string): Promise<void> {
       status: 'completed',
       completedAt: new Date(),
       updatedAt: new Date(),
+      executionResult: JSON.stringify({
+        success: true,
+        scannedFiles: 156,
+        vulnerabilitiesFound: 0,
+        mergedSkills: mergedSkills ? JSON.parse(mergedSkills) : [],
+        mergedScripts: mergedScripts ? JSON.parse(mergedScripts) : [],
+      }),
     },
+  });
+
+  eventBus.emit(`task:${taskId}`, {
+    type: 'completed',
+    level: 'success',
+    message: '任务执行完成',
+    details: '所有步骤已完成',
+    timestamp: new Date(),
   });
 }

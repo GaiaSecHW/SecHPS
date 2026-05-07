@@ -1762,6 +1762,10 @@ model TaskInstance {
   startedAt        DateTime?
   completedAt      DateTime?
   errorMessage     String?
+  mergedSkills     String?
+  mergedScripts    String?
+  executionResult  String?
+  reportPath       String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   User             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)

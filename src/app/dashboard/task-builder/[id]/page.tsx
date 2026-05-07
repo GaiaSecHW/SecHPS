@@ -17,6 +17,8 @@ interface TaskInstance {
   projectPath: string | null;
   skills: string | null;
   scripts: string | null;
+  mergedSkills: string | null;
+  mergedScripts: string | null;
   notes: string | null;
   status: 'pending' | 'running' | 'completed' | 'failed';
   startedAt: string | null;
@@ -58,6 +60,8 @@ export default function TaskDetailPage() {
   const [task, setTask] = useState<TaskInstance | null>(null);
   const [logs, setLogs] = useState<TaskExecutionLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [eventSourceRef, setEventSourceRef] = useState<EventSource | null>(null);
 
   useEffect(() => {
     fetchTaskDetail(taskId);
@@ -98,6 +102,43 @@ export default function TaskDetailPage() {
     });
   };
 
+  const subscribeToLogs = (id: string) => {
+    const eventSource = new EventSource(`/api/task-builder/tasks/${id}/logs/stream`);
+    setEventSourceRef(eventSource);
+    setIsStreaming(true);
+
+    eventSource.onmessage = (event) => {
+      const log = JSON.parse(event.data);
+      
+      setLogs(prev => {
+        const exists = prev.find(l => l.id === log.id);
+        if (exists) return prev;
+        return [...prev, {
+          id: log.id || Date.now().toString(),
+          taskId: id,
+          timestamp: log.timestamp || new Date().toISOString(),
+          level: log.level,
+          message: log.message,
+          details: log.details,
+          createdAt: new Date().toISOString(),
+        }];
+      });
+
+      if (log.type === 'completed' || log.type === 'error') {
+        eventSource.close();
+        setIsStreaming(false);
+        setEventSourceRef(null);
+        fetchTaskDetail(id);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      setIsStreaming(false);
+      setEventSourceRef(null);
+    };
+  };
+
   const handleExecute = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -112,12 +153,21 @@ export default function TaskDetailPage() {
       }
 
       toast.success('任务已开始执行');
-      await fetchTaskDetail(taskId);
+      setLogs([]);
+      subscribeToLogs(taskId);
     } catch (error) {
       console.error('执行失败:', error);
       toast.error(error instanceof Error ? error.message : '执行失败');
     }
   };
+
+  useEffect(() => {
+    return () => {
+      if (eventSourceRef) {
+        eventSourceRef.close();
+      }
+    };
+  }, [eventSourceRef]);
 
   if (loading) {
     return (
@@ -289,11 +339,65 @@ export default function TaskDetailPage() {
         </div>
       )}
 
+      {task.mergedSkills && (
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings size={20} className="text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">合并后的 Skills</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(() => {
+              try {
+                const skills = JSON.parse(task.mergedSkills);
+                return skills.map((skillId: string) => (
+                  <span key={skillId} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-md text-sm">
+                    {skillId}
+                  </span>
+                ));
+              } catch {
+                return <span className="text-sm text-gray-500">解析失败</span>;
+              }
+            })()}
+          </div>
+        </div>
+      )}
+
+      {task.mergedScripts && (
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText size={20} className="text-purple-600" />
+            <h2 className="text-lg font-semibold text-gray-900">合并后的 Scripts</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(() => {
+              try {
+                const scripts = JSON.parse(task.mergedScripts);
+                return scripts.map((script: string) => (
+                  <span key={script} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-md text-sm">
+                    {script}
+                  </span>
+                ));
+              } catch {
+                return <span className="text-sm text-gray-500">解析失败</span>;
+              }
+            })()}
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <FileText size={20} className="text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-900">执行日志</h2>
-          <span className="text-sm text-gray-500">({logs.length} 条记录)</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <FileText size={20} className="text-gray-600" />
+            <h2 className="text-lg font-semibold text-gray-900">执行日志</h2>
+            <span className="text-sm text-gray-500">({logs.length} 条记录)</span>
+          </div>
+          {isStreaming && (
+            <span className="flex items-center gap-2 text-sm text-blue-600 animate-pulse">
+              <Loader2 size={14} className="animate-spin" />
+              实时更新中...
+            </span>
+          )}
         </div>
         
         {logs.length === 0 ? (
