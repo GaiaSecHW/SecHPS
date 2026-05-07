@@ -236,6 +236,9 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/admin/fsm-templates" icon={<Layers size={20} />} collapsed={collapsed}>
                 威胁建模配置
               </NavLink>
+              <NavLink href="/dashboard/codeswarm" icon={<Server size={20} />} collapsed={collapsed}>
+                CodeSwarm
+              </NavLink>
               <NavLink href="/dashboard/admin/categories" icon={<Tags size={20} />} collapsed={collapsed}>
                 漏洞分类管理
               </NavLink>
