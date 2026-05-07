@@ -254,6 +254,52 @@ model AutonomousEvolutionRunLog {
   @@index([startedAt])
 }
 
+model CodeswarmWorker {
+  id            String          @id
+  nodeId        String          @unique
+  name          String?
+  address       String
+  status        String          @default("offline")
+  maxConcurrent Int             @default(5)
+  currentTasks  Int             @default(0)
+  capabilities  String?
+  lastHeartbeat DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  CodeswarmTask CodeswarmTask[]
+
+  @@index([status])
+  @@index([nodeId])
+}
+
+model CodeswarmTask {
+  id            String           @id
+  taskId        String           @unique
+  workerId      String?
+  state         String           @default("queued")
+  instruction   String
+  projectPath   String?
+  workspacePath String?
+  skills        String?
+  mcps          String?
+  model         String?
+  apiKey        String?
+  timeoutSec    Int?
+  result        String?
+  reportContent String?
+  error         String?
+  events        String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime
+  startedAt     DateTime?
+  completedAt   DateTime?
+  CodeswarmWorker CodeswarmWorker? @relation(fields: [workerId], references: [id])
+
+  @@index([state])
+  @@index([taskId])
+  @@index([workerId])
+}
+
 model CodeKnowledge {
   id         String   @id
   projectId  String
