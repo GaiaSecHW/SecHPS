@@ -33,6 +33,7 @@ import {
   Coins,
   GitBranch,
   Megaphone,
+  ClipboardList,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -137,6 +138,9 @@ function DashboardLayoutContent({
           </NavLink>
           <NavLink href="/dashboard/sessions" icon={<MessageSquare size={20} />} collapsed={collapsed}>
             我的项目
+          </NavLink>
+          <NavLink href="/dashboard/task-builder" icon={<ClipboardList size={20} />} collapsed={collapsed}>
+            任务实例
           </NavLink>
 
           {/* 开发者视图 - 仅 developer 和 admin 可见 */}
