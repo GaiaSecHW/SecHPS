@@ -1,0 +1,201 @@
+import { z } from 'zod';
+
+// ============================================================================
+// Task State Enum
+// ============================================================================
+
+export const TaskStateEnum = z.enum([
+  'queued',
+  'dispatched',
+  'building',
+  'running',
+  'completed',
+  'failed',
+  'cancelled',
+]);
+
+export type TaskState = z.infer<typeof TaskStateEnum>;
+
+// ============================================================================
+// MCP Service Types
+// ============================================================================
+
+export const MCPServiceLocalSchema = z.object({
+  type: z.literal('local'),
+  command: z.array(z.string()),
+  environment: z.record(z.string()).optional(),
+  enabled: z.boolean().default(true),
+  timeout: z.number().optional(),
+});
+
+export const MCPServiceRemoteSchema = z.object({
+  type: z.literal('remote'),
+  url: z.string().url(),
+  headers: z.record(z.string()).optional(),
+  enabled: z.boolean().default(true),
+  timeout: z.number().optional(),
+});
+
+export const MCPServiceSchema = z.discriminatedUnion('type', [
+  MCPServiceLocalSchema,
+  MCPServiceRemoteSchema,
+]);
+
+export type MCPServiceLocal = z.infer<typeof MCPServiceLocalSchema>;
+export type MCPServiceRemote = z.infer<typeof MCPServiceRemoteSchema>;
+export type MCPService = z.infer<typeof MCPServiceSchema>;
+
+// ============================================================================
+// Skill Definition
+// ============================================================================
+
+export const SkillDefSchema = z.object({
+  id: z.string(),
+  version: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  requiresMcp: z.array(z.string()).optional(),
+});
+
+export type SkillDef = z.infer<typeof SkillDefSchema>;
+
+// ============================================================================
+// Task Request (User submission)
+// ============================================================================
+
+export const TaskRequestSchema = z.object({
+  instruction: z.string(),
+  projectId: z.string().optional(),
+  skills: z.array(z.string()).optional(),
+  mcps: z.array(z.string()).optional(),
+  model: z.string().optional(),
+  timeoutSec: z.number().optional(),
+  apiKey: z.string().optional(),
+});
+
+export type TaskRequest = z.infer<typeof TaskRequestSchema>;
+
+// ============================================================================
+// Task (Full task with state)
+// ============================================================================
+
+export const TaskSchema = z.object({
+  taskId: z.string(),
+  state: TaskStateEnum,
+  request: TaskRequestSchema,
+  assignedNode: z.string().optional(),
+  result: z.string().optional(),
+  error: z.string().optional(),
+  createdAt: z.string().or(z.date()),
+  updatedAt: z.string().or(z.date()),
+  startedAt: z.string().or(z.date()).optional(),
+  completedAt: z.string().or(z.date()).optional(),
+});
+
+export type Task = z.infer<typeof TaskSchema>;
+
+// ============================================================================
+// Task Payload (Orchestrator → Worker)
+// ============================================================================
+
+export const TaskPayloadSchema = z.object({
+  taskId: z.string(),
+  instruction: z.string(),
+  projectPath: z.string(),
+  skills: z.array(z.string()).optional(),
+  mcps: z.array(MCPServiceSchema).optional(),
+  model: z.string().optional(),
+  timeoutSec: z.number().optional(),
+  apiKey: z.string().optional(),
+  // NFS passthrough: skip copying project files, use this path directly as workspace
+  workspacePath: z.string().optional(),
+  // Override callback URL (NAZHUA backend address)
+  nazhuaCallbackUrl: z.string().optional(),
+  // Extra environment variables to pass to the OpenCode process
+  env: z.record(z.string()).optional(),
+});
+
+export type TaskPayload = z.infer<typeof TaskPayloadSchema>;
+
+// ============================================================================
+// Worker Event Types
+// ============================================================================
+
+export const WorkerEventTypeEnum = z.enum([
+  'agent_message_chunk',
+  'tool_call',
+  'tool_call_update',
+  'error',
+]);
+
+export type WorkerEventType = z.infer<typeof WorkerEventTypeEnum>;
+
+export const WorkerEventSchema = z.object({
+  type: WorkerEventTypeEnum,
+  timestamp: z.string().or(z.date()),
+  data: z.unknown().optional(),
+});
+
+export type WorkerEvent = z.infer<typeof WorkerEventSchema>;
+
+// ============================================================================
+// Worker Events (Worker → Orchestrator)
+// ============================================================================
+
+export const WorkerEventsSchema = z.object({
+  taskId: z.string(),
+  nodeId: z.string(),
+  events: z.array(WorkerEventSchema),
+});
+
+export type WorkerEvents = z.infer<typeof WorkerEventsSchema>;
+
+// ============================================================================
+// Task Result (Worker → Orchestrator)
+// ============================================================================
+
+export const TaskResultStatusEnum = z.enum([
+  'running',
+  'completed',
+  'failed',
+]);
+
+export type TaskResultStatus = z.infer<typeof TaskResultStatusEnum>;
+
+export const TaskResultSchema = z.object({
+  taskId: z.string(),
+  nodeId: z.string(),
+  status: TaskResultStatusEnum,
+  result: z.string().optional(),
+  error: z.string().optional(),
+  // Security report content (reports.jsonl raw text)
+  reportContent: z.string().optional(),
+});
+
+export type TaskResult = z.infer<typeof TaskResultSchema>;
+
+// ============================================================================
+// Agent Node (Worker registration)
+// ============================================================================
+
+export const AgentNodeStatusEnum = z.enum([
+  'online',
+  'offline',
+  'busy',
+  'draining',
+]);
+
+export type AgentNodeStatus = z.infer<typeof AgentNodeStatusEnum>;
+
+export const AgentNodeSchema = z.object({
+  nodeId: z.string(),
+  address: z.string(),
+  status: AgentNodeStatusEnum,
+  maxConcurrent: z.number(),
+  currentTasks: z.number().default(0),
+  capabilities: z.array(z.string()).optional(),
+  lastHeartbeat: z.string().or(z.date()),
+});
+
+export type AgentNode = z.infer<typeof AgentNodeSchema>;
+

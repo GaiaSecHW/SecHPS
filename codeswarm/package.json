@@ -1,0 +1,13 @@
+{
+  "name": "codeswarm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "dev:worker": "pnpm --filter @codeswarm/worker dev",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}
