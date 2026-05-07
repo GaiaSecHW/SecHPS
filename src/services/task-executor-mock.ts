@@ -2,6 +2,16 @@ import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import eventBus from '@/lib/event-bus';
 
+function parseJsonArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return value ? [value] : [];
+  }
+}
+
 const MOCK_LOG_MESSAGES = [
   { level: 'info', message: '任务开始执行', details: '正在初始化执行环境...' },
   { level: 'info', message: '加载 Agent 配置', details: 'Agent: {agentName}' },
@@ -68,8 +78,8 @@ export async function executeTaskMock(
         success: true,
         scannedFiles: 156,
         vulnerabilitiesFound: 0,
-        mergedSkills: mergedSkills ? JSON.parse(mergedSkills) : [],
-        mergedScripts: mergedScripts ? JSON.parse(mergedScripts) : [],
+        mergedSkills: parseJsonArray(mergedSkills),
+        mergedScripts: parseJsonArray(mergedScripts),
       }),
     },
   });
