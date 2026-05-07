@@ -1484,6 +1484,7 @@ model User {
   Skill                                        Skill[]
   SkillPrediction                              SkillPrediction[]
   SkillPredictionTask                          SkillPredictionTask[]
+  TaskInstance                                 TaskInstance[]
   UserRole                                     UserRole[]
   Workflow                                     Workflow[]
   WorkflowExecution                            WorkflowExecution[]
@@ -1743,4 +1744,42 @@ model WorkflowShare {
   @@index([workflowId])
   @@index([sharedBy])
   @@index([sharedWith])
+}
+
+model TaskInstance {
+  id           String             @id
+  userId       String?
+  name         String
+  templateId   String
+  templateName String
+  parameters   String
+  notes        String?
+  status       String             @default("pending")
+  startedAt    DateTime?
+  completedAt  DateTime?
+  errorMessage String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime
+  User         User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  TaskExecutionLog TaskExecutionLog[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([templateId])
+  @@index([createdAt])
+}
+
+model TaskExecutionLog {
+  id        String        @id
+  taskId    String
+  timestamp DateTime      @default(now())
+  level     String
+  message   String
+  details   String?
+  createdAt DateTime      @default(now())
+  TaskInstance TaskInstance @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@index([level])
+  @@index([timestamp])
 }
