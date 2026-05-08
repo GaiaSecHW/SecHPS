@@ -5,15 +5,12 @@ import { X, CheckCircle2, ArrowRight, ArrowLeft, Upload, File, Loader2, Plus } f
 import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 
-interface Agent {
+interface AgentApp {
   id: string;
   name: string;
-  displayName: string;
-  description: string | null;
-  category: string;
-  model: string;
-  skills: string | null;
-  isBuiltin: boolean;
+  engine: string;
+  startCommand: string;
+  notes: string | null;
 }
 
 interface Skill {
@@ -59,7 +56,7 @@ const initialFormData: TaskFormData = {
 export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [currentStep, setCurrentStep] = useState<StepId>('select');
   const [formData, setFormData] = useState<TaskFormData>(initialFormData);
-  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentApps, setAgentApps] = useState<AgentApp[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [availableScripts, setAvailableScripts] = useState<string[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -74,23 +71,23 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
   useEffect(() => {
     if (isOpen) {
-      fetchAgents();
+      fetchAgentApps();
     }
   }, [isOpen]);
 
-  const fetchAgents = async () => {
+  const fetchAgentApps = async () => {
     setLoadingAgents(true);
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/agent-definitions', {
+      const response = await fetch('/api/agent-apps', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
-        setAgents(data.agents || []);
+        setAgentApps(data.apps || []);
       } else {
-        toast.error('获取 Agent 列表失败');
+        toast.error('获取 Agent 应用列表失败');
       }
     } catch {
       toast.error('网络错误');
@@ -121,13 +118,13 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     }
   };
 
-  const handleAgentSelect = (agentId: string) => {
-    const agent = agents.find(a => a.id === agentId);
-    if (agent) {
+  const handleAgentAppSelect = (agentAppId: string) => {
+    const agentApp = agentApps.find(a => a.id === agentAppId);
+    if (agentApp) {
       setFormData({
         ...formData,
-        agentId,
-        agentName: agent.displayName || agent.name,
+        agentId: agentAppId,
+        agentName: agentApp.name,
       });
     }
   };
@@ -320,44 +317,41 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
         <div className="flex-1 overflow-y-auto p-6">
           {currentStep === 'select' && (
             <div className="space-y-4">
-              <p className="text-sm text-gray-600">选择 Agent：</p>
+              <p className="text-sm text-gray-600">选择 Agent 应用：</p>
               {loadingAgents ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 size={24} className="animate-spin text-blue-600" />
                 </div>
-              ) : agents.length === 0 ? (
+              ) : agentApps.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  暂无可用 Agent，请联系管理员创建
+                  暂无可用 Agent 应用，请在 Agent应用开发页面创建
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
-                  {agents.map((agent) => (
+                  {agentApps.map((agentApp) => (
                     <div
-                      key={agent.id}
-                      onClick={() => handleAgentSelect(agent.id)}
+                      key={agentApp.id}
+                      onClick={() => handleAgentAppSelect(agentApp.id)}
                       className={`p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                        formData.agentId === agent.id
+                        formData.agentId === agentApp.id
                           ? 'bg-blue-50 border-blue-500 shadow-md'
                           : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow'
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-gray-900">
-                          {agent.displayName || agent.name}
+                          {agentApp.name}
                         </span>
-                        {formData.agentId === agent.id && (
+                        {formData.agentId === agentApp.id && (
                           <CheckCircle2 size={16} className="text-blue-600" />
                         )}
                       </div>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-                        {agent.description || '无描述'}
+                        {agentApp.notes || '无描述'}
                       </p>
                       <div className="flex gap-1 mt-2">
                         <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                          {agent.category}
-                        </span>
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                          {agent.model}
+                          {agentApp.engine}
                         </span>
                       </div>
                     </div>
