@@ -1475,6 +1475,7 @@ model User {
   isActive                                     Boolean               @default(true)
   createdAt                                    DateTime              @default(now())
   updatedAt                                    DateTime
+  AgentApp                                     AgentApp[]
   AgentDefinition                              AgentDefinition[]
   AgentTeam                                    AgentTeam[]
   McpServerConfig                              McpServerConfig[]
@@ -1834,4 +1835,21 @@ model CodeswarmTask {
   @@index([state])
   @@index([workerId])
   @@index([createdAt])
+}
+
+model AgentApp {
+  id           String   @id
+  userId       String
+  name         String
+  engine       String
+  skillPath    String
+  startCommand String
+  notes        String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
 }

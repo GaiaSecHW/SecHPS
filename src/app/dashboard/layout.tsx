@@ -34,6 +34,7 @@ import {
   GitBranch,
   Megaphone,
   ClipboardList,
+  Box,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -161,6 +162,9 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/mcp-servers" icon={<Server size={20} />} collapsed={collapsed}>
                 MCP 服务器
+              </NavLink>
+              <NavLink href="/dashboard/agent-apps" icon={<Box size={20} />} collapsed={collapsed}>
+                Agent应用开发
               </NavLink>
             </>
           )}
