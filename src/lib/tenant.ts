@@ -15,6 +15,7 @@ export function getTenantContext(payload: JWTPayload): TenantContext {
   return {
     tenantId: payload.tenantId ?? null,
     isIcsTenant: payload.isIcsTenant ?? false,
+    // 平台管理员：admin角色 + 无租户（tenantId=null）
     isPlatformAdmin: isSuperAdmin && !payload.tenantId,
   };
 }

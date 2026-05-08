@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
       name,
       slug,
       isIcsTenant: isIcsTenant ?? false,
+      updatedAt: new Date(),
     },
   });
 
