@@ -3,7 +3,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
-import { uploadFileToRemote, testSftpConnection } from '@/lib/sftp-upload';
+import { uploadAndExtractArchive, testSftpConnection } from '@/lib/sftp-upload';
 
 export async function POST(request: NextRequest) {
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -35,15 +35,21 @@ export async function POST(request: NextRequest) {
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        const result = await uploadFileToRemote(taskId, file.name, buffer);
-        filePath = result.remoteFilePath;
-        projectPath = result.remoteDirPath;
-
-        console.log(`File uploaded to: ${filePath}`);
+        const result = await uploadAndExtractArchive(taskId, file.name, buffer);
+        
+        if (result.extracted) {
+          projectPath = result.remoteDirPath;
+          filePath = null;
+          console.log(`Archive extracted to: ${projectPath}`);
+        } else {
+          filePath = result.remoteFilePath;
+          projectPath = result.remoteDirPath;
+          console.log(`File uploaded to: ${filePath}`);
+        }
       } catch (uploadError) {
-        console.error('文件上传失败:', uploadError);
+        console.error('文件上传/解压失败:', uploadError);
         const errorMessage = uploadError instanceof Error ? uploadError.message : '文件上传失败';
-        return NextResponse.json({ error: `文件上传失败: ${errorMessage}` }, { status: 500 });
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
       }
     }
 
