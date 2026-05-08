@@ -54,10 +54,16 @@ next-env.d.ts
 Thumbs.db
 
 # Data files (skills are managed via database)
-data/skills/
+data/
 
 # Session messages (JSONL storage)
 data/sessions/
+
+# User uploads
+uploads/
+
+# Development database
+prisma/dev.db
 
 # OMC tool state files
 .omc/
