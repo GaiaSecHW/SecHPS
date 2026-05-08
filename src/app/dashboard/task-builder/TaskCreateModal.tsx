@@ -67,6 +67,41 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
         toast.error('文件大小不能超过 5GB');
         return;
       }
+      const allowedTypes = [
+        '.zip', '.jar', '.war', '.ear', '.tar', '.gz', '.rar', '.7z',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt',
+        '.md', '.csv', '.json', '.xml', '.yaml', '.yml'
+      ];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!allowedTypes.includes(ext)) {
+        toast.error(`文件格式不支持，仅支持 ZIP、JAR、WAR 等格式`);
+        return;
+      }
+      setSelectedFile(file);
+      if (!name) {
+        setName(file.name.split('.')[0]);
+      }
+    }
+  };
+
+  const handleFileDrop = (files: FileList) => {
+    const file = files[0];
+    if (file) {
+      const maxSize = 5 * 1024 * 1024 * 1024;
+      if (file.size > maxSize) {
+        toast.error('文件大小不能超过 5GB');
+        return;
+      }
+      const allowedTypes = [
+        '.zip', '.jar', '.war', '.ear', '.tar', '.gz', '.rar', '.7z',
+        '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.txt',
+        '.md', '.csv', '.json', '.xml', '.yaml', '.yml'
+      ];
+      const ext = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+      if (!allowedTypes.includes(ext)) {
+        toast.error(`文件格式不支持，仅支持 ZIP、JAR、WAR 等格式`);
+        return;
+      }
       setSelectedFile(file);
       if (!name) {
         setName(file.name.split('.')[0]);
@@ -198,13 +233,6 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               上传文件
             </label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              onChange={handleFileSelect}
-              accept=".zip,.jar,.war,.ear,.tar,.gz,.rar,.7z,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
-              className="hidden"
-            />
             {selectedFile ? (
               <div className="flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-md">
                 <div className="flex items-center space-x-2">
@@ -225,17 +253,50 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                 </button>
               </div>
             ) : (
-              <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-blue-400 transition-colors cursor-pointer"
+              <div 
+                className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-blue-400 transition-colors"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.currentTarget.classList.add('border-blue-400', 'bg-blue-50');
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+                  if (e.dataTransfer.files.length > 0) {
+                    handleFileDrop(e.dataTransfer.files);
+                  }
+                }}
               >
                 <div className="text-center">
                   <Upload className="mx-auto h-12 w-12 text-gray-400" />
                   <div className="mt-4">
-                    <span className="text-sm text-gray-600">点击上传文件</span>
+                    <label
+                      htmlFor="file-upload-task"
+                      className="cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500"
+                    >
+                      <span>点击上传文件</span>
+                      <input
+                        id="file-upload-task"
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        accept=".zip,.jar,.war,.ear,.tar,.gz,.rar,.7z,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
+                        className="sr-only"
+                      />
+                    </label>
+                    <p className="pl-1">或拖拽文件到此处</p>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
-                    支持多种格式：压缩包、文档、数据文件，最大 5GB
+                    支持多种格式：压缩包（ZIP、JAR、WAR、EAR、TAR、GZ、RAR、7Z）、
+                    文档（PDF、DOC、DOCX、XLS、XLSX、PPT、PPTX、TXT、MD）、
+                    数据（CSV、JSON、XML、YAML），单个文件最大 5GB
                   </p>
                 </div>
               </div>
