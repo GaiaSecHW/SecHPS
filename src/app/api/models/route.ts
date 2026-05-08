@@ -57,29 +57,16 @@ export async function GET(request: Request) {
     }
 
     // 根据用户角色和租户过滤模型
+    // 注意：ModelConfig 使用 isPublic (Boolean) 而非 visibility (String)，不能使用 buildTenantFilter
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
       // 管理员/ICSL 可以看到所有
-    } else if (forEvaluation) {
-      // 用于评估时：用户可以看到自己的模型 + 公开的模型 + 同租户的模型
-      const tenantFilter = buildTenantFilter(tenant, {
-        tenantField: 'tenantId',
-        visibilityField: 'visibility',
-      });
-      where.OR = [
-        { userId: payload.userId },  // 自己创建的
-        { isPublic: true },           // 公开的
-        { ...tenantFilter },          // 同租户的
-      ];
     } else {
-      // 普通用户管理页面：自己的 + 公开的 + 同租户的
-      const tenantFilter = buildTenantFilter(tenant, {
-        tenantField: 'tenantId',
-        visibilityField: 'visibility',
-      });
+      // 普通用户：自己的 + 公开的 + 同租户的
+      // ModelConfig 没有 visibility 字段，直接用 tenantId 过滤
       where.OR = [
         { userId: payload.userId },  // 自己创建的
-        { isPublic: true },           // 公开的
-        { ...tenantFilter },          // 同租户的
+        { isPublic: true },           // 公开的（isPublic=true）
+        { tenantId: tenant.tenantId }, // 同租户的
       ];
     }
 
