@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
+import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
 
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
@@ -31,15 +33,15 @@ function formatModel(model: any, includeApiKey: boolean = false) {
 }
 
 // 获取用户的模型列表
-// 普通用户：只能看到自己创建的模型 + 公开的模型
-// 管理员：可以看到所有模型
+// 普通用户：只能看到自己创建的模型 + 公开的模型 + 同租户的模型
+// 管理员/ICSL：可以看到所有模型
 export async function GET(request: Request) {
   // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     // 获取查询参数
@@ -47,33 +49,37 @@ export async function GET(request: Request) {
     const isActiveParam = searchParams.get('isActive');
     const forEvaluation = searchParams.get('forEvaluation') === 'true';
 
-    // 检查是否是管理员
-    const userIsAdmin = isAdmin(payload);
-
     // 构建查询条件
     let where: any = {};
-    
+
     if (isActiveParam !== null) {
       where.isActive = isActiveParam === 'true';
     }
 
-    // 根据用户角色和用途过滤模型
-    if (forEvaluation) {
-      // 用于评估时：用户可以看到自己的模型 + 公开的模型
+    // 根据用户角色和租户过滤模型
+    if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      // 管理员/ICSL 可以看到所有
+    } else if (forEvaluation) {
+      // 用于评估时：用户可以看到自己的模型 + 公开的模型 + 同租户的模型
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
       where.OR = [
         { userId: payload.userId },  // 自己创建的
         { isPublic: true },           // 公开的
-        { userId: null },             // 系统级模型（管理员创建的公共模型）
+        { ...tenantFilter },          // 同租户的
       ];
-    } else if (userIsAdmin) {
-      // 管理员可以看到所有模型
-      // 不添加额外的userId过滤
     } else {
-      // 普通用户管理页面：自己的 + 公开的 + 系统级模型
+      // 普通用户管理页面：自己的 + 公开的 + 同租户的
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
       where.OR = [
         { userId: payload.userId },  // 自己创建的
         { isPublic: true },           // 公开的
-        { userId: null },             // 系统级模型
+        { ...tenantFilter },          // 同租户的
       ];
     }
 
@@ -99,7 +105,7 @@ export async function GET(request: Request) {
     const formattedModels = models.map((model) => formatModel(model, false));
 
     // 记录列表查询日志
-    logger.list(LOG_MODULES.MODEL, payload, 'models', { isActive: isActiveParam, forEvaluation, isAdmin }, formattedModels.length);
+    logger.list(LOG_MODULES.MODEL, payload, 'models', { isActive: isActiveParam, forEvaluation }, formattedModels.length);
 
     return NextResponse.json({ models: formattedModels });
   } catch (error) {
@@ -111,11 +117,11 @@ export async function GET(request: Request) {
 // 创建新的模型配置（个人模型）
 export async function POST(request: Request) {
   // 使用统一认证中间件
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const body = await request.json();
@@ -128,6 +134,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // 租户检查：只有 ICSL 或平台管理员可以创建公开资源
+    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json(
+        { error: '只有 ICSL 租户可以创建公共资源' },
+        { status: 403 }
+      );
+    }
+
+    // 获取租户 ID 和可见性
+    const visibility = getVisibility(isPublic);
+    const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // 验证 providerType
     const validProviderTypes = ['claude', 'openai'];
@@ -174,10 +192,10 @@ export async function POST(request: Request) {
     // 检查是否是管理员
     const userIsAdmin = isAdmin(payload);
 
-    // 验证管理员专属字段
-    if (isSystemModel && !userIsAdmin) {
+    // 验证管理员专属字段（ICSL/平台管理员都可以创建系统模型）
+    if (isSystemModel && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
       return NextResponse.json(
-        { error: '只有管理员可以创建系统模型' },
+        { error: '只有 ICSL 或平台管理员可以创建系统模型' },
         { status: 403 }
       );
     }
@@ -190,7 +208,7 @@ export async function POST(request: Request) {
     }
 
     // 如果设置为默认模型，先取消其他默认模型
-    if (isDefault && userIsAdmin) {
+    if (isDefault && (tenant.isIcsTenant || tenant.isPlatformAdmin)) {
       await prisma.modelConfig.updateMany({
         where: { isDefault: true },
         data: { isDefault: false },
@@ -202,6 +220,7 @@ export async function POST(request: Request) {
       data: {
         id: generateId('model'),
         userId: isSystemModel ? null : payload.userId,  // 系统模型 userId 为 null
+        tenantId,
         name,
         providerType: providerType || 'openai',
         apiBaseUrl,

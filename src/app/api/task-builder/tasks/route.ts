@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequest, authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { uploadAndExtractArchive, testSftpConnection } from '@/lib/sftp-upload';
+import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
 
 export async function POST(request: NextRequest) {
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
+
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const formData = await request.formData();
@@ -56,7 +60,9 @@ export async function POST(request: NextRequest) {
     const task = await prisma.taskInstance.create({
       data: {
         id: taskId,
-        userId: auth.payload.userId,
+        userId: payload.userId,
+        tenantId: tenant.tenantId,
+        visibility: tenant.isIcsTenant ? 'public' : 'private',
         name,
         agentId,
         agentName,
@@ -81,8 +87,10 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
+  const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
   if (!auth.success) return authErrorResponse(auth);
+
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   const { searchParams } = new URL(request.url);
   const page = parseInt(searchParams.get('page') || '1');
@@ -90,7 +98,22 @@ export async function GET(request: NextRequest) {
   const skip = (page - 1) * limit;
 
   try {
-    const where = auth.payload.roles?.includes('admin') ? {} : { userId: auth.payload.userId };
+    // 构建租户过滤条件
+    let where: any = {};
+
+    if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      // 管理员/ICSL 可见所有
+    } else {
+      // 普通用户：自己的 + 公开的 + 同租户的
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
+      where.OR = [
+        { userId: payload.userId },
+        { ...tenantFilter },
+      ];
+    }
 
     const [tasks, total] = await Promise.all([
       prisma.taskInstance.findMany({

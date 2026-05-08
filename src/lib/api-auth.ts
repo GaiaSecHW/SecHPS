@@ -7,6 +7,8 @@
 import { NextResponse } from 'next/server';
 import { verifyToken, hasPermission } from '@/lib/auth';
 import type { JWTPayload } from '@/lib/auth';
+import type { TenantContext } from '@/lib/tenant';
+import { getTenantContext } from '@/lib/tenant';
 
 /**
  * 认证结果类型
@@ -170,7 +172,7 @@ export function getUserId(payload: JWTPayload): string {
 }
 
 /**
- * 认证结果扩展类型（包含便捷方法）
+ * 认证结果扩展类型（包含便捷方法和租户上下文）
  */
 export interface AuthSuccessResult {
   success: true;
@@ -179,11 +181,13 @@ export interface AuthSuccessResult {
   isAdmin: boolean;
   /** 获取用户 ID */
   userId: string;
+  /** 租户上下文 */
+  tenant: TenantContext;
 }
 
 /**
- * 增强版认证请求（返回更多便捷属性）
- * 
+ * 增强版认证请求（返回更多便捷属性和租户上下文）
+ *
  * @param request - Next.js Request 对象
  * @param options - 认证选项
  * @returns 认证结果
@@ -193,14 +197,15 @@ export function authenticateRequestEnhanced(
   options?: AuthenticateOptions
 ): AuthResult | AuthSuccessResult {
   const result = authenticateRequest(request, options);
-  
+
   if (result.success) {
     return {
       ...result,
       isAdmin: isAdmin(result.payload),
       userId: result.payload.userId,
+      tenant: getTenantContext(result.payload),
     };
   }
-  
+
   return result;
 }

@@ -1,27 +1,27 @@
 // src/app/api/mcp-servers/route.ts
-// MCP 服务器配置 API（支持用户私有 + 共享 MCP）
+// MCP 服务器配置 API（支持用户私有 + 共享 MCP + 多租户）
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
+import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
 
 // GET /api/mcp-servers - 获取用户可访问的 MCP 服务器列表
-// 普通用户：自己的 MCP + 共享的 MCP
-// 管理员：所有 MCP
+// 普通用户：自己的 MCP + 共享的 MCP + 同租户的 MCP
+// 管理员/ICSL：所有 MCP
 export async function GET(request: Request) {
   // 使用统一认证中间件
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
-    const userIsAdmin = isAdmin(payload);
-
     // 解析分页参数
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1', 10);
@@ -35,27 +35,38 @@ export async function GET(request: Request) {
     // 构建 where 条件
     let where: any = { projectId: null }; // 排除项目级 MCP
 
-    if (userIsAdmin) {
-      // 管理员：查看所有全局 MCP
+    if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      // 管理员/ICSL：查看所有全局 MCP
       if (search) {
         where.name = { contains: search };
       }
       if (filter === 'mine') {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
-        where.isShared = true;
+        where.OR = [{ visibility: 'public' }, { isShared: true }];
       }
     } else {
-      // 普通用户：自己的 MCP + 共享的 MCP
+      // 普通用户：自己的 MCP + 共享的 MCP + 同租户的 MCP
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
+
       if (filter === 'mine') {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
-        where.isShared = true;
+        where.OR = [
+          { visibility: 'public' },
+          { isShared: true },
+          { ...tenantFilter },
+        ];
       } else {
-        // all: 自己的 + 共享的
+        // all: 自己的 + 共享的 + 同租户的
         where.OR = [
           { userId: payload.userId },
+          { visibility: 'public' },
           { isShared: true },
+          { ...tenantFilter },
         ];
       }
       if (search) {
@@ -98,15 +109,13 @@ export async function GET(request: Request) {
 // 所有用户都可以创建自己的 MCP
 export async function POST(request: Request) {
   // 使用统一认证中间件
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
-    const userIsAdmin = isAdmin(payload);
-
     const body = await request.json();
     const {
       name,
@@ -117,7 +126,7 @@ export async function POST(request: Request) {
       env,
       isEnabled = true,
       autoStart = false,
-      isShared = false, // 只有管理员可以设置为共享
+      isShared = false, // 只有 ICSL/管理员可以设置为共享
     } = body;
 
     // 验证必填字段
@@ -150,13 +159,17 @@ export async function POST(request: Request) {
       );
     }
 
-    // 非管理员不能创建共享 MCP
-    if (isShared && !userIsAdmin) {
+    // 非管理员/ICSL 不能创建共享 MCP
+    if (isShared && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
       return NextResponse.json(
-        { error: '只有管理员可以创建共享 MCP' },
+        { error: '只有 ICSL 或平台管理员可以创建共享 MCP' },
         { status: 403 }
       );
     }
+
+    // 获取租户 ID 和可见性
+    const visibility = getVisibility(isShared);
+    const tenantId = getTenantIdForCreate(tenant, isShared);
 
     // 检查名称是否已存在（用户自己的 MCP 名称不能重复）
     const existing = await prisma.mcpServerConfig.findFirst({
@@ -186,8 +199,9 @@ export async function POST(request: Request) {
         env: env ? JSON.stringify(env) : null,
         isEnabled,
         autoStart,
-        isShared: userIsAdmin ? isShared : false, // 非管理员强制为 false
+        isShared: tenant.isIcsTenant || tenant.isPlatformAdmin ? isShared : false, // 非管理员/ICSL 强制为 false
         userId: payload.userId,
+        tenantId,
         projectId: null,
         updatedAt: new Date(),
       },

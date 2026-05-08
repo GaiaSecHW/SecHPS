@@ -198,6 +198,9 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/users" icon={<Users size={20} />} collapsed={collapsed}>
                 用户管理
               </NavLink>
+              <NavLink href="/dashboard/admin/tenants" icon={<Layers size={20} />} collapsed={collapsed}>
+                租户管理
+              </NavLink>
               {/* 角色权限菜单已隐藏 */}
               {/* <NavLink href="/dashboard/roles" icon={<Settings size={20} />} collapsed={collapsed}>
                 角色权限
@@ -283,9 +286,26 @@ function DashboardLayoutContent({
                 />
               )}
               <div className="text-sm">
-                <p className="font-medium text-gray-900">
-                  {user?.name || user?.username}
-                </p>
+                <div className="flex items-center gap-2">
+                  <p className="font-medium text-gray-900">
+                    {user?.name || user?.username}
+                  </p>
+                  {user?.tenantId && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                      {user?.tenantName || '租户'}
+                    </span>
+                  )}
+                  {user?.isIcsTenant && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                      ICSL
+                    </span>
+                  )}
+                  {user?.roles?.includes('admin') && !user?.tenantId && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                      平台管理员
+                    </span>
+                  )}
+                </div>
                 <p className="text-gray-500">{user?.email}</p>
               </div>
             </div>

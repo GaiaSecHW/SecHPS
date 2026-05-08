@@ -72,13 +72,13 @@ export async function POST(request: Request) {
       );
     }
     
-    const { roles, permissions } = userWithPerms;
+    const { roles, permissions, tenant } = userWithPerms;
 
     // 清除用户缓存，确保获取最新权限
     invalidateUserCaches(user.id);
 
-    // 生成 JWT Token
-    const token = generateToken(user, roles, permissions);
+    // 生成 JWT Token（包含租户信息）
+    const token = generateToken(user, roles, permissions, tenant);
     
     // 生成 Refresh Token
     const refreshToken = generateRefreshToken(user.id);
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       {
         message: '登录成功',
         token,
-        refreshToken, // 可选：返回给前端用于 localStorage 备份
+        refreshToken,
         user: {
           id: user.id,
           email: user.email,
@@ -116,6 +116,9 @@ export async function POST(request: Request) {
           avatar: user.avatar,
           roles: roles.map(r => r.name),
           permissions: permissions,
+          tenantId: tenant?.id ?? null,
+          tenantName: tenant?.name ?? null,
+          isIcsTenant: tenant?.isIcsTenant ?? false,
         },
       },
       {

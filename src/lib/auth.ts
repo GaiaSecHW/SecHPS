@@ -73,6 +73,8 @@ export interface JWTPayload {
   email: string;
   roles: string[];
   permissions: string[];
+  tenantId?: string | null;    // 租户 ID
+  isIcsTenant?: boolean;       // 是否 ICSL 租户
 }
 
 export interface RefreshTokenPayload {
@@ -92,13 +94,20 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 }
 
 // 生成 JWT Token
-export function generateToken(user: User, roles: Role[], permissions: string[]): string {
+export function generateToken(
+  user: User,
+  roles: Role[],
+  permissions: string[],
+  tenant?: { id: string; name?: string; isIcsTenant: boolean } | null
+): string {
   const payload: JWTPayload = {
     userId: user.id,
-    username: user.username,  // 添加用户名
+    username: user.username,
     email: user.email,
     roles: roles.map(r => r.name),
     permissions: permissions,
+    tenantId: tenant?.id ?? null,
+    isIcsTenant: tenant?.isIcsTenant ?? false,
   };
 
   return jwt.sign(payload, JWT_SECRET, {
@@ -173,11 +182,12 @@ export function verifyTokenAllowExpired(token: string): JWTPayload | null {
   }
 }
 
-// 获取用户完整信息（包含角色和权限）- 使用缓存
+// 获取用户完整信息（包含角色、权限和租户）- 使用缓存
 export async function getUserWithPermissions(userId: string): Promise<{
   user: User;
   roles: Role[];
   permissions: string[];
+  tenant?: { id: string; name?: string; isIcsTenant: boolean } | null;
 } | null> {
   const cacheKey = cacheKeys.userPermissions(userId);
 
@@ -185,6 +195,7 @@ export async function getUserWithPermissions(userId: string): Promise<{
     user: User;
     roles: Role[];
     permissions: string[];
+    tenant?: { id: string; name?: string; isIcsTenant: boolean } | null;
   } | null>(
     permissionCache,
     cacheKey,
@@ -192,6 +203,7 @@ export async function getUserWithPermissions(userId: string): Promise<{
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
+          tenant: true,  // 包含租户信息
           UserRole: {
             include: {
               Role: {
@@ -220,6 +232,7 @@ export async function getUserWithPermissions(userId: string): Promise<{
         user,
         roles: user.UserRole.map(ur => ur.Role),
         permissions: Array.from(permissions),
+        tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name, isIcsTenant: user.tenant.isIcsTenant } : null,
       };
     },
     5 * 60 * 1000 // 5 minutes TTL

@@ -2,8 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { hasPermission } from '@/lib/auth';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { AuditLogger } from '@/lib/audit/logger';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
@@ -14,6 +14,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { findSimilarSkills, SkillForSimilarity, SimilarSkill } from '@/services/skill-similarity';
 import { triggerGovernanceAnalysis } from '@/services/skill-governance';
 import { generateId } from '@/lib/id-generator';
+import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
 
 // GET /api/skills - 获取 Skills 列表
 // 支持作用域过滤：
@@ -22,11 +23,11 @@ import { generateId } from '@/lib/id-generator';
 // - scope=all: 返回用户可用的所有 Skills（公共 + 私有）
 export async function GET(request: Request) {
   try {
-    const auth = authenticateRequest(request);
+    const auth = authenticateRequestEnhanced(request);
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') || undefined;
@@ -55,31 +56,42 @@ export async function GET(request: Request) {
         where.VulnerabilityPattern = { categoryId: cat.id };
       }
     }
-    
+
     // 默认只返回最新版本
     where.isLatest = true;
 
-    // 作用域过滤
+    // 作用域过滤 - 整合多租户
     if (scope === 'public') {
       // 选择模式：公共技能 + 公开分享的技能（用于执行时选择）
       where.OR = [
-        { userId: null },        // 公共技能（系统内置）
-        { isPublic: true },      // 其他用户公开分享的技能
+        { userId: null },           // 公共技能（系统内置）
+        { visibility: 'public' },    // 公开分享的技能
+        { isPublic: true },          // 其他用户公开分享的技能
       ];
     } else if (scope === 'mine') {
-      // 管理模式：自己的技能 + 系统内置的 + 公开共享的
+      // 管理模式：自己的技能 + 系统内置的 + 公开共享的 + 同租户的
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
       where.OR = [
         { userId: payload.userId }, // 自己创建的技能
         { userId: null },           // 系统内置技能
         { isPublic: true },         // 其他用户公开分享的技能
+        { ...tenantFilter },        // 同租户的技能
       ];
     } else {
       // scope === 'all': 选择模式（用于执行时选择技能）
-      // 用户可用的所有 Skills：公共 + 自己的 + 公开分享的
+      // 用户可用的所有 Skills：公共 + 自己的 + 公开分享的 + 同租户的
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
       where.OR = [
         { userId: null },           // 公共技能（系统内置）
         { userId: payload.userId }, // 自己创建的技能
         { isPublic: true },         // 其他用户公开分享的技能
+        { ...tenantFilter },        // 同租户的技能
       ];
     }
 
@@ -138,14 +150,14 @@ export async function GET(request: Request) {
 }
 
 // POST /api/skills - 创建 Skill
-// 支持创建公共 Skill（需要管理员权限）或私有 Skill
+// 支持创建公共 Skill（需要管理员/ICSL 权限）或私有 Skill
 export async function POST(request: Request) {
   try {
-    const auth = authenticateRequest(request);
+    const auth = authenticateRequestEnhanced(request);
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const body = await request.json();
     const {
@@ -166,6 +178,18 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
+
+    // 租户检查：只有 ICSL 或平台管理员可以创建公开资源
+    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json(
+        { details: { error: '只有 ICSL 租户可以创建公共资源' } },
+        { status: 403 }
+      );
+    }
+
+    // 获取租户 ID 和可见性
+    const visibility = getVisibility(isPublic);
+    const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // ===== 新字段验证 =====
     // 验证 techStackId 存在性（如果提供）
@@ -199,8 +223,8 @@ export async function POST(request: Request) {
     let isBuiltin = false;
 
     if (isPublic) {
-      // 创建公共 Skill 需要管理员权限
-      if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
+      // 创建公共 Skill 需要管理员/ICSL 权限
+      if (!tenant.isIcsTenant && !tenant.isPlatformAdmin) {
         return NextResponse.json({ details: { error: '禁止访问 - 创建公共 Skill 需要管理员权限' } }, { status: 403 });
       }
       userId = null;  // 公共 Skill
@@ -211,11 +235,12 @@ export async function POST(request: Request) {
       isBuiltin = false;
     }
 
-    // 检查名称是否已存在（同一作用域内）
+    // 检查名称是否已存在（同一租户内）
     const existing = await prisma.skill.findFirst({
       where: {
         name,
         userId,
+        tenantId: isPublic ? null : tenantId,
       },
     });
     if (existing) {
@@ -236,6 +261,8 @@ export async function POST(request: Request) {
         cwe: cwe || null,
         content,
         userId,
+        tenantId,
+        visibility,
         isBuiltin,
         version: 1,
         isLatest: true,

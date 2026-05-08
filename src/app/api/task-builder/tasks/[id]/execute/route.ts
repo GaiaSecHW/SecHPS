@@ -64,7 +64,7 @@ export async function POST(
       timestamp: new Date(),
     });
 
-    executeTaskMock(id, mergedSkills, mergedScripts).catch(async (error) => {
+    executeTaskMock(id, mergedSkills || undefined, mergedScripts || undefined).catch(async (error) => {
       console.error('执行失败:', error);
       
       eventBus.emit(`task:${id}`, {

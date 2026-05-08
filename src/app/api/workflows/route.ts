@@ -4,7 +4,9 @@ import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { buildSearchFilter, combineWhereClauses } from '@/lib/query-optimizer';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
+import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
 import { AuditLogger } from '@/lib/audit/logger';
 import { generateId } from '@/lib/id-generator';
 
@@ -31,16 +33,16 @@ function formatWorkflow(workflow: any) {
 }
 
 // 获取工作流列表
-// 普通用户：只能看到自己创建的 + 公开的
-// 管理员：可以看到所有工作流 + 创建者信息
+// 平台管理员/ICSL：可以看到所有
+// 普通用户：只能看到自己创建的 + 公开的 + 同租户的
 export async function GET(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_READ });
+    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.WORKFLOW_READ });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     // 获取查询参数
     const { searchParams } = new URL(request.url);
@@ -57,21 +59,25 @@ export async function GET(request: Request) {
 
     // 构建查询条件
     let baseWhere: any = {};
-    
+
     if (forEvaluation) {
       // 用于评估时：用户可以看到自己的 + 公开的
       baseWhere.OR = [
         { userId: payload.userId },
-        { isPublic: true },
+        { visibility: 'public' },
       ];
-    } else if (userIsAdmin) {
-      // 管理员可以看到所有
+    } else if (userIsAdmin || tenant.isIcsTenant) {
+      // 管理员/ICSL 可以看到所有
       // 不添加用户过滤
     } else {
-      // 普通用户管理页面：可以看到自己的 + 公开共享的
+      // 普通用户管理页面：可以看到自己的 + 公开共享的 + 同租户的
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
       baseWhere.OR = [
         { userId: payload.userId },
-        { isPublic: true },
+        { ...tenantFilter },
       ];
     }
 
@@ -139,11 +145,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.WORKFLOW_CREATE });
+    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.WORKFLOW_CREATE });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     // 解析请求体
     const body = await request.json();
@@ -164,6 +170,14 @@ export async function POST(request: Request) {
     if (trimmedName.length > 100) {
       return NextResponse.json({ error: '工作流名称不能超过100个字符' }, { status: 400 });
     }
+
+    // 验证：只有 ICSL 或平台管理员可创建 public
+    const visibility = getVisibility(isPublic);
+    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
+    }
+
+    const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // FSM 工作流使用默认的 threat-modeling 模板
     let fsmTemplateId: string | undefined;
@@ -190,6 +204,8 @@ export async function POST(request: Request) {
       data: {
         id: generateId('wf'),
         userId: payload.userId,
+        tenantId,
+        visibility,
         name: trimmedName,
         description: description?.trim() || undefined,
         techStack: techStackJson,

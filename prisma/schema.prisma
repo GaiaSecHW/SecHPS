@@ -8,6 +8,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// 多租户支持
+model Tenant {
+  id          String   @id
+  name        String
+  slug        String   @unique
+  isIcsTenant Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // 关联
+  users       User[]
+  AgentApp    AgentApp[]
+  Project     Project[]
+  Workflow    Workflow[]
+  Skill       Skill[]
+  AgentTeam   AgentTeam[]
+  ModelConfig ModelConfig[]
+  McpServerConfig McpServerConfig[]
+  TaskInstance TaskInstance[]
+}
+
 model AgentDefinition {
   id              String            @id
   userId          String?
@@ -55,6 +76,8 @@ model AgentMemberExecution {
 model AgentTeam {
   id                 String               @id
   userId             String
+  tenantId           String?
+  visibility         String               @default("private")
   name               String
   description        String?
   leadAgentId        String
@@ -66,11 +89,14 @@ model AgentTeam {
   updatedAt          DateTime
   User               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   AgentDefinition    AgentDefinition      @relation(fields: [leadAgentId], references: [id], onDelete: Cascade)
+  tenant             Tenant?              @relation(fields: [tenantId], references: [id])
   AgentTeamExecution AgentTeamExecution[]
   AgentTeamMember    AgentTeamMember[]
   EvaluationSession  EvaluationSession[]
 
   @@index([userId])
+  @@index([tenantId])
+  @@index([visibility])
   @@index([status])
   @@index([leadAgentId])
 }
@@ -483,6 +509,7 @@ model LogFileRecord {
 model McpServerConfig {
   id           String    @id
   userId       String
+  tenantId     String?
   projectId    String?
   name         String
   type         String
@@ -499,16 +526,19 @@ model McpServerConfig {
   updatedAt    DateTime
   Project      Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   User         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
 
   @@index([isShared])
   @@index([name])
   @@index([projectId])
   @@index([userId])
+  @@index([tenantId])
 }
 
 model ModelConfig {
   id                  String                @id
   userId              String?
+  tenantId            String?
   name                String
   providerType        String                @default("openai")
   apiBaseUrl          String
@@ -527,10 +557,12 @@ model ModelConfig {
   EvaluationIteration EvaluationIteration[]
   EvaluationSession   EvaluationSession[]
   User                User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant              Tenant?               @relation(fields: [tenantId], references: [id])
   NodeExecution       NodeExecution[]
   TaskInstance        TaskInstance[]
 
   @@index([userId])
+  @@index([tenantId])
   @@index([isActive])
   @@index([isDefault])
   @@index([isPublic])
@@ -681,6 +713,8 @@ model Plugin {
 model Project {
   id                        String                      @id
   userId                    String
+  tenantId                  String?
+  visibility                 String                      @default("private") // "private" | "public"
   configId                  String?
   name                      String
   displayName               String?
@@ -713,11 +747,14 @@ model Project {
   SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   ToolPermission            ToolPermission[]
   Vulnerability             Vulnerability[]
+  tenant                    Tenant?                    @relation(fields: [tenantId], references: [id])
 
   @@index([userId])
+  @@index([tenantId])
   @@index([configId])
   @@index([status])
   @@index([name])
+  @@index([visibility])
 }
 
 model ProjectFile {
@@ -900,6 +937,8 @@ model SessionMeta {
 model Skill {
   id                                                     String                      @id
   userId                                                 String?
+  tenantId                                               String?
+  visibility                                             String                      @default("private") // "private" | "public"
   name                                                   String
   displayName                                            String
   description                                            String
@@ -927,6 +966,7 @@ model Skill {
   Skill                                                  Skill?                      @relation("SkillToSkill", fields: [parentId], references: [id])
   other_Skill                                            Skill[]                     @relation("SkillToSkill")
   User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant                                                 Tenant?                     @relation(fields: [tenantId], references: [id])
   SkillAnalysis                                          SkillAnalysis[]
   SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
   SkillEvolution                                         SkillEvolution[]
@@ -949,6 +989,8 @@ model Skill {
   @@index([isLatest])
   @@index([name])
   @@index([userId])
+  @@index([tenantId])
+  @@index([visibility])
 }
 
 model SkillAnalysis {
@@ -1473,9 +1515,11 @@ model User {
   passwordHash                                 String
   name                                         String?
   avatar                                       String?
+  tenantId                                     String?
   isActive                                     Boolean               @default(true)
   createdAt                                    DateTime              @default(now())
   updatedAt                                    DateTime
+  tenant                                       Tenant?               @relation(fields: [tenantId], references: [id])
   AgentApp                                     AgentApp[]
   AgentDefinition                              AgentDefinition[]
   AgentTeam                                    AgentTeam[]
@@ -1594,6 +1638,8 @@ model VulnerabilityPattern {
 model Workflow {
   id                String              @id
   userId            String
+  tenantId          String?
+  visibility        String              @default("private")
   name              String
   description       String?
   thumbnail         String?
@@ -1608,6 +1654,7 @@ model Workflow {
   updatedAt         DateTime
   User              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   FSMTemplate       FSMTemplate?        @relation(fields: [fsmTemplateId], references: [id])
+  tenant            Tenant?             @relation(fields: [tenantId], references: [id])
   WorkflowEdge      WorkflowEdge[]
   WorkflowExecution WorkflowExecution[]
   WorkflowNode      WorkflowNode[]
@@ -1617,6 +1664,8 @@ model Workflow {
   @@index([fsmTemplateId])
   @@index([workflowType])
   @@index([userId])
+  @@index([tenantId])
+  @@index([visibility])
   @@index([status])
   @@index([isActive])
   @@index([isPublic])
@@ -1751,6 +1800,8 @@ model WorkflowShare {
 model TaskInstance {
   id               String             @id
   userId           String?
+  tenantId         String?
+  visibility       String             @default("private")
   name             String
   agentId          String
   agentName        String
@@ -1774,9 +1825,12 @@ model TaskInstance {
   updatedAt        DateTime
   User             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
   ModelConfig      ModelConfig?       @relation(fields: [modelId], references: [id], onDelete: SetNull)
+  Tenant           Tenant?            @relation(fields: [tenantId], references: [id])
   TaskExecutionLog TaskExecutionLog[]
 
   @@index([userId])
+  @@index([tenantId])
+  @@index([visibility])
   @@index([status])
   @@index([agentId])
   @@index([modelId])
@@ -1845,6 +1899,8 @@ model CodeswarmTask {
 model AgentApp {
   id           String   @id
   userId       String
+  tenantId     String?
+  visibility   String   @default("private") // "private" | "public"
   name         String
   engine       String
   skillPath    String
@@ -1854,7 +1910,9 @@ model AgentApp {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@index([userId])
-  @@index([status])
+  @@index([tenantId])
+  @@index([visibility])
 }
