@@ -383,7 +383,7 @@ function McpServersContent() {
         <div className="flex items-center space-x-3">
           <Server className="h-8 w-8 text-purple-600" />
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-gray-100">
               MCP 服务器配置
             </h1>
             <p className="text-sm text-gray-500 mt-1">
@@ -416,7 +416,7 @@ function McpServersContent() {
               setSearchQuery(e.target.value);
               setPage(1);
             }}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
         </div>
         {/* 过滤按钮 */}
@@ -424,7 +424,7 @@ function McpServersContent() {
           <button
             onClick={() => { setFilter('all'); setPage(1); }}
             className={`px-3 py-2 text-sm rounded-md transition-colors ${
-              filter === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              filter === 'all' ? 'bg-purple-600 text-white' : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
             }`}
           >
             全部
@@ -432,7 +432,7 @@ function McpServersContent() {
           <button
             onClick={() => { setFilter('mine'); setPage(1); }}
             className={`px-3 py-2 text-sm rounded-md transition-colors ${
-              filter === 'mine' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              filter === 'mine' ? 'bg-purple-600 text-white' : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
             }`}
           >
             <User size={14} className="inline mr-1" />
@@ -441,7 +441,7 @@ function McpServersContent() {
           <button
             onClick={() => { setFilter('shared'); setPage(1); }}
             className={`px-3 py-2 text-sm rounded-md transition-colors ${
-              filter === 'shared' ? 'bg-purple-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              filter === 'shared' ? 'bg-purple-600 text-white' : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
             }`}
           >
             <Share2 size={14} className="inline mr-1" />
@@ -452,14 +452,14 @@ function McpServersContent() {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
         {/* MCP Servers List */}
         {servers.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+          <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
             <Server className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500 mb-4">暂无 MCP 服务器配置</p>
             <button
@@ -470,9 +470,9 @@ function McpServersContent() {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-700/50">
+              <thead className="bg-[#162032]">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     名称
@@ -497,14 +497,14 @@ function McpServersContent() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-dark-surface divide-y divide-gray-700/50">
                 {servers.map((server) => (
-                  <tr key={server.id} className="hover:bg-gray-50">
+                  <tr key={server.id} className="hover:bg-[#0F172A]">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <Server className="h-5 w-5 text-gray-400 mr-2" />
                         <div>
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium text-gray-100">
                             {server.name}
                           </span>
                           {server.user && server.userId !== currentUserId && (
@@ -519,8 +519,8 @@ function McpServersContent() {
                       <span
                         className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                           server.type === 'local'
-                            ? 'bg-blue-100 text-blue-800'
-                            : 'bg-green-100 text-green-800'
+                            ? 'bg-blue-500/15 text-blue-400'
+                            : 'bg-green-500/15 text-green-400'
                         }`}
                       >
                         {server.type === 'local' ? '本地' : '远程'}
@@ -543,12 +543,12 @@ function McpServersContent() {
                     {/* 共享状态 */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       {server.isShared ? (
-                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-500/15 text-purple-400">
                           <Share2 size={12} className="mr-1" />
                           共享
                         </span>
                       ) : (
-                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-600">
+                        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-dark-surface-hover text-gray-400">
                           <Lock size={12} className="mr-1" />
                           私有
                         </span>
@@ -560,8 +560,8 @@ function McpServersContent() {
                         onClick={() => handleToggle(server)}
                         className={`flex items-center space-x-1 ${
                           server.isEnabled
-                            ? 'text-green-600 hover:text-green-700'
-                            : 'text-gray-400 hover:text-gray-600'
+                            ? 'text-green-400 hover:text-green-400'
+                            : 'text-gray-400 hover:text-gray-400'
                         }`}
                       >
                         {server.isEnabled ? (
@@ -613,14 +613,14 @@ function McpServersContent() {
                         <>
                           <button
                             onClick={() => handleEdit(server)}
-                            className="text-blue-600 hover:text-blue-700 mr-3"
+                            className="text-blue-400 hover:text-blue-400 mr-3"
                             title="编辑"
                           >
                             <Edit size={16} />
                           </button>
                           <button
                             onClick={() => handleDelete(server.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-400 hover:text-red-400"
                             title="删除"
                           >
                             <Trash2 size={16} />
@@ -637,23 +637,23 @@ function McpServersContent() {
 
         {/* 分页 */}
         {totalCount > pageSize && (
-          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-white rounded-lg border border-gray-200">
-            <span className="text-sm text-gray-600">
+          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-dark-surface rounded-lg border border-gray-700/50">
+            <span className="text-sm text-gray-400">
               共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
             </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-sm text-gray-600">第 {page} 页</span>
+              <span className="text-sm text-gray-400">第 {page} 页</span>
               <button
                 onClick={() => setPage(p => p + 1)}
                 disabled={page >= Math.ceil(totalCount / pageSize)}
-                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronRight size={16} />
               </button>
@@ -665,14 +665,14 @@ function McpServersContent() {
         {testResult && (
           <div className={`mt-4 p-4 rounded-lg ${
             testResult.success 
-              ? 'bg-green-50 border border-green-200' 
-              : 'bg-red-50 border border-red-200'
+              ? 'bg-green-900/20 border border-green-800/40' 
+              : 'bg-red-900/20 border border-red-800/40'
           }`}>
             <div className="flex items-start">
               {testResult.success ? (
-                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 mr-3" />
+                <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 mr-3" />
               ) : (
-                <XCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3" />
+                <XCircle className="h-5 w-5 text-red-400 mt-0.5 mr-3" />
               )}
               <div className="flex-1">
                 <h4 className={`text-sm font-medium ${
@@ -681,20 +681,20 @@ function McpServersContent() {
                   {testResult.success ? '测试成功' : '测试失败'}
                 </h4>
                 <p className={`text-sm mt-1 ${
-                  testResult.success ? 'text-green-700' : 'text-red-700'
+                  testResult.success ? 'text-green-400' : 'text-red-400'
                 }`}>
                   {testResult.message}
                 </p>
                 {testResult.tools && testResult.tools.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-sm font-medium text-gray-700 mb-2">
+                    <p className="text-sm font-medium text-gray-300 mb-2">
                       可用工具 ({testResult.tools.length}):
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {testResult.tools.map((tool, index) => (
                         <span
                           key={index}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400"
                           title={tool.description || '无描述'}
                         >
                           {tool.name}
@@ -706,7 +706,7 @@ function McpServersContent() {
               </div>
               <button
                 onClick={() => setTestResult(null)}
-                className="text-gray-400 hover:text-gray-600 ml-4"
+                className="text-gray-400 hover:text-gray-400 ml-4"
               >
                 <XCircle size={16} />
               </button>
@@ -717,15 +717,15 @@ function McpServersContent() {
         {/* Add/Edit Form Modal */}
         {showForm && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
+            <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
               <div className="p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">
+                <h2 className="text-xl font-bold text-gray-100 mb-4">
                   {editingServer ? '编辑 MCP 服务器' : '添加 MCP 服务器'}
                 </h2>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
                       服务器名称 *
                     </label>
                     <input
@@ -734,14 +734,14 @@ function McpServersContent() {
                       onChange={(e) =>
                         setFormData({ ...formData, name: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="例如: filesystem, database, cloudbugs4ai"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
                       类型 *
                     </label>
                     <select
@@ -753,7 +753,7 @@ function McpServersContent() {
                           type: v as 'local' | 'sse' | 'http',
                         });
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                     >
                       <option value="local">本地 (Local/stdio)</option>
                       <option value="sse">远程 SSE (旧版)</option>
@@ -764,7 +764,7 @@ function McpServersContent() {
                   {formData.type === 'local' && (
                     <>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
                           命令 *
                         </label>
                         <input
@@ -773,14 +773,14 @@ function McpServersContent() {
                           onChange={(e) =>
                             setFormData({ ...formData, command: e.target.value })
                           }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                          className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                           placeholder="例如: npx @modelcontextprotocol/server-filesystem"
                           required={formData.type === 'local'}
                         />
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-sm font-medium text-gray-300 mb-1">
                           参数 (JSON 数组)
                         </label>
                         <textarea
@@ -788,7 +788,7 @@ function McpServersContent() {
                           onChange={(e) =>
                             setFormData({ ...formData, args: e.target.value })
                           }
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                          className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
                           rows={3}
                           placeholder='["/path/to/project"]'
                         />
@@ -801,7 +801,7 @@ function McpServersContent() {
 
                   {(formData.type === 'sse' || formData.type === 'http') && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-1">
                         URL {formData.type === 'sse' ? '(SSE 端点)' : '(MCP 端点)'} *
                       </label>
                       <input
@@ -810,7 +810,7 @@ function McpServersContent() {
                         onChange={(e) =>
                           setFormData({ ...formData, url: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                         placeholder={formData.type === 'sse' ? "http://localhost:9999/sse" : "http://localhost:9999/mcp"}
                         required={formData.type === 'sse' || formData.type === 'http'}
                       />
@@ -818,7 +818,7 @@ function McpServersContent() {
                   )}
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
                       环境变量 (JSON 对象)
                     </label>
                     <textarea
@@ -826,7 +826,7 @@ function McpServersContent() {
                       onChange={(e) =>
                         setFormData({ ...formData, env: e.target.value })
                       }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 font-mono text-sm"
                       rows={3}
                       placeholder='{"API_KEY": "your-key"}'
                     />
@@ -843,9 +843,9 @@ function McpServersContent() {
                         onChange={(e) =>
                           setFormData({ ...formData, isEnabled: e.target.checked })
                         }
-                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">启用</span>
+                      <span className="ml-2 text-sm text-gray-300">启用</span>
                     </label>
 
                     <label className="flex items-center">
@@ -855,9 +855,9 @@ function McpServersContent() {
                         onChange={(e) =>
                           setFormData({ ...formData, autoStart: e.target.checked })
                         }
-                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-600 rounded"
                       />
-                      <span className="ml-2 text-sm text-gray-700">自动启动</span>
+                      <span className="ml-2 text-sm text-gray-300">自动启动</span>
                     </label>
                   </div>
 
@@ -869,7 +869,7 @@ function McpServersContent() {
                         setEditingServer(null);
                         resetForm();
                       }}
-                      className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                      className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-700 transition-colors"
                     >
                       取消
                     </button>

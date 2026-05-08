@@ -26,12 +26,12 @@ export function StreamingMessage({
   return (
     <div
       ref={containerRef}
-      className={`prose prose-sm max-w-none bg-gray-50 rounded-lg p-4 max-h-[600px] overflow-y-auto ${className}`}
+      className={`prose prose-sm prose-invert max-w-none bg-dark-surface rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700/50 ${className}`}
     >
       {content ? (
         <ReactMarkdown>{content}</ReactMarkdown>
       ) : (
-        <span className="text-gray-400">等待响应...</span>
+        <span className="text-gray-500">等待响应...</span>
       )}
       {isStreaming && (
         <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />

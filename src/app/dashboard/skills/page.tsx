@@ -85,11 +85,11 @@ interface VulnerabilityTreeLanguage {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'cat-vulnerability-mining': 'bg-red-500',
-  'cat-code-audit': 'bg-blue-500',
-  'cat-threat-modeling': 'bg-indigo-500',
-  'cat-coding': 'bg-green-500',
-  'cat-planning': 'bg-orange-500',
+  'cat-vulnerability-mining': 'bg-red-600',
+  'cat-code-audit': 'bg-blue-600',
+  'cat-threat-modeling': 'bg-indigo-600',
+  'cat-coding': 'bg-green-600',
+  'cat-planning': 'bg-orange-600',
   'cat-data-analysis': 'bg-teal-500',
 };
 
@@ -459,20 +459,20 @@ function SkillsPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Skills 管理</h1>
-          <p className="mt-1 text-sm text-gray-600">共 {totalSkills} 个 Skills</p>
+          <h1 className="text-2xl font-bold text-gray-100">Skills 管理</h1>
+          <p className="mt-1 text-sm text-gray-400">共 {totalSkills} 个 Skills</p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap justify-end">
           {isAdmin && selectedSkills.size > 0 && (
             <>
-              <span className="text-sm text-gray-600">已选 {selectedSkills.size} 项</span>
-              <button onClick={() => handleBatchOperation('enable')} disabled={batchOperating} className="inline-flex items-center px-4 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 text-sm disabled:opacity-50">
+              <span className="text-sm text-gray-400">已选 {selectedSkills.size} 项</span>
+              <button onClick={() => handleBatchOperation('enable')} disabled={batchOperating} className="inline-flex items-center px-4 py-2 bg-green-500/15 text-green-400 border border-green-500/20 rounded-lg hover:bg-green-600/25 text-sm disabled:opacity-50">
                 <CheckCircle size={16} className="mr-1.5" />批量启用
               </button>
-              <button onClick={() => handleBatchOperation('disable')} disabled={batchOperating} className="inline-flex items-center px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 text-sm disabled:opacity-50">
+              <button onClick={() => handleBatchOperation('disable')} disabled={batchOperating} className="inline-flex items-center px-4 py-2 bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 rounded-lg hover:bg-yellow-600/25 text-sm disabled:opacity-50">
                 <XCircle size={16} className="mr-1.5" />批量禁用
               </button>
-              <button onClick={() => handleBatchOperation('delete')} disabled={batchOperating} className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 text-sm disabled:opacity-50">
+              <button onClick={() => handleBatchOperation('delete')} disabled={batchOperating} className="inline-flex items-center px-4 py-2 bg-red-500/15 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-600/25 text-sm disabled:opacity-50">
                 <Trash2 size={16} className="mr-1.5" />批量删除
               </button>
             </>
@@ -497,7 +497,7 @@ function SkillsPageContent() {
           <button onClick={() => router.push('/dashboard/skills/create-wizard')} className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
             <Plus size={16} className="mr-1.5" />引导创建
           </button>
-          <button onClick={() => router.push('/dashboard/skills/create')} className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+          <button onClick={() => router.push('/dashboard/skills/create')} className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
             <Code size={16} className="mr-1.5" />快速创建
           </button>
         </div>
@@ -507,21 +507,21 @@ function SkillsPageContent() {
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
         <div className="flex gap-2 flex-1 w-full sm:w-auto">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
             <input
               type="text"
               placeholder="搜索 Skills..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base"
+              className="w-full pl-10 pr-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-100 placeholder-gray-500 text-base"
             />
           </div>
-          <button onClick={handleSearch} className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+          <button onClick={handleSearch} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
             搜索
           </button>
           {searchTerm && (
-            <button onClick={handleClearSearch} className="px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+            <button onClick={handleClearSearch} className="px-4 py-2.5 bg-dark-surface border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover text-sm">
               清除
             </button>
           )}
@@ -529,8 +529,8 @@ function SkillsPageContent() {
         <div className="flex items-center gap-2 flex-wrap">
           {isAdmin && skills.length > 0 && (
             <label className="flex items-center space-x-1.5 cursor-pointer mr-2">
-              <input type="checkbox" checked={selectedSkills.size === skills.length && skills.length > 0} onChange={handleSelectAll} className="w-4 h-4 text-blue-600 border-gray-300 rounded" />
-              <span className="text-sm text-gray-600">全选</span>
+              <input type="checkbox" checked={selectedSkills.size === skills.length && skills.length > 0} onChange={handleSelectAll} className="w-4 h-4 text-primary-600 border-gray-600 rounded" />
+              <span className="text-sm text-gray-400">全选</span>
             </label>
           )}
           <select
@@ -542,7 +542,7 @@ function SkillsPageContent() {
               setCurrentPage(1);
               updateUrlParams({ categoryId: e.target.value || null, languageId: null, patternId: null, page: null });
             }}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有分类</option>
             {categories.map((cat) => (
@@ -560,7 +560,7 @@ function SkillsPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ languageId: e.target.value || null, patternId: null, page: null });
                 }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">所有语言</option>
                 {vulnerabilityTree.map((lang) => (
@@ -579,7 +579,7 @@ function SkillsPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ patternId: e.target.value || null, page: null });
                 }}
-                className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">所有模式</option>
                 {selectedLang.patterns.map((pat) => (
@@ -595,7 +595,7 @@ function SkillsPageContent() {
               setCurrentPage(1);
               updateUrlParams({ isActive: e.target.value || null, page: null });
             }}
-            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+            className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有状态</option>
             {activeStatusOptions.map((opt) => (
@@ -607,15 +607,15 @@ function SkillsPageContent() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-lg text-sm">{error}</div>
       )}
 
       {/* Card Grid */}
       {skills.length === 0 ? (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12">
+        <div className="bg-dark-surface rounded-xl shadow-sm border border-gray-700/50 p-12">
           <div className="text-center">
-            <Award className="mx-auto h-16 w-16 text-gray-300" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">暂无 Skills</h3>
+            <Award className="mx-auto h-16 w-16 text-gray-500" />
+            <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Skills</h3>
             <p className="mt-2 text-sm text-gray-500">
               {searchTerm || selectedCategoryId ? '没有找到匹配的 Skills' : '点击右上角按钮创建新 Skill'}
             </p>
@@ -625,7 +625,7 @@ function SkillsPageContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {skills.map((skill) => {
             const IconComp = getCategoryIcon(skill);
-            const iconColor = CATEGORY_COLORS[skill.categoryId] || 'bg-gray-500';
+            const iconColor = CATEGORY_COLORS[skill.categoryId] || 'bg-[#0F172A]0';
             const canEdit = isAdmin || (skill.userId !== null && skill.userId === user?.id);
             const canDelete = isAdmin || (skill.userId !== null && skill.userId === user?.id && !skill.isBuiltin);
             const canShare = skill.userId !== null && skill.userId === user?.id;
@@ -633,8 +633,8 @@ function SkillsPageContent() {
             return (
               <div
                 key={skill.id}
-                className={`bg-white rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer group relative ${
-                  selectedSkills.has(skill.id) ? 'ring-2 ring-blue-500 border-blue-400' : 'border-gray-200'
+                className={`bg-dark-surface rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer group relative ${
+                  selectedSkills.has(skill.id) ? 'ring-2 ring-primary-500 border-primary-400' : 'border-gray-700/50'
                 }`}
                 onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
               >
@@ -648,7 +648,7 @@ function SkillsPageContent() {
                       type="checkbox"
                       checked={selectedSkills.has(skill.id)}
                       onChange={() => handleSelectSkill(skill.id)}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
                     />
                   </div>
                 )}
@@ -661,28 +661,28 @@ function SkillsPageContent() {
                 >
                   <button
                     onClick={() => setMenuOpenId(menuOpenId === skill.id ? null : skill.id)}
-                    className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="p-1 rounded-md text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover opacity-0 group-hover:opacity-100 transition-opacity"
                   >
                     <MoreVertical size={16} />
                   </button>
                   {menuOpenId === skill.id && (
-                    <div className="absolute right-0 top-8 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[140px] z-20">
+                    <div className="absolute right-0 top-8 bg-dark-surface rounded-lg shadow-xl border border-gray-700 py-1 min-w-[140px] z-20">
                       <button
                         onClick={() => { router.push(`/dashboard/skills/${skill.id}`); setMenuOpenId(null); }}
-                        className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
                       >
                         <Edit size={14} /> {canEdit ? '编辑' : '查看详情'}
                       </button>
                       <button
                         onClick={() => { window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank'); setMenuOpenId(null); }}
-                        className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                        className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
                       >
                         <ExternalLink size={14} /> 新窗口打开
                       </button>
                       {canEdit && (
                         <button
                           onClick={() => { handleToggleActive(skill.id, skill.isActive); setMenuOpenId(null); }}
-                          className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                          className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
                         >
                           {skill.isActive ? <><XCircle size={14} /> 禁用</> : <><CheckCircle size={14} /> 启用</>}
                         </button>
@@ -690,17 +690,17 @@ function SkillsPageContent() {
                       {canShare && (
                         <button
                           onClick={() => { handleToggleShare(skill.id, skill.isPublic); setMenuOpenId(null); }}
-                          className="w-full px-3 py-1.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                          className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
                         >
                           {skill.isPublic ? <><Globe size={14} /> 取消分享</> : <><Lock size={14} /> 分享</>}
                         </button>
                       )}
                       {canDelete && (
                         <>
-                          <div className="border-t border-gray-100 my-1" />
+                          <div className="border-t border-gray-700 my-1" />
                           <button
                             onClick={() => { handleDelete(skill.id, skill.displayName); setMenuOpenId(null); }}
-                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-2"
+                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-red-500/15 text-red-400 flex items-center gap-2"
                           >
                             <Trash2 size={14} /> 删除
                           </button>
@@ -718,33 +718,33 @@ function SkillsPageContent() {
                       <IconComp className="text-white" size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate text-base leading-tight">{skill.displayName}</h3>
-                      <p className="text-xs text-gray-400 truncate">{skill.name}</p>
+                      <h3 className="font-semibold text-gray-100 truncate text-base leading-tight">{skill.displayName}</h3>
+                      <p className="text-xs text-gray-500 truncate">{skill.name}</p>
                     </div>
                   </div>
 
                   {/* Badges */}
                   <div className="flex flex-wrap gap-1.5 mb-2">
                     {skill.categoryName && (
-                      <span className="px-2 py-0.5 text-xs bg-purple-50 text-purple-700 rounded font-medium">
+                      <span className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 rounded font-medium">
                         {skill.categoryName}
                       </span>
                     )}
                     {skill.hasSubDimension && skill.languageName && (
-                      <span className="px-2 py-0.5 text-xs bg-blue-50 text-blue-700 rounded">
+                      <span className="px-2 py-0.5 text-xs bg-blue-500/15 text-blue-400 rounded">
                         {skill.languageName}
                       </span>
                     )}
                     {skill.hasSubDimension && skill.patternName && (
-                      <span className="px-2 py-0.5 text-xs bg-orange-50 text-orange-700 rounded">
+                      <span className="px-2 py-0.5 text-xs bg-orange-500/15 text-orange-400 rounded">
                         {skill.patternName}
                       </span>
                     )}
                     {!skill.isActive && (
-                      <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded">已禁用</span>
+                      <span className="px-2 py-0.5 text-xs bg-gray-500/15 text-gray-400 rounded">已禁用</span>
                     )}
                     {skill.isBuiltin && (
-                      <span className="px-2 py-0.5 text-xs bg-indigo-50 text-indigo-700 rounded">内置</span>
+                      <span className="px-2 py-0.5 text-xs bg-indigo-500/15 text-indigo-400 rounded">内置</span>
                     )}
                   </div>
 
@@ -754,7 +754,7 @@ function SkillsPageContent() {
                   </p>
 
                   {/* Metrics + Date */}
-                  <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-50">
+                  <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-700/50">
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1">
                         <Play size={12} /> {formatNumber(skill.execCount)}
@@ -782,9 +782,9 @@ function SkillsPageContent() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between bg-white rounded-xl shadow-sm border border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between bg-dark-surface rounded-xl shadow-sm border border-gray-700/50 px-4 py-3">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-400">
               共 {totalSkills} 条，第 {currentPage}/{totalPages} 页
             </span>
             <select
@@ -794,7 +794,7 @@ function SkillsPageContent() {
                 setCurrentPage(1);
                 updateUrlParams({ limit: Number(e.target.value), page: null });
               }}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm"
+              className="px-3 py-1.5 border border-gray-600 rounded-lg text-sm bg-[#0F172A] text-gray-100"
             >
               <option value="10">10/页</option>
               <option value="20">20/页</option>
@@ -806,29 +806,29 @@ function SkillsPageContent() {
             <button
               onClick={() => { setCurrentPage(1); updateUrlParams({ page: null }); }}
               disabled={currentPage === 1}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50"
+              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50"
             >
               <ChevronLeft size={18} /><ChevronLeft size={18} className="-ml-2" />
             </button>
             <button
               onClick={() => { const p = Math.max(1, currentPage - 1); setCurrentPage(p); updateUrlParams({ page: p === 1 ? null : p }); }}
               disabled={currentPage === 1}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50"
+              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50"
             >
               <ChevronLeft size={20} />
             </button>
-            <span className="px-4 py-1.5 text-sm text-gray-700">{currentPage} / {totalPages}</span>
+            <span className="px-4 py-1.5 text-sm text-gray-300">{currentPage} / {totalPages}</span>
             <button
               onClick={() => { const p = Math.min(totalPages, currentPage + 1); setCurrentPage(p); updateUrlParams({ page: p === 1 ? null : p }); }}
               disabled={currentPage === totalPages}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50"
+              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50"
             >
               <ChevronRight size={20} />
             </button>
             <button
               onClick={() => { setCurrentPage(totalPages); updateUrlParams({ page: totalPages === 1 ? null : totalPages }); }}
               disabled={currentPage === totalPages}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50"
+              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50"
             >
               <ChevronRight size={18} /><ChevronRight size={18} className="-ml-2" />
             </button>

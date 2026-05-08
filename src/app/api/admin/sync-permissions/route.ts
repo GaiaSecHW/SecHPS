@@ -4,6 +4,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS, ROLES, DEFAULT_ROLE_PERMISSIONS } from '@/types/permissions';
 import { generateId } from '@/lib/id-generator';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { fetchPermissionsPaginated } from '@/lib/auth';
 
 export async function POST(request: Request) {
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.ROLE_ASSIGN_PERMISSION });
@@ -70,13 +71,10 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // 获取当前角色的权限
-      const currentPermissions = await prisma.role.findUnique({
-        where: { id: role.id },
-        include: { Permission: true },
-      });
+      // 获取当前角色的权限 (paginated raw SQL to avoid MTU black hole)
+      const currentPermRows = await fetchPermissionsPaginated<{ id: string; name: string }>([role.id], 'p.id, p.name');
 
-      const currentPermIds = new Set(currentPermissions?.Permission?.map(p => p.id) || []);
+      const currentPermIds = new Set(currentPermRows.map(p => p.id));
 
       // 添加新权限
       for (const permissionName of permissionNames) {
@@ -97,7 +95,7 @@ export async function POST(request: Request) {
 
       // 删除不再需要的权限
       const newPermNames = new Set<string>(permissionNames);
-      for (const perm of currentPermissions?.Permission || []) {
+      for (const perm of currentPermRows) {
         if (!newPermNames.has(perm.name)) {
           await prisma.role.update({
             where: { id: role.id },
@@ -114,11 +112,8 @@ export async function POST(request: Request) {
     for (const roleName of Object.keys(DEFAULT_ROLE_PERMISSIONS)) {
       const role = createdRoles[roleName];
       if (role) {
-        const roleWithPerms = await prisma.role.findUnique({
-          where: { id: role.id },
-          include: { Permission: true },
-        });
-        roleStats[roleName] = roleWithPerms?.Permission?.length || 0;
+        const perms = await fetchPermissionsPaginated<{ name: string }>([role.id], 'p.name');
+        roleStats[roleName] = perms.length;
       }
     }
 

@@ -261,10 +261,10 @@ export default function ConfigPage() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="text-xl font-semibold text-gray-100 mb-2">
             访问被拒绝
           </h2>
-          <p className="text-gray-600">
+          <p className="text-gray-400">
             您没有查看配置的权限。
           </p>
         </div>
@@ -285,10 +285,10 @@ export default function ConfigPage() {
       <div className="flex items-center justify-center h-96">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
+          <h2 className="text-xl font-semibold text-gray-100 mb-2">
             未找到配置
           </h2>
-          <p className="text-gray-600">
+          <p className="text-gray-400">
             请联系管理员创建默认配置。
           </p>
         </div>
@@ -301,11 +301,11 @@ export default function ConfigPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
             <Settings className="h-6 w-6" />
             配置管理
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-400 mt-1">
             管理您的 OpenCode 配置
           </p>
         </div>
@@ -314,7 +314,7 @@ export default function ConfigPage() {
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             title="导出当前配置为 JSON 文件"
           >
             {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
@@ -322,7 +322,7 @@ export default function ConfigPage() {
           </button>
           {/* 导入按钮 */}
           <label
-            className={`flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}
+            className={`flex items-center gap-2 px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover transition-colors cursor-pointer ${importing ? 'opacity-50 pointer-events-none' : ''}`}
             title="从 JSON 文件导入配置（将覆盖当前配置）"
           >
             {importing ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
@@ -339,7 +339,7 @@ export default function ConfigPage() {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
             >
               {saving ? (
                 <>
@@ -359,36 +359,36 @@ export default function ConfigPage() {
 
       {/* Success/Error Messages */}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md flex items-center gap-2">
+        <div className="bg-green-900/20 border border-green-800/40 text-green-300 px-4 py-3 rounded-md flex items-center gap-2">
           <Check className="h-5 w-5" />
           {success}
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md flex items-center gap-2">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-md flex items-center gap-2">
           <AlertCircle className="h-5 w-5" />
           {error}
         </div>
       )}
 
       {/* Configuration Form */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
         {/* Project Upload Directory */}
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <FolderOpen size={20} />
             项目上传目录
           </h3>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               目录路径
             </label>
             <input
               type="text"
               value={projectUploadDir}
               onChange={(e) => setProjectUploadDir(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="例如 /data/projects 或 D:\projects"
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -398,8 +398,8 @@ export default function ConfigPage() {
         </div>
 
         {/* Workflow Config */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 border-t border-gray-700/50 pt-6">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <Settings size={20} />
             工作流配置
           </h3>
@@ -407,28 +407,28 @@ export default function ConfigPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Start Node Config */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-800">开始节点</h4>
+              <h4 className="text-sm font-semibold text-gray-200">开始节点</h4>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   节点名称
                 </label>
                 <input
                   type="text"
                   value={startNodeLabel}
                   onChange={(e) => setStartNodeLabel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="开始"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   节点描述
                 </label>
                 <textarea
                   value={startNodeDescription}
                   onChange={(e) => setStartNodeDescription(e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                   placeholder="工作流的起始点"
                 />
               </div>
@@ -436,28 +436,28 @@ export default function ConfigPage() {
             
             {/* End Node Config */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-800">结束节点</h4>
+              <h4 className="text-sm font-semibold text-gray-200">结束节点</h4>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   节点名称
                 </label>
                 <input
                   type="text"
                   value={endNodeLabel}
                   onChange={(e) => setEndNodeLabel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="结束"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   节点描述
                 </label>
                 <textarea
                   value={endNodeDescription}
                   onChange={(e) => setEndNodeDescription(e.target.value)}
                   rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                   placeholder="工作流的结束点"
                 />
               </div>
@@ -470,14 +470,14 @@ export default function ConfigPage() {
         </div>
 
         {/* Concurrent Evaluation Limit */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 border-t border-gray-700/50 pt-6">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <Server size={20} />
             并发评估限制
           </h3>
           <div className="flex items-center gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 最大同时运行评估数量
               </label>
               <div className="flex items-center gap-3">
@@ -492,9 +492,9 @@ export default function ConfigPage() {
                       setMaxConcurrentEvaluations(value);
                     }
                   }}
-                  className="w-20 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                  className="w-20 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-center"
                 />
-                <span className="text-sm text-gray-600">个评估</span>
+                <span className="text-sm text-gray-400">个评估</span>
                 <div className="flex gap-1">
                   {[1, 3, 5, 10].map((n) => (
                     <button
@@ -502,8 +502,8 @@ export default function ConfigPage() {
                       onClick={() => setMaxConcurrentEvaluations(n)}
                       className={`px-3 py-1 text-sm rounded-md border ${
                         maxConcurrentEvaluations === n
-                          ? 'bg-blue-600 text-white border-blue-600'
-                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                          ? 'bg-primary-600 text-white border-blue-600'
+                          : 'bg-dark-surface text-gray-400 border-gray-600 hover:bg-dark-surface-hover'
                       }`}
                     >
                       {n}
@@ -519,20 +519,20 @@ export default function ConfigPage() {
         </div>
 
         {/* System Prompt Config */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 border-t border-gray-700/50 pt-6">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <Settings size={20} />
             系统提示词
           </h3>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               自定义系统提示词
             </label>
             <textarea
               value={customSystemPrompt}
               onChange={(e) => setCustomSystemPrompt(e.target.value)}
               rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
               placeholder="在此输入自定义的系统提示词，用于项目评估时发送给 AI 的第一条系统消息..."
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -542,20 +542,20 @@ export default function ConfigPage() {
         </div>
 
         {/* Progress Question Config */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 border-t border-gray-700/50 pt-6">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <Settings size={20} />
             进展询问消息
           </h3>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               自定义进展询问消息
             </label>
             <textarea
               value={customProgressQuestion}
               onChange={(e) => setCustomProgressQuestion(e.target.value)}
               rows={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
               placeholder="请简要告诉我当前的评估进展如何：&#10;1. 已经完成了哪些检查？&#10;2. 目前发现了什么问题？&#10;3. 接下来计划做什么？&#10;&#10;请简洁回答，让我了解大致进度即可。"
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -565,20 +565,20 @@ export default function ConfigPage() {
         </div>
 
         {/* Skill Output Template */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 border-t border-gray-700/50 pt-6">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <FileText size={20} />
             Skill标准输出模板
           </h3>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               模板内容
             </label>
             <textarea
               value={skillOutputTemplate}
               onChange={(e) => setSkillOutputTemplate(e.target.value)}
               rows={10}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
               placeholder={'# 安全审计报告\n\n## 漏洞列表\n\n### 1. [漏洞标题] [严重性]\n\n**位置**: `文件路径:行号`\n\n**问题描述**: ...\n\n**修复建议**: ...\n\n---\n\n## 摘要统计\n\n- 总计: N 个漏洞\n- 高危: N 个\n- 中危: N 个\n- 低危: N 个'}
             />
             <p className="text-xs text-gray-500 mt-1">
@@ -588,24 +588,24 @@ export default function ConfigPage() {
         </div>
 
         {/* CLAUDE.md Global Template */}
-        <div className="space-y-4 border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 border-t border-gray-700/50 pt-6">
+          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
             <FileText size={20} />
             CLAUDE.md 全局模板
           </h3>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-300 mb-1">
               模板内容
             </label>
             <textarea
               value={claudemdTemplate}
               onChange={(e) => setClaudemdTemplate(e.target.value)}
               rows={12}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
               placeholder={'# 项目说明\n\n## 项目结构\n\n```\nsrc/\n├── controllers/\n├── models/\n├── routes/\n└── utils/\n```\n\n## 编码规范\n\n- 使用 TypeScript\n- 遵循 ESLint 规则\n- 函数必须有注释\n\n## 安全要求\n\n- 所有用户输入必须验证\n- 使用参数化查询防止 SQL 注入\n- 输出必须转义防止 XSS'}
             />
             <p className="text-xs text-gray-500 mt-1">
-              启动评估时，此模板内容将写入项目根目录的 <code className="bg-gray-100 px-1 rounded">.claude/CLAUDE.md</code> 文件。如果文件已存在将被覆盖。
+              启动评估时，此模板内容将写入项目根目录的 <code className="bg-dark-surface-hover px-1 rounded">.claude/CLAUDE.md</code> 文件。如果文件已存在将被覆盖。
             </p>
           </div>
         </div>
@@ -618,7 +618,7 @@ export default function ConfigPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-3 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
           >
             {saving ? (
               <>

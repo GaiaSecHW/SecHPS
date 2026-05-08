@@ -253,12 +253,12 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
   const runningNode = nodes.find(n => n.status === 'running');
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <div className="px-4 py-3 border-b border-gray-700/50 bg-[#0F172A]">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">{workflow.name}</h3>
+            <h3 className="text-sm font-semibold text-gray-100">{workflow.name}</h3>
             {workflow.description && (
               <p className="text-xs text-gray-500 mt-0.5">{workflow.description}</p>
             )}
@@ -267,13 +267,13 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
             <span className="text-xs text-gray-500">
               {completedCount}/{totalCount} 
             </span>
-            <div className="w-20 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-20 h-2 bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-green-500 transition-all duration-300"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <span className="text-xs font-medium text-gray-700">{progress}%</span>
+            <span className="text-xs font-medium text-gray-300">{progress}%</span>
           </div>
         </div>
       </div>
@@ -319,7 +319,7 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
                   </div>
 
                   {/* Node Label */}
-                  <p className="text-sm font-medium text-gray-900 text-center truncate max-w-[100px]">
+                  <p className="text-sm font-medium text-gray-100 text-center truncate max-w-[100px]">
                     {node.data?.label || nodeType.label}
                   </p>
 
@@ -358,10 +358,10 @@ export function WorkflowVisualizer({ evaluationId, opencodeSessionId }: Workflow
 
       {/* Current Running Task */}
       {runningNode && (
-        <div className="px-4 py-3 border-t border-gray-200 bg-blue-50">
+        <div className="px-4 py-3 border-t border-gray-700/50 bg-blue-50">
           <div className="flex items-center space-x-2">
             <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-            <span className="text-sm text-blue-700">
+            <span className="text-sm text-blue-400">
               : <strong>{runningNode.data?.label || ''}</strong>
             </span>
           </div>

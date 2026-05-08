@@ -305,7 +305,7 @@ export default function SkillVersionsPage() {
       'tool-add': 'bg-green-100 text-green-700 border-green-200',
       'tool-remove': 'bg-red-100 text-red-700 border-red-200',
     };
-    return colors[changeType] || 'bg-gray-100 text-gray-700 border-gray-200';
+    return colors[changeType] || 'bg-gray-100 text-gray-300 border-gray-700/50';
   };
 
   // Calculate trend data for chart
@@ -325,7 +325,7 @@ export default function SkillVersionsPage() {
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
-          <span className="text-gray-600 font-medium">加载版本数据...</span>
+          <span className="text-gray-400 font-medium">加载版本数据...</span>
         </div>
       </div>
     );
@@ -335,12 +335,12 @@ export default function SkillVersionsPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center">
-        <div className="bg-white rounded-xl shadow-lg p-8 max-w-md mx-4">
+        <div className="bg-dark-surface rounded-xl shadow-lg p-8 max-w-md mx-4">
           <div className="flex items-center gap-3 text-red-600 mb-4">
             <AlertTriangle size={24} />
             <span className="font-semibold">加载失败</span>
           </div>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <p className="text-gray-400 mb-6">{error}</p>
           <button
             onClick={() => router.push('/skills')}
             className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
@@ -363,18 +363,18 @@ export default function SkillVersionsPage() {
               onClick={() => router.push('/skills')}
               className="p-2 hover:bg-white/80 rounded-lg transition-colors"
             >
-              <ChevronLeft size={24} className="text-gray-600" />
+              <ChevronLeft size={24} className="text-gray-400" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{skillInfo?.displayName || '版本对比'}</h1>
+              <h1 className="text-2xl font-bold text-gray-100">{skillInfo?.displayName || '版本对比'}</h1>
               <p className="text-gray-500 text-sm">版本效果对比分析</p>
             </div>
           </div>
 
           {/* Single version message */}
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+          <div className="bg-dark-surface rounded-xl shadow-lg p-8 text-center">
             <History size={48} className="mx-auto text-gray-400 mb-4" />
-            <h2 className="text-xl font-semibold text-gray-700 mb-2">暂无历史版本</h2>
+            <h2 className="text-xl font-semibold text-gray-300 mb-2">暂无历史版本</h2>
             <p className="text-gray-500 mb-6">
               当前技能只有一个版本，无法进行版本对比分析。
               请先进行技能进化操作以生成新版本。
@@ -401,10 +401,10 @@ export default function SkillVersionsPage() {
               onClick={() => router.push('/skills')}
               className="p-2 hover:bg-white/80 rounded-lg transition-colors shadow-sm"
             >
-              <ChevronLeft size={24} className="text-gray-600" />
+              <ChevronLeft size={24} className="text-gray-400" />
             </button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{skillInfo?.displayName}</h1>
+              <h1 className="text-2xl font-bold text-gray-100">{skillInfo?.displayName}</h1>
               <p className="text-gray-500 text-sm flex items-center gap-2">
                 <History size={14} />
                 版本效果对比分析 · {versions.length} 个版本
@@ -430,11 +430,11 @@ export default function SkillVersionsPage() {
         </div>
 
         {/* Trend Chart */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-dark-surface rounded-xl shadow-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-indigo-50">
             <div className="flex items-center gap-3">
               <BarChart3 size={20} className="text-blue-600" />
-              <h2 className="font-semibold text-gray-900">精准率趋势</h2>
+              <h2 className="font-semibold text-gray-100">精准率趋势</h2>
             </div>
           </div>
           <div className="p-6">
@@ -528,12 +528,12 @@ export default function SkillVersionsPage() {
 
         {/* Comparison Result */}
         {comparisonResult && (
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-indigo-200">
+          <div className="bg-dark-surface rounded-xl shadow-lg overflow-hidden border-2 border-indigo-200">
             <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-indigo-50 to-purple-50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <GitCompare size={20} className="text-indigo-600" />
-                  <h2 className="font-semibold text-gray-900">对比结果</h2>
+                  <h2 className="font-semibold text-gray-100">对比结果</h2>
                 </div>
                 <div className={`flex items-center gap-2 px-3 py-1 rounded-lg ${
                   comparisonResult.isSuccess
@@ -557,17 +557,17 @@ export default function SkillVersionsPage() {
                 <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
                   <div className="flex items-center gap-2 mb-3">
                     <Target size={18} className="text-blue-600" />
-                    <span className="font-medium text-gray-700">精准率</span>
+                    <span className="font-medium text-gray-300">精准率</span>
                   </div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-500">v{comparisonResult.oldVersion}</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-lg font-bold text-gray-100">
                       {(comparisonResult.precisionBefore * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-gray-500">v{comparisonResult.newVersion}</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-lg font-bold text-gray-100">
                       {(comparisonResult.precisionAfter * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -593,17 +593,17 @@ export default function SkillVersionsPage() {
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
                   <div className="flex items-center gap-2 mb-3">
                     <BarChart3 size={18} className="text-green-600" />
-                    <span className="font-medium text-gray-700">召回率</span>
+                    <span className="font-medium text-gray-300">召回率</span>
                   </div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-500">v{comparisonResult.oldVersion}</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-lg font-bold text-gray-100">
                       {(comparisonResult.recallBefore * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-gray-500">v{comparisonResult.newVersion}</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-lg font-bold text-gray-100">
                       {(comparisonResult.recallAfter * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -629,17 +629,17 @@ export default function SkillVersionsPage() {
                 <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-4 border border-orange-100">
                   <div className="flex items-center gap-2 mb-3">
                     <AlertTriangle size={18} className="text-orange-600" />
-                    <span className="font-medium text-gray-700">误报率</span>
+                    <span className="font-medium text-gray-300">误报率</span>
                   </div>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-gray-500">v{comparisonResult.oldVersion}</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-lg font-bold text-gray-100">
                       {(comparisonResult.falsePositiveRateBefore * 100).toFixed(1)}%
                     </span>
                   </div>
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-gray-500">v{comparisonResult.newVersion}</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-lg font-bold text-gray-100">
                       {(comparisonResult.falsePositiveRateAfter * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -679,12 +679,12 @@ export default function SkillVersionsPage() {
         )}
 
         {/* Version List */}
-        <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+        <div className="bg-dark-surface rounded-xl shadow-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-gray-50">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <History size={20} className="text-gray-600" />
-                <h2 className="font-semibold text-gray-900">版本列表</h2>
+                <History size={20} className="text-gray-400" />
+                <h2 className="font-semibold text-gray-100">版本列表</h2>
               </div>
               {selectedVersions.length > 0 && (
                 <span className="text-sm text-gray-500">
@@ -703,7 +703,7 @@ export default function SkillVersionsPage() {
                     ? 'bg-indigo-50 border-l-4 border-indigo-500'
                     : v.isLatest
                     ? 'bg-green-50/30'
-                    : 'hover:bg-gray-50'
+                    : 'hover:bg-[#0F172A]'
                 }`}
                 onClick={() => handleVersionSelect(v.id)}
               >
@@ -716,7 +716,7 @@ export default function SkillVersionsPage() {
                         className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
                           selectedVersions.includes(v.id)
                             ? 'bg-indigo-600 border-indigo-600'
-                            : 'border-gray-300'
+                            : 'border-gray-600'
                         }`}
                       >
                         {selectedVersions.includes(v.id) && (
@@ -728,7 +728,7 @@ export default function SkillVersionsPage() {
                       <span className={`px-3 py-1 rounded-lg font-medium text-sm ${
                         v.isLatest
                           ? 'bg-green-100 text-green-800 border border-green-200'
-                          : 'bg-gray-100 text-gray-700 border border-gray-200'
+                          : 'bg-gray-100 text-gray-300 border border-gray-700/50'
                       }`}>
                         v{v.version}
                       </span>
@@ -751,7 +751,7 @@ export default function SkillVersionsPage() {
 
                     {/* Change Description */}
                     {v.evolution?.changeDesc && (
-                      <p className="text-sm text-gray-700 mb-1 ml-8">
+                      <p className="text-sm text-gray-300 mb-1 ml-8">
                         {v.evolution.changeDesc}
                       </p>
                     )}
@@ -810,12 +810,12 @@ export default function SkillVersionsPage() {
         {/* Rollback Modal */}
         {rollbackModal?.isOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-md mx-4 overflow-hidden">
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-red-50">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-gradient-to-r from-orange-50 to-red-50">
                 <div className="flex items-center gap-3">
                   <RotateCcw size={20} className="text-orange-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">版本回滚确认</h2>
+                  <h2 className="text-lg font-semibold text-gray-100">版本回滚确认</h2>
                 </div>
                 <button
                   onClick={() => {
@@ -846,27 +846,27 @@ export default function SkillVersionsPage() {
                 </div>
 
                 {/* Info */}
-                <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                <div className="bg-[#0F172A] rounded-lg p-4 border border-gray-100">
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600">Skill 名称:</span>
-                    <span className="font-medium text-gray-900">{skillInfo?.displayName}</span>
+                    <span className="text-gray-400">Skill 名称:</span>
+                    <span className="font-medium text-gray-100">{skillInfo?.displayName}</span>
                   </div>
                   <div className="flex items-center justify-between text-sm mt-2">
-                    <span className="text-gray-600">目标版本:</span>
+                    <span className="text-gray-400">目标版本:</span>
                     <span className="font-medium text-green-700">v{rollbackModal.targetVersionNumber}</span>
                   </div>
                 </div>
 
                 {/* Reason Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     回滚原因 <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={rollbackReason}
                     onChange={(e) => setRollbackReason(e.target.value)}
                     placeholder="请填写回滚原因..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
                     rows={3}
                   />
                 </div>
@@ -881,7 +881,7 @@ export default function SkillVersionsPage() {
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-3">
+              <div className="px-6 py-4 border-t border-gray-700/50 bg-[#0F172A] flex items-center justify-end gap-3">
                 <button
                   onClick={() => {
                     setRollbackModal(null);
@@ -889,7 +889,7 @@ export default function SkillVersionsPage() {
                     setRollbackError(null);
                   }}
                   disabled={rollbackLoading}
-                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+                  className="px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
                 >
                   取消
                 </button>

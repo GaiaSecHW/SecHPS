@@ -196,7 +196,7 @@ export default function ProjectTokenDetailPage({
   if (loading && !project) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
       </div>
     );
   }
@@ -206,11 +206,11 @@ export default function ProjectTokenDetailPage({
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">加载失败</h2>
-          <p className="text-gray-600 mb-4">{error}</p>
+          <h2 className="text-xl font-semibold text-gray-100 mb-2">加载失败</h2>
+          <p className="text-gray-400 mb-4">{error}</p>
           <button
             onClick={() => router.push('/dashboard/token-stats')}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
           >
             返回统计页面
           </button>
@@ -222,17 +222,17 @@ export default function ProjectTokenDetailPage({
   return (
     <div className="space-y-6">
       {/* 头部 */}
-      <div className="flex items-center justify-between bg-white rounded-lg shadow border border-gray-200 p-4">
+      <div className="flex items-center justify-between bg-dark-surface rounded-lg border border-gray-700/50 p-4">
         <div className="flex items-center space-x-4">
           <button
             onClick={() => router.push('/dashboard/token-stats')}
-            className="text-gray-400 hover:text-gray-600"
+            className="text-gray-400 hover:text-gray-400"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-xl font-bold text-gray-900 flex items-center">
-              <Coins className="mr-2 text-blue-600" size={24} />
+            <h1 className="text-xl font-bold text-gray-100 flex items-center">
+              <Coins className="mr-2 text-blue-400" size={24} />
               {project?.name || '项目'} Token 消耗明细
             </h1>
             <p className="text-sm text-gray-500">查看每次 API 调用的详细消耗情况</p>
@@ -241,28 +241,28 @@ export default function ProjectTokenDetailPage({
       </div>
 
       {/* 项目汇总 */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">项目汇总</h2>
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <h2 className="text-lg font-semibold text-gray-100 mb-4">项目汇总</h2>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          <div className="bg-blue-50 rounded-lg p-4">
-            <p className="text-xs text-blue-600">总输入 Token</p>
-            <p className="text-lg font-bold text-blue-700">
+          <div className="bg-blue-600/10 rounded-lg p-4">
+            <p className="text-xs text-blue-400">总输入 Token</p>
+            <p className="text-lg font-bold text-blue-400">
               {formatNumber(summary?.totalInputTokens || 0)}
             </p>
           </div>
-          <div className="bg-green-50 rounded-lg p-4">
-            <p className="text-xs text-green-600">总输出 Token</p>
-            <p className="text-lg font-bold text-green-700">
+          <div className="bg-green-600/10 rounded-lg p-4">
+            <p className="text-xs text-green-400">总输出 Token</p>
+            <p className="text-lg font-bold text-green-400">
               {formatNumber(summary?.totalOutputTokens || 0)}
             </p>
           </div>
-          <div className="bg-purple-50 rounded-lg p-4">
+          <div className="bg-purple-600/10 rounded-lg p-4">
             <p className="text-xs text-purple-600">总 Token</p>
             <p className="text-lg font-bold text-purple-700">
               {formatNumber(summary?.totalTokens || 0)}
             </p>
           </div>
-          <div className="bg-orange-50 rounded-lg p-4">
+          <div className="bg-orange-600/10 rounded-lg p-4">
             <p className="text-xs text-orange-600 flex items-center">
               预估费用
               <span 
@@ -279,9 +279,9 @@ export default function ProjectTokenDetailPage({
               {formatCost(summary?.estimatedCost)}
             </p>
           </div>
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-xs text-gray-600">评估次数</p>
-            <p className="text-lg font-bold text-gray-700">
+          <div className="bg-[#0F172A] rounded-lg p-4">
+            <p className="text-xs text-gray-400">评估次数</p>
+            <p className="text-lg font-bold text-gray-300">
               {summary?.evaluationCount || 0}
             </p>
           </div>
@@ -289,9 +289,9 @@ export default function ProjectTokenDetailPage({
       </div>
 
       {/* 评估列表 */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-          <Calendar className="mr-2 text-blue-600" size={20} />
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+          <Calendar className="mr-2 text-blue-400" size={20} />
           评估会话列表
         </h2>
         <div className="space-y-2">
@@ -300,8 +300,8 @@ export default function ProjectTokenDetailPage({
               key={evaluation.id}
               className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                 selectedEvaluation === evaluation.id
-                  ? 'bg-blue-50 border-blue-300'
-                  : 'bg-gray-50 border-gray-200 hover:bg-blue-50 hover:border-blue-200'
+                  ? 'bg-blue-600/10 border-blue-300'
+                  : 'bg-[#0F172A] border-gray-700/50 hover:bg-blue-600/100/100/10 hover:border-blue-500/20'
               }`}
               onClick={() => setSelectedEvaluation(selectedEvaluation === evaluation.id ? null : evaluation.id)}
             >
@@ -315,7 +315,7 @@ export default function ProjectTokenDetailPage({
                     ) : (
                       <Loader2 size={16} className="text-blue-500 animate-spin" />
                     )}
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="text-sm font-medium text-gray-100">
                       {evaluation.title || `评估 ${evaluation.id.substring(0, 8)}`}
                     </span>
                   </div>
@@ -326,8 +326,8 @@ export default function ProjectTokenDetailPage({
                 <div className="flex items-center space-x-4">
                   <div className="text-right">
                     <div className="flex items-center space-x-2 text-xs">
-                      <span className="text-blue-600">↑{formatNumber(evaluation.totalInputTokens)}</span>
-                      <span className="text-green-600">↓{formatNumber(evaluation.totalOutputTokens)}</span>
+                      <span className="text-blue-400">↑{formatNumber(evaluation.totalInputTokens)}</span>
+                      <span className="text-green-400">↓{formatNumber(evaluation.totalOutputTokens)}</span>
                     </div>
                     <p className="text-xs text-gray-500 flex items-center">
                       <CostWithTooltip cost={evaluation.estimatedCost} />
@@ -349,10 +349,10 @@ export default function ProjectTokenDetailPage({
       </div>
 
       {/* Token 使用记录 */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
-            <Filter className="mr-2 text-blue-600" size={20} />
+          <h2 className="text-lg font-semibold text-gray-100 flex items-center">
+            <Filter className="mr-2 text-blue-400" size={20} />
             API 调用记录
             {selectedEvaluation && (
               <span className="ml-2 text-sm text-gray-500">
@@ -363,7 +363,7 @@ export default function ProjectTokenDetailPage({
           {selectedEvaluation && (
             <button
               onClick={() => setSelectedEvaluation(null)}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-blue-400 hover:text-blue-800"
             >
               显示全部
             </button>
@@ -371,26 +371,26 @@ export default function ProjectTokenDetailPage({
         </div>
 
         {tokenUsages?.data.length === 0 ? (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
+          <div className="text-center py-8 bg-[#0F172A] rounded-lg">
             <Coins className="mx-auto h-12 w-12 text-gray-400" />
             <p className="mt-4 text-sm text-gray-500">暂无 API 调用记录</p>
           </div>
         ) : (
           <div className="space-y-2">
             {tokenUsages?.data.map((record) => (
-              <div key={record.id} className="border border-gray-200 rounded-lg overflow-hidden">
+              <div key={record.id} className="border border-gray-700/50 rounded-lg overflow-hidden">
                 {/* 可点击的标题行 */}
                 <button
-                  className="w-full flex items-center justify-between px-4 py-3 text-left bg-gray-50 hover:bg-gray-100 transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-3 text-left bg-[#0F172A] hover:bg-dark-surface-hover transition-colors"
                   onClick={() => toggleRecord(record.id)}
                 >
                   <div className="flex items-center space-x-3 min-w-0 flex-1">
                     {getStatusIcon(record.status)}
                     <div className="flex items-center space-x-2">
-                      <span className="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                      <span className="text-xs font-medium bg-blue-500/15 text-blue-400 px-2 py-0.5 rounded">
                         {record.apiProvider}
                       </span>
-                      <span className="text-xs text-gray-600">
+                      <span className="text-xs text-gray-400">
                         {record.modelName || '未知模型'}
                       </span>
                       <span className="text-xs text-gray-400">
@@ -401,8 +401,8 @@ export default function ProjectTokenDetailPage({
                   <div className="flex items-center space-x-4 flex-shrink-0">
                     <div className="text-right">
                       <div className="flex items-center space-x-2 text-xs">
-                        <span className="text-blue-600">↑{formatNumber(record.inputTokens)}</span>
-                        <span className="text-green-600">↓{formatNumber(record.outputTokens)}</span>
+                        <span className="text-blue-400">↑{formatNumber(record.inputTokens)}</span>
+                        <span className="text-green-400">↓{formatNumber(record.outputTokens)}</span>
                       </div>
                       <p className="text-xs text-gray-500">
                         {formatDuration(record.durationMs)}
@@ -423,15 +423,15 @@ export default function ProjectTokenDetailPage({
 
                 {/* 展开的详情 */}
                 {expandedRecords.has(record.id) && (
-                  <div className="px-4 py-3 border-t border-gray-200 bg-white">
+                  <div className="px-4 py-3 border-t border-gray-700/50 bg-dark-surface">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                       <div>
                         <p className="text-xs text-gray-500">总 Token</p>
-                        <p className="text-sm font-medium text-gray-900">{record.totalTokens}</p>
+                        <p className="text-sm font-medium text-gray-100">{record.totalTokens}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">缓存 Token</p>
-                        <p className="text-sm font-medium text-gray-900">{record.cachedTokens || '-'}</p>
+                        <p className="text-sm font-medium text-gray-100">{record.cachedTokens || '-'}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">预估费用</p>
@@ -443,7 +443,7 @@ export default function ProjectTokenDetailPage({
                         <p className="text-xs text-gray-500">状态</p>
                         <p className="text-sm font-medium flex items-center space-x-1">
                           {getStatusIcon(record.status)}
-                          <span className={record.status === 'success' ? 'text-green-700' : 'text-red-700'}>
+                          <span className={record.status === 'success' ? 'text-green-400' : 'text-red-400'}>
                             {record.status}
                           </span>
                         </p>
@@ -451,15 +451,15 @@ export default function ProjectTokenDetailPage({
                     </div>
 
                     {record.errorMessage && (
-                      <div className="bg-red-50 border border-red-200 rounded p-2 mb-3">
-                        <p className="text-xs text-red-700">{record.errorMessage}</p>
+                      <div className="bg-red-900/20 border border-red-800/40 rounded p-2 mb-3">
+                        <p className="text-xs text-red-400">{record.errorMessage}</p>
                       </div>
                     )}
 
                     {/* 请求预览 */}
                     {record.requestPreview && (
                       <div className="mb-3">
-                        <p className="text-xs font-medium text-gray-700 mb-1">请求预览</p>
+                        <p className="text-xs font-medium text-gray-300 mb-1">请求预览</p>
                         <pre className="text-xs bg-gray-800 text-gray-300 p-2 rounded overflow-x-auto max-h-32">
                           {record.requestPreview}
                         </pre>
@@ -469,7 +469,7 @@ export default function ProjectTokenDetailPage({
                     {/* 响应预览 */}
                     {record.responsePreview && (
                       <div>
-                        <p className="text-xs font-medium text-gray-700 mb-1">响应预览</p>
+                        <p className="text-xs font-medium text-gray-300 mb-1">响应预览</p>
                         <pre className="text-xs bg-gray-800 text-green-300 p-2 rounded overflow-x-auto max-h-32">
                           {record.responsePreview}
                         </pre>
@@ -488,7 +488,7 @@ export default function ProjectTokenDetailPage({
             <button
               onClick={() => setPage(page + 1)}
               disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
             >
               {loading ? '加载中...' : '加载更多'}
             </button>

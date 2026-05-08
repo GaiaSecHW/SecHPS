@@ -75,12 +75,12 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
-          <HelpCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+          <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-2">这一步做什么？</p>
-            <p className="text-blue-700">
+            <p className="text-blue-400">
               深入了解你的需求细节。我们会询问一些关键问题，帮助生成更精准的 Skill 定义。
               信息越详细，生成的 Skill 质量越高。
             </p>
@@ -90,17 +90,17 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
 
       {/* 边缘情况 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
           有哪些边缘情况或特殊情况需要考虑？
         </label>
         <div className="space-y-2 mb-2">
           {data.edgeCases.map((edgeCase, index) => (
-            <div key={index} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-              <span className="text-sm text-gray-700">{edgeCase}</span>
+            <div key={index} className="flex items-center justify-between bg-[#0F172A] border border-gray-700/50 rounded-md px-3 py-2">
+              <span className="text-sm text-gray-300">{edgeCase}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveEdgeCase(index)}
-                className="text-gray-400 hover:text-red-600"
+                className="text-gray-400 hover:text-red-400"
               >
                 <X size={16} />
               </button>
@@ -114,7 +114,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
             onChange={(e) => setNewEdgeCase(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAddEdgeCase()}
             placeholder="例如：处理大文件时内存溢出、空输入的处理..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
           <button
             type="button"
@@ -128,7 +128,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
 
       {/* 输入格式 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
           期望的输入格式是什么？ <span className="text-red-500">*</span>
         </label>
         <textarea
@@ -136,7 +136,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
           onChange={(e) => onChange({ ...data, inputOutputFormats: e.target.value })}
           rows={4}
           placeholder="描述输入数据的格式。例如：&#10;- Java 代码文件，包含用户输入验证逻辑&#10;- 项目目录路径，包含多个源代码文件&#10;- 特定格式的配置文件（YAML/JSON）"
-          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
         <p className="mt-1 text-xs text-gray-500">
           输出格式由系统配置的标准输出模板统一规定
@@ -145,7 +145,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
 
       {/* 示例文件 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
           <FileText size={16} className="inline mr-1" />
           有示例文件或代码片段吗？
         </label>
@@ -154,12 +154,12 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
         </p>
         <div className="space-y-2 mb-2">
           {data.exampleFiles.map((file, index) => (
-            <div key={index} className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
-              <span className="text-sm text-gray-700 font-mono">{file}</span>
+            <div key={index} className="flex items-center justify-between bg-[#0F172A] border border-gray-700/50 rounded-md px-3 py-2">
+              <span className="text-sm text-gray-300 font-mono">{file}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveExampleFile(index)}
-                className="text-gray-400 hover:text-red-600"
+                className="text-gray-400 hover:text-red-400"
               >
                 <X size={16} />
               </button>
@@ -173,7 +173,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
             onChange={(e) => setNewExampleFile(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAddExampleFile()}
             placeholder="例如：/path/to/example.java 或 https://..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
           <button
             type="button"
@@ -187,18 +187,18 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
 
       {/* 成功标准 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
           <CheckCircle size={16} className="inline mr-1" />
           如何判断 Skill 是否成功执行？
         </label>
         <div className="space-y-2 mb-2">
           {data.successCriteria.map((criterion, index) => (
-            <div key={index} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-md px-3 py-2">
-              <span className="text-sm text-gray-700">{criterion}</span>
+            <div key={index} className="flex items-center justify-between bg-green-900/20 border border-green-200 rounded-md px-3 py-2">
+              <span className="text-sm text-gray-300">{criterion}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveSuccessCriterion(index)}
-                className="text-gray-400 hover:text-red-600"
+                className="text-gray-400 hover:text-red-400"
               >
                 <X size={16} />
               </button>
@@ -212,7 +212,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
             onChange={(e) => setNewSuccessCriterion(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAddSuccessCriterion()}
             placeholder="例如：准确识别出所有 SQL 注入点、无漏报..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
           <button
             type="button"
@@ -226,7 +226,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
 
       {/* 依赖项 */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
+        <label className="block text-sm font-medium text-gray-300 mb-2">
           <AlertCircle size={16} className="inline mr-1" />
           需要依赖哪些工具或资源？
         </label>
@@ -235,12 +235,12 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
         </p>
         <div className="space-y-2 mb-2">
           {data.dependencies.map((dep, index) => (
-            <div key={index} className="flex items-center justify-between bg-yellow-50 border border-yellow-200 rounded-md px-3 py-2">
-              <span className="text-sm text-gray-700">{dep}</span>
+            <div key={index} className="flex items-center justify-between bg-yellow-900/20 border border-yellow-200 rounded-md px-3 py-2">
+              <span className="text-sm text-gray-300">{dep}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveDependency(index)}
-                className="text-gray-400 hover:text-red-600"
+                className="text-gray-400 hover:text-red-400"
               >
                 <X size={16} />
               </button>
@@ -254,7 +254,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
             onChange={(e) => setNewDependency(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAddDependency()}
             placeholder="例如：read_file、search_pattern、数据库访问..."
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="flex-1 px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           />
           <button
             type="button"
@@ -270,7 +270,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
       <div className="flex justify-between pt-4 border-t">
         <button
           onClick={onPrevious}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
         >
           上一步
         </button>

@@ -119,7 +119,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
       case 'dispatched':
       case 'building':
       case 'running':
-        return <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />;
+        return <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />;
       default:
         return <Clock className="w-4 h-4 text-gray-400" />;
     }
@@ -178,7 +178,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
           )}
           <button
             onClick={() => { refetch(); onRefresh(); }}
-            className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="flex items-center space-x-2 px-3 py-2 bg-dark-surface-hover hover:bg-gray-700 rounded-lg transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             <span>刷新</span>
@@ -198,7 +198,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
               className={`px-3 py-1 text-xs rounded-full transition-colors ${
                 stateFilter === f.key
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-dark-surface-hover'
               }`}
             >
               {f.label} ({count})
@@ -208,13 +208,13 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
       </div>
 
       {filteredTasks.length === 0 ? (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-12">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12">
           <div className="text-center">
             <Clock className="mx-auto h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">
+            <h3 className="mt-4 text-lg font-medium text-gray-100">
               {stateFilter === 'all' ? '暂无任务' : `暂无${STATE_FILTERS.find(f => f.key === stateFilter)?.label}任务`}
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-gray-400">
               在「任务调试」页面创建任务
             </p>
           </div>
@@ -228,13 +228,13 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
             return (
               <div
                 key={task.id}
-                className={`bg-white rounded-lg shadow border ${
-                  isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-200'
+                className={`bg-dark-surface rounded-lg shadow border ${
+                  isSelected ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-700/50'
                 } overflow-hidden`}
               >
                 {/* Task Header */}
                 <div
-                  className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+                  className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-dark-surface-hover"
                   onClick={() => {
                     setExpandedTask(isExpanded ? null : task.taskId);
                     onTaskSelect(isExpanded ? null : task.taskId);
@@ -257,19 +257,19 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {getStateIcon(task.state)}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
-                        <span className="text-sm font-medium text-gray-900 truncate">
+                        <span className="text-sm font-medium text-gray-100 truncate">
                           {task.taskId}
                         </span>
                         <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                          task.state === 'completed' ? 'bg-green-100 text-green-800' :
-                          task.state === 'failed' ? 'bg-red-100 text-red-800' :
-                          'bg-blue-100 text-blue-800'
+                          task.state === 'completed' ? 'bg-green-500/15 text-green-400' :
+                          task.state === 'failed' ? 'bg-red-500/15 text-red-400' :
+                          'bg-blue-900/30 text-blue-400'
                         }`}>
                           {getStateLabel(task.state)}
                         </span>
                         {task.agent && (
                           <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                            task.agent === 'claude' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
+                            task.agent === 'claude' ? 'bg-purple-900/30 text-purple-400' : 'bg-orange-900/20 text-orange-400'
                           }`}>
                             {task.agent === 'claude' ? 'Claude Code' : 'OpenCode'}
                           </span>
@@ -303,7 +303,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
 
                 {/* Task Details */}
                 {isExpanded && (
-                  <div className="px-4 py-4 border-t border-gray-200 bg-gray-50 space-y-4">
+                  <div className="px-4 py-4 border-t border-gray-700/50 bg-[#0F172A] space-y-4">
                     {/* Meta Info */}
                     <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
@@ -329,7 +329,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         {task.gitUrl && (
                           <div>
                             <span className="text-gray-500">Git:</span>
-                            <code className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+                            <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
                               {task.gitUrl}{task.gitRef ? ` (${task.gitRef})` : ''}
                             </code>
                           </div>
@@ -337,7 +337,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         {task.projectPath && (
                           <div>
                             <span className="text-gray-500">Project:</span>
-                            <code className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+                            <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
                               {task.projectPath}
                             </code>
                           </div>
@@ -348,7 +348,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {task.workspacePath && (
                       <div className="text-sm">
                         <span className="text-gray-500">Workspace:</span>
-                        <code className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+                        <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
                           {task.workspacePath}
                         </code>
                       </div>
@@ -360,7 +360,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         <span className="text-gray-500">Skills:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
                           {task.skills.map((skill, i) => (
-                            <span key={i} className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded">
+                            <span key={i} className="px-2 py-0.5 text-xs bg-purple-900/30 text-purple-400 rounded">
                               {skill}
                             </span>
                           ))}
@@ -408,7 +408,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {task.reportContent && (
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">安全报告</h4>
-                        <pre className="bg-gray-100 p-3 rounded-lg text-xs overflow-x-auto max-h-48">
+                        <pre className="bg-dark-surface-hover p-3 rounded-lg text-xs overflow-x-auto max-h-48">
                           {task.reportContent.slice(0, 2000)}{task.reportContent.length > 2000 ? '\n...(truncated)' : ''}
                         </pre>
                       </div>
@@ -417,8 +417,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {/* Error */}
                     {task.error && (
                       <div>
-                        <h4 className="text-sm font-medium text-red-700 mb-2">错误信息</h4>
-                        <pre className="bg-red-50 text-red-700 p-3 rounded-lg text-xs overflow-x-auto">
+                        <h4 className="text-sm font-medium text-red-400 mb-2">错误信息</h4>
+                        <pre className="bg-red-50 text-red-400 p-3 rounded-lg text-xs overflow-x-auto">
                           {task.error}
                         </pre>
                       </div>

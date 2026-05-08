@@ -161,14 +161,14 @@ export default function SystemPromptsPage() {
   const getTypeBadge = (type: 'preset' | 'custom') => {
     if (type === 'preset') {
       return (
-        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800">
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20">
           <Sparkles className="w-3 h-3 mr-1" />
           预设
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-dark-surface-hover text-gray-300">
         <Code className="w-3 h-3 mr-1" />
         自定义
       </span>
@@ -178,7 +178,7 @@ export default function SystemPromptsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
       </div>
     );
   }
@@ -188,7 +188,7 @@ export default function SystemPromptsPage() {
       <div className="mb-6">
         <Link
           href="/dashboard"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center text-gray-400 hover:text-gray-100"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           返回项目列表
@@ -197,7 +197,7 @@ export default function SystemPromptsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">系统提示词管理</h1>
+          <h1 className="text-2xl font-bold text-gray-100">系统提示词管理</h1>
           <p className="text-sm text-gray-500 mt-1">
             配置自定义系统提示词或使用预设模板
           </p>
@@ -208,7 +208,7 @@ export default function SystemPromptsPage() {
             setEditingPrompt(null);
             setShowForm(true);
           }}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           <Plus className="w-4 h-4 mr-2" />
           添加提示词
@@ -216,20 +216,20 @@ export default function SystemPromptsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="mb-4 bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {showForm && (
-        <div className="mb-6 bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">
+        <div className="mb-6 bg-dark-surface rounded-lg shadow p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold mb-4 text-gray-100">
             {editingPrompt ? '编辑系统提示词' : '添加系统提示词'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   名称 *
                 </label>
                 <input
@@ -239,12 +239,12 @@ export default function SystemPromptsPage() {
                     setFormData({ ...formData, name: e.target.value })
                   }
                   placeholder="例如: 代码审查提示词"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   required
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   类型 *
                 </label>
                 <select
@@ -255,7 +255,7 @@ export default function SystemPromptsPage() {
                       type: e.target.value as 'preset' | 'custom',
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="custom">自定义</option>
                   <option value="preset">预设</option>
@@ -264,7 +264,7 @@ export default function SystemPromptsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 提示词内容 *
               </label>
               <textarea
@@ -274,14 +274,14 @@ export default function SystemPromptsPage() {
                 }
                 placeholder="输入系统提示词内容（支持 Markdown 格式）"
                 rows={8}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500 font-mono text-sm"
                 required
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   优先级
                 </label>
                 <input
@@ -294,7 +294,7 @@ export default function SystemPromptsPage() {
                     })
                   }
                   placeholder="数字越大优先级越高"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
               <div className="flex items-center pt-6">
@@ -305,9 +305,9 @@ export default function SystemPromptsPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, isEnabled: e.target.checked })
                     }
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-600 rounded"
                   />
-                  <span className="ml-2 text-sm text-gray-700">启用</span>
+                  <span className="ml-2 text-sm text-gray-300">启用</span>
                 </label>
               </div>
             </div>
@@ -320,13 +320,13 @@ export default function SystemPromptsPage() {
                   setEditingPrompt(null);
                   resetForm();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 bg-dark-surface border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover"
               >
                 取消
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
               >
                 {editingPrompt ? '更新' : '创建'}
               </button>
@@ -336,45 +336,45 @@ export default function SystemPromptsPage() {
       )}
 
       {prompts.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">暂无系统提示词</p>
+        <div className="bg-dark-surface rounded-lg shadow p-8 text-center border border-gray-700/50">
+          <FileText className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+          <p className="text-gray-400 mb-4">暂无系统提示词</p>
           <button
             onClick={() => setShowForm(true)}
-            className="text-blue-600 hover:text-blue-700"
+            className="text-primary-400 hover:text-primary-300"
           >
             添加第一个提示词
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-dark-surface rounded-lg shadow overflow-hidden border border-gray-700/50">
+          <table className="min-w-full divide-y divide-gray-700/50">
+            <thead className="bg-[#162032]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   名称
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   类型
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   优先级
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   状态
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   操作
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-700/50">
               {prompts.map((prompt) => (
-                <tr key={prompt.id} className="hover:bg-gray-50">
+                <tr key={prompt.id} className="hover:bg-dark-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <FileText className="w-5 h-5 text-gray-400 mr-2" />
-                      <span className="text-sm font-medium text-gray-900">
+                      <FileText className="w-5 h-5 text-gray-500 mr-2" />
+                      <span className="text-sm font-medium text-gray-100">
                         {prompt.name}
                       </span>
                     </div>
@@ -383,14 +383,14 @@ export default function SystemPromptsPage() {
                     {getTypeBadge(prompt.type)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm text-gray-500">{prompt.priority}</span>
+                    <span className="text-sm text-gray-400">{prompt.priority}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         prompt.isEnabled
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-500/15 text-green-400 border border-green-500/20'
+                          : 'bg-dark-surface-hover text-gray-400'
                       }`}
                     >
                       {prompt.isEnabled ? '启用' : '禁用'}
@@ -400,13 +400,13 @@ export default function SystemPromptsPage() {
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => handleEdit(prompt)}
-                        className="text-blue-600 hover:text-blue-700"
+                        className="text-blue-400 hover:text-blue-300"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(prompt.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-red-400 hover:text-red-300"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

@@ -193,7 +193,7 @@ export default function EditToolPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500"></div>
       </div>
     );
   }
@@ -201,7 +201,7 @@ export default function EditToolPage() {
   if (!tool) {
     return (
       <div className="p-6">
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded">
+        <div className="bg-yellow-900/20 border border-yellow-800/40 text-yellow-300 px-4 py-3 rounded">
           工具不存在或已被删除
         </div>
       </div>
@@ -214,16 +214,16 @@ export default function EditToolPage() {
       <div className="mb-6">
         <button
           onClick={() => router.back()}
-          className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+          className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回
         </button>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">编辑工具</h1>
-            <p className="text-gray-600 mt-1">
-              {tool.name} {tool.isBuiltin && <span className="text-purple-600">(内置)</span>}
+            <h1 className="text-2xl font-bold text-gray-100">编辑工具</h1>
+            <p className="text-gray-400 mt-1">
+              {tool.name} {tool.isBuiltin && <span className="text-purple-400">(内置)</span>}
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -254,14 +254,14 @@ export default function EditToolPage() {
       {/* 表单 */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
             {error}
           </div>
         )}
 
         {/* 基本信息 */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+        <div className="bg-dark-surface shadow rounded-lg p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
             <Cog size={20} className="mr-2" />
             基本信息
           </h2>
@@ -269,41 +269,41 @@ export default function EditToolPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* 工具名称（不可编辑） */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 工具名称
               </label>
               <input
                 type="text"
                 value={tool.name}
                 disabled
-                className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500"
+                className="w-full px-3 py-2 border border-gray-700 rounded-md bg-dark-surface-hover text-gray-500"
               />
               <p className="mt-1 text-sm text-gray-500">工具名称不可修改</p>
             </div>
 
             {/* 显示名称 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                显示名称 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                显示名称 <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
                 value={formData.displayName}
                 onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 required
               />
             </div>
 
             {/* 分类 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                分类 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                分类 <span className="text-red-400">*</span>
               </label>
               <select
                 value={formData.category}
                 onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 {CATEGORIES.map((cat) => (
                   <option key={cat.value} value={cat.value}>
@@ -315,13 +315,13 @@ export default function EditToolPage() {
 
             {/* 执行器 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                执行器 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                执行器 <span className="text-red-400">*</span>
               </label>
               <select
                 value={formData.executor}
                 onChange={(e) => setFormData({ ...formData, executor: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 disabled={tool.isBuiltin}
               >
                 {EXECUTORS.map((exec) => (
@@ -337,13 +337,13 @@ export default function EditToolPage() {
 
             {/* 描述 */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                描述 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                描述 <span className="text-red-400">*</span>
               </label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 rows={3}
                 required
               />
@@ -351,14 +351,14 @@ export default function EditToolPage() {
 
             {/* 超时时间 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 超时时间（毫秒）
               </label>
               <input
                 type="number"
                 value={formData.timeout}
                 onChange={(e) => setFormData({ ...formData, timeout: parseInt(e.target.value) || 30000 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 min={1000}
                 step={1000}
               />
@@ -367,16 +367,16 @@ export default function EditToolPage() {
         </div>
 
         {/* 参数定义 */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">参数定义</h2>
+        <div className="bg-dark-surface shadow rounded-lg p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold text-gray-100 mb-4">参数定义</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              参数 Schema (JSON) <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              参数 Schema (JSON) <span className="text-red-400">*</span>
             </label>
             <textarea
               value={formData.parameters}
               onChange={(e) => setFormData({ ...formData, parameters: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
               rows={8}
               disabled={tool.isBuiltin}
               required
@@ -388,16 +388,16 @@ export default function EditToolPage() {
         </div>
 
         {/* 执行器配置 */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">执行器配置</h2>
+        <div className="bg-dark-surface shadow rounded-lg p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold text-gray-100 mb-4">执行器配置</h2>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               执行器配置 (JSON)
             </label>
             <textarea
               value={formData.executorConfig}
               onChange={(e) => setFormData({ ...formData, executorConfig: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
               rows={8}
               disabled={tool.isBuiltin}
             />
@@ -408,17 +408,17 @@ export default function EditToolPage() {
         </div>
 
         {/* 权限设置 */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">权限设置</h2>
+        <div className="bg-dark-surface shadow rounded-lg p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold text-gray-100 mb-4">权限设置</h2>
           <div className="space-y-4">
             <label className="flex items-center">
               <input
                 type="checkbox"
                 checked={formData.requiresPermission}
                 onChange={(e) => setFormData({ ...formData, requiresPermission: e.target.checked })}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-gray-600 text-primary-600 focus:ring-primary-500"
               />
-              <span className="ml-2 text-sm text-gray-700">
+              <span className="ml-2 text-sm text-gray-300">
                 需要用户授权
               </span>
             </label>
@@ -431,9 +431,9 @@ export default function EditToolPage() {
                 type="checkbox"
                 checked={formData.allowedInSandbox}
                 onChange={(e) => setFormData({ ...formData, allowedInSandbox: e.target.checked })}
-                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="rounded border-gray-600 text-primary-600 focus:ring-primary-500"
               />
-              <span className="ml-2 text-sm text-gray-700">
+              <span className="ml-2 text-sm text-gray-300">
                 允许在沙箱环境执行
               </span>
             </label>
@@ -448,14 +448,14 @@ export default function EditToolPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-6 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            className="px-6 py-2 bg-dark-surface border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover"
           >
             取消
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+            className="px-6 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
           >
             {saving ? (
               <>

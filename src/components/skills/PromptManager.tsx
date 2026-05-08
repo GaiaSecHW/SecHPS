@@ -161,12 +161,12 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
       
       {/* Modal */}
       <div className="relative min-h-screen flex items-center justify-center p-4">
-        <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+        <div className="relative bg-dark-surface rounded-lg shadow-xl w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+          <div className="px-6 py-4 bg-[#0F172A] border-b border-gray-700/50 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <FileText className="h-6 w-6 text-gray-600" />
-              <h2 className="text-xl font-semibold text-gray-900">LLM 提示词配置</h2>
+              <FileText className="h-6 w-6 text-gray-400" />
+              <h2 className="text-xl font-semibold text-gray-100">LLM 提示词配置</h2>
               <span className="text-sm text-gray-500">
                 {prompts.length} 个提示词
               </span>
@@ -175,14 +175,14 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
               <button
                 onClick={handleSeed}
                 disabled={loading}
-                className="inline-flex items-center px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200 disabled:opacity-50"
+                className="inline-flex items-center px-3 py-1.5 text-sm bg-dark-surface-hover text-gray-700 rounded hover:bg-dark-surface-hover disabled:opacity-50"
               >
                 <RefreshCw size={16} className={`mr-1 ${loading ? 'animate-spin' : ''}`} />
                 初始化默认值
               </button>
               <button
                 onClick={onClose}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full"
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-dark-surface-hover rounded-full"
               >
                 <X size={20} />
               </button>
@@ -198,19 +198,19 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
             ) : (
               <div className="space-y-4">
                 {prompts.map((prompt) => (
-                  <div key={prompt.promptKey} className="border border-gray-200 rounded-lg p-4">
+                  <div key={prompt.promptKey} className="border border-gray-700/50 rounded-lg p-4">
                     {/* Header Row */}
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-medium text-gray-900">{prompt.displayName}</h3>
+                          <h3 className="font-medium text-gray-100">{prompt.displayName}</h3>
                           {prompt.isActive ? (
-                            <span className="px-2 py-0.5 text-xs bg-green-100 text-green-800 rounded-full flex items-center gap-1">
+                            <span className="px-2 py-0.5 text-xs bg-green-500/15 text-green-400 rounded-full flex items-center gap-1">
                               <CheckCircle size={12} />
                               已启用
                             </span>
                           ) : (
-                            <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full flex items-center gap-1">
+                            <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-600 rounded-full flex items-center gap-1">
                               <XCircle size={12} />
                               使用默认
                             </span>
@@ -226,7 +226,7 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => toggleExpand(prompt.promptKey)}
-                          className="inline-flex items-center px-2 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded"
+                          className="inline-flex items-center px-2 py-1 text-sm text-gray-600 hover:text-gray-100 hover:bg-dark-surface-hover rounded"
                         >
                           {expandedKey === prompt.promptKey ? (
                             <EyeOff size={16} className="mr-1" />
@@ -237,7 +237,7 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
                         </button>
                         <button
                           onClick={() => handleEdit(prompt)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-900/30 text-blue-400 rounded hover:bg-blue-200"
                         >
                           编辑
                         </button>
@@ -246,7 +246,7 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
 
                     {/* Expanded Content (View Mode) */}
                     {expandedKey === prompt.promptKey && editingKey !== prompt.promptKey && (
-                      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="mt-3 p-3 bg-[#0F172A] rounded-lg border border-gray-700/50">
                         <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono overflow-auto max-h-64">
                           {prompt.content}
                         </pre>
@@ -257,12 +257,12 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
                     {editingKey === prompt.promptKey && (
                       <div className="mt-3 space-y-3">
                         <div className="flex items-center gap-3">
-                          <label className="flex items-center gap-2 text-sm text-gray-700">
+                          <label className="flex items-center gap-2 text-sm text-gray-300">
                             <input
                               type="checkbox"
                               checked={editActive}
                               onChange={(e) => setEditActive(e.target.checked)}
-                              className="rounded border-gray-300"
+                              className="rounded border-gray-600"
                             />
                             启用此提示词（启用后覆盖代码默认值）
                           </label>
@@ -271,7 +271,7 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
                           value={editContent}
                           onChange={(e) => setEditContent(e.target.value)}
                           rows={10}
-                          className="w-full p-3 text-sm font-mono border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full p-3 text-sm font-mono border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                           placeholder="输入提示词内容..."
                         />
                         <div className="flex items-center justify-between">
@@ -281,7 +281,7 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
                           <div className="flex items-center gap-2">
                             <button
                               onClick={handleCancelEdit}
-                              className="px-3 py-1.5 text-sm text-gray-700 hover:text-gray-900"
+                              className="px-3 py-1.5 text-sm text-gray-700 hover:text-gray-100"
                             >
                               取消
                             </button>
@@ -308,7 +308,7 @@ export function PromptManagerModal({ isOpen, onClose }: PromptManagerModalProps)
           </div>
 
           {/* Footer - Help Section */}
-          <div className="px-6 py-3 bg-blue-50 border-t border-blue-100">
+          <div className="px-6 py-3 bg-primary-600/15 border-t border-blue-100">
             <h4 className="text-sm font-medium text-blue-900 mb-2">占位符说明</h4>
             <div className="grid grid-cols-2 gap-4 text-xs text-blue-800">
               <div>
@@ -343,7 +343,7 @@ export function PromptManagerButton() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+        className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-900/30 text-purple-400 rounded hover:bg-purple-200"
       >
         <FileText size={16} className="mr-1" />
         提示词配置

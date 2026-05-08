@@ -366,9 +366,9 @@ export default function EvaluationReportPage({
       case 'low':
         return 'bg-blue-100 text-blue-800 border-blue-200';
       case 'info':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-[#162032] text-gray-200 border-gray-700/50';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-200';
+        return 'bg-[#162032] text-gray-400 border-gray-700/50';
     }
   };
 
@@ -383,11 +383,11 @@ export default function EvaluationReportPage({
       case 'verified':
         return 'bg-blue-100 text-blue-800';
       case 'false-positive':
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-[#162032] text-gray-400';
       case 'closed':
-        return 'bg-gray-100 text-gray-500';
+        return 'bg-[#162032] text-gray-500';
       default:
-        return 'bg-gray-100 text-gray-600';
+        return 'bg-[#162032] text-gray-400';
     }
   };
 
@@ -415,11 +415,11 @@ export default function EvaluationReportPage({
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+        return <CheckCircle2 className="h-4 w-4 text-green-400" />;
       case 'failed':
-        return <XCircle className="h-4 w-4 text-red-600" />;
+        return <XCircle className="h-4 w-4 text-red-400" />;
       case 'running':
-        return <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />;
+        return <Loader2 className="h-4 w-4 text-blue-400 animate-spin" />;
       default:
         return <div className="h-4 w-4 rounded-full bg-gray-300" />;
     }
@@ -428,7 +428,7 @@ export default function EvaluationReportPage({
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+        <Loader2 className="h-12 w-12 animate-spin text-blue-400" />
       </div>
     );
   }
@@ -438,11 +438,11 @@ export default function EvaluationReportPage({
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">加载失败</h2>
-          <p className="text-gray-600 mb-4">{error || '未找到报告'}</p>
+          <h2 className="text-xl font-semibold text-gray-100 mb-2">加载失败</h2>
+          <p className="text-gray-400 mb-4">{error || '未找到报告'}</p>
           <button
             onClick={() => router.back()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
           >
             返回
           </button>
@@ -457,19 +457,19 @@ export default function EvaluationReportPage({
   const isFSMReport = evaluation?.workflowType === 'fsm' || fsmReport !== null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0B1120]">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 sticky top-0 z-10">
+      <div className="bg-dark-surface border-b border-gray-700/50 px-6 py-4 sticky top-0 z-10">
         <div className="flex items-center justify-between max-w-7xl mx-auto">
           <div className="flex items-center space-x-4">
             <button
               onClick={() => router.back()}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-300"
             >
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h1 className="text-xl font-semibold text-gray-900 flex items-center">
+              <h1 className="text-xl font-semibold text-gray-100 flex items-center">
                 {isFSMReport ? (
                   <Layers className="mr-2" size={24} />
                 ) : (
@@ -506,13 +506,13 @@ export default function EvaluationReportPage({
                     })
                     .catch(console.error);
                 }}
-                className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded border border-gray-200"
+                className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-gray-100 hover:bg-dark-surface-hover rounded border border-gray-600"
               >
                 <Download size={16} />
                 <span>下载 Markdown</span>
               </button>
             )}
-            <button className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded border border-gray-200">
+            <button className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-300 hover:text-gray-100 hover:bg-dark-surface-hover rounded border border-gray-600">
               <Download size={16} />
               <span>下载 JSON</span>
             </button>
@@ -524,11 +524,11 @@ export default function EvaluationReportPage({
       {isFSMReport && fsmReport && (
         <div className="max-w-7xl mx-auto px-6 pt-4">
           {/* FSM 报告统计摘要 */}
-          <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4 mb-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <BarChart3 className="h-5 w-5 text-purple-600" />
-                <h3 className="text-lg font-semibold text-gray-900">风险摘要</h3>
+                <h3 className="text-lg font-semibold text-gray-100">风险摘要</h3>
               </div>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 fsmReport.criticalCount > 0 ? 'bg-red-100 text-red-800' :
@@ -543,7 +543,7 @@ export default function EvaluationReportPage({
             </div>
             <div className="grid grid-cols-5 gap-4 mt-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{fsmReport.criticalCount}</div>
+                <div className="text-2xl font-bold text-red-400">{fsmReport.criticalCount}</div>
                 <div className="text-xs text-gray-500">严重</div>
               </div>
               <div className="text-center">
@@ -551,11 +551,11 @@ export default function EvaluationReportPage({
                 <div className="text-xs text-gray-500">高危</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-yellow-600">{fsmReport.mediumCount}</div>
+                <div className="text-2xl font-bold text-yellow-400">{fsmReport.mediumCount}</div>
                 <div className="text-xs text-gray-500">中危</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">{fsmReport.lowCount}</div>
+                <div className="text-2xl font-bold text-blue-400">{fsmReport.lowCount}</div>
                 <div className="text-xs text-gray-500">低危</div>
               </div>
               <div className="text-center">
@@ -566,15 +566,15 @@ export default function EvaluationReportPage({
           </div>
 
           {/* 标签页导航 */}
-          <div className="flex space-x-1 bg-gray-100 rounded-lg p-1 mb-4">
+          <div className="flex space-x-1 bg-dark-surface-hover rounded-lg p-1 mb-4">
             {FSM_TABS.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setFsmActiveTab(tab.id)}
                 className={`flex items-center space-x-1 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                   fsmActiveTab === tab.id
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? 'bg-dark-surface text-gray-100 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200 hover:bg-dark-surface-hover'
                 }`}
               >
                 {tab.icon}
@@ -584,16 +584,16 @@ export default function EvaluationReportPage({
           </div>
 
           {/* 标签页内容 */}
-          <div className="bg-white rounded-lg border border-gray-200 min-h-[400px]">
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 min-h-[400px]">
             {fsmSectionLoading ? (
               <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
               </div>
             ) : fsmSection ? (
               <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">{fsmSection.title}</h2>
+                <h2 className="text-xl font-semibold text-gray-100 mb-4">{fsmSection.title}</h2>
                 <div className="prose prose-sm max-w-none">
-                  <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans bg-gray-50 p-4 rounded-lg">
+                  <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans bg-dark-surface-hover p-4 rounded-lg">
                     {fsmSection.content}
                   </pre>
                 </div>
@@ -629,20 +629,20 @@ export default function EvaluationReportPage({
           </div>
           
           {analysisReport?.projectOverview?.description && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">项目描述</h4>
-              <p className="text-sm text-gray-600 whitespace-pre-wrap">
+            <div className="mt-4 pt-4 border-t border-gray-700/50">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">项目描述</h4>
+              <p className="text-sm text-gray-400 whitespace-pre-wrap">
                 {analysisReport.projectOverview.description}
               </p>
             </div>
           )}
 
           {analysisReport?.projectOverview?.techStack && analysisReport.projectOverview.techStack.length > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">技术栈</h4>
+            <div className="mt-4 pt-4 border-t border-gray-700/50">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">技术栈</h4>
               <div className="flex flex-wrap gap-2">
                 {analysisReport.projectOverview.techStack.map((tech, i) => (
-                  <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded">
+                  <span key={i} className="px-2 py-1 bg-blue-500/15 text-blue-400 text-xs rounded border border-blue-500/20">
                     {tech}
                   </span>
                 ))}
@@ -668,12 +668,12 @@ export default function EvaluationReportPage({
               </div>
 
               {analysisReport.architecture.directoryStructure && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">目录结构</h4>
-                  <div className="bg-gray-50 rounded p-3 font-mono text-xs space-y-1">
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">目录结构</h4>
+                  <div className="bg-dark-surface-hover rounded p-3 font-mono text-xs space-y-1">
                     {Object.entries(analysisReport.architecture.directoryStructure).map(([dir, desc]) => (
                       <div key={dir} className="flex">
-                        <span className="text-blue-600 w-48">{dir}</span>
+                        <span className="text-blue-400 w-48">{dir}</span>
                         <span className="text-gray-500">{desc}</span>
                       </div>
                     ))}
@@ -682,9 +682,9 @@ export default function EvaluationReportPage({
               )}
 
               {analysisReport.architecture.summary && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">架构概述</h4>
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">架构概述</h4>
+                  <p className="text-sm text-gray-400 whitespace-pre-wrap">
                     {analysisReport.architecture.summary}
                   </p>
                 </div>
@@ -707,39 +707,39 @@ export default function EvaluationReportPage({
               {/* API 端点 */}
               {analysisReport.entryPoints.apiEndpoints && analysisReport.entryPoints.apiEndpoints.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">
                     API 端点 ({analysisReport.entryPoints.apiEndpoints.length} 个)
                   </h4>
-                  <div className="bg-gray-50 rounded overflow-hidden">
+                  <div className="bg-dark-surface-hover rounded overflow-hidden">
                     <table className="min-w-full text-xs">
-                      <thead className="bg-gray-100">
+                      <thead className="bg-[#162032]">
                         <tr>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">方法</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">路径</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">认证</th>
-                          <th className="px-3 py-2 text-left font-medium text-gray-600">描述</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-400">方法</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-400">路径</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-400">认证</th>
+                          <th className="px-3 py-2 text-left font-medium text-gray-400">描述</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-gray-200">
+                      <tbody className="divide-y divide-gray-700/50">
                         {analysisReport.entryPoints.apiEndpoints.map((endpoint, i) => (
                           <tr key={i}>
                             <td className="px-3 py-2">
                               <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                                endpoint.method === 'GET' ? 'bg-green-100 text-green-700' :
-                                endpoint.method === 'POST' ? 'bg-blue-100 text-blue-700' :
-                                endpoint.method === 'PUT' ? 'bg-yellow-100 text-yellow-700' :
-                                endpoint.method === 'DELETE' ? 'bg-red-100 text-red-700' :
-                                'bg-gray-100 text-gray-700'
+                                endpoint.method === 'GET' ? 'bg-green-500/15 text-green-400 border border-green-500/20' :
+                                endpoint.method === 'POST' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20' :
+                                endpoint.method === 'PUT' ? 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20' :
+                                endpoint.method === 'DELETE' ? 'bg-red-500/15 text-red-400 border border-red-500/20' :
+                                'bg-[#162032] text-gray-300'
                               }`}>
                                 {endpoint.method}
                               </span>
                             </td>
-                            <td className="px-3 py-2 font-mono text-gray-700">{endpoint.path}</td>
+                            <td className="px-3 py-2 font-mono text-gray-300">{endpoint.path}</td>
                             <td className="px-3 py-2">
                               <span className={`px-1.5 py-0.5 rounded text-xs ${
-                                endpoint.auth === 'public' ? 'bg-green-50 text-green-600' :
-                                endpoint.auth === 'admin' ? 'bg-red-50 text-red-600' :
-                                'bg-yellow-50 text-yellow-600'
+                                endpoint.auth === 'public' ? 'bg-green-500/15 text-green-400' :
+                                endpoint.auth === 'admin' ? 'bg-red-500/15 text-red-400' :
+                                'bg-yellow-500/15 text-yellow-400'
                               }`}>
                                 {endpoint.auth === 'public' ? '公开' : endpoint.auth === 'admin' ? '管理员' : '需认证'}
                               </span>
@@ -755,14 +755,14 @@ export default function EvaluationReportPage({
 
               {/* 用户输入点 */}
               {analysisReport.entryPoints.userInputPoints && analysisReport.entryPoints.userInputPoints.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">
                     用户输入点 ({analysisReport.entryPoints.userInputPoints.length} 个)
                   </h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {analysisReport.entryPoints.userInputPoints.map((input, i) => (
-                      <div key={i} className="bg-gray-50 rounded p-3">
-                        <div className="font-medium text-gray-700">{input.location}</div>
+                      <div key={i} className="bg-dark-bg rounded p-3">
+                        <div className="font-medium text-gray-300">{input.location}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           字段: {input.fields.join(', ')}
                         </div>
@@ -794,11 +794,11 @@ export default function EvaluationReportPage({
               </div>
 
               {analysisReport.authentication.roles && analysisReport.authentication.roles.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">角色列表</h4>
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">角色列表</h4>
                   <div className="flex flex-wrap gap-2">
                     {analysisReport.authentication.roles.map((role, i) => (
-                      <span key={i} className="px-2 py-1 bg-purple-50 text-purple-700 text-xs rounded">
+                      <span key={i} className="px-2 py-1 bg-purple-500/15 text-purple-400 text-xs rounded border border-purple-500/20">
                         {role}
                       </span>
                     ))}
@@ -807,8 +807,8 @@ export default function EvaluationReportPage({
               )}
 
               {analysisReport.authentication.securityConfig && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">安全配置</h4>
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">安全配置</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                     <SecurityBadge label="HTTPS" value={analysisReport.authentication.securityConfig.https} />
                     <SecurityBadge label="CORS" value={analysisReport.authentication.securityConfig.cors} />
@@ -819,9 +819,9 @@ export default function EvaluationReportPage({
               )}
 
               {analysisReport.authentication.summary && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">认证概述</h4>
-                  <p className="text-sm text-gray-600 whitespace-pre-wrap">
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">认证概述</h4>
+                  <p className="text-sm text-gray-400 whitespace-pre-wrap">
                     {analysisReport.authentication.summary}
                   </p>
                 </div>
@@ -841,13 +841,13 @@ export default function EvaluationReportPage({
         >
           <div className="mb-4">
             <div className="flex items-center space-x-4 text-sm">
-              <span className="text-gray-600">
-                总计: <span className="font-medium text-gray-900">{skillsStats.total}</span>
+              <span className="text-gray-400">
+                总计: <span className="font-medium text-gray-100">{skillsStats.total}</span>
               </span>
-              <span className="text-green-600">
+              <span className="text-green-400">
                 完成: <span className="font-medium">{skillsStats.completed}</span>
               </span>
-              <span className="text-red-600">
+              <span className="text-red-400">
                 失败: <span className="font-medium">{skillsStats.failed}</span>
               </span>
               <span className="text-orange-600">
@@ -857,19 +857,19 @@ export default function EvaluationReportPage({
           </div>
 
           {skillExecutions.length > 0 ? (
-            <div className="bg-gray-50 rounded overflow-hidden">
+            <div className="bg-dark-surface-hover rounded overflow-hidden">
               <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
+                <thead className="bg-[#162032]">
                   <tr>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">状态</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">技能名称</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">加载时间</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">结束时间</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">耗时</th>
-                    <th className="px-3 py-2 text-left font-medium text-gray-600">发现数</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-400">状态</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-400">技能名称</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-400">加载时间</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-400">结束时间</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-400">耗时</th>
+                    <th className="px-3 py-2 text-left font-medium text-gray-400">发现数</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200">
+                <tbody className="divide-y divide-gray-700/50">
                   {skillExecutions.map((exec) => (
                     <tr key={exec.id}>
                       <td className="px-3 py-2">
@@ -883,7 +883,7 @@ export default function EvaluationReportPage({
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-2 font-medium text-gray-900">
+                      <td className="px-3 py-2 font-medium text-gray-100">
                         {exec.skillDisplayName || exec.skillName || '未知'}
                       </td>
                       <td className="px-3 py-2 text-gray-500">
@@ -896,7 +896,7 @@ export default function EvaluationReportPage({
                         {exec.duration ? formatSkillDuration(exec.duration) : '-'}
                       </td>
                       <td className="px-3 py-2">
-                        <span className={`font-medium ${exec.findingsCount > 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                        <span className={`font-medium ${exec.findingsCount > 0 ? 'text-red-400' : 'text-gray-500'}`}>
                           {exec.findingsCount}
                         </span>
                       </td>
@@ -920,16 +920,16 @@ export default function EvaluationReportPage({
           {/* 按漏洞类型统计 */}
           {vulnerabilitySummary.byType.length > 0 ? (
             <div className="space-y-3">
-              <h4 className="text-sm font-medium text-gray-700">按漏洞类型统计</h4>
+              <h4 className="text-sm font-medium text-gray-300">按漏洞类型统计</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {vulnerabilitySummary.byType.map((item, index) => (
                   <div 
                     key={index} 
-                    className={`bg-gray-50 rounded-lg p-3 cursor-pointer hover:bg-gray-100 transition-colors ${vulnFilterType === item.categoryId ? 'ring-2 ring-blue-500' : ''}`}
+                    className={`bg-dark-surface-hover rounded-lg p-3 cursor-pointer hover:bg-gray-700/30 transition-colors ${vulnFilterType === item.categoryId ? 'ring-2 ring-primary-500' : ''}`}
                     onClick={() => setVulnFilterType(vulnFilterType === item.categoryId ? '' : item.categoryId)}
                   >
                     <div className="text-xs text-gray-500 truncate" title={item.categoryName}>{item.categoryName}</div>
-                    <div className="text-2xl font-bold text-gray-900">{item.count}</div>
+                    <div className="text-2xl font-bold text-gray-100">{item.count}</div>
                   </div>
                 ))}
               </div>
@@ -940,21 +940,21 @@ export default function EvaluationReportPage({
 
           {/* 状态统计 */}
           {vulnerabilitySummary.total > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="mt-4 pt-4 border-t border-gray-700/50">
               <div className="flex items-center flex-wrap gap-4 text-sm">
-                <span className="text-gray-600">
+                <span className="text-gray-400">
                   待处理: <span className="font-medium text-orange-600">{vulnerabilitySummary.byStatus.open}</span>
                 </span>
-                <span className="text-gray-600">
-                  已确认: <span className="font-medium text-green-600">{vulnerabilitySummary.byStatus.confirmed}</span>
+                <span className="text-gray-400">
+                  已确认: <span className="font-medium text-green-400">{vulnerabilitySummary.byStatus.confirmed}</span>
                 </span>
-                <span className="text-gray-600">
-                  已修复: <span className="font-medium text-blue-600">{vulnerabilitySummary.byStatus.fixed}</span>
+                <span className="text-gray-400">
+                  已修复: <span className="font-medium text-blue-400">{vulnerabilitySummary.byStatus.fixed}</span>
                 </span>
-                <span className="text-gray-600">
+                <span className="text-gray-400">
                   误报: <span className="font-medium text-gray-500">{vulnerabilitySummary.byStatus.falsePositive}</span>
                 </span>
-                <span className="text-gray-600 ml-auto">
+                <span className="text-gray-400 ml-auto">
                   总计: <span className="font-medium text-purple-600">{vulnerabilitySummary.total}</span>
                 </span>
               </div>
@@ -963,15 +963,15 @@ export default function EvaluationReportPage({
 
           {/* 漏洞明细表格 */}
           {vulnerabilitySummary.total > 0 && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="mt-4 pt-4 border-t border-gray-700/50">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-medium text-gray-700">漏洞明细</h4>
+                <h4 className="text-sm font-medium text-gray-300">漏洞明细</h4>
                 {/* 筛选控件 */}
                 <div className="flex items-center gap-2">
                   <select
                     value={vulnFilterStatus}
                     onChange={(e) => { setVulnFilterStatus(e.target.value); setVulnPage(1); }}
-                    className="text-xs border border-gray-300 rounded px-2 py-1"
+                    className="text-xs border border-gray-600 rounded px-2 py-1"
                   >
                     <option value="">全部状态</option>
                     <option value="new">新建</option>
@@ -982,7 +982,7 @@ export default function EvaluationReportPage({
                   {(vulnFilterType || vulnFilterStatus) && (
                     <button
                       onClick={() => { setVulnFilterType(''); setVulnFilterStatus(''); setVulnPage(1); }}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-blue-400 hover:underline"
                     >
                       清除筛选
                     </button>
@@ -995,29 +995,29 @@ export default function EvaluationReportPage({
                   <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="text-left py-2 px-2 font-medium text-gray-600">漏洞类型</th>
-                          <th className="text-left py-2 px-2 font-medium text-gray-600">标题</th>
-                          <th className="text-left py-2 px-2 font-medium text-gray-600">发现Skill</th>
-                          <th className="text-left py-2 px-2 font-medium text-gray-600">状态</th>
-                          <th className="text-left py-2 px-2 font-medium text-gray-600">CWE</th>
+                        <tr className="border-b border-gray-700/50">
+                          <th className="text-left py-2 px-2 font-medium text-gray-400">漏洞类型</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-400">标题</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-400">发现Skill</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-400">状态</th>
+                          <th className="text-left py-2 px-2 font-medium text-gray-400">CWE</th>
                         </tr>
                       </thead>
                       <tbody>
                         {vulnerabilitySummary.details.map((vuln) => (
                           <tr 
                             key={vuln.id} 
-                            className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                            className="border-b border-gray-100 hover:bg-dark-bg cursor-pointer"
                             onClick={() => router.push(`/vulnerabilities/${vuln.id}`)}
                           >
                             <td className="py-2 px-2">
-                              <div className="text-gray-900">{vuln.type}</div>
+                              <div className="text-gray-100">{vuln.type}</div>
                               {vuln.patternName !== vuln.type && (
                                 <div className="text-xs text-gray-500">{vuln.patternName}</div>
                               )}
                             </td>
                             <td className="py-2 px-2">
-                              <div className="text-gray-700 max-w-xs truncate" title={vuln.title}>{vuln.title}</div>
+                              <div className="text-gray-300 max-w-xs truncate" title={vuln.title}>{vuln.title}</div>
                               {vuln.description && (
                                 <div className="text-xs text-gray-500 max-w-xs truncate" title={vuln.description}>
                                   {vuln.description}
@@ -1025,7 +1025,7 @@ export default function EvaluationReportPage({
                               )}
                             </td>
                             <td className="py-2 px-2">
-                              <span className="text-gray-700">{vuln.skillName || '-'}</span>
+                              <span className="text-gray-300">{vuln.skillName || '-'}</span>
                             </td>
                             <td className="py-2 px-2">
                               <span className={`px-2 py-0.5 rounded text-xs ${getStatusColor(vuln.status)}`}>
@@ -1051,14 +1051,14 @@ export default function EvaluationReportPage({
                         <button
                           onClick={() => setVulnPage(p => Math.max(1, p - 1))}
                           disabled={vulnerabilitySummary.pagination.page <= 1}
-                          className="px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                          className="px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-dark-surface-hover"
                         >
                           上一页
                         </button>
                         <button
                           onClick={() => setVulnPage(p => Math.min(vulnerabilitySummary.pagination.totalPages, p + 1))}
                           disabled={vulnerabilitySummary.pagination.page >= vulnerabilitySummary.pagination.totalPages}
-                          className="px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                          className="px-2 py-1 border rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed hover:bg-dark-surface-hover"
                         >
                           下一页
                         </button>
@@ -1093,14 +1093,14 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+    <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
       <button
         onClick={onToggle}
-        className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+        className="w-full px-4 py-3 flex items-center justify-between hover:bg-dark-surface-hover"
       >
         <div className="flex items-center space-x-2">
           <span className="text-gray-500">{icon}</span>
-          <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+          <h3 className="text-lg font-semibold text-gray-100">{title}</h3>
         </div>
         {expanded ? (
           <ChevronDown className="h-5 w-5 text-gray-400" />
@@ -1109,7 +1109,7 @@ function Section({
         )}
       </button>
       {expanded && (
-        <div className="px-4 pb-4 border-t border-gray-100">
+        <div className="px-4 pb-4 border-t border-gray-700/50">
           {children}
         </div>
       )}
@@ -1121,19 +1121,19 @@ function InfoItem({ label, value }: { label: string; value: string | undefined }
   return (
     <div>
       <h4 className="text-xs font-medium text-gray-500">{label}</h4>
-      <p className="text-sm text-gray-900 mt-0.5">{value || '-'}</p>
+      <p className="text-sm text-gray-100 mt-0.5">{value || '-'}</p>
     </div>
   );
 }
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   const colors: Record<string, string> = {
-    red: 'bg-red-50 border-red-200 text-red-700',
-    orange: 'bg-orange-50 border-orange-200 text-orange-700',
-    yellow: 'bg-yellow-50 border-yellow-200 text-yellow-700',
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    gray: 'bg-gray-50 border-gray-200 text-gray-700',
-    purple: 'bg-purple-50 border-purple-200 text-purple-700',
+    red: 'bg-red-900/20 border-red-200 text-red-400',
+    orange: 'bg-orange-900/20 border-orange-200 text-orange-700',
+    yellow: 'bg-yellow-900/20 border-yellow-200 text-yellow-400',
+    blue: 'bg-blue-900/20 border-blue-200 text-blue-400',
+    gray: 'bg-dark-bg border-gray-700/50 text-gray-300',
+    purple: 'bg-purple-900/20 border-purple-200 text-purple-700',
   };
 
   return (
@@ -1148,7 +1148,7 @@ function SecurityBadge({ label, value }: { label: string; value: any }) {
   const isEnabled = value === true || value === 'true' || value === '启用';
   return (
     <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs ${
-      isEnabled ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+      isEnabled ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-red-500/15 text-red-400 border border-red-500/20'
     }`}>
       {isEnabled ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
       <span>{label}</span>

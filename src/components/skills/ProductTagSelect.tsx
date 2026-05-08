@@ -46,7 +46,7 @@ export function ProductTagSelect({ selectedIds, onChange }: Props) {
   if (tags.length === 0) {
     return (
       <div className="flex items-center gap-2">
-        <span className="px-2 py-1 text-sm bg-green-100 text-green-700 rounded">所有产品（暂无产品标签）</span>
+        <span className="px-2 py-1 text-sm bg-green-100 text-green-400 rounded">所有产品（暂无产品标签）</span>
       </div>
     );
   }
@@ -71,8 +71,8 @@ export function ProductTagSelect({ selectedIds, onChange }: Props) {
             onClick={() => toggleTag(tag.id)}
             className={`px-3 py-1 text-sm rounded-full border transition-colors ${
               selectedIds.includes(tag.id)
-                ? 'bg-green-100 text-green-700 border-green-300'
-                : 'bg-white text-gray-600 border-gray-300 hover:border-gray-400'
+                ? 'bg-green-100 text-green-400 border-green-300'
+                : 'bg-dark-surface text-gray-400 border-gray-600 hover:border-gray-400'
             }`}
           >
             {tag.displayName}
@@ -83,12 +83,12 @@ export function ProductTagSelect({ selectedIds, onChange }: Props) {
         <div className="flex flex-wrap gap-1 items-center">
           <span className="text-xs text-gray-500">已选：</span>
           {selectedTags.map(tag => (
-            <span key={tag.id} className="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+            <span key={tag.id} className="inline-flex items-center px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">
               {tag.displayName}
               <button
                 type="button"
                 onClick={() => toggleTag(tag.id)}
-                className="ml-1 text-green-500 hover:text-green-700"
+                className="ml-1 text-green-500 hover:text-green-400"
               >
                 <X size={12} />
               </button>

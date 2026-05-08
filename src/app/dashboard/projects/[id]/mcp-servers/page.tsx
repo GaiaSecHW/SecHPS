@@ -200,7 +200,7 @@ export default function McpServersPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
       </div>
     );
   }
@@ -210,7 +210,7 @@ export default function McpServersPage() {
       <div className="mb-6">
         <Link
           href="/dashboard"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center text-gray-400 hover:text-gray-100"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           返回项目列表
@@ -219,7 +219,7 @@ export default function McpServersPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">MCP 服务器配置</h1>
+          <h1 className="text-2xl font-bold text-gray-100">MCP 服务器配置</h1>
           <p className="text-sm text-gray-500 mt-1">
             管理 Model Context Protocol 服务器配置
           </p>
@@ -230,7 +230,7 @@ export default function McpServersPage() {
             setEditingServer(null);
             setShowForm(true);
           }}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           <Plus className="w-4 h-4 mr-2" />
           添加服务器
@@ -238,19 +238,19 @@ export default function McpServersPage() {
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="mb-4 bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {showForm && (
-        <div className="mb-6 bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">
+        <div className="mb-6 bg-dark-surface rounded-lg shadow p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold mb-4 text-gray-100">
             {editingServer ? '编辑 MCP 服务器' : '添加 MCP 服务器'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 服务器名称 *
               </label>
               <input
@@ -259,13 +259,13 @@ export default function McpServersPage() {
                 onChange={(e) =>
                   setFormData({ ...formData, name: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 类型 *
               </label>
               <select
@@ -276,7 +276,7 @@ export default function McpServersPage() {
                       type: e.target.value as 'local' | 'sse' | 'http',
                     })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="local">本地服务器 (stdio)</option>
                   <option value="sse">远程 SSE (旧版)</option>
@@ -287,7 +287,7 @@ export default function McpServersPage() {
             {formData.type === 'local' ? (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     命令 *
                   </label>
                   <input
@@ -297,12 +297,12 @@ export default function McpServersPage() {
                       setFormData({ ...formData, command: e.target.value })
                     }
                     placeholder="例如: npx @modelcontextprotocol/server-filesystem"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     参数 (JSON 数组或空格分隔)
                   </label>
                   <input
@@ -312,11 +312,11 @@ export default function McpServersPage() {
                       setFormData({ ...formData, args: e.target.value })
                     }
                     placeholder='例如: ["/path/to/project"] 或 /path/to/project'
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     环境变量 (JSON 对象)
                   </label>
                   <textarea
@@ -326,13 +326,13 @@ export default function McpServersPage() {
                     }
                     placeholder='例如: {"API_KEY": "xxx"}'
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
               </>
             ) : (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   URL {formData.type === 'sse' ? '(SSE 端点)' : '(MCP 端点)'} *
                 </label>
                 <input
@@ -342,7 +342,7 @@ export default function McpServersPage() {
                     setFormData({ ...formData, url: e.target.value })
                   }
                   placeholder={formData.type === 'sse' ? "例如: http://localhost:8080/sse" : "例如: http://localhost:8080/mcp"}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   required
                 />
               </div>
@@ -356,9 +356,9 @@ export default function McpServersPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, isEnabled: e.target.checked })
                   }
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-600 rounded"
                 />
-                <span className="ml-2 text-sm text-gray-700">启用</span>
+                <span className="ml-2 text-sm text-gray-300">启用</span>
               </label>
               <label className="flex items-center">
                 <input
@@ -367,9 +367,9 @@ export default function McpServersPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, autoStart: e.target.checked })
                   }
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-600 rounded"
                 />
-                <span className="ml-2 text-sm text-gray-700">自动启动</span>
+                <span className="ml-2 text-sm text-gray-300">自动启动</span>
               </label>
             </div>
 
@@ -381,13 +381,13 @@ export default function McpServersPage() {
                   setEditingServer(null);
                   resetForm();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 bg-dark-surface border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover"
               >
                 取消
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
               >
                 {editingServer ? '更新' : '创建'}
               </button>
@@ -397,45 +397,45 @@ export default function McpServersPage() {
       )}
 
       {servers.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <Server className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">暂无 MCP 服务器配置</p>
+        <div className="bg-dark-surface rounded-lg shadow p-8 text-center border border-gray-700/50">
+          <Server className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+          <p className="text-gray-400 mb-4">暂无 MCP 服务器配置</p>
           <button
             onClick={() => setShowForm(true)}
-            className="text-blue-600 hover:text-blue-700"
+            className="text-primary-400 hover:text-primary-300"
           >
             添加第一个服务器
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-dark-surface rounded-lg shadow overflow-hidden border border-gray-700/50">
+          <table className="min-w-full divide-y divide-gray-700/50">
+            <thead className="bg-[#162032]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   名称
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   类型
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   配置
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   状态
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   操作
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-700/50">
               {servers.map((server) => (
-                <tr key={server.id} className="hover:bg-gray-50">
+                <tr key={server.id} className="hover:bg-dark-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <Server className="w-5 h-5 text-gray-400 mr-2" />
-                      <span className="text-sm font-medium text-gray-900">
+                      <Server className="w-5 h-5 text-gray-500 mr-2" />
+                      <span className="text-sm font-medium text-gray-100">
                         {server.name}
                       </span>
                     </div>
@@ -444,15 +444,15 @@ export default function McpServersPage() {
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                         server.type === 'local'
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-purple-100 text-purple-800'
+                          ? 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                          : 'bg-purple-500/15 text-purple-400 border border-purple-500/20'
                       }`}
                     >
                       {server.type === 'local' ? '本地' : '远程'}
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-500 max-w-xs truncate">
+                    <div className="text-sm text-gray-400 max-w-xs truncate">
                       {server.type === 'local'
                         ? server.command
                         : server.url}
@@ -461,12 +461,12 @@ export default function McpServersPage() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
                       {server.isEnabled ? (
-                        <span className="inline-flex items-center text-green-600">
+                        <span className="inline-flex items-center text-green-400">
                           <Power className="w-4 h-4 mr-1" />
                           启用
                         </span>
                       ) : (
-                        <span className="inline-flex items-center text-gray-400">
+                        <span className="inline-flex items-center text-gray-500">
                           <PowerOff className="w-4 h-4 mr-1" />
                           禁用
                         </span>
@@ -477,13 +477,13 @@ export default function McpServersPage() {
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => handleEdit(server)}
-                        className="text-blue-600 hover:text-blue-700"
+                        className="text-blue-400 hover:text-blue-300"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(server.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-red-400 hover:text-red-300"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

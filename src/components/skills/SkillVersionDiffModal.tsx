@@ -157,23 +157,23 @@ export function SkillVersionDiffModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
+      <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-[#0F172A]">
           <div className="flex items-center gap-3">
             <GitCompare size={20} className="text-indigo-600" />
-            <h2 className="text-lg font-semibold text-gray-900">版本对比</h2>
+            <h2 className="text-lg font-semibold text-gray-100">版本对比</h2>
           </div>
           
           <div className="flex items-center gap-4">
             {/* View Mode Toggle */}
-            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+            <div className="flex items-center gap-2 bg-dark-surface-hover rounded-lg p-1">
               <button
                 onClick={() => setViewMode('side-by-side')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
                   viewMode === 'side-by-side'
-                    ? 'bg-white shadow text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-dark-surface shadow text-gray-100'
+                    : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 并排对比
@@ -182,8 +182,8 @@ export function SkillVersionDiffModal({
                 onClick={() => setViewMode('inline')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
                   viewMode === 'inline'
-                    ? 'bg-white shadow text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-dark-surface shadow text-gray-100'
+                    : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
                 内联对比
@@ -192,7 +192,7 @@ export function SkillVersionDiffModal({
 
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
             >
               <X size={20} className="text-gray-500" />
             </button>
@@ -204,7 +204,7 @@ export function SkillVersionDiffModal({
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-              <span className="ml-3 text-gray-600">加载版本对比数据...</span>
+              <span className="ml-3 text-gray-400">加载版本对比数据...</span>
             </div>
           ) : error ? (
             <div className="flex items-center gap-2 py-8 text-red-600">
@@ -215,12 +215,12 @@ export function SkillVersionDiffModal({
             <div className="space-y-6">
               {/* Evolution Info */}
               {evolution && (
-                <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <div className="bg-indigo-900/20 border border-indigo-500/20 rounded-lg p-4">
                   <div className="flex items-center gap-4 mb-3">
                     <span className={`px-3 py-1 rounded-lg text-sm font-medium ${getChangeTypeColor(evolution.changeType)}`}>
                       {getChangeTypeLabel(evolution.changeType)}
                     </span>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 text-sm text-gray-400">
                       <span className="font-medium">v{evolution.fromVersion}</span>
                       <ArrowRight size={16} />
                       <span className="font-medium">v{evolution.toVersion}</span>
@@ -239,10 +239,10 @@ export function SkillVersionDiffModal({
               {viewMode === 'side-by-side' ? (
                 <div className="grid grid-cols-2 gap-4">
                   {/* Before (Target Version) */}
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+                  <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+                    <div className="px-4 py-2 bg-dark-surface-hover border-b border-gray-700/50 flex items-center gap-2">
                       <FileText size={16} className="text-gray-500" />
-                      <span className="font-medium text-gray-700">v{targetVersionNumber} (目标版本)</span>
+                      <span className="font-medium text-gray-300">v{targetVersionNumber} (目标版本)</span>
                     </div>
                     <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">
                       {targetContent || '暂无内容'}
@@ -250,10 +250,10 @@ export function SkillVersionDiffModal({
                   </div>
 
                   {/* After (Current Version) */}
-                  <div className="border border-gray-200 rounded-lg overflow-hidden">
-                    <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+                  <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+                    <div className="px-4 py-2 bg-dark-surface-hover border-b border-gray-700/50 flex items-center gap-2">
                       <FileText size={16} className="text-gray-500" />
-                      <span className="font-medium text-gray-700">v{currentVersionNumber} (当前版本)</span>
+                      <span className="font-medium text-gray-300">v{currentVersionNumber} (当前版本)</span>
                     </div>
                     <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">
                       {currentContent || '暂无内容'}
@@ -262,10 +262,10 @@ export function SkillVersionDiffModal({
                 </div>
               ) : (
                 /* Inline Diff View */
-                <div className="border border-gray-200 rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
+                <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 bg-dark-surface-hover border-b border-gray-700/50 flex items-center gap-2">
                     <FileText size={16} className="text-gray-500" />
-                    <span className="font-medium text-gray-700">内联对比视图</span>
+                    <span className="font-medium text-gray-300">内联对比视图</span>
                     <div className="ml-auto flex items-center gap-3 text-xs">
                       <span className="flex items-center gap-1">
                         <span className="w-3 h-3 bg-red-200 rounded"></span>
@@ -292,28 +292,28 @@ export function SkillVersionDiffModal({
                           ''
                         }`}
                       >
-                        <span className="px-2 py-1 bg-gray-100 text-gray-400 text-xs min-w-[40px] text-right select-none">
+                        <span className="px-2 py-1 bg-dark-surface-hover text-gray-400 text-xs min-w-[40px] text-right select-none">
                           {line.lineNum}
                         </span>
                         {line.type === 'removed' && (
-                          <span className="px-4 py-1 text-red-700 flex-1">
+                          <span className="px-4 py-1 text-red-400 flex-1">
                             <span className="text-red-400 mr-2">-</span>
                             {line.before}
                           </span>
                         )}
                         {line.type === 'added' && (
-                          <span className="px-4 py-1 text-green-700 flex-1">
+                          <span className="px-4 py-1 text-green-400 flex-1">
                             <span className="text-green-400 mr-2">+</span>
                             {line.after}
                           </span>
                         )}
                         {line.type === 'modified' && (
                           <>
-                            <span className="px-4 py-1 text-red-700 flex-1 border-r border-gray-200">
+                            <span className="px-4 py-1 text-red-400 flex-1 border-r border-gray-700/50">
                               <span className="text-red-400 mr-2">-</span>
                               {line.before}
                             </span>
-                            <span className="px-4 py-1 text-green-700 flex-1">
+                            <span className="px-4 py-1 text-green-400 flex-1">
                               <span className="text-green-400 mr-2">+</span>
                               {line.after}
                             </span>
@@ -335,10 +335,10 @@ export function SkillVersionDiffModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end">
+        <div className="px-6 py-4 border-t border-gray-700/50 bg-[#0F172A] flex items-center justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-4 py-2 bg-gray-700 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
           >
             关闭
           </button>
