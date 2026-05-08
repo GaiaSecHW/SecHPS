@@ -32,9 +32,7 @@ interface TaskFormData {
   name: string;
   agentId: string;
   agentName: string;
-  notes: string;
-  selectedSkills: string[];
-  selectedScripts: string[];
+  description: string;
 }
 
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
@@ -101,9 +99,9 @@ export default function TaskBuilderPage() {
       form.append('name', formData.name);
       form.append('agentId', formData.agentId);
       form.append('agentName', formData.agentName);
-      form.append('notes', formData.notes || '');
-      form.append('skills', formData.selectedSkills.join(','));
-      form.append('scripts', formData.selectedScripts.join(','));
+      form.append('notes', formData.description || '');
+      form.append('skills', '');
+      form.append('scripts', '');
       if (file) {
         form.append('file', file);
       }
