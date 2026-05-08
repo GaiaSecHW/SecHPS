@@ -228,7 +228,7 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
       reviewStatus: 'pending',
       analyzedBy: 'system',
     })),
-    // skipDuplicates is not supported in SQLite
+    skipDuplicates: true,
   });
 
   // 4. 返回任务状态
