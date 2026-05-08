@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
-import { agentAppsMemoryStorage } from '@/lib/agent-apps-storage';
-import { v4 as uuidv4 } from 'uuid';
+import { prisma } from '@/lib/prisma';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequest(request);
   if (!auth.success) return authErrorResponse(auth);
 
   try {
-    const apps = agentAppsMemoryStorage.filter((app: any) => app.userId === auth.payload.userId);
+    const where = auth.payload.roles?.includes('admin') 
+      ? {} 
+      : { userId: auth.payload.userId };
+
+    const apps = await prisma.agentApp.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
     return NextResponse.json({ apps });
   } catch (error) {
     console.error('获取应用列表失败:', error);
@@ -27,26 +33,23 @@ export async function POST(request: NextRequest) {
     const engine = formData.get('engine') as string;
     const startCommand = formData.get('startCommand') as string;
     const notes = formData.get('notes') as string | null;
-    const skillFileType = formData.get('skillFileType') as string | null;
 
     if (!name || !engine || !startCommand) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
     }
 
-    const appId = uuidv4();
-    const app = {
-      id: appId,
-      userId: auth.payload.userId,
-      name,
-      engine,
-      skillPath: `/agent-apps/${appId}/skill`,
-      startCommand,
-      notes: notes || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    agentAppsMemoryStorage.push(app);
+    const app = await prisma.agentApp.create({
+      data: {
+        id: crypto.randomUUID(),
+        userId: auth.payload.userId,
+        name,
+        engine,
+        skillPath: `/agent-apps/${crypto.randomUUID()}/skill`,
+        startCommand,
+        notes: notes || null,
+        status: 'active',
+      },
+    });
 
     return NextResponse.json({ app });
   } catch (error) {

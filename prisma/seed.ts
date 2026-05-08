@@ -130,12 +130,14 @@ async function main() {
     await prisma.opencodeConfig.create({
       data: {
         id: generateId('cfg'),
-        userId: admin.id,
         name: 'Default',
         baseURL: 'http://localhost:54321',
         description: 'Default AI4WEB configuration',
         isActive: true,
         updatedAt: new Date(),
+        User: {
+          connect: { id: admin.id },
+        },
       },
     });
 
