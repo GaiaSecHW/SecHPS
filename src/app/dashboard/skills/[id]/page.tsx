@@ -24,13 +24,16 @@ import {
   Eye,
   History,
   Plus,
+  Bug,
+  Search,
+  Shield,
+  Code,
+  LayoutDashboard,
+  TrendingUp,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
-import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
-import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
-import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
@@ -43,8 +46,8 @@ interface Skill {
   name: string;
   displayName: string;
   description: string;
-  techStackId: string | null;
-  techStackName?: string | null;
+  categoryId: string;
+  vulnerabilityTreeId: string | null;
   cwe: string | null;
   severity: string | null;
   content: string;
@@ -62,9 +65,12 @@ interface Skill {
   updatedAt: string;
   userId: string | null;
   isPublic: boolean;
-  vulnerabilityPatternId: string | null;
-  vulnerabilityPatternName?: string | null;
-  vulnerabilityPatternCategory?: string | null;
+  categoryName: string | null;
+  categoryIcon: string | null;
+  hasSubDimension: boolean;
+  patternName: string | null;
+  languageName: string | null;
+  productTags: Array<{ id: string; name: string; displayName: string }>;
 }
 
 export default function SkillDetailPage() {
@@ -82,8 +88,9 @@ export default function SkillDetailPage() {
   const [editName, setEditName] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
-  const [editVulnerabilityPatternId, setEditVulnerabilityPatternId] = useState<string>('');
-  const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
+  const [editCategoryId, setEditCategoryId] = useState<string>('');
+  const [editVulnerabilityTreeId, setEditVulnerabilityTreeId] = useState<string>('');
+  const [editSelectedLanguageId, setEditSelectedLanguageId] = useState<string>('');
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
@@ -222,11 +229,11 @@ export default function SkillDetailPage() {
     }
   };
 
-  // 技术栈选择相关
-  const [editTechStackId, setEditTechStackId] = useState('');
-
-  // 使用 Hook 获取技术栈选项
-  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
+  // 分类选择相关
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; icon: string | null; hasSubDimension: boolean }>>([]);
+  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; patterns: Array<{ id: string; name: string; displayName: string }> }>>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingTree, setLoadingTree] = useState(false);
   
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -339,14 +346,56 @@ export default function SkillDetailPage() {
     }
   };
 
-  const startEditing = () => {
+  const startEditing = async () => {
     if (!skill) return;
     setEditName(skill.displayName);
-    setEditVulnerabilityPatternId(skill.vulnerabilityPatternId || '');
-    setEditTechStackId(skill.techStackId || '');
+    setEditCategoryId(skill.categoryId || '');
+    setEditVulnerabilityTreeId(skill.vulnerabilityTreeId || '');
+    setEditSelectedLanguageId('');
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
     setIsEditing(true);
+
+    // 加载分类和漏洞树数据
+    const token = localStorage.getItem('token');
+    setLoadingCategories(true);
+    try {
+      const res = await fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data.categories || []);
+      }
+    } catch (e) {
+      console.error('获取分类失败:', e);
+    } finally {
+      setLoadingCategories(false);
+    }
+
+    // 如果有子维度，加载漏洞树并回显语言
+    if (skill.hasSubDimension) {
+      setLoadingTree(true);
+      try {
+        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setVulnerabilityTree(data.tree || []);
+          // 回显：根据当前 vulnerabilityTreeId 找到所属语言
+          if (skill.vulnerabilityTreeId) {
+            for (const lang of (data.tree || [])) {
+              const found = lang.patterns.find((p: { id: string }) => p.id === skill.vulnerabilityTreeId);
+              if (found) {
+                setEditSelectedLanguageId(lang.id);
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('获取漏洞树失败:', e);
+      } finally {
+        setLoadingTree(false);
+      }
+    }
   };
 
   const cancelEditing = () => {
@@ -361,15 +410,15 @@ export default function SkillDetailPage() {
       return;
     }
 
-    if (!editVulnerabilityPatternId) {
-      alert('请选择漏洞模式');
+    if (!editCategoryId) {
+      alert('请选择分类');
       return;
     }
 
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      
+
       // 直接保存用户编辑的内容，不清理输出格式
       const response = await fetch(`/api/skills/${skillId}`, {
         method: 'PUT',
@@ -380,9 +429,8 @@ export default function SkillDetailPage() {
         body: JSON.stringify({
           displayName: editName.trim(),
           description: editName.trim(),
-          vulnerabilityPatternId: editVulnerabilityPatternId,
-          techStackId: editTechStackId || null,
-          cwe: selectedVulnerabilityPattern?.cwe || null,
+          categoryId: editCategoryId,
+          vulnerabilityTreeId: editVulnerabilityTreeId || null,
           content: editContent,
           isActive: editIsActive,
         }),
@@ -794,38 +842,88 @@ export default function SkillDetailPage() {
                 />
               </div>
               
-              {/* 漏洞模式选择 */}
+              {/* 分类选择 */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  漏洞模式 <span className="text-red-500">*</span>
-                </label>
-                <VulnerabilityPatternSelector
-                  value={editVulnerabilityPatternId}
-                  onChange={(id, pattern) => {
-                    setEditVulnerabilityPatternId(id);
-                    setSelectedVulnerabilityPattern(pattern);
-                  }}
-                  placeholder="选择漏洞模式"
-                />
-              </div>
-
-              {/* 技术栈选择 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  适合的技术栈
+                  分类 <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={editTechStackId}
-                  onChange={(e) => setEditTechStackId(e.target.value)}
-                  disabled={loadingTechStack}
+                  value={editCategoryId}
+                  onChange={(e) => {
+                    setEditCategoryId(e.target.value);
+                    setEditVulnerabilityTreeId('');
+                    setEditSelectedLanguageId('');
+                    // 检查选中的分类是否有子维度
+                    const selected = categories.find(c => c.id === e.target.value);
+                    if (selected?.hasSubDimension) {
+                      setLoadingTree(true);
+                      const token = localStorage.getItem('token');
+                      fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } })
+                        .then(res => res.ok ? res.json() : { tree: [] })
+                        .then(data => setVulnerabilityTree(data.tree || []))
+                        .catch(() => setVulnerabilityTree([]))
+                        .finally(() => setLoadingTree(false));
+                    } else {
+                      setVulnerabilityTree([]);
+                    }
+                  }}
+                  disabled={loadingCategories}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
-                  <option value="">无（通用）</option>
-                  {techStackOptionsWithIds.map((opt) => (
-                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                  <option value="">选择分类</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.icon ? cat.icon + ' ' : ''}{cat.displayName}</option>
                   ))}
                 </select>
               </div>
+
+              {/* 语言选择（仅当分类有子维度时显示） */}
+              {(() => {
+                const selectedCat = categories.find(c => c.id === editCategoryId);
+                return selectedCat?.hasSubDimension ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      语言
+                    </label>
+                    <select
+                      value={editSelectedLanguageId}
+                      onChange={(e) => {
+                        setEditSelectedLanguageId(e.target.value);
+                        setEditVulnerabilityTreeId('');
+                      }}
+                      disabled={loadingTree}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">选择语言</option>
+                      {vulnerabilityTree.map((lang) => (
+                        <option key={lang.id} value={lang.id}>{lang.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* 模式选择（级联，选择语言后显示） */}
+              {editSelectedLanguageId && (() => {
+                const selectedLang = vulnerabilityTree.find(l => l.id === editSelectedLanguageId);
+                return selectedLang && selectedLang.patterns.length > 0 ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      模式
+                    </label>
+                    <select
+                      value={editVulnerabilityTreeId}
+                      onChange={(e) => setEditVulnerabilityTreeId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">选择模式</option>
+                      {selectedLang.patterns.map((p) => (
+                        <option key={p.id} value={p.id}>{p.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             {/* Markdown 内容 */}
@@ -1174,22 +1272,55 @@ export default function SkillDetailPage() {
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">分类</h3>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">SKILL类型</h3>
                 <p className="text-gray-900">
-                  {skill.vulnerabilityPatternCategory || skill.vulnerabilityPatternName || '无'}
+                  {skill.categoryName ? (() => {
+                    const iconMap: Record<string, any> = { Bug, Search, Shield, Code, LayoutDashboard, TrendingUp };
+                    const Icon = skill.categoryIcon ? iconMap[skill.categoryIcon] : null;
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm bg-purple-50 text-purple-700 rounded-md">
+                        {Icon && <Icon size={14} />}
+                        {skill.categoryName}
+                      </span>
+                    );
+                  })() : '无'}
                 </p>
               </div>
+              {skill.hasSubDimension && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">攻击模式</h3>
+                  <p className="text-gray-900">
+                    <div className="flex items-center gap-1">
+                      {skill.languageName && (
+                        <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
+                          {skill.languageName}
+                        </span>
+                      )}
+                      {skill.patternName && (
+                        <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
+                          {skill.patternName}
+                        </span>
+                      )}
+                      {!skill.languageName && !skill.patternName && <span>无</span>}
+                    </div>
+                  </p>
+                </div>
+              )}
               <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">所属技术栈</h3>
-                {skill.techStackName ? (
-                  <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                    {skill.techStackName}
-                  </span>
-                ) : <p className="text-gray-900">无</p>}
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">CWE</h3>
-                <p className="text-gray-900">{skill.cwe || '无'}</p>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">适用产品</h3>
+                <p className="text-gray-900">
+                  {skill.productTags && skill.productTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {skill.productTags.map(tag => (
+                        <span key={tag.id} className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">
+                          {tag.displayName}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">所有产品</span>
+                  )}
+                </p>
               </div>
             </div>
 
@@ -1437,9 +1568,8 @@ export default function SkillDetailPage() {
             description: editName,
             content: editContent,
             isActive: editIsActive,
-            vulnerabilityPatternId: editVulnerabilityPatternId,
-            techStackId: editTechStackId,
-            cwe: selectedVulnerabilityPattern?.cwe || null,
+            categoryId: editCategoryId,
+            vulnerabilityTreeId: editVulnerabilityTreeId,
           }}
         />
       )}

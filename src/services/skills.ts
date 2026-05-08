@@ -20,8 +20,8 @@ export interface LoadedSkill {
   name: string;
   displayName: string;
   description: string;
-  techStackId?: string | null;
-  vulnerabilityPatternId?: string | null;
+  categoryId?: string | null;
+  vulnerabilityTreeId?: string | null;
   severity: Severity;
   cwe?: string | null;
   content: string;
@@ -189,8 +189,8 @@ export async function createSkill(
     name: string;
     displayName: string;
     description: string;
-    techStackId?: string | null;
-    vulnerabilityPatternId?: string | null;
+    categoryId?: string | null;
+    vulnerabilityTreeId?: string | null;
     cwe?: string | null;
     severity: string;
     content: string;
@@ -217,8 +217,8 @@ export async function createSkill(
         name: data.name,
         displayName: data.displayName,
         description: data.description,
-        techStackId: data.techStackId ?? null,
-        vulnerabilityPatternId: data.vulnerabilityPatternId ?? null,
+        categoryId: data.categoryId ?? 'cat-vulnerability-mining',
+        vulnerabilityTreeId: data.vulnerabilityTreeId ?? null,
         cwe: data.cwe,
         severity: data.severity,
         content: data.content,
@@ -245,8 +245,8 @@ export async function createSkillVersion(
   updates: {
     displayName?: string;
     description?: string;
-    techStackId?: string | null;
-    vulnerabilityPatternId?: string | null;
+    categoryId?: string | null;
+    vulnerabilityTreeId?: string | null;
     cwe?: string | null;
     severity?: string;
     content?: string;
@@ -280,8 +280,8 @@ export async function createSkillVersion(
         name: currentSkill.name,
         displayName: updates.displayName ?? currentSkill.displayName,
         description: updates.description ?? currentSkill.description,
-        techStackId: updates.techStackId ?? currentSkill.techStackId,
-        vulnerabilityPatternId: updates.vulnerabilityPatternId ?? currentSkill.vulnerabilityPatternId,
+        categoryId: updates.categoryId ?? currentSkill.categoryId,
+        vulnerabilityTreeId: updates.vulnerabilityTreeId ?? currentSkill.vulnerabilityTreeId,
         cwe: updates.cwe ?? currentSkill.cwe,
         severity: updates.severity ?? currentSkill.severity,
         content: updates.content ?? currentSkill.content,
@@ -377,8 +377,8 @@ export async function rollbackSkillVersion(
         name: targetSkill.name,
         displayName: targetSkill.displayName,
         description: targetSkill.description,
-        techStackId: targetSkill.techStackId,
-        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
+        categoryId: targetSkill.categoryId,
+        vulnerabilityTreeId: targetSkill.vulnerabilityTreeId,
         cwe: targetSkill.cwe,
         severity: targetSkill.severity,
         content: targetSkill.content,
@@ -535,7 +535,7 @@ export function filterSkillsByCategory(
   skills: LoadedSkill[],
   categories: string[]
 ): LoadedSkill[] {
-  return skills.filter(skill => skill.vulnerabilityPatternId && categories.includes(skill.vulnerabilityPatternId));
+  return skills.filter(skill => skill.vulnerabilityTreeId && categories.includes(skill.vulnerabilityTreeId));
 }
 
 /**
@@ -559,8 +559,8 @@ function parseSkill(skill: Skill): LoadedSkill {
     name: skill.name,
     displayName: skill.displayName,
     description: skill.description,
-    techStackId: skill.techStackId,
-    vulnerabilityPatternId: skill.vulnerabilityPatternId,
+    categoryId: skill.categoryId,
+    vulnerabilityTreeId: skill.vulnerabilityTreeId,
     severity: skill.severity as Severity,
     cwe: skill.cwe,
     content: skill.content || '',

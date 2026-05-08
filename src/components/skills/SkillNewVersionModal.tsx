@@ -21,9 +21,8 @@ interface SkillNewVersionModalProps {
     description: string;
     content: string;
     isActive: boolean;
-    vulnerabilityPatternId: string;
-    techStackId: string;
-    cwe: string | null;
+    categoryId: string;
+    vulnerabilityTreeId: string;
   };
 }
 
@@ -79,9 +78,8 @@ export function SkillNewVersionModal({
           description: editData.description,
           content: editData.content,
           isActive: editData.isActive,
-          vulnerabilityPatternId: editData.vulnerabilityPatternId,
-          techStackId: editData.techStackId || null,
-          cwe: editData.cwe,
+          categoryId: editData.categoryId,
+          vulnerabilityTreeId: editData.vulnerabilityTreeId || null,
         }),
       });
 

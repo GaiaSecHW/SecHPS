@@ -15,10 +15,8 @@ import {
   Eye,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
+import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
 import { hasPermission } from '@/lib/permissions';
-import { useTechStackOptionsWithIds, TechStackOptionWithId } from '@/hooks/useTechStackOptionsWithIds';
-import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
-import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 使用公共模块的默认模板
@@ -36,15 +34,17 @@ export default function CreateSkillPage() {
   const [content, setContent] = useState(DEFAULT_TEMPLATE);
   const [isPublic, setIsPublic] = useState(false);
   
-  // 技术栈单选（改为 ID）
-  const [techStackId, setTechStackId] = useState<string>('');
-  const [techStackSearch, setTechStackSearch] = useState('');
-  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
-  
-// 漏洞模式单选（改为 ID）
-  const [vulnerabilityPatternId, setVulnerabilityPatternId] = useState<string>('');
-  const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
-  const techStackDropdownRef = useRef<HTMLDivElement>(null);
+  // 三维分类
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<string | null>(null);
+  const [productTagIds, setProductTagIds] = useState<string[]>([]);
+
+  // 分类数据
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; description?: string; icon?: string; hasSubDimension: boolean }>>([]);
+  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; type: string; patterns: Array<{ id: string; name: string; displayName: string; skillCount: number }> }>>([]);
+  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingTree, setLoadingTree] = useState(false);
 
   // AI 生成相关状态
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -72,9 +72,6 @@ export default function CreateSkillPage() {
   };
 
   // 技术栈选项 - 从数据库动态获取
-  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
-  const techStackOptions = techStackOptionsWithIds;
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -85,23 +82,67 @@ export default function CreateSkillPage() {
         console.error('解析 token 失败:', error);
       }
     }
-  }, []);
 
-  // 点击外部关闭技术栈下拉框
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (techStackDropdownRef.current && !techStackDropdownRef.current.contains(event.target as Node)) {
-        setShowTechStackDropdown(false);
+    // 获取分类数据
+    const fetchCategories = async () => {
+      setLoadingCategories(true);
+      try {
+        const t = localStorage.getItem('token');
+        const res = await fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setCategories(data.categories || []);
+        }
+      } catch (e) {
+        console.error('获取分类失败:', e);
+      } finally {
+        setLoadingCategories(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+
+    // 获取漏洞模式树
+    const fetchTree = async () => {
+      setLoadingTree(true);
+      try {
+        const t = localStorage.getItem('token');
+        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setVulnerabilityTree(data.tree || []);
+        }
+      } catch (e) {
+        console.error('获取漏洞模式树失败:', e);
+      } finally {
+        setLoadingTree(false);
+      }
     };
+
+    fetchCategories();
+    fetchTree();
   }, []);
 
-  // 获取选中的技术栈对象
-  const selectedTechStack = techStackOptions.find(opt => opt.id === techStackId);
+  // 获取选中的分类对象
+  const selectedCategory = categories.find(c => c.id === categoryId);
+
+  // 当分类变化时，重置语言和模式选择
+  useEffect(() => {
+    setSelectedLanguageId('');
+    setVulnerabilityTreeId(null);
+  }, [categoryId]);
+
+  // 当语言变化时，重置模式选择
+  useEffect(() => {
+    setVulnerabilityTreeId(null);
+  }, [selectedLanguageId]);
+
+  // 获取当前语言和通用语言下的 patterns
+  const availablePatterns = (() => {
+    if (!selectedLanguageId) return [];
+    const langPatterns = vulnerabilityTree.find(l => l.id === selectedLanguageId)?.patterns || [];
+    const generalNode = vulnerabilityTree.find(l => l.name === '通用');
+    const generalPatterns = generalNode?.id === selectedLanguageId ? [] : (generalNode?.patterns || []);
+    return [...langPatterns, ...generalPatterns];
+  })();
 
   // AI 生成 Skill 内容
   const handleAiGenerate = async () => {
@@ -145,8 +186,9 @@ try {
             intent: {
               name: name.trim(),
               description: name.trim(),
-              category: selectedVulnerabilityPattern?.categoryId || 'code-audit',
-              techStackId: techStackId || undefined,
+              category: selectedCategory?.name || 'code-audit',
+              categoryId: categoryId || undefined,
+              vulnerabilityTreeId: vulnerabilityTreeId || undefined,
               whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
               whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
               expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
@@ -185,8 +227,13 @@ try {
       return;
     }
 
-    if (!vulnerabilityPatternId) {
-      setError('请选择漏洞类型');
+    if (!categoryId) {
+      setError('请选择分类');
+      return;
+    }
+
+    if (selectedCategory?.hasSubDimension && !vulnerabilityTreeId) {
+      setError('请选择漏洞模式');
       return;
     }
 
@@ -210,10 +257,10 @@ try {
           name: name.trim(),
           displayName: name.trim(),
           description: name.trim(),
-          techStackId: techStackId || null,
-          vulnerabilityPatternId: vulnerabilityPatternId || null,
+          categoryId: categoryId,
+          vulnerabilityTreeId: vulnerabilityTreeId || null,
+          productTagIds: productTagIds,
           content,
-          cwe: selectedVulnerabilityPattern?.cwe || null,
           isPublic,
         }),
       });
@@ -302,86 +349,70 @@ try {
               />
             </div>
 
-            {/* 漏洞类型（VulnerabilityPattern） */}
+            {/* 分类（Category） */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                漏洞类型 <span className="text-red-500">*</span>
+                分类 <span className="text-red-500">*</span>
               </label>
-              <VulnerabilityPatternSelector
-                value={vulnerabilityPatternId}
-                onChange={(id, pattern) => {
-                  setVulnerabilityPatternId(id);
-                  setSelectedVulnerabilityPattern(pattern);
-                }}
-              />
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={loadingCategories}
+              >
+                <option value="">{loadingCategories ? '加载中...' : '请选择分类'}</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.displayName}</option>
+                ))}
+              </select>
             </div>
 
-            {/* 技术栈（单选） */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                适合的语言
-              </label>
-              <div className="relative" ref={techStackDropdownRef}>
-                <input
-                  type="text"
-                  value={techStackSearch || (selectedTechStack ? selectedTechStack.name : '')}
-                  onChange={(e) => {
-                    setTechStackSearch(e.target.value);
-                    setShowTechStackDropdown(true);
-                  }}
-                  onFocus={() => setShowTechStackDropdown(true)}
-                  placeholder={loadingTechStack ? "加载中..." : "搜索并选择语言..."}
+            {/* 语言（Language）- 仅当分类 hasSubDimension=true 时显示 */}
+            {selectedCategory?.hasSubDimension && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  语言
+                </label>
+                <select
+                  value={selectedLanguageId}
+                  onChange={(e) => setSelectedLanguageId(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loadingTechStack}
-                />
-                {showTechStackDropdown && !loadingTechStack && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {techStackOptions
-                      .filter((option) => 
-                        option.name.toLowerCase().includes(techStackSearch.toLowerCase())
-                      )
-
-                      .map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setTechStackId(option.id);
-                            setTechStackSearch('');
-                            setShowTechStackDropdown(false);
-                          }}
-                          className={`w-full px-4 py-2 text-left hover:bg-gray-100 text-sm ${
-                            option.id === techStackId ? 'bg-blue-50 text-blue-700' : ''
-                          }`}
-                        >
-                          {option.name}
-                          {option.description && (
-                            <span className="text-gray-400 ml-2 text-xs">{option.description}</span>
-                          )}
-                        </button>
-                      ))}
-                    {techStackOptions.filter((option) => 
-                      option.name.toLowerCase().includes(techStackSearch.toLowerCase())
-                    ).length === 0 && (
-                      <div className="px-4 py-2 text-sm text-gray-500">
-                        无匹配选项
-                      </div>
-                    )}
-                  </div>
-                )}
-                {loadingTechStack && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      <span className="text-sm text-gray-500">加载中...</span>
-                    </div>
-                  </div>
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  选择此 Skill 适用的编程语言
-                </p>
+                  disabled={loadingTree}
+                >
+                  <option value="">{loadingTree ? '加载中...' : '请选择语言'}</option>
+                  {vulnerabilityTree.map(lang => (
+                    <option key={lang.id} value={lang.id}>{lang.displayName}</option>
+                  ))}
+                </select>
               </div>
-            </div>
+            )}
+
+            {/* 漏洞模式（Pattern）- 仅当选择了语言后显示 */}
+            {selectedCategory?.hasSubDimension && selectedLanguageId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  漏洞模式 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={vulnerabilityTreeId || ''}
+                  onChange={(e) => setVulnerabilityTreeId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">请选择漏洞模式</option>
+                  {availablePatterns.map(p => (
+                    <option key={p.id} value={p.id}>{p.displayName}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 适用产品（维度三） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
+            </label>
+            <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
           </div>
 
           {/* 是否公开 */}

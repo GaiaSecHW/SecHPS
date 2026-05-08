@@ -8,8 +8,8 @@ interface SkillDraft {
   name: string;
   displayName: string;
   description: string;
-  vulnerabilityPatternId?: string;
-  techStackId?: string;
+  vulnerabilityTreeId?: string;
+  categoryId?: string;
   cwe?: string;
   content: string;  // 完整的 Markdown 内容
 }
@@ -18,8 +18,9 @@ interface Props {
   intentData: {
     name: string;
     description: string;
-    vulnerabilityPatternId?: string;
-    techStackId?: string;
+    categoryId: string;
+    vulnerabilityTreeId?: string;
+    selectedLanguageId?: string;
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -253,7 +254,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
           </label>
           <input
             type="text"
-            value={skillData.vulnerabilityPatternId || ''}
+            value={skillData.vulnerabilityTreeId || ''}
             disabled
             className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50"
           />

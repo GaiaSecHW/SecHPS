@@ -204,8 +204,8 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
   const skill = await prisma.skill.findUnique({
     where: { id: skillId },
     include: {
-      TechStackOption: true,
-      VulnerabilityPattern: true,
+      SkillCategory: true,
+      VulnerabilityTree: true,
     },
   });
 

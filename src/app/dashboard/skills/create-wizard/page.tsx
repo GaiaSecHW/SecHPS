@@ -45,10 +45,10 @@ interface SkillWizardData {
   intent: {
     name: string;
     description: string;
-    category: string; // 保留用于兼容
-    techStack: string[]; // 保留用于兼容
-    techStackId?: string; // 新增：单选语言 ID
-    vulnerabilityPatternId?: string; // 新增：漏洞类型 ID
+    categoryId: string;
+    vulnerabilityTreeId?: string;
+    selectedLanguageId?: string;
+    productTagIds?: string[];
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -69,8 +69,8 @@ interface SkillWizardData {
     name: string;
     displayName: string;
     description: string;
-    vulnerabilityPatternId?: string;
-    techStackId?: string;
+    categoryId?: string;
+    vulnerabilityTreeId?: string;
     cwe?: string;
     content: string;
   };
@@ -126,10 +126,9 @@ const initialWizardData: SkillWizardData = {
   intent: {
     name: '',
     description: '',
-    category: '', // 保留用于兼容
-    techStack: [], // 保留用于兼容
-    techStackId: '', // 新增：单选语言
-    vulnerabilityPatternId: '', // 新增：漏洞类型 ID
+    categoryId: '',
+    vulnerabilityTreeId: '',
+    selectedLanguageId: '',
     whatDoesItDo: '',
     whenShouldItTrigger: '',
     expectedOutput: '',
@@ -146,8 +145,8 @@ const initialWizardData: SkillWizardData = {
     name: '',
     displayName: '',
     description: '',
-    vulnerabilityPatternId: undefined,
-    techStackId: undefined,
+    categoryId: undefined,
+    vulnerabilityTreeId: undefined,
     content: '',
   },
   testCases: [],
@@ -324,20 +323,20 @@ export default function SkillCreateWizardPage() {
       
       const skillData = {
         ...wizardData.skill,
-        isPublic: false, // 默认私有
-        // 新增字段：从 intent 步骤传递
-        techStackId: wizardData.intent.techStackId || null,
-        vulnerabilityPatternId: wizardData.intent.vulnerabilityPatternId || null,
+        isPublic: false,
+        categoryId: wizardData.intent.categoryId,
+        vulnerabilityTreeId: wizardData.intent.vulnerabilityTreeId || null,
+        productTagIds: wizardData.intent.productTagIds || [],
       };
-      
+
       // 检查必填字段
       const missingFields = [];
       if (!skillData.name) missingFields.push('name');
       if (!skillData.displayName) missingFields.push('displayName');
       if (!skillData.description) missingFields.push('description');
       if (!skillData.content) missingFields.push('content');
-      if (!wizardData.intent.techStackId) missingFields.push('techStackId (语言)');
-      if (!wizardData.intent.vulnerabilityPatternId) missingFields.push('vulnerabilityPatternId (漏洞类型)');
+      if (!wizardData.intent.categoryId) missingFields.push('分类');
+      if (!wizardData.intent.vulnerabilityTreeId) missingFields.push('漏洞模式');
       
       if (missingFields.length > 0) {
         throw new Error(`缺少必填字段: ${missingFields.join(', ')}`);
