@@ -528,6 +528,7 @@ model ModelConfig {
   EvaluationSession   EvaluationSession[]
   User                User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   NodeExecution       NodeExecution[]
+  TaskInstance        TaskInstance[]
 
   @@index([userId])
   @@index([isActive])
@@ -1753,6 +1754,8 @@ model TaskInstance {
   name             String
   agentId          String
   agentName        String
+  modelId          String?
+  modelName        String?
   parameters       String
   filePath         String?
   projectPath      String?
@@ -1770,11 +1773,13 @@ model TaskInstance {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   User             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ModelConfig      ModelConfig?       @relation(fields: [modelId], references: [id], onDelete: SetNull)
   TaskExecutionLog TaskExecutionLog[]
 
   @@index([userId])
   @@index([status])
   @@index([agentId])
+  @@index([modelId])
   @@index([createdAt])
 }
 

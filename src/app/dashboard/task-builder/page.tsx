@@ -14,6 +14,8 @@ interface TaskInstance {
   name: string;
   agentId: string;
   agentName: string;
+  modelId: string | null;
+  modelName: string | null;
   parameters: string;
   filePath: string | null;
   projectPath: string | null;
@@ -32,6 +34,8 @@ interface TaskFormData {
   name: string;
   agentId: string;
   agentName: string;
+  modelId: string;
+  modelName: string;
   description: string;
 }
 
@@ -99,6 +103,8 @@ export default function TaskBuilderPage() {
       form.append('name', formData.name);
       form.append('agentId', formData.agentId);
       form.append('agentName', formData.agentName);
+      form.append('modelId', formData.modelId);
+      form.append('modelName', formData.modelName);
       form.append('notes', formData.description || '');
       form.append('skills', '');
       form.append('scripts', '');

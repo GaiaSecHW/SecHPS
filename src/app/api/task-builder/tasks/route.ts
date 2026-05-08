@@ -3,10 +3,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
-import * as fs from 'fs';
-import * as path from 'path';
-
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'task-files');
+import { uploadFileToRemote, testSftpConnection } from '@/lib/sftp-upload';
 
 export async function POST(request: NextRequest) {
   const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -17,6 +14,8 @@ export async function POST(request: NextRequest) {
     const name = formData.get('name') as string;
     const agentId = formData.get('agentId') as string;
     const agentName = formData.get('agentName') as string;
+    const modelId = formData.get('modelId') as string | null;
+    const modelName = formData.get('modelName') as string | null;
     const parameters = formData.get('parameters') as string;
     const notes = formData.get('notes') as string | null;
     const skills = formData.get('skills') as string | null;
@@ -29,19 +28,23 @@ export async function POST(request: NextRequest) {
 
     const taskId = randomUUID();
     let filePath: string | null = null;
+    let projectPath: string | null = null;
 
     if (file && file.size > 0) {
-      if (!fs.existsSync(UPLOAD_DIR)) {
-        fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        const result = await uploadFileToRemote(taskId, file.name, buffer);
+        filePath = result.remoteFilePath;
+        projectPath = result.remoteDirPath;
+
+        console.log(`File uploaded to: ${filePath}`);
+      } catch (uploadError) {
+        console.error('文件上传失败:', uploadError);
+        const errorMessage = uploadError instanceof Error ? uploadError.message : '文件上传失败';
+        return NextResponse.json({ error: `文件上传失败: ${errorMessage}` }, { status: 500 });
       }
-
-      const fileExt = file.name.split('.').pop() || 'zip';
-      const fileName = `${taskId}_${file.name}`;
-      filePath = path.join(UPLOAD_DIR, fileName);
-
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      fs.writeFileSync(filePath, buffer);
     }
 
     const task = await prisma.taskInstance.create({
@@ -51,8 +54,11 @@ export async function POST(request: NextRequest) {
         name,
         agentId,
         agentName,
+        modelId: modelId || null,
+        modelName: modelName || null,
         parameters: parameters || '{}',
         filePath,
+        projectPath,
         skills,
         scripts,
         notes,
@@ -104,5 +110,17 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('获取任务列表失败:', error);
     return NextResponse.json({ error: '获取任务列表失败' }, { status: 500 });
+  }
+}
+
+export async function GET_CONNECTION_STATUS(request: NextRequest) {
+  const auth = authenticateRequest(request);
+  if (!auth.success) return authErrorResponse(auth);
+
+  try {
+    const isConnected = await testSftpConnection();
+    return NextResponse.json({ connected: isConnected });
+  } catch (error) {
+    return NextResponse.json({ connected: false, error: 'SFTP连接测试失败' });
   }
 }

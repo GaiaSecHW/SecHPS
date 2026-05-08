@@ -12,18 +12,37 @@ interface AgentApp {
   notes: string | null;
 }
 
+interface ModelConfig {
+  id: string;
+  name: string;
+  providerType: string;
+  models: string[];
+  isActive: boolean;
+  isDefault: boolean;
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (formData: { name: string; agentId: string; agentName: string; description: string }, file: File | null) => Promise<void>;
+  onSubmit: (formData: {
+    name: string;
+    agentId: string;
+    agentName: string;
+    modelId: string;
+    modelName: string;
+    description: string;
+  }, file: File | null) => Promise<void>;
 }
 
 export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [selectedModelId, setSelectedModelId] = useState('');
   const [agentApps, setAgentApps] = useState<AgentApp[]>([]);
+  const [models, setModels] = useState<ModelConfig[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,9 +50,11 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   useEffect(() => {
     if (isOpen) {
       fetchAgentApps();
+      fetchModels();
       setName('');
       setDescription('');
       setSelectedAgentId('');
+      setSelectedModelId('');
       setSelectedFile(null);
     }
   }, [isOpen]);
@@ -56,6 +77,31 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       toast.error('网络错误');
     } finally {
       setLoadingAgents(false);
+    }
+  };
+
+  const fetchModels = async () => {
+    setLoadingModels(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/models?isActive=true&forEvaluation=true', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setModels(data.models || []);
+        const defaultModel = data.models?.find((m: ModelConfig) => m.isDefault);
+        if (defaultModel) {
+          setSelectedModelId(defaultModel.id);
+        }
+      } else {
+        toast.error('获取模型列表失败');
+      }
+    } catch {
+      toast.error('网络错误');
+    } finally {
+      setLoadingModels(false);
     }
   };
 
@@ -125,8 +171,13 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       toast.error('请选择 Agent');
       return;
     }
+    if (!selectedModelId) {
+      toast.error('请选择模型');
+      return;
+    }
 
     const selectedAgent = agentApps.find(a => a.id === selectedAgentId);
+    const selectedModel = models.find(m => m.id === selectedModelId);
     
     setIsSubmitting(true);
     try {
@@ -135,6 +186,8 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           name: name.trim(),
           agentId: selectedAgentId,
           agentName: selectedAgent?.name || '',
+          modelId: selectedModelId,
+          modelName: selectedModel?.name || '',
           description: description.trim(),
         },
         selectedFile
@@ -149,6 +202,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     setName('');
     setDescription('');
     setSelectedAgentId('');
+    setSelectedModelId('');
     setSelectedFile(null);
     setIsSubmitting(false);
     onClose();
@@ -223,6 +277,35 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                 {agentApps.map((agent) => (
                   <option key={agent.id} value={agent.id}>
                     {agent.name} ({agent.engine})
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          <div>
+            <label htmlFor="modelSelect" className="block text-sm font-medium text-gray-700">
+              选择模型 *
+            </label>
+            {loadingModels ? (
+              <div className="mt-1 flex items-center justify-center py-8">
+                <Loader2 size={20} className="animate-spin text-blue-600" />
+              </div>
+            ) : models.length === 0 ? (
+              <div className="mt-1 text-center py-8 text-gray-500 text-sm bg-gray-50 border border-gray-200 rounded-md">
+                暂无可用模型，请在 我的模型页面创建
+              </div>
+            ) : (
+              <select
+                id="modelSelect"
+                value={selectedModelId}
+                onChange={(e) => setSelectedModelId(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">请选择模型</option>
+                {models.map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.name} ({model.providerType}) {model.isDefault ? '[默认]' : ''}
                   </option>
                 ))}
               </select>
@@ -314,7 +397,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !name.trim() || !selectedAgentId}
+            disabled={isSubmitting || !name.trim() || !selectedAgentId || !selectedModelId}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
