@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
-import { RefreshCw, Trash2, Server, Wifi, WifiOff, Clock } from 'lucide-react';
+import { RefreshCw, Trash2, Server, Wifi, WifiOff, Clock, Pencil, Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Worker {
@@ -27,6 +27,8 @@ interface WorkersResponse {
 export function WorkerNodesTable() {
   const { data, loading, error, refetch } = useApiFetch<WorkersResponse>('/api/codeswarm/nodes');
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [editingNode, setEditingNode] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<number>(0);
 
   const handleDelete = async (nodeId: string) => {
     if (!confirm('确定要删除这个 Worker 节点吗？')) return;
@@ -45,6 +47,34 @@ export function WorkerNodesTable() {
     } finally {
       setDeleting(null);
     }
+  };
+
+  const handleSaveConcurrent = async (nodeId: string) => {
+    try {
+      const resp = await fetch(`/api/codeswarm/nodes/${nodeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ maxConcurrent: editValue }),
+      });
+      if (resp.ok) {
+        toast.success(`并发数已更新为 ${editValue}`);
+        setEditingNode(null);
+        refetch();
+      } else {
+        toast.error('更新失败');
+      }
+    } catch {
+      toast.error('更新失败');
+    }
+  };
+
+  const startEditing = (worker: Worker) => {
+    setEditingNode(worker.nodeId);
+    setEditValue(worker.maxConcurrent);
+  };
+
+  const cancelEditing = () => {
+    setEditingNode(null);
   };
 
   const formatLastHeartbeat = (date: string | null) => {
@@ -94,7 +124,7 @@ export function WorkerNodesTable() {
               启动 Worker 后会自动注册到此处
             </p>
             <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-              <code>ORCHESTRATOR_URL=http://localhost:3000 npx tsx packages/worker/src/index.ts</code>
+              <code>ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs</code>
             </div>
           </div>
         </div>
@@ -108,6 +138,9 @@ export function WorkerNodesTable() {
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   状态
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  最大并发数
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   容量
@@ -150,6 +183,48 @@ export function WorkerNodesTable() {
                     }`}>
                       {worker.status === 'online' ? '在线' : worker.status === 'busy' ? '忙碌' : '离线'}
                     </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {editingNode === worker.nodeId ? (
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          value={editValue}
+                          onChange={(e) => setEditValue(Math.max(1, parseInt(e.target.value) || 1))}
+                          min={1}
+                          max={50}
+                          className="w-16 px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveConcurrent(worker.nodeId);
+                            if (e.key === 'Escape') cancelEditing();
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSaveConcurrent(worker.nodeId)}
+                          className="p-1 text-green-600 hover:bg-green-50 rounded"
+                          title="保存"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={cancelEditing}
+                          className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+                          title="取消"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => startEditing(worker)}
+                        className="flex items-center space-x-1 text-sm text-gray-700 hover:text-blue-600 group"
+                        title="点击编辑并发数"
+                      >
+                        <span className="font-medium">{worker.maxConcurrent}</span>
+                        <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">

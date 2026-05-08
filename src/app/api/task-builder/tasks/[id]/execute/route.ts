@@ -5,6 +5,16 @@ import { prisma } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { executeTaskMock } from '@/services/task-executor-mock';
 
+function parseJsonArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [parsed];
+  } catch {
+    return value ? [value] : [];
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -79,8 +89,8 @@ export async function POST(
     return NextResponse.json({ 
       message: '任务已开始执行', 
       taskId: id,
-      mergedSkills: mergedSkills ? JSON.parse(mergedSkills) : [],
-      mergedScripts: mergedScripts ? JSON.parse(mergedScripts) : [],
+      mergedSkills: parseJsonArray(mergedSkills),
+      mergedScripts: parseJsonArray(mergedScripts),
     });
   } catch (error) {
     console.error('执行任务失败:', error);

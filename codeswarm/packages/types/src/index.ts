@@ -23,7 +23,7 @@ export type TaskState = z.infer<typeof TaskStateEnum>;
 export const MCPServiceLocalSchema = z.object({
   type: z.literal('local'),
   command: z.array(z.string()),
-  environment: z.record(z.string()).optional(),
+  environment: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().default(true),
   timeout: z.number().optional(),
 });
@@ -31,7 +31,7 @@ export const MCPServiceLocalSchema = z.object({
 export const MCPServiceRemoteSchema = z.object({
   type: z.literal('remote'),
   url: z.string().url(),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   enabled: z.boolean().default(true),
   timeout: z.number().optional(),
 });
@@ -71,6 +71,8 @@ export const TaskRequestSchema = z.object({
   model: z.string().optional(),
   timeoutSec: z.number().optional(),
   apiKey: z.string().optional(),
+  gitUrl: z.string().optional(),
+  gitRef: z.string().optional(),
 });
 
 export type TaskRequest = z.infer<typeof TaskRequestSchema>;
@@ -112,7 +114,11 @@ export const TaskPayloadSchema = z.object({
   // Override callback URL (NAZHUA backend address)
   nazhuaCallbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
-  env: z.record(z.string()).optional(),
+  env: z.record(z.string(), z.string()).optional(),
+  // Git repository URL to clone into workspace (takes priority over projectPath)
+  gitUrl: z.string().optional(),
+  // Git branch/commit to checkout after clone
+  gitRef: z.string().optional(),
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

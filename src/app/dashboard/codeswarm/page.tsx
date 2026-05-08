@@ -1,20 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { WorkerNodesTable } from '@/components/codeswarm/WorkerNodesTable';
 import { TaskDebugPanel } from '@/components/codeswarm/TaskDebugPanel';
 import { TaskResultViewer } from '@/components/codeswarm/TaskResultViewer';
 import { AdminGuard } from '@/components/PermissionGuard';
-import { Server, Play, List, BookOpen, ChevronDown, ChevronRight } from 'lucide-react';
+import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react';
 
 interface Task {
   id: string;
   taskId: string;
   state: string;
   instruction: string;
+  agent: string | null;
   workerId: string | null;
   createdAt: string;
+}
+
+interface Worker {
+  id: string;
+  nodeId: string;
+  status: string;
+  maxConcurrent: number;
+  currentTasks: number;
+}
+
+interface TasksResponse {
+  tasks: Task[];
+}
+
+interface WorkersResponse {
+  workers: Worker[];
 }
 
 interface ApiParam {
@@ -41,6 +58,72 @@ export default function CodeSwarmPage() {
   );
 }
 
+function StatsCards({ tasks, workers }: { tasks: Task[]; workers: Worker[] }) {
+  const stats = useMemo(() => {
+    const onlineWorkers = workers.filter(w => w.status === 'online').length;
+    const totalWorkers = workers.length;
+    const activeTasks = tasks.filter(t => ['queued', 'dispatched', 'building', 'running'].includes(t.state)).length;
+    const completedTasks = tasks.filter(t => t.state === 'completed').length;
+    const failedTasks = tasks.filter(t => t.state === 'failed').length;
+    const totalTasks = tasks.length;
+    const successRate = (completedTasks + failedTasks) > 0
+      ? Math.round((completedTasks / (completedTasks + failedTasks)) * 100)
+      : 0;
+
+    return { onlineWorkers, totalWorkers, activeTasks, completedTasks, failedTasks, totalTasks, successRate };
+  }, [tasks, workers]);
+
+  const cards = [
+    {
+      label: '在线节点',
+      value: `${stats.onlineWorkers}/${stats.totalWorkers}`,
+      icon: Wifi,
+      color: stats.onlineWorkers > 0 ? 'text-green-600' : 'text-gray-400',
+      bg: stats.onlineWorkers > 0 ? 'bg-green-100' : 'bg-gray-100',
+    },
+    {
+      label: '活跃任务',
+      value: stats.activeTasks,
+      icon: Loader2,
+      color: 'text-blue-600',
+      bg: 'bg-blue-100',
+      spin: stats.activeTasks > 0,
+    },
+    {
+      label: '已完成',
+      value: stats.completedTasks,
+      icon: CheckCircle,
+      color: 'text-green-600',
+      bg: 'bg-green-100',
+    },
+    {
+      label: '成功率',
+      value: `${stats.successRate}%`,
+      icon: Activity,
+      color: stats.successRate >= 80 ? 'text-green-600' : stats.successRate >= 50 ? 'text-yellow-600' : 'text-red-600',
+      bg: stats.successRate >= 80 ? 'bg-green-100' : stats.successRate >= 50 ? 'bg-yellow-100' : 'bg-red-100',
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-4 gap-4">
+      {cards.map((card) => (
+        <div key={card.label} className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">{card.label}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
+            </div>
+            <div className={`p-3 rounded-lg ${card.bg}`}>
+              <card.icon className={`w-6 h-6 ${card.color} ${card.spin ? 'animate-spin' : ''}`} />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -53,6 +136,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${
           endpoint.method === 'GET' ? 'bg-green-100 text-green-700' :
           endpoint.method === 'POST' ? 'bg-blue-100 text-blue-700' :
+          endpoint.method === 'PATCH' ? 'bg-yellow-100 text-yellow-700' :
           'bg-red-100 text-red-700'
         }`}>
           {endpoint.method}
@@ -159,8 +243,9 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
 function CodeSwarmPageContent() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'workers' | 'debug' | 'tasks' | 'api'>('debug');
-  const { data: tasksData, refetch: refetchTasks } = useApiFetch<{ tasks: Task[] }>('/api/codeswarm/tasks');
+  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'api'>('overview');
+  const { data: tasksData, refetch: refetchTasks } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
+  const { data: workersData } = useApiFetch<WorkersResponse>('/api/codeswarm/nodes');
 
   const handleTaskCreated = (taskId: string) => {
     setSelectedTaskId(taskId);
@@ -228,9 +313,6 @@ function CodeSwarmPageContent() {
           method: 'GET',
           path: '/api/codeswarm/tasks',
           desc: '获取任务列表',
-          requestParams: [
-            { name: 'state', type: 'string', required: false, desc: '按状态筛选 (pending/running/completed/failed)' },
-          ],
           response: [
             { name: 'tasks', type: 'Task[]', desc: '任务数组' },
           ]
@@ -241,8 +323,11 @@ function CodeSwarmPageContent() {
           desc: '创建任务 (平台接口)',
           requestBody: [
             { name: 'instruction', type: 'string', required: true, desc: 'AI 执行指令' },
+            { name: 'agent', type: 'string', required: false, desc: '执行器类型 (opencode/claude)' },
+            { name: 'gitUrl', type: 'string', required: false, desc: 'Git 仓库地址' },
+            { name: 'gitRef', type: 'string', required: false, desc: 'Git 分支/Tag/Commit' },
             { name: 'projectPath', type: 'string', required: false, desc: '项目路径' },
-            { name: 'workspacePath', type: 'string', required: false, desc: '工作空间路径' },
+            { name: 'workspacePath', type: 'string', required: false, desc: '工作空间路径 (NFS)' },
             { name: 'model', type: 'string', required: false, desc: 'AI 模型 (如 anthropic/claude-sonnet-4)' },
             { name: 'apiKey', type: 'string', required: false, desc: 'API Key' },
             { name: 'timeoutSec', type: 'number', required: false, desc: '超时时间(秒)' },
@@ -281,15 +366,29 @@ function CodeSwarmPageContent() {
           path: '/api/codeswarm/nodes',
           desc: '获取 Worker 节点列表',
           response: [
-            { name: 'nodes', type: 'Worker[]', desc: '节点数组' },
+            { name: 'workers', type: 'Worker[]', desc: '节点数组' },
           ]
         },
         {
           method: 'GET',
           path: '/api/codeswarm/nodes/:nodeId',
-          desc: '获取节点详情',
+          desc: '获取节点详情 (含最近任务)',
           response: [
-            { name: 'node', type: 'Worker', desc: '节点对象' },
+            { name: 'worker', type: 'Worker & {tasks: Task[]}', desc: '节点对象及最近20条任务' },
+          ]
+        },
+        {
+          method: 'PATCH',
+          path: '/api/codeswarm/nodes/:nodeId',
+          desc: '更新节点配置',
+          requestBody: [
+            { name: 'maxConcurrent', type: 'number', required: false, desc: '最大并发数 (1-50)' },
+            { name: 'name', type: 'string', required: false, desc: '节点名称' },
+            { name: 'status', type: 'string', required: false, desc: '节点状态' },
+          ],
+          response: [
+            { name: 'success', type: 'boolean', desc: '是否成功' },
+            { name: 'worker', type: 'Worker', desc: '更新后的节点对象' },
           ]
         },
         {
@@ -323,6 +422,17 @@ function CodeSwarmPageContent() {
 
       {/* Tab Navigation */}
       <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
+        <button
+          onClick={() => setActiveTab('overview')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+            activeTab === 'overview'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Activity className="w-4 h-4" />
+          <span>概览</span>
+        </button>
         <button
           onClick={() => setActiveTab('debug')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
@@ -370,6 +480,17 @@ function CodeSwarmPageContent() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'overview' && (
+        <div className="space-y-6">
+          <StatsCards tasks={tasksData?.tasks || []} workers={workersData?.workers || []} />
+          <TaskResultViewer
+            selectedTaskId={selectedTaskId}
+            onTaskSelect={setSelectedTaskId}
+            onRefresh={refetchTasks}
+          />
+        </div>
+      )}
+
       {activeTab === 'debug' && (
         <TaskDebugPanel onTaskCreated={handleTaskCreated} />
       )}
@@ -400,7 +521,7 @@ function CodeSwarmPageContent() {
                 </h3>
                 <div className="space-y-2">
                   {section.endpoints.map((ep) => (
-                    <ApiDocCard key={ep.path} endpoint={ep} />
+                    <ApiDocCard key={`${ep.method}-${ep.path}`} endpoint={ep} />
                   ))}
                 </div>
               </div>
@@ -415,8 +536,11 @@ NODE_ID=worker-1                           # 唯一节点标识
 PORT=8080                                  # Worker HTTP 端口
 MAX_CONCURRENT=3                           # 最大并发任务数
 
-# 启动命令
-node packages/worker/dist/index.js`}
+# 启动命令 (独立测试 Worker)
+node scripts/test-worker.mjs
+
+# 或使用完整 Worker 包
+npx tsx packages/worker/src/index.ts`}
               </pre>
             </div>
           </div>
@@ -424,14 +548,14 @@ node packages/worker/dist/index.js`}
       )}
 
       {/* Callback URLs Info */}
-      {activeTab !== 'api' && (
+      {activeTab !== 'api' && activeTab !== 'overview' && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <h3 className="text-sm font-medium text-yellow-800 mb-2">Worker 配置说明</h3>
           <p className="text-sm text-yellow-700 mb-2">
             Worker 启动时需要配置回调地址指向本服务：
           </p>
           <code className="block bg-yellow-100 p-2 rounded text-xs">
-            ORCHESTRATOR_URL=http://localhost:3000 npx tsx packages/worker/src/index.ts
+            ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs
           </code>
           <p className="text-xs text-yellow-600 mt-2">
             Worker 注册后会在此页面显示，心跳间隔 30 秒，超时 90 秒判定离线

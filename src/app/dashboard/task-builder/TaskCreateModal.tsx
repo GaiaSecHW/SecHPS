@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, CheckCircle2, ArrowRight, ArrowLeft, Upload, File, Loader2 } from 'lucide-react';
+import { X, CheckCircle2, ArrowRight, ArrowLeft, Upload, File, Loader2, Plus } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import toast from 'react-hot-toast';
 
@@ -67,6 +67,8 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scriptUploadRef = useRef<HTMLInputElement>(null);
+  const [uploadingScript, setUploadingScript] = useState(false);
 
   const currentStepIndex = STEPS.findIndex(s => s.id === currentStep);
 
@@ -166,6 +168,64 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     setFormData({ ...formData, selectedScripts: newScripts });
   };
 
+  const handleScriptUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const allowedExtensions = ['.sh', '.py', '.js', '.ts'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    
+    if (!ext || !allowedExtensions.includes(`.${ext}`)) {
+      toast.error(`不支持的文件类型，仅支持: ${allowedExtensions.join(', ')}`);
+      if (scriptUploadRef.current) {
+        scriptUploadRef.current.value = '';
+      }
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error('文件大小不能超过 10MB');
+      if (scriptUploadRef.current) {
+        scriptUploadRef.current.value = '';
+      }
+      return;
+    }
+
+    setUploadingScript(true);
+    try {
+      const token = localStorage.getItem('token');
+      const form = new FormData();
+      form.append('file', file);
+
+      const response = await fetch('/api/task-builder/scripts', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '上传失败');
+      }
+
+      toast.success('脚本上传成功');
+      setAvailableScripts(prev => [...prev, file.name]);
+      setFormData(prev => ({
+        ...prev,
+        selectedScripts: [...prev.selectedScripts, file.name],
+      }));
+
+      if (scriptUploadRef.current) {
+        scriptUploadRef.current.value = '';
+      }
+    } catch (error) {
+      toast.error(`上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setUploadingScript(false);
+    }
+  };
+
   const handleNext = () => {
     if (currentStep === 'select' && formData.agentId) {
       fetchResources();
@@ -203,6 +263,10 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     setFormData(initialFormData);
     setSelectedFile(null);
     setIsSubmitting(false);
+    setUploadingScript(false);
+    if (scriptUploadRef.current) {
+      scriptUploadRef.current.value = '';
+    }
     onClose();
   };
 
@@ -356,12 +420,38 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   选择脚本文件 <span className="text-gray-500 text-xs ml-1">(可选，多选)</span>
                 </label>
+                <input
+                  ref={scriptUploadRef}
+                  type="file"
+                  accept=".sh,.py,.js,.ts"
+                  onChange={handleScriptUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => scriptUploadRef.current?.click()}
+                  disabled={uploadingScript}
+                  className="w-full mb-3 p-2 border-2 border-dashed border-blue-300 rounded-md hover:border-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center gap-2 text-blue-600 disabled:opacity-50"
+                >
+                  {uploadingScript ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span className="text-sm">上传中...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} />
+                      <span className="text-sm">上传自定义脚本 (.sh, .py, .js, .ts)</span>
+                    </>
+                  )}
+                </button>
                 {loadingResources ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 size={20} className="animate-spin text-blue-600" />
                   </div>
                 ) : availableScripts.length === 0 ? (
-                  <p className="text-sm text-gray-500">暂无可用脚本文件</p>
+                  <div className="text-center py-4 text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-md">
+                    暂无可用脚本，请上传自定义脚本
+                  </div>
                 ) : (
                   <div className="space-y-2 max-h-48 overflow-y-auto">
                     {availableScripts.map((script) => (

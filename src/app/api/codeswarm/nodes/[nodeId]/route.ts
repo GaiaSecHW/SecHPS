@@ -39,6 +39,32 @@ export async function GET(
   }
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ nodeId: string }> }
+) {
+  try {
+    const { nodeId } = await params;
+    const body = await request.json();
+    const { maxConcurrent, name, status } = body;
+
+    const data: Record<string, any> = { updatedAt: new Date() };
+    if (maxConcurrent !== undefined) data.maxConcurrent = Math.max(1, Math.min(50, maxConcurrent));
+    if (name !== undefined) data.name = name;
+    if (status !== undefined) data.status = status;
+
+    const worker = await prisma.codeswarmWorker.update({
+      where: { nodeId },
+      data,
+    });
+
+    return NextResponse.json({ success: true, worker });
+  } catch (error) {
+    console.error('[CodeSwarm] Patch node error:', error);
+    return NextResponse.json({ error: 'Failed to update node' }, { status: 500 });
+  }
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ nodeId: string }> }

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Plus, ClipboardList, Play, Trash2, Eye, Calendar, User, Shield, Bug, Sword, Network, Loader2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { ConfirmDialog } from '@/components/ui/Modal';
 
 interface TaskInstance {
   id: string;
@@ -55,6 +56,12 @@ export default function TaskBuilderPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    isOpen: boolean;
+    taskId: string | null;
+    taskName: string;
+  }>({ isOpen: false, taskId: null, taskName: '' });
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchTasks(currentPage, pageSize);
@@ -146,9 +153,34 @@ export default function TaskBuilderPage() {
     }
   };
 
-  const handleDeleteTask = async (taskId: string) => {
-    if (!confirm('确定要删除此任务实例吗？')) return;
-    toast('删除功能待实现', { icon: '🔧' });
+  const handleDeleteTask = (taskId: string, taskName: string) => {
+    setDeleteConfirm({ isOpen: true, taskId, taskName });
+  };
+
+  const confirmDeleteTask = async () => {
+    if (!deleteConfirm.taskId) return;
+    
+    setDeleting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/task-builder/tasks/${deleteConfirm.taskId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '删除失败');
+      }
+
+      toast.success('任务已删除');
+      setDeleteConfirm({ isOpen: false, taskId: null, taskName: '' });
+      await fetchTasks(currentPage, pageSize);
+    } catch (error) {
+      toast.error(`删除失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -302,7 +334,7 @@ export default function TaskBuilderPage() {
                             详情
                           </button>
                           <button
-                            onClick={() => handleDeleteTask(task.id)}
+                            onClick={() => handleDeleteTask(task.id, task.name)}
                             className="text-red-600 hover:text-red-900 flex items-center gap-1"
                           >
                             <Trash2 size={14} />
@@ -368,6 +400,18 @@ export default function TaskBuilderPage() {
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSubmit={handleCreateTask}
+      />
+
+      <ConfirmDialog
+        isOpen={deleteConfirm.isOpen}
+        onClose={() => setDeleteConfirm({ isOpen: false, taskId: null, taskName: '' })}
+        onConfirm={confirmDeleteTask}
+        title="删除任务"
+        message={`确定要删除任务「${deleteConfirm.taskName}」吗？此操作不可恢复。`}
+        confirmText="删除"
+        cancelText="取消"
+        variant="danger"
+        loading={deleting}
       />
     </div>
   );

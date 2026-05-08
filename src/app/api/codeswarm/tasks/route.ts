@@ -43,6 +43,9 @@ export async function POST(request: Request) {
       model,
       apiKey,
       timeoutSec,
+      gitUrl,
+      gitRef,
+      agent,
     } = body;
 
     if (!instruction) {
@@ -75,10 +78,11 @@ export async function POST(request: Request) {
         model: model || null,
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
+        agent: agent || null,
         startedAt: worker ? new Date() : null,
         updatedAt: new Date(),
       },
-    });
+    }) as any;
 
     // If worker available, dispatch task
     if (worker) {
@@ -90,7 +94,7 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             taskId,
             instruction,
-            projectPath,
+            projectPath: projectPath || '',
             workspacePath,
             skills,
             mcps,
@@ -98,6 +102,9 @@ export async function POST(request: Request) {
             apiKey,
             timeoutSec,
             nazhuaCallbackUrl: baseUrl,
+            gitUrl,
+            gitRef,
+            agent,
           }),
           signal: AbortSignal.timeout(10000),
         });

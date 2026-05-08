@@ -13,6 +13,9 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [expanded, setExpanded] = useState(true);
   const [form, setForm] = useState({
     instruction: '',
+    agent: 'opencode' as 'opencode' | 'claude',
+    gitUrl: '',
+    gitRef: '',
     projectPath: '',
     workspacePath: '',
     model: 'anthropic/claude-sonnet-4',
@@ -34,6 +37,9 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     try {
       const payload = {
         instruction: form.instruction,
+        agent: form.agent,
+        gitUrl: form.gitUrl || undefined,
+        gitRef: form.gitRef || undefined,
         projectPath: form.projectPath || undefined,
         workspacePath: form.workspacePath || undefined,
         model: form.model || undefined,
@@ -63,6 +69,8 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         setForm(prev => ({
           ...prev,
           instruction: '',
+          gitUrl: '',
+          gitRef: '',
           projectPath: '',
           workspacePath: '',
         }));
@@ -102,6 +110,39 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
       {/* Form */}
       {expanded && (
         <form onSubmit={handleSubmit} className="p-6 border-t border-gray-200 space-y-4">
+          {/* Agent Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              执行器
+            </label>
+            <div className="flex gap-3">
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'opencode' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                <input
+                  type="radio"
+                  name="agent"
+                  value="opencode"
+                  checked={form.agent === 'opencode'}
+                  onChange={() => setForm({ ...form, agent: 'opencode' })}
+                  className="sr-only"
+                />
+                <span className="font-medium">OpenCode</span>
+                <span className="text-xs opacity-70">opencode run</span>
+              </label>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'claude' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                <input
+                  type="radio"
+                  name="agent"
+                  value="claude"
+                  checked={form.agent === 'claude'}
+                  onChange={() => setForm({ ...form, agent: 'claude' })}
+                  className="sr-only"
+                />
+                <span className="font-medium">Claude Code</span>
+                <span className="text-xs opacity-700">claude -p</span>
+              </label>
+            </div>
+          </div>
+
           {/* Instruction */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -110,10 +151,38 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             <textarea
               value={form.instruction}
               onChange={(e) => setForm({ ...form, instruction: e.target.value })}
-              placeholder="输入要执行的指令，例如：分析这个代码库的安全漏洞..."
-              rows={4}
+              placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
+              rows={5}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+          </div>
+
+          {/* Git URL */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Git 仓库地址
+              </label>
+              <input
+                type="text"
+                value={form.gitUrl}
+                onChange={(e) => setForm({ ...form, gitUrl: e.target.value })}
+                placeholder="https://github.com/username/repo.git"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Git 分支/Tag
+              </label>
+              <input
+                type="text"
+                value={form.gitRef}
+                onChange={(e) => setForm({ ...form, gitRef: e.target.value })}
+                placeholder="main, v1.0, commit hash"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
           </div>
 
           {/* Basic Fields */}

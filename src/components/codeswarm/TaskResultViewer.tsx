@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
-import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface Task {
   id: string;
@@ -13,6 +14,9 @@ interface Task {
   instruction: string;
   projectPath: string | null;
   workspacePath: string | null;
+  gitUrl: string | null;
+  gitRef: string | null;
+  agent: string | null;
   skills: string[] | null;
   mcps: any[] | null;
   model: string | null;
@@ -40,9 +44,21 @@ interface TaskResultViewerProps {
   onRefresh: () => void;
 }
 
+const STATE_FILTERS = [
+  { key: 'all', label: '全部' },
+  { key: 'queued', label: '排队中' },
+  { key: 'dispatched', label: '已分发' },
+  { key: 'running', label: '执行中' },
+  { key: 'completed', label: '已完成' },
+  { key: 'failed', label: '失败' },
+] as const;
+
 export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: TaskResultViewerProps) {
   const { data, loading, error, refetch } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [stateFilter, setStateFilter] = useState<string>('all');
+  const [deletingTask, setDeletingTask] = useState<string | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (selectedTaskId) {
@@ -51,6 +67,47 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
   }, [selectedTaskId]);
 
   const tasks = data?.tasks || [];
+  const hasActiveTasks = tasks.some(t => ['queued', 'dispatched', 'building', 'running'].includes(t.state));
+
+  // Auto-refresh when active tasks exist
+  useEffect(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (hasActiveTasks) {
+      intervalRef.current = setInterval(() => {
+        refetch();
+      }, 5000);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [hasActiveTasks, refetch]);
+
+  const filteredTasks = stateFilter === 'all'
+    ? tasks
+    : tasks.filter(t => t.state === stateFilter);
+
+  const handleDeleteTask = async (e: React.MouseEvent, taskId: string) => {
+    e.stopPropagation();
+    if (!confirm('确定要删除这个任务吗？')) return;
+    setDeletingTask(taskId);
+    try {
+      const resp = await fetch(`/api/codeswarm/tasks/${taskId}`, { method: 'DELETE' });
+      if (resp.ok) {
+        toast.success('任务已删除');
+        refetch();
+        onRefresh();
+      } else {
+        toast.error('删除失败');
+      }
+    } catch {
+      toast.error('删除失败');
+    } finally {
+      setDeletingTask(null);
+    }
+  };
 
   const getStateIcon = (state: string) => {
     switch (state) {
@@ -87,8 +144,9 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
   };
 
   const formatDuration = (start: string | null, end: string | null) => {
-    if (!start || !end) return '-';
-    const diff = new Date(end).getTime() - new Date(start).getTime();
+    if (!start) return '-';
+    const endTime = end ? new Date(end).getTime() : Date.now();
+    const diff = endTime - new Date(start).getTime();
     const seconds = Math.floor(diff / 1000);
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
@@ -111,20 +169,51 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">任务列表</h2>
-        <button
-          onClick={() => { refetch(); onRefresh(); }}
-          className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-        >
-          <RefreshCw className="w-4 h-4" />
-          <span>刷新</span>
-        </button>
+        <div className="flex items-center space-x-2">
+          {hasActiveTasks && (
+            <span className="flex items-center space-x-1 text-xs text-blue-600">
+              <Loader2 className="w-3 h-3 animate-spin" />
+              <span>自动刷新中</span>
+            </span>
+          )}
+          <button
+            onClick={() => { refetch(); onRefresh(); }}
+            className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            <RefreshCw className="w-4 h-4" />
+            <span>刷新</span>
+          </button>
+        </div>
       </div>
 
-      {tasks.length === 0 ? (
+      {/* State Filters */}
+      <div className="flex items-center space-x-1">
+        <Filter className="w-4 h-4 text-gray-400" />
+        {STATE_FILTERS.map(f => {
+          const count = f.key === 'all' ? tasks.length : tasks.filter(t => t.state === f.key).length;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setStateFilter(f.key)}
+              className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                stateFilter === f.key
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {f.label} ({count})
+            </button>
+          );
+        })}
+      </div>
+
+      {filteredTasks.length === 0 ? (
         <div className="bg-white rounded-lg shadow border border-gray-200 p-12">
           <div className="text-center">
             <Clock className="mx-auto h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">暂无任务</h3>
+            <h3 className="mt-4 text-lg font-medium text-gray-900">
+              {stateFilter === 'all' ? '暂无任务' : `暂无${STATE_FILTERS.find(f => f.key === stateFilter)?.label}任务`}
+            </h3>
             <p className="mt-2 text-sm text-gray-600">
               在「任务调试」页面创建任务
             </p>
@@ -132,7 +221,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
         </div>
       ) : (
         <div className="space-y-3">
-          {tasks.map((task) => {
+          {filteredTasks.map((task) => {
             const isExpanded = expandedTask === task.taskId;
             const isSelected = selectedTaskId === task.taskId;
 
@@ -178,9 +267,16 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         }`}>
                           {getStateLabel(task.state)}
                         </span>
+                        {task.agent && (
+                          <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                            task.agent === 'claude' ? 'bg-purple-100 text-purple-800' : 'bg-orange-100 text-orange-800'
+                          }`}>
+                            {task.agent === 'claude' ? 'Claude Code' : 'OpenCode'}
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-gray-500 truncate mt-0.5">
-                        {task.instruction.slice(0, 60)}{task.instruction.length > 60 ? '...' : ''}
+                        {task.instruction.slice(0, 80)}{task.instruction.length > 80 ? '...' : ''}
                       </p>
                     </div>
                   </div>
@@ -189,6 +285,19 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       <span className="text-blue-600">{task.CodeswarmWorker.address}</span>
                     )}
                     <span>{formatTime(task.createdAt)}</span>
+                    <span className="text-gray-400">{formatDuration(task.startedAt, task.completedAt)}</span>
+                    <button
+                      onClick={(e) => handleDeleteTask(e, task.taskId)}
+                      disabled={deletingTask === task.taskId}
+                      className="p-1 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+                      title="删除任务"
+                    >
+                      {deletingTask === task.taskId ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                    </button>
                   </div>
                 </div>
 
@@ -196,10 +305,14 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                 {isExpanded && (
                   <div className="px-4 py-4 border-t border-gray-200 bg-gray-50 space-y-4">
                     {/* Meta Info */}
-                    <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div className="grid grid-cols-4 gap-4 text-sm">
                       <div>
                         <span className="text-gray-500">Task ID:</span>
                         <span className="ml-2 font-mono text-xs">{task.taskId}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500">Agent:</span>
+                        <span className="ml-2">{task.agent === 'claude' ? 'Claude Code' : task.agent === 'opencode' ? 'OpenCode' : '-'}</span>
                       </div>
                       <div>
                         <span className="text-gray-500">Model:</span>
@@ -211,12 +324,24 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       </div>
                     </div>
 
-                    {task.projectPath && (
-                      <div className="text-sm">
-                        <span className="text-gray-500">Project:</span>
-                        <code className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
-                          {task.projectPath}
-                        </code>
+                    {(task.gitUrl || task.projectPath) && (
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        {task.gitUrl && (
+                          <div>
+                            <span className="text-gray-500">Git:</span>
+                            <code className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+                              {task.gitUrl}{task.gitRef ? ` (${task.gitRef})` : ''}
+                            </code>
+                          </div>
+                        )}
+                        {task.projectPath && (
+                          <div>
+                            <span className="text-gray-500">Project:</span>
+                            <code className="ml-2 text-xs bg-gray-200 px-2 py-0.5 rounded">
+                              {task.projectPath}
+                            </code>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -273,8 +398,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {task.result && (
                       <div>
                         <h4 className="text-sm font-medium text-gray-700 mb-2">执行结果</h4>
-                        <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48">
-                          {task.result.slice(0, 2000)}{task.result.length > 2000 ? '\n...(truncated)' : ''}
+                        <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-xs overflow-x-auto max-h-48 whitespace-pre-wrap">
+                          {task.result.slice(0, 3000)}{task.result.length > 3000 ? '\n...(truncated)' : ''}
                         </pre>
                       </div>
                     )}

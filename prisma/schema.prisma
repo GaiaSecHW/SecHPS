@@ -1791,3 +1791,47 @@ model TaskExecutionLog {
   @@index([level])
   @@index([timestamp])
 }
+
+model CodeswarmWorker {
+  id            String    @id @default(cuid())
+  nodeId        String    @unique
+  address       String
+  status        String    @default("online")
+  maxConcurrent Int       @default(5)
+  currentTasks  Int       @default(0)
+  lastHeartbeat DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  CodeswarmTask CodeswarmTask[]
+}
+
+model CodeswarmTask {
+  id              String          @id @default(cuid())
+  taskId          String          @unique
+  workerId        String?
+  state           String          @default("queued")
+  instruction     String
+  projectPath     String?
+  workspacePath   String?
+  gitUrl          String?
+  gitRef          String?
+  skills          String?
+  mcps            String?
+  model           String?
+  apiKey          String?
+  timeoutSec      Int?
+  agent           String?
+  events          String?
+  result          String?
+  error           String?
+  reportContent   String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  CodeswarmWorker CodeswarmWorker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
+
+  @@index([state])
+  @@index([workerId])
+  @@index([createdAt])
+}
