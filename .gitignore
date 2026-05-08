@@ -63,7 +63,7 @@ data/sessions/
 uploads/
 
 # Development database
-prisma/dev.db
+dev.db
 
 # OMC tool state files
 .omc/
