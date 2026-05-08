@@ -39,6 +39,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [description, setDescription] = useState('');
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [selectedModelId, setSelectedModelId] = useState('');
+  const [selectedActualModel, setSelectedActualModel] = useState('');
   const [agentApps, setAgentApps] = useState<AgentApp[]>([]);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
@@ -55,9 +56,23 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       setDescription('');
       setSelectedAgentId('');
       setSelectedModelId('');
+      setSelectedActualModel('');
       setSelectedFile(null);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (selectedModelId) {
+      const selectedModel = models.find(m => m.id === selectedModelId);
+      if (selectedModel && selectedModel.models && selectedModel.models.length > 0) {
+        setSelectedActualModel(selectedModel.models[0]);
+      } else {
+        setSelectedActualModel('');
+      }
+    } else {
+      setSelectedActualModel('');
+    }
+  }, [selectedModelId, models]);
 
   const fetchAgentApps = async () => {
     setLoadingAgents(true);
@@ -94,6 +109,9 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
         const defaultModel = data.models?.find((m: ModelConfig) => m.isDefault);
         if (defaultModel) {
           setSelectedModelId(defaultModel.id);
+          if (defaultModel.models?.length > 0) {
+            setSelectedActualModel(defaultModel.models[0]);
+          }
         }
       } else {
         toast.error('获取模型列表失败');
@@ -175,9 +193,12 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       toast.error('请选择模型');
       return;
     }
+    if (!selectedActualModel) {
+      toast.error('请选择具体模型名称');
+      return;
+    }
 
     const selectedAgent = agentApps.find(a => a.id === selectedAgentId);
-    const selectedModel = models.find(m => m.id === selectedModelId);
     
     setIsSubmitting(true);
     try {
@@ -187,7 +208,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           agentId: selectedAgentId,
           agentName: selectedAgent?.name || '',
           modelId: selectedModelId,
-          modelName: selectedModel?.name || '',
+          modelName: selectedActualModel,
           description: description.trim(),
         },
         selectedFile
@@ -203,6 +224,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     setDescription('');
     setSelectedAgentId('');
     setSelectedModelId('');
+    setSelectedActualModel('');
     setSelectedFile(null);
     setIsSubmitting(false);
     onClose();
@@ -302,7 +324,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                 onChange={(e) => setSelectedModelId(e.target.value)}
                 className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">请选择模型</option>
+                <option value="">请选择模型配置</option>
                 {models.map((model) => (
                   <option key={model.id} value={model.id}>
                     {model.name} ({model.providerType}) {model.isDefault ? '[默认]' : ''}
@@ -311,6 +333,36 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
               </select>
             )}
           </div>
+
+          {selectedModelId && (
+            <div>
+              <label htmlFor="actualModelSelect" className="block text-sm font-medium text-gray-700">
+                选择具体模型 *
+              </label>
+              {(() => {
+                const selectedModel = models.find(m => m.id === selectedModelId);
+                const actualModels = selectedModel?.models || [];
+                return actualModels.length === 0 ? (
+                  <div className="mt-1 text-center py-4 text-gray-500 text-sm bg-gray-50 border border-gray-200 rounded-md">
+                    该模型配置未配置具体模型
+                  </div>
+                ) : (
+                  <select
+                    id="actualModelSelect"
+                    value={selectedActualModel}
+                    onChange={(e) => setSelectedActualModel(e.target.value)}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    {actualModels.map((modelName) => (
+                      <option key={modelName} value={modelName}>
+                        {modelName}
+                      </option>
+                    ))}
+                  </select>
+                );
+              })()}
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -397,7 +449,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !name.trim() || !selectedAgentId || !selectedModelId}
+            disabled={isSubmitting || !name.trim() || !selectedAgentId || !selectedModelId || !selectedActualModel}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}
