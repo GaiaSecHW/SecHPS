@@ -92,66 +92,64 @@ async function main() {
   // 4. 创建测试管理员账户（如果不存在）
   console.log('👤 创建测试管理员账户...');
   const adminEmail = 'admin@ai4web.com';
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: adminEmail },
+  const adminPassword = process.env.ADMIN_SEED_PASSWORD ||
+    require('crypto').randomBytes(12).toString('base64').slice(0, 16);
+  const passwordHash = await bcrypt.hash(adminPassword, 10);
+
+  // 使用 upsert 避免唯一约束冲突 - 使用 username 作为唯一键
+  const adminUsername = 'admin';
+  const admin = await prisma.user.upsert({
+    where: { username: adminUsername },
+    update: {},
+    create: {
+      id: generateId('user'),
+      email: adminEmail,
+      username: adminUsername,
+      passwordHash,
+      name: 'Administrator',
+      tenantId: null,  // 平台管理员无租户
+      isActive: true,
+      updatedAt: new Date(),
+    },
   });
 
-  if (!existingAdmin) {
-    // 使用环境变量或生成随机密码
-    const adminPassword = process.env.ADMIN_SEED_PASSWORD || 
-      require('crypto').randomBytes(12).toString('base64').slice(0, 16);
-    
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
-    const admin = await prisma.user.create({
-      data: {
-        id: generateId('user'),
-        email: adminEmail,
-        username: 'admin',
-        passwordHash,
-        name: 'Administrator',
-        isActive: true,
-        updatedAt: new Date(),
+  // 分配 admin 角色
+  const adminRole = createdRoles[ROLES.ADMIN];
+  if (adminRole) {
+    await prisma.userRole.upsert({
+      where: {
+        userId_roleId: { userId: admin.id, roleId: adminRole.id }
+      },
+      update: {},
+      create: {
+        id: generateId('ur'),
+        userId: admin.id,
+        roleId: adminRole.id,
       },
     });
-
-    // 分配 admin 角色
-    const adminRole = createdRoles[ROLES.ADMIN];
-    if (adminRole) {
-      await prisma.userRole.create({
-        data: {
-          id: generateId('ur'),
-          userId: admin.id,
-          roleId: adminRole.id,
-        },
-      });
-    }
-
-    // 创建默认 AI4WEB 配置
-    await prisma.opencodeConfig.create({
-      data: {
-        id: generateId('cfg'),
-        name: 'Default',
-        baseURL: 'http://localhost:54321',
-        description: 'Default AI4WEB configuration',
-        isActive: true,
-        updatedAt: new Date(),
-        User: {
-          connect: { id: admin.id },
-        },
-      },
-    });
-
-    console.log('✅ 测试管理员账户已创建');
-    console.log(`   邮箱: ${adminEmail}`);
-    if (process.env.ADMIN_SEED_PASSWORD) {
-      console.log(`   密码: (使用 ADMIN_SEED_PASSWORD 环境变量)`);
-    } else {
-      console.log(`   密码: ${adminPassword}`);
-      console.log(`   ⚠️  请保存此密码，或使用 ADMIN_SEED_PASSWORD 环境变量设置自定义密码`);
-    }
-  } else {
-    console.log('ℹ️  测试管理员账户已存在');
   }
+
+  // 创建默认 AI4WEB 配置
+  await prisma.opencodeConfig.upsert({
+    where: { id: admin.id + '-config' },
+    update: {},
+    create: {
+      id: generateId('cfg'),
+      name: 'Default',
+      baseURL: 'http://localhost:54321',
+      description: 'Default AI4WEB configuration',
+      isActive: true,
+      updatedAt: new Date(),
+      User: {
+        connect: { id: admin.id },
+      },
+    },
+  });
+
+  console.log('✅ 测试管理员账户已存在/已创建');
+  console.log(`   邮箱: ${adminEmail}`);
+  console.log(`   用户名: admin`);
+  console.log(`   租户: 无 (平台管理员)`);
 
   // 5. 创建默认期望输出模板
   console.log('📝 创建默认期望输出模板...');

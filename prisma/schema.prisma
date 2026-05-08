@@ -8,25 +8,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// 多租户支持
-model Tenant {
-  id          String   @id
-  name        String
-  slug        String   @unique
-  isIcsTenant Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+model AgentApp {
+  id           String   @id
+  userId       String
+  tenantId     String?
+  visibility   String   @default("private")
+  name         String
+  engine       String
+  skillPath    String
+  startCommand String
+  notes        String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime
+  Tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // 关联
-  users       User[]
-  AgentApp    AgentApp[]
-  Project     Project[]
-  Workflow    Workflow[]
-  Skill       Skill[]
-  AgentTeam   AgentTeam[]
-  ModelConfig ModelConfig[]
-  McpServerConfig McpServerConfig[]
-  TaskInstance TaskInstance[]
+  @@index([visibility])
+  @@index([tenantId])
+  @@index([userId])
 }
 
 model AgentDefinition {
@@ -45,14 +45,14 @@ model AgentDefinition {
   isBuiltin       Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime
-  User            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   ModelConfig     ModelConfig?      @relation(fields: [modelConfigId], references: [id])
+  User            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
   AgentTeam       AgentTeam[]
   AgentTeamMember AgentTeamMember[]
 
-  @@index([name])
-  @@index([category])
   @@index([isActive])
+  @@index([category])
+  @@index([name])
 }
 
 model AgentMemberExecution {
@@ -65,12 +65,12 @@ model AgentMemberExecution {
   inputTokens        Int                @default(0)
   outputTokens       Int                @default(0)
   createdAt          DateTime           @default(now())
-  AgentTeamExecution AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
   AgentTeamMember    AgentTeamMember    @relation(fields: [memberId], references: [id])
+  AgentTeamExecution AgentTeamExecution @relation(fields: [teamExecutionId], references: [id], onDelete: Cascade)
 
-  @@index([teamExecutionId])
-  @@index([memberId])
   @@index([status])
+  @@index([memberId])
+  @@index([teamExecutionId])
 }
 
 model AgentTeam {
@@ -87,18 +87,18 @@ model AgentTeam {
   ralphConfig        String?
   createdAt          DateTime             @default(now())
   updatedAt          DateTime
-  User               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Tenant             Tenant?              @relation(fields: [tenantId], references: [id])
   AgentDefinition    AgentDefinition      @relation(fields: [leadAgentId], references: [id], onDelete: Cascade)
-  tenant             Tenant?              @relation(fields: [tenantId], references: [id])
+  User               User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   AgentTeamExecution AgentTeamExecution[]
   AgentTeamMember    AgentTeamMember[]
   EvaluationSession  EvaluationSession[]
 
-  @@index([userId])
-  @@index([tenantId])
-  @@index([visibility])
-  @@index([status])
   @@index([leadAgentId])
+  @@index([status])
+  @@index([visibility])
+  @@index([tenantId])
+  @@index([userId])
 }
 
 model AgentTeamExecution {
@@ -112,12 +112,12 @@ model AgentTeamExecution {
   totalOutputTokens    Int                    @default(0)
   createdAt            DateTime               @default(now())
   AgentMemberExecution AgentMemberExecution[]
-  AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
   EvaluationSession    EvaluationSession?     @relation(fields: [evaluationId], references: [id])
+  AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  @@index([teamId])
-  @@index([evaluationId])
   @@index([status])
+  @@index([evaluationId])
+  @@index([teamId])
 }
 
 model AgentTeamMember {
@@ -129,11 +129,11 @@ model AgentTeamMember {
   overrideTools        String?
   createdAt            DateTime               @default(now())
   AgentMemberExecution AgentMemberExecution[]
-  AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
   AgentDefinition      AgentDefinition        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  AgentTeam            AgentTeam              @relation(fields: [teamId], references: [id], onDelete: Cascade)
 
-  @@index([teamId])
   @@index([agentId])
+  @@index([teamId])
 }
 
 model AlertInstance {
@@ -155,10 +155,10 @@ model AlertInstance {
   updatedAt        DateTime
   AlertRule        AlertRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
 
-  @@index([triggeredAt])
-  @@index([severity])
-  @@index([status])
   @@index([ruleId])
+  @@index([status])
+  @@index([severity])
+  @@index([triggeredAt])
 }
 
 model AlertRule {
@@ -178,9 +178,9 @@ model AlertRule {
   updatedAt            DateTime
   AlertInstance        AlertInstance[]
 
-  @@index([severity])
-  @@index([enabled])
   @@index([metricType])
+  @@index([enabled])
+  @@index([severity])
 }
 
 model AnalysisReport {
@@ -213,12 +213,12 @@ model AnalysisReport {
   rawContent          String?
   createdAt           DateTime          @default(now())
   updatedAt           DateTime
-  Project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   EvaluationSession   EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  Project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([createdAt])
-  @@index([projectId])
   @@index([evaluationId])
+  @@index([projectId])
+  @@index([createdAt])
 }
 
 model AuditLog {
@@ -231,10 +231,10 @@ model AuditLog {
   userAgent String?
   createdAt DateTime @default(now())
 
-  @@index([action, createdAt])
-  @@index([createdAt])
-  @@index([action])
   @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([action, createdAt])
 }
 
 model AutonomousEvolutionExperience {
@@ -255,10 +255,10 @@ model AutonomousEvolutionExperience {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime
 
-  @@index([hitCount])
-  @@index([sourceModel])
-  @@index([isInjected])
   @@index([errorCategory])
+  @@index([isInjected])
+  @@index([sourceModel])
+  @@index([hitCount])
 }
 
 model AutonomousEvolutionRunLog {
@@ -276,8 +276,8 @@ model AutonomousEvolutionRunLog {
   startedAt    DateTime  @default(now())
   finishedAt   DateTime?
 
-  @@index([trigger])
   @@index([startedAt])
+  @@index([trigger])
 }
 
 model CodeKnowledge {
@@ -300,9 +300,53 @@ model CodeKnowledge {
   updatedAt  DateTime
   Project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([name])
-  @@index([entityType])
   @@index([projectId])
+  @@index([entityType])
+  @@index([name])
+}
+
+model CodeswarmTask {
+  id              String           @id
+  taskId          String           @unique
+  workerId        String?
+  state           String           @default("queued")
+  instruction     String
+  projectPath     String?
+  workspacePath   String?
+  gitUrl          String?
+  gitRef          String?
+  skills          String?
+  mcps            String?
+  model           String?
+  apiKey          String?
+  timeoutSec      Int?
+  agent           String?
+  events          String?
+  result          String?
+  error           String?
+  reportContent   String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime
+  CodeswarmWorker CodeswarmWorker? @relation(fields: [workerId], references: [id])
+
+  @@index([createdAt])
+  @@index([workerId])
+  @@index([state])
+}
+
+model CodeswarmWorker {
+  id            String          @id
+  nodeId        String          @unique
+  address       String
+  status        String          @default("online")
+  maxConcurrent Int             @default(5)
+  currentTasks  Int             @default(0)
+  lastHeartbeat DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime
+  CodeswarmTask CodeswarmTask[]
 }
 
 model DataFlow {
@@ -318,9 +362,9 @@ model DataFlow {
   createdAt   DateTime @default(now())
   Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([sinkId])
-  @@index([sourceId])
   @@index([projectId])
+  @@index([sourceId])
+  @@index([sinkId])
 }
 
 model EvaluationIteration {
@@ -343,14 +387,14 @@ model EvaluationIteration {
   roleId               String?
   createdAt            DateTime          @default(now())
   updatedAt            DateTime
-  ModelConfig          ModelConfig?      @relation(fields: [modelConfigId], references: [id])
   EvaluationSession    EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+  ModelConfig          ModelConfig?      @relation(fields: [modelConfigId], references: [id])
 
   @@unique([evaluationSessionId, iterationNumber])
-  @@index([modelConfigId])
-  @@index([evaluationSessionId])
-  @@index([status])
   @@index([iterationNumber])
+  @@index([status])
+  @@index([evaluationSessionId])
+  @@index([modelConfigId])
 }
 
 model EvaluationResult {
@@ -400,9 +444,9 @@ model EvaluationSession {
   AnalysisReport            AnalysisReport?
   EvaluationIteration       EvaluationIteration[]
   EvaluationResult          EvaluationResult?
-  Project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  AgentTeam                 AgentTeam?                  @relation(fields: [agentTeamId], references: [id])
   ModelConfig               ModelConfig?                @relation(fields: [modelConfigId], references: [id])
+  AgentTeam                 AgentTeam?                  @relation(fields: [agentTeamId], references: [id])
+  Project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   NodeExecution             NodeExecution[]
   PhaseOutput               PhaseOutput[]
   Report                    Report?
@@ -412,15 +456,43 @@ model EvaluationSession {
   TokenUsage                TokenUsage[]
   Vulnerability             Vulnerability[]
 
-  @@index([workflowType])
-  @@index([projectId])
-  @@index([agentTeamId])
-  @@index([workflowId])
-  @@index([modelConfigId])
-  @@index([opencodeSessionId])
-  @@index([status])
-  @@index([provider])
   @@index([lastActivity])
+  @@index([provider])
+  @@index([status])
+  @@index([opencodeSessionId])
+  @@index([modelConfigId])
+  @@index([workflowId])
+  @@index([agentTeamId])
+  @@index([projectId])
+  @@index([workflowType])
+}
+
+model EvolutionAttempt {
+  id                         String             @id
+  taskId                     String
+  attemptNumber              Int
+  falsePositiveCasesUsed     String?
+  confirmedCasesUsed         String?
+  falsePositivePatterns      String?
+  confirmedPatterns          String?
+  recommendations            String?
+  improvedContent            String?
+  changeSummary              String?
+  backtestSummary            String?
+  falsePositiveExclusionRate Float?
+  confirmedMissed            Int                @default(0)
+  backtestDetailRows         String?
+  failureReason              String?
+  missedCasesInfo            String?
+  remainingFalsePositive     String?
+  isPassed                   Boolean            @default(false)
+  status                     String             @default("pending")
+  createdAt                  DateTime           @default(now())
+  SkillEvolutionTask         SkillEvolutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([attemptNumber])
+  @@index([taskId])
 }
 
 model ExpectedOutputTemplate {
@@ -437,9 +509,9 @@ model ExpectedOutputTemplate {
   createdAt   DateTime @default(now())
   updatedAt   DateTime
 
-  @@index([isActive])
-  @@index([category])
   @@index([name])
+  @@index([category])
+  @@index([isActive])
 }
 
 model ExperienceUsageLog {
@@ -450,10 +522,10 @@ model ExperienceUsageLog {
   source       String   @default("pre_injected")
   usedAt       DateTime @default(now())
 
-  @@index([experienceId])
-  @@index([evaluationId])
-  @@index([usedAt])
   @@index([source])
+  @@index([usedAt])
+  @@index([evaluationId])
+  @@index([experienceId])
 }
 
 model FSMTemplate {
@@ -472,9 +544,9 @@ model FSMTemplate {
   updatedAt   DateTime
   Workflow    Workflow[]
 
-  @@index([isBuiltin])
-  @@index([isActive])
   @@index([name])
+  @@index([isActive])
+  @@index([isBuiltin])
 }
 
 model IntegratedReport {
@@ -491,8 +563,8 @@ model IntegratedReport {
   createdAt     DateTime @default(now())
   Report        Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
-  @@index([sourceType])
   @@index([reportId])
+  @@index([sourceType])
 }
 
 model LogFileRecord {
@@ -501,7 +573,7 @@ model LogFileRecord {
   fileHash      String
   processedAt   DateTime @default(now())
   sequenceCount Int      @default(0)
-  updatedAt     DateTime @updatedAt
+  updatedAt     DateTime
 
   @@index([filePath])
 }
@@ -517,22 +589,22 @@ model McpServerConfig {
   args         String?
   url          String?
   env          String?
-  tools        String? // JSON 格式存储工具列表 [{name, description, inputSchema}]
+  tools        String?
   isEnabled    Boolean   @default(true)
   autoStart    Boolean   @default(false)
   isShared     Boolean   @default(false)
-  lastTestedAt DateTime? // 最后测试连接时间
+  lastTestedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime
-  Project      Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  Tenant       Tenant?   @relation(fields: [tenantId], references: [id])
   User         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+  Project      Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  @@index([isShared])
-  @@index([name])
-  @@index([projectId])
-  @@index([userId])
   @@index([tenantId])
+  @@index([userId])
+  @@index([projectId])
+  @@index([name])
+  @@index([isShared])
 }
 
 model ModelConfig {
@@ -546,7 +618,7 @@ model ModelConfig {
   models              String
   routeType           String?
   maxTokens           Int                   @default(32000)
-  contextWindow       Int                   @default(0) // 模型的 context window 大小，0 表示不启用动态计算
+  contextWindow       Int                   @default(0)
   temperature         Float                 @default(0.3)
   isActive            Boolean               @default(true)
   isDefault           Boolean               @default(false)
@@ -556,18 +628,18 @@ model ModelConfig {
   AgentDefinition     AgentDefinition[]
   EvaluationIteration EvaluationIteration[]
   EvaluationSession   EvaluationSession[]
+  Tenant              Tenant?               @relation(fields: [tenantId], references: [id])
   User                User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant              Tenant?               @relation(fields: [tenantId], references: [id])
   NodeExecution       NodeExecution[]
   TaskInstance        TaskInstance[]
 
-  @@index([userId])
-  @@index([tenantId])
-  @@index([isActive])
-  @@index([isDefault])
-  @@index([isPublic])
-  @@index([providerType])
   @@index([routeType])
+  @@index([providerType])
+  @@index([isPublic])
+  @@index([isDefault])
+  @@index([isActive])
+  @@index([tenantId])
+  @@index([userId])
 }
 
 model NodeExecution {
@@ -592,15 +664,15 @@ model NodeExecution {
   outputTokens        Int?
   stopReason          String?
   compactionTriggered Boolean           @default(false)
-  ModelConfig         ModelConfig?      @relation(fields: [modelConfigId], references: [id])
   EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
+  ModelConfig         ModelConfig?      @relation(fields: [modelConfigId], references: [id])
 
   @@unique([evaluationSessionId, workflowNodeId])
-  @@index([modelConfigId])
-  @@index([evaluationSessionId])
-  @@index([workflowNodeId])
-  @@index([status])
   @@index([skipped])
+  @@index([status])
+  @@index([workflowNodeId])
+  @@index([evaluationSessionId])
+  @@index([modelConfigId])
 }
 
 model NotificationChannel {
@@ -612,8 +684,8 @@ model NotificationChannel {
   createdAt DateTime @default(now())
   updatedAt DateTime
 
-  @@index([enabled])
   @@index([type])
+  @@index([enabled])
 }
 
 model OpencodeConfig {
@@ -676,13 +748,13 @@ model PhaseOutput {
   findingsCount     Int?               @default(0)
   createdAt         DateTime           @default(now())
   updatedAt         DateTime
-  WorkflowExecution WorkflowExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
   EvaluationSession EvaluationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  WorkflowExecution WorkflowExecution? @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
-  @@index([status])
-  @@index([phaseNumber])
-  @@index([executionId])
   @@index([sessionId])
+  @@index([executionId])
+  @@index([phaseNumber])
+  @@index([status])
 }
 
 model Plugin {
@@ -704,17 +776,17 @@ model Plugin {
   createdAt   DateTime @default(now())
   updatedAt   DateTime
 
-  @@index([isEnabled])
-  @@index([status])
-  @@index([type])
   @@index([name])
+  @@index([type])
+  @@index([status])
+  @@index([isEnabled])
 }
 
 model Project {
   id                        String                      @id
   userId                    String
   tenantId                  String?
-  visibility                 String                      @default("private") // "private" | "public"
+  visibility                String                      @default("private")
   configId                  String?
   name                      String
   displayName               String?
@@ -736,8 +808,9 @@ model Project {
   DataFlow                  DataFlow[]
   EvaluationSession         EvaluationSession[]
   McpServerConfig           McpServerConfig[]
-  User                      User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Tenant                    Tenant?                     @relation(fields: [tenantId], references: [id])
   OpencodeConfig            OpencodeConfig?             @relation(fields: [configId], references: [id])
+  User                      User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
   ProjectFile               ProjectFile[]
   ProjectStructure          ProjectStructure?
   Report                    Report[]
@@ -747,14 +820,13 @@ model Project {
   SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   ToolPermission            ToolPermission[]
   Vulnerability             Vulnerability[]
-  tenant                    Tenant?                    @relation(fields: [tenantId], references: [id])
 
-  @@index([userId])
-  @@index([tenantId])
-  @@index([configId])
-  @@index([status])
-  @@index([name])
   @@index([visibility])
+  @@index([name])
+  @@index([status])
+  @@index([configId])
+  @@index([tenantId])
+  @@index([userId])
 }
 
 model ProjectFile {
@@ -813,15 +885,15 @@ model Report {
   createdAt         DateTime           @default(now())
   updatedAt         DateTime
   IntegratedReport  IntegratedReport[]
-  Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   EvaluationSession EvaluationSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  Project           Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
   ReportSection     ReportSection[]
 
-  @@index([status])
-  @@index([workflowType])
-  @@index([reportType])
-  @@index([projectId])
   @@index([sessionId])
+  @@index([projectId])
+  @@index([reportType])
+  @@index([workflowType])
+  @@index([status])
 }
 
 model ReportSection {
@@ -837,8 +909,8 @@ model ReportSection {
   Report      Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
 
   @@unique([reportId, sectionId])
-  @@index([order])
   @@index([reportId])
+  @@index([order])
 }
 
 model Role {
@@ -864,8 +936,8 @@ model ScanReport {
   createdAt  DateTime @default(now())
   ScanTask   ScanTask @relation(fields: [scanTaskId], references: [id], onDelete: Cascade)
 
-  @@index([projectId])
   @@index([scanTaskId])
+  @@index([projectId])
 }
 
 model ScanTask {
@@ -892,28 +964,28 @@ model ScanTask {
   Project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   SkillExecution  SkillExecution[]
 
-  @@index([userId, status])
-  @@index([createdAt])
-  @@index([status])
   @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([userId, status])
 }
 
 model SessionMessage {
   id                  String            @id
   evaluationSessionId String
   workflowNodeId      String?
-  skillExecutionId    String? // 关联到 SkillExecution（skill agent 的消息）
-  role                String // user, assistant, tool_call, tool_result 等
-  content             String? // 消息内容（可选，大内容存储在 JSONL）
-  messageRef          String? // JSONL 文件中的消息 ID（用于从文件读取内容）
+  skillExecutionId    String?
+  role                String
+  content             String?
+  messageRef          String?
   createdAt           DateTime          @default(now())
-  EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
   SkillExecution      SkillExecution?   @relation(fields: [skillExecutionId], references: [id], onDelete: Cascade)
+  EvaluationSession   EvaluationSession @relation(fields: [evaluationSessionId], references: [id], onDelete: Cascade)
 
-  @@index([workflowNodeId])
-  @@index([evaluationSessionId])
-  @@index([role])
   @@index([skillExecutionId])
+  @@index([role])
+  @@index([evaluationSessionId])
+  @@index([workflowNodeId])
 }
 
 model SessionMeta {
@@ -938,7 +1010,7 @@ model Skill {
   id                                                     String                      @id
   userId                                                 String?
   tenantId                                               String?
-  visibility                                             String                      @default("private") // "private" | "public"
+  visibility                                             String                      @default("private")
   name                                                   String
   displayName                                            String
   description                                            String
@@ -961,36 +1033,36 @@ model Skill {
   updatedAt                                              DateTime
   techStackId                                            String?
   vulnerabilityPatternId                                 String?
-  VulnerabilityPattern                                   VulnerabilityPattern?       @relation(fields: [vulnerabilityPatternId], references: [id])
-  TechStackOption                                        TechStackOption?            @relation(fields: [techStackId], references: [id])
+  Tenant                                                 Tenant?                     @relation(fields: [tenantId], references: [id])
+  User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   Skill                                                  Skill?                      @relation("SkillToSkill", fields: [parentId], references: [id])
   other_Skill                                            Skill[]                     @relation("SkillToSkill")
-  User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant                                                 Tenant?                     @relation(fields: [tenantId], references: [id])
+  TechStackOption                                        TechStackOption?            @relation(fields: [techStackId], references: [id])
+  VulnerabilityPattern                                   VulnerabilityPattern?       @relation(fields: [vulnerabilityPatternId], references: [id])
   SkillAnalysis                                          SkillAnalysis[]
   SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
   SkillEvolution                                         SkillEvolution[]
   SkillEvolutionTask                                     SkillEvolutionTask[]
   SkillExecution                                         SkillExecution[]
   SkillImprovement                                       SkillImprovement[]
-  SkillMergeRecord_SkillMergeRecord_sourceSkillIdToSkill SkillMergeRecord[]          @relation("SkillMergeRecord_sourceSkillIdToSkill")
   SkillMergeRecord_SkillMergeRecord_targetSkillIdToSkill SkillMergeRecord[]          @relation("SkillMergeRecord_targetSkillIdToSkill")
+  SkillMergeRecord_SkillMergeRecord_sourceSkillIdToSkill SkillMergeRecord[]          @relation("SkillMergeRecord_sourceSkillIdToSkill")
   SkillNewImpactAnalysis                                 SkillNewImpactAnalysis[]
   SkillObservationLog                                    SkillObservationLog[]
   SkillObservationStats                                  SkillObservationStats?
   SkillVulnerabilityMapping                              SkillVulnerabilityMapping[]
 
   @@unique([userId, name])
-  @@index([vulnerabilityPatternId])
-  @@index([techStackId])
-  @@index([isPublic])
-  @@index([isActive])
-  @@index([version])
-  @@index([isLatest])
-  @@index([name])
-  @@index([userId])
-  @@index([tenantId])
   @@index([visibility])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([name])
+  @@index([isLatest])
+  @@index([version])
+  @@index([isActive])
+  @@index([isPublic])
+  @@index([techStackId])
+  @@index([vulnerabilityPatternId])
 }
 
 model SkillAnalysis {
@@ -1017,10 +1089,10 @@ model SkillAnalysis {
   entryPointComparison  String?
   Skill                 Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([analysisType, reviewStatus])
-  @@index([analysisType])
-  @@index([reviewStatus])
   @@index([skillId])
+  @@index([reviewStatus])
+  @@index([analysisType])
+  @@index([analysisType, reviewStatus])
 }
 
 model SkillDuplicateGroup {
@@ -1038,9 +1110,9 @@ model SkillDuplicateGroup {
   updatedAt                 DateTime
   SkillDuplicateGroupMember SkillDuplicateGroupMember[]
 
-  @@index([vulnerabilityType])
-  @@index([language])
   @@index([status])
+  @@index([language])
+  @@index([vulnerabilityType])
 }
 
 model SkillDuplicateGroupMember {
@@ -1050,12 +1122,12 @@ model SkillDuplicateGroupMember {
   role                String              @default("member")
   similarityScore     Float               @default(0)
   joinedAt            DateTime            @default(now())
-  Skill               Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
   SkillDuplicateGroup SkillDuplicateGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  Skill               Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, skillId])
-  @@index([skillId])
   @@index([groupId])
+  @@index([skillId])
 }
 
 model SkillEvolution {
@@ -1073,8 +1145,8 @@ model SkillEvolution {
   createdAt   DateTime @default(now())
   Skill       Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([createdAt])
   @@index([skillId])
+  @@index([createdAt])
 }
 
 model SkillEvolutionConfig {
@@ -1094,16 +1166,16 @@ model SkillEvolutionConfig {
 
 model SkillEvolutionPrompt {
   id          String   @id
-  promptKey   String   @unique // 提示词标识: balance_analysis_system, balance_analysis_user, improvement_generation_system, improvement_generation_user
-  displayName String // 显示名称
-  description String? // 描述
-  content     String // 提示词内容（可编辑）
-  isActive    Boolean  @default(true) // 是否激活（未激活则使用代码默认值）
+  promptKey   String   @unique
+  displayName String
+  description String?
+  content     String
+  isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime
 
-  @@index([promptKey])
   @@index([isActive])
+  @@index([promptKey])
 }
 
 model SkillEvolutionTask {
@@ -1121,41 +1193,13 @@ model SkillEvolutionTask {
   recallAfter        Float?
   createdAt          DateTime           @default(now())
   completedAt        DateTime?
+  EvolutionAttempt   EvolutionAttempt[]
   Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
   SkillImprovement   SkillImprovement?
-  EvolutionAttempt   EvolutionAttempt[]
 
-  @@index([createdAt])
-  @@index([status])
   @@index([skillId])
-}
-
-model EvolutionAttempt {
-  id                         String             @id
-  taskId                     String
-  attemptNumber              Int
-  falsePositiveCasesUsed     String?
-  confirmedCasesUsed         String?
-  falsePositivePatterns      String?
-  confirmedPatterns          String?
-  recommendations            String?
-  improvedContent            String?
-  changeSummary              String?
-  backtestSummary            String?
-  falsePositiveExclusionRate Float?
-  confirmedMissed            Int                @default(0)
-  backtestDetailRows         String?
-  failureReason              String?
-  missedCasesInfo            String?
-  remainingFalsePositive     String?
-  isPassed                   Boolean            @default(false)
-  status                     String             @default("pending")
-  createdAt                  DateTime           @default(now())
-  SkillEvolutionTask         SkillEvolutionTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-  @@index([attemptNumber])
   @@index([status])
+  @@index([createdAt])
 }
 
 model SkillExecution {
@@ -1165,7 +1209,7 @@ model SkillExecution {
   evaluationId       String?
   nodeId             String?
   scanTaskId         String?
-  order              Int                @default(0) // 调用次序
+  order              Int                @default(0)
   input              String
   output             String?
   status             String             @default("pending")
@@ -1179,22 +1223,22 @@ model SkillExecution {
   inputTokens        Int?
   outputTokens       Int?
   createdAt          DateTime           @default(now())
-  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id])
-  Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
-  Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  SessionMessage     SessionMessage[]
   ScanTask           ScanTask?          @relation(fields: [scanTaskId], references: [id])
+  Project            Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  Skill              Skill              @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id])
   Vulnerability      Vulnerability[]
-  SessionMessages    SessionMessage[] // skill agent 执行产生的消息
 
-  @@index([skillId])
-  @@index([projectId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([evaluationId])
-  @@index([nodeId])
-  @@index([projectId, status])
-  @@index([skillId, status])
   @@index([order])
+  @@index([skillId, status])
+  @@index([projectId, status])
+  @@index([nodeId])
+  @@index([evaluationId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([projectId])
+  @@index([skillId])
 }
 
 model SkillGovernanceConfig {
@@ -1208,8 +1252,8 @@ model SkillGovernanceConfig {
   createdAt      DateTime @default(now())
   updatedAt      DateTime
 
-  @@index([configKey])
   @@index([isActive])
+  @@index([configKey])
 }
 
 model SkillImprovement {
@@ -1223,12 +1267,12 @@ model SkillImprovement {
   improvedContent    String?
   status             String              @default("pending")
   createdAt          DateTime            @default(now())
-  SkillEvolutionTask SkillEvolutionTask? @relation(fields: [taskId], references: [id])
   Skill              Skill               @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  SkillEvolutionTask SkillEvolutionTask? @relation(fields: [taskId], references: [id])
 
-  @@index([createdAt])
-  @@index([status])
   @@index([skillId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model SkillMergeRecord {
@@ -1248,14 +1292,14 @@ model SkillMergeRecord {
   mergedAt                                    DateTime?
   createdAt                                   DateTime  @default(now())
   updatedAt                                   DateTime
-  Skill_SkillMergeRecord_sourceSkillIdToSkill Skill     @relation("SkillMergeRecord_sourceSkillIdToSkill", fields: [sourceSkillId], references: [id])
   Skill_SkillMergeRecord_targetSkillIdToSkill Skill     @relation("SkillMergeRecord_targetSkillIdToSkill", fields: [targetSkillId], references: [id])
+  Skill_SkillMergeRecord_sourceSkillIdToSkill Skill     @relation("SkillMergeRecord_sourceSkillIdToSkill", fields: [sourceSkillId], references: [id])
 
-  @@index([sourceSkillId])
-  @@index([targetSkillId])
-  @@index([status])
-  @@index([createdAt])
   @@index([sourceSkillId, targetSkillId])
+  @@index([createdAt])
+  @@index([status])
+  @@index([targetSkillId])
+  @@index([sourceSkillId])
 }
 
 model SkillNewImpactAnalysis {
@@ -1274,10 +1318,10 @@ model SkillNewImpactAnalysis {
   updatedAt            DateTime
   Skill                Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([skillId])
-  @@index([overlapScore])
-  @@index([status])
   @@index([createdAt])
+  @@index([status])
+  @@index([overlapScore])
+  @@index([skillId])
 }
 
 model SkillObservationLog {
@@ -1296,12 +1340,12 @@ model SkillObservationLog {
   updatedAt      DateTime
   Skill          Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([skillId])
-  @@index([triggerType])
-  @@index([severity])
-  @@index([status])
-  @@index([createdAt])
   @@index([skillId, createdAt])
+  @@index([createdAt])
+  @@index([status])
+  @@index([severity])
+  @@index([triggerType])
+  @@index([skillId])
 }
 
 model SkillObservationStats {
@@ -1321,9 +1365,9 @@ model SkillObservationStats {
   updatedAt         DateTime
   Skill             Skill     @relation(fields: [skillId], references: [id], onDelete: Cascade)
 
-  @@index([skillId])
-  @@index([warningCount])
   @@index([matchRate])
+  @@index([warningCount])
+  @@index([skillId])
 }
 
 model SkillPrediction {
@@ -1339,10 +1383,10 @@ model SkillPrediction {
   createdAt         DateTime @default(now())
   User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([workflowId])
-  @@index([createdAt])
   @@index([userId, createdAt])
+  @@index([createdAt])
+  @@index([workflowId])
+  @@index([userId])
 }
 
 model SkillPredictionTask {
@@ -1367,13 +1411,13 @@ model SkillPredictionTask {
   governanceWarning String?
   User              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([workflowId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([userId, status])
-  @@index([nodeId])
   @@index([workflowId, nodeId])
+  @@index([nodeId])
+  @@index([userId, status])
+  @@index([createdAt])
+  @@index([status])
+  @@index([workflowId])
+  @@index([userId])
 }
 
 model SkillVulnerabilityMapping {
@@ -1385,17 +1429,17 @@ model SkillVulnerabilityMapping {
   skillNameReported String?
   matchType         String            @default("exact")
   matchedAt         DateTime          @default(now())
-  Project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
-  Vulnerability     Vulnerability     @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
   Skill             Skill             @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  Vulnerability     Vulnerability     @relation(fields: [vulnerabilityId], references: [id], onDelete: Cascade)
+  EvaluationSession EvaluationSession @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  Project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([skillId, vulnerabilityId])
-  @@index([matchType])
-  @@index([projectId])
-  @@index([evaluationId])
-  @@index([vulnerabilityId])
   @@index([skillId])
+  @@index([vulnerabilityId])
+  @@index([evaluationId])
+  @@index([projectId])
+  @@index([matchType])
 }
 
 model SystemConfig {
@@ -1417,384 +1461,24 @@ model SystemMetric {
   tags       String?
   recordedAt DateTime @default(now())
 
+  @@index([type])
+  @@index([name])
   @@index([recordedAt])
-  @@index([name])
-  @@index([type])
 }
 
-model TechStackOption {
-  id          String   @id
-  name        String   @unique
-  category    String
-  description String?
-  isActive    Boolean  @default(true)
-  isBuiltin   Boolean  @default(false)
-  sortOrder   Int      @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
-  Skill       Skill[]
+model TaskExecutionLog {
+  id           String       @id
+  taskId       String
+  timestamp    DateTime     @default(now())
+  level        String
+  message      String
+  details      String?
+  createdAt    DateTime     @default(now())
+  TaskInstance TaskInstance @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@index([isActive])
-  @@index([category])
-  @@index([name])
-}
-
-model TokenUsage {
-  id                 String             @id
-  evaluationId       String?
-  projectId          String?
-  apiProvider        String
-  modelName          String?
-  callType           String
-  inputTokens        Int                @default(0)
-  outputTokens       Int                @default(0)
-  totalTokens        Int                @default(0)
-  cachedTokens       Int?
-  requestPreview     String?
-  responsePreview    String?
-  requestStartedAt   DateTime           @default(now())
-  requestCompletedAt DateTime?
-  durationMs         Int?
-  estimatedCost      Float?
-  status             String             @default("success")
-  errorMessage       String?
-  createdAt          DateTime           @default(now())
-  userId             String?
-  username           String?
-  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
-
-  @@index([userId, createdAt])
-  @@index([projectId, createdAt])
-  @@index([evaluationId, createdAt])
-  @@index([createdAt])
-  @@index([modelName])
-  @@index([apiProvider])
-  @@index([projectId])
-  @@index([evaluationId])
-}
-
-model Tool {
-  id                 String   @id
-  name               String   @unique
-  displayName        String
-  description        String
-  category           String
-  parameters         String
-  executor           String
-  executorConfig     String?
-  requiresPermission Boolean  @default(false)
-  allowedInSandbox   Boolean  @default(true)
-  timeout            Int      @default(600000)
-  isActive           Boolean  @default(true)
-  isBuiltin          Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime
-
-  @@index([isActive])
-  @@index([category])
-}
-
-model ToolPermission {
-  id          String   @id
-  projectId   String
-  toolPattern String
-  permission  String
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime
-  Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, toolPattern])
-  @@index([projectId])
-}
-
-model User {
-  id                                           String                @id
-  email                                        String                @unique
-  username                                     String                @unique
-  passwordHash                                 String
-  name                                         String?
-  avatar                                       String?
-  tenantId                                     String?
-  isActive                                     Boolean               @default(true)
-  createdAt                                    DateTime              @default(now())
-  updatedAt                                    DateTime
-  tenant                                       Tenant?               @relation(fields: [tenantId], references: [id])
-  AgentApp                                     AgentApp[]
-  AgentDefinition                              AgentDefinition[]
-  AgentTeam                                    AgentTeam[]
-  McpServerConfig                              McpServerConfig[]
-  ModelConfig                                  ModelConfig[]
-  OpencodeConfig                               OpencodeConfig[]
-  Project                                      Project[]
-  Skill                                        Skill[]
-  SkillPrediction                              SkillPrediction[]
-  SkillPredictionTask                          SkillPredictionTask[]
-  TaskInstance                                 TaskInstance[]
-  UserRole                                     UserRole[]
-  Workflow                                     Workflow[]
-  WorkflowExecution                            WorkflowExecution[]
-  WorkflowShare_WorkflowShare_sharedByToUser   WorkflowShare[]       @relation("WorkflowShare_sharedByToUser")
-  WorkflowShare_WorkflowShare_sharedWithToUser WorkflowShare[]       @relation("WorkflowShare_sharedWithToUser")
-
-  @@index([username])
-  @@index([email])
-}
-
-model UserRole {
-  id        String   @id
-  userId    String
-  roleId    String
-  createdAt DateTime @default(now())
-  Role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, roleId])
-  @@index([roleId])
-  @@index([userId])
-}
-
-model Vulnerability {
-  id                        String                      @id
-  projectId                 String
-  evaluationId              String?
-  skillExecutionId          String?
-  title                     String
-  description               String // 漏洞描述（污点传播路径）
-  type                      String
-  cwe                       String? // CWE编号 (来自 JSON.cwe_id)
-  severity                  String
-  skill                     String?
-  location                  String? // 所有涉及此漏洞的源代码 (来自 JSON.location)
-  POC                       String? // 完整攻击请求 + 推导过程 (来自 JSON.POC)
-  vulnerable                Boolean?                    @default(true) // 是否为真实漏洞 (来自 JSON.vulnerable)
-  fixSuggestion             String? // 修复建议（手动填写）
-  status                    String                      @default("new")
-  falsePositiveReason       String? // 误报原因（标记为误报时填写）
-  confirmedBy               String?
-  confirmedAt               DateTime?
-  fixedBy                   String?
-  fixedAt                   DateTime?
-  verifiedBy                String?
-  verifiedAt                DateTime?
-  notes                     String?
-  createdAt                 DateTime                    @default(now())
-  updatedAt                 DateTime
-  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
-  SkillExecution            SkillExecution?             @relation(fields: [skillExecutionId], references: [id])
-  EvaluationSession         EvaluationSession?          @relation(fields: [evaluationId], references: [id])
-  Project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
-
-  @@index([severity, status])
-  @@index([projectId, status])
-  @@index([createdAt])
-  @@index([type])
-  @@index([severity])
-  @@index([status])
-  @@index([evaluationId])
-  @@index([projectId])
-  @@index([vulnerable])
-}
-
-model VulnerabilityCategory {
-  id                   String                 @id
-  value                String                 @unique
-  label                String
-  description          String?
-  sortOrder            Int                    @default(0)
-  isActive             Boolean                @default(true)
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime
-  VulnerabilityPattern VulnerabilityPattern[]
-
-  @@index([value])
-  @@index([isActive])
-}
-
-model VulnerabilityPattern {
-  id                    String                @id
-  name                  String                @unique
-  displayName           String
-  description           String
-  categoryId            String
-  cwe                   String?
-  cve                   String?
-  patterns              String
-  languages             String
-  exampleVulnerable     String?
-  exampleFixed          String?
-  fixGuidance           String?
-  isActive              Boolean               @default(true)
-  isBuiltin             Boolean               @default(true)
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime
-  Skill                 Skill[]
-  VulnerabilityCategory VulnerabilityCategory @relation(fields: [categoryId], references: [id])
-
-  @@index([categoryId])
-  @@index([isActive])
-}
-
-model Workflow {
-  id                String              @id
-  userId            String
-  tenantId          String?
-  visibility        String              @default("private")
-  name              String
-  description       String?
-  thumbnail         String?
-  techStack         String?
-  version           Int                 @default(1)
-  status            String              @default("draft")
-  isActive          Boolean             @default(false)
-  isPublic          Boolean             @default(false)
-  workflowType      String              @default("dag")
-  fsmTemplateId     String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime
-  User              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  FSMTemplate       FSMTemplate?        @relation(fields: [fsmTemplateId], references: [id])
-  tenant            Tenant?             @relation(fields: [tenantId], references: [id])
-  WorkflowEdge      WorkflowEdge[]
-  WorkflowExecution WorkflowExecution[]
-  WorkflowNode      WorkflowNode[]
-  WorkflowRole      WorkflowRole[]
-  WorkflowShare     WorkflowShare[]
-
-  @@index([fsmTemplateId])
-  @@index([workflowType])
-  @@index([userId])
-  @@index([tenantId])
-  @@index([visibility])
-  @@index([status])
-  @@index([isActive])
-  @@index([isPublic])
-  @@index([userId, status])
-  @@index([status, isActive])
-}
-
-model WorkflowEdge {
-  id                                               String       @id
-  workflowId                                       String
-  sourceId                                         String
-  targetId                                         String
-  sourceHandle                                     String?
-  targetHandle                                     String?
-  label                                            String?
-  data                                             String?
-  createdAt                                        DateTime     @default(now())
-  Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
-  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
-
-  @@unique([sourceId, targetId, sourceHandle])
-  @@index([workflowId])
-  @@index([sourceId])
-  @@index([targetId])
-}
-
-model WorkflowExecution {
-  id                    String                  @id
-  workflowId            String
-  userId                String
-  status                String                  @default("pending")
-  roleModels            String?
-  startedAt             DateTime                @default(now())
-  completedAt           DateTime?
-  error                 String?
-  result                String?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime
-  PhaseOutput           PhaseOutput[]
-  Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  WorkflowExecutionStep WorkflowExecutionStep[]
-
-  @@index([workflowId])
-  @@index([userId])
-  @@index([status])
-  @@index([startedAt])
-  @@index([workflowId, status])
-}
-
-model WorkflowExecutionStep {
-  id                String            @id
-  executionId       String
-  nodeId            String
-  status            String            @default("pending")
-  startedAt         DateTime?
-  completedAt       DateTime?
-  input             String?
-  output            String?
-  error             String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime
-  WorkflowExecution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-
-  @@index([executionId])
-  @@index([nodeId])
-  @@index([status])
-}
-
-model WorkflowNode {
-  id                                               String         @id
-  workflowId                                       String
-  roleId                                           String?
-  type                                             String
-  positionX                                        Float
-  positionY                                        Float
-  data                                             String
-  vulnerabilityCategories                          String?
-  skills                                           String?
-  createdAt                                        DateTime       @default(now())
-  updatedAt                                        DateTime
-  fsmFixed                                         Boolean?       @default(false)
-  fsmOrder                                         Int?
-  fsmPhase                                         Int?
-  skillPath                                        String?
-  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_sourceIdToWorkflowNode")
-  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_targetIdToWorkflowNode")
-  Workflow                                         Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  WorkflowRole                                     WorkflowRole?  @relation(fields: [roleId], references: [id])
-
-  @@index([fsmOrder])
-  @@index([fsmPhase])
-  @@index([roleId])
-  @@index([workflowId])
-  @@index([type])
-}
-
-model WorkflowRole {
-  id           String         @id
-  workflowId   String
-  name         String
-  description  String?
-  color        String?
-  order        Int            @default(0)
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime
-  WorkflowNode WorkflowNode[]
-  Workflow     Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-
-  @@index([workflowId])
-}
-
-model WorkflowShare {
-  id                                  String    @id
-  workflowId                          String
-  sharedBy                            String
-  sharedWith                          String
-  permission                          String    @default("read")
-  expiresAt                           DateTime?
-  createdAt                           DateTime  @default(now())
-  Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
-  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
-
-  @@unique([workflowId, sharedWith])
-  @@index([workflowId])
-  @@index([sharedBy])
-  @@index([sharedWith])
+  @@index([timestamp])
+  @@index([level])
+  @@index([taskId])
 }
 
 model TaskInstance {
@@ -1823,96 +1507,409 @@ model TaskInstance {
   reportPath       String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
-  User             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  ModelConfig      ModelConfig?       @relation(fields: [modelId], references: [id], onDelete: SetNull)
-  Tenant           Tenant?            @relation(fields: [tenantId], references: [id])
   TaskExecutionLog TaskExecutionLog[]
+  Tenant           Tenant?            @relation(fields: [tenantId], references: [id])
+  ModelConfig      ModelConfig?       @relation(fields: [modelId], references: [id])
+  User             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([tenantId])
-  @@index([visibility])
-  @@index([status])
-  @@index([agentId])
+  @@index([createdAt])
   @@index([modelId])
-  @@index([createdAt])
-}
-
-model TaskExecutionLog {
-  id           String       @id
-  taskId       String
-  timestamp    DateTime     @default(now())
-  level        String
-  message      String
-  details      String?
-  createdAt    DateTime     @default(now())
-  TaskInstance TaskInstance @relation(fields: [taskId], references: [id], onDelete: Cascade)
-
-  @@index([taskId])
-  @@index([level])
-  @@index([timestamp])
-}
-
-model CodeswarmWorker {
-  id            String    @id @default(cuid())
-  nodeId        String    @unique
-  address       String
-  status        String    @default("online")
-  maxConcurrent Int       @default(5)
-  currentTasks  Int       @default(0)
-  lastHeartbeat DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  CodeswarmTask CodeswarmTask[]
-}
-
-model CodeswarmTask {
-  id              String          @id @default(cuid())
-  taskId          String          @unique
-  workerId        String?
-  state           String          @default("queued")
-  instruction     String
-  projectPath     String?
-  workspacePath   String?
-  gitUrl          String?
-  gitRef          String?
-  skills          String?
-  mcps            String?
-  model           String?
-  apiKey          String?
-  timeoutSec      Int?
-  agent           String?
-  events          String?
-  result          String?
-  error           String?
-  reportContent   String?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  CodeswarmWorker CodeswarmWorker? @relation(fields: [workerId], references: [id], onDelete: SetNull)
-
-  @@index([state])
-  @@index([workerId])
-  @@index([createdAt])
-}
-
-model AgentApp {
-  id           String   @id
-  userId       String
-  tenantId     String?
-  visibility   String   @default("private") // "private" | "public"
-  name         String
-  engine       String
-  skillPath    String
-  startCommand String
-  notes        String?
-  status       String   @default("active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
-
-  @@index([userId])
-  @@index([tenantId])
+  @@index([agentId])
+  @@index([status])
   @@index([visibility])
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model TechStackOption {
+  id          String   @id
+  name        String   @unique
+  category    String
+  description String?
+  isActive    Boolean  @default(true)
+  isBuiltin   Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  Skill       Skill[]
+
+  @@index([name])
+  @@index([category])
+  @@index([isActive])
+}
+
+model Tenant {
+  id              String            @id
+  name            String
+  slug            String            @unique
+  isIcsTenant     Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime
+  AgentApp        AgentApp[]
+  AgentTeam       AgentTeam[]
+  McpServerConfig McpServerConfig[]
+  ModelConfig     ModelConfig[]
+  Project         Project[]
+  Skill           Skill[]
+  TaskInstance    TaskInstance[]
+  User            User[]
+  Workflow        Workflow[]
+}
+
+model TokenUsage {
+  id                 String             @id
+  evaluationId       String?
+  projectId          String?
+  apiProvider        String
+  modelName          String?
+  callType           String
+  inputTokens        Int                @default(0)
+  outputTokens       Int                @default(0)
+  totalTokens        Int                @default(0)
+  cachedTokens       Int?
+  requestPreview     String?
+  responsePreview    String?
+  requestStartedAt   DateTime           @default(now())
+  requestCompletedAt DateTime?
+  durationMs         Int?
+  estimatedCost      Float?
+  status             String             @default("success")
+  errorMessage       String?
+  createdAt          DateTime           @default(now())
+  userId             String?
+  username           String?
+  EvaluationSession  EvaluationSession? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  @@index([evaluationId])
+  @@index([projectId])
+  @@index([apiProvider])
+  @@index([modelName])
+  @@index([createdAt])
+  @@index([evaluationId, createdAt])
+  @@index([projectId, createdAt])
+  @@index([userId, createdAt])
+}
+
+model Tool {
+  id                 String   @id
+  name               String   @unique
+  displayName        String
+  description        String
+  category           String
+  parameters         String
+  executor           String
+  executorConfig     String?
+  requiresPermission Boolean  @default(false)
+  allowedInSandbox   Boolean  @default(true)
+  timeout            Int      @default(600000)
+  isActive           Boolean  @default(true)
+  isBuiltin          Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model ToolPermission {
+  id          String   @id
+  projectId   String
+  toolPattern String
+  permission  String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  Project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, toolPattern])
+  @@index([projectId])
+}
+
+model User {
+  id                                           String                @id
+  email                                        String                @unique
+  username                                     String                @unique
+  passwordHash                                 String
+  name                                         String?
+  avatar                                       String?
+  tenantId                                     String?
+  isActive                                     Boolean               @default(true)
+  createdAt                                    DateTime              @default(now())
+  updatedAt                                    DateTime
+  AgentApp                                     AgentApp[]
+  AgentDefinition                              AgentDefinition[]
+  AgentTeam                                    AgentTeam[]
+  McpServerConfig                              McpServerConfig[]
+  ModelConfig                                  ModelConfig[]
+  Project                                      Project[]
+  Skill                                        Skill[]
+  SkillPrediction                              SkillPrediction[]
+  SkillPredictionTask                          SkillPredictionTask[]
+  TaskInstance                                 TaskInstance[]
+  Tenant                                       Tenant?               @relation(fields: [tenantId], references: [id])
+  UserRole                                     UserRole[]
+  Workflow                                     Workflow[]
+  WorkflowExecution                            WorkflowExecution[]
+  WorkflowShare_WorkflowShare_sharedWithToUser WorkflowShare[]       @relation("WorkflowShare_sharedWithToUser")
+  WorkflowShare_WorkflowShare_sharedByToUser   WorkflowShare[]       @relation("WorkflowShare_sharedByToUser")
+  OpencodeConfig                               OpencodeConfig[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model UserRole {
+  id        String   @id
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+}
+
+model Vulnerability {
+  id                        String                      @id
+  projectId                 String
+  evaluationId              String?
+  skillExecutionId          String?
+  title                     String
+  description               String
+  type                      String
+  cwe                       String?
+  severity                  String
+  skill                     String?
+  location                  String?
+  POC                       String?
+  vulnerable                Boolean?                    @default(true)
+  fixSuggestion             String?
+  status                    String                      @default("new")
+  falsePositiveReason       String?
+  confirmedBy               String?
+  confirmedAt               DateTime?
+  fixedBy                   String?
+  fixedAt                   DateTime?
+  verifiedBy                String?
+  verifiedAt                DateTime?
+  notes                     String?
+  createdAt                 DateTime                    @default(now())
+  updatedAt                 DateTime
+  SkillVulnerabilityMapping SkillVulnerabilityMapping[]
+  Project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  EvaluationSession         EvaluationSession?          @relation(fields: [evaluationId], references: [id])
+  SkillExecution            SkillExecution?             @relation(fields: [skillExecutionId], references: [id])
+
+  @@index([vulnerable])
+  @@index([projectId])
+  @@index([evaluationId])
+  @@index([status])
+  @@index([severity])
+  @@index([type])
+  @@index([createdAt])
+  @@index([projectId, status])
+  @@index([severity, status])
+}
+
+model VulnerabilityCategory {
+  id                   String                 @id
+  value                String                 @unique
+  label                String
+  description          String?
+  sortOrder            Int                    @default(0)
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  VulnerabilityPattern VulnerabilityPattern[]
+
+  @@index([isActive])
+  @@index([value])
+}
+
+model VulnerabilityPattern {
+  id                    String                @id
+  name                  String                @unique
+  displayName           String
+  description           String
+  categoryId            String
+  cwe                   String?
+  cve                   String?
+  patterns              String
+  languages             String
+  exampleVulnerable     String?
+  exampleFixed          String?
+  fixGuidance           String?
+  isActive              Boolean               @default(true)
+  isBuiltin             Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime
+  Skill                 Skill[]
+  VulnerabilityCategory VulnerabilityCategory @relation(fields: [categoryId], references: [id])
+
+  @@index([isActive])
+  @@index([categoryId])
+}
+
+model Workflow {
+  id                String              @id
+  userId            String
+  tenantId          String?
+  visibility        String              @default("private")
+  name              String
+  description       String?
+  thumbnail         String?
+  techStack         String?
+  version           Int                 @default(1)
+  status            String              @default("draft")
+  isActive          Boolean             @default(false)
+  isPublic          Boolean             @default(false)
+  workflowType      String              @default("dag")
+  fsmTemplateId     String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime
+  Tenant            Tenant?             @relation(fields: [tenantId], references: [id])
+  FSMTemplate       FSMTemplate?        @relation(fields: [fsmTemplateId], references: [id])
+  User              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  WorkflowEdge      WorkflowEdge[]
+  WorkflowExecution WorkflowExecution[]
+  WorkflowNode      WorkflowNode[]
+  WorkflowRole      WorkflowRole[]
+  WorkflowShare     WorkflowShare[]
+
+  @@index([status, isActive])
+  @@index([userId, status])
+  @@index([isPublic])
+  @@index([isActive])
+  @@index([status])
+  @@index([visibility])
+  @@index([tenantId])
+  @@index([userId])
+  @@index([workflowType])
+  @@index([fsmTemplateId])
+}
+
+model WorkflowEdge {
+  id                                               String       @id
+  workflowId                                       String
+  sourceId                                         String
+  targetId                                         String
+  sourceHandle                                     String?
+  targetHandle                                     String?
+  label                                            String?
+  data                                             String?
+  createdAt                                        DateTime     @default(now())
+  WorkflowNode_WorkflowEdge_targetIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_targetIdToWorkflowNode", fields: [targetId], references: [id], onDelete: Cascade)
+  WorkflowNode_WorkflowEdge_sourceIdToWorkflowNode WorkflowNode @relation("WorkflowEdge_sourceIdToWorkflowNode", fields: [sourceId], references: [id], onDelete: Cascade)
+  Workflow                                         Workflow     @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, targetId, sourceHandle])
+  @@index([targetId])
+  @@index([sourceId])
+  @@index([workflowId])
+}
+
+model WorkflowExecution {
+  id                    String                  @id
+  workflowId            String
+  userId                String
+  status                String                  @default("pending")
+  roleModels            String?
+  startedAt             DateTime                @default(now())
+  completedAt           DateTime?
+  error                 String?
+  result                String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime
+  PhaseOutput           PhaseOutput[]
+  User                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Workflow              Workflow                @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  WorkflowExecutionStep WorkflowExecutionStep[]
+
+  @@index([workflowId, status])
+  @@index([startedAt])
+  @@index([status])
+  @@index([userId])
+  @@index([workflowId])
+}
+
+model WorkflowExecutionStep {
+  id                String            @id
+  executionId       String
+  nodeId            String
+  status            String            @default("pending")
+  startedAt         DateTime?
+  completedAt       DateTime?
+  input             String?
+  output            String?
+  error             String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime
+  WorkflowExecution WorkflowExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([nodeId])
+  @@index([executionId])
+}
+
+model WorkflowNode {
+  id                                               String         @id
+  workflowId                                       String
+  roleId                                           String?
+  type                                             String
+  positionX                                        Float
+  positionY                                        Float
+  data                                             String
+  vulnerabilityCategories                          String?
+  skills                                           String?
+  createdAt                                        DateTime       @default(now())
+  updatedAt                                        DateTime
+  fsmFixed                                         Boolean?       @default(false)
+  fsmOrder                                         Int?
+  fsmPhase                                         Int?
+  skillPath                                        String?
+  WorkflowEdge_WorkflowEdge_targetIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_targetIdToWorkflowNode")
+  WorkflowEdge_WorkflowEdge_sourceIdToWorkflowNode WorkflowEdge[] @relation("WorkflowEdge_sourceIdToWorkflowNode")
+  WorkflowRole                                     WorkflowRole?  @relation(fields: [roleId], references: [id])
+  Workflow                                         Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([type])
+  @@index([workflowId])
+  @@index([roleId])
+  @@index([fsmPhase])
+  @@index([fsmOrder])
+}
+
+model WorkflowRole {
+  id           String         @id
+  workflowId   String
+  name         String
+  description  String?
+  color        String?
+  order        Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime
+  WorkflowNode WorkflowNode[]
+  Workflow     Workflow       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+
+model WorkflowShare {
+  id                                  String    @id
+  workflowId                          String
+  sharedBy                            String
+  sharedWith                          String
+  permission                          String    @default("read")
+  expiresAt                           DateTime?
+  createdAt                           DateTime  @default(now())
+  User_WorkflowShare_sharedWithToUser User      @relation("WorkflowShare_sharedWithToUser", fields: [sharedWith], references: [id], onDelete: Cascade)
+  User_WorkflowShare_sharedByToUser   User      @relation("WorkflowShare_sharedByToUser", fields: [sharedBy], references: [id], onDelete: Cascade)
+  Workflow                            Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, sharedWith])
+  @@index([sharedWith])
+  @@index([sharedBy])
+  @@index([workflowId])
 }

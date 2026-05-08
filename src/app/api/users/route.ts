@@ -117,7 +117,7 @@ export async function POST(request: Request) {
     const payload = auth.payload;
 
     const body = await request.json();
-    const { email, username, password, name, roles } = body;
+    const { email, username, password, name, roles, tenantId } = body;
 
     // 验证输入
     if (!email || !username || !password) {
@@ -171,6 +171,7 @@ export async function POST(request: Request) {
           username,
           passwordHash,
           name: name || username,
+          tenantId: tenantId || null,
           updatedAt: new Date(),
         },
       });
@@ -233,6 +234,7 @@ export async function POST(request: Request) {
           email: user.email,
           username: user.username,
           name: user.name,
+          tenantId: user.tenantId,
         },
       },
       { status: 201 }

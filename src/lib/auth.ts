@@ -203,7 +203,7 @@ export async function getUserWithPermissions(userId: string): Promise<{
       const user = await prisma.user.findUnique({
         where: { id: userId },
         include: {
-          tenant: true,  // 包含租户信息
+          Tenant: true,  // 包含租户信息
           UserRole: {
             include: {
               Role: {
@@ -232,7 +232,7 @@ export async function getUserWithPermissions(userId: string): Promise<{
         user,
         roles: user.UserRole.map(ur => ur.Role),
         permissions: Array.from(permissions),
-        tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name, isIcsTenant: user.tenant.isIcsTenant } : null,
+        tenant: user.Tenant ? { id: user.Tenant.id, name: user.Tenant.name, isIcsTenant: user.Tenant.isIcsTenant } : null,
       };
     },
     5 * 60 * 1000 // 5 minutes TTL

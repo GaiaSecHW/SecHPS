@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     where,
     include: {
       _count: {
-        select: { users: true },
+        select: { User: true },
       },
     },
     orderBy: { createdAt: 'desc' },
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     tenants: tenants.map(t => ({
       ...t,
-      userCount: t._count.users,
+      userCount: t._count.User,
       _count: undefined,
     })),
   });

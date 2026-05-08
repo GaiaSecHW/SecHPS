@@ -20,7 +20,7 @@ export async function GET(
   const tenant = await prisma.tenant.findUnique({
     where: { id },
     include: {
-      _count: { select: { users: true } },
+      _count: { select: { User: true } },
     },
   });
 
@@ -31,7 +31,7 @@ export async function GET(
   return NextResponse.json({
     tenant: {
       ...tenant,
-      userCount: tenant._count.users,
+      userCount: tenant._count.User,
       _count: undefined,
     },
   });

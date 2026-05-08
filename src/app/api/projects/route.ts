@@ -1,38 +1,46 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { generateId } from '@/lib/id-generator';
 import { PERMISSIONS } from '@/types/permissions';
 import { mkdir, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
 
 // 获取项目列表
 export async function GET(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PROJECT_READ });
+    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.PROJECT_READ });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
 
-    // 检查是否是管理员
-    const userIsAdmin = isAdmin(payload);
+    // 构建租户过滤条件
+    let where: any = {};
 
-    const where: any = {};
     if (status) {
       where.status = status;
     }
 
-    // 普通用户可以看到自己的 + 公开共享的项目，管理员可以看所有项目
-    if (!userIsAdmin) {
+    // 根据用户角色和租户过滤
+    if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      // 管理员/ICSL 可见所有
+    } else {
+      // 普通用户：自己的 + 公开的 + 同租户的
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
       where.OR = [
-        { userId: payload.userId },  // 自己创建的
-        { isPublic: true },           // 公开共享的
+        { userId: payload.userId },
+        { ...tenantFilter },
       ];
     }
 
@@ -132,16 +140,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.PROJECT_CREATE });
+    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.PROJECT_CREATE });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const formData = await request.formData();
     const name = formData.get('name') as string;
     const description = formData.get('description') as string;
     const techStackStr = formData.get('techStack') as string;
+    const isPublic = formData.get('isPublic') === 'true';
     const files = formData.getAll('files') as File[];
 
     // 解析技术栈（JSON 字符串）
@@ -162,16 +171,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '请至少上传一个文件' } }, { status: 400 });
     }
 
+    // 验证：只有 ICSL 或平台管理员可创建 public
+    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json({ details: { error: '只有 ICSL 租户可以创建公共资源' } }, { status: 403 });
+    }
+
+    // 获取租户 ID 和可见性
+    const visibility = getVisibility(isPublic);
+    const tenantId = getTenantIdForCreate(tenant, isPublic);
+
     // 获取系统配置中的项目上传目录
     const config = await prisma.opencodeConfig.findFirst({
       where: { isActive: true },
     });
 
     // 使用配置的目录或默认目录
-    const uploadBaseDir = config?.projectUploadDir 
+    const uploadBaseDir = config?.projectUploadDir
       ? config.projectUploadDir
       : join(process.cwd(), 'uploads');
-    
+
     logger.debug(LOG_MODULES.PROJECT, `上传目录: ${uploadBaseDir}`, { userId: payload.userId });
     
     // 创建项目目录
@@ -205,6 +223,8 @@ export async function POST(request: Request) {
         projectPath: projectDir,
         techStack: techStack.length > 0 ? JSON.stringify(techStack) : null,
         userId: payload.userId,
+        tenantId,
+        visibility,
         status: 'idle',
         updatedAt: new Date(),
       },
