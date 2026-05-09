@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -1031,14 +1031,14 @@ model Skill {
   successExecCount                                       Int                         @default(0)
   createdAt                                              DateTime                    @default(now())
   updatedAt                                              DateTime
-  techStackId                                            String?
-  vulnerabilityPatternId                                 String?
+  categoryId                                             String                    @default("cat-vulnerability-mining")
+  vulnerabilityTreeId                                    String?
+  SkillCategory                                          SkillCategory               @relation(fields: [categoryId], references: [id])
+  VulnerabilityTree                                      VulnerabilityTree?          @relation(fields: [vulnerabilityTreeId], references: [id])
   Tenant                                                 Tenant?                     @relation(fields: [tenantId], references: [id])
   User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   Skill                                                  Skill?                      @relation("SkillToSkill", fields: [parentId], references: [id])
   other_Skill                                            Skill[]                     @relation("SkillToSkill")
-  TechStackOption                                        TechStackOption?            @relation(fields: [techStackId], references: [id])
-  VulnerabilityPattern                                   VulnerabilityPattern?       @relation(fields: [vulnerabilityPatternId], references: [id])
   SkillAnalysis                                          SkillAnalysis[]
   SkillDuplicateGroupMember                              SkillDuplicateGroupMember[]
   SkillEvolution                                         SkillEvolution[]
@@ -1050,19 +1050,82 @@ model Skill {
   SkillNewImpactAnalysis                                 SkillNewImpactAnalysis[]
   SkillObservationLog                                    SkillObservationLog[]
   SkillObservationStats                                  SkillObservationStats?
+  SkillProductTag                                        SkillProductTag[]
   SkillVulnerabilityMapping                              SkillVulnerabilityMapping[]
 
   @@unique([userId, name])
-  @@index([visibility])
-  @@index([tenantId])
-  @@index([userId])
-  @@index([name])
-  @@index([isLatest])
-  @@index([version])
-  @@index([isActive])
+  @@index([categoryId])
+  @@index([vulnerabilityTreeId])
   @@index([isPublic])
-  @@index([techStackId])
-  @@index([vulnerabilityPatternId])
+  @@index([isActive])
+  @@index([version])
+  @@index([isLatest])
+  @@index([name])
+  @@index([userId])
+}
+
+model SkillCategory {
+  id              String   @id
+  name            String   @unique
+  displayName     String
+  description     String?
+  icon            String?
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  hasSubDimension Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime
+  Skill           Skill[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+model VulnerabilityTree {
+  id          String            @id
+  name        String
+  displayName String
+  type        String            // 'language' | 'pattern'
+  parentId    String?
+  description String?
+  sortOrder   Int               @default(0)
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime
+  VulnerabilityTree VulnerabilityTree?  @relation("VulnerabilityTreeToTree", fields: [parentId], references: [id])
+  other_VulnerabilityTree VulnerabilityTree[] @relation("VulnerabilityTreeToTree")
+  Skill       Skill[]
+
+  @@index([type])
+  @@index([parentId])
+  @@index([isActive])
+  @@index([name])
+}
+
+model ProductTag {
+  id          String   @id
+  name        String   @unique
+  displayName String
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+  SkillProductTag SkillProductTag[]
+
+  @@index([isActive])
+  @@index([name])
+}
+
+model SkillProductTag {
+  id          String     @id
+  skillId     String
+  productTagId String
+  Skill       Skill      @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  ProductTag  ProductTag @relation(fields: [productTagId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, productTagId])
+  @@index([skillId])
+  @@index([productTagId])
 }
 
 model SkillAnalysis {
@@ -1531,7 +1594,6 @@ model TechStackOption {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime
-  Skill       Skill[]
 
   @@index([name])
   @@index([category])
@@ -1745,7 +1807,6 @@ model VulnerabilityPattern {
   isBuiltin             Boolean               @default(true)
   createdAt             DateTime              @default(now())
   updatedAt             DateTime
-  Skill                 Skill[]
   VulnerabilityCategory VulnerabilityCategory @relation(fields: [categoryId], references: [id])
 
   @@index([isActive])

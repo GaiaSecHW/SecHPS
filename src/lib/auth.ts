@@ -182,6 +182,39 @@ export function verifyTokenAllowExpired(token: string): JWTPayload | null {
   }
 }
 
+/**
+ * Fetch permission data for given roles via paginated raw SQL.
+ * Required because Prisma's `include: { Permission: true }` on Role
+ * queries _PermissionToRole and returns responses that exceed the
+ * path MTU (~1200 bytes) to our remote PostgreSQL server, causing TCP stalls.
+ */
+export async function fetchPermissionsPaginated<T>(
+  roleIds: string[],
+  selectColumns: string,
+  batchSize = 20,
+): Promise<T[]> {
+  if (roleIds.length === 0) return [];
+  const result: T[] = [];
+  for (const roleId of roleIds) {
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const rows = await prisma.$queryRawUnsafe(
+        `SELECT ${selectColumns} FROM "Permission" p` +
+        ` JOIN "_PermissionToRole" ptr ON p.id = ptr."A"` +
+        ` WHERE ptr."B" = $1` +
+        ` ORDER BY p.name` +
+        ` LIMIT ${batchSize} OFFSET ${offset}`,
+        roleId,
+      ) as T[];
+      result.push(...rows);
+      hasMore = rows.length === batchSize;
+      offset += batchSize;
+    }
+  }
+  return result;
+}
+
 // 获取用户完整信息（包含角色、权限和租户）- 使用缓存
 export async function getUserWithPermissions(userId: string): Promise<{
   user: User;
@@ -200,38 +233,32 @@ export async function getUserWithPermissions(userId: string): Promise<{
     permissionCache,
     cacheKey,
     async () => {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: {
-          Tenant: true,  // 包含租户信息
-          UserRole: {
-            include: {
-              Role: {
-                include: {
-                  Permission: true,
-                },
-              },
-            },
-          },
-        },
-      });
+      // Split into flat queries to keep each response small (MTU black hole fix)
+      const [user, userRoles] = await Promise.all([
+        prisma.user.findUnique({
+          where: { id: userId },
+          include: { Tenant: true },
+        }),
+        prisma.userRole.findMany({
+          where: { userId },
+          include: { Role: true },
+        }),
+      ]);
 
       if (!user) {
         return null;
       }
 
-      // 提取所有权限（去重）
-      const permissions = new Set<string>();
-      user.UserRole.forEach(userRole => {
-        userRole.Role.Permission.forEach(permission => {
-          permissions.add(permission.name);
-        });
-      });
+      // Raw SQL with pagination — Prisma's relation queries through _PermissionToRole
+      // produce responses too large for the path MTU (~1200 bytes) to this PostgreSQL host
+      const roleIds = userRoles.map(ur => ur.roleId);
+      const permRows = await fetchPermissionsPaginated<{ name: string }>(roleIds, 'p.name');
+      const permissions = [...new Set(permRows.map(r => r.name))];
 
       return {
         user,
-        roles: user.UserRole.map(ur => ur.Role),
-        permissions: Array.from(permissions),
+        roles: userRoles.map(ur => ur.Role),
+        permissions,
         tenant: user.Tenant ? { id: user.Tenant.id, name: user.Tenant.name, isIcsTenant: user.Tenant.isIcsTenant } : null,
       };
     },

@@ -144,10 +144,10 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
   if (!needsTestCases) {
     return (
       <div className="space-y-6">
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+        <div className="bg-[#0F172A] border border-gray-700/50 rounded-lg p-6 text-center">
           <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">已跳过测试用例</h3>
-          <p className="text-sm text-gray-600 mb-4">
+          <h3 className="text-lg font-medium text-gray-100 mb-2">已跳过测试用例</h3>
+          <p className="text-sm text-gray-400 mb-4">
             你在第一步选择了不需要测试用例。你可以直接进入下一步完成 Skill 创建。
           </p>
           <p className="text-sm text-gray-500">
@@ -158,7 +158,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
         <div className="flex justify-between pt-4 border-t">
           <button
             onClick={onPrevious}
-            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
           >
             上一步
           </button>
@@ -176,12 +176,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
-          <Play className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
+          <Play className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-2">为什么要创建测试用例？</p>
-            <p className="text-blue-700">
+            <p className="text-blue-400">
               测试用例可以帮助验证 Skill 的效果。我们会用这些用例测试 Skill，
               对比有 Skill 和无 Skill 两种情况的效果，帮助你改进 Skill 质量。
             </p>
@@ -192,22 +192,22 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
       {/* 已添加的测试用例列表 */}
       {testCases.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-gray-700">已添加的测试用例 ({testCases.length})</h3>
+          <h3 className="text-sm font-medium text-gray-300">已添加的测试用例 ({testCases.length})</h3>
           {testCases.map((testCase, index) => {
             const isExpanded = expandedId === testCase.id;
             const isEditing = editingId === testCase.id;
             
             return (
-              <div key={testCase.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div key={testCase.id} className="bg-dark-surface border border-gray-700/50 rounded-lg overflow-hidden">
                 {/* 标题栏 - 始终显示 */}
                 <div 
-                  className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                  className="p-4 cursor-pointer hover:bg-[#0F172A] transition-colors"
                   onClick={() => !isEditing && handleToggleExpand(testCase.id)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
-                        <h4 className="text-sm font-medium text-gray-900">
+                        <h4 className="text-sm font-medium text-gray-100">
                           {index + 1}. {testCase.name}
                         </h4>
                         {isExpanded ? (
@@ -224,7 +224,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                       {!isExpanded && testCase.testFiles && testCase.testFiles.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {testCase.testFiles.map((file, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                            <span key={i} className="px-2 py-0.5 bg-gray-100 text-gray-400 text-xs rounded">
                               {file}
                             </span>
                           ))}
@@ -238,7 +238,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                             e.stopPropagation();
                             handleStartEdit(testCase);
                           }}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                          className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-900/20 rounded"
                           title="编辑"
                         >
                           <Edit2 size={16} />
@@ -249,7 +249,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                           e.stopPropagation();
                           handleRemoveTestCase(testCase.id);
                         }}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                        className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded"
                         title="删除"
                       >
                         <Trash2 size={16} />
@@ -260,36 +260,36 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
 
                 {/* 展开内容 */}
                 {isExpanded && (
-                  <div className="border-t border-gray-200 p-4 bg-gray-50">
+                  <div className="border-t border-gray-700/50 p-4 bg-[#0F172A]">
                     {isEditing ? (
                       /* 编辑模式 */
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
                             测试用例名称 <span className="text-red-500">*</span>
                           </label>
                           <input
                             type="text"
                             value={editingTestCase.name || ''}
                             onChange={(e) => setEditingTestCase({ ...editingTestCase, name: e.target.value })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
                             测试提示词 <span className="text-red-500">*</span>
                           </label>
                           <textarea
                             value={editingTestCase.prompt || ''}
                             onChange={(e) => setEditingTestCase({ ...editingTestCase, prompt: e.target.value })}
                             rows={4}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
                             期望输出（可选）
                           </label>
                           <textarea
@@ -297,12 +297,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                             onChange={(e) => setEditingTestCase({ ...editingTestCase, expectedOutput: e.target.value })}
                             rows={4}
                             placeholder="描述你期望的输出结果..."
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                            className="w-full px-3 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
                             <FileText size={14} className="inline mr-1" />
                             测试文件（可选）
                           </label>
@@ -311,12 +311,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                               {editingTestCase.testFiles.map((file, i) => (
                                 <span
                                   key={i}
-                                  className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                                  className="inline-flex items-center px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded"
                                 >
                                   {file}
                                   <button
                                     onClick={() => handleEditTestFileRemove(i)}
-                                    className="ml-1 text-blue-600 hover:text-blue-800"
+                                    className="ml-1 text-blue-400 hover:text-blue-800"
                                   >
                                     ×
                                   </button>
@@ -327,7 +327,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                           <button
                             type="button"
                             onClick={handleEditTestFileAdd}
-                            className="px-3 py-1.5 text-sm border border-gray-300 rounded-md hover:bg-gray-100"
+                            className="px-3 py-1.5 text-sm border border-gray-600 rounded-md hover:bg-dark-surface-hover"
                           >
                             <Plus size={14} className="inline mr-1" />
                             添加文件
@@ -337,7 +337,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                         <div className="flex justify-end gap-2 pt-2">
                           <button
                             onClick={handleCancelEdit}
-                            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-100"
+                            className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-dark-surface-hover"
                           >
                             <X size={16} className="inline mr-1" />
                             取消
@@ -357,7 +357,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                       <div className="space-y-3">
                         <div>
                           <label className="block text-xs font-medium text-gray-500 mb-1">测试提示词</label>
-                          <pre className="text-sm text-gray-800 bg-white p-3 rounded border border-gray-200 whitespace-pre-wrap font-mono">
+                          <pre className="text-sm text-gray-200 bg-dark-surface p-3 rounded border border-gray-700/50 whitespace-pre-wrap font-mono">
                             {testCase.prompt}
                           </pre>
                         </div>
@@ -365,7 +365,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                         {testCase.expectedOutput && (
                           <div>
                             <label className="block text-xs font-medium text-gray-500 mb-1">期望输出</label>
-                            <pre className="text-sm text-gray-800 bg-white p-3 rounded border border-gray-200 whitespace-pre-wrap font-mono">
+                            <pre className="text-sm text-gray-200 bg-dark-surface p-3 rounded border border-gray-700/50 whitespace-pre-wrap font-mono">
                               {testCase.expectedOutput}
                             </pre>
                           </div>
@@ -394,12 +394,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
       )}
 
       {/* 添加新测试用例 */}
-      <div className="border border-gray-300 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-4">添加新测试用例</h3>
+      <div className="border border-gray-600 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-gray-300 mb-4">添加新测试用例</h3>
 
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               测试用例名称 <span className="text-red-500">*</span>
             </label>
             <input
@@ -407,12 +407,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
               value={newTestCase.name}
               onChange={(e) => setNewTestCase({ ...newTestCase, name: e.target.value })}
               placeholder="例如：检测简单 SQL 注入"
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               测试提示词 <span className="text-red-500">*</span>
             </label>
             <textarea
@@ -420,12 +420,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
               onChange={(e) => setNewTestCase({ ...newTestCase, prompt: e.target.value })}
               rows={4}
               placeholder="用户会说的话，例如：&#10;请分析这段 Java 代码中的 SQL 注入漏洞：&#10;&#10;String query = &quot;SELECT * FROM users WHERE id = &quot; + userId;"
-               className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+               className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               期望输出（可选）
             </label>
             <textarea
@@ -433,7 +433,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
               onChange={(e) => setNewTestCase({ ...newTestCase, expectedOutput: e.target.value })}
               rows={6}
               placeholder="描述你期望的输出结果，评估时会与实际输出进行对比..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
             />
             <p className="mt-1 text-xs text-gray-500">
               期望输出用于评估时对比实际输出，帮助判断 Skill 效果。留空则不进行对比。
@@ -441,7 +441,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               <FileText size={16} className="inline mr-1" />
               测试文件（可选）
             </label>
@@ -451,12 +451,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                   {newTestCase.testFiles.map((file, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                      className="inline-flex items-center px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded"
                     >
                       {file}
                       <button
                         onClick={() => handleRemoveTestFile(index)}
-                        className="ml-1 text-blue-600 hover:text-blue-800"
+                        className="ml-1 text-blue-400 hover:text-blue-800"
                       >
                         ×
                       </button>
@@ -471,7 +471,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                   onChange={(e) => setNewTestFile(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && handleAddTestFile()}
                   placeholder="例如：/path/to/test.java"
-                  className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="flex-1 px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
                 <button
                   type="button"
@@ -497,12 +497,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
       </div>
 
       {/* 建议 */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
         <div className="flex items-start">
-          <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+          <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-yellow-800">
             <p className="font-medium mb-1">建议</p>
-            <ul className="text-yellow-700 space-y-1">
+            <ul className="text-yellow-400 space-y-1">
               <li>• 创建 2-5 个测试用例以获得最佳效果</li>
               <li>• 涵盖不同的场景和边缘情况</li>
               <li>• 期望输出应明确描述，便于评估时对比</li>
@@ -515,7 +515,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
       <div className="flex justify-between pt-4 border-t">
         <button
           onClick={onPrevious}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
         >
           上一步
         </button>

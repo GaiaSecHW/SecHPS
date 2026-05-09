@@ -30,12 +30,13 @@ export async function GET(request: Request) {
     const { payload, tenant } = auth as AuthSuccessResult;
 
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get('category') || undefined;
+    const categoryId = searchParams.get('categoryId') || undefined;
+    const languageId = searchParams.get('languageId') || undefined;
+    const patternId = searchParams.get('patternId') || undefined;
+    const productTagId = searchParams.get('productTagId') || undefined;
     const isActive = searchParams.get('isActive');
     const search = searchParams.get('search') || undefined;
     const scope = searchParams.get('scope') || 'all'; // public | mine | all
-    const techStackId = searchParams.get('techStackId') || undefined;
-    const vulnerabilityPatternId = searchParams.get('vulnerabilityPatternId') || undefined;
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || searchParams.get('pageSize') || '20');
 
@@ -44,17 +45,27 @@ export async function GET(request: Request) {
     // 构建查询条件
     const where: Record<string, unknown> = {};
     if (isActive !== null) where.isActive = isActive === 'true';
-    if (techStackId) where.techStackId = techStackId;
-    if (vulnerabilityPatternId) where.vulnerabilityPatternId = vulnerabilityPatternId;
-    if (category) {
-      // category 参数可能是 VulnerabilityCategory.value 或 id，统一转为 id
-      const cat = await prisma.vulnerabilityCategory.findFirst({
-        where: { OR: [{ id: category }, { value: category }] },
+    if (categoryId) where.categoryId = categoryId;
+    if (patternId) where.vulnerabilityTreeId = patternId;
+    if (languageId) {
+      // 查找该语言下的所有 pattern ID
+      const patterns = await prisma.vulnerabilityTree.findMany({
+        where: { parentId: languageId, type: 'pattern' },
         select: { id: true },
       });
-      if (cat) {
-        where.VulnerabilityPattern = { categoryId: cat.id };
-      }
+      const patternIds = patterns.map(p => p.id);
+      // 包含该语言下的 pattern + 通用语言下的 pattern
+      const generalLanguages = await prisma.vulnerabilityTree.findMany({ where: { name: '通用', type: 'language' }, select: { id: true } });
+      const generalLanguageIds = generalLanguages.map(p => p.id);
+      const generalPatterns = await prisma.vulnerabilityTree.findMany({
+        where: { parentId: { in: generalLanguageIds }, type: 'pattern' },
+        select: { id: true },
+      });
+      const generalIds = generalPatterns.map(p => p.id);
+      where.vulnerabilityTreeId = { in: [...patternIds, ...generalIds] };
+    }
+    if (productTagId) {
+      where.SkillProductTag = { some: { productTagId } };
     }
 
     // 默认只返回最新版本
@@ -126,20 +137,19 @@ export async function GET(request: Request) {
       prisma.skill.count({ where }),
     ]);
 
-    // 转换数据格式，添加创建者信息和关联名称
+    // 转换数据格式，添加创建者信息和维度信息
     const skillsWithCreator = skills.map(skill => ({
       ...skill,
       userName: skill.User?.name || null,
       userUsername: skill.User?.username || null,
-      User: undefined, // 移除嵌套的 User 对象
-      // ===== 新增字段：关联名称 =====
-      techStackName: skill.TechStackOption?.name || null,
-      techStackCategory: skill.TechStackOption?.category || null,
-      vulnerabilityPatternName: skill.VulnerabilityPattern?.displayName || skill.VulnerabilityPattern?.name || null,
-      vulnerabilityPatternCategory: skill.VulnerabilityPattern?.VulnerabilityCategory?.value || null,
-      vulnerabilityPatternCwe: skill.VulnerabilityPattern?.cwe || null,
-      TechStackOption: undefined, // 移除嵌套对象
-      VulnerabilityPattern: undefined, // 移除嵌套对象
+      User: undefined,
+      categoryName: skill.SkillCategory?.displayName || null,
+      categoryIcon: skill.SkillCategory?.icon || null,
+      hasSubDimension: skill.SkillCategory?.hasSubDimension || false,
+      patternName: skill.VulnerabilityTree?.displayName || null,
+      languageName: skill.VulnerabilityTree?.VulnerabilityTree?.displayName || null,
+      SkillCategory: undefined,
+      VulnerabilityTree: undefined,
     }));
 
     return NextResponse.json(createPaginatedResponse(skillsWithCreator, total, pageNum, pageLimit));
@@ -164,26 +174,19 @@ export async function POST(request: Request) {
       name,
       displayName,
       description,
-      techStackId,
-      vulnerabilityPatternId,
+      categoryId,
+      vulnerabilityTreeId,
+      productTagIds,
       cwe,
       content,
       isPublic = false,
     } = body;
 
     // 验证必填字段
-    if (!name || !displayName || !description || !content) {
+    if (!name || !displayName || !description || !content || !categoryId) {
       return NextResponse.json(
-        { details: { error: '缺少必填字段：名称、显示名称、描述、内容' } },
+        { details: { error: '缺少必填字段：名称、显示名称、描述、内容、分类' } },
         { status: 400 }
-      );
-    }
-
-    // 租户检查：只有 ICSL 或平台管理员可以创建公开资源
-    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
-      return NextResponse.json(
-        { details: { error: '只有 ICSL 租户可以创建公共资源' } },
-        { status: 403 }
       );
     }
 
@@ -191,30 +194,25 @@ export async function POST(request: Request) {
     const visibility = getVisibility(isPublic);
     const tenantId = getTenantIdForCreate(tenant, isPublic);
 
-    // ===== 新字段验证 =====
-    // 验证 techStackId 存在性（如果提供）
-    if (techStackId) {
-      const techStackOption = await prisma.techStackOption.findUnique({
-        where: { id: techStackId },
-      });
-      if (!techStackOption) {
-        return NextResponse.json(
-          { details: { error: `技术栈 ID "${techStackId}" 不存在` } },
-          { status: 400 }
-        );
-      }
+    // 验证 categoryId 存在性
+    const skillCategory = await prisma.skillCategory.findUnique({ where: { id: categoryId } });
+    if (!skillCategory) {
+      return NextResponse.json({ details: { error: `分类 ID "${categoryId}" 不存在` } }, { status: 400 });
     }
 
-    // 验证 vulnerabilityPatternId 存在性（如果提供）
-    if (vulnerabilityPatternId) {
-      const vulnerabilityPattern = await prisma.vulnerabilityPattern.findUnique({
-        where: { id: vulnerabilityPatternId },
-      });
-      if (!vulnerabilityPattern) {
-        return NextResponse.json(
-          { details: { error: `漏洞类型 ID "${vulnerabilityPatternId}" 不存在` } },
-          { status: 400 }
-        );
+    // 如果分类需要第二维度，vulnerabilityTreeId 必填
+    if (skillCategory.hasSubDimension && !vulnerabilityTreeId) {
+      return NextResponse.json(
+        { details: { error: `分类 "${skillCategory.displayName}" 需要指定漏洞模式` } },
+        { status: 400 }
+      );
+    }
+
+    // 验证 vulnerabilityTreeId 是 pattern 类型的叶子节点
+    if (vulnerabilityTreeId) {
+      const treeNode = await prisma.vulnerabilityTree.findUnique({ where: { id: vulnerabilityTreeId } });
+      if (!treeNode || treeNode.type !== 'pattern') {
+        return NextResponse.json({ details: { error: `漏洞模式 ID "${vulnerabilityTreeId}" 无效` } }, { status: 400 });
       }
     }
 
@@ -256,8 +254,8 @@ export async function POST(request: Request) {
         name,
         displayName,
         description,
-        techStackId: techStackId || null,
-        vulnerabilityPatternId: vulnerabilityPatternId || null,
+        categoryId,
+        vulnerabilityTreeId: vulnerabilityTreeId || null,
         cwe: cwe || null,
         content,
         userId,
@@ -267,6 +265,14 @@ export async function POST(request: Request) {
         version: 1,
         isLatest: true,
         updatedAt: new Date(),
+        ...(productTagIds?.length > 0 && {
+          SkillProductTag: {
+            create: productTagIds.map((tagId: string) => ({
+              id: generateId('spt'),
+              productTagId: tagId,
+            })),
+          },
+        }),
       },
     });
 
@@ -310,8 +316,6 @@ export async function POST(request: Request) {
           description: true,
           cwe: true,
           content: true,
-          techStackId: true,
-          vulnerabilityPatternId: true,
         },
       });
 

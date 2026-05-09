@@ -437,7 +437,7 @@ function SkillsEvolutionContent() {
       case 'rejected':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-dark-surface-hover text-gray-200';
     }
   };
 
@@ -467,8 +467,8 @@ function SkillsEvolutionContent() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Skills 进化管理</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-100">Skills 进化管理</h1>
+          <p className="mt-1 text-sm text-gray-400">
             管理 AI 技能的进化和优化
           </p>
         </div>
@@ -489,8 +489,8 @@ function SkillsEvolutionContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Skills 进化管理</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-100">Skills 进化管理</h1>
+          <p className="mt-1 text-sm text-gray-400">
             监控 Skill 精准率，自动触发进化优化
           </p>
         </div>
@@ -516,11 +516,11 @@ function SkillsEvolutionContent() {
         {/* Global Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Skills */}
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">总 Skills</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics?.overview.totalSkills || 0}</p>
+              <p className="text-2xl font-bold text-gray-100">{metrics?.overview.totalSkills || 0}</p>
               <p className="text-xs text-gray-400 mt-1">
                 有数据: {metrics?.overview.skillsWithData || 0}
               </p>
@@ -532,11 +532,11 @@ function SkillsEvolutionContent() {
         </div>
 
         {/* Average Precision */}
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">平均精准率</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-2xl font-bold text-gray-100">
                 {formatPrecision(metrics?.overview.averagePrecision || 0)}
               </p>
               <p className="text-xs text-gray-400 mt-1">
@@ -550,35 +550,35 @@ function SkillsEvolutionContent() {
             }`}>
               <Target className={`h-6 w-6 ${
                 (metrics?.overview.averagePrecision || 0) >= (metrics?.config.precisionThreshold || 0.7)
-                  ? 'text-green-600'
-                  : 'text-yellow-600'
+                  ? 'text-green-400'
+                  : 'text-yellow-400'
               }`} />
             </div>
           </div>
         </div>
 
         {/* Evolution Tasks */}
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">进化任务</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics?.taskStats.total || 0}</p>
+              <p className="text-2xl font-bold text-gray-100">{metrics?.taskStats.total || 0}</p>
               <p className="text-xs text-gray-400 mt-1">
                 待处理: {metrics?.taskStats.pending || 0} | 分析中: {metrics?.taskStats.analyzing || 0}
               </p>
             </div>
             <div className="p-3 bg-blue-100 rounded-lg">
-              <Activity className="h-6 w-6 text-blue-600" />
+              <Activity className="h-6 w-6 text-blue-400" />
             </div>
           </div>
         </div>
 
         {/* Evolution History */}
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">进化历史</p>
-              <p className="text-2xl font-bold text-gray-900">{metrics?.overview.evolutionHistoryCount || 0}</p>
+              <p className="text-2xl font-bold text-gray-100">{metrics?.overview.evolutionHistoryCount || 0}</p>
               <p className="text-xs text-gray-400 mt-1">
                 完成: {metrics?.taskStats.completed || 0} | 拒绝: {metrics?.taskStats.rejected || 0}
               </p>
@@ -592,47 +592,47 @@ function SkillsEvolutionContent() {
 
       {/* Findings Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
-              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CheckCircle className="h-5 w-5 text-green-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500">正确发现</p>
-              <p className="text-xl font-bold text-green-600">{metrics?.overview.totalConfirmed || 0}</p>
+              <p className="text-xl font-bold text-green-400">{metrics?.overview.totalConfirmed || 0}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-red-100 rounded-lg">
-              <XCircle className="h-5 w-5 text-red-600" />
+              <XCircle className="h-5 w-5 text-red-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500">误报</p>
-              <p className="text-xl font-bold text-red-600">{metrics?.overview.totalFalsePositives || 0}</p>
+              <p className="text-xl font-bold text-red-400">{metrics?.overview.totalFalsePositives || 0}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
-              <BarChart3 className="h-5 w-5 text-blue-600" />
+              <BarChart3 className="h-5 w-5 text-blue-400" />
             </div>
             <div>
               <p className="text-sm text-gray-500">总发现数</p>
-              <p className="text-xl font-bold text-blue-600">{metrics?.overview.totalFindings || 0}</p>
+              <p className="text-xl font-bold text-blue-400">{metrics?.overview.totalFindings || 0}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Evolution Config Section */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
+        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Settings className="h-5 w-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-900">进化配置</h2>
+            <Settings className="h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-100">进化配置</h2>
           </div>
           <div className="flex items-center gap-2">
             {config?.config.isActive ? (
@@ -640,7 +640,7 @@ function SkillsEvolutionContent() {
                 已启用
               </span>
             ) : (
-              <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+              <span className="px-2 py-1 text-xs bg-dark-surface-hover text-gray-400 rounded-full">
                 已禁用
               </span>
             )}
@@ -661,7 +661,7 @@ function SkillsEvolutionContent() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     精准率阈值 (0-1)
                   </label>
                   <input
@@ -671,12 +671,12 @@ function SkillsEvolutionContent() {
                     max="1"
                     value={configForm.precisionThreshold}
                     onChange={(e) => setConfigForm({ ...configForm, precisionThreshold: parseFloat(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">低于此值的 Skill 将触发进化</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     最小误报数
                   </label>
                   <input
@@ -684,12 +684,12 @@ function SkillsEvolutionContent() {
                     min="0"
                     value={configForm.minFalsePositives}
                     onChange={(e) => setConfigForm({ ...configForm, minFalsePositives: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">至少需要这么多误报才能触发进化</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     最小确认数
                   </label>
                   <input
@@ -697,12 +697,12 @@ function SkillsEvolutionContent() {
                     min="0"
                     value={configForm.minConfirmed}
                     onChange={(e) => setConfigForm({ ...configForm, minConfirmed: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">至少需要这么多确认才能触发进化</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     每日最大任务数
                   </label>
                   <input
@@ -710,7 +710,7 @@ function SkillsEvolutionContent() {
                     min="1"
                     value={configForm.maxDailyTasks}
                     onChange={(e) => setConfigForm({ ...configForm, maxDailyTasks: parseInt(e.target.value) })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   />
                   <p className="text-xs text-gray-500 mt-1">每天最多创建的进化任务数</p>
                 </div>
@@ -722,13 +722,13 @@ function SkillsEvolutionContent() {
                     type="checkbox"
                     checked={configForm.isActive}
                     onChange={(e) => setConfigForm({ ...configForm, isActive: e.target.checked })}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
                   />
-                  <span className="text-sm text-gray-700">启用自动进化</span>
+                  <span className="text-sm text-gray-300">启用自动进化</span>
                 </label>
               </div>
               
-              <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-3 pt-4 border-t border-gray-700/50">
                 <button
                   onClick={handleSaveConfig}
                   disabled={savingConfig}
@@ -749,7 +749,7 @@ function SkillsEvolutionContent() {
                 <button
                   onClick={handleResetConfig}
                   disabled={savingConfig}
-                  className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
+                  className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-dark-surface-hover disabled:opacity-50"
                 >
                   重置为默认
                 </button>
@@ -764,7 +764,7 @@ function SkillsEvolutionContent() {
                       isActive: config?.config.isActive || true,
                     });
                   }}
-                  className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                  className="inline-flex items-center px-4 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-dark-surface-hover"
                 >
                   取消
                 </button>
@@ -774,25 +774,25 @@ function SkillsEvolutionContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-gray-500">精准率阈值</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold text-gray-100">
                   {formatPrecision(config?.config.precisionThreshold || 0.7)}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">最小误报数</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold text-gray-100">
                   {config?.config.minFalsePositives || 5}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">最小确认数</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold text-gray-100">
                   {config?.config.minConfirmed || 3}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-gray-500">每日最大任务数</p>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold text-gray-100">
                   {config?.config.maxDailyTasks || 10}
                 </p>
               </div>
@@ -802,11 +802,11 @@ function SkillsEvolutionContent() {
       </div>
 
       {/* Skills Needing Evolution */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
+        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-600" />
-            <h2 className="text-lg font-semibold text-gray-900">待进化 Skills</h2>
+            <AlertTriangle className="h-5 w-5 text-yellow-400" />
+            <h2 className="text-lg font-semibold text-gray-100">待进化 Skills</h2>
             <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
               {metrics?.overview.skillsNeedingEvolution || 0} 个
             </span>
@@ -814,7 +814,7 @@ function SkillsEvolutionContent() {
         </div>
         
         {/* 触发条件说明 */}
-        <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+        <div className="px-4 py-2 bg-blue-900/20 border-b border-blue-100">
           <div className="text-xs text-blue-800">
             <span className="font-medium">触发条件：</span> 有执行记录 + 有误报记录 + 精准率 &lt; {formatPrecision(metrics?.config.precisionThreshold || 0.7)}
             <span className="mx-2 text-blue-400">|</span>
@@ -822,11 +822,11 @@ function SkillsEvolutionContent() {
           </div>
         </div>
         
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-700/50">
           {metrics?.skillsNeedingEvolution.length === 0 ? (
             <div className="p-8 text-center">
               <CheckCircle className="mx-auto h-12 w-12 text-green-400" />
-              <p className="mt-2 text-sm text-gray-600">
+              <p className="mt-2 text-sm text-gray-400">
                 所有 Skills 精准率达标，无需进化
               </p>
             </div>
@@ -834,16 +834,16 @@ function SkillsEvolutionContent() {
             metrics?.skillsNeedingEvolution.map((skill) => (
               <div key={skill.skillId} className="p-4">
                 <div
-                  className="cursor-pointer hover:bg-gray-50 transition-colors -mx-4 -my-4 px-4 py-4"
+                  className="cursor-pointer hover:bg-[#0F172A] transition-colors -mx-4 -my-4 px-4 py-4"
                   onClick={() => setExpandedSkill(expandedSkill === skill.skillId ? null : skill.skillId)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="p-2 bg-yellow-100 rounded-lg">
-                        <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                        <AlertTriangle className="h-5 w-5 text-yellow-400" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{skill.displayName}</h3>
+                        <h3 className="font-semibold text-gray-100">{skill.displayName}</h3>
                         <p className="text-sm text-gray-500">{skill.skillName}</p>
                       </div>
                     </div>
@@ -851,23 +851,23 @@ function SkillsEvolutionContent() {
                       <div className="flex items-center gap-4 text-sm">
                         <div className="text-center">
                           <p className="text-xs text-gray-500">执行次数</p>
-                          <p className="font-medium text-gray-900">{skill.totalExecutions}</p>
+                          <p className="font-medium text-gray-100">{skill.totalExecutions}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-gray-500">发现漏洞</p>
-                          <p className="font-medium text-gray-900">{skill.totalFindings}</p>
+                          <p className="font-medium text-gray-100">{skill.totalFindings}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-gray-500">已确认</p>
-                          <p className="font-medium text-green-600">{skill.confirmedCount}</p>
+                          <p className="font-medium text-green-400">{skill.confirmedCount}</p>
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-gray-500">误报</p>
-                          <p className="font-medium text-red-600">{skill.falsePositiveCount}</p>
+                          <p className="font-medium text-red-400">{skill.falsePositiveCount}</p>
                         </div>
-                        <div className="text-center px-3 py-1 bg-red-50 rounded">
+                        <div className="text-center px-3 py-1 bg-red-900/20 rounded">
                           <p className="text-xs text-gray-500">精准率</p>
-                          <p className="font-semibold text-red-600">{formatPrecision(skill.precision)}</p>
+                          <p className="font-semibold text-red-400">{formatPrecision(skill.precision)}</p>
                         </div>
                       </div>
                       {expandedSkill === skill.skillId ? (
@@ -880,7 +880,7 @@ function SkillsEvolutionContent() {
                 </div>
                 
                 {expandedSkill === skill.skillId && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 bg-gray-50 -mx-4 px-4">
+                  <div className="mt-4 pt-4 border-t border-gray-700/50 bg-[#0F172A] -mx-4 px-4">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => navigateToSkillDetail(skill.skillId)}
@@ -920,7 +920,7 @@ function SkillsEvolutionContent() {
         
         {/* Pagination for skills needing evolution */}
         {metrics?.skillsPagination?.totalPages && metrics.skillsPagination.totalPages > 1 && (
-          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+          <div className="px-4 py-3 bg-[#0F172A] border-t border-gray-700/50 flex items-center justify-between">
             <span className="text-sm text-gray-500">
               第 {skillsPage} / {metrics.skillsPagination.totalPages} 页 (共 {metrics.skillsPagination.total} 个)
             </span>
@@ -928,14 +928,14 @@ function SkillsEvolutionContent() {
               <button
                 onClick={() => setSkillsPage(Math.max(1, skillsPage - 1))}
                 disabled={skillsPage === 1}
-                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronDown size={16} className="rotate-90" />
               </button>
               <button
                 onClick={() => setSkillsPage(Math.min(metrics.skillsPagination.totalPages, skillsPage + 1))}
                 disabled={skillsPage === metrics.skillsPagination.totalPages}
-                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronUp size={16} className="rotate-90" />
               </button>
@@ -945,11 +945,11 @@ function SkillsEvolutionContent() {
       </div>
 
       {/* Evolution Task History */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
+        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <History className="h-5 w-5 text-gray-600" />
-            <h2 className="text-lg font-semibold text-gray-900">进化任务历史</h2>
+            <History className="h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-100">进化任务历史</h2>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-500">
@@ -958,11 +958,11 @@ function SkillsEvolutionContent() {
           </div>
         </div>
         
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-700/50">
           {tasks?.tasks.length === 0 ? (
             <div className="p-8 text-center">
               <Clock className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">
+              <p className="mt-2 text-sm text-gray-400">
                 暂无进化任务记录
               </p>
             </div>
@@ -970,7 +970,7 @@ function SkillsEvolutionContent() {
             tasks?.tasks.map((task) => (
               <div key={task.id} className="p-4">
                 <div
-                  className="cursor-pointer hover:bg-gray-50 transition-colors -mx-4 -my-4 px-4 py-4"
+                  className="cursor-pointer hover:bg-[#0F172A] transition-colors -mx-4 -my-4 px-4 py-4"
                   onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
                 >
                   <div className="flex items-center justify-between">
@@ -982,17 +982,17 @@ function SkillsEvolutionContent() {
                         'bg-yellow-100'
                       }`}>
                         {task.status === 'completed' ? (
-                          <CheckCircle className="h-5 w-5 text-green-600" />
+                          <CheckCircle className="h-5 w-5 text-green-400" />
                         ) : task.status === 'rejected' ? (
-                          <XCircle className="h-5 w-5 text-red-600" />
+                          <XCircle className="h-5 w-5 text-red-400" />
                         ) : task.status === 'analyzing' ? (
-                          <Play className="h-5 w-5 text-blue-600" />
+                          <Play className="h-5 w-5 text-blue-400" />
                         ) : (
-                          <Clock className="h-5 w-5 text-yellow-600" />
+                          <Clock className="h-5 w-5 text-yellow-400" />
                         )}
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{task.Skill.displayName}</h3>
+                        <h3 className="font-semibold text-gray-100">{task.Skill.displayName}</h3>
                         <p className="text-sm text-gray-500">{task.Skill.name}</p>
                       </div>
                     </div>
@@ -1004,7 +1004,7 @@ function SkillsEvolutionContent() {
                            task.status === 'completed' ? '已完成' :
                            task.status === 'rejected' ? '已拒绝' : task.status}
                         </span>
-                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                        <span className="px-2 py-1 text-xs bg-dark-surface-hover text-gray-400 rounded-full">
                           {getTriggerReasonLabel(task.triggerReason)}
                         </span>
                       </div>
@@ -1023,29 +1023,29 @@ function SkillsEvolutionContent() {
                 </div>
                 
                 {expandedTask === task.id && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 bg-gray-50 -mx-4 px-4">
+                  <div className="mt-4 pt-4 border-t border-gray-700/50 bg-[#0F172A] -mx-4 px-4">
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-xs text-gray-500">触发原因</p>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-gray-100">
                           {getTriggerReasonLabel(task.triggerReason)}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">误报数</p>
-                        <p className="text-sm font-medium text-red-600">
+                        <p className="text-sm font-medium text-red-400">
                           {task.falsePositiveCount}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">确认数</p>
-                        <p className="text-sm font-medium text-green-600">
+                        <p className="text-sm font-medium text-green-400">
                           {task.confirmedCount}
                         </p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500">进化前精准率</p>
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium text-gray-100">
                           {formatPrecision(task.precisionBefore)}
                         </p>
                       </div>
@@ -1093,7 +1093,7 @@ function SkillsEvolutionContent() {
         
         {/* Pagination */}
         {tasks?.pagination?.totalPages && tasks.pagination.totalPages > 1 && (
-          <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+          <div className="px-4 py-3 bg-[#0F172A] border-t border-gray-700/50 flex items-center justify-between">
             <span className="text-sm text-gray-500">
               第 {tasksPage} / {tasks.pagination.totalPages} 页
             </span>
@@ -1101,14 +1101,14 @@ function SkillsEvolutionContent() {
               <button
                 onClick={() => setTasksPage(Math.max(1, tasksPage - 1))}
                 disabled={tasksPage === 1}
-                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronDown size={16} className="rotate-90" />
               </button>
               <button
                 onClick={() => setTasksPage(Math.min(tasks.pagination.totalPages, tasksPage + 1))}
                 disabled={tasksPage === tasks.pagination.totalPages}
-                className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronUp size={16} className="rotate-90" />
               </button>

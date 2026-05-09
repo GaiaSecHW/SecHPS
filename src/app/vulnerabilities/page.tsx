@@ -48,11 +48,11 @@ const statusColors: Record<string, string> = {
   new: 'bg-blue-100 text-blue-800',
   pending: 'bg-gray-100 text-gray-800',
   confirmed: 'bg-yellow-100 text-yellow-800',
-  'false-positive': 'bg-gray-100 text-gray-600',
-  false_positive: 'bg-gray-100 text-gray-600',
+  'false-positive': 'bg-gray-100 text-gray-400',
+  false_positive: 'bg-gray-100 text-gray-400',
   fixed: 'bg-green-100 text-green-800',
   verified: 'bg-purple-100 text-purple-800',
-  closed: 'bg-gray-100 text-gray-600',
+  closed: 'bg-gray-100 text-gray-400',
 };
 
 const statusLabels: Record<string, string> = {
@@ -71,7 +71,7 @@ const severityColors: Record<string, string> = {
   high: 'bg-orange-100 text-orange-800',
   medium: 'bg-yellow-100 text-yellow-800',
   low: 'bg-blue-100 text-blue-800',
-  info: 'bg-gray-100 text-gray-600',
+  info: 'bg-gray-100 text-gray-400',
 };
 
 export default function VulnerabilitiesPage() {
@@ -234,18 +234,18 @@ function VulnerabilitiesPageContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-[#0F172A] p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-red-100 rounded-lg">
                 <Bug className="h-6 w-6 text-red-600" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">漏洞列表</h1>
-                <p className="text-sm text-gray-600 mt-1">
+                <h1 className="text-2xl font-bold text-gray-100">漏洞列表</h1>
+                <p className="text-sm text-gray-400 mt-1">
                   共 {totalCount} 个漏洞记录
                 </p>
               </div>
@@ -254,7 +254,7 @@ function VulnerabilitiesPageContent() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-4">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* 搜索框 */}
             <div className="flex-1">
@@ -267,7 +267,7 @@ function VulnerabilitiesPageContent() {
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     onKeyDown={handleSearchKeyDown}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
                 <button
@@ -280,7 +280,7 @@ function VulnerabilitiesPageContent() {
                 {searchTerm && (
                   <button
                     onClick={handleClearSearch}
-                    className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                    className="px-4 py-2 bg-gray-200 text-gray-300 rounded-lg hover:bg-gray-300 transition-colors"
                   >
                     清除
                   </button>
@@ -298,7 +298,7 @@ function VulnerabilitiesPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ status: e.target.value || null, page: null });
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 {statusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -318,7 +318,7 @@ function VulnerabilitiesPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ skillId: e.target.value || null, page: null });
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">所有 Skill</option>
                 {skills.map((skill) => (
@@ -339,13 +339,13 @@ function VulnerabilitiesPageContent() {
         )}
 
         {/* Vulnerabilities List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 overflow-hidden">
           {vulnerabilities.length === 0 ? (
             <div className="p-12">
               <div className="text-center">
                 <Shield className="mx-auto h-16 w-16 text-gray-400" />
-                <h3 className="mt-4 text-lg font-medium text-gray-900">暂无漏洞</h3>
-                <p className="mt-2 text-sm text-gray-600">
+                <h3 className="mt-4 text-lg font-medium text-gray-100">暂无漏洞</h3>
+                <p className="mt-2 text-sm text-gray-400">
                   {searchTerm || selectedStatus || selectedSkillId
                     ? '没有找到匹配的漏洞'
                     : '系统运行良好，暂未发现安全漏洞'}
@@ -357,7 +357,7 @@ function VulnerabilitiesPageContent() {
               {vulnerabilities.map((vuln) => (
                 <div
                   key={vuln.id}
-                  className="px-6 py-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="px-6 py-4 hover:bg-[#0F172A] transition-colors cursor-pointer"
                   onClick={() => handleRowClick(vuln.id)}
                 >
                   <div className="flex items-center gap-4">
@@ -367,13 +367,13 @@ function VulnerabilitiesPageContent() {
                     </span>
 
                     {/* 严重程度标签 */}
-                    <span className={`px-2 py-1 text-xs font-medium rounded flex-shrink-0 ${severityColors[vuln.severity] || 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`px-2 py-1 text-xs font-medium rounded flex-shrink-0 ${severityColors[vuln.severity] || 'bg-gray-100 text-gray-400'}`}>
                       {vuln.severity}
                     </span>
 
                     {/* 标题 */}
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">{vuln.title}</h3>
+                      <h3 className="font-semibold text-gray-100 truncate">{vuln.title}</h3>
                       <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
                         {/* 文件位置 */}
                         {vuln.location && (
@@ -411,10 +411,10 @@ function VulnerabilitiesPageContent() {
 
         {/* Pagination */}
         {totalCount > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-4 py-3">
+          <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-400">
                   共 {totalCount} 条记录，第 {currentPage} / {totalPages} 页
                 </span>
                 <select
@@ -424,7 +424,7 @@ function VulnerabilitiesPageContent() {
                     setCurrentPage(1);
                     updateUrlParams({ limit: Number(e.target.value), page: null });
                   }}
-                  className="px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="px-2 py-1 border border-gray-600 rounded text-sm"
                 >
                   <option value="10">10 条/页</option>
                   <option value="20">20 条/页</option>
@@ -439,7 +439,7 @@ function VulnerabilitiesPageContent() {
                     updateUrlParams({ page: null });
                   }}
                   disabled={currentPage === 1}
-                  className="flex items-center p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="首页"
                 >
                   <ChevronLeft size={16} />
@@ -452,12 +452,12 @@ function VulnerabilitiesPageContent() {
                     updateUrlParams({ page: newPage === 1 ? null : newPage });
                   }}
                   disabled={currentPage === 1}
-                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="上一页"
                 >
                   <ChevronLeft size={20} />
                 </button>
-                <span className="px-3 py-1 text-sm text-gray-700">
+                <span className="px-3 py-1 text-sm text-gray-300">
                   {currentPage} / {totalPages}
                 </span>
                 <button
@@ -467,7 +467,7 @@ function VulnerabilitiesPageContent() {
                     updateUrlParams({ page: newPage === 1 ? null : newPage });
                   }}
                   disabled={currentPage === totalPages}
-                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="下一页"
                 >
                   <ChevronRight size={20} />
@@ -478,7 +478,7 @@ function VulnerabilitiesPageContent() {
                     updateUrlParams({ page: totalPages === 1 ? null : totalPages });
                   }}
                   disabled={currentPage === totalPages}
-                  className="flex items-center p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex items-center p-1.5 text-gray-400 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="末页"
                 >
                   <ChevronRight size={16} />

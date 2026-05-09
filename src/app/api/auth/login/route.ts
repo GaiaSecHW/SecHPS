@@ -32,12 +32,7 @@ export async function POST(request: Request) {
     });
 
     if (!user) {
-      // 登录失败：用户不存在
-      logger.loginFailedNoUser(username, '用户不存在');
-      return NextResponse.json(
-        { error: '用户名或密码错误' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: '用户名或密码错误' }, { status: 401 });
     }
 
     // 验证密码
@@ -64,14 +59,13 @@ export async function POST(request: Request) {
 
     // 获取用户权限
     const userWithPerms = await getUserWithPermissions(user.id);
-    
     if (!userWithPerms) {
       return NextResponse.json(
         { error: '获取用户权限失败' },
         { status: 500 }
       );
     }
-    
+
     const { roles, permissions, tenant } = userWithPerms;
 
     // 清除用户缓存，确保获取最新权限
@@ -79,7 +73,7 @@ export async function POST(request: Request) {
 
     // 生成 JWT Token（包含租户信息）
     const token = generateToken(user, roles, permissions, tenant);
-    
+
     // 生成 Refresh Token
     const refreshToken = generateRefreshToken(user.id);
 
@@ -87,7 +81,7 @@ export async function POST(request: Request) {
     await auditLogAuth('login', user.id, request, {
       metadata: { method: 'username_password' },
     });
-    
+
     // 登录成功日志
     logger.loginSuccess(user.id, user.username, { roles: roles.map(r => r.name) });
 

@@ -155,21 +155,21 @@ export default function ToolPermissionsPage() {
     switch (permission) {
       case 'allow':
         return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-green-500/15 text-green-400 border border-green-500/20">
             <Check className="w-3 h-3 mr-1" />
             允许
           </span>
         );
       case 'deny':
         return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-red-500/15 text-red-400 border border-red-500/20">
             <X className="w-3 h-3 mr-1" />
             拒绝
           </span>
         );
       case 'ask':
         return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-yellow-500/15 text-yellow-400 border border-yellow-500/20">
             <AlertCircle className="w-3 h-3 mr-1" />
             询问
           </span>
@@ -180,7 +180,7 @@ export default function ToolPermissionsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
       </div>
     );
   }
@@ -190,7 +190,7 @@ export default function ToolPermissionsPage() {
       <div className="mb-6">
         <Link
           href="/dashboard"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900"
+          className="inline-flex items-center text-gray-400 hover:text-gray-100"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
           返回项目列表
@@ -199,7 +199,7 @@ export default function ToolPermissionsPage() {
 
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">工具权限管理</h1>
+          <h1 className="text-2xl font-bold text-gray-100">工具权限管理</h1>
           <p className="text-sm text-gray-500 mt-1">
             配置工具调用权限规则（允许、拒绝或询问）
           </p>
@@ -210,7 +210,7 @@ export default function ToolPermissionsPage() {
             setEditingPermission(null);
             setShowForm(true);
           }}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           <Plus className="w-4 h-4 mr-2" />
           添加规则
@@ -218,19 +218,19 @@ export default function ToolPermissionsPage() {
       </div>
 
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="mb-4 bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {showForm && (
-        <div className="mb-6 bg-white rounded-lg shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">
+        <div className="mb-6 bg-dark-surface rounded-lg shadow p-6 border border-gray-700/50">
+          <h2 className="text-lg font-semibold mb-4 text-gray-100">
             {editingPermission ? '编辑权限规则' : '添加权限规则'}
           </h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 工具模式 *
               </label>
               <input
@@ -240,7 +240,7 @@ export default function ToolPermissionsPage() {
                   setFormData({ ...formData, toolPattern: e.target.value })
                 }
                 placeholder="例如: Bash(npm:*) 或 Read"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 required
               />
               <p className="mt-1 text-xs text-gray-500">
@@ -249,7 +249,7 @@ export default function ToolPermissionsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 权限 *
               </label>
               <select
@@ -260,7 +260,7 @@ export default function ToolPermissionsPage() {
                     permission: e.target.value as 'allow' | 'deny' | 'ask',
                   })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="allow">允许 - 自动执行</option>
                 <option value="deny">拒绝 - 禁止执行</option>
@@ -269,7 +269,7 @@ export default function ToolPermissionsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-300 mb-1">
                 描述
               </label>
               <textarea
@@ -279,7 +279,7 @@ export default function ToolPermissionsPage() {
                 }
                 placeholder="可选：规则描述"
                 rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -291,13 +291,13 @@ export default function ToolPermissionsPage() {
                   setEditingPermission(null);
                   resetForm();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 bg-dark-surface border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover"
               >
                 取消
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
               >
                 {editingPermission ? '更新' : '创建'}
               </button>
@@ -307,42 +307,42 @@ export default function ToolPermissionsPage() {
       )}
 
       {permissions.length === 0 ? (
-        <div className="bg-white rounded-lg shadow p-8 text-center">
-          <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-500 mb-4">暂无工具权限规则</p>
+        <div className="bg-dark-surface rounded-lg shadow p-8 text-center border border-gray-700/50">
+          <Shield className="w-12 h-12 text-gray-500 mx-auto mb-4" />
+          <p className="text-gray-400 mb-4">暂无工具权限规则</p>
           <button
             onClick={() => setShowForm(true)}
-            className="text-blue-600 hover:text-blue-700"
+            className="text-primary-400 hover:text-primary-300"
           >
             添加第一条规则
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-dark-surface rounded-lg shadow overflow-hidden border border-gray-700/50">
+          <table className="min-w-full divide-y divide-gray-700/50">
+            <thead className="bg-[#162032]">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   工具模式
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   权限
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   描述
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   操作
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="divide-y divide-gray-700/50">
               {permissions.map((permission) => (
-                <tr key={permission.id} className="hover:bg-gray-50">
+                <tr key={permission.id} className="hover:bg-dark-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <Shield className="w-5 h-5 text-gray-400 mr-2" />
-                      <code className="text-sm font-mono text-gray-900 bg-gray-100 px-2 py-1 rounded">
+                      <Shield className="w-5 h-5 text-gray-500 mr-2" />
+                      <code className="text-sm font-mono text-gray-100 bg-dark-surface-hover px-2 py-1 rounded">
                         {permission.toolPattern}
                       </code>
                     </div>
@@ -351,7 +351,7 @@ export default function ToolPermissionsPage() {
                     {getPermissionBadge(permission.permission)}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm text-gray-500 max-w-xs truncate">
+                    <div className="text-sm text-gray-400 max-w-xs truncate">
                       {permission.description || '-'}
                     </div>
                   </td>
@@ -359,13 +359,13 @@ export default function ToolPermissionsPage() {
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => handleEdit(permission)}
-                        className="text-blue-600 hover:text-blue-700"
+                        className="text-blue-400 hover:text-blue-300"
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(permission.id)}
-                        className="text-red-600 hover:text-red-700"
+                        className="text-red-400 hover:text-red-300"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

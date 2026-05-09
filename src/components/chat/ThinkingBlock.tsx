@@ -21,14 +21,14 @@ export function ThinkingBlock({
   }
 
   return (
-    <div className={`bg-gray-50 border border-gray-200 rounded-lg ${className}`}>
+    <div className={`bg-[#0F172A] border border-gray-700/50 rounded-lg ${className}`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-100 transition-colors rounded-lg"
+        className="w-full flex items-center justify-between px-3 py-2 hover:bg-dark-surface-hover transition-colors rounded-lg"
       >
         <div className="flex items-center space-x-2">
-          <Brain size={16} className="text-purple-600" />
-          <span className="text-sm font-medium text-gray-700">思考过程</span>
+          <Brain size={16} className="text-purple-400" />
+          <span className="text-sm font-medium text-gray-300">思考过程</span>
         </div>
         {expanded ? (
           <ChevronUp size={16} className="text-gray-500" />
@@ -38,8 +38,8 @@ export function ThinkingBlock({
       </button>
 
       {expanded && (
-        <div className="px-3 py-2 border-t border-gray-200">
-          <div className="text-sm text-gray-600 italic whitespace-pre-wrap leading-relaxed">
+        <div className="px-3 py-2 border-t border-gray-700/50">
+          <div className="text-sm text-gray-400 italic whitespace-pre-wrap leading-relaxed">
             {content}
           </div>
         </div>

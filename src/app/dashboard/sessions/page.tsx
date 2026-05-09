@@ -1183,11 +1183,11 @@ const getStatusText = (status: string) => {
       case 'failed':
         return 'bg-red-100 text-red-800 border-red-200';
       case 'cancelled':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
+        return 'bg-dark-surface-hover text-gray-200 border-gray-700/50';
       case 'idle':
-        return 'bg-gray-100 text-gray-600 border-gray-200';
+        return 'bg-dark-surface-hover text-gray-400 border-gray-700/50';
       default:
-        return 'bg-gray-100 text-gray-600 border-gray-200';
+        return 'bg-dark-surface-hover text-gray-400 border-gray-700/50';
     }
   };
 
@@ -1203,15 +1203,15 @@ if (loading) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">我的项目</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-100">我的项目</h1>
+          <p className="mt-1 text-sm text-gray-400">
             管理您的 AI 编程评估项目
           </p>
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <Plus size={20} />
           <span>新建项目</span>
@@ -1219,18 +1219,18 @@ if (loading) {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+        <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {projects.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+        <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
           <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">
+          <h3 className="mt-4 text-lg font-medium text-gray-100">
             暂无项目
           </h3>
-          <p className="mt-2 text-sm text-gray-600">
+          <p className="mt-2 text-sm text-gray-400">
             创建您的第一个项目开始 AI 编程
           </p>
         </div>
@@ -1239,24 +1239,24 @@ if (loading) {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
+              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow"
             >
               <div className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-gray-900 truncate max-w-[300px]" title={project.name || '未命名项目'}>
+                    <h3 className="text-lg font-semibold text-gray-100 truncate max-w-[300px]" title={project.name || '未命名项目'}>
                       {project.name || '未命名项目'}
                     </h3>
                     {/* 共享状态标签 */}
                     {project.isPublic && (
-                      <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                      <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-400 rounded text-xs">
                         <Share2 size={12} className="mr-1" />
                         公开
                       </span>
                     )}
                     {/* 所有者标签（显示别人的项目时） */}
                     {project.userName && project.userId !== user?.id && (
-                      <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-xs">
+                      <span className="inline-flex items-center px-2 py-0.5 bg-dark-surface-hover text-gray-400 rounded text-xs">
                         <User size={12} className="mr-1" />
                         {project.userName || project.userUsername}
                       </span>
@@ -1270,7 +1270,7 @@ if (loading) {
                 </div>
 
                 {project.description && (
-                  <p className="mt-2 text-sm text-gray-600 line-clamp-2">
+                  <p className="mt-2 text-sm text-gray-400 line-clamp-2">
                     {project.description}
                   </p>
                 )}
@@ -1288,7 +1288,7 @@ if (loading) {
                           return (
                             <span
                               key={tsId}
-                              className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs"
+                              className="inline-flex items-center px-2 py-0.5 bg-blue-100 text-blue-400 rounded text-xs"
                             >
                               {displayName}
                             </span>
@@ -1301,7 +1301,7 @@ if (loading) {
                   </div>
                 )}
 
-                <p className="mt-2 text-sm text-gray-600">
+                <p className="mt-2 text-sm text-gray-400">
                   创建于 {new Date(project.createdAt).toLocaleString('zh-CN', {
                     year: 'numeric',
                     month: '2-digit',
@@ -1374,12 +1374,12 @@ if (loading) {
                 }
                 
                 const statusConfig: Record<string, { bg: string; border: string; text: string; label: string }> = {
-                  running: { bg: 'bg-blue-50', border: 'border-blue-100', text: 'text-blue-700', label: '运行中' },
-                  preparing: { bg: 'bg-orange-50', border: 'border-orange-100', text: 'text-orange-700', label: '准备中' },
-                  queued: { bg: 'bg-yellow-50', border: 'border-yellow-100', text: 'text-yellow-700', label: '排队中' },
-                  completed: { bg: 'bg-green-50', border: 'border-green-100', text: 'text-green-700', label: '已完成' },
-                  failed: { bg: 'bg-red-50', border: 'border-red-100', text: 'text-red-700', label: '异常' },
-                  cancelled: { bg: 'bg-gray-100', border: 'border-gray-200', text: 'text-gray-700', label: '已中止' },
+                  running: { bg: 'bg-blue-900/20', border: 'border-blue-100', text: 'text-blue-400', label: '运行中' },
+                  preparing: { bg: 'bg-orange-900/20', border: 'border-orange-100', text: 'text-orange-700', label: '准备中' },
+                  queued: { bg: 'bg-yellow-900/20', border: 'border-yellow-100', text: 'text-yellow-400', label: '排队中' },
+                  completed: { bg: 'bg-green-900/20', border: 'border-green-100', text: 'text-green-400', label: '已完成' },
+                  failed: { bg: 'bg-red-900/20', border: 'border-red-100', text: 'text-red-400', label: '异常' },
+                  cancelled: { bg: 'bg-gray-100', border: 'border-gray-700/50', text: 'text-gray-300', label: '已中止' },
                 };
                 const config = statusConfig[latestEval.status] || statusConfig.completed;
                 
@@ -1388,7 +1388,7 @@ if (loading) {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
-                          {isRunning && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                          {isRunning && <Loader2 className="h-4 w-4 animate-spin text-blue-400" />}
                           <span className={`text-sm font-medium ${config.text}`}>
                             {config.label}
                           </span>
@@ -1405,7 +1405,7 @@ if (loading) {
                         {latestEval.status === 'queued' && (
                           <button
                             onClick={() => cancelQueuedEvaluation(latestEval.id)}
-                            className="text-xs text-yellow-700 hover:text-yellow-900 flex items-center space-x-1"
+                            className="text-xs text-yellow-400 hover:text-yellow-900 flex items-center space-x-1"
                           >
                             <XCircle size={12} />
                             <span>取消排队</span>
@@ -1424,7 +1424,7 @@ if (loading) {
                 );
               })()}
 
-              <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
+              <div className="bg-dark-bg px-6 py-3 border-t border-gray-700/50">
                 {/* 第一行：灰盒渗透、漏洞管理 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex space-x-2">
@@ -1438,13 +1438,13 @@ if (loading) {
                     </button>
                     <button
                       onClick={() => handleVulnerabilityManagement(project)}
-                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-red-600 hover:text-red-800"
+                      className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-red-400 hover:text-red-800"
                       title="漏洞管理"
                     >
                       <Bug size={16} />
                       <span>漏洞管理</span>
                       {project.vulnerabilityCount && project.vulnerabilityCount > 0 && (
-                        <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                        <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-600 text-white rounded-full">
                           {project.vulnerabilityCount}
                         </span>
                       )}
@@ -1463,7 +1463,7 @@ if (loading) {
                           setShowWorkflowModal(true);
                         }}
                         disabled={startingProject === project.id || project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued' || e.status === 'preparing')}
-                        className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-600 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-400 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Play size={16} />
                         <span>{startingProject === project.id ? '启动中...' : '启动评估'}</span>
@@ -1473,7 +1473,7 @@ if (loading) {
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => openEditModal(project)}
-                        className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
+                        className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-400 hover:bg-dark-surface-hover rounded"
                         title="编辑"
                       >
                         <Edit2 size={14} />
@@ -1482,7 +1482,7 @@ if (loading) {
                     )}
                     <button
                       onClick={() => openHistoryModal(project)}
-                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-600 hover:bg-gray-100 rounded"
+                      className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-blue-400 hover:bg-dark-surface-hover rounded"
                       title="评估历史"
                     >
                       <History size={14} />
@@ -1492,7 +1492,7 @@ if (loading) {
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => deleteProject(project.id)}
-                        className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-red-600 hover:bg-red-50 rounded"
+                        className="flex items-center space-x-1 px-2 py-1 text-sm text-gray-500 hover:text-red-400 hover:bg-red-900/20 rounded"
                         title="删除"
                       >
                         <Trash2 size={14} />
@@ -1510,9 +1510,9 @@ if (loading) {
       {/* 新建项目对话框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">新建项目</h3>
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">新建项目</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -1522,7 +1522,7 @@ if (loading) {
                   setProjectTechStack([]);
                   setTechStackSearch('');
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -1530,7 +1530,7 @@ if (loading) {
 
             <div className="p-6 space-y-4">
               <div>
-                <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="projectName" className="block text-sm font-medium text-gray-300">
                   项目名称 *
                 </label>
                 <input
@@ -1539,13 +1539,13 @@ if (loading) {
                   required
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   placeholder="请输入项目名称"
                 />
               </div>
 
               <div>
-                <label htmlFor="projectDescription" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="projectDescription" className="block text-sm font-medium text-gray-300">
                   项目描述
                 </label>
                 <textarea
@@ -1553,14 +1553,14 @@ if (loading) {
                   rows={3}
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   placeholder="请输入项目描述（可选）"
                 />
               </div>
 
               {/* 技术栈选择 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   技术栈
                 </label>
                 <div className="relative">
@@ -1577,7 +1577,7 @@ if (loading) {
                         <button
                           type="button"
                           onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== tsId))}
-                          className="ml-2 text-blue-600 hover:text-blue-800"
+                          className="ml-2 text-blue-400 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
@@ -1596,12 +1596,12 @@ if (loading) {
                       }}
                       onFocus={() => setShowTechStackDropdown(true)}
                       placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                       disabled={loadingTechStack}
                     />
                     {/* 下拉选项 */}
                     {showTechStackDropdown && !loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
                           .filter((option) =>
                             option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
@@ -1617,7 +1617,7 @@ if (loading) {
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
-                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                              className="w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm"
                             >
                               {option.name}
                             </button>
@@ -1633,7 +1633,7 @@ if (loading) {
                       </div>
                     )}
                     {loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
+                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg p-4">
                         <div className="flex items-center justify-center">
                           <Loader2 className="h-4 w-4 animate-spin mr-2" />
                           <span className="text-sm text-gray-500">加载技术栈选项...</span>
@@ -1648,25 +1648,25 @@ if (loading) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   上传文件
                 </label>
                 <div 
-                  className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-blue-400 transition-colors"
+                  className="border-2 border-dashed border-gray-600 rounded-md p-6 hover:border-blue-400 transition-colors"
                   onDragOver={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    e.currentTarget.classList.add('border-blue-400', 'bg-blue-50');
+                    e.currentTarget.classList.add('border-blue-400', 'bg-blue-900/20');
                   }}
                   onDragLeave={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+                    e.currentTarget.classList.remove('border-blue-400', 'bg-blue-900/20');
                   }}
                   onDrop={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50');
+                    e.currentTarget.classList.remove('border-blue-400', 'bg-blue-900/20');
                     const files = Array.from(e.dataTransfer.files);
                     if (files.length > 0) {
                       handleFileDrop(files);
@@ -1678,7 +1678,7 @@ if (loading) {
                     <div className="mt-4">
                       <label
                         htmlFor="file-upload"
-                        className="cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500"
+                        className="cursor-pointer rounded-md font-medium text-blue-400 hover:text-blue-500"
                       >
                         <span>点击上传文件</span>
                         <input
@@ -1704,13 +1704,13 @@ if (loading) {
                 {uploadedFiles.length > 0 && (
                   <div className="mt-4 space-y-2">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium text-gray-700">
+                      <p className="text-sm font-medium text-gray-300">
                         已选择 {uploadedFiles.length} 个文件（共 {formatFileSize(getTotalSize())}）
                       </p>
                       <button
                         onClick={clearAllFiles}
                         disabled={uploading}
-                        className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                        className="text-xs text-red-400 hover:text-red-800 disabled:opacity-50"
                       >
                         清空所有
                       </button>
@@ -1718,12 +1718,12 @@ if (loading) {
                     {uploadedFiles.map((file) => (
                       <div
                         key={file.id}
-                        className="flex items-center justify-between p-3 bg-gray-50 rounded-md"
+                        className="flex items-center justify-between p-3 bg-dark-bg rounded-md"
                       >
                         <div className="flex items-center space-x-3">
                           <File size={20} className="text-gray-400" />
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                            <p className="text-sm font-medium text-gray-100">{file.name}</p>
                             <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                           </div>
                         </div>
@@ -1746,7 +1746,7 @@ if (loading) {
                           {file.status === 'pending' && (
                             <button
                               onClick={() => removeFile(file.id)}
-                              className="p-1 text-gray-400 hover:text-red-600"
+                              className="p-1 text-gray-400 hover:text-red-400"
                               title="移除文件"
                             >
                               <X size={16} />
@@ -1760,7 +1760,7 @@ if (loading) {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -1769,14 +1769,14 @@ if (loading) {
                   setUploadedFiles([]);
                 }}
                 disabled={uploading}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-dark-bg disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={createProject}
                 disabled={uploading || !projectName.trim() || uploadedFiles.length === 0}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {uploading ? '创建中...' : `创建项目${uploadedFiles.length > 0 ? `（${uploadedFiles.length} 个文件）` : ''}`}
               </button>
@@ -1788,9 +1788,9 @@ if (loading) {
       {/* 编辑项目对话框 */}
       {showEditModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">编辑项目</h3>
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">编辑项目</h3>
               <button
                 onClick={() => {
                   setShowEditModal(false);
@@ -1801,7 +1801,7 @@ if (loading) {
                   setTechStackSearch('');
                   setUploadedFiles([]);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -1809,7 +1809,7 @@ if (loading) {
 
             <div className="p-6 space-y-4">
               <div>
-                <label htmlFor="editProjectName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="editProjectName" className="block text-sm font-medium text-gray-300">
                   项目名称 *
                 </label>
                 <input
@@ -1818,12 +1818,12 @@ if (loading) {
                   required
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
               <div>
-                <label htmlFor="editProjectDescription" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="editProjectDescription" className="block text-sm font-medium text-gray-300">
                   项目描述
                 </label>
                 <textarea
@@ -1831,13 +1831,13 @@ if (loading) {
                   rows={3}
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
 
               {/* 技术栈选择 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   技术栈
                 </label>
                 <div className="relative">
@@ -1854,7 +1854,7 @@ if (loading) {
                         <button
                           type="button"
                           onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== tsId))}
-                          className="ml-2 text-blue-600 hover:text-blue-800"
+                          className="ml-2 text-blue-400 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
@@ -1873,12 +1873,12 @@ if (loading) {
                       }}
                       onFocus={() => setShowTechStackDropdown(true)}
                       placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                       disabled={loadingTechStack}
                     />
                     {/* 下拉选项 */}
                     {showTechStackDropdown && !loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
                           .filter((option) =>
                             option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
@@ -1894,7 +1894,7 @@ if (loading) {
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
-                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
+                              className="w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm"
                             >
                               {option.name}
                             </button>
@@ -1917,19 +1917,19 @@ if (loading) {
               </div>
 
               {/* 文件管理区域 */}
-              <div className="border-t border-gray-200 pt-4 mt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+              <div className="border-t border-gray-700/50 pt-4 mt-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   文件管理
                 </label>
                 
                 {/* 上传新文件 */}
-                <div className="border-2 border-dashed border-gray-300 rounded-md p-4 mb-4">
+                <div className="border-2 border-dashed border-gray-600 rounded-md p-4 mb-4">
                   <div className="text-center">
                     <Upload className="mx-auto h-8 w-8 text-gray-400" />
                     <div className="mt-2">
                       <label
                         htmlFor="edit-modal-upload"
-                        className="cursor-pointer rounded-md font-medium text-blue-600 hover:text-blue-500"
+                        className="cursor-pointer rounded-md font-medium text-blue-400 hover:text-blue-500"
                       >
                         <span>点击选择文件上传</span>
                         <input
@@ -1952,13 +1952,13 @@ if (loading) {
                   {uploadedFiles.length > 0 && (
                     <div className="mt-4 space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-700">
+                        <p className="text-sm font-medium text-gray-300">
                           待上传 {uploadedFiles.length} 个文件
                         </p>
                         <button
                           onClick={() => setUploadedFiles([])}
                           disabled={uploadingFiles}
-                          className="text-xs text-red-600 hover:text-red-800 disabled:opacity-50"
+                          className="text-xs text-red-400 hover:text-red-800 disabled:opacity-50"
                         >
                           清空
                         </button>
@@ -1966,12 +1966,12 @@ if (loading) {
                       {uploadedFiles.map((file) => (
                         <div
                           key={file.id}
-                          className="flex items-center justify-between p-2 bg-gray-50 rounded-md"
+                          className="flex items-center justify-between p-2 bg-dark-bg rounded-md"
                         >
                           <div className="flex items-center space-x-2">
                             <File size={16} className="text-gray-400" />
                             <div>
-                              <p className="text-sm text-gray-900">{file.name}</p>
+                              <p className="text-sm text-gray-100">{file.name}</p>
                               <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                             </div>
                           </div>
@@ -1988,7 +1988,7 @@ if (loading) {
                             {file.status === 'pending' && (
                               <button
                                 onClick={() => removeFile(file.id)}
-                                className="p-1 text-gray-400 hover:text-red-600"
+                                className="p-1 text-gray-400 hover:text-red-400"
                                 title="移除"
                               >
                                 <X size={14} />
@@ -2010,30 +2010,30 @@ if (loading) {
 
                 {/* 已上传文件列表 */}
                 <div>
-                  <h4 className="text-xs font-medium text-gray-600 mb-2">已上传文件 ({selectedProject.files?.length || 0})</h4>
+                  <h4 className="text-xs font-medium text-gray-400 mb-2">已上传文件 ({selectedProject.files?.length || 0})</h4>
                   {selectedProject.files && selectedProject.files.length > 0 ? (
                     <div className="space-y-1 max-h-40 overflow-y-auto">
                       {selectedProject.files.map((file) => (
                         <div
                           key={file.id}
-                          className="flex items-center justify-between p-2 bg-gray-50 rounded-md text-sm"
+                          className="flex items-center justify-between p-2 bg-dark-bg rounded-md text-sm"
                         >
                           <div className="flex items-center space-x-2">
                             <File size={14} className="text-gray-400" />
-                            <span className="text-gray-900 truncate max-w-[200px]">{file.fileName}</span>
+                            <span className="text-gray-100 truncate max-w-[200px]">{file.fileName}</span>
                             <span className="text-xs text-gray-500">{formatFileSize(file.fileSize)}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <button
                               onClick={() => downloadFile(selectedProject.id, file.id, file.fileName)}
-                              className="p-1 text-gray-400 hover:text-blue-600"
+                              className="p-1 text-gray-400 hover:text-blue-400"
                               title="下载"
                             >
                               <Download size={14} />
                             </button>
                             <button
                               onClick={() => deleteFile(selectedProject.id, file.id)}
-                              className="p-1 text-gray-400 hover:text-red-600"
+                              className="p-1 text-gray-400 hover:text-red-400"
                               title="删除"
                             >
                               <Trash2 size={14} />
@@ -2049,7 +2049,7 @@ if (loading) {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowEditModal(false);
@@ -2061,14 +2061,14 @@ if (loading) {
                   setUploadedFiles([]);
                 }}
                 disabled={uploading}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-dark-bg disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={updateProject}
                 disabled={uploading || !projectName.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {uploading ? '保存中...' : '保存更改'}
               </button>
@@ -2080,15 +2080,15 @@ if (loading) {
       {/* 评估历史对话框 */}
       {showHistoryModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">评估历史</h3>
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">评估历史</h3>
               <button
                 onClick={() => {
                   setShowHistoryModal(false);
                   setSelectedProject(null);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -2100,7 +2100,7 @@ if (loading) {
                   {selectedProject.evaluations.map((evaluation, index) => (
                     <div
                       key={evaluation.id}
-                      className="border border-gray-200 rounded-md p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="border border-gray-700/50 rounded-md p-4 hover:bg-dark-bg cursor-pointer transition-colors"
                       onClick={() => {
                         router.push(`/dashboard/sessions/${selectedProject.id}?evaluationId=${evaluation.id}`);
                         setShowHistoryModal(false);
@@ -2108,7 +2108,7 @@ if (loading) {
                       }}
                     >
                        <div className="flex items-center justify-between mb-2">
-                         <h4 className="text-sm font-medium text-gray-900">
+                         <h4 className="text-sm font-medium text-gray-100">
                            评估 #{index + 1}
                          </h4>
                          <div className="flex items-center space-x-2">
@@ -2160,16 +2160,16 @@ if (loading) {
                                     toast.error('删除失败');
                                   }
                                }}
-                               className="p-1 text-red-600 hover:text-red-800"
+                               className="p-1 text-red-400 hover:text-red-800"
                                title="删除评估"
                              >
                                <Trash2 size={16} />
                              </button>
                            )}
-                           <span className="text-xs text-blue-600 hover:text-blue-800">查看详情 →</span>
+                           <span className="text-xs text-blue-400 hover:text-blue-800">查看详情 →</span>
                          </div>
                        </div>
-                        <div className="text-sm text-gray-600 space-y-1">
+                        <div className="text-sm text-gray-400 space-y-1">
                           <p>开始时间: {new Date(evaluation.startedAt).toLocaleString()}</p>
                           {evaluation.completedAt && (
                             <p>完成时间: {new Date(evaluation.completedAt).toLocaleString()}</p>
@@ -2184,17 +2184,17 @@ if (loading) {
                           {evaluation.status !== 'running' && evaluation.endReason && (
                             <div className={`mt-2 p-2 rounded ${
                               evaluation.endReason === 'completed' 
-                                ? 'bg-green-50 border border-green-200' 
+                                ? 'bg-green-900/20 border border-green-200' 
                                 : evaluation.endReason === 'stopped'
-                                ? 'bg-yellow-50 border border-yellow-200'
-                                : 'bg-red-50 border border-red-200'
+                                ? 'bg-yellow-900/20 border border-yellow-200'
+                                : 'bg-red-900/20 border border-red-200'
                             }`}>
                               <p className={`font-medium ${
                                 evaluation.endReason === 'completed' 
-                                  ? 'text-green-700' 
+                                  ? 'text-green-400' 
                                   : evaluation.endReason === 'stopped'
-                                  ? 'text-yellow-700'
-                                  : 'text-red-700'
+                                  ? 'text-yellow-400'
+                                  : 'text-red-400'
                               }`}>
                                 {evaluation.endReason === 'completed' && '✅ 正常结束'}
                                 {evaluation.endReason === 'stopped' && '⏹️ 手工停止'}
@@ -2204,10 +2204,10 @@ if (loading) {
                               {(evaluation.errorMessage || evaluation.endMessage) && (
                                 <p className={`text-xs mt-1 ${
                                   evaluation.endReason === 'completed' 
-                                    ? 'text-green-600' 
+                                    ? 'text-green-400' 
                                     : evaluation.endReason === 'stopped'
-                                    ? 'text-yellow-600'
-                                    : 'text-red-600'
+                                    ? 'text-yellow-400'
+                                    : 'text-red-400'
                                 }`}>
                                   {evaluation.errorMessage || evaluation.endMessage}
                                 </p>
@@ -2216,7 +2216,7 @@ if (loading) {
                           )}
                           {/* 失败但没有 endReason 时显示 errorMessage */}
                           {evaluation.status === 'failed' && !evaluation.endReason && evaluation.errorMessage && (
-                            <p className="text-red-600 mt-2 p-2 bg-red-50 rounded">错误: {evaluation.errorMessage}</p>
+                            <p className="text-red-400 mt-2 p-2 bg-red-900/20 rounded">错误: {evaluation.errorMessage}</p>
                           )}
                        </div>
                     </div>
@@ -2225,19 +2225,19 @@ if (loading) {
               ) : (
                 <div className="text-center py-12">
                   <History className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-4 text-sm text-gray-600">暂无评估记录</p>
+                  <p className="mt-4 text-sm text-gray-400">暂无评估记录</p>
                   <p className="mt-2 text-xs text-gray-500">点击"启动评估"开始第一次评估</p>
                 </div>
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end">
               <button
                 onClick={() => {
                   setShowHistoryModal(false);
                   setSelectedProject(null);
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-dark-surface-hover"
               >
                 关闭
               </button>
@@ -2249,16 +2249,16 @@ if (loading) {
       {/* 灰盒渗透对话框 */}
       {showEnvConfigModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">灰盒渗透</h3>
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">灰盒渗透</h3>
               <button
                 onClick={() => {
                   setShowEnvConfigModal(false);
                   setSelectedProject(null);
                   setEnvironmentUrl('');
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -2266,7 +2266,7 @@ if (loading) {
 
             <div className="p-6">
               <div>
-                <label htmlFor="environmentUrl" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="environmentUrl" className="block text-sm font-medium text-gray-300">
                   环境 URL
                 </label>
                 <input
@@ -2274,14 +2274,14 @@ if (loading) {
                   type="url"
                   value={environmentUrl}
                   onChange={(e) => setEnvironmentUrl(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                   placeholder="例如: http://localhost:8080"
                 />
                 <p className="mt-1 text-xs text-gray-500">请输入目标环境的访问地址</p>
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowEnvConfigModal(false);
@@ -2289,14 +2289,14 @@ if (loading) {
                   setEnvironmentUrl('');
                 }}
                 disabled={uploading}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-dark-bg disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={saveEnvConfig}
                 disabled={uploading}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {uploading ? '保存中...' : '保存配置'}
               </button>
@@ -2320,15 +2320,15 @@ if (loading) {
                 setShowImagePreview(false);
                 setPreviewImage(null);
               }}
-              className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-lg hover:bg-gray-100 z-10"
+              className="absolute top-2 right-2 p-2 bg-dark-surface rounded-full shadow-lg hover:bg-dark-surface-hover z-10"
             >
-              <X size={24} className="text-gray-600" />
+              <X size={24} className="text-gray-400" />
             </button>
             <img
               src={previewImage.src}
               alt={previewImage.alt}
               className={`max-w-full max-h-[90vh] rounded-lg shadow-2xl ${
-                previewImage.src?.startsWith('data:image/svg') ? 'min-w-[400px] min-h-[200px] object-contain bg-gray-100 p-4' : 'object-contain'
+                previewImage.src?.startsWith('data:image/svg') ? 'min-w-[400px] min-h-[200px] object-contain bg-dark-surface-hover p-4' : 'object-contain'
               }`}
               onClick={(e) => e.stopPropagation()}
             />
@@ -2342,10 +2342,10 @@ if (loading) {
       {/* Workflow 选择对话框 */}
       {showWorkflowModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">选择评估工作流</h3>
+                <h3 className="text-lg font-semibold text-gray-100">选择评估工作流</h3>
                 <p className="text-sm text-gray-500 mt-1">项目: {selectedProject.name}</p>
               </div>
               <button
@@ -2354,7 +2354,7 @@ if (loading) {
                   setSelectedProject(null);
                   setSelectedWorkflow(null);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -2363,22 +2363,22 @@ if (loading) {
             <div className="p-6">
               {loadingWorkflows ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
                   <span className="ml-2 text-gray-500">加载工作流列表中...</span>
                 </div>
               ) : workflows.length === 0 ? (
                 <div className="text-center py-12">
                   <Workflow className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">
+                  <h3 className="mt-4 text-lg font-medium text-gray-100">
                     暂无可用工作流
                   </h3>
-                  <p className="mt-2 text-sm text-gray-600">
+                  <p className="mt-2 text-sm text-gray-400">
                     请先在工作流管理中创建并发布工作流
                   </p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-sm text-gray-400 mb-4">
                     选择一个已发布的工作流来执行评估。工作流定义了评估的步骤和使用的 Agent。
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2388,15 +2388,15 @@ if (loading) {
                         onClick={() => setSelectedWorkflow(workflow.id)}
                         className={`border-2 rounded-lg p-4 cursor-pointer transition-all relative group ${
                           selectedWorkflow === workflow.id
-                            ? 'border-blue-600 bg-blue-50 shadow-lg ring-2 ring-blue-200'
-                            : 'border-gray-200 hover:border-blue-400 hover:bg-gray-50 hover:shadow'
+                            ? 'border-blue-600 bg-blue-900/20 shadow-lg ring-2 ring-blue-200'
+                            : 'border-gray-700/50 hover:border-blue-400 hover:bg-dark-bg hover:shadow'
                         }`}
                       >
                         {/* 选中标记 - 更明显 */}
                         <div className={`absolute top-3 right-3 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
                           selectedWorkflow === workflow.id
                             ? 'border-blue-600 bg-blue-600'
-                            : 'border-gray-300 group-hover:border-blue-400'
+                            : 'border-gray-600 group-hover:border-blue-400'
                         }`}>
                           {selectedWorkflow === workflow.id && (
                             <CheckCircle className="h-4 w-4 text-white" />
@@ -2415,7 +2415,7 @@ if (loading) {
                         <div className="flex items-start justify-between pr-8">
                           <div className="flex-1">
                             <h4 className={`text-sm font-semibold ${
-                              selectedWorkflow === workflow.id ? 'text-blue-700' : 'text-gray-900'
+                              selectedWorkflow === workflow.id ? 'text-blue-400' : 'text-gray-100'
                             }`}>
                               {workflow.name}
                             </h4>
@@ -2441,7 +2441,7 @@ if (loading) {
                                       `data:image/svg+xml;base64,${workflow.thumbnail}` : 
                                       `data:image/png;base64,${workflow.thumbnail}`)}
                                 alt={`${workflow.name} 缩略图`}
-                                className="w-full h-24 object-cover rounded border border-gray-200 cursor-pointer"
+                                className="w-full h-24 object-cover rounded border border-gray-700/50 cursor-pointer"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   console.log('[Thumbnail Click] workflow.thumbnail:', workflow.thumbnail?.substring(0, 50));
@@ -2463,7 +2463,7 @@ if (loading) {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-between items-center">
               <button
                 onClick={() => {
                   setShowWorkflowModal(false);
@@ -2471,7 +2471,7 @@ if (loading) {
                   setSelectedWorkflow(null);
                 }}
                 disabled={!!startingProject}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="px-4 py-2 border border-gray-600 rounded text-gray-300 hover:bg-dark-bg disabled:opacity-50"
               >
                 取消
               </button>
@@ -2485,7 +2485,7 @@ if (loading) {
                     setShowRoleModelModal(true);
                   }}
                   disabled={!selectedWorkflow || !!startingProject}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   下一步
                 </button>
@@ -2498,10 +2498,10 @@ if (loading) {
       {/* 角色模型配置对话框 */}
       {showRoleModelModal && selectedProject && selectedWorkflow && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">为角色配置模型</h3>
+                <h3 className="text-lg font-semibold text-gray-100">为角色配置模型</h3>
                 <p className="text-sm text-gray-500 mt-1">
                   项目: {selectedProject.name} | 编排: {workflows.find(w => w.id === selectedWorkflow)?.name}
                 </p>
@@ -2512,7 +2512,7 @@ if (loading) {
                 setSelectedWorkflow(null);
                 setWorkflowRoles([]);
                 setRoleModels([]);
-              }} className="text-gray-400 hover:text-gray-600">
+              }} className="text-gray-400 hover:text-gray-400">
                 <X size={20} />
               </button>
             </div>
@@ -2520,19 +2520,19 @@ if (loading) {
             <div className="p-6">
               {loadingRoles ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
                   <span className="ml-2 text-gray-500">加载角色列表...</span>
                 </div>
               ) : workflowRoles.length === 0 ? (
                 <div className="text-center py-12">
                   <Workflow className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">该编排无角色定义</h3>
-                  <p className="mt-2 text-sm text-gray-600">请先在编排编辑器中定义角色</p>
+                  <h3 className="mt-4 text-lg font-medium text-gray-100">该编排无角色定义</h3>
+                  <p className="mt-2 text-sm text-gray-400">请先在编排编辑器中定义角色</p>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {/* 快速设置：全部使用同一模型 */}
-                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="bg-blue-900/20 p-4 rounded-lg border border-blue-200">
                     <label className="block text-sm font-medium text-blue-800 mb-2">
                       快速设置：为所有角色使用同一模型
                     </label>
@@ -2547,7 +2547,7 @@ if (loading) {
                           setRoleModels(newRoleModels);
                         }
                       }}
-                      className="block w-full px-3 py-2 border border-blue-300 rounded-md focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      className="block w-full px-3 py-2 border border-blue-300 rounded-md focus:ring-primary-500 focus:border-primary-500 bg-dark-surface"
                     >
 <option value="">选择模型应用到所有角色</option>
                        {models.map((model) => {
@@ -2567,18 +2567,18 @@ if (loading) {
 
                   {/* 为每个角色配置模型 */}
                   <div className="space-y-3">
-                    <h4 className="text-sm font-medium text-gray-700">角色模型配置</h4>
+                    <h4 className="text-sm font-medium text-gray-300">角色模型配置</h4>
                     {workflowRoles.map((role: any) => (
-                      <div key={role.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                      <div key={role.id} className="flex items-center gap-4 p-4 bg-dark-bg rounded-lg">
                         {/* 角色信息 */}
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
                             {role.color && (
                               <div className={`w-4 h-4 rounded-full`} style={{ backgroundColor: role.color }} />
                             )}
-                            <span className="font-medium text-gray-900">{role.name}</span>
+                            <span className="font-medium text-gray-100">{role.name}</span>
                             {role.id === 'default' && (
-                              <span className="text-xs bg-gray-200 px-2 py-0.5 rounded">自动添加</span>
+                              <span className="text-xs bg-gray-700 px-2 py-0.5 rounded">自动添加</span>
                             )}
                           </div>
                           {role.description && (
@@ -2604,7 +2604,7 @@ if (loading) {
                               }
                               setRoleModels(newRoleModels);
                             }}
-                            className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                            className="block w-full px-3 py-2 border border-gray-600 rounded-md focus:ring-primary-500 focus:border-primary-500"
                           >
                             <option value="">选择模型</option>
                             {models.map((model) => {
@@ -2628,14 +2628,14 @@ if (loading) {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between items-center">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-between items-center">
               <button
                 onClick={() => {
                   setShowRoleModelModal(false);
                   setShowWorkflowModal(true);
                 }}
                 disabled={!!startingProject}
-                className="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                className="px-4 py-2 border border-gray-600 rounded text-gray-300 hover:bg-dark-bg disabled:opacity-50"
               >
                 上一步
               </button>
@@ -2681,10 +2681,10 @@ if (loading) {
       {/* 漏洞管理弹窗 */}
       {showVulnerabilityModal && vulnerabilityProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">漏洞管理</h3>
+                <h3 className="text-lg font-semibold text-gray-100">漏洞管理</h3>
                 <p className="text-sm text-gray-500 mt-1">{vulnerabilityProject.name}</p>
               </div>
               <button
@@ -2696,14 +2696,14 @@ if (loading) {
                   setVulnSearchTerm('');
                   setVulnStatusFilter('');
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={24} />
               </button>
             </div>
 
             {/* 搜索和过滤 */}
-            <div className="px-6 py-3 border-b border-gray-100 bg-gray-50 flex gap-3">
+            <div className="px-6 py-3 border-b border-gray-100 bg-dark-bg flex gap-3">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                 <input
@@ -2714,7 +2714,7 @@ if (loading) {
                     setVulnSearchTerm(e.target.value);
                     setVulnPage(1);
                   }}
-                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 />
               </div>
               <select
@@ -2723,7 +2723,7 @@ if (loading) {
                   setVulnStatusFilter(e.target.value);
                   setVulnPage(1);
                 }}
-                className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">全部状态</option>
                 <option value="new">新建</option>
@@ -2744,24 +2744,24 @@ if (loading) {
             <div className="flex-1 overflow-y-auto">
               {loadingVulnerabilities ? (
                 <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
                   <span className="ml-2 text-gray-500">加载漏洞数据...</span>
                 </div>
               ) : vulnerabilities.length === 0 ? (
                 <div className="text-center py-12">
                   <Bug className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900">暂无漏洞</h3>
-                  <p className="mt-2 text-sm text-gray-600">
+                  <h3 className="mt-4 text-lg font-medium text-gray-100">暂无漏洞</h3>
+                  <p className="mt-2 text-sm text-gray-400">
                     该项目尚未发现漏洞，运行评估后会显示检测结果
                   </p>
                 </div>
               ) : (
                 <div className="flex h-full">
                   {/* 左侧：漏洞列表 */}
-                  <div className={`border-r border-gray-200 ${selectedVulnerability ? 'w-1/2' : 'w-full'}`}>
-                    <div className="p-4 border-b border-gray-100 bg-gray-50">
+                  <div className={`border-r border-gray-700/50 ${selectedVulnerability ? 'w-1/2' : 'w-full'}`}>
+                    <div className="p-4 border-b border-gray-100 bg-[#0F172A]">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">
+                        <span className="text-sm font-medium text-gray-300">
                           共 {vulnTotalCount} 个漏洞
                         </span>
                         <div className="flex gap-2">
@@ -2769,10 +2769,10 @@ if (loading) {
                             const count = vulnerabilities.filter(v => v.severity === severity).length;
                             if (count === 0) return null;
                             const colors: Record<string, string> = {
-                              critical: 'bg-red-100 text-red-700',
+                              critical: 'bg-red-100 text-red-400',
                               high: 'bg-orange-100 text-orange-700',
-                              medium: 'bg-yellow-100 text-yellow-700',
-                              low: 'bg-blue-100 text-blue-700',
+                              medium: 'bg-yellow-100 text-yellow-400',
+                              low: 'bg-blue-100 text-blue-400',
                             };
                             const labels: Record<string, string> = {
                               critical: '严重',
@@ -2796,17 +2796,17 @@ if (loading) {
                           onClick={() => setSelectedVulnerability(vuln)}
                           className={`px-4 py-3 cursor-pointer transition-colors ${
                             selectedVulnerability?.id === vuln.id
-                              ? 'bg-blue-50 border-l-4 border-blue-500'
-                              : 'hover:bg-gray-50'
+                              ? 'bg-blue-900/20 border-l-4 border-blue-500'
+                              : 'hover:bg-dark-surface-hover'
                           }`}
                         >
                           <div className="flex items-center gap-2">
                             <span className={`px-1.5 py-0.5 text-xs font-medium rounded flex-shrink-0 ${
-                              vuln.status === 'new' ? 'bg-blue-100 text-blue-700' :
-                              vuln.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
-                              vuln.status === 'fixed' ? 'bg-green-100 text-green-700' :
+                              vuln.status === 'new' ? 'bg-blue-100 text-blue-400' :
+                              vuln.status === 'confirmed' ? 'bg-yellow-100 text-yellow-400' :
+                              vuln.status === 'fixed' ? 'bg-green-100 text-green-400' :
                               vuln.status === 'verified' ? 'bg-purple-100 text-purple-700' :
-                              'bg-gray-100 text-gray-600'
+                              'bg-dark-surface-hover text-gray-400'
                             }`}>
                               {vuln.status === 'new' ? '新建' :
                                vuln.status === 'confirmed' ? '已确认' :
@@ -2815,7 +2815,7 @@ if (loading) {
                                vuln.status === 'false-positive' ? '误报' : vuln.status}
                             </span>
                             <span className="text-xs text-gray-500 flex-shrink-0">{vuln.type}</span>
-                            <h4 className="text-sm font-medium text-gray-900 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
+                            <h4 className="text-sm font-medium text-gray-100 truncate flex-1 min-w-0" title={vuln.title}>{vuln.title}</h4>
                             {vuln.createdAt && (
                               <span className="text-xs text-gray-400 flex-shrink-0">
                                 {new Date(vuln.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}
@@ -2835,15 +2835,15 @@ if (loading) {
                           <button
                             onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, vulnPage - 1)}
                             disabled={vulnPage === 1}
-                            className="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-1 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <ChevronLeft size={16} />
                           </button>
-                          <span className="text-xs text-gray-600 px-2">{vulnPage}</span>
+                          <span className="text-xs text-gray-400 px-2">{vulnPage}</span>
                           <button
                             onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, vulnPage + 1)}
                             disabled={vulnPage >= Math.ceil(vulnTotalCount / vulnPageSize)}
-                            className="p-1 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-1 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <ChevronRight size={16} />
                           </button>
@@ -2860,23 +2860,23 @@ if (loading) {
 
       {/* 漏洞全屏详情 */}
       {selectedVulnerability && (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+        <div className="fixed inset-0 bg-dark-surface z-50 flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-dark-surface shrink-0">
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setSelectedVulnerability(null)}
-                className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
+                className="flex items-center text-gray-500 hover:text-gray-200 transition-colors"
               >
                 <X size={18} className="mr-1" />
                 返回
               </button>
               <span className="text-gray-300">|</span>
               <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                selectedVulnerability.status === 'new' ? 'bg-blue-100 text-blue-700' :
-                selectedVulnerability.status === 'confirmed' ? 'bg-yellow-100 text-yellow-700' :
-                selectedVulnerability.status === 'fixed' ? 'bg-green-100 text-green-700' :
+                selectedVulnerability.status === 'new' ? 'bg-blue-100 text-blue-400' :
+                selectedVulnerability.status === 'confirmed' ? 'bg-yellow-100 text-yellow-400' :
+                selectedVulnerability.status === 'fixed' ? 'bg-green-100 text-green-400' :
                 selectedVulnerability.status === 'verified' ? 'bg-purple-100 text-purple-700' :
-                'bg-gray-100 text-gray-600'
+                'bg-dark-surface-hover text-gray-400'
               }`}>
                 {selectedVulnerability.status === 'new' ? '新建' :
                  selectedVulnerability.status === 'confirmed' ? '已确认' :
@@ -2884,21 +2884,21 @@ if (loading) {
                  selectedVulnerability.status === 'verified' ? '已验证' :
                  selectedVulnerability.status === 'false-positive' ? '误报' : selectedVulnerability.status}
               </span>
-              <h2 className="text-lg font-bold text-gray-900">{selectedVulnerability.title}</h2>
+              <h2 className="text-lg font-bold text-gray-100">{selectedVulnerability.title}</h2>
             </div>
             <div className="flex items-center gap-2">
               {selectedVulnerability.status === 'new' && (
                 <>
-                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
                     <Copy size={14} className="mr-1" />复制MD
                   </button>
                   <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'confirm')} className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">确认漏洞</button>
-                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'false-positive')} className="px-3 py-1.5 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm">标记误报</button>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'false-positive')} className="px-3 py-1.5 bg-dark-surface-hover text-gray-200 rounded hover:bg-gray-700 text-sm">标记误报</button>
                 </>
               )}
               {selectedVulnerability.status === 'confirmed' && (
                 <>
-                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
                     <Copy size={14} className="mr-1" />复制MD
                   </button>
                   <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')} className="px-3 py-1.5 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm">标记已修复</button>
@@ -2906,7 +2906,7 @@ if (loading) {
               )}
               {selectedVulnerability.status === 'fixed' && (
                 <>
-                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
                     <Copy size={14} className="mr-1" />复制MD
                   </button>
                   <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')} className="px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm">验证修复</button>
@@ -2916,25 +2916,25 @@ if (loading) {
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-5xl mx-auto p-6 space-y-4">
-              <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-2 gap-3">
-                <div><span className="text-xs text-gray-500">漏洞类型</span><p className="text-sm font-medium text-gray-900">{selectedVulnerability.type}</p></div>
-                <div><span className="text-xs text-gray-500">CWE 编号</span><p className="text-sm font-medium text-gray-900">{selectedVulnerability.cwe || '无'}</p></div>
-                <div><span className="text-xs text-gray-500">发现工具</span><p className="text-sm font-medium text-gray-900">{selectedVulnerability.skill || '未知'}</p></div>
-                <div><span className="text-xs text-gray-500">发现时间</span><p className="text-sm font-medium text-gray-900">{new Date(selectedVulnerability.createdAt).toLocaleString('zh-CN')}</p></div>
+              <div className="bg-dark-bg rounded-lg p-4 grid grid-cols-2 gap-3">
+                <div><span className="text-xs text-gray-500">漏洞类型</span><p className="text-sm font-medium text-gray-100">{selectedVulnerability.type}</p></div>
+                <div><span className="text-xs text-gray-500">CWE 编号</span><p className="text-sm font-medium text-gray-100">{selectedVulnerability.cwe || '无'}</p></div>
+                <div><span className="text-xs text-gray-500">发现工具</span><p className="text-sm font-medium text-gray-100">{selectedVulnerability.skill || '未知'}</p></div>
+                <div><span className="text-xs text-gray-500">发现时间</span><p className="text-sm font-medium text-gray-100">{new Date(selectedVulnerability.createdAt).toLocaleString('zh-CN')}</p></div>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVulnerability.description)}</div>
+                <h4 className="text-sm font-medium text-gray-300 mb-2">漏洞描述</h4>
+                <div className="text-sm text-gray-400 bg-dark-surface border border-gray-700/50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVulnerability.description)}</div>
               </div>
               {selectedVulnerability.location && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码位置</h4>
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">问题代码位置</h4>
                   <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.location}</pre>
                 </div>
               )}
               {selectedVulnerability.POC && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">POC 验证代码</h4>
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">POC 验证代码</h4>
                   <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedVulnerability.POC}</pre>
                 </div>
               )}
@@ -2946,16 +2946,16 @@ if (loading) {
       {/* 误报原因输入弹窗 */}
       {showFalsePositiveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">标记为误报</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-100 mb-4">标记为误报</h3>
+            <p className="text-sm text-gray-400 mb-4">
               请输入误报原因（可选）。此原因将用于后续的 Skill 进化改进。
             </p>
             <textarea
               value={falsePositiveReason}
               onChange={(e) => setFalsePositiveReason(e.target.value)}
               placeholder="例如：该代码已进行输入验证，不存在漏洞..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
               rows={4}
             />
             <div className="mt-4 flex justify-end gap-3">
@@ -2964,7 +2964,7 @@ if (loading) {
                   setShowFalsePositiveModal(false);
                   setFalsePositiveReason('');
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-200"
               >
                 取消
               </button>

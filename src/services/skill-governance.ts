@@ -204,8 +204,8 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
   const skill = await prisma.skill.findUnique({
     where: { id: skillId },
     include: {
-      TechStackOption: true,
-      VulnerabilityPattern: true,
+      SkillCategory: true,
+      VulnerabilityTree: true,
     },
   });
 
@@ -228,7 +228,7 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
       reviewStatus: 'pending',
       analyzedBy: 'system',
     })),
-    // skipDuplicates is not supported in SQLite
+    skipDuplicates: true,
   });
 
   // 4. 返回任务状态

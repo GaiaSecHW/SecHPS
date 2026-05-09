@@ -226,8 +226,8 @@ export default function FileBrowser({ projectId, onFileSelect, selectedPath }: F
     return (
       <div key={node.path}>
         <div
-          className={`flex items-center space-x-2 px-2 py-1 cursor-pointer hover:bg-gray-100 rounded transition-colors ${
-            isSelected ? 'bg-blue-50 border-l-2 border-blue-500' : ''
+          className={`flex items-center space-x-2 px-2 py-1 cursor-pointer hover:bg-dark-surface-hover rounded transition-colors ${
+            isSelected ? 'bg-primary-600/15 border-l-2 border-blue-500' : ''
           }`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => handleFileClick(node)}
@@ -247,7 +247,7 @@ export default function FileBrowser({ projectId, onFileSelect, selectedPath }: F
           )}
           {node.type === 'file' && <span className="w-4" />}
           {getFileIcon(node)}
-          <span className="flex-1 truncate text-sm text-gray-700">{node.name}</span>
+          <span className="flex-1 truncate text-sm text-gray-300">{node.name}</span>
           {node.size !== undefined && (
             <span className="text-xs text-gray-400">{formatSize(node.size)}</span>
           )}
@@ -295,7 +295,7 @@ export default function FileBrowser({ projectId, onFileSelect, selectedPath }: F
   return (
     <div className="flex flex-col h-full">
       {/* 头部 */}
-      <div className="flex-shrink-0 border-b border-gray-200 p-3">
+      <div className="flex-shrink-0 border-b border-gray-700/50 p-3">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium text-gray-700 truncate">
             {projectName || '项目文件'}
@@ -317,12 +317,12 @@ export default function FileBrowser({ projectId, onFileSelect, selectedPath }: F
             placeholder="搜索文件..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
             >
               <X size={14} />
             </button>
@@ -349,7 +349,7 @@ export default function FileBrowser({ projectId, onFileSelect, selectedPath }: F
       </div>
 
       {/* 底部统计 */}
-      <div className="flex-shrink-0 border-t border-gray-200 p-2 text-xs text-gray-400">
+      <div className="flex-shrink-0 border-t border-gray-700/50 p-2 text-xs text-gray-400">
         {filteredFiles.length} 个项目
         {searchQuery && ` (筛选自 ${files.length} 个)`}
       </div>

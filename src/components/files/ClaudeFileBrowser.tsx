@@ -98,7 +98,7 @@ export default function ClaudeFileBrowser({
     return (
       <div key={node.path}>
         <div
-          className={`flex items-center space-x-2 px-2 py-1 cursor-pointer hover:bg-gray-100 rounded ${
+          className={`flex items-center space-x-2 px-2 py-1 cursor-pointer hover:bg-dark-surface-hover rounded ${
             isSelected ? 'bg-blue-50' : ''
           }`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -163,7 +163,7 @@ export default function ClaudeFileBrowser({
       <div className="p-3 border-b">
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium truncate">{projectName}</h3>
-          <button onClick={fetchFiles} className="p-1 text-gray-400 hover:text-gray-600">
+          <button onClick={fetchFiles} className="p-1 text-gray-400 hover:text-gray-400">
             <RefreshCw size={14} />
           </button>
         </div>

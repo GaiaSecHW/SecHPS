@@ -1153,14 +1153,14 @@ const [showPreview, setShowPreview] = useState(false);
       {/* 中间画布区域 */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* 工具栏 */}
-        <div className="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4">
+        <div className="h-14 bg-dark-surface border-b border-gray-700/50 flex items-center justify-between px-4">
           <div className="flex items-center space-x-2">
             {!readOnly && (
               <>
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="flex items-center space-x-1 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   <Save size={16} />
                   <span>{saving ? '保存中...' : '保存'}</span>
@@ -1194,7 +1194,7 @@ const [showPreview, setShowPreview] = useState(false);
                 className={`flex items-center space-x-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
                   isEnabled
                     ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-gray-400 text-white hover:bg-gray-500'
+                    : 'bg-gray-400 text-white hover:bg-dark-surface-hover0'
                 }`}
                 title={isEnabled ? '点击禁用工作流' : '点击启用工作流'}
               >
@@ -1208,7 +1208,7 @@ const [showPreview, setShowPreview] = useState(false);
                 <button
                   onClick={handleUndo}
                   disabled={historyIndex <= 0}
-                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-gray-600 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="撤销"
                 >
                   <Undo size={18} />
@@ -1216,7 +1216,7 @@ const [showPreview, setShowPreview] = useState(false);
                 <button
                   onClick={handleRedo}
                   disabled={historyIndex >= history.length - 1}
-                  className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="p-1.5 text-gray-600 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
                   title="重做"
                 >
                   <Redo size={18} />
@@ -1225,21 +1225,21 @@ const [showPreview, setShowPreview] = useState(false);
             )}
             <button
               onClick={() => zoomIn()}
-              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+              className="p-1.5 text-gray-600 hover:bg-dark-surface-hover rounded"
               title="放大"
             >
               <ZoomIn size={18} />
             </button>
             <button
               onClick={() => zoomOut()}
-              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+              className="p-1.5 text-gray-600 hover:bg-dark-surface-hover rounded"
               title="缩小"
             >
               <ZoomOut size={18} />
             </button>
             <button
               onClick={() => fitView()}
-              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded"
+              className="p-1.5 text-gray-600 hover:bg-dark-surface-hover rounded"
               title="适应视图"
             >
               <Maximize size={18} />
@@ -1248,7 +1248,7 @@ const [showPreview, setShowPreview] = useState(false);
         </div>
 
         {/* React Flow 画布 */}
-        <div className="flex-1 bg-gray-50 relative overflow-hidden" onDrop={onDrop} onDragOver={onDragOver}>
+        <div className="flex-1 bg-[#0F172A] relative overflow-hidden" onDrop={onDrop} onDragOver={onDragOver}>
           <ReactFlow
             nodes={nodesWithConfig}
             edges={edges}
@@ -1281,14 +1281,14 @@ const [showPreview, setShowPreview] = useState(false);
               nodeStrokeWidth={3}
               zoomable={true}
               pannable={true}
-              className="!bg-white !border-2 !border-gray-300 !rounded-lg !shadow-lg"
+              className="!bg-dark-surface !border-2 !border-gray-600 !rounded-lg !shadow-lg"
               style={{ width: 200, height: 150 }}
               maskColor="rgba(0, 0, 0, 0.1)"
             />
           </ReactFlow>
 
           {/* 缩放提示 */}
-          <div className="absolute bottom-4 left-4 bg-white px-3 py-1.5 rounded-lg shadow-md text-xs text-gray-500 border border-gray-200 z-10">
+          <div className="absolute bottom-4 left-4 bg-dark-surface px-3 py-1.5 rounded-lg shadow-md text-xs text-gray-500 border border-gray-700/50 z-10">
             💡 提示：右下角小地图可快速导航，滚轮缩放，拖拽平移
           </div>
         </div>
@@ -1296,9 +1296,9 @@ const [showPreview, setShowPreview] = useState(false);
 
       {/* 右侧属性面板 */}
       {(selectedNode || selectedEdge) && (
-        <div className="w-80 flex-shrink-0 bg-white border-l border border-gray-200 overflow-y-auto">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+        <div className="w-80 flex-shrink-0 bg-dark-surface border-l border border-gray-700/50 overflow-y-auto">
+          <div className="p-4 border-b border-gray-700/50 flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
               <Settings size={20} />
               属性配置
             </h3>
@@ -1311,7 +1311,7 @@ const [showPreview, setShowPreview] = useState(false);
                     handleDeleteEdge();
                   }
                 }}
-                className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md"
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-red-400 hover:bg-red-50 rounded-md"
               >
                 <Trash2 size={16} />
                 删除
@@ -1343,7 +1343,7 @@ const [showPreview, setShowPreview] = useState(false);
                             );
                             setSelectedNode(updatedNode);
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">默认角色</option>
                           {roles.map((role: any) => (
@@ -1361,7 +1361,7 @@ const [showPreview, setShowPreview] = useState(false);
                                 backgroundColor: roles.find(r => r.id === selectedNode.data.roleId)?.color || '#3B82F6'
                               }}
                             />
-                            <span className="text-xs text-gray-600">
+                            <span className="text-xs text-gray-400">
                               {roles.find(r => r.id === selectedNode.data.roleId)?.name || '默认角色'}
                             </span>
                           </div>
@@ -1388,7 +1388,7 @@ const [showPreview, setShowPreview] = useState(false);
                           );
                           setSelectedNode(updatedNode);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
 
@@ -1413,13 +1413,13 @@ const [showPreview, setShowPreview] = useState(false);
                             setSelectedNode(updatedNode);
                           }}
                           rows={3}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
                     )}
 
                     {/* Skill 加载模式配置 */}
-                    <div className="pt-4 border-t border-gray-200">
+                    <div className="pt-4 border-t border-gray-700/50">
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Skill 加载模式
                       </label>
@@ -1442,7 +1442,7 @@ const [showPreview, setShowPreview] = useState(false);
                           );
                           setSelectedNode(updatedNode);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="description">自定义描述（默认）</option>
                         <option value="manual">手工指定 Skills</option>
@@ -1455,8 +1455,8 @@ const [showPreview, setShowPreview] = useState(false);
 
 {/* 漏洞类别模式 - 多选漏洞分类 */}
                      {(selectedNode.data.skillLoadingMode || 'description') === 'vulnerability' && (
-                       <div className="bg-orange-50 border border-orange-200 rounded-md p-3 mt-3">
-                         <p className="text-sm text-orange-800 font-medium mb-2">
+                       <div className="bg-orange-900/20 border border-orange-500/20 rounded-md p-3 mt-3">
+                         <p className="text-sm text-orange-300 font-medium mb-2">
                            漏洞分类配置
                          </p>
                          <div className="space-y-2">
@@ -1466,7 +1466,7 @@ const [showPreview, setShowPreview] = useState(false);
                            {vulnCategories.length === 0 ? (
                              <p className="text-xs text-gray-400">加载中...</p>
                            ) : (
-                             <div className="bg-white rounded-md border border-gray-200 max-h-48 overflow-y-auto">
+                             <div className="bg-dark-surface rounded-md border border-gray-700/50 max-h-48 overflow-y-auto">
                                {vulnCategories.map((cat) => {
                                  const selected: string[] = selectedNode.data.vulnerabilityCategories || [];
                                  const isChecked = selected.includes(cat.value);
@@ -1509,7 +1509,7 @@ const [showPreview, setShowPreview] = useState(false);
                                    共匹配 {matched.length} 个 Skills（已按技术栈过滤）
                                  </p>
                                  {matched.length > 0 && (
-                                   <div className="bg-white rounded border border-gray-200 max-h-32 overflow-y-auto">
+                                   <div className="bg-dark-surface rounded border border-gray-700/50 max-h-32 overflow-y-auto">
                                      {matched.map(s => (
                                        <div key={s.id} className="px-2 py-1 text-xs text-gray-700 border-b border-gray-100 last:border-0">
                                          {s.displayName || s.name}
@@ -1526,8 +1526,8 @@ const [showPreview, setShowPreview] = useState(false);
 
 {/* 手工指定模式 - 显示 Skills 多选器 */}
                     {(selectedNode.data.skillLoadingMode || 'description') === 'manual' && (
-                      <div className="bg-green-50 border border-green-200 rounded-md p-3 mt-3">
-                        <p className="text-sm text-green-800 font-medium mb-2">
+                      <div className="bg-green-900/20 border border-green-500/20 rounded-md p-3 mt-3">
+                        <p className="text-sm text-green-300 font-medium mb-2">
                           手工指定 Skills
                         </p>
                         <div className="space-y-3">
@@ -1578,7 +1578,7 @@ const [showPreview, setShowPreview] = useState(false);
                                       );
                                       setSelectedNode(updatedNode);
                                     }}
-                                    className="px-2 py-1 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                                    className="px-2 py-1 text-xs bg-[#0F172A]0 text-white rounded hover:bg-gray-600 transition-colors"
                                   >
                                     清空
                                   </button>
@@ -1588,7 +1588,7 @@ const [showPreview, setShowPreview] = useState(false);
                                     onChange={(e) => {
                                       setSkillCategoryFilter(e.target.value);
                                     }}
-                                    className="px-2 py-1 text-xs border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                                    className="px-2 py-1 text-xs border border-gray-600 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
                                   >
                                     <option value="">按类别选择...</option>
                                     {skillCategories
@@ -1607,19 +1607,19 @@ const [showPreview, setShowPreview] = useState(false);
                                     placeholder="搜索 Skills..."
                                     value={skillSearchQuery}
                                     onChange={(e) => setSkillSearchQuery(e.target.value)}
-                                    className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                    className="w-full px-3 py-1.5 text-sm border border-gray-600 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                                   />
                                   {skillSearchQuery && (
                                     <button
                                       onClick={() => setSkillSearchQuery('')}
-                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-400"
                                     >
                                       <X className="w-4 h-4" />
                                     </button>
                                   )}
                                 </div>
                                 {/* Skills 分组列表 */}
-                                <div className="bg-white rounded-md border border-gray-200 max-h-64 overflow-y-auto">
+                                <div className="bg-dark-surface rounded-md border border-gray-700/50 max-h-64 overflow-y-auto">
                                   {groupedSkills.length === 0 ? (
                                     <div className="px-3 py-4 text-center text-sm text-gray-500">
                                       {skillSearchQuery ? '没有匹配的 Skills' : '暂无可用 Skills'}
@@ -1638,7 +1638,7 @@ const [showPreview, setShowPreview] = useState(false);
                                         <div key={group.category} className="border-b border-gray-100 last:border-b-0">
                                           {/* 分组标题 */}
                                           <div
-                                            className="flex items-center justify-between px-3 py-2 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                                            className="flex items-center justify-between px-3 py-2 bg-[#0F172A] cursor-pointer hover:bg-dark-surface-hover"
                                             onClick={() => toggleCategory(group.category)}
                                           >
                                             <div className="flex items-center gap-2">
@@ -1647,7 +1647,7 @@ const [showPreview, setShowPreview] = useState(false);
                                               ) : (
                                                 <ChevronRight className="w-4 h-4 text-gray-500" />
                                               )}
-                                              <span className="text-sm font-medium text-gray-700">{group.category}</span>
+                                              <span className="text-sm font-medium text-gray-300">{group.category}</span>
                                               <span className="text-xs text-gray-500">({group.count})</span>
                                             </div>
                                             <button
@@ -1655,7 +1655,7 @@ const [showPreview, setShowPreview] = useState(false);
                                                 e.stopPropagation();
                                                 toggleCategorySkills(group.category, group.skills, !allSelected);
                                               }}
-                                              className="text-xs px-2 py-0.5 rounded border border-gray-300 hover:bg-gray-200 text-gray-600"
+                                              className="text-xs px-2 py-0.5 rounded border border-gray-600 hover:bg-dark-surface-hover text-gray-400"
                                             >
                                               {allSelected ? '取消全选' : '全选'}
                                             </button>
@@ -1668,7 +1668,7 @@ const [showPreview, setShowPreview] = useState(false);
                                                 return (
                                                   <div
                                                     key={skill.id}
-                                                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 ${
+                                                    className={`flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-dark-surface-hover ${
                                                       isSelected ? 'bg-green-50' : ''
                                                     }`}
                                                     onClick={() => {
@@ -1694,7 +1694,7 @@ const [showPreview, setShowPreview] = useState(false);
                                                     <div className={`w-4 h-4 rounded border ${
                                                       isSelected
                                                         ? 'bg-green-600 border-green-600'
-                                                        : 'border-gray-300'
+                                                        : 'border-gray-600'
                                                     } flex items-center justify-center`}>
                                                       {isSelected && (
                                                         <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -1703,7 +1703,7 @@ const [showPreview, setShowPreview] = useState(false);
                                                       )}
                                                     </div>
                                                     <div className="flex-1">
-                                                      <span className="text-sm text-gray-900">{skill.displayName}</span>
+                                                      <span className="text-sm text-gray-100">{skill.displayName}</span>
                                                     </div>
                                                   </div>
                                                 );
@@ -1716,7 +1716,7 @@ const [showPreview, setShowPreview] = useState(false);
                                   )}
                                 </div>
                                 {/* 已选择的 Skills 数量 */}
-                                <div className="text-xs text-gray-600">
+                                <div className="text-xs text-gray-400">
                                   已选择 {selectedNode.data.skills ? JSON.parse(selectedNode.data.skills).length : 0} 个 Skills
                                 </div>
                               </div>
@@ -1728,12 +1728,12 @@ const [showPreview, setShowPreview] = useState(false);
                               <label className="block text-xs text-gray-600 mb-1">
                                 已选择的 Skills
                               </label>
-<div className="bg-white rounded-md p-2 border border-gray-200">
+<div className="bg-dark-surface rounded-md p-2 border border-gray-700/50">
                                 {JSON.parse(selectedNode.data.skills || '[]').map((skillId: string) => {
                                   const skill = availableSkills.find(s => s.id === skillId);
 return (
                                     <div key={skillId} className="flex items-center justify-between py-1">
-                                      <span className="text-xs text-gray-700">
+                                      <span className="text-xs text-gray-300">
                                         {skill?.displayName || skillId}
                                       </span>
                                       <button
@@ -1752,7 +1752,7 @@ return (
                                           );
                                           setSelectedNode(updatedNode);
                                         }}
-                                        className="text-xs text-red-600 hover:text-red-800"
+                                        className="text-xs text-red-400 hover:text-red-800"
                                       >
                                         移除
                                       </button>
@@ -1786,7 +1786,7 @@ return (
                             );
                             setSelectedNode(updatedNode);
                           }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">默认角色</option>
                           {roles.map((role: any) => (
@@ -1804,7 +1804,7 @@ return (
                                 backgroundColor: roles.find(r => r.id === selectedNode.data.roleId)?.color || '#3B82F6'
                               }}
                             />
-                            <span className="text-xs text-gray-600">
+                            <span className="text-xs text-gray-400">
                               {roles.find(r => r.id === selectedNode.data.roleId)?.name || '默认角色'}
                             </span>
                           </div>
@@ -1812,8 +1812,8 @@ return (
                       </div>
                     )}
                     
-                    <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-                      <p className="text-sm text-blue-800 font-medium mb-2">
+                    <div className="bg-blue-900/20 border border-blue-500/20 rounded-md p-3 mb-4">
+                      <p className="text-sm text-blue-300 font-medium mb-2">
                         系统节点配置
                       </p>
                       <p className="text-xs text-blue-600">
@@ -1825,7 +1825,7 @@ return (
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         节点名称
                       </label>
-                      <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900">
+                      <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-100">
                         {selectedNode.type === 'start' 
                           ? workflowConfig.startNodeLabel 
                           : selectedNode.type === 'end' 
@@ -1838,7 +1838,7 @@ return (
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         描述
                       </label>
-                      <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-900 whitespace-pre-wrap">
+                      <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-100 whitespace-pre-wrap">
                         {selectedNode.type === 'start' 
                           ? workflowConfig.startNodeDescription 
                           : selectedNode.type === 'end' 
@@ -1851,8 +1851,8 @@ return (
 
                 {/* Subtask 继承角色显示 */}
                 {selectedNode.type === 'subtask' && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-md p-3">
-                    <p className="text-sm text-purple-800 font-medium mb-2">
+                  <div className="bg-purple-900/20 border border-purple-500/20 rounded-md p-3">
+                    <p className="text-sm text-purple-300 font-medium mb-2">
                       角色继承
                     </p>
                     {(() => {
@@ -1873,7 +1873,7 @@ return (
                         );
                       } else {
                         return (
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-400">
                             继承自 {parentNode?.data?.label || '父节点'}: 默认角色
                           </span>
                         );
@@ -1889,7 +1889,7 @@ return (
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     节点类型
                   </label>
-                  <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600">
+                  <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-400">
                     {selectedNode.type}
                   </div>
                 </div>
@@ -1898,7 +1898,7 @@ return (
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     节点 ID
                   </label>
-                  <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600 font-mono">
+                  <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-600 font-mono">
                     {selectedNode.id}
                   </div>
                 </div>
@@ -1906,7 +1906,7 @@ return (
                 {/* Skill 预测 - 仅在 description 模式下显示 */}
                 {(selectedNode.type === 'task' || selectedNode.type === 'subtask') && 
                  (selectedNode.data.skillLoadingMode || 'description') === 'description' && (
-                  <div className="pt-4 border-t border-gray-200">
+                  <div className="pt-4 border-t border-gray-700/50">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Skill 匹配预测
                     </label>
@@ -1950,7 +1950,7 @@ return (
                           setViewingNodeId(selectedNode.id);
                           setShowPredictionTasks(true);
                         }}
-                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-dark-surface-hover text-gray-700 rounded-md hover:bg-dark-surface-hover transition-colors text-sm"
                       >
                         <Sparkles size={12} />
                         查看预测 ({predictionTasks.filter(t => t.nodeId === selectedNode.id).length})
@@ -1978,7 +1978,7 @@ return (
                       );
                       setEdges(updatedEdges);
                     }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
@@ -1986,7 +1986,7 @@ return (
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     边 ID
                   </label>
-                  <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600 font-mono">
+                  <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-600 font-mono">
                     {selectedEdge.id}
                   </div>
                 </div>
@@ -1995,7 +1995,7 @@ return (
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     源节点
                   </label>
-                  <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600 font-mono">
+                  <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-600 font-mono">
                     {selectedEdge.source}
                   </div>
                 </div>
@@ -2004,7 +2004,7 @@ return (
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     目标节点
                   </label>
-                  <div className="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600 font-mono">
+                  <div className="px-3 py-2 bg-[#0F172A] rounded-md text-sm text-gray-600 font-mono">
                     {selectedEdge.target}
                   </div>
                 </div>
@@ -2017,13 +2017,13 @@ return (
       {/* 预览弹窗 */}
       {showPreview && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
             {/* 头部 */}
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">工作流预览</h3>
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">工作流预览</h3>
               <button
                 onClick={() => setShowPreview(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -2041,7 +2041,7 @@ return (
                     return <h2 key={index} className="text-xl font-semibold mb-3 mt-4">{line.slice(3)}</h2>;
                   }
                   if (line.startsWith('---')) {
-                    return <hr key={index} className="my-4 border-gray-300" />;
+                    return <hr key={index} className="my-4 border-gray-600" />;
                   }
                   if (line.startsWith('- **')) {
                     return <p key={index} className="text-sm text-gray-600 mb-1">{line}</p>;
@@ -2050,7 +2050,7 @@ return (
                     return <p key={index} className="text-sm text-gray-700 ml-4 mb-1">{line.slice(2)}</p>;
                   }
                   if (line.startsWith('**')) {
-                    return <p key={index} className="text-sm font-medium text-gray-900 mb-1">{line}</p>;
+                    return <p key={index} className="text-sm font-medium text-gray-100 mb-1">{line}</p>;
                   }
                   if (line.trim() === '') {
                     return <br key={index} />;
@@ -2061,7 +2061,7 @@ return (
             </div>
 
             {/* 底部 */}
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end">
               <button
                 onClick={() => setShowPreview(false)}
                 className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700"
@@ -2076,16 +2076,16 @@ return (
       {/* 预测任务弹窗 */}
       {showPredictionTasks && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[80vh] flex flex-col">
             {/* 头部 */}
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
                 <Sparkles size={20} />
                 预测任务
               </h3>
               <button
                 onClick={() => setShowPredictionTasks(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
@@ -2109,10 +2109,10 @@ return (
                   ) : (
                     <div className="space-y-4">
                       {filteredTasks.map((task) => (
-                    <div key={task.id} className="border border-gray-200 rounded-lg">
+                    <div key={task.id} className="border border-gray-700/50 rounded-lg">
                       {/* 标题和时间 - 可点击展开/收缩 */}
                        <div 
-                         className="flex items-start justify-between p-4 cursor-pointer hover:bg-gray-50"
+                         className="flex items-start justify-between p-4 cursor-pointer hover:bg-dark-surface-hover"
                          onClick={() => {
                            setExpandedTasks(prev => {
                              const next = new Set(prev);
@@ -2132,7 +2132,7 @@ return (
                              <ChevronRight size={16} className="text-gray-400 mt-1 flex-shrink-0" />
                            )}
                            <div className="flex-1">
-                             <h4 className="font-semibold text-gray-900">{task.taskName}</h4>
+                             <h4 className="font-semibold text-gray-100">{task.taskName}</h4>
                              <p className="text-sm text-gray-600 mt-1 line-clamp-2">{task.taskDescription}</p>
                              {task.nodeId && (
                                <p className="text-xs text-gray-400 mt-1 font-mono">节点: {task.nodeId}</p>
@@ -2145,11 +2145,11 @@ return (
                           </div>
                           {/* 状态标签 */}
                           <div className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full mt-1 ${
-                            task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            task.status === 'running' ? 'bg-blue-100 text-blue-800' :
-                            task.status === 'failed' ? 'bg-red-100 text-red-800' :
-                            task.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
-                            'bg-yellow-100 text-yellow-800'
+                            task.status === 'completed' ? 'bg-green-500/15 text-green-400' :
+                            task.status === 'running' ? 'bg-blue-900/30 text-blue-400' :
+                            task.status === 'failed' ? 'bg-red-500/15 text-red-400' :
+                            task.status === 'cancelled' ? 'bg-gray-100 text-gray-200' :
+                            'bg-yellow-900/20 text-yellow-400'
                           }`}>
                             {task.status === 'pending' && '等待中'}
                             {task.status === 'running' && (
@@ -2165,7 +2165,7 @@ return (
                           {/* 进度条 */}
                           {(task.status === 'running' || task.status === 'pending') && (
                             <div className="mt-2 w-32">
-                              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                              <div className="w-full bg-gray-700 rounded-full h-1.5">
                                 <div 
                                   className="bg-blue-500 h-1.5 rounded-full transition-all"
                                   style={{ width: `${task.progress}%` }}
@@ -2182,23 +2182,23 @@ return (
                         <div className="px-4 pb-4 border-t border-gray-100">
                           {/* 错误信息 */}
                           {task.errorMessage && (
-                            <div className="bg-red-50 border border-red-200 rounded-md p-3 mt-3">
-                              <p className="text-sm text-red-700">{task.errorMessage}</p>
+                            <div className="bg-red-900/20 border border-red-500/20 rounded-md p-3 mt-3">
+                              <p className="text-sm text-red-400">{task.errorMessage}</p>
                             </div>
                           )}
                           
                           {/* 匹配结果 */}
                           {task.status === 'completed' && task.matches && Array.isArray(task.matches) && (
                             <div className="space-y-2 mt-3">
-                              <h5 className="text-sm font-medium text-gray-700">
+                              <h5 className="text-sm font-medium text-gray-300">
                                 匹配的 Skills ({task.matchCount}) - {task.method === 'llm' ? 'AI 匹配' : '关键词匹配'}
                               </h5>
                               <div className="grid grid-cols-1 gap-2">
                                 {task.matches.map((match, idx) => (
-                                  <div key={idx} className="bg-gray-50 rounded-md p-3">
+                                  <div key={idx} className="bg-[#0F172A] rounded-md p-3">
                                     <div className="flex items-center justify-between mb-1">
-                                      <span className="font-medium text-sm text-gray-900">{match.displayName}</span>
-                                      <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
+                                      <span className="font-medium text-sm text-gray-100">{match.displayName}</span>
+                                      <span className="text-xs bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded-full">
                                         {(match.relevance * 100).toFixed(0)}%
                                       </span>
                                     </div>
@@ -2218,7 +2218,7 @@ return (
                                   e.stopPropagation();
                                   cancelTask(task.id);
                                 }}
-                                className="text-sm text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors"
+                                className="text-sm text-red-400 hover:text-red-300 hover:bg-red-50 px-3 py-1.5 rounded-md transition-colors"
                               >
                                 取消任务
                               </button>
@@ -2234,7 +2234,7 @@ return (
             </div>
 
             {/* 底部 */}
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-between">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-between">
               <span className="text-sm text-gray-500">
                 共 {viewingNodeId 
                   ? predictionTasks.filter(t => t.nodeId === viewingNodeId).length 
@@ -2254,10 +2254,10 @@ return (
       {/* 角色管理面板 */}
       {showRolePanel && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">角色管理</h3>
-              <button onClick={() => setShowRolePanel(false)} className="text-gray-400 hover:text-gray-600">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">角色管理</h3>
+              <button onClick={() => setShowRolePanel(false)} className="text-gray-400 hover:text-gray-400">
                 <X size={20} />
               </button>
             </div>
@@ -2271,10 +2271,10 @@ return (
               ) : (
                 <div className="space-y-3">
                   {roles.map((role: any) => (
-                    <div key={role.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div key={role.id} className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg">
                       <div className="flex items-center gap-2">
                         <div className="w-4 h-4 rounded-full" style={{ backgroundColor: role.color || '#3B82F6' }} />
-                        <span className="font-medium text-gray-900">{role.name}</span>
+                        <span className="font-medium text-gray-100">{role.name}</span>
                         <span className="text-xs text-gray-500">({role.nodes?.length || 0} 个节点)</span>
                       </div>
                       <button
@@ -2287,7 +2287,7 @@ return (
                            fetchRoles();
                            onRolesChange?.();
                          }}
-                         className="text-red-600 hover:text-red-800"
+                         className="text-red-400 hover:text-red-800"
                        >
                         <Trash2 size={16} />
                       </button>
@@ -2301,7 +2301,7 @@ return (
               )}
               
               {/* 创建新角色 */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
+              <div className="mt-6 pt-6 border-t border-gray-700/50">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">创建新角色</h4>
                 <p className="text-xs text-gray-500 mb-3">
                   角色颜色用于标识节点归属，节点左侧会显示角色颜色条
@@ -2312,7 +2312,7 @@ return (
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     placeholder="角色名称（如：分析员、审计员）"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500"
                   />
                   
                   {/* 预制颜色选择 */}
@@ -2371,7 +2371,7 @@ return (
                        toast.success('角色创建成功');
                     }}
                     disabled={!newRoleName.trim()}
-                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                   >
                     创建角色
                   </button>

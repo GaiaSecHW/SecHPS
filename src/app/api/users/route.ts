@@ -5,6 +5,7 @@ import { generateId, ID_PREFIXES } from '@/lib/id-generator';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { fetchPermissionsPaginated } from '@/lib/auth';
 
 // 密码复杂度验证函数
 function validatePassword(password: string): { valid: boolean; error?: string } {
@@ -46,11 +47,7 @@ export async function GET(request: Request) {
         include: {
           UserRole: {
             include: {
-              Role: {
-                include: {
-                  Permission: true,
-                },
-              },
+              Role: true,
             },
           },
           OpencodeConfig: true,
@@ -63,6 +60,14 @@ export async function GET(request: Request) {
       }),
       prisma.user.count(),
     ]);
+
+    // Fetch permissions for all roles via paginated raw SQL (MTU black hole fix)
+    const allRoleIds = [...new Set(users.flatMap(u => u.UserRole.map(ur => ur.roleId)))];
+    const rolePermMap = new Map<string, string[]>();
+    for (const roleId of allRoleIds) {
+      const rows = await fetchPermissionsPaginated<{ name: string }>([roleId], 'p.name');
+      rolePermMap.set(roleId, rows.map(r => r.name));
+    }
 
     // 格式化返回数据
     const formattedUsers = users.map(user => ({
@@ -77,7 +82,7 @@ export async function GET(request: Request) {
         id: ur.Role.id,
         name: ur.Role.name,
         description: ur.Role.description,
-        permissions: ur.Role.Permission.map(p => p.name),
+        permissions: rolePermMap.get(ur.roleId) ?? [],
       })),
       opencodeConfigs: user.OpencodeConfig.map(config => ({
         id: config.id,

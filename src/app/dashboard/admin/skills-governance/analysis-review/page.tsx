@@ -57,9 +57,9 @@ interface ApiResponse {
 }
 
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  approved: 'bg-green-100 text-green-800 border-green-200',
-  rejected: 'bg-red-100 text-red-800 border-red-200',
+  pending: 'bg-yellow-100 text-yellow-800 border-yellow-500/20',
+  approved: 'bg-green-100 text-green-800 border-green-500/20',
+  rejected: 'bg-red-100 text-red-800 border-red-500/20',
 };
 
 const statusLabels: Record<string, string> = {
@@ -139,13 +139,13 @@ function AnalysisReviewListContent() {
       <div className="mb-6">
         <Link
           href="/dashboard/admin/skills-governance"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回治理中心
         </Link>
-        <h1 className="text-2xl font-bold text-gray-900">Skill 重复审核</h1>
-        <p className="text-gray-600 mt-1">审核 LLM 分析结果，确认哪些 Skill 真正重复</p>
+        <h1 className="text-2xl font-bold text-gray-100">Skill 重复审核</h1>
+        <p className="text-gray-400 mt-1">审核 LLM 分析结果，确认哪些 Skill 真正重复</p>
       </div>
 
       {/* 状态筛选 */}
@@ -163,7 +163,7 @@ function AnalysisReviewListContent() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               status === tab.key
                 ? 'bg-blue-600 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-dark-surface-hover text-gray-300 hover:bg-dark-surface-hover'
             }`}
           >
             {tab.label}
@@ -177,9 +177,9 @@ function AnalysisReviewListContent() {
           <LoadingSpinner size="lg" />
         </div>
       ) : !analyses || analyses.length === 0 ? (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12 text-center">
           <FileText className="mx-auto text-gray-400 mb-4" size={48} />
-          <p className="text-gray-600">暂无{statusLabels[status] || ''}分析结果</p>
+          <p className="text-gray-400">暂无{statusLabels[status] || ''}分析结果</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -187,17 +187,17 @@ function AnalysisReviewListContent() {
             <Link
               key={analysis.id}
               href={`/dashboard/admin/skills-governance/analysis-review/${analysis.id}`}
-              className="block bg-white rounded-lg shadow border border-gray-200 p-4 hover:shadow-md transition-shadow"
+              className="block bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4 hover:shadow-md transition-shadow"
             >
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-4 mb-2">
-                    <span className="font-medium text-gray-900">{analysis.skillA.displayName || analysis.skillA.name}</span>
+                    <span className="font-medium text-gray-100">{analysis.skillA.displayName || analysis.skillA.name}</span>
                     <span className="text-gray-400">vs</span>
-                    <span className="font-medium text-gray-900">{analysis.skillB?.displayName || analysis.skillB?.name || '未知'}</span>
+                    <span className="font-medium text-gray-100">{analysis.skillB?.displayName || analysis.skillB?.name || '未知'}</span>
                   </div>
                   
-                  <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  <div className="flex items-center space-x-4 text-sm text-gray-400">
                     <span className={`px-2 py-1 rounded text-xs ${analysis.isDuplicate ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
                       {analysis.isDuplicate ? 'LLM判断: 重复' : 'LLM判断: 不重复'}
                     </span>
@@ -237,17 +237,17 @@ function AnalysisReviewListContent() {
           <button
             onClick={() => router.push(`?status=${status}&page=${page - 1}`)}
             disabled={page <= 1}
-            className="px-3 py-2 rounded border border-gray-300 text-sm disabled:opacity-50"
+            className="px-3 py-2 rounded border border-gray-600 text-sm disabled:opacity-50"
           >
             上一页
           </button>
-          <span className="text-sm text-gray-600">
+          <span className="text-sm text-gray-400">
             第 {page} / {pagination.totalPages} 页
           </span>
           <button
             onClick={() => router.push(`?status=${status}&page=${page + 1}`)}
             disabled={page >= pagination.totalPages}
-            className="px-3 py-2 rounded border border-gray-300 text-sm disabled:opacity-50"
+            className="px-3 py-2 rounded border border-gray-600 text-sm disabled:opacity-50"
           >
             下一页
           </button>

@@ -101,11 +101,11 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">创建新应用</h2>
+      <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
+          <h2 className="text-lg font-semibold text-gray-100">创建新应用</h2>
           { !isSubmitting && (
-            <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-full">
+            <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-400 rounded-full">
               <X className="h-5 w-5" />
             </button>
           )}
@@ -113,26 +113,26 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
         <div className="px-6 py-4 space-y-5 overflow-y-auto">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               应用名称 <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               使用引擎 <span className="text-red-500">*</span>
             </label>
             <select
               value={formData.engine}
               onChange={(e) => setFormData({ ...formData, engine: e.target.value as any })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             >
               <option value="">请选择引擎</option>
@@ -142,13 +142,13 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               Skill 文件上传 <span className="text-red-500">*</span>
             </label>
             {!skillFile ? (
               <div>
                 <div
-                  className="border-2 border-dashed border-gray-300 rounded-md p-6 hover:border-primary-500 cursor-pointer"
+                  className="border-2 border-dashed border-gray-600 rounded-md p-6 hover:border-primary-500 cursor-pointer"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <div className="flex flex-col items-center justify-center text-gray-500">
@@ -182,11 +182,11 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                 </div>
               </div>
             ) : (
-              <div className="border border-gray-300 rounded-md p-4 flex items-center justify-between">
+              <div className="border border-gray-600 rounded-md p-4 flex items-center justify-between">
                 <div className="flex items-center space-x-3">
                   <File size={20} className="text-primary-600" />
                   <div>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-gray-100">
                       {skillFile.type === 'folder' ? `📁 ${skillFile.name}` : skillFile.name}
                     </p>
                     <p className="text-xs text-gray-500">
@@ -210,7 +210,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
               启动命令 <span className="text-red-500">*</span>
             </label>
             <input
@@ -218,29 +218,29 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               value={formData.startCommand}
               onChange={(e) => setFormData({ ...formData, startCommand: e.target.value })}
               placeholder="例如: opencode run skill.md"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">备注说明</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">备注说明</label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
               disabled={isSubmitting}
             />
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] disabled:opacity-50"
           >
             取消
           </button>

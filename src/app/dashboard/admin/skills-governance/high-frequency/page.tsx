@@ -251,7 +251,7 @@ function HighFrequencyPageContent() {
       {/* Back Button */}
       <Link 
         href="/dashboard/admin/skills-governance"
-        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回治理总览
@@ -260,8 +260,8 @@ function HighFrequencyPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">高频重复排行</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-100">高频重复排行</h1>
+          <p className="mt-1 text-sm text-gray-400">
             显示重叠次数最高的 Skills，帮助识别潜在的重复或相似技能
           </p>
         </div>
@@ -269,7 +269,7 @@ function HighFrequencyPageContent() {
           {/* Batch action buttons */}
           {selectedSkills.size > 0 && (
             <>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-400">
                 已选择 {selectedSkills.size} 项
               </span>
               <button
@@ -325,7 +325,7 @@ function HighFrequencyPageContent() {
       </div>
 
       {/* Info box */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
         <h3 className="text-sm font-medium text-blue-800 mb-2">高频重复排行说明</h3>
         <ul className="text-sm text-blue-700 space-y-1">
           <li>• <strong>重叠次数</strong>：该 Skill 在观测日志中与其他 Skill 同时出现的次数</li>
@@ -345,16 +345,16 @@ function HighFrequencyPageContent() {
               placeholder="搜索 Skill 名称或分类..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">显示数量:</label>
+          <label className="text-sm text-gray-400">显示数量:</label>
           <select
             value={limit}
             onChange={(e) => setLimit(Number(e.target.value))}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="10">10</option>
             <option value="20">20</option>
@@ -366,18 +366,18 @@ function HighFrequencyPageContent() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}
 
       {/* Ranking Table */}
       {filteredSkills.length === 0 ? (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-12">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12">
           <div className="text-center">
             <Shield className="mx-auto h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">暂无高频重叠数据</h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <h3 className="mt-4 text-lg font-medium text-gray-100">暂无高频重叠数据</h3>
+            <p className="mt-2 text-sm text-gray-400">
               {searchTerm
                 ? '没有找到匹配的 Skills'
                 : '尚未有足够的观测数据，请等待更多 Skill 匹配请求'}
@@ -385,10 +385,10 @@ function HighFrequencyPageContent() {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-700/50">
+              <thead className="bg-[#0F172A]">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     <label className="flex items-center space-x-2 cursor-pointer">
@@ -396,7 +396,7 @@ function HighFrequencyPageContent() {
                         type="checkbox"
                         checked={selectedSkills.size === filteredSkills.length && filteredSkills.length > 0}
                         onChange={handleSelectAll}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue-600 border-gray-600 rounded focus:ring-blue-500"
                       />
                       <span>选择</span>
                     </label>
@@ -427,43 +427,43 @@ function HighFrequencyPageContent() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-dark-surface divide-y divide-gray-700/50">
                 {filteredSkills.map((skill, index) => {
                   const riskConfig = riskLevelConfig[skill.riskLevel] || riskLevelConfig.low;
                   return (
-                    <tr key={skill.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={skill.id} className="hover:bg-[#0F172A] transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <input
                           type="checkbox"
                           checked={selectedSkills.has(skill.skillId)}
                           onChange={() => handleSelectSkill(skill.skillId)}
-                          className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          className="w-4 h-4 text-blue-600 border-gray-600 rounded focus:ring-blue-500"
                         />
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
                           {index < 3 && (
                             <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold mr-2 ${
-                              index === 0 ? 'bg-red-500 text-white' :
-                              index === 1 ? 'bg-orange-500 text-white' :
-                              'bg-yellow-500 text-white'
+                              index === 0 ? 'bg-red-600 text-white' :
+                              index === 1 ? 'bg-orange-600 text-white' :
+                              'bg-yellow-600 text-white'
                             }`}>
                               {index + 1}
                             </span>
                           )}
                           {index >= 3 && (
-                            <span className="text-gray-600 font-medium">{index + 1}</span>
+                            <span className="text-gray-400 font-medium">{index + 1}</span>
                           )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="font-medium text-gray-900">{skill.skillDisplayName}</div>
+                          <div className="font-medium text-gray-100">{skill.skillDisplayName}</div>
                           <div className="text-sm text-gray-500">{skill.skillName}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded">
+                        <span className="px-2 py-1 text-xs bg-dark-surface-hover text-gray-300 rounded">
                           {skill.skillCategory}
                         </span>
                       </td>
@@ -477,7 +477,7 @@ function HighFrequencyPageContent() {
                           <span className={`font-medium ${
                             skill.overlapCount >= 10 ? 'text-red-600' :
                             skill.overlapCount >= 5 ? 'text-orange-600' :
-                            'text-gray-600'
+                            'text-gray-400'
                           }`}>
                             {skill.overlapCount}
                           </span>
@@ -487,11 +487,11 @@ function HighFrequencyPageContent() {
                         <div className="flex items-center">
                           <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                             <div
-                              className="bg-blue-500 h-2 rounded-full"
+                              className="bg-blue-600 h-2 rounded-full"
                               style={{ width: `${Math.min(skill.matchRate * 100, 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-400">
                             {(skill.matchRate * 100).toFixed(1)}%
                           </span>
                         </div>
@@ -501,14 +501,14 @@ function HighFrequencyPageContent() {
                           <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                             <div
                               className={`h-2 rounded-full ${
-                                skill.warningRate >= 0.5 ? 'bg-red-500' :
-                                skill.warningRate >= 0.3 ? 'bg-orange-500' :
-                                'bg-yellow-500'
+                                skill.warningRate >= 0.5 ? 'bg-red-600' :
+                                skill.warningRate >= 0.3 ? 'bg-orange-600' :
+                                'bg-yellow-600'
                               }`}
                               style={{ width: `${Math.min(skill.warningRate * 100, 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-400">
                             {(skill.warningRate * 100).toFixed(1)}%
                           </span>
                         </div>
@@ -535,11 +535,11 @@ function HighFrequencyPageContent() {
       {/* Overlap Pairs Section */}
       {overlapPairs.length > 0 && (
         <div className="mt-8">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">高频重叠对</h2>
-          <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+          <h2 className="text-lg font-semibold text-gray-100 mb-4">高频重叠对</h2>
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+              <table className="min-w-full divide-y divide-gray-700/50">
+                <thead className="bg-[#0F172A]">
                   <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Skill 1
@@ -561,18 +561,18 @@ function HighFrequencyPageContent() {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-dark-surface divide-y divide-gray-700/50">
                   {overlapPairs.slice(0, 10).map((pair, index) => (
-                    <tr key={`${pair.skillId1}-${pair.skillId2}-${index}`} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <tr key={`${pair.skillId1}-${pair.skillId2}-${index}`} className="hover:bg-[#0F172A] transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-100">
                         {pair.skillName1}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-100">
                         {pair.skillName2}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`font-medium ${
-                          pair.overlapCount >= 5 ? 'text-red-600' : 'text-gray-600'
+                          pair.overlapCount >= 5 ? 'text-red-600' : 'text-gray-400'
                         }`}>
                           {pair.overlapCount}
                         </span>
@@ -582,14 +582,14 @@ function HighFrequencyPageContent() {
                           <div className="w-16 bg-gray-200 rounded-full h-2 mr-2">
                             <div
                               className={`h-2 rounded-full ${
-                                pair.overlapScore >= 0.85 ? 'bg-red-500' :
-                                pair.overlapScore >= 0.75 ? 'bg-orange-500' :
-                                'bg-blue-500'
+                                pair.overlapScore >= 0.85 ? 'bg-red-600' :
+                                pair.overlapScore >= 0.75 ? 'bg-orange-600' :
+                                'bg-blue-600'
                               }`}
                               style={{ width: `${Math.min(pair.overlapScore * 100, 100)}%` }}
                             />
                           </div>
-                          <span className="text-sm text-gray-600">
+                          <span className="text-sm text-gray-400">
                             {pair.overlapScore.toFixed(2)}
                           </span>
                         </div>
@@ -599,7 +599,7 @@ function HighFrequencyPageContent() {
                           pair.overlapType === 'exact' ? 'bg-red-100 text-red-800' :
                           pair.overlapType === 'semantic-overlap' ? 'bg-orange-100 text-orange-800' :
                           pair.overlapType === 'techStack-overlap' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
+                          'bg-dark-surface-hover text-gray-200'
                         }`}>
                           {pair.overlapType === 'exact' ? '完全匹配' :
                            pair.overlapType === 'semantic-overlap' ? '语义重叠' :

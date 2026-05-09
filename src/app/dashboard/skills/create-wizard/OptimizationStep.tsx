@@ -98,7 +98,7 @@ export default function OptimizationStep({
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+      <div className="bg-indigo-900/20 border border-indigo-200 rounded-lg p-4">
         <div className="flex items-start">
           <Sparkles className="w-5 h-5 text-indigo-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-indigo-800">
@@ -111,24 +111,24 @@ export default function OptimizationStep({
       </div>
 
       {/* 当前 Skill 概览 */}
-      <div className="bg-white border border-gray-200 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">当前 Skill 概览</h3>
+      <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-gray-300 mb-3">当前 Skill 概览</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-gray-500">名称:</span>
-            <span className="ml-2 text-gray-900">{skillData.displayName || skillData.name}</span>
+            <span className="ml-2 text-gray-100">{skillData.displayName || skillData.name}</span>
           </div>
           <div>
             <span className="text-gray-500">分类:</span>
-            <span className="ml-2 text-gray-900">{skillData.category || 'code-audit'}</span>
+            <span className="ml-2 text-gray-100">{skillData.category || 'code-audit'}</span>
           </div>
           <div>
             <span className="text-gray-500">测试用例:</span>
-            <span className="ml-2 text-gray-900">{testCases?.length || 0} 个</span>
+            <span className="ml-2 text-gray-100">{testCases?.length || 0} 个</span>
           </div>
           <div>
             <span className="text-gray-500">工具:</span>
-            <span className="ml-2 text-gray-900">{skillData.tools?.length || 0} 个</span>
+            <span className="ml-2 text-gray-100">{skillData.tools?.length || 0} 个</span>
           </div>
         </div>
       </div>
@@ -160,24 +160,24 @@ export default function OptimizationStep({
       {optimizedSkill && (
         <div className="space-y-4">
           {/* 准确率 */}
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">预估触发准确率</span>
-                <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded">模型预估</span>
+                <span className="text-sm font-medium text-gray-300">预估触发准确率</span>
+                <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-400 rounded">模型预估</span>
               </div>
               <TrendingUp className="w-5 h-5 text-green-500" />
             </div>
             <div className="flex items-center space-x-4">
               <div className="flex-1">
-                <div className="w-full bg-gray-200 rounded-full h-3">
+                <div className="w-full bg-gray-700 rounded-full h-3">
                   <div
-                    className="bg-green-500 h-3 rounded-full transition-all duration-500"
+                    className="bg-green-600 h-3 rounded-full transition-all duration-500"
                     style={{ width: `${(optimizationData.triggerAccuracy || 0.85) * 100}%` }}
                   />
                 </div>
               </div>
-              <span className="text-2xl font-bold text-green-600">
+              <span className="text-2xl font-bold text-green-400">
                 {((optimizationData.triggerAccuracy || 0.85) * 100).toFixed(0)}%
               </span>
             </div>
@@ -188,7 +188,7 @@ export default function OptimizationStep({
 
           {/* 优化对比 */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-gray-700">优化对比</h3>
+            <h3 className="text-sm font-medium text-gray-300">优化对比</h3>
 
             {/* 描述对比 */}
             <CompareSection
@@ -227,12 +227,12 @@ export default function OptimizationStep({
 
             {/* 触发关键词 */}
             {optimizedSkill.triggerKeywords && optimizedSkill.triggerKeywords.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-lg p-4">
+              <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-medium text-gray-700">触发关键词</h4>
+                  <h4 className="text-sm font-medium text-gray-300">触发关键词</h4>
                   <button
                     onClick={() => handleCopy(optimizedSkill.triggerKeywords.join(', '), 'keywords')}
-                    className="text-xs text-blue-600 hover:text-blue-800"
+                    className="text-xs text-blue-400 hover:text-blue-800"
                   >
                     {copied === 'keywords' ? '已复制' : '复制'}
                   </button>
@@ -248,24 +248,24 @@ export default function OptimizationStep({
             )}
 
             {/* 工具对比 */}
-            <div className="bg-white border border-gray-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">工具列表</h4>
+            <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-gray-300 mb-2">工具列表</h4>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-gray-500 mb-1">原始</p>
                   <div className="flex flex-wrap gap-1">
                     {(skillData.tools || []).map((tool: string, index: number) => (
-                      <span key={index} className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded">
+                      <span key={index} className="px-2 py-0.5 bg-gray-100 text-gray-400 text-xs rounded">
                         {tool}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs text-green-600 mb-1">优化后</p>
+                  <p className="text-xs text-green-400 mb-1">优化后</p>
                   <div className="flex flex-wrap gap-1">
                     {(optimizedSkill.tools || []).map((tool: string, index: number) => (
-                      <span key={index} className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">
+                      <span key={index} className="px-2 py-0.5 bg-green-100 text-green-400 text-xs rounded">
                         {tool}
                       </span>
                     ))}
@@ -277,12 +277,12 @@ export default function OptimizationStep({
 
           {/* 优化建议 */}
           {optimizationData.suggestions && optimizationData.suggestions.length > 0 && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-start">
-                <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+                <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
                 <div className="text-sm text-yellow-800">
                   <p className="font-medium mb-2">优化建议</p>
-                  <ul className="text-yellow-700 space-y-1">
+                  <ul className="text-yellow-400 space-y-1">
                     {optimizationData.suggestions.map((suggestion, index) => (
                       <li key={index}>• {suggestion}</li>
                     ))}
@@ -297,7 +297,7 @@ export default function OptimizationStep({
             <button
               onClick={handleOptimize}
               disabled={isOptimizing}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center disabled:opacity-50"
+              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] flex items-center disabled:opacity-50"
             >
               <Sparkles size={16} className="mr-2" />
               重新优化
@@ -318,7 +318,7 @@ export default function OptimizationStep({
         <button
           onClick={onPrevious}
           disabled={isOptimizing}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
         >
           上一步
         </button>
@@ -354,53 +354,53 @@ function CompareSection({
   isCode?: boolean;
 }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div className="bg-dark-surface border border-gray-700/50 rounded-lg overflow-hidden">
       <div 
-        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[#0F172A]"
         onClick={onToggle}
       >
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-medium text-gray-700">{title}</h4>
+          <h4 className="text-sm font-medium text-gray-300">{title}</h4>
           {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
         <div className="flex items-center gap-2">
           {optimized !== original && (
-            <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded">已优化</span>
+            <span className="px-2 py-0.5 bg-green-100 text-green-400 text-xs rounded">已优化</span>
           )}
         </div>
       </div>
       
       {isExpanded && (
-        <div className="border-t border-gray-200">
-          <div className="grid grid-cols-2 divide-x divide-gray-200">
+        <div className="border-t border-gray-700/50">
+          <div className="grid grid-cols-2 divide-x divide-gray-700/50">
             {/* 原始 */}
-            <div className="p-4 bg-gray-50">
+            <div className="p-4 bg-[#0F172A]">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-gray-500">原始</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); onCopy(original); }}
-                  className="text-xs text-gray-500 hover:text-gray-700"
+                  className="text-xs text-gray-500 hover:text-gray-300"
                 >
                   复制
                 </button>
               </div>
-              <div className={`text-sm text-gray-700 ${isCode ? 'font-mono text-xs whitespace-pre-wrap' : ''}`}>
+              <div className={`text-sm text-gray-300 ${isCode ? 'font-mono text-xs whitespace-pre-wrap' : ''}`}>
                 {original || <span className="text-gray-400 italic">无</span>}
               </div>
             </div>
             
             {/* 优化后 */}
-            <div className="p-4 bg-green-50">
+            <div className="p-4 bg-green-900/20">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-green-600">优化后</span>
+                <span className="text-xs text-green-400">优化后</span>
                 <button
                   onClick={(e) => { e.stopPropagation(); onCopy(optimized); }}
-                  className="text-xs text-green-600 hover:text-green-800"
+                  className="text-xs text-green-400 hover:text-green-800"
                 >
                   {copied ? '已复制' : '复制'}
                 </button>
               </div>
-              <div className={`text-sm text-gray-900 ${isCode ? 'font-mono text-xs whitespace-pre-wrap' : ''}`}>
+              <div className={`text-sm text-gray-100 ${isCode ? 'font-mono text-xs whitespace-pre-wrap' : ''}`}>
                 {optimized || <span className="text-gray-400 italic">无</span>}
               </div>
             </div>

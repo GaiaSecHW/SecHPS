@@ -293,12 +293,12 @@ function DiffModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
+      <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col mx-4">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-[#0F172A]">
           <div className="flex items-center gap-4">
             <GitCompare size={20} className="text-indigo-600" />
-            <h2 className="text-lg font-semibold text-gray-900">Skill 内容对比</h2>
+            <h2 className="text-lg font-semibold text-gray-100">Skill 内容对比</h2>
             
             {/* Stats */}
             <div className="flex items-center gap-3 text-xs">
@@ -308,7 +308,7 @@ function DiffModal({
               <span className="px-2 py-1 bg-red-100 text-red-700 rounded">
                 -{stats.removed} 删除
               </span>
-              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded">
+              <span className="px-2 py-1 bg-dark-surface-hover text-gray-300 rounded">
                 {stats.same} 相同
               </span>
             </div>
@@ -321,19 +321,19 @@ function DiffModal({
                 type="checkbox"
                 checked={showSameLines}
                 onChange={(e) => setShowSameLines(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300"
+                className="w-4 h-4 rounded border-gray-600"
               />
               显示相同行
             </label>
             
             {/* View Mode Toggle */}
-            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <div className="flex items-center gap-1 bg-dark-surface-hover rounded-lg p-1">
               <button
                 onClick={() => setViewMode('inline')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
                   viewMode === 'inline'
-                    ? 'bg-white shadow text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-dark-surface shadow text-gray-100'
+                    : 'text-gray-400 hover:text-gray-100'
                 }`}
               >
                 内联对比
@@ -342,8 +342,8 @@ function DiffModal({
                 onClick={() => setViewMode('side-by-side')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
                   viewMode === 'side-by-side'
-                    ? 'bg-white shadow text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-dark-surface shadow text-gray-100'
+                    : 'text-gray-400 hover:text-gray-100'
                 }`}
               >
                 并排对比
@@ -352,8 +352,8 @@ function DiffModal({
                 onClick={() => setViewMode('diff-only')}
                 className={`px-3 py-1 rounded text-sm transition-colors ${
                   viewMode === 'diff-only'
-                    ? 'bg-white shadow text-gray-900'
-                    : 'text-gray-600 hover:text-gray-900'
+                    ? 'bg-dark-surface shadow text-gray-100'
+                    : 'text-gray-400 hover:text-gray-100'
                 }`}
               >
                 仅差异
@@ -362,7 +362,7 @@ function DiffModal({
 
             <button
               onClick={onClose}
-              className="p-2 hover:bg-gray-200 rounded-lg transition-colors"
+              className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
             >
               <XCircle size={20} className="text-gray-500" />
             </button>
@@ -374,12 +374,12 @@ function DiffModal({
           {viewMode === 'side-by-side' ? (
             <div className="overflow-auto max-h-[70vh]">
               {/* Sticky Headers */}
-              <div className="grid grid-cols-2 gap-0 divide-x divide-gray-200 sticky top-0 z-10">
-                <div className="px-4 py-2 bg-red-50 border-b border-red-200 flex items-center gap-2">
+              <div className="grid grid-cols-2 gap-0 divide-x divide-gray-700/50 sticky top-0 z-10">
+                <div className="px-4 py-2 bg-red-900/20 border-b border-red-500/20 flex items-center gap-2">
                   <FileText size={16} className="text-red-500" />
                   <span className="font-medium text-red-700">{originalLabel}</span>
                 </div>
-                <div className="px-4 py-2 bg-green-50 border-b border-green-200 flex items-center gap-2">
+                <div className="px-4 py-2 bg-green-900/20 border-b border-green-500/20 flex items-center gap-2">
                   <FileText size={16} className="text-green-500" />
                   <span className="font-medium text-green-700">{improvedLabel}</span>
                 </div>
@@ -387,21 +387,21 @@ function DiffModal({
               {/* Content - each row spans both columns */}
               <div className="font-mono text-sm">
                 {filteredLines.map((line, idx) => (
-                  <div key={idx} className="grid grid-cols-2 gap-0 divide-x divide-gray-200">
+                  <div key={idx} className="grid grid-cols-2 gap-0 divide-x divide-gray-700/50">
                     {/* Original column */}
                     <div className={`flex ${
                       line.type === 'removed' ? 'bg-red-100' :
-                      line.type === 'same' ? 'bg-white' :
-                      'bg-gray-50'
+                      line.type === 'same' ? 'bg-dark-surface' :
+                      'bg-[#0F172A]'
                     }`}>
                       <span className={`px-2 py-1 text-xs select-none min-w-[50px] text-right ${
-                        line.oldLineNum ? 'text-gray-400 bg-gray-100 border-r border-gray-200' : 'text-transparent'
+                        line.oldLineNum ? 'text-gray-400 bg-dark-surface-hover border-r border-gray-700/50' : 'text-transparent'
                       }`}>
                         {line.oldLineNum || ''}
                       </span>
                       <span className={`px-3 py-1 flex-1 whitespace-pre ${
                         line.type === 'removed' ? 'text-red-700' :
-                        line.type === 'same' ? 'text-gray-700' :
+                        line.type === 'same' ? 'text-gray-300' :
                         'text-gray-400 italic'
                       }`}>
                         {line.oldLine || (line.type === 'added' ? '' : '')}
@@ -410,17 +410,17 @@ function DiffModal({
                     {/* Improved column */}
                     <div className={`flex ${
                       line.type === 'added' ? 'bg-green-100' :
-                      line.type === 'same' ? 'bg-white' :
-                      'bg-gray-50'
+                      line.type === 'same' ? 'bg-dark-surface' :
+                      'bg-[#0F172A]'
                     }`}>
                       <span className={`px-2 py-1 text-xs select-none min-w-[50px] text-right ${
-                        line.newLineNum ? 'text-gray-400 bg-gray-100 border-r border-gray-200' : 'text-transparent'
+                        line.newLineNum ? 'text-gray-400 bg-dark-surface-hover border-r border-gray-700/50' : 'text-transparent'
                       }`}>
                         {line.newLineNum || ''}
                       </span>
                       <span className={`px-3 py-1 flex-1 whitespace-pre ${
                         line.type === 'added' ? 'text-green-700' :
-                        line.type === 'same' ? 'text-gray-700' :
+                        line.type === 'same' ? 'text-gray-300' :
                         'text-gray-400 italic'
                       }`}>
                         {line.newLine || (line.type === 'removed' ? '' : '')}
@@ -432,8 +432,8 @@ function DiffModal({
             </div>
           ) : viewMode === 'inline' ? (
             <div className="p-4">
-              <div className="border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-3 text-xs sticky top-0">
+              <div className="border border-gray-700/50 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-dark-surface-hover border-b border-gray-700/50 flex items-center gap-3 text-xs sticky top-0">
                   <span className="flex items-center gap-1">
                     <span className="w-3 h-3 bg-red-200 rounded"></span>
                     删除 (-{stats.removed})
@@ -443,7 +443,7 @@ function DiffModal({
                     新增 (+{stats.added})
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="w-3 h-3 bg-white border border-gray-300 rounded"></span>
+                    <span className="w-3 h-3 bg-dark-surface border border-gray-600 rounded"></span>
                     相同 ({stats.same})
                   </span>
                   <span className="ml-auto text-gray-500">
@@ -455,18 +455,18 @@ function DiffModal({
                     <div key={idx} className={`flex ${
                       line.type === 'removed' ? 'bg-red-100 border-l-4 border-red-500' :
                       line.type === 'added' ? 'bg-green-100 border-l-4 border-green-500' :
-                      'bg-white'
+                      'bg-dark-surface'
                     }`}>
-                      <span className="px-2 py-1 text-xs text-gray-400 bg-gray-50 min-w-[50px] text-right select-none border-r border-gray-200">
+                      <span className="px-2 py-1 text-xs text-gray-400 bg-[#0F172A] min-w-[50px] text-right select-none border-r border-gray-700/50">
                         {line.oldLineNum || ''}
                       </span>
-                      <span className="px-2 py-1 text-xs text-gray-400 bg-gray-50 min-w-[50px] text-right select-none border-r border-gray-200">
+                      <span className="px-2 py-1 text-xs text-gray-400 bg-[#0F172A] min-w-[50px] text-right select-none border-r border-gray-700/50">
                         {line.newLineNum || ''}
                       </span>
                       <span className={`px-4 py-1 flex-1 whitespace-pre ${
                         line.type === 'removed' ? 'text-red-700' :
                         line.type === 'added' ? 'text-green-700' :
-                        'text-gray-600'
+                        'text-gray-400'
                       }`}>
                         {line.type === 'removed' && <span className="text-red-500 font-bold mr-2">−</span>}
                         {line.type === 'added' && <span className="text-green-500 font-bold mr-2">+</span>}
@@ -481,15 +481,15 @@ function DiffModal({
           ) : (
             /* Diff-only view */
             <div className="p-4">
-              <div className="border border-indigo-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-2 bg-indigo-50 border-b border-indigo-200 flex items-center gap-2">
+              <div className="border border-indigo-500/20 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-indigo-900/20 border-b border-indigo-500/20 flex items-center gap-2">
                   <Target size={16} className="text-indigo-500" />
                   <span className="font-medium text-indigo-700">仅显示差异内容（{stats.added + stats.removed} 处变更）</span>
                 </div>
                 <div className="overflow-auto max-h-[60vh] font-mono text-sm">
                   {diffLines.filter(l => l.type !== 'same').map((line, idx) => (
                     <div key={idx} className={`flex ${
-                      line.type === 'removed' ? 'bg-red-50' : 'bg-green-50'
+                      line.type === 'removed' ? 'bg-red-900/20' : 'bg-green-900/20'
                     }`}>
                       <span className={`px-2 py-1 text-xs min-w-[60px] text-right select-none ${
                         line.type === 'removed' ? 'text-red-400 bg-red-100' : 'text-green-400 bg-green-100'
@@ -527,13 +527,13 @@ function DiffModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+        <div className="px-6 py-4 border-t border-gray-700/50 bg-[#0F172A] flex items-center justify-between">
           <div className="text-xs text-gray-500">
             使用 LCS（最长公共子序列）算法计算差异
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+            className="px-4 py-2 bg-gray-200 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
           >
             关闭
           </button>
@@ -852,7 +852,7 @@ function EvolutionAnalysisContent() {
       'applied': 'bg-green-100 text-green-800',
       'rejected': 'bg-red-100 text-red-800',
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'bg-dark-surface-hover text-gray-200';
   };
 
   if (loading) {
@@ -869,12 +869,12 @@ function EvolutionAnalysisContent() {
         <div>
           <Link
             href="/dashboard/admin/skills-evolution"
-            className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+            className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
           >
             <ArrowLeft size={20} className="mr-2" />
             返回进化管理
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">进化分析详情</h1>
+          <h1 className="text-2xl font-bold text-gray-100">进化分析详情</h1>
         </div>
         <Alert type="error">{error}</Alert>
         <button
@@ -893,12 +893,12 @@ function EvolutionAnalysisContent() {
       <div className="p-6">
         <Link
           href="/dashboard/admin/skills-evolution"
-          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回进化管理
         </Link>
-        <p className="text-gray-600">任务不存在</p>
+        <p className="text-gray-400">任务不存在</p>
       </div>
     );
   }
@@ -912,13 +912,13 @@ function EvolutionAnalysisContent() {
         <div>
           <Link
             href="/dashboard/admin/skills-evolution"
-            className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-2"
+            className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-2"
           >
             <ArrowLeft size={20} className="mr-2" />
             返回进化管理
           </Link>
-          <h1 className="text-2xl font-bold text-gray-900">进化分析详情</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-100">进化分析详情</h1>
+          <p className="mt-1 text-sm text-gray-400">
             {skill?.displayName || 'N/A'} - {getTriggerReasonLabel(task.triggerReason)}
           </p>
         </div>
@@ -926,7 +926,7 @@ function EvolutionAnalysisContent() {
           {skill && (
             <Link
               href={`/dashboard/skills/${skill.id}`}
-              className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+              className="inline-flex items-center px-4 py-2 bg-dark-surface-hover text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
             >
               <ExternalLink size={16} className="mr-2" />
               Skill 详情
@@ -944,30 +944,30 @@ function EvolutionAnalysisContent() {
 
       {/* Skill Metrics Summary */}
       {skill && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+          <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
             <BarChart3 size={20} className="text-blue-600" />
             Skill 指标概览
           </h2>
           
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-[#0F172A] rounded-lg">
               <p className="text-xs text-gray-500">版本</p>
-              <p className="text-lg font-semibold text-gray-900">v{skill.version}</p>
+              <p className="text-lg font-semibold text-gray-100">v{skill.version}</p>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-[#0F172A] rounded-lg">
               <p className="text-xs text-gray-500">执行次数</p>
-              <p className="text-lg font-semibold text-gray-900">{skill.execCount}</p>
+              <p className="text-lg font-semibold text-gray-100">{skill.execCount}</p>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-[#0F172A] rounded-lg">
               <p className="text-xs text-gray-500">发现问题</p>
               <p className="text-lg font-semibold text-blue-600">{skill.vulnerabilityCount}</p>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-[#0F172A] rounded-lg">
               <p className="text-xs text-gray-500">成功执行</p>
               <p className="text-lg font-semibold text-green-600">{skill.successExecCount}</p>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-[#0F172A] rounded-lg">
               <p className="text-xs text-gray-500">进化前精准率</p>
               <p className={`text-lg font-semibold ${
                 (task.precisionBefore ?? 0) >= 0.7 ? 'text-green-600' : 'text-red-600'
@@ -975,19 +975,19 @@ function EvolutionAnalysisContent() {
                 {formatPrecision(task.precisionBefore)}
               </p>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg">
+            <div className="p-3 bg-[#0F172A] rounded-lg">
               <p className="text-xs text-gray-500">成功率</p>
-              <p className="text-lg font-semibold text-gray-900">
+              <p className="text-lg font-semibold text-gray-100">
                 {skill.successRate ? `${(skill.successRate * 100).toFixed(1)}%` : 'N/A'}
               </p>
             </div>
           </div>
 
           {/* Task Info */}
-          <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="mt-4 pt-4 border-t border-gray-700/50 grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <p className="text-xs text-gray-500">触发原因</p>
-              <p className="text-sm font-medium text-gray-900">{getTriggerReasonLabel(task.triggerReason)}</p>
+              <p className="text-sm font-medium text-gray-100">{getTriggerReasonLabel(task.triggerReason)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">误报数</p>
@@ -999,7 +999,7 @@ function EvolutionAnalysisContent() {
             </div>
             <div>
               <p className="text-xs text-gray-500">创建时间</p>
-              <p className="text-sm font-medium text-gray-900">
+              <p className="text-sm font-medium text-gray-100">
                 {new Date(task.createdAt).toLocaleString('zh-CN')}
               </p>
             </div>
@@ -1008,8 +1008,8 @@ function EvolutionAnalysisContent() {
       )}
 
       {/* Tab Navigation */}
-      <div className="bg-white rounded-lg shadow border border-gray-200">
-        <div className="border-b border-gray-200">
+      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
+        <div className="border-b border-gray-700/50">
           <nav className="flex -mb-px">
             {[
               { key: 'overview', label: '概览', icon: BarChart3 },
@@ -1024,14 +1024,14 @@ function EvolutionAnalysisContent() {
                 onClick={() => setActiveTab(tab.key as TabKey)}
                 className={`flex items-center gap-2 px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
                   activeTab === tab.key
-                    ? 'border-blue-500 text-blue-600 bg-blue-50/50'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-500 text-blue-600 bg-blue-900/20/50'
+                    : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
                 }`}
               >
                 <tab.icon size={16} />
                 {tab.label}
                 {tab.key === 'history' && attempts.length > 0 && (
-                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                  <span className="ml-1 px-1.5 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded-full">
                     {attempts.length}
                   </span>
                 )}
@@ -1045,11 +1045,11 @@ function EvolutionAnalysisContent() {
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Evolution Steps Card */}
-              <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-                <div className="px-4 py-3 bg-cyan-50 border-b border-cyan-200 flex items-center justify-between">
+              <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+                <div className="px-4 py-3 bg-cyan-900/20 border-b border-cyan-500/20 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <RefreshCw className="h-5 w-5 text-cyan-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">进化执行步骤</h2>
+                    <h2 className="text-lg font-semibold text-gray-100">进化执行步骤</h2>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-cyan-600 bg-cyan-100/50 px-2 py-1 rounded">
@@ -1058,7 +1058,7 @@ function EvolutionAnalysisContent() {
                     <span className={`px-2 py-1 text-xs rounded-full ${
                       task.status === 'completed' ? 'bg-green-100 text-green-800' :
                       task.status === 'analyzing' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-gray-100 text-gray-800'
+                      'bg-dark-surface-hover text-gray-200'
                     }`}>
                       {task.status === 'completed' ? '已完成' : task.status === 'analyzing' ? '分析中' : '待处理'}
                     </span>
@@ -1071,29 +1071,29 @@ function EvolutionAnalysisContent() {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                       task.status === 'completed' || task.status === 'analyzing' 
                         ? 'bg-green-100 text-green-600' 
-                        : 'bg-gray-100 text-gray-400'
+                        : 'bg-dark-surface-hover text-gray-400'
                     }`}>
                       1
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-sm font-medium text-gray-900">
+                        <h3 className="text-sm font-medium text-gray-100">
                           提取历史案例（从漏洞记录中筛选误报和正确发现）
                         </h3>
                         {(task.status === 'completed' || task.status === 'analyzing') && (
                           <CheckCircle size={16} className="text-green-600" />
                         )}
                       </div>
-                      <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                      <div className="bg-[#0F172A] p-3 rounded-lg text-xs">
                         <div className="flex items-center gap-4">
                           <div>
                             <p className="text-gray-500 mb-1">数据来源</p>
-                            <p className="text-gray-700">Skill 执行记录 → 漏洞表</p>
+                            <p className="text-gray-300">Skill 执行记录 → 漏洞表</p>
                           </div>
                           <div className="text-gray-400">→</div>
                           <div>
                             <p className="text-gray-500 mb-1">筛选结果</p>
-                            <p className="text-gray-700">
+                            <p className="text-gray-300">
                               误报案例: {realtimeCases?.falsePositives?.length || improvement?.falsePositiveCases?.length || 0} 个
                               <br />
                               正确发现: {realtimeCases?.confirmedCases?.length || improvement?.confirmedCases?.length || 0} 个
@@ -1109,13 +1109,13 @@ function EvolutionAnalysisContent() {
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                       task.status === 'completed' || task.status === 'analyzing'
                         ? 'bg-green-100 text-green-600'
-                        : 'bg-gray-100 text-gray-400'
+                        : 'bg-dark-surface-hover text-gray-400'
                     }`}>
                       2
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-sm font-medium text-gray-900">
+                        <h3 className="text-sm font-medium text-gray-100">
                           LLM 分析案例（归纳误报原因和正确发现模式）
                         </h3>
                         {task.status === 'completed' && (
@@ -1125,18 +1125,18 @@ function EvolutionAnalysisContent() {
                           <Loader2 size={16} className="text-yellow-600 animate-spin" />
                         )}
                       </div>
-                      <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                      <div className="bg-[#0F172A] p-3 rounded-lg text-xs">
                         <div className="flex items-center gap-4">
                           <div>
                             <p className="text-gray-500 mb-1">输入数据</p>
-                            <p className="text-gray-700">
+                            <p className="text-gray-300">
                               Skill 内容 + 案例数据
                             </p>
                           </div>
                           <div className="text-gray-400">→</div>
                           <div>
                             <p className="text-gray-500 mb-1">分析结果</p>
-                            <p className="text-gray-700">
+                            <p className="text-gray-300">
                               误报模式: {analysis?.falsePositivePatterns?.length || 0} 个
                               <br />
                               正确发现模式: {analysis?.confirmedPatterns?.length || 0} 个
@@ -1156,13 +1156,13 @@ function EvolutionAnalysisContent() {
                         ? 'bg-green-100 text-green-600'
                         : task.status === 'analyzing'
                         ? 'bg-yellow-100 text-yellow-600'
-                        : 'bg-gray-100 text-gray-400'
+                        : 'bg-dark-surface-hover text-gray-400'
                     }`}>
                       3
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-sm font-medium text-gray-900">
+                        <h3 className="text-sm font-medium text-gray-100">
                           LLM 生成改进内容（根据分析建议修改 Skill）
                         </h3>
                         {task.status === 'completed' && (
@@ -1172,11 +1172,11 @@ function EvolutionAnalysisContent() {
                           <Loader2 size={16} className="text-yellow-600 animate-spin" />
                         )}
                       </div>
-                      <div className="bg-gray-50 p-3 rounded-lg text-xs">
+                      <div className="bg-[#0F172A] p-3 rounded-lg text-xs">
                         <div className="flex items-center gap-4">
                           <div>
                             <p className="text-gray-500 mb-1">输入数据</p>
-                            <p className="text-gray-700">
+                            <p className="text-gray-300">
                               分析结果 + 原始 Skill
                               <br />
                               + 改进建议
@@ -1185,7 +1185,7 @@ function EvolutionAnalysisContent() {
                           <div className="text-gray-400">→</div>
                           <div>
                             <p className="text-gray-500 mb-1">输出结果</p>
-                            <p className="text-gray-700">
+                            <p className="text-gray-300">
                               {improvement?.improvedContent 
                                 ? `改进后内容 (${improvement.improvedContent.length} 字符)`
                                 : '待生成'}
@@ -1197,7 +1197,7 @@ function EvolutionAnalysisContent() {
                   </div>
 
                   {/* Summary */}
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                  <div className="mt-4 pt-4 border-t border-gray-700/50">
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-gray-500">进化前精准率</span>
                       <span className={`font-medium ${
@@ -1216,11 +1216,11 @@ function EvolutionAnalysisContent() {
       {activeTab === 'cases' && (
         <div className="space-y-6">
           {/* False Positive Cases */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-red-50 border-b border-red-200 flex items-center justify-between">
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+            <div className="px-4 py-3 bg-red-900/20 border-b border-red-500/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <XCircle className="h-5 w-5 text-red-600" />
-                <h2 className="text-lg font-semibold text-gray-900">误报案例</h2>
+                <h2 className="text-lg font-semibold text-gray-100">误报案例</h2>
                 <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
                   {realtimeCases?.falsePositives?.length || improvement?.falsePositiveCases?.length || 0} 个
                 </span>
@@ -1238,32 +1238,32 @@ function EvolutionAnalysisContent() {
             </div>
             
             {expandedFalsePositives && (
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-gray-700/50">
                 {(() => {
                   const fpCases = realtimeCases?.falsePositives || improvement?.falsePositiveCases || [];
                   if (fpCases.length === 0) {
                     return (
                       <div className="p-8 text-center">
                         <XCircle className="mx-auto h-12 w-12 text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-600">暂无误报案例</p>
+                        <p className="mt-2 text-sm text-gray-400">暂无误报案例</p>
                       </div>
                     );
                   }
                   return fpCases.map((caseItem, index) => (
-                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-[#0F172A] transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded font-medium">
                               误报
                             </span>
-                            <span className="font-medium text-gray-900">{caseItem.title}</span>
+                            <span className="font-medium text-gray-100">{caseItem.title}</span>
                           </div>
-                          <p className="text-sm text-gray-600 mb-2">
+                          <p className="text-sm text-gray-400 mb-2">
                             {caseItem.description}
                           </p>
                           {caseItem.location && (
-                            <pre className="text-xs text-gray-500 p-2 bg-gray-100 rounded overflow-x-auto max-h-32">
+                            <pre className="text-xs text-gray-500 p-2 bg-dark-surface-hover rounded overflow-x-auto max-h-32">
                               {caseItem.location}
                             </pre>
                           )}
@@ -1293,11 +1293,11 @@ function EvolutionAnalysisContent() {
           </div>
 
           {/* Confirmed Cases */}
-          <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-            <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-center justify-between">
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+            <div className="px-4 py-3 bg-green-900/20 border-b border-green-500/20 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-600" />
-                <h2 className="text-lg font-semibold text-gray-900">正确发现案例</h2>
+                <h2 className="text-lg font-semibold text-gray-100">正确发现案例</h2>
                 <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
                   {realtimeCases?.confirmedCases?.length || improvement?.confirmedCases?.length || 0} 个
                 </span>
@@ -1315,32 +1315,32 @@ function EvolutionAnalysisContent() {
             </div>
             
             {expandedConfirmed && (
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-gray-700/50">
                 {(() => {
                   const ccCases = realtimeCases?.confirmedCases || improvement?.confirmedCases || [];
                   if (ccCases.length === 0) {
                     return (
                       <div className="p-8 text-center">
                         <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-                        <p className="mt-2 text-sm text-gray-600">暂无正确发现案例</p>
+                        <p className="mt-2 text-sm text-gray-400">暂无正确发现案例</p>
                       </div>
                     );
                   }
                   return ccCases.map((caseItem, index) => (
-                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-gray-50 transition-colors">
+                    <div key={caseItem.vulnerabilityId || index} className="p-4 hover:bg-[#0F172A] transition-colors">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded font-medium">
                               正确发现
                             </span>
-                            <span className="font-medium text-gray-900">{caseItem.title}</span>
+                            <span className="font-medium text-gray-100">{caseItem.title}</span>
                           </div>
-                          <p className="text-sm text-gray-600 mb-2">
+                          <p className="text-sm text-gray-400 mb-2">
                             {caseItem.description}
                           </p>
                           {caseItem.location && (
-                            <pre className="text-xs text-gray-500 p-2 bg-gray-100 rounded overflow-x-auto max-h-32">
+                            <pre className="text-xs text-gray-500 p-2 bg-dark-surface-hover rounded overflow-x-auto max-h-32">
                               {caseItem.location}
                             </pre>
                           )}
@@ -1367,21 +1367,21 @@ function EvolutionAnalysisContent() {
 
       {/* Analysis Tab */}
       {activeTab === 'analysis' && analysis && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center gap-2">
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+          <div className="px-4 py-3 bg-purple-900/20 border-b border-purple-500/20 flex items-center gap-2">
             <Sparkles size={20} className="text-purple-600" />
-            <h2 className="text-lg font-semibold text-gray-900">LLM 分析结果</h2>
+            <h2 className="text-lg font-semibold text-gray-100">LLM 分析结果</h2>
           </div>
           
           <div className="p-6">
             {/* False Positive Patterns */}
             {analysis.falsePositivePatterns.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                   <AlertTriangle size={16} className="text-red-500" />
                   误报模式
                 </h3>
-                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-red-50 p-3 rounded-lg">
+                <ul className="list-disc list-inside text-sm text-gray-400 space-y-1 bg-red-900/20 p-3 rounded-lg">
                   {analysis.falsePositivePatterns.map((pattern, i) => (
                     <li key={i}>{pattern}</li>
                   ))}
@@ -1392,8 +1392,8 @@ function EvolutionAnalysisContent() {
             {/* False Positive Causes */}
             {analysis.falsePositiveCauses.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">误报原因</h3>
-                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">误报原因</h3>
+                <ul className="list-disc list-inside text-sm text-gray-400 space-y-1 bg-[#0F172A] p-3 rounded-lg">
                   {analysis.falsePositiveCauses.map((cause, i) => (
                     <li key={i}>{cause}</li>
                   ))}
@@ -1404,11 +1404,11 @@ function EvolutionAnalysisContent() {
             {/* Confirmed Patterns */}
             {analysis.confirmedPatterns.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                   <CheckCircle size={16} className="text-green-500" />
                   正确发现模式
                 </h3>
-                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-green-50 p-3 rounded-lg">
+                <ul className="list-disc list-inside text-sm text-gray-400 space-y-1 bg-green-900/20 p-3 rounded-lg">
                   {analysis.confirmedPatterns.map((pattern, i) => (
                     <li key={i}>{pattern}</li>
                   ))}
@@ -1419,8 +1419,8 @@ function EvolutionAnalysisContent() {
             {/* Confirmed Strengths */}
             {analysis.confirmedStrengths.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2">必须保留的规则</h3>
-                <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 bg-blue-50 p-3 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-300 mb-2">必须保留的规则</h3>
+                <ul className="list-disc list-inside text-sm text-gray-400 space-y-1 bg-blue-900/20 p-3 rounded-lg">
                   {analysis.confirmedStrengths.map((strength, i) => (
                     <li key={i}>{strength}</li>
                   ))}
@@ -1431,22 +1431,22 @@ function EvolutionAnalysisContent() {
             {/* Recommendations */}
             {analysis.recommendations.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                   <Target size={16} className="text-blue-500" />
                   改进建议
                 </h3>
                 <div className="space-y-2">
                   {analysis.recommendations.map((rec, i) => (
-                    <div key={i} className="p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                    <div key={i} className="p-3 bg-indigo-900/20 rounded-lg border border-indigo-500/20">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="px-2 py-0.5 text-xs bg-indigo-100 text-indigo-700 rounded font-medium">
                           {getRecommendationTypeLabel(rec.type)}
                         </span>
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded">
                           {getImpactLabel(rec.impact)}
                         </span>
                       </div>
-                      <p className="text-sm text-gray-700">{rec.description}</p>
+                      <p className="text-sm text-gray-300">{rec.description}</p>
                     </div>
                   ))}
                 </div>
@@ -1456,11 +1456,11 @@ function EvolutionAnalysisContent() {
             {/* Warnings */}
             {analysis.warnings.length > 0 && (
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                <h3 className="text-sm font-medium text-gray-300 mb-2 flex items-center gap-2">
                   <AlertTriangle size={16} className="text-yellow-500" />
                   警告
                 </h3>
-                <ul className="list-disc list-inside text-sm text-yellow-700 space-y-1 bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                <ul className="list-disc list-inside text-sm text-yellow-700 space-y-1 bg-yellow-900/20 p-3 rounded-lg border border-yellow-500/20">
                   {analysis.warnings.map((warning, i) => (
                     <li key={i}>{warning}</li>
                   ))}
@@ -1476,10 +1476,10 @@ function EvolutionAnalysisContent() {
         <div className="space-y-6">
           {/* Improved Skill Content */}
           {improvement && improvement.improvedContent && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 bg-green-50 border-b border-green-200 flex items-center gap-2">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+              <div className="px-4 py-3 bg-green-900/20 border-b border-green-500/20 flex items-center gap-2">
                 <FileText size={20} className="text-green-600" />
-                <h2 className="text-lg font-semibold text-gray-900">改进方案</h2>
+                <h2 className="text-lg font-semibold text-gray-100">改进方案</h2>
                 <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(improvement.status)}`}>
                   {improvement.status === 'pending' ? '待审批' :
                    improvement.status === 'applied' ? '已应用' :
@@ -1505,12 +1505,12 @@ function EvolutionAnalysisContent() {
                   查看内容对比
                 </button>
 
-                <div className="border border-green-200 rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-green-50 border-b border-green-200 flex items-center gap-2">
+                <div className="border border-green-500/20 rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 bg-green-900/20 border-b border-green-500/20 flex items-center gap-2">
                     <FileText size={16} className="text-green-600" />
                     <span className="font-medium text-green-700">改进后内容（完整）</span>
                   </div>
-                  <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
+                  <pre className="p-4 text-sm text-gray-300 overflow-auto max-h-[600px] whitespace-pre-wrap font-mono">
                     {improvement.improvedContent}
                   </pre>
                 </div>
@@ -1520,11 +1520,11 @@ function EvolutionAnalysisContent() {
 
           {/* Backtest Validation */}
           {improvement && improvement.status === 'pending' && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 bg-purple-50 border-b border-purple-200 flex items-center justify-between">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+              <div className="px-4 py-3 bg-purple-900/20 border-b border-purple-500/20 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5 text-purple-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">回测验证</h2>
+                  <h2 className="text-lg font-semibold text-gray-100">回测验证</h2>
                   {backtestResult && (
                     <span className={`px-2 py-1 text-xs rounded-full ${
                       backtestResult.isSuccessful ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
@@ -1570,19 +1570,19 @@ function EvolutionAnalysisContent() {
                 <div className="p-4">
                   {/* Summary */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="p-3 bg-gray-50 rounded-lg">
+                    <div className="p-3 bg-[#0F172A] rounded-lg">
                       <p className="text-xs text-gray-500">总案例数</p>
-                      <p className="text-lg font-semibold text-gray-900">{backtestResult.summary.totalCases}</p>
+                      <p className="text-lg font-semibold text-gray-100">{backtestResult.summary.totalCases}</p>
                     </div>
-                    <div className="p-3 bg-green-50 rounded-lg">
+                    <div className="p-3 bg-green-900/20 rounded-lg">
                       <p className="text-xs text-gray-500">通过数</p>
                       <p className="text-lg font-semibold text-green-600">{backtestResult.summary.passedCount}</p>
                     </div>
-                    <div className="p-3 bg-red-50 rounded-lg">
+                    <div className="p-3 bg-red-900/20 rounded-lg">
                       <p className="text-xs text-gray-500">失败数</p>
                       <p className="text-lg font-semibold text-red-600">{backtestResult.summary.failedCount}</p>
                     </div>
-                    <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="p-3 bg-blue-900/20 rounded-lg">
                       <p className="text-xs text-gray-500">回测精准率</p>
                       <p className="text-lg font-semibold text-blue-600">
                         {(backtestResult.summary.backtestPrecision * 100).toFixed(1)}%
@@ -1592,26 +1592,26 @@ function EvolutionAnalysisContent() {
 
                   {/* Detailed metrics */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div className="p-3 bg-green-900/20 rounded-lg border border-green-500/20">
                       <p className="text-xs text-gray-500">误报已修复</p>
                       <p className="text-lg font-semibold text-green-600">{backtestResult.summary.falsePositiveFixed}</p>
                     </div>
-                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="p-3 bg-red-900/20 rounded-lg border border-red-500/20">
                       <p className="text-xs text-gray-500">误报仍存在</p>
                       <p className="text-lg font-semibold text-red-600">{backtestResult.summary.falsePositiveRemaining}</p>
                     </div>
-                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div className="p-3 bg-green-900/20 rounded-lg border border-green-500/20">
                       <p className="text-xs text-gray-500">正确发现已检出</p>
                       <p className="text-lg font-semibold text-green-600">{backtestResult.summary.confirmedDetected}</p>
                     </div>
-                    <div className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                    <div className="p-3 bg-orange-900/20 rounded-lg border border-orange-500/20">
                       <p className="text-xs text-gray-500">正确发现漏检</p>
                       <p className="text-lg font-semibold text-orange-600">{backtestResult.summary.confirmedMissed}</p>
                     </div>
                   </div>
 
                   {/* Improvement Score */}
-                  <div className="mb-6 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+                  <div className="mb-6 p-3 bg-indigo-900/20 rounded-lg border border-indigo-500/20">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-indigo-700">改进分数</span>
                       <span className={`text-lg font-semibold ${
@@ -1625,7 +1625,7 @@ function EvolutionAnalysisContent() {
 
                   {/* Recommendation */}
                   <div className={`p-4 rounded-lg mb-6 ${
-                    backtestResult.isSuccessful ? 'bg-green-50 border border-green-200' : 'bg-orange-50 border border-orange-200'
+                    backtestResult.isSuccessful ? 'bg-green-900/20 border border-green-500/20' : 'bg-orange-900/20 border border-orange-500/20'
                   }`}>
                     <div className="flex items-start gap-2">
                       {backtestResult.isSuccessful ? (
@@ -1642,18 +1642,18 @@ function EvolutionAnalysisContent() {
                   {/* Detailed Cases Table */}
                   {backtestDetailRows.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                      <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
                         <Target size={16} className="text-purple-500" />
                         详细案例验证结果
                       </h3>
-                      <div className="mb-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                      <div className="mb-2 text-xs text-gray-500 bg-[#0F172A] p-2 rounded">
                         <span className="font-medium">验证目标：</span>
                         <span className="text-green-600 mx-1">确认是漏洞→仍能扫描出来 ✓</span>
                         <span className="text-red-600 mx-1">误报（非漏洞）→不再报告 ✓</span>
                       </div>
                       <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
+                        <table className="min-w-full divide-y divide-gray-700/50">
+                          <thead className="bg-[#0F172A]">
                             <tr>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">案例标题</th>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人工判定</th>
@@ -1664,10 +1664,10 @@ function EvolutionAnalysisContent() {
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
                             </tr>
                           </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
+                          <tbody className="bg-dark-surface divide-y divide-gray-700/50">
                             {backtestDetailRows.map((row, idx) => (
-                              <tr key={idx} className={row.passed ? 'bg-green-50/30' : 'bg-red-50/30'}>
-                                <td className="px-3 py-2 text-sm text-gray-900">{row.caseTitle}</td>
+                              <tr key={idx} className={row.passed ? 'bg-green-900/20/30' : 'bg-red-900/20/30'}>
+                                <td className="px-3 py-2 text-sm text-gray-100">{row.caseTitle}</td>
                                 <td className="px-3 py-2">
                                   <span className={`px-2 py-0.5 text-xs rounded ${
                                     row.caseType === '误报案例' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -1675,10 +1675,10 @@ function EvolutionAnalysisContent() {
                                     {row.caseType === '误报案例' ? '确认非漏洞（误报）' : '确认是漏洞'}
                                   </span>
                                 </td>
-                                <td className="px-3 py-2 text-sm text-gray-600">{row.expectedAction}</td>
+                                <td className="px-3 py-2 text-sm text-gray-400">{row.expectedAction}</td>
                                 <td className="px-3 py-2">
                                   <span className={`px-2 py-0.5 text-xs rounded ${
-                                    row.newSkillAction === '已报告' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'
+                                    row.newSkillAction === '已报告' ? 'bg-yellow-100 text-yellow-700' : 'bg-dark-surface-hover text-gray-300'
                                   }`}>
                                     {row.newSkillAction}
                                   </span>
@@ -1696,11 +1696,11 @@ function EvolutionAnalysisContent() {
                                     </span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-sm text-gray-600 max-w-xs truncate">{row.reason}</td>
+                                <td className="px-3 py-2 text-sm text-gray-400 max-w-xs truncate">{row.reason}</td>
                                 <td className="px-3 py-2">
                                   <Link
                                     href={`/dashboard/admin/vulnerabilities?id=${row.vulnerabilityId}`}
-                                    className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded hover:bg-gray-200"
+                                    className="inline-flex items-center px-2 py-1 text-xs bg-dark-surface-hover text-gray-400 rounded hover:bg-dark-surface-hover"
                                   >
                                     <ExternalLink size={12} className="mr-1" />
                                     详情
@@ -1719,7 +1719,7 @@ function EvolutionAnalysisContent() {
               {!backtestResult && !backtestLoading && (
                 <div className="p-8 text-center">
                   <Shield className="mx-auto h-12 w-12 text-gray-400" />
-                  <p className="mt-2 text-sm text-gray-600">点击"运行回测"验证改进效果</p>
+                  <p className="mt-2 text-sm text-gray-400">点击"运行回测"验证改进效果</p>
                   <p className="mt-1 text-xs text-gray-400">回测将使用新 Skill 内容分析历史案例，验证改进是否有效</p>
                 </div>
               )}
@@ -1734,31 +1734,31 @@ function EvolutionAnalysisContent() {
           {loadingAttempts ? (
             <div className="p-8 text-center">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">加载尝试历史...</p>
+              <p className="mt-2 text-sm text-gray-400">加载尝试历史...</p>
             </div>
           ) : attempts.length === 0 ? (
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-8 text-center">
               <History className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">暂无进化尝试记录</p>
+              <p className="mt-2 text-sm text-gray-400">暂无进化尝试记录</p>
               <p className="mt-1 text-xs text-gray-400">任务开始后将记录每次尝试的过程和结果</p>
             </div>
           ) : (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                  <History size={20} className="text-gray-600" />
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+              <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50">
+                <h2 className="text-lg font-semibold text-gray-100 flex items-center gap-2">
+                  <History size={20} className="text-gray-400" />
                   进化尝试历史
-                  <span className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded-full">
+                  <span className="px-2 py-1 text-xs bg-gray-200 text-gray-300 rounded-full">
                     共 {attempts.length} 次
                   </span>
                 </h2>
               </div>
               
-              <div className="divide-y divide-gray-200">
+              <div className="divide-y divide-gray-700/50">
                 {attempts.map((attempt) => (
                   <div 
                     key={attempt.id} 
-                    className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="p-4 hover:bg-[#0F172A] transition-colors cursor-pointer"
                     onClick={() => fetchAttemptDetail(attempt.id)}
                   >
                     <div className="flex items-start justify-between">
@@ -1777,10 +1777,10 @@ function EvolutionAnalysisContent() {
                             }`}>
                               {attempt.isPassed ? '达标' : '未达标'}
                             </span>
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-gray-100">
                               排除率: {(attempt.falsePositiveExclusionRate * 100).toFixed(1)}%
                             </span>
-                            <span className="text-sm text-gray-600">
+                            <span className="text-sm text-gray-400">
                               漏检: {attempt.confirmedMissed} 个
                             </span>
                           </div>
@@ -1790,13 +1790,13 @@ function EvolutionAnalysisContent() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        <button className="p-1 hover:bg-gray-200 rounded">
+                        <button className="p-1 hover:bg-dark-surface-hover rounded">
                           <ChevronRight size={16} className="text-gray-400" />
                         </button>
                       </div>
                     </div>
                     {attempt.failureReason && !attempt.isPassed && (
-                      <div className="mt-3 ml-14 p-2 bg-red-50 rounded border border-red-200">
+                      <div className="mt-3 ml-14 p-2 bg-red-900/20 rounded border border-red-500/20">
                         <p className="text-xs text-red-700">
                           <span className="font-medium">失败原因：</span>{attempt.failureReason}
                         </p>
@@ -1810,11 +1810,11 @@ function EvolutionAnalysisContent() {
 
           {/* Selected Attempt Detail */}
           {selectedAttempt && expandedAttemptDetail && (
-            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 bg-indigo-50 border-b border-indigo-200 flex items-center justify-between">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+              <div className="px-4 py-3 bg-indigo-900/20 border-b border-indigo-500/20 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Layers size={20} className="text-indigo-600" />
-                  <h2 className="text-lg font-semibold text-gray-900">
+                  <h2 className="text-lg font-semibold text-gray-100">
                     尝试 #{selectedAttempt.attemptNumber} 详情
                   </h2>
                 </div>
@@ -1829,13 +1829,13 @@ function EvolutionAnalysisContent() {
               <div className="p-6 space-y-6">
                 {/* Summary */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="p-3 bg-gray-50 rounded-lg">
+                  <div className="p-3 bg-[#0F172A] rounded-lg">
                     <p className="text-xs text-gray-500">状态</p>
                     <p className={`text-lg font-semibold ${selectedAttempt.isPassed ? 'text-green-600' : 'text-red-600'}`}>
                       {selectedAttempt.isPassed ? '达标' : '未达标'}
                     </p>
                   </div>
-                  <div className="p-3 bg-green-50 rounded-lg">
+                  <div className="p-3 bg-green-900/20 rounded-lg">
                     <p className="text-xs text-gray-500">误报排除率</p>
                     <p className={`text-lg font-semibold ${
                       selectedAttempt.falsePositiveExclusionRate >= 0.5 ? 'text-green-600' : 'text-yellow-600'
@@ -1843,7 +1843,7 @@ function EvolutionAnalysisContent() {
                       {(selectedAttempt.falsePositiveExclusionRate * 100).toFixed(1)}%
                     </p>
                   </div>
-                  <div className="p-3 bg-orange-50 rounded-lg">
+                  <div className="p-3 bg-orange-900/20 rounded-lg">
                     <p className="text-xs text-gray-500">漏检数</p>
                     <p className={`text-lg font-semibold ${
                       selectedAttempt.confirmedMissed === 0 ? 'text-green-600' : 'text-red-600'
@@ -1851,7 +1851,7 @@ function EvolutionAnalysisContent() {
                       {selectedAttempt.confirmedMissed}
                     </p>
                   </div>
-                  <div className="p-3 bg-blue-50 rounded-lg">
+                  <div className="p-3 bg-blue-900/20 rounded-lg">
                     <p className="text-xs text-gray-500">回测通过率</p>
                     <p className="text-lg font-semibold text-blue-600">
                       {selectedAttempt.backtestSummary ? 
@@ -1863,7 +1863,7 @@ function EvolutionAnalysisContent() {
 
                 {/* Failure Reason */}
                 {selectedAttempt.failureReason && (
-                  <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="p-4 bg-red-900/20 rounded-lg border border-red-500/20">
                     <div className="flex items-start gap-2">
                       <AlertTriangle size={18} className="text-red-600 mt-0.5" />
                       <div>
@@ -1876,27 +1876,27 @@ function EvolutionAnalysisContent() {
 
                 {/* Cases Used */}
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
                     <Database size={16} className="text-gray-500" />
                     使用的案例集
                   </h3>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 bg-red-50 rounded-lg border border-red-200">
+                    <div className="p-3 bg-red-900/20 rounded-lg border border-red-500/20">
                       <p className="text-xs text-gray-500 mb-2">误报案例 ({selectedAttempt.falsePositiveCasesUsed?.length || 0} 个)</p>
                       <div className="space-y-1">
                         {selectedAttempt.falsePositiveCasesUsed?.slice(0, 5).map((c, i) => (
-                          <p key={i} className="text-xs text-gray-700 truncate">{c.title}</p>
+                          <p key={i} className="text-xs text-gray-300 truncate">{c.title}</p>
                         ))}
                         {selectedAttempt.falsePositiveCasesUsed?.length > 5 && (
                           <p className="text-xs text-gray-400">... 还有 {selectedAttempt.falsePositiveCasesUsed.length - 5} 个</p>
                         )}
                       </div>
                     </div>
-                    <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                    <div className="p-3 bg-green-900/20 rounded-lg border border-green-500/20">
                       <p className="text-xs text-gray-500 mb-2">正确发现案例 ({selectedAttempt.confirmedCasesUsed?.length || 0} 个)</p>
                       <div className="space-y-1">
                         {selectedAttempt.confirmedCasesUsed?.slice(0, 5).map((c, i) => (
-                          <p key={i} className="text-xs text-gray-700 truncate">{c.title}</p>
+                          <p key={i} className="text-xs text-gray-300 truncate">{c.title}</p>
                         ))}
                         {selectedAttempt.confirmedCasesUsed?.length > 5 && (
                           <p className="text-xs text-gray-400">... 还有 {selectedAttempt.confirmedCasesUsed.length - 5} 个</p>
@@ -1915,7 +1915,7 @@ function EvolutionAnalysisContent() {
                     </h3>
                     <div className="space-y-2">
                       {selectedAttempt.missedCasesInfo.map((c, i) => (
-                        <div key={i} className="p-3 bg-red-50 rounded-lg border border-red-200">
+                        <div key={i} className="p-3 bg-red-900/20 rounded-lg border border-red-500/20">
                           <p className="text-sm font-medium text-red-700">{c.title}</p>
                           <p className="text-xs text-red-600 mt-1">{c.description}</p>
                         </div>
@@ -1933,7 +1933,7 @@ function EvolutionAnalysisContent() {
                     </h3>
                     <div className="space-y-2">
                       {selectedAttempt.remainingFalsePositive.slice(0, 5).map((c, i) => (
-                        <div key={i} className="p-3 bg-orange-50 rounded-lg border border-orange-200">
+                        <div key={i} className="p-3 bg-orange-900/20 rounded-lg border border-orange-500/20">
                           <p className="text-sm font-medium text-orange-700">{c.title}</p>
                           <p className="text-xs text-orange-600 mt-1">{c.description}</p>
                         </div>
@@ -1948,11 +1948,11 @@ function EvolutionAnalysisContent() {
                 {/* Improved Content Preview */}
                 {selectedAttempt.improvedContent && (
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+                    <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
                       <FileText size={16} className="text-gray-500" />
                       生成的改进内容（完整）
                     </h3>
-                    <pre className="p-3 bg-gray-100 rounded-lg text-xs overflow-x-auto max-h-[400px] whitespace-pre-wrap">
+                    <pre className="p-3 bg-dark-surface-hover rounded-lg text-xs overflow-x-auto max-h-[400px] whitespace-pre-wrap">
                       {selectedAttempt.improvedContent}
                     </pre>
                   </div>
@@ -1967,21 +1967,21 @@ function EvolutionAnalysisContent() {
       {activeTab === 'actions' && (
         <div className="space-y-6">
           {improvement && improvement.status === 'pending' && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+              <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
                 <Zap size={20} className="text-yellow-600" />
                 审批操作
               </h2>
 
               {showRejectInput && (
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     拒绝原因 <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
                     rows={3}
                     placeholder="请填写拒绝此改进的原因..."
                   />
@@ -2041,7 +2041,7 @@ function EvolutionAnalysisContent() {
                         setRejectReason('');
                       }}
                       disabled={submitting}
-                      className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50 transition-colors"
+                      className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-300 rounded-lg hover:bg-dark-surface-hover disabled:opacity-50 transition-colors"
                     >
                       取消
                     </button>
@@ -2056,14 +2056,14 @@ function EvolutionAnalysisContent() {
           )}
 
           {improvement && improvement.status !== 'pending' && (
-            <div className="bg-white rounded-lg border border-gray-200 p-6">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
               <div className="flex items-center gap-3">
                 {improvement.status === 'applied' ? (
                   <>
                     <CheckCircle size={24} className="text-green-600" />
                     <div>
                       <h3 className="font-semibold text-green-700">改进已应用</h3>
-                      <p className="text-sm text-gray-600">新版本已创建，Skill 内容已更新</p>
+                      <p className="text-sm text-gray-400">新版本已创建，Skill 内容已更新</p>
                     </div>
                   </>
                 ) : (
@@ -2071,7 +2071,7 @@ function EvolutionAnalysisContent() {
                     <XCircle size={24} className="text-red-600" />
                     <div>
                       <h3 className="font-semibold text-red-700">改进已拒绝</h3>
-                      <p className="text-sm text-gray-600">Skill 内容保持不变</p>
+                      <p className="text-sm text-gray-400">Skill 内容保持不变</p>
                     </div>
                   </>
                 )}
@@ -2080,9 +2080,9 @@ function EvolutionAnalysisContent() {
           )}
 
           {!improvement && (
-            <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
+            <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-8 text-center">
               <Clock className="mx-auto h-12 w-12 text-gray-400" />
-              <p className="mt-2 text-sm text-gray-600">改进方案尚未生成</p>
+              <p className="mt-2 text-sm text-gray-400">改进方案尚未生成</p>
               <p className="mt-1 text-xs text-gray-400">等待任务完成后可进行审批操作</p>
             </div>
           )}

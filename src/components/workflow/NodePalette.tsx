@@ -46,9 +46,9 @@ export default function NodePalette({ onNodeDragStart, hideTriggers = false }: N
   };
 
   return (
-    <div className="h-full bg-white border-r border-gray-200 overflow-y-auto">
-      <div className="p-4 border-b border-gray-200">
-        <h2 className="text-lg font-semibold text-gray-900">节点面板</h2>
+    <div className="h-full bg-dark-surface border-r border-gray-700/50 overflow-y-auto">
+      <div className="p-4 border-b border-gray-700/50">
+        <h2 className="text-lg font-semibold text-gray-100">节点面板</h2>
         <p className="text-sm text-gray-600 mt-1">拖拽节点到画布</p>
       </div>
 
@@ -58,8 +58,8 @@ export default function NodePalette({ onNodeDragStart, hideTriggers = false }: N
           return (
             <div key={category}>
               <div className="flex items-center space-x-2 mb-3">
-                {CategoryIcon && <CategoryIcon size={16} className="text-gray-600" />}
-                <h3 className="text-sm font-medium text-gray-900 uppercase">
+                {CategoryIcon && <CategoryIcon size={16} className="text-gray-400" />}
+                <h3 className="text-sm font-medium text-gray-100 uppercase">
                   {categoryLabels[category] || category}
                 </h3>
               </div>
@@ -75,7 +75,7 @@ export default function NodePalette({ onNodeDragStart, hideTriggers = false }: N
                         e.dataTransfer.setData('application/reactflow', JSON.stringify(node));
                         onNodeDragStart(node);
                       }}
-                      className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-grab hover:bg-gray-100 hover:border-gray-300 transition-all"
+                      className="flex items-center space-x-3 p-3 bg-[#0F172A] rounded-lg border border-gray-700/50 cursor-grab hover:bg-dark-surface-hover hover:border-gray-600 transition-all"
                       style={{ borderLeftColor: node.color, borderLeftWidth: '4px' }}
                     >
                       {Icon && (
@@ -87,7 +87,7 @@ export default function NodePalette({ onNodeDragStart, hideTriggers = false }: N
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900">{node.label}</p>
+                        <p className="text-sm font-medium text-gray-100">{node.label}</p>
                         <p className="text-xs text-gray-500 truncate">{node.description}</p>
                       </div>
                     </div>

@@ -50,8 +50,8 @@ export interface DiskSkill {
   name: string;
   displayName: string;
   description: string;
-  techStackId: string | null;
-  vulnerabilityPatternId: string | null;
+  categoryId: string | null;
+  vulnerabilityTreeId: string | null;
   severity: string;
   cwe: string | null;
   content: string;  // 完整的 Markdown 内容
@@ -179,8 +179,8 @@ export async function saveSkillToDisk(skill: Skill, overrideTemplate?: string): 
       name: skill.name,
       displayName: skill.displayName,
       description: skill.description,
-      techStackId: skill.techStackId,
-      vulnerabilityPatternId: skill.vulnerabilityPatternId,
+      categoryId: skill.categoryId,
+      vulnerabilityTreeId: skill.vulnerabilityTreeId,
       severity: skill.severity || 'medium',
       cwe: skill.cwe || '',
       content: skill.content || '',
@@ -206,15 +206,15 @@ export async function saveSkillToDisk(skill: Skill, overrideTemplate?: string): 
     
     // 更新 metadata.json（只保存最新版本的元数据）
     if (skill.isLatest) {
-      // 查询技术栈名称
+      // 查询分类名称
       let techStackNames: string[] = [];
-      if (skill.techStackId) {
-        const techStackOption = await prisma.techStackOption.findUnique({
-          where: { id: skill.techStackId },
+      if (skill.categoryId) {
+        const categoryOption = await prisma.skillCategory.findUnique({
+          where: { id: skill.categoryId },
           select: { name: true },
         });
-        if (techStackOption) {
-          techStackNames = [techStackOption.name];
+        if (categoryOption) {
+          techStackNames = [categoryOption.name];
         }
       }
       
@@ -372,7 +372,7 @@ export async function copySkillsToProject(
         tenantId: true,
         visibility: true,
         version: true,
-        techStackId: true,
+        categoryId: true,
         content: true,
         description: true,
         severity: true,
@@ -388,7 +388,7 @@ export async function copySkillsToProject(
         referenceCount: true,
         vulnerabilityCount: true,
         successExecCount: true,
-        vulnerabilityPatternId: true,
+        vulnerabilityTreeId: true,
       },
     });
     
@@ -405,9 +405,9 @@ export async function copySkillsToProject(
     
     for (const skill of filteredDbSkills) {
       // 技术栈匹配过滤
-      if (projectTechStack && projectTechStack.length > 0 && skill.techStackId) {
-        if (!projectTechStack.includes(skill.techStackId)) {
-          console.log(`[SkillFiles] 技术栈不匹配，跳过: ${skill.name} (Skill技术栈ID: ${skill.techStackId})`);
+      if (projectTechStack && projectTechStack.length > 0 && skill.categoryId) {
+        if (!projectTechStack.includes(skill.categoryId)) {
+          console.log(`[SkillFiles] 技术栈不匹配，跳过: ${skill.name} (Skill分类ID: ${skill.categoryId})`);
           continue;
         }
       }
@@ -503,7 +503,7 @@ export async function copySkillsToProject(
           referenceCount: skill.referenceCount ?? 0,
           vulnerabilityCount: skill.vulnerabilityCount ?? 0,
           successExecCount: skill.successExecCount ?? 0,
-          vulnerabilityPatternId: skill.vulnerabilityPatternId ?? null,
+          vulnerabilityTreeId: skill.vulnerabilityTreeId ?? null,
           tenantId: skill.tenantId ?? null,
           visibility: skill.visibility ?? 'private',
           createdAt: new Date(),
@@ -811,7 +811,7 @@ export async function copySkillsByIds(
         displayName: true,
         isActive: true,
         isLatest: true,
-        techStackId: true,
+        categoryId: true,
       },
     });
 
@@ -852,13 +852,13 @@ export async function copySkillsByIds(
       }
 
       // 技术栈验证（统一用 ID 比较）
-      if (projectTechStack && projectTechStack.length > 0 && skill.techStackId) {
-        if (!projectTechStack.includes(skill.techStackId)) {
+      if (projectTechStack && projectTechStack.length > 0 && skill.categoryId) {
+        if (!projectTechStack.includes(skill.categoryId)) {
           result.invalidSkills?.push({
             skillId,
             skillName: skill.name,
             reason: 'tech_stack_mismatch',
-            techStackId: skill.techStackId,
+            techStackId: skill.categoryId,
           });
           continue;
         }

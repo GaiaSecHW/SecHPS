@@ -129,20 +129,20 @@ function ReviewPageContent() {
       <div className="mb-6">
         <Link
           href="/dashboard/skills/governance"
-          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-2"
+          className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-300 mb-2"
         >
           <ArrowLeft className="h-4 w-4" />
           返回治理中心
         </Link>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">重复组审核</h1>
-            <p className="text-gray-600 mt-1">查看和处理相似的 Skill 组</p>
+            <h1 className="text-2xl font-bold text-gray-100">重复组审核</h1>
+            <p className="text-gray-400 mt-1">查看和处理相似的 Skill 组</p>
           </div>
           <div className="flex gap-2">
             <button
               onClick={fetchGroups}
-              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="inline-flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-dark-surface-hover"
             >
               <RefreshCw className="h-4 w-4" />
               刷新
@@ -169,9 +169,9 @@ function ReviewPageContent() {
       </div>
 
       {/* 说明 */}
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+      <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4 mb-6">
         <h3 className="text-sm font-medium text-yellow-800 mb-2">使用说明</h3>
-        <ol className="text-sm text-yellow-700 space-y-1 list-decimal list-inside">
+        <ol className="text-sm text-yellow-400 space-y-1 list-decimal list-inside">
           <li>点击"运行全量分析"扫描所有 Skill 的相似性</li>
           <li>系统会识别出可能重复的 Skill 组</li>
           <li>审核每组，决定是合并还是保留全部</li>
@@ -182,7 +182,7 @@ function ReviewPageContent() {
       {loading ? (
         <LoadingSpinner />
       ) : groups.length === 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-12 text-center">
           <AlertTriangle className="h-12 w-12 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500 mb-4">暂无重复组数据</p>
           <p className="text-sm text-gray-400">
@@ -194,11 +194,11 @@ function ReviewPageContent() {
           {groups.map((group) => (
             <div
               key={group.id}
-              className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+              className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden"
             >
-              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+              <div className="px-4 py-3 bg-dark-bg border-b border-gray-700/50 flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">
+                  <p className="font-medium text-gray-100">
                     {group.name || `${group.language} - ${group.vulnerabilityType}`}
                   </p>
                   <p className="text-sm text-gray-500">
@@ -211,7 +211,7 @@ function ReviewPageContent() {
                     <>
                       <button
                         onClick={() => handleResolve(group.id, 'keep_all')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-300 bg-dark-surface-hover rounded hover:bg-gray-200"
                       >
                         <CheckCircle className="h-3 w-3" />
                         保留全部
@@ -237,20 +237,20 @@ function ReviewPageContent() {
                 {group.members.map((member) => (
                   <div
                     key={member.skillId}
-                    className="px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+                    className="px-4 py-3 flex items-center justify-between hover:bg-dark-surface-hover"
                   >
                     <div className="flex items-center gap-3">
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-medium ${
                           member.role === 'primary'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-gray-100 text-gray-600'
+                            ? 'bg-blue-100 text-blue-400'
+                            : 'bg-dark-surface-hover text-gray-400'
                         }`}
                       >
                         {member.role === 'primary' ? '主要' : '成员'}
                       </span>
                       <div>
-                        <p className="font-medium text-gray-900">
+                        <p className="font-medium text-gray-100">
                           {member.skillDisplayName}
                         </p>
                         <p className="text-sm text-gray-500">{member.skillName}</p>

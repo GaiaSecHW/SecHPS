@@ -15,10 +15,8 @@ import {
   Eye,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
+import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
 import { hasPermission } from '@/lib/permissions';
-import { useTechStackOptionsWithIds, TechStackOptionWithId } from '@/hooks/useTechStackOptionsWithIds';
-import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
-import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
 
 // 使用公共模块的默认模板
@@ -36,15 +34,17 @@ export default function CreateSkillPage() {
   const [content, setContent] = useState(DEFAULT_TEMPLATE);
   const [isPublic, setIsPublic] = useState(false);
   
-  // 技术栈单选（改为 ID）
-  const [techStackId, setTechStackId] = useState<string>('');
-  const [techStackSearch, setTechStackSearch] = useState('');
-  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
-  
-// 漏洞模式单选（改为 ID）
-  const [vulnerabilityPatternId, setVulnerabilityPatternId] = useState<string>('');
-  const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
-  const techStackDropdownRef = useRef<HTMLDivElement>(null);
+  // 三维分类
+  const [categoryId, setCategoryId] = useState<string>('');
+  const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<string | null>(null);
+  const [productTagIds, setProductTagIds] = useState<string[]>([]);
+
+  // 分类数据
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; description?: string; icon?: string; hasSubDimension: boolean }>>([]);
+  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; type: string; patterns: Array<{ id: string; name: string; displayName: string; skillCount: number }> }>>([]);
+  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingTree, setLoadingTree] = useState(false);
 
   // AI 生成相关状态
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -72,9 +72,6 @@ export default function CreateSkillPage() {
   };
 
   // 技术栈选项 - 从数据库动态获取
-  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
-  const techStackOptions = techStackOptionsWithIds;
-
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -85,23 +82,67 @@ export default function CreateSkillPage() {
         console.error('解析 token 失败:', error);
       }
     }
-  }, []);
 
-  // 点击外部关闭技术栈下拉框
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (techStackDropdownRef.current && !techStackDropdownRef.current.contains(event.target as Node)) {
-        setShowTechStackDropdown(false);
+    // 获取分类数据
+    const fetchCategories = async () => {
+      setLoadingCategories(true);
+      try {
+        const t = localStorage.getItem('token');
+        const res = await fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setCategories(data.categories || []);
+        }
+      } catch (e) {
+        console.error('获取分类失败:', e);
+      } finally {
+        setLoadingCategories(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+
+    // 获取漏洞模式树
+    const fetchTree = async () => {
+      setLoadingTree(true);
+      try {
+        const t = localStorage.getItem('token');
+        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setVulnerabilityTree(data.tree || []);
+        }
+      } catch (e) {
+        console.error('获取漏洞模式树失败:', e);
+      } finally {
+        setLoadingTree(false);
+      }
     };
+
+    fetchCategories();
+    fetchTree();
   }, []);
 
-  // 获取选中的技术栈对象
-  const selectedTechStack = techStackOptions.find(opt => opt.id === techStackId);
+  // 获取选中的分类对象
+  const selectedCategory = categories.find(c => c.id === categoryId);
+
+  // 当分类变化时，重置语言和模式选择
+  useEffect(() => {
+    setSelectedLanguageId('');
+    setVulnerabilityTreeId(null);
+  }, [categoryId]);
+
+  // 当语言变化时，重置模式选择
+  useEffect(() => {
+    setVulnerabilityTreeId(null);
+  }, [selectedLanguageId]);
+
+  // 获取当前语言和通用语言下的 patterns
+  const availablePatterns = (() => {
+    if (!selectedLanguageId) return [];
+    const langPatterns = vulnerabilityTree.find(l => l.id === selectedLanguageId)?.patterns || [];
+    const generalNode = vulnerabilityTree.find(l => l.name === '通用');
+    const generalPatterns = generalNode?.id === selectedLanguageId ? [] : (generalNode?.patterns || []);
+    return [...langPatterns, ...generalPatterns];
+  })();
 
   // AI 生成 Skill 内容
   const handleAiGenerate = async () => {
@@ -145,8 +186,9 @@ try {
             intent: {
               name: name.trim(),
               description: name.trim(),
-              category: selectedVulnerabilityPattern?.categoryId || 'code-audit',
-              techStackId: techStackId || undefined,
+              category: selectedCategory?.name || 'code-audit',
+              categoryId: categoryId || undefined,
+              vulnerabilityTreeId: vulnerabilityTreeId || undefined,
               whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
               whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
               expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
@@ -185,8 +227,13 @@ try {
       return;
     }
 
-    if (!vulnerabilityPatternId) {
-      setError('请选择漏洞类型');
+    if (!categoryId) {
+      setError('请选择分类');
+      return;
+    }
+
+    if (selectedCategory?.hasSubDimension && !vulnerabilityTreeId) {
+      setError('请选择漏洞模式');
       return;
     }
 
@@ -210,10 +257,10 @@ try {
           name: name.trim(),
           displayName: name.trim(),
           description: name.trim(),
-          techStackId: techStackId || null,
-          vulnerabilityPatternId: vulnerabilityPatternId || null,
+          categoryId: categoryId,
+          vulnerabilityTreeId: vulnerabilityTreeId || null,
+          productTagIds: productTagIds,
           content,
-          cwe: selectedVulnerabilityPattern?.cwe || null,
           isPublic,
         }),
       });
@@ -236,16 +283,16 @@ try {
       {/* AI 生成全屏遮罩 */}
       {aiGenerating && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
+          <div className="bg-dark-surface rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center animate-pulse">
               <Sparkles size={32} className="text-white" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">AI 正在生成 Skill</h3>
+            <h3 className="text-lg font-semibold text-gray-100">AI 正在生成 Skill</h3>
             <p className="text-sm text-gray-500 text-center">
               大模型内容生成中，请勿关闭页面或进行其他操作...
             </p>
             {/* 进度条 */}
-            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"
                 style={{ width: `${Math.max(5, 100 - (aiCountdown / 300) * 100)}%`, transition: 'width 1s linear' }}
@@ -265,13 +312,13 @@ try {
         <div className="flex items-center space-x-4">
           <button
             onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">创建新 Skill</h1>
-            <p className="text-sm text-gray-600">定义一个新的 AI 漏洞检测技能</p>
+            <h1 className="text-2xl font-bold text-gray-100">创建新 Skill</h1>
+            <p className="text-sm text-gray-400">定义一个新的 AI 漏洞检测技能</p>
           </div>
         </div>
       </div>
@@ -279,17 +326,17 @@ try {
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+          <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
             {error}
           </div>
         )}
 
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-6 space-y-6">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6 space-y-6">
           {/* 基本信息 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Skill 名称 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
                 Skill 名称 <span className="text-red-500">*</span>
               </label>
               <input
@@ -297,91 +344,75 @@ try {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="例如：SQL注入检测"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 required
               />
             </div>
 
-            {/* 漏洞类型（VulnerabilityPattern） */}
+            {/* 分类（Category） */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                漏洞类型 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                分类 <span className="text-red-500">*</span>
               </label>
-              <VulnerabilityPatternSelector
-                value={vulnerabilityPatternId}
-                onChange={(id, pattern) => {
-                  setVulnerabilityPatternId(id);
-                  setSelectedVulnerabilityPattern(pattern);
-                }}
-              />
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                disabled={loadingCategories}
+              >
+                <option value="">{loadingCategories ? '加载中...' : '请选择分类'}</option>
+                {categories.map(c => (
+                  <option key={c.id} value={c.id}>{c.displayName}</option>
+                ))}
+              </select>
             </div>
 
-            {/* 技术栈（单选） */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                适合的语言
-              </label>
-              <div className="relative" ref={techStackDropdownRef}>
-                <input
-                  type="text"
-                  value={techStackSearch || (selectedTechStack ? selectedTechStack.name : '')}
-                  onChange={(e) => {
-                    setTechStackSearch(e.target.value);
-                    setShowTechStackDropdown(true);
-                  }}
-                  onFocus={() => setShowTechStackDropdown(true)}
-                  placeholder={loadingTechStack ? "加载中..." : "搜索并选择语言..."}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loadingTechStack}
-                />
-                {showTechStackDropdown && !loadingTechStack && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {techStackOptions
-                      .filter((option) => 
-                        option.name.toLowerCase().includes(techStackSearch.toLowerCase())
-                      )
-
-                      .map((option) => (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => {
-                            setTechStackId(option.id);
-                            setTechStackSearch('');
-                            setShowTechStackDropdown(false);
-                          }}
-                          className={`w-full px-4 py-2 text-left hover:bg-gray-100 text-sm ${
-                            option.id === techStackId ? 'bg-blue-50 text-blue-700' : ''
-                          }`}
-                        >
-                          {option.name}
-                          {option.description && (
-                            <span className="text-gray-400 ml-2 text-xs">{option.description}</span>
-                          )}
-                        </button>
-                      ))}
-                    {techStackOptions.filter((option) => 
-                      option.name.toLowerCase().includes(techStackSearch.toLowerCase())
-                    ).length === 0 && (
-                      <div className="px-4 py-2 text-sm text-gray-500">
-                        无匹配选项
-                      </div>
-                    )}
-                  </div>
-                )}
-                {loadingTechStack && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-3">
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      <span className="text-sm text-gray-500">加载中...</span>
-                    </div>
-                  </div>
-                )}
-                <p className="text-xs text-gray-500 mt-1">
-                  选择此 Skill 适用的编程语言
-                </p>
+            {/* 语言（Language）- 仅当分类 hasSubDimension=true 时显示 */}
+            {selectedCategory?.hasSubDimension && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  语言
+                </label>
+                <select
+                  value={selectedLanguageId}
+                  onChange={(e) => setSelectedLanguageId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  disabled={loadingTree}
+                >
+                  <option value="">{loadingTree ? '加载中...' : '请选择语言'}</option>
+                  {vulnerabilityTree.map(lang => (
+                    <option key={lang.id} value={lang.id}>{lang.displayName}</option>
+                  ))}
+                </select>
               </div>
-            </div>
+            )}
+
+            {/* 漏洞模式（Pattern）- 仅当选择了语言后显示 */}
+            {selectedCategory?.hasSubDimension && selectedLanguageId && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  漏洞模式 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={vulnerabilityTreeId || ''}
+                  onChange={(e) => setVulnerabilityTreeId(e.target.value || null)}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">请选择漏洞模式</option>
+                  {availablePatterns.map(p => (
+                    <option key={p.id} value={p.id}>{p.displayName}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* 适用产品（维度三） */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
+            </label>
+            <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
           </div>
 
           {/* 是否公开 */}
@@ -392,9 +423,9 @@ try {
                   type="checkbox"
                   checked={isPublic}
                   onChange={(e) => setIsPublic(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
                 />
-                <span className="ml-2 text-sm text-gray-700">
+                <span className="ml-2 text-sm text-gray-300">
                   公开 Skill（所有用户可见）
                 </span>
               </label>
@@ -404,7 +435,7 @@ try {
           {/* Markdown 内容 */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-300">
                 Skill 内容（Markdown 格式）<span className="text-red-500">*</span>
               </label>
               <div className="flex items-center gap-2">
@@ -437,7 +468,7 @@ try {
                   <button
                     type="button"
                     onClick={() => setShowDiffModal(true)}
-                    className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
+                    className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
                     title="重新打开上次 AI 生成结果的对比弹窗"
                   >
                     <Eye size={14} className="mr-1.5" />
@@ -447,7 +478,7 @@ try {
                 <button
                   type="button"
                   onClick={() => setContent(DEFAULT_TEMPLATE)}
-                  className="text-sm text-blue-600 hover:text-blue-800"
+                  className="text-sm text-blue-400 hover:text-blue-800"
                 >
                   重置模板
                 </button>
@@ -456,7 +487,7 @@ try {
 
             {/* AI 生成错误提示 */}
             {aiGenerateError && (
-              <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+              <div className="mb-3 flex items-start gap-2 bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg text-sm">
                 <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
                 <span>{aiGenerateError}</span>
               </div>
@@ -464,31 +495,31 @@ try {
 
             {/* AI 生成提示 */}
             {aiGenerateSuccess && (
-              <div className="mb-3 flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
+              <div className="mb-3 flex items-center gap-2 bg-green-900/20 border border-green-200 text-green-400 px-4 py-3 rounded-lg text-sm">
                 <CheckCircle size={16} className="flex-shrink-0" />
                 <span>AI 已根据 Skill 名称和分类生成内容，你可以在下方编辑器中继续修改完善。</span>
               </div>
             )}
 
-            <div className="mb-3 border border-gray-200 rounded-lg overflow-hidden">
+            <div className="mb-3 border border-gray-700/50 rounded-lg overflow-hidden">
               <button
                 type="button"
                 onClick={() => setShowFormatHint(!showFormatHint)}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-gray-600"
+                className="w-full flex items-center justify-between px-4 py-2.5 bg-dark-bg hover:bg-dark-surface-hover transition-colors text-sm text-gray-400"
               >
                 <span>格式建议</span>
                 {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </button>
               {showFormatHint && (
-                <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600 space-y-4">
+                <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50 text-sm text-gray-400 space-y-4">
                   {/* 核心结构 */}
                   <div>
-                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">1</span>
+                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-blue-100 text-blue-400 flex items-center justify-center text-xs font-bold">1</span>
                       核心结构（YAML Frontmatter + Markdown 正文）
                     </h4>
-                    <div className="bg-white rounded border border-gray-200 p-3 font-mono text-xs leading-relaxed overflow-auto max-h-64">
-                      <pre className="text-gray-700">{FORMAT_GUIDE.example.yaml}
+                    <div className="bg-dark-surface rounded border border-gray-700/50 p-3 font-mono text-xs leading-relaxed overflow-auto max-h-64">
+                      <pre className="text-gray-300">{FORMAT_GUIDE.example.yaml}
 
 {FORMAT_GUIDE.example.content}</pre>
                     </div>
@@ -496,14 +527,14 @@ try {
 
                   {/* 关键原则 */}
                   <div>
-                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">2</span>
+                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-green-100 text-green-400 flex items-center justify-center text-xs font-bold">2</span>
                       优秀 Skill 的关键原则
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {FORMAT_GUIDE.principles.map((p, i) => (
-                        <div key={i} className="bg-white rounded border p-3">
-                          <p className="font-medium text-gray-800 mb-1">{p.title}</p>
+                        <div key={i} className="bg-dark-surface rounded border p-3">
+                          <p className="font-medium text-gray-200 mb-1">{p.title}</p>
                           <p className="text-xs text-gray-500">{p.description}</p>
                         </div>
                       ))}
@@ -512,25 +543,25 @@ try {
 
                   {/* 常见错误 */}
                   <div>
-                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-red-100 text-red-700 flex items-center justify-center text-xs font-bold">3</span>
+                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
+                      <span className="w-5 h-5 rounded bg-red-100 text-red-400 flex items-center justify-center text-xs font-bold">3</span>
                       常见错误 vs 正确做法
                     </h4>
                     <div className="space-y-2">
                       {FORMAT_GUIDE.mistakes.map((m, i) => (
                         <div key={i}>
-                          <div className="flex items-start gap-3 bg-red-50 rounded border border-red-100 p-2">
+                          <div className="flex items-start gap-3 bg-red-900/20 rounded border border-red-100 p-2">
                             <span className="text-red-500 font-bold text-xs">❌</span>
                             <div className="text-xs">
-                              <p className="font-medium text-red-700">{m.wrong}</p>
-                              <code className="text-red-600 bg-red-100 px-1 rounded">{m.wrongCode}</code>
+                              <p className="font-medium text-red-400">{m.wrong}</p>
+                              <code className="text-red-400 bg-red-100 px-1 rounded">{m.wrongCode}</code>
                             </div>
                           </div>
-                          <div className="flex items-start gap-3 bg-green-50 rounded border border-green-100 p-2">
+                          <div className="flex items-start gap-3 bg-green-900/20 rounded border border-green-100 p-2">
                             <span className="text-green-500 font-bold text-xs">✅</span>
                             <div className="text-xs">
-                              <p className="font-medium text-green-700">{m.right}</p>
-                              <code className="text-green-600 bg-green-100 px-1 rounded">{m.rightCode}</code>
+                              <p className="font-medium text-green-400">{m.right}</p>
+                              <code className="text-green-400 bg-green-100 px-1 rounded">{m.rightCode}</code>
                             </div>
                           </div>
                         </div>
@@ -540,7 +571,7 @@ try {
 
                   {/* 推荐章节 */}
                   <div>
-                    <h4 className="font-semibold text-gray-800 mb-2 flex items-center gap-2">
+                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
                       <span className="w-5 h-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">4</span>
                       推荐章节结构
                     </h4>
@@ -550,8 +581,8 @@ try {
                           key={i}
                           className={`px-2 py-1 rounded text-xs font-mono ${
                             s.highlight
-                              ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                              : 'bg-purple-50 text-purple-700'
+                              ? 'bg-orange-900/20 text-orange-700 border border-orange-200'
+                              : 'bg-purple-900/20 text-purple-700'
                           }`}
                         >
                           {s.name}{s.highlight ? ' ⭐重要' : ''}
@@ -568,7 +599,7 @@ try {
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              className="w-full h-[500px] px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              className="w-full h-[500px] px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
               placeholder="输入 Markdown 格式的 Skill 定义，或点击上方「AI 生成内容」按钮自动生成..."
               required
             />
@@ -580,7 +611,7 @@ try {
           <button
             type="button"
             onClick={() => router.back()}
-            className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors"
           >
             取消
           </button>
@@ -649,22 +680,22 @@ try {
         const { left: leftDiff, right: rightDiff } = buildDiff(leftLines, rightLines);
 
         const rowBg = (type: DiffRow['type'], side: 'left'|'right') => {
-          if (type === 'removed') return 'bg-red-50';
-          if (type === 'added') return 'bg-green-50';
-          if (type === 'empty') return side === 'left' ? 'bg-green-50/40' : 'bg-red-50/40';
+          if (type === 'removed') return 'bg-red-900/20';
+          if (type === 'added') return 'bg-green-900/20';
+          if (type === 'empty') return side === 'left' ? 'bg-green-900/20/40' : 'bg-red-900/20/40';
           return '';
         };
         const textColor = (type: DiffRow['type']) => {
-          if (type === 'removed') return 'text-red-700';
-          if (type === 'added') return 'text-green-700';
+          if (type === 'removed') return 'text-red-400';
+          if (type === 'added') return 'text-green-400';
           if (type === 'empty') return 'text-transparent select-none';
-          return 'text-gray-700';
+          return 'text-gray-300';
         };
         const lineNoBg = (type: DiffRow['type']) => {
           if (type === 'removed') return 'bg-red-100 text-red-400';
           if (type === 'added') return 'bg-green-100 text-green-500';
-          if (type === 'empty') return 'bg-gray-50 text-transparent';
-          return 'bg-gray-50 text-gray-300';
+          if (type === 'empty') return 'bg-dark-bg text-transparent';
+          return 'bg-dark-bg text-gray-300';
         };
         const marker = (type: DiffRow['type']) => {
           if (type === 'removed') return <span className="text-red-400 select-none mr-1">−</span>;
@@ -686,16 +717,16 @@ try {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
+            <div className="bg-dark-surface rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
 
               {/* 头部 */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
                     <Sparkles size={16} className="text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">AI 生成内容对比</h2>
+                    <h2 className="text-lg font-semibold text-gray-100">AI 生成内容对比</h2>
                     <p className="text-xs text-gray-500">
                       共 <span className="font-medium text-orange-500">{changedCount}</span> 处变更 &nbsp;·&nbsp;
                       <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block"/>删除</span> &nbsp;
@@ -704,25 +735,25 @@ try {
                   </div>
                 </div>
                 <button onClick={() => setShowDiffModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  className="p-2 text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover rounded-lg transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               {/* 列标题 */}
-              <div className="flex divide-x divide-gray-200 flex-shrink-0 border-b border-gray-200">
-                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50">
+              <div className="flex divide-x divide-gray-700/50 flex-shrink-0 border-b border-gray-700/50">
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0F172A]">
                   <span className="w-2 h-2 rounded-full bg-red-400"/>
-                  <span className="text-sm font-medium text-gray-600">当前内容（你填写的）</span>
+                  <span className="text-sm font-medium text-gray-400">当前内容（你填写的）</span>
                 </div>
-                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-50">
-                  <span className="w-2 h-2 rounded-full bg-purple-500"/>
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-900/20">
+                  <span className="w-2 h-2 rounded-full bg-purple-600"/>
                   <span className="text-sm font-medium text-purple-700">AI 生成的内容</span>
                 </div>
               </div>
 
               {/* diff 主体 */}
-              <div className="flex-1 flex divide-x divide-gray-200 min-h-0 overflow-hidden">
+              <div className="flex-1 flex divide-x divide-gray-700/50 min-h-0 overflow-hidden">
                 <div ref={(el) => { (window as any).__diffLeft = el; }}
                   onScroll={onLeftScroll}
                   className="flex-1 overflow-auto font-mono text-xs leading-5">
@@ -760,10 +791,10 @@ try {
               </div>
 
               {/* 底部操作 */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 flex-shrink-0 bg-dark-bg rounded-b-2xl">
                 <button
                   onClick={() => setShowDiffModal(false)}
-                  className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
                 >
                   放弃，保留当前内容
                 </button>

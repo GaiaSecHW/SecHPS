@@ -181,7 +181,7 @@ export default function TechStackPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
       </div>
     );
   }
@@ -190,15 +190,15 @@ export default function TechStackPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
             <Layers className="h-6 w-6" />
             技术栈管理
           </h1>
-          <p className="text-gray-600 mt-1">管理可用于 Skill 和 Workflow 的技术栈选项</p>
+          <p className="text-gray-400 mt-1">管理可用于 Skill 和 Workflow 的技术栈选项</p>
         </div>
         <button
           onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
         >
           <Plus size={18} />
           添加技术栈
@@ -206,23 +206,23 @@ export default function TechStackPage() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-md">
           {error}
         </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
+        <div className="bg-green-900/20 border border-green-800/40 text-green-300 px-4 py-3 rounded-md">
           {success}
         </div>
       )}
 
-      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
         {Object.entries(groupedOptions).map(([category, opts]) => {
           const categoryInfo = DEFAULT_CATEGORY_CONFIG[category] || { label: category, icon: DEFAULT_ICON };
           const Icon = categoryInfo.icon;
           return (
             <div key={category}>
-              <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
                 <Icon size={16} />
                 {categoryInfo.label}
                 <span className="text-gray-400 font-normal">({opts.length})</span>
@@ -232,14 +232,14 @@ export default function TechStackPage() {
                   <div
                     key={opt.id}
                     className={`flex items-center justify-between px-3 py-2 rounded-md border ${
-                      opt.isActive ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100 text-gray-400'
+                      opt.isActive ? 'bg-dark-surface border-gray-700/50' : 'bg-[#0F172A] border-gray-100 text-gray-400'
                     }`}
                   >
                     <span className="text-sm truncate">{opt.name}</span>
                     <div className="flex items-center gap-1 ml-2 flex-shrink-0">
                       <button
                         onClick={() => handleEdit(opt)}
-                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
+                        className="p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-600/100/100/10 rounded"
                         title="编辑"
                       >
                         <Edit2 size={14} />
@@ -247,7 +247,7 @@ export default function TechStackPage() {
                       {!opt.isBuiltin && (
                         <button
                           onClick={() => handleDelete(opt.id)}
-                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          className="p-1 text-gray-400 hover:text-red-400 hover:bg-red-600/100/100/10 rounded"
                           title="删除"
                         >
                           <Trash2 size={14} />
@@ -256,7 +256,7 @@ export default function TechStackPage() {
                       <button
                         onClick={() => handleToggleActive(opt)}
                         className={`p-1 rounded ${
-                          opt.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'
+                          opt.isActive ? 'text-green-400 hover:bg-green-600/100/10' : 'text-gray-400 hover:bg-dark-surface-hover'
                         }`}
                         title={opt.isActive ? '禁用' : '启用'}
                       >
@@ -279,44 +279,44 @@ export default function TechStackPage() {
 
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">
                 {editingId ? '编辑技术栈' : '添加技术栈'}
               </h3>
               <button
                 onClick={() => { setShowAddModal(false); resetForm(); setError(null); }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-400"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 space-y-4">
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+                <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-md">
                   {error}
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   名称 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => { setFormData({ ...formData, name: e.target.value }); setError(null); }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="例如：Java、Spring、MySQL"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   分类 <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   {effectiveCategoryOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -324,27 +324,27 @@ export default function TechStackPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                <label className="block text-sm font-medium text-gray-300 mb-1">描述</label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="可选描述"
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end gap-3">
               <button
                 onClick={() => { setShowAddModal(false); resetForm(); }}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
               >
                 取消
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50"
               >
                 {saving ? '保存中...' : '保存'}
               </button>
