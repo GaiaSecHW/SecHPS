@@ -1568,6 +1568,7 @@ model TaskInstance {
   mergedScripts    String?
   executionResult  String?
   reportPath       String?
+  codeswarmTaskId  String?
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   TaskExecutionLog TaskExecutionLog[]

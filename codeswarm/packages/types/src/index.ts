@@ -103,7 +103,7 @@ export type Task = z.infer<typeof TaskSchema>;
 export const TaskPayloadSchema = z.object({
   taskId: z.string(),
   instruction: z.string(),
-  projectPath: z.string(),
+  projectPath: z.string().optional(),
   skills: z.array(z.string()).optional(),
   mcps: z.array(MCPServiceSchema).optional(),
   model: z.string().optional(),
@@ -119,6 +119,8 @@ export const TaskPayloadSchema = z.object({
   gitUrl: z.string().optional(),
   // Git branch/commit to checkout after clone
   gitRef: z.string().optional(),
+  // Agent type (opencode, claudecode, etc.)
+  agent: z.string().optional(),
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

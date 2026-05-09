@@ -162,6 +162,14 @@ export async function POST(
       });
     });
 
+    await prisma.taskInstance.update({
+      where: { id },
+      data: {
+        codeswarmTaskId: codeswarmData.taskId,
+        updatedAt: new Date(),
+      },
+    });
+
     return NextResponse.json({
       message: '任务已开始执行',
       taskId: id,
