@@ -24,6 +24,8 @@ interface TaskInstance {
   startedAt: string | null;
   completedAt: string | null;
   errorMessage: string | null;
+  executionResult: string | null;
+  reportPath: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -301,9 +303,37 @@ export default function TaskDetailPage() {
         <div className="bg-red-600/10 rounded-lg border border-red-500/20 p-6">
           <div className="flex items-center gap-2 mb-4">
             <XCircle size={20} className="text-red-400" />
-            <h2 className="text-lg font-semibold text-red-900">错误信息</h2>
+            <h2 className="text-lg font-semibold text-red-400">错误信息</h2>
           </div>
-          <p className="text-sm text-red-400">{task.errorMessage}</p>
+          <pre className="text-sm text-red-400 whitespace-pre-wrap overflow-x-auto">{task.errorMessage}</pre>
+        </div>
+      )}
+
+      {task.executionResult && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle size={20} className="text-green-400" />
+            <h2 className="text-lg font-semibold text-gray-100">执行结果</h2>
+          </div>
+          <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap">
+            {task.executionResult.length > 5000 
+              ? task.executionResult.slice(0, 5000) + '\n...(内容过长，已截断)'
+              : task.executionResult}
+          </pre>
+        </div>
+      )}
+
+      {task.reportPath && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FileText size={20} className="text-yellow-400" />
+            <h2 className="text-lg font-semibold text-gray-100">安全报告</h2>
+          </div>
+          <pre className="bg-gray-900 text-yellow-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96">
+            {task.reportPath.length > 3000 
+              ? task.reportPath.slice(0, 3000) + '\n...(内容过长，已截断)'
+              : task.reportPath}
+          </pre>
         </div>
       )}
 
