@@ -184,71 +184,88 @@ async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): 
   for (let i = 0; i < maxPolls; i++) {
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const response = await fetch(`${baseUrl}/api/codeswarm/tasks/${codeswarmTaskId}`);
-    const data = await response.json();
-    const task = data.task;
+    try {
+      const response = await fetch(`${baseUrl}/api/codeswarm/tasks/${codeswarmTaskId}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error('CodeSwarm 任务已被删除');
+        }
+        throw new Error(`查询 CodeSwarm 任务失败: ${response.status}`);
+      }
 
-    if (task.state === 'completed') {
-      await prisma.taskInstance.update({
-        where: { id: localTaskId },
-        data: {
-          status: 'completed',
-          completedAt: new Date(),
-          updatedAt: new Date(),
-          executionResult: task.result || null,
-          reportPath: task.reportContent || null,
-        },
-      });
+      const data = await response.json();
+      const task = data.task;
 
-      eventBus.emit(`task:${localTaskId}`, {
-        type: 'completed',
-        level: 'success',
-        message: '任务执行完成',
-        details: '所有步骤已完成',
-        timestamp: new Date(),
-      });
-      return;
-    }
+      if (!task) {
+        throw new Error('CodeSwarm 任务不存在');
+      }
 
-    if (task.state === 'failed') {
-      throw new Error(task.error || 'CodeSwarm 任务执行失败');
-    }
+      if (task.state === 'completed') {
+        await prisma.taskInstance.update({
+          where: { id: localTaskId },
+          data: {
+            status: 'completed',
+            completedAt: new Date(),
+            updatedAt: new Date(),
+            executionResult: task.result || null,
+            reportPath: task.reportContent || null,
+          },
+        });
 
-    if (task.events && task.events.length > 0) {
-      const recentEvents = task.events.slice(-5);
-      for (const event of recentEvents) {
-        if (event.type === 'agent_message_chunk') {
-          await prisma.taskExecutionLog.create({
-            data: {
-              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              taskId: localTaskId,
-              level: 'info',
-              message: 'Agent 输出',
-              details: event.content?.substring(0, 200) || null,
-            },
-          });
-        } else if (event.type === 'tool_call') {
-          await prisma.taskExecutionLog.create({
-            data: {
-              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              taskId: localTaskId,
-              level: 'info',
-              message: '工具调用',
-              details: `工具: ${event.tool}`,
-            },
-          });
-        } else if (event.type === 'error') {
-          await prisma.taskExecutionLog.create({
-            data: {
-              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              taskId: localTaskId,
-              level: 'error',
-              message: '执行错误',
-              details: event.message || null,
-            },
-          });
+        eventBus.emit(`task:${localTaskId}`, {
+          type: 'completed',
+          level: 'success',
+          message: '任务执行完成',
+          details: '所有步骤已完成',
+          timestamp: new Date(),
+        });
+        return;
+      }
+
+      if (task.state === 'failed') {
+        throw new Error(task.error || 'CodeSwarm 任务执行失败');
+      }
+
+      if (task.events && task.events.length > 0) {
+        const recentEvents = task.events.slice(-5);
+        for (const event of recentEvents) {
+          if (event.type === 'agent_message_chunk') {
+            await prisma.taskExecutionLog.create({
+              data: {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                taskId: localTaskId,
+                level: 'info',
+                message: 'Agent 输出',
+                details: event.content?.substring(0, 200) || null,
+              },
+            });
+          } else if (event.type === 'tool_call') {
+            await prisma.taskExecutionLog.create({
+              data: {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                taskId: localTaskId,
+                level: 'info',
+                message: '工具调用',
+                details: `工具: ${event.tool}`,
+              },
+            });
+          } else if (event.type === 'error') {
+            await prisma.taskExecutionLog.create({
+              data: {
+                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                taskId: localTaskId,
+                level: 'error',
+                message: '执行错误',
+                details: event.message || null,
+              },
+            });
+          }
         }
       }
+    } catch (pollError) {
+      console.error(`[pollCodeswarmTask] 轮询失败:`, pollError);
+      throw pollError;
     }
   }
 
