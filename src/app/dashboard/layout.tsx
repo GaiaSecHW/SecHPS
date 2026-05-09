@@ -100,10 +100,10 @@ function DashboardLayoutContent({
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen">
       {/* Sidebar */}
       <div
-        className={`${collapsed ? 'w-16' : 'w-56'} bg-[#0F172A] text-gray-300 flex flex-col transition-all duration-300 ease-in-out relative flex-shrink-0 border-r border-gray-800/50`}
+        className={`fixed left-0 top-0 h-screen ${collapsed ? 'w-16' : 'w-56'} bg-[#0F172A] text-gray-300 flex flex-col transition-all duration-300 ease-in-out z-20 border-r border-gray-800/50`}
       >
         {/* Collapse toggle */}
         <button
@@ -260,7 +260,7 @@ function DashboardLayoutContent({
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 bg-dark-bg overflow-hidden flex flex-col">
+      <div className={`fixed right-0 top-0 h-screen ${collapsed ? 'left-16' : 'left-56'} bg-dark-bg overflow-hidden flex flex-col transition-all duration-300`}>
         {/* Header */}
         <header className="bg-dark-surface border-b border-gray-800/60 flex-shrink-0">
           <div className="h-14 flex items-center justify-between px-4 sm:px-6 lg:px-8">

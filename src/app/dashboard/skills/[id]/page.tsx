@@ -1289,39 +1289,37 @@ export default function SkillDetailPage() {
               {skill.hasSubDimension && (
                 <div>
                   <h3 className="text-sm font-medium text-gray-500 mb-1">攻击模式</h3>
-                  <p className="text-gray-100">
-                    <div className="flex items-center gap-1">
-                      {skill.languageName && (
-                        <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-400 rounded">
-                          {skill.languageName}
-                        </span>
-                      )}
-                      {skill.patternName && (
-                        <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
-                          {skill.patternName}
-                        </span>
-                      )}
-                      {!skill.languageName && !skill.patternName && <span>无</span>}
-                    </div>
-                  </p>
+                  <div className="text-gray-100 flex items-center gap-1">
+                    {skill.languageName && (
+                      <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-400 rounded">
+                        {skill.languageName}
+                      </span>
+                    )}
+                    {skill.patternName && (
+                      <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
+                        {skill.patternName}
+                      </span>
+                    )}
+                    {!skill.languageName && !skill.patternName && <span>无</span>}
+                  </div>
                 </div>
               )}
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">适用产品</h3>
-                <p className="text-gray-100">
-                  {skill.productTags && skill.productTags.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {skill.productTags.map(tag => (
-                        <span key={tag.id} className="px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">
-                          {tag.displayName}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">所有产品</span>
-                  )}
-                </p>
-              </div>
+<div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">适用产品</h3>
+                  <div className="text-gray-100">
+                    {skill.productTags && skill.productTags.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {skill.productTags.map(tag => (
+                          <span key={tag.id} className="px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">
+                            {tag.displayName}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">所有产品</span>
+                    )}
+                  </div>
+                </div>
             </div>
 
             {/* Markdown 内容 */}

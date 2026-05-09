@@ -130,7 +130,7 @@ export async function GET(request: Request) {
       prisma.skill.findMany({
         where,
         select: skillSelectMinimal,
-      orderBy: [{ displayName: 'asc' }],
+      orderBy: [{ execCount: 'desc' }, { updatedAt: 'desc' }],
         skip,
         take,
       }),

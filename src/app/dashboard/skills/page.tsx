@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState, useRef } from 'react';
+import { Suspense, useEffect, useState, useRef, Fragment } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
@@ -131,7 +131,7 @@ function SkillsPageContent() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(searchParams.get('categoryId') || '');
   const [selectedLanguageId, setSelectedLanguageId] = useState(searchParams.get('languageId') || '');
   const [selectedPatternId, setSelectedPatternId] = useState(searchParams.get('patternId') || '');
-  const [selectedActiveStatus, setSelectedActiveStatus] = useState(searchParams.get('isActive') || '');
+  const [selectedActiveStatus, setSelectedActiveStatus] = useState(searchParams.get('isActive') || 'true');
 
   const [categories, setCategories] = useState<SkillCategoryItem[]>([]);
   const [vulnerabilityTree, setVulnerabilityTree] = useState<VulnerabilityTreeLanguage[]>([]);
@@ -459,8 +459,8 @@ function SkillsPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Skills 管理</h1>
-          <p className="mt-1 text-sm text-gray-400">共 {totalSkills} 个 Skills</p>
+          <h1 className="text-2xl font-bold text-gray-100 tracking-tight">Skills 管理</h1>
+          <p className="mt-1 text-sm text-gray-400">共 <span className="text-primary-400 font-medium">{totalSkills}</span> 个 Skills</p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap justify-end">
           {isAdmin && selectedSkills.size > 0 && (
@@ -494,10 +494,10 @@ function SkillsPageContent() {
               </label>
             </>
           )}
-          <button onClick={() => router.push('/dashboard/skills/create-wizard')} className="inline-flex items-center px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm">
+          <button onClick={() => router.push('/dashboard/skills/create-wizard')} className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-500 hover:to-purple-400 text-sm transition-all duration-200 shadow-sm hover:shadow-purple-500/25">
             <Plus size={16} className="mr-1.5" />引导创建
           </button>
-          <button onClick={() => router.push('/dashboard/skills/create')} className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
+          <button onClick={() => router.push('/dashboard/skills/create')} className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-500 hover:to-primary-400 text-sm transition-all duration-200 shadow-sm hover:shadow-primary-500/25">
             <Code size={16} className="mr-1.5" />快速创建
           </button>
         </div>
@@ -514,7 +514,7 @@ function SkillsPageContent() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-100 placeholder-gray-500 text-base"
+              className="w-full pl-10 pr-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100 placeholder-gray-500 text-base transition-all duration-200"
             />
           </div>
           <button onClick={handleSearch} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
@@ -614,10 +614,10 @@ function SkillsPageContent() {
       {skills.length === 0 ? (
         <div className="bg-dark-surface rounded-xl shadow-sm border border-gray-700/50 p-12">
           <div className="text-center">
-            <Award className="mx-auto h-16 w-16 text-gray-500" />
+            <Award className="mx-auto h-16 w-16 text-gray-500 opacity-60" />
             <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Skills</h3>
             <p className="mt-2 text-sm text-gray-500">
-              {searchTerm || selectedCategoryId ? '没有找到匹配的 Skills' : '点击右上角按钮创建新 Skill'}
+              {searchTerm || selectedCategoryId ? '没有找到匹配的 Skills，尝试调整筛选条件' : '点击右上角按钮创建新 Skill'}
             </p>
           </div>
         </div>
@@ -633,11 +633,15 @@ function SkillsPageContent() {
             return (
               <div
                 key={skill.id}
-                className={`bg-dark-surface rounded-xl border shadow-sm hover:shadow-md transition-all cursor-pointer group relative ${
-                  selectedSkills.has(skill.id) ? 'ring-2 ring-primary-500 border-primary-400' : 'border-gray-700/50'
+                className={`bg-dark-surface rounded-xl border shadow-sm hover:shadow-lg hover:shadow-primary-500/10 hover:border-primary-500/30 transition-all duration-300 cursor-pointer group relative hover:-translate-y-1 ${
+                  selectedSkills.has(skill.id) ? 'ring-2 ring-primary-500 border-primary-400 shadow-primary-500/20' : 
+                  !skill.isActive ? 'border-gray-500/30 bg-gray-900/30' : 'border-gray-700/50'
                 }`}
                 onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
               >
+                {!skill.isActive && (
+                  <div className="absolute inset-0 bg-gray-500/5 rounded-xl pointer-events-none" />
+                )}
                 {/* Admin checkbox */}
                 {isAdmin && (
                   <div
@@ -711,50 +715,60 @@ function SkillsPageContent() {
                 </div>
 
                 {/* Card content */}
-                <div className="p-4">
+                <div className="p-4 flex flex-col h-full">
                   {/* Icon + Title */}
                   <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-9 h-9 rounded-lg ${iconColor} flex items-center justify-center flex-shrink-0`}>
-                      <IconComp className="text-white" size={18} />
+                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-all duration-200 ${
+                      iconColor === 'bg-red-600' ? 'bg-gradient-to-br from-red-500 to-red-700' :
+                      iconColor === 'bg-blue-600' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+                      iconColor === 'bg-indigo-600' ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' :
+                      iconColor === 'bg-green-600' ? 'bg-gradient-to-br from-green-500 to-green-700' :
+                      iconColor === 'bg-orange-600' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
+                      iconColor === 'bg-teal-500' ? 'bg-gradient-to-br from-teal-400 to-teal-600' :
+                      'bg-gradient-to-br from-gray-500 to-gray-700'
+                    }`}>
+                      <IconComp className="text-white drop-shadow-sm" size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-100 truncate text-base leading-tight">{skill.displayName}</h3>
+                      <h3 className={`font-semibold truncate text-base leading-tight ${!skill.isActive ? 'text-gray-400' : 'text-gray-100'}`}>{skill.displayName}</h3>
                       <p className="text-xs text-gray-500 truncate">{skill.name}</p>
                     </div>
                   </div>
 
-                  {/* Badges */}
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {skill.categoryName && (
-                      <span className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 rounded font-medium">
-                        {skill.categoryName}
-                      </span>
-                    )}
-                    {skill.hasSubDimension && skill.languageName && (
-                      <span className="px-2 py-0.5 text-xs bg-blue-500/15 text-blue-400 rounded">
-                        {skill.languageName}
-                      </span>
-                    )}
-                    {skill.hasSubDimension && skill.patternName && (
-                      <span className="px-2 py-0.5 text-xs bg-orange-500/15 text-orange-400 rounded">
-                        {skill.patternName}
-                      </span>
-                    )}
-                    {!skill.isActive && (
-                      <span className="px-2 py-0.5 text-xs bg-gray-500/15 text-gray-400 rounded">已禁用</span>
-                    )}
-                    {skill.isBuiltin && (
-                      <span className="px-2 py-0.5 text-xs bg-indigo-500/15 text-indigo-400 rounded">内置</span>
-                    )}
+                  {/* Badges - limit to 3 visible, rest on hover */}
+                  <div className="flex flex-wrap gap-1.5 mb-2 min-h-[1.5rem]">
+                    {(() => {
+                      const badges: Array<{ key: string; node: React.ReactNode }> = [];
+                      if (skill.categoryName) badges.push({ key: 'category', node: <span className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 rounded font-medium">{skill.categoryName}</span> });
+                      if (skill.hasSubDimension && skill.languageName) badges.push({ key: 'language', node: <span className="px-2 py-0.5 text-xs bg-blue-500/15 text-blue-400 rounded">{skill.languageName}</span> });
+                      if (skill.hasSubDimension && skill.patternName) badges.push({ key: 'pattern', node: <span className="px-2 py-0.5 text-xs bg-orange-500/15 text-orange-400 rounded">{skill.patternName}</span> });
+                      if (!skill.isActive) badges.push({ key: 'disabled', node: <span className="px-2 py-0.5 text-xs bg-gray-500/15 text-gray-400 rounded">已禁用</span> });
+                      if (skill.isBuiltin) badges.push({ key: 'builtin', node: <span className="px-2 py-0.5 text-xs bg-indigo-500/15 text-indigo-400 rounded">内置</span> });
+                      const visible = badges.slice(0, 3);
+                      const hidden = badges.slice(3);
+                      return (
+                        <>
+                          {visible.map(b => <Fragment key={b.key}>{b.node}</Fragment>)}
+                          {hidden.length > 0 && (
+                            <span className="px-2 py-0.5 text-xs bg-gray-600/15 text-gray-500 rounded group-hover:hidden">
+                              +{hidden.length}
+                            </span>
+                          )}
+                          {hidden.map(b => (
+                            <span key={b.key} className="hidden group-hover:inline-flex">{b.node}</span>
+                          ))}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   {/* Description */}
-                  <p className="text-sm text-gray-500 line-clamp-2 mb-2 leading-snug">
+                  <p className={`text-sm line-clamp-2 min-h-[2.5rem] mb-2 leading-snug ${!skill.description ? 'italic text-gray-400/60' : 'text-gray-500'}`}>
                     {skill.description || '暂无描述'}
                   </p>
 
                   {/* Metrics + Date */}
-                  <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-700/50">
+                  <div className={`flex items-center justify-between text-xs pt-2 border-t mt-auto ${!skill.isActive ? 'border-gray-600/30 text-gray-500' : 'border-gray-700/50 text-gray-400'}`}>
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1">
                         <Play size={12} /> {formatNumber(skill.execCount)}
