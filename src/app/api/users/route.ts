@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { generateId, ID_PREFIXES } from '@/lib/id-generator';
 import { PERMISSIONS } from '@/types/permissions';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
@@ -28,11 +29,11 @@ function validatePassword(password: string): { valid: boolean; error?: string } 
 export async function GET(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_READ });
+    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.USER_READ });
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     // 解析分页参数
     const { searchParams } = new URL(request.url);
@@ -41,9 +42,25 @@ export async function GET(request: Request) {
 
     const { skip, take, page: pageNum, limit: pageLimit } = getOffsetPagination({ page, limit });
 
+    // 构建租户过滤条件
+    let where: any = {};
+    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+      if (tenant.tenantId) {
+        // 租户用户：看到同租户用户 + 无租户用户
+        where.OR = [
+          { tenantId: tenant.tenantId },
+          { tenantId: null },
+        ];
+      } else {
+        // 无租户用户：只看到无租户用户
+        where.tenantId = null;
+      }
+    }
+
     // 获取用户总数和分页数据
     const [users, total] = await Promise.all([
       prisma.user.findMany({
+        where,
         include: {
           UserRole: {
             include: {
@@ -58,7 +75,7 @@ export async function GET(request: Request) {
         skip,
         take,
       }),
-      prisma.user.count(),
+      prisma.user.count({ where }),
     ]);
 
     // Fetch permissions for all roles via paginated raw SQL (MTU black hole fix)
@@ -77,6 +94,7 @@ export async function GET(request: Request) {
       name: user.name,
       avatar: user.avatar,
       isActive: user.isActive,
+      tenantId: user.tenantId,
       createdAt: user.createdAt,
       roles: user.UserRole.map(ur => ({
         id: ur.Role.id,

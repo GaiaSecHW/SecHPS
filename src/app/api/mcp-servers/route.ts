@@ -43,34 +43,47 @@ export async function GET(request: Request) {
       if (filter === 'mine') {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
-        where.OR = [{ visibility: 'public' }, { isShared: true }];
+        where.OR = [{ isShared: true }];
       }
-    } else {
-      // 普通用户：自己的 MCP + 共享的 MCP + 同租户的 MCP
-      const tenantFilter = buildTenantFilter(tenant, {
-        tenantField: 'tenantId',
-        visibilityField: 'visibility',
-      });
-
+    } else if (tenant.tenantId) {
+      // 普通租户用户：自己的 MCP + 共享的 MCP + 同租户的 MCP
       if (filter === 'mine') {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
         where.OR = [
-          { visibility: 'public' },
           { isShared: true },
-          { ...tenantFilter },
+          { tenantId: tenant.tenantId },
         ];
       } else {
         // all: 自己的 + 共享的 + 同租户的
         where.OR = [
           { userId: payload.userId },
-          { visibility: 'public' },
           { isShared: true },
-          { ...tenantFilter },
+          { tenantId: tenant.tenantId },
         ];
       }
       if (search) {
         // 合并搜索条件
+        const searchCondition = { name: { contains: search } };
+        if (where.OR) {
+          where.OR = where.OR.map((cond: any) => ({ ...cond, ...searchCondition }));
+        } else {
+          where.name = { contains: search };
+        }
+      }
+    } else {
+      // 无租户用户：自己的 + 共享的
+      if (filter === 'mine') {
+        where.userId = payload.userId;
+      } else if (filter === 'shared') {
+        where.OR = [{ isShared: true }];
+      } else {
+        where.OR = [
+          { userId: payload.userId },
+          { isShared: true },
+        ];
+      }
+      if (search) {
         const searchCondition = { name: { contains: search } };
         if (where.OR) {
           where.OR = where.OR.map((cond: any) => ({ ...cond, ...searchCondition }));
