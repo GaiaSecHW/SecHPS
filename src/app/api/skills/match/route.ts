@@ -1,8 +1,10 @@
 // src/app/api/skills/match/route.ts
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 import { routeRequestWithDefaultModel, getDefaultModelInfo } from '@/lib/model-client';
 import { analyzeSkillOverlap, type OverlapGroup } from '@/services/skill-overlap-analysis';
 import { predictImpact, type ImpactPrediction } from '@/services/skill-impact-prediction';
@@ -128,11 +130,11 @@ function generateGovernanceWarning(matches: SkillMatch[]): GovernanceWarning | n
  * 根据任务信息匹配相关 Skills
  */
 export async function POST(request: Request) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     // 解析请求体
@@ -147,7 +149,11 @@ export async function POST(request: Request) {
       );
     }
 
-    // 获取所有可用的 Skills（公共 + 当前用户私有）
+    // 获取所有可用的 Skills（带租户过滤）
+    const tenantFilter = buildTenantFilter(tenant, {
+      tenantField: 'tenantId',
+      visibilityField: 'visibility',
+    });
     const skills = await prisma.skill.findMany({
       where: {
         isActive: true,
@@ -155,6 +161,7 @@ export async function POST(request: Request) {
         OR: [
           { userId: null },           // 公共 Skills
           { userId: payload.userId }, // 用户私有 Skills
+          { ...tenantFilter },        // 同租户的 Skills
         ],
       },
       select: {

@@ -2,16 +2,18 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
-// GET /api/skills/export - 导出所有 Skills
+// GET /api/skills/export - 导出 Skills
 export async function GET(request: Request) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponseNested(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     // 检查是否是管理员
@@ -20,7 +22,22 @@ export async function GET(request: Request) {
       return NextResponse.json({ details: { error: '需要管理员权限' } }, { status: 403 });
     }
 
+    // 非平台管理员/ICSL 只能导出本租户的 Skills
+    const where: Record<string, unknown> = {};
+    if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+      const tenantFilter = buildTenantFilter(tenant, {
+        tenantField: 'tenantId',
+        visibilityField: 'visibility',
+      });
+      where.OR = [
+        { userId: null },
+        { userId: payload.userId },
+        { ...tenantFilter },
+      ];
+    }
+
     const skills = await prisma.skill.findMany({
+      where,
       orderBy: [{ displayName: 'asc' }],
     });
 

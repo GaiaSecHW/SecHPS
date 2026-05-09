@@ -2,20 +2,22 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponseNested } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 // POST /api/skills/batch - 批量操作
 export async function POST(request: Request) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponseNested(auth);
   }
-  const payload = auth.payload;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const body = await request.json();
@@ -25,10 +27,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '参数错误' } }, { status: 400 });
     }
 
-    // 获取所有指定的 Skills
+    // 构建租户过滤条件
+    const tenantFilter = buildTenantFilter(tenant, {
+      tenantField: 'tenantId',
+      visibilityField: 'visibility',
+    });
+
+    // 获取所有指定的 Skills（带租户过滤）
     const skills = await prisma.skill.findMany({
       where: {
         id: { in: skillIds },
+        OR: [
+          { userId: payload.userId },
+          { userId: null },
+          { ...tenantFilter },
+        ],
       },
     });
 
