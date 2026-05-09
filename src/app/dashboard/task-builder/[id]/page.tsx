@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -431,38 +431,176 @@ export default function TaskDetailPage() {
         {logs.length === 0 ? (
           <p className="text-sm text-gray-500 text-center py-8">暂无执行日志</p>
         ) : (
-          <div className="space-y-2 max-h-[500px] overflow-y-auto">
-            {logs.map((log) => {
-              const logConfig = logLevelConfig[log.level] || logLevelConfig.info;
-              const LogIcon = logConfig.icon;
-
-              return (
-                <div
-                  key={log.id}
-                  className={`p-3 rounded-lg border ${logConfig.bg} border-gray-700/50`}
-                >
-                  <div className="flex items-start gap-3">
-                    <LogIcon size={16} className={`${logConfig.text} mt-0.5`} />
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <span className={`text-sm font-medium ${logConfig.text}`}>
-                          {log.message}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {formatDate(log.timestamp)}
-                        </span>
-                      </div>
-                      {log.details && (
-                        <p className="text-xs text-gray-400 mt-1">{log.details}</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <LogsGroupedDisplay logs={logs} formatDate={formatDate} />
         )}
       </div>
+    </div>
+  );
+}
+
+function LogsGroupedDisplay({ logs, formatDate }: { logs: TaskExecutionLog[], formatDate: (date: string) => string }) {
+  const [agentOutputExpanded, setAgentOutputExpanded] = useState(true);
+  const [toolCallsExpanded, setToolCallsExpanded] = useState(true);
+  const [errorsExpanded, setErrorsExpanded] = useState(true);
+  const [statusExpanded, setStatusExpanded] = useState(true);
+
+  const groupedLogs = useMemo(() => {
+    const agentOutputLogs = logs.filter(l => l.message === 'Agent 输出');
+    const toolCallLogs = logs.filter(l => l.message === '工具调用');
+    const errorLogs = logs.filter(l => l.level === 'error');
+    const statusLogs = logs.filter(l => 
+      !['Agent 输出', '工具调用'].includes(l.message) && l.level !== 'error'
+    );
+    
+    const agentOutputText = agentOutputLogs.map(l => l.details || '').join('');
+    
+    return {
+      agentOutput: { logs: agentOutputLogs, text: agentOutputText },
+      toolCalls: { logs: toolCallLogs },
+      errors: { logs: errorLogs },
+      status: { logs: statusLogs },
+    };
+  }, [logs]);
+
+  return (
+    <div className="space-y-4">
+      {/* Agent 输出流 */}
+      {groupedLogs.agentOutput.logs.length > 0 && (
+        <div className="bg-gray-900/50 rounded-lg border border-gray-700/50">
+          <button
+            onClick={() => setAgentOutputExpanded(!agentOutputExpanded)}
+            className="w-full flex items-center justify-between p-3 hover:bg-gray-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Activity size={16} className="text-green-400" />
+              <span className="text-sm font-medium text-green-400">Agent 输出流</span>
+              <span className="text-xs text-gray-500">({groupedLogs.agentOutput.logs.length} 条)</span>
+            </div>
+            {agentOutputExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+          </button>
+          
+          {agentOutputExpanded && (
+            <div className="px-3 pb-3">
+              <pre className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96 whitespace-pre-wrap font-mono leading-relaxed">
+                {groupedLogs.agentOutput.text.length > 10000 
+                  ? groupedLogs.agentOutput.text.slice(0, 10000) + '\n...(内容过长，已截断)'
+                  : groupedLogs.agentOutput.text}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 工具调用列表 */}
+      {groupedLogs.toolCalls.logs.length > 0 && (
+        <div className="bg-blue-900/20 rounded-lg border border-blue-500/30">
+          <button
+            onClick={() => setToolCallsExpanded(!toolCallsExpanded)}
+            className="w-full flex items-center justify-between p-3 hover:bg-blue-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Wrench size={16} className="text-blue-400" />
+              <span className="text-sm font-medium text-blue-400">工具调用记录</span>
+              <span className="text-xs text-gray-500">({groupedLogs.toolCalls.logs.length} 次)</span>
+            </div>
+            {toolCallsExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+          </button>
+          
+          {toolCallsExpanded && (
+            <div className="px-3 pb-3">
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {groupedLogs.toolCalls.logs.map((log, idx) => (
+                  <div key={log.id} className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-500 font-mono">{idx + 1}.</span>
+                    <span className="text-blue-300">{log.details}</span>
+                    <span className="text-xs text-gray-600 ml-auto">{formatDate(log.timestamp)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 错误信息 */}
+      {groupedLogs.errors.logs.length > 0 && (
+        <div className="bg-red-900/20 rounded-lg border border-red-500/30">
+          <button
+            onClick={() => setErrorsExpanded(!errorsExpanded)}
+            className="w-full flex items-center justify-between p-3 hover:bg-red-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <XCircle size={16} className="text-red-400" />
+              <span className="text-sm font-medium text-red-400">错误信息</span>
+              <span className="text-xs text-gray-500">({groupedLogs.errors.logs.length} 条)</span>
+            </div>
+            {errorsExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+          </button>
+          
+          {errorsExpanded && (
+            <div className="px-3 pb-3">
+              <div className="space-y-2">
+                {groupedLogs.errors.logs.map((log) => (
+                  <div key={log.id} className="bg-red-900/30 p-3 rounded-lg">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-red-400">{log.message}</span>
+                      <span className="text-xs text-gray-600">{formatDate(log.timestamp)}</span>
+                    </div>
+                    {log.details && (
+                      <pre className="text-xs text-red-300 whitespace-pre-wrap overflow-x-auto mt-1">
+                        {log.details}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 执行状态时间线 */}
+      {groupedLogs.status.logs.length > 0 && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50">
+          <button
+            onClick={() => setStatusExpanded(!statusExpanded)}
+            className="w-full flex items-center justify-between p-3 hover:bg-gray-800/30 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Activity size={16} className="text-gray-400" />
+              <span className="text-sm font-medium text-gray-300">执行状态时间线</span>
+              <span className="text-xs text-gray-500">({groupedLogs.status.logs.length} 步)</span>
+            </div>
+            {statusExpanded ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+          </button>
+          
+          {statusExpanded && (
+            <div className="px-3 pb-3">
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {groupedLogs.status.logs.map((log) => {
+                  const logConfig = logLevelConfig[log.level] || logLevelConfig.info;
+                  const LogIcon = logConfig.icon;
+                  
+                  return (
+                    <div key={log.id} className="flex items-start gap-2">
+                      <LogIcon size={14} className={`${logConfig.text} mt-0.5`} />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-sm ${logConfig.text}`}>{log.message}</span>
+                          <span className="text-xs text-gray-500">{formatDate(log.timestamp)}</span>
+                        </div>
+                        {log.details && (
+                          <p className="text-xs text-gray-400 mt-0.5">{log.details}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -245,7 +245,7 @@ async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): 
                 taskId: localTaskId,
                 level: 'info',
                 message: 'Agent 输出',
-                details: event.content?.substring(0, 200) || null,
+                details: event.content || null,
               },
             });
           } else if (event.type === 'tool_call') {
