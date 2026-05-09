@@ -302,6 +302,13 @@ function DashboardLayoutContent({
                 </div>
                 <p className="text-gray-500 text-xs">{user?.email}</p>
               </div>
+              <button
+                onClick={handleLogout}
+                className="ml-2 p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="退出登录"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </header>
