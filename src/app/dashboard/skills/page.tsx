@@ -30,6 +30,7 @@ import {
   Shield,
   LayoutDashboard,
   TrendingUp,
+  User,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { DeveloperGuard } from '@/components/PermissionGuard';
@@ -752,6 +753,14 @@ function SkillsPageContent() {
                   <p className="text-sm text-gray-500 line-clamp-2 mb-2 leading-snug">
                     {skill.description || '暂无描述'}
                   </p>
+
+                  {/* Author */}
+                  {skill.userName && (
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
+                      <User size={11} />
+                      <span>{skill.userName}</span>
+                    </div>
+                  )}
 
                   {/* Metrics + Date */}
                   <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-700/50">
