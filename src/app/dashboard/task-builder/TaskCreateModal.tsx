@@ -268,7 +268,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           <div>
             <label htmlFor="taskDescription" className="block text-sm font-medium text-gray-300">
-              任务描述 <span className="text-red-400">*</span>
+              任务描述 <span className="text-gray-300">*</span>
             </label>
             <p className="text-xs text-gray-500 mt-1 mb-2">这是 Agent 执行的指令提示词，请清晰描述任务目标</p>
             <textarea
