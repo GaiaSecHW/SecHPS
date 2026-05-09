@@ -8,8 +8,8 @@ interface SkillDraft {
   name: string;
   displayName: string;
   description: string;
-  vulnerabilityTreeId?: string;
-  categoryId?: string;
+  vulnerabilityPatternId?: string;
+  techStackId?: string;
   cwe?: string;
   content: string;  // 完整的 Markdown 内容
 }
@@ -18,9 +18,8 @@ interface Props {
   intentData: {
     name: string;
     description: string;
-    categoryId: string;
-    vulnerabilityTreeId?: string;
-    selectedLanguageId?: string;
+    vulnerabilityPatternId?: string;
+    techStackId?: string;
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -132,7 +131,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-purple-900/20 border border-purple-200 rounded-lg p-4">
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
         <div className="flex items-start">
           <Sparkles className="w-5 h-5 text-purple-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-purple-800">
@@ -166,11 +165,11 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
 
         <button
           onClick={handleCopy}
-          className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
+          className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
         >
           {copied ? (
             <>
-              <Check size={16} className="mr-2 text-green-400" />
+              <Check size={16} className="mr-2 text-green-600" />
               已复制
             </>
           ) : (
@@ -184,12 +183,12 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
 
       {/* 错误提示 */}
       {generateError && (
-        <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start">
-            <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
             <div className="text-sm text-yellow-800">
               <p className="font-medium mb-1">使用了本地模板生成</p>
-              <p className="text-yellow-400">{generateError}</p>
+              <p className="text-yellow-700">{generateError}</p>
             </div>
           </div>
         </div>
@@ -198,45 +197,45 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
       {/* 基本信息 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Skill 名称 <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={skillData.name}
             onChange={(e) => onChange({ ...skillData, name: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             显示名称 <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             value={skillData.displayName}
             onChange={(e) => onChange({ ...skillData, displayName: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           描述 <span className="text-red-500">*</span>
         </label>
         <input
           type="text"
           value={skillData.description}
           onChange={(e) => onChange({ ...skillData, description: e.target.value })}
-          className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             CWE 编号（可选）
           </label>
           <input
@@ -244,26 +243,26 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
             value={skillData.cwe || ''}
             onChange={(e) => onChange({ ...skillData, cwe: e.target.value })}
             placeholder="例如：CWE-89"
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             漏洞模式
           </label>
           <input
             type="text"
-            value={skillData.vulnerabilityTreeId || ''}
+            value={skillData.vulnerabilityPatternId || ''}
             disabled
-            className="w-full px-4 py-2 border border-gray-600 rounded-md bg-[#0F172A]"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md bg-gray-50"
           />
         </div>
       </div>
 
       {/* Markdown 内容 */}
       <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
+        <label className="block text-sm font-medium text-gray-700 mb-2">
           <FileText size={16} className="inline mr-1" />
           Skill 内容（Markdown 格式）<span className="text-red-500">*</span>
         </label>
@@ -271,7 +270,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
           value={skillData.content}
           onChange={(e) => onChange({ ...skillData, content: e.target.value })}
           rows={20}
-          className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
+          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
           placeholder={`> 你是一个资深安全工程师，专注于 [漏洞类型] 分析...
 
 ## 输入格式
@@ -298,7 +297,7 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
       <div className="flex justify-between pt-4 border-t">
         <button
           onClick={onPrevious}
-          className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
         >
           上一步
         </button>

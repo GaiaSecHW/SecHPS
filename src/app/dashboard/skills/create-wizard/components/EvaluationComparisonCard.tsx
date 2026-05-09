@@ -24,14 +24,14 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
   };
 
   const getDeltaIcon = (delta: number) => {
-    if (delta > 0) return <TrendingUp className="w-4 h-4 text-green-400" />;
-    if (delta < 0) return <TrendingDown className="w-4 h-4 text-red-400" />;
+    if (delta > 0) return <TrendingUp className="w-4 h-4 text-green-600" />;
+    if (delta < 0) return <TrendingDown className="w-4 h-4 text-red-600" />;
     return <Minus className="w-4 h-4 text-gray-400" />;
   };
 
   const getDeltaColor = (delta: number, isBetter: boolean) => {
-    if (delta === 0) return 'text-gray-400';
-    return delta > 0 ? (isBetter ? 'text-green-400' : 'text-red-400') : (isBetter ? 'text-red-400' : 'text-green-400');
+    if (delta === 0) return 'text-gray-600';
+    return delta > 0 ? (isBetter ? 'text-green-600' : 'text-red-600') : (isBetter ? 'text-red-600' : 'text-green-600');
   };
 
   const withSkill = comparison.with_skill_run;
@@ -42,17 +42,17 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
   const tokenDelta = comparison.token_delta;
 
   return (
-    <div className="bg-dark-surface border border-gray-700/50 rounded-lg overflow-hidden">
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
       {/* 头部：测试用例名称 */}
-      <div className="px-4 py-3 bg-[#0F172A] border-b border-gray-700/50">
+      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-medium text-gray-100">{comparison.eval_name}</h4>
+            <h4 className="font-medium text-gray-900">{comparison.eval_name}</h4>
             <p className="text-xs text-gray-500 mt-1">评估 ID: #{comparison.eval_id}</p>
           </div>
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="flex items-center space-x-1 px-3 py-1 text-sm text-gray-400 hover:text-gray-200 hover:bg-dark-surface-hover rounded"
+            className="flex items-center space-x-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded"
           >
             <span>{isExpanded ? '收起' : '展开'}</span>
             {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -61,11 +61,11 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
       </div>
 
       {/* 对比面板 */}
-      <div className="grid grid-cols-2 divide-x divide-gray-700/50">
+      <div className="grid grid-cols-2 divide-x divide-gray-200">
         {/* With Skill */}
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
-            <h5 className="text-sm font-medium text-gray-100">使用 Skill</h5>
+            <h5 className="text-sm font-medium text-gray-900">使用 Skill</h5>
             {withSkill.result.pass_rate === 100 ? (
               <CheckCircle className="w-5 h-5 text-green-500" />
             ) : withSkill.result.pass_rate >= 80 ? (
@@ -76,26 +76,26 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">通过率:</span>
-              <span className={`font-medium ${withSkill.result.pass_rate === 100 ? 'text-green-400' : withSkill.result.pass_rate >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+              <span className="text-gray-600">通过率:</span>
+              <span className={`font-medium ${withSkill.result.pass_rate === 100 ? 'text-green-600' : withSkill.result.pass_rate >= 80 ? 'text-yellow-600' : 'text-red-600'}`}>
                 {withSkill.result.pass_rate.toFixed(0)}% ({withSkill.result.passed}/{withSkill.result.total})
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">耗时:</span>
-              <span className="text-gray-100">{formatTime(withSkill.result.time_seconds)}</span>
+              <span className="text-gray-600">耗时:</span>
+              <span className="text-gray-900">{formatTime(withSkill.result.time_seconds)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Token:</span>
-              <span className="text-gray-100">{formatTokens(withSkill.result.tokens)}</span>
+              <span className="text-gray-600">Token:</span>
+              <span className="text-gray-900">{formatTokens(withSkill.result.tokens)}</span>
             </div>
           </div>
         </div>
 
         {/* Without Skill */}
-        <div className="p-4 bg-[#0F172A]">
+        <div className="p-4 bg-gray-50">
           <div className="flex items-center justify-between mb-3">
-            <h5 className="text-sm font-medium text-gray-300">不使用 Skill (基线)</h5>
+            <h5 className="text-sm font-medium text-gray-700">不使用 Skill (基线)</h5>
             {withoutSkill.result.pass_rate === 100 ? (
               <CheckCircle className="w-5 h-5 text-green-500" />
             ) : withoutSkill.result.pass_rate >= 80 ? (
@@ -106,25 +106,25 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-400">通过率:</span>
-              <span className={`font-medium ${withoutSkill.result.pass_rate === 100 ? 'text-green-400' : withoutSkill.result.pass_rate >= 80 ? 'text-yellow-400' : 'text-red-400'}`}>
+              <span className="text-gray-600">通过率:</span>
+              <span className={`font-medium ${withoutSkill.result.pass_rate === 100 ? 'text-green-600' : withoutSkill.result.pass_rate >= 80 ? 'text-yellow-600' : 'text-red-600'}`}>
                 {withoutSkill.result.pass_rate.toFixed(0)}% ({withoutSkill.result.passed}/{withoutSkill.result.total})
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">耗时:</span>
-              <span className="text-gray-100">{formatTime(withoutSkill.result.time_seconds)}</span>
+              <span className="text-gray-600">耗时:</span>
+              <span className="text-gray-900">{formatTime(withoutSkill.result.time_seconds)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-400">Token:</span>
-              <span className="text-gray-100">{formatTokens(withoutSkill.result.tokens)}</span>
+              <span className="text-gray-600">Token:</span>
+              <span className="text-gray-900">{formatTokens(withoutSkill.result.tokens)}</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* 差异统计 */}
-      <div className="px-4 py-3 bg-blue-900/20 border-t border-blue-100">
+      <div className="px-4 py-3 bg-blue-50 border-t border-blue-100">
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
@@ -140,19 +140,19 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
               <span className={getDeltaColor(-tokenDelta, true)}>Token {tokenDelta > 0 ? '+' : ''}{formatTokens(tokenDelta)}</span>
             </div>
           </div>
-          <div className="text-xs text-gray-400">
-            <span className="text-green-400">↑{comparison.improved_count} 改进</span>
+          <div className="text-xs text-gray-600">
+            <span className="text-green-600">↑{comparison.improved_count} 改进</span>
             <span className="mx-2">|</span>
-            <span className="text-red-400">↓{comparison.regressed_count} 回退</span>
+            <span className="text-red-600">↓{comparison.regressed_count} 回退</span>
           </div>
         </div>
       </div>
 
       {/* 展开的断言详情 */}
       {isExpanded && comparison.expectation_comparisons.length > 0 && (
-        <div className="border-t border-gray-700/50">
-          <div className="px-4 py-3 bg-[#0F172A] border-b border-gray-700/50">
-            <h5 className="text-sm font-medium text-gray-100">断言对比详情</h5>
+        <div className="border-t border-gray-200">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <h5 className="text-sm font-medium text-gray-900">断言对比详情</h5>
           </div>
           <div className="divide-y divide-gray-100">
             {comparison.expectation_comparisons.map((expectation, index) => (
@@ -184,11 +184,11 @@ function ExpectationItem({ expectation, index }: { expectation: ExpectationCompa
   const getChangeIndicator = () => {
     switch (expectation.status_change) {
       case 'improved':
-        return <span className="text-xs text-green-400 font-medium">↑ 改进</span>;
+        return <span className="text-xs text-green-600 font-medium">↑ 改进</span>;
       case 'regressed':
-        return <span className="text-xs text-red-400 font-medium">↓ 回退</span>;
+        return <span className="text-xs text-red-600 font-medium">↓ 回退</span>;
       case 'both_pass':
-        return <span className="text-xs text-green-400">✓ 都通过</span>;
+        return <span className="text-xs text-green-600">✓ 都通过</span>;
       case 'both_fail':
         return <span className="text-xs text-gray-500">✗ 都失败</span>;
     }
@@ -200,9 +200,9 @@ function ExpectationItem({ expectation, index }: { expectation: ExpectationCompa
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-1">
             <span className="text-xs text-gray-400">#{index + 1}</span>
-            <span className="text-sm text-gray-100">{expectation.text}</span>
+            <span className="text-sm text-gray-900">{expectation.text}</span>
             {expectation.type && (
-              <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-400 rounded">
+              <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
                 {expectation.type}
               </span>
             )}
@@ -219,7 +219,7 @@ function ExpectationItem({ expectation, index }: { expectation: ExpectationCompa
             <div>{getChangeIndicator()}</div>
             <button
               onClick={() => setShowEvidence(!showEvidence)}
-              className="text-blue-400 hover:text-blue-800"
+              className="text-blue-600 hover:text-blue-800"
             >
               {showEvidence ? '隐藏证据' : '查看证据'}
             </button>
@@ -230,15 +230,15 @@ function ExpectationItem({ expectation, index }: { expectation: ExpectationCompa
       {showEvidence && (
         <div className="mt-3 space-y-2">
           {expectation.with_skill_evidence && (
-            <div className="bg-green-900/20 border border-green-200 rounded p-2">
+            <div className="bg-green-50 border border-green-200 rounded p-2">
               <div className="text-xs font-medium text-green-800 mb-1">With Skill 证据:</div>
-              <p className="text-xs text-green-400 whitespace-pre-wrap">{expectation.with_skill_evidence}</p>
+              <p className="text-xs text-green-700 whitespace-pre-wrap">{expectation.with_skill_evidence}</p>
             </div>
           )}
           {expectation.without_skill_evidence && (
-            <div className="bg-[#0F172A] border border-gray-700/50 rounded p-2">
-              <div className="text-xs font-medium text-gray-200 mb-1">Without Skill 证据:</div>
-              <p className="text-xs text-gray-300 whitespace-pre-wrap">{expectation.without_skill_evidence}</p>
+            <div className="bg-gray-50 border border-gray-200 rounded p-2">
+              <div className="text-xs font-medium text-gray-800 mb-1">Without Skill 证据:</div>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap">{expectation.without_skill_evidence}</p>
             </div>
           )}
         </div>

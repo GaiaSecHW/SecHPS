@@ -144,8 +144,8 @@ export async function applyImprovement(
       referenceCount: originalSkill.referenceCount,
       vulnerabilityCount: originalSkill.vulnerabilityCount,
       successExecCount: originalSkill.successExecCount,
-      categoryId: originalSkill.categoryId,
-      vulnerabilityTreeId: originalSkill.vulnerabilityTreeId,
+      techStackId: originalSkill.techStackId,
+      vulnerabilityPatternId: originalSkill.vulnerabilityPatternId,
       updatedAt: new Date(),
     },
   });

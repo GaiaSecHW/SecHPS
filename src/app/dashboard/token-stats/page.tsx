@@ -179,7 +179,7 @@ export default function TokenStatsPage() {
     <span className="flex items-center">
       {formatCost(cost)}
       <span className="ml-1 cursor-help relative group">
-        <Info size={10} className="text-gray-400 hover:text-gray-400" />
+        <Info size={10} className="text-gray-400 hover:text-gray-600" />
         <span className="absolute right-0 bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-1.5 whitespace-nowrap z-10 shadow-lg">
           ¥6/百万输入 + ¥22/百万输出
         </span>
@@ -190,8 +190,8 @@ export default function TokenStatsPage() {
   const formatTokensWithColor = (input: number, output: number) => {
     return (
       <div className="flex items-center space-x-2 text-xs">
-        <span className="text-blue-400">↑ {formatNumber(input)}</span>
-        <span className="text-green-400">↓ {formatNumber(output)}</span>
+        <span className="text-blue-600">↑ {formatNumber(input)}</span>
+        <span className="text-green-600">↓ {formatNumber(output)}</span>
       </div>
     );
   };
@@ -199,7 +199,7 @@ export default function TokenStatsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -209,11 +209,11 @@ export default function TokenStatsPage() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-100 mb-2">加载失败</h2>
-          <p className="text-gray-400 mb-4">{error}</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">加载失败</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => router.push('/dashboard')}
-            className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
             返回首页
           </button>
@@ -227,11 +227,11 @@ export default function TokenStatsPage() {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100 flex items-center">
-            <Coins className="mr-2 text-blue-400" size={28} />
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            <Coins className="mr-2 text-blue-600" size={28} />
             Token 消耗统计
           </h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <p className="mt-1 text-sm text-gray-600">
             查看大模型 API 调用的 Token 消耗情况
           </p>
         </div>
@@ -239,9 +239,9 @@ export default function TokenStatsPage() {
 
       {/* 时间段选择 + 管理员按钮 */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2 bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+        <div className="flex items-center space-x-2 bg-white rounded-lg shadow border border-gray-200 p-4">
           <Calendar className="text-gray-400" size={20} />
-          <span className="text-sm font-medium text-gray-300">时间范围：</span>
+          <span className="text-sm font-medium text-gray-700">时间范围：</span>
           <div className="flex space-x-2">
             {(['day', 'week', 'month', 'year'] as const).map((period) => (
               <button
@@ -249,8 +249,8 @@ export default function TokenStatsPage() {
                 onClick={() => fetchPeriodStats(period)}
                 className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                   selectedPeriod === period
-                    ? 'bg-primary-600 text-white'
-                    : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {period === 'day' ? '今日' : period === 'week' ? '本周' : period === 'month' ? '本月' : '本年'}
@@ -263,7 +263,7 @@ export default function TokenStatsPage() {
         {isAdmin && (
           <Link
             href="/dashboard/token-stats/users"
-            className="flex items-center px-4 py-3 bg-primary-600 text-white rounded-lg shadow hover:bg-primary-600 transition-colors"
+            className="flex items-center px-4 py-3 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 transition-colors"
           >
             <Users size={18} className="mr-2" />
             查看用户统计
@@ -277,13 +277,13 @@ export default function TokenStatsPage() {
         <SummaryCard
           title="今日消耗"
           stats={dailyStats}
-          icon={<Clock className="text-blue-400" size={24} />}
+          icon={<Clock className="text-blue-600" size={24} />}
           color="blue"
         />
         <SummaryCard
           title="本周消耗"
           stats={weeklyStats}
-          icon={<Calendar className="text-green-400" size={24} />}
+          icon={<Calendar className="text-green-600" size={24} />}
           color="green"
         />
         <SummaryCard
@@ -301,29 +301,29 @@ export default function TokenStatsPage() {
       </div>
 
       {/* 当前时间段详情 */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
-          <PieChart className="mr-2 text-blue-400" size={20} />
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+          <PieChart className="mr-2 text-blue-600" size={20} />
           {selectedPeriod === 'day' ? '今日' : selectedPeriod === 'week' ? '本周' : selectedPeriod === 'month' ? '本月' : '本年'}详细统计
         </h2>
 
         {/* 总计 */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 bg-[#0F172A] rounded-lg p-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 bg-gray-50 rounded-lg p-4">
           <div>
             <p className="text-xs text-gray-500">总输入 Token</p>
-            <p className="text-lg font-semibold text-blue-400">
+            <p className="text-lg font-semibold text-blue-600">
               {formatNumber(dailyStats?.totalInputTokens || 0)}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500">总输出 Token</p>
-            <p className="text-lg font-semibold text-green-400">
+            <p className="text-lg font-semibold text-green-600">
               {formatNumber(dailyStats?.totalOutputTokens || 0)}
             </p>
           </div>
           <div>
             <p className="text-xs text-gray-500">评估次数</p>
-            <p className="text-lg font-semibold text-gray-100">
+            <p className="text-lg font-semibold text-gray-900">
               {dailyStats?.evaluationCount || 0}
             </p>
           </div>
@@ -334,7 +334,7 @@ export default function TokenStatsPage() {
                 className="ml-1 cursor-help relative group"
                 title="费用计算公式"
               >
-                <Info size={12} className="text-gray-400 hover:text-gray-400" />
+                <Info size={12} className="text-gray-400 hover:text-gray-600" />
                 <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
                   费用 = 输入Token × 单价 + 输出Token × 单价<br/>
                   <span className="text-gray-400">单价：输入 ¥6/百万，输出 ¥22/百万</span>
@@ -350,21 +350,21 @@ export default function TokenStatsPage() {
         {/* 模型使用统计 */}
         {modelStats.length > 0 && (
           <div className="mb-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">模型使用分布</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">模型使用分布</h3>
             <div className="space-y-2">
               {modelStats.map((stat, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50"
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200"
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <span className="text-xs font-medium text-blue-400">
+                      <span className="text-xs font-medium text-blue-700">
                         {stat.apiProvider.substring(0, 2).toUpperCase()}
                       </span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-100">
+                      <p className="text-sm font-medium text-gray-900">
                         {stat.modelName || '未知模型'}
                       </p>
                       <p className="text-xs text-gray-500">
@@ -387,13 +387,13 @@ export default function TokenStatsPage() {
         {/* 项目消耗统计 */}
         {projectStats.length > 0 && (
           <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-3">项目消耗明细</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">项目消耗明细</h3>
             <div className="space-y-2">
               {projectStats.map((stat) => (
                 <Link
                   key={stat.projectId}
                   href={`/dashboard/token-stats/project/${stat.projectId}`}
-                  className="flex items-center justify-between p-3 bg-[#0F172A] rounded-lg border border-gray-700/50 hover:bg-blue-600/100/100/10 hover:border-blue-500/20 transition-colors cursor-pointer"
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors cursor-pointer"
                 >
                   <div className="flex items-center space-x-3">
                     <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -402,7 +402,7 @@ export default function TokenStatsPage() {
                       </span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-100">{stat.projectName}</p>
+                      <p className="text-sm font-medium text-gray-900">{stat.projectName}</p>
                       <p className="text-xs text-gray-500">
                         {stat.evaluationCount} 次评估
                       </p>
@@ -425,7 +425,7 @@ export default function TokenStatsPage() {
 
         {/* 无数据提示 */}
         {modelStats.length === 0 && projectStats.length === 0 && (
-          <div className="text-center py-8 bg-[#0F172A] rounded-lg">
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
             <Coins className="mx-auto h-12 w-12 text-gray-400" />
             <p className="mt-4 text-sm text-gray-500">
               当前时间段内暂无 Token 使用记录
@@ -450,10 +450,10 @@ function SummaryCard({
   color: 'blue' | 'green' | 'purple' | 'orange';
 }) {
   const colorClasses = {
-    blue: 'bg-blue-600/10 border-blue-500/20',
-    green: 'bg-green-600/10 border-green-500/20',
-    purple: 'bg-purple-600/10 border-purple-500/20',
-    orange: 'bg-orange-600/10 border-orange-500/20',
+    blue: 'bg-blue-50 border-blue-200',
+    green: 'bg-green-50 border-green-200',
+    purple: 'bg-purple-50 border-purple-200',
+    orange: 'bg-orange-50 border-orange-200',
   };
 
   const formatNumber = (num: number) => {
@@ -474,33 +474,33 @@ function SummaryCard({
   };
 
   return (
-    <div className={`bg-dark-surface rounded-lg border p-6`}>
+    <div className={`bg-white rounded-lg shadow border p-6`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
           <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
             {icon}
           </div>
-          <h3 className="text-sm font-medium text-gray-400">{title}</h3>
+          <h3 className="text-sm font-medium text-gray-600">{title}</h3>
         </div>
       </div>
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500">总 Token</span>
-          <span className="text-lg font-bold text-gray-100">
+          <span className="text-lg font-bold text-gray-900">
             {formatNumber(stats?.totalTokens || 0)}
           </span>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500">输入/输出</span>
           <div className="flex items-center space-x-2 text-xs">
-            <span className="text-blue-400">↑{formatNumber(stats?.totalInputTokens || 0)}</span>
-            <span className="text-green-400">↓{formatNumber(stats?.totalOutputTokens || 0)}</span>
+            <span className="text-blue-600">↑{formatNumber(stats?.totalInputTokens || 0)}</span>
+            <span className="text-green-600">↓{formatNumber(stats?.totalOutputTokens || 0)}</span>
           </div>
         </div>
         <div className="flex items-center justify-between">
           <span className="text-xs text-gray-500">评估次数</span>
-          <span className="text-sm font-medium text-gray-300">
+          <span className="text-sm font-medium text-gray-700">
             {stats?.evaluationCount || 0}
           </span>
         </div>
@@ -510,7 +510,7 @@ function SummaryCard({
             <span 
               className="ml-1 cursor-help relative group"
             >
-              <Info size={12} className="text-gray-400 hover:text-gray-400" />
+              <Info size={12} className="text-gray-400 hover:text-gray-600" />
               <span className="absolute left-0 bottom-full mb-2 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-2 whitespace-nowrap z-10 shadow-lg">
                 费用 = 输入Token × 单价 + 输出Token × 单价<br/>
                 <span className="text-gray-400">单价：输入 ¥6/百万，输出 ¥22/百万</span>

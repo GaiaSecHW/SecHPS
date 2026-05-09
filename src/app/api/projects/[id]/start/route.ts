@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission, fetchPermissionsPaginated } from '@/lib/auth';
+import { verifyToken, hasPermission } from '@/lib/auth';
 import { isAdmin } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
@@ -52,15 +52,17 @@ export async function POST(
           include: {
             UserRole: {
               include: {
-                Role: true,
+                Role: {
+                  include: {
+                    Permission: true,
+                  },
+                },
               },
             },
           },
         });
         if (user) {
-          const roleIds = user.UserRole.map(ur => ur.roleId);
-          const permRows = await fetchPermissionsPaginated<{ module: string; action: string }>(roleIds, 'p.module, p.action');
-          const permissions = permRows.map(p => `${p.module}:${p.action}`);
+          const permissions = user.UserRole.flatMap(ur => ur.Role.Permission.map(p => `${p.module}:${p.action}`));
           const roles = user.UserRole.map(ur => ur.Role.name);
           payload = { userId: user.id, permissions, roles };
         }

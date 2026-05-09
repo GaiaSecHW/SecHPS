@@ -323,8 +323,8 @@ function AutonomousEvolutionContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">执行进化管理</h1>
-          <p className="mt-1 text-sm text-gray-400">从评估日志中提取失败→成功经验，注入 System Prompt 跳过重复失败</p>
+          <h1 className="text-2xl font-bold text-gray-900">执行进化管理</h1>
+          <p className="mt-1 text-sm text-gray-600">从评估日志中提取失败→成功经验，注入 System Prompt 跳过重复失败</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Injection on/off toggle */}
@@ -332,19 +332,19 @@ function AutonomousEvolutionContent() {
             onClick={toggleInjection}
             className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors ${
               injectionEnabled
-                ? 'bg-green-900/20 text-green-700 border-green-500/20 hover:bg-green-100'
-                : 'bg-[#0F172A] text-gray-500 border-gray-700/50 hover:bg-dark-surface-hover'
+                ? 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
             }`}
             title="控制提取时新经验是否默认启用"
           >
-            <span className={`w-7 h-4 rounded-full relative inline-block transition-colors ${injectionEnabled ? 'bg-green-600' : 'bg-gray-300'}`}>
-              <span className={`absolute top-0.5 w-3 h-3 bg-dark-surface rounded-full shadow transition-transform ${injectionEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            <span className={`w-7 h-4 rounded-full relative inline-block transition-colors ${injectionEnabled ? 'bg-green-500' : 'bg-gray-300'}`}>
+              <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-transform ${injectionEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
             </span>
             自动启用
           </button>
           <button
             onClick={() => { setShowIdleConfig(true); fetchIdleConfig(); }}
-            className="p-2 text-gray-500 hover:text-gray-300 hover:bg-dark-surface-hover rounded-lg"
+            className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
             title="自动触发配置"
           >
             <Settings size={18} />
@@ -359,16 +359,16 @@ function AutonomousEvolutionContent() {
               <ChevronDown size={14} />
             </button>
             {showDropdown && (
-              <div className="absolute right-0 mt-1 w-44 bg-dark-surface border border-gray-700/50 rounded-lg shadow-lg z-10">
+              <div className="absolute right-0 mt-1 w-44 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                 <button
                   onClick={() => handleExtract('incremental')}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-[#0F172A]"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50"
                 >
                   增量提取（推荐）
                 </button>
                 <button
                   onClick={() => handleExtract('full')}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-[#0F172A] text-orange-600"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50 text-orange-600"
                 >
                   全量重新提取
                 </button>
@@ -387,9 +387,9 @@ function AutonomousEvolutionContent() {
             { label: '本周新增', value: stats.weekNew },
             { label: '总引用次数', value: stats.totalUsage },
           ].map(card => (
-            <div key={card.label} className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+            <div key={card.label} className="bg-white rounded-lg border border-gray-200 p-4">
               <p className="text-sm text-gray-500">{card.label}</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{card.value}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
             </div>
           ))}
         </div>
@@ -401,13 +401,13 @@ function AutonomousEvolutionContent() {
       )}
 
       {/* Tabs */}
-      <div className="flex border-b border-gray-700/50">
+      <div className="flex border-b border-gray-200">
         <button
           onClick={() => setActiveTab('experiences')}
           className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             activeTab === 'experiences'
               ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
           经验库
@@ -417,7 +417,7 @@ function AutonomousEvolutionContent() {
           className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
             activeTab === 'runlogs'
               ? 'border-blue-600 text-blue-600'
-              : 'border-transparent text-gray-500 hover:text-gray-300'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
           运行历史
@@ -467,13 +467,13 @@ function AutonomousEvolutionContent() {
               placeholder="搜索经验..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
           <select
             value={filterCategory}
             onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           >
             <option value="">所有错误类型</option>
             {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
@@ -483,13 +483,13 @@ function AutonomousEvolutionContent() {
           <select
             value={filterInjected}
             onChange={e => { setFilterInjected(e.target.value); setPage(1); }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           >
             <option value="">所有状态</option>
             <option value="true">已注入</option>
             <option value="false">未注入</option>
           </select>
-          <button type="submit" className="px-4 py-2 bg-dark-surface-hover text-gray-300 rounded-lg text-sm hover:bg-dark-surface-hover">
+          <button type="submit" className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
             搜索
           </button>
         </form>
@@ -500,7 +500,7 @@ function AutonomousEvolutionContent() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
           </div>
         ) : experiences.length === 0 ? (
-          <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-12 text-center">
+          <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
             <Brain className="mx-auto h-12 w-12 text-gray-300" />
             <p className="mt-3 text-gray-500">暂无经验数据，点击「立即提取」开始分析评估日志</p>
           </div>
@@ -522,13 +522,13 @@ function AutonomousEvolutionContent() {
                 <>
                   <button
                     onClick={() => handleBatchInject('enable')}
-                    className="px-3 py-1 text-xs bg-green-900/20 text-green-700 border border-green-500/20 rounded hover:bg-green-100"
+                    className="px-3 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
                   >
                     批量启用
                   </button>
                   <button
                     onClick={() => handleBatchInject('disable')}
-                    className="px-3 py-1 text-xs bg-[#0F172A] text-gray-400 border border-gray-700/50 rounded hover:bg-dark-surface-hover"
+                    className="px-3 py-1 text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100"
                   >
                     批量停用
                   </button>
@@ -542,7 +542,7 @@ function AutonomousEvolutionContent() {
             return (
               <div
                 key={exp.id}
-                className={`bg-dark-surface rounded-lg border p-4 hover:border-gray-600 transition-colors ${selectedIds.has(exp.id) ? 'border-blue-300 bg-blue-900/20/30' : 'border-gray-700/50'}`}
+                className={`bg-white rounded-lg border p-4 hover:border-gray-300 transition-colors ${selectedIds.has(exp.id) ? 'border-blue-300 bg-blue-50/30' : 'border-gray-200'}`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -563,12 +563,12 @@ function AutonomousEvolutionContent() {
                             <Circle size={12} /> 未启用
                           </span>
                         )}
-                        <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded">
+                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
                           {CATEGORY_LABELS[exp.errorCategory] || exp.errorCategory}
                         </span>
                       </div>
                       <h3
-                        className="mt-1.5 font-semibold text-gray-100 cursor-pointer hover:text-blue-600"
+                        className="mt-1.5 font-semibold text-gray-900 cursor-pointer hover:text-blue-600"
                         onClick={() => router.push(`/dashboard/admin/autonomous-evolution/${exp.id}`)}
                       >
                         {exp.title}
@@ -589,7 +589,7 @@ function AutonomousEvolutionContent() {
                     {!exp.isInjected && (
                       <button
                         onClick={() => handleToggleInject(exp.id)}
-                        className="px-2 py-1 text-xs bg-green-900/20 text-green-700 border border-green-500/20 rounded hover:bg-green-100"
+                        className="px-2 py-1 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100"
                       >
                         启用
                       </button>
@@ -597,20 +597,20 @@ function AutonomousEvolutionContent() {
                     {exp.isInjected && (
                       <button
                         onClick={() => handleToggleInject(exp.id)}
-                        className="px-2 py-1 text-xs bg-[#0F172A] text-gray-400 border border-gray-700/50 rounded hover:bg-dark-surface-hover"
+                        className="px-2 py-1 text-xs bg-gray-50 text-gray-600 border border-gray-200 rounded hover:bg-gray-100"
                       >
                         停用
                       </button>
                     )}
                     <button
                       onClick={() => router.push(`/dashboard/admin/autonomous-evolution/${exp.id}`)}
-                      className="px-2 py-1 text-xs bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded hover:bg-blue-100"
+                      className="px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100"
                     >
                       详情
                     </button>
                     <button
                       onClick={() => handleDelete(exp.id, exp.title)}
-                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-900/20 rounded"
+                      className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                     >
                       <Trash2 size={14} />
                     </button>
@@ -628,15 +628,15 @@ function AutonomousEvolutionContent() {
           <button
             disabled={page <= 1}
             onClick={() => setPage(p => p - 1)}
-            className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+            className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50"
           >
             上一页
           </button>
-          <span className="px-3 py-1 text-sm text-gray-400">{page} / {totalPages}</span>
+          <span className="px-3 py-1 text-sm text-gray-600">{page} / {totalPages}</span>
           <button
             disabled={page >= totalPages}
             onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+            className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50"
           >
             下一页
           </button>
@@ -653,12 +653,12 @@ function AutonomousEvolutionContent() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
             </div>
           ) : runLogs.length === 0 ? (
-            <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-12 text-center">
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
               <p className="text-gray-500">暂无运行记录</p>
             </div>
           ) : (
             runLogs.map(log => (
-              <div key={log.id} className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+              <div key={log.id} className="bg-white rounded-lg border border-gray-200 p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`px-2 py-0.5 text-xs rounded font-medium ${
@@ -668,10 +668,10 @@ function AutonomousEvolutionContent() {
                     }`}>
                       {log.status === 'done' ? '完成' : log.status === 'error' ? '失败' : '运行中'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
                       {log.mode === 'full' ? '全量' : log.mode === 'auto' ? '自动' : '增量'}
                     </span>
-                    <span className="px-2 py-0.5 text-xs bg-purple-900/20 text-purple-600 rounded">
+                    <span className="px-2 py-0.5 text-xs bg-purple-50 text-purple-600 rounded">
                       {log.trigger === 'auto' ? '自动触发' : '手动触发'}
                     </span>
                   </div>
@@ -702,13 +702,13 @@ function AutonomousEvolutionContent() {
               <button
                 disabled={runLogsPage <= 1}
                 onClick={() => { const p = runLogsPage - 1; setRunLogsPage(p); fetchRunLogs(p); }}
-                className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+                className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50"
               >上一页</button>
-              <span className="px-3 py-1 text-sm text-gray-400">{runLogsPage} / {runLogsTotalPages}</span>
+              <span className="px-3 py-1 text-sm text-gray-600">{runLogsPage} / {runLogsTotalPages}</span>
               <button
                 disabled={runLogsPage >= runLogsTotalPages}
                 onClick={() => { const p = runLogsPage + 1; setRunLogsPage(p); fetchRunLogs(p); }}
-                className="px-3 py-1 text-sm border border-gray-600 rounded disabled:opacity-40 hover:bg-[#0F172A]"
+                className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-40 hover:bg-gray-50"
               >下一页</button>
             </div>
           )}
@@ -718,10 +718,10 @@ function AutonomousEvolutionContent() {
       {/* Idle Config Modal */}
       {showIdleConfig && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-          <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-100">自动触发配置</h3>
-              <button onClick={() => setShowIdleConfig(false)} className="text-gray-400 hover:text-gray-400">
+              <h3 className="font-semibold text-gray-900">自动触发配置</h3>
+              <button onClick={() => setShowIdleConfig(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={18} />
               </button>
             </div>
@@ -733,7 +733,7 @@ function AutonomousEvolutionContent() {
                   onChange={e => setIdleConfig(c => ({ ...c, enabled: e.target.checked }))}
                   className="w-4 h-4"
                 />
-                <span className="text-sm text-gray-300">启用自动提取</span>
+                <span className="text-sm text-gray-700">启用自动提取</span>
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -742,7 +742,7 @@ function AutonomousEvolutionContent() {
                     type="time"
                     value={idleConfig.windowStart}
                     onChange={e => setIdleConfig(c => ({ ...c, windowStart: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   />
                 </div>
                 <div>
@@ -751,7 +751,7 @@ function AutonomousEvolutionContent() {
                     type="time"
                     value={idleConfig.windowEnd}
                     onChange={e => setIdleConfig(c => ({ ...c, windowEnd: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-lg text-sm"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                   />
                 </div>
               </div>
@@ -762,7 +762,7 @@ function AutonomousEvolutionContent() {
                   min={5}
                   value={idleConfig.pollIntervalMinutes}
                   onChange={e => setIdleConfig(c => ({ ...c, pollIntervalMinutes: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
               <div>
@@ -773,12 +773,12 @@ function AutonomousEvolutionContent() {
                   max={100}
                   value={idleConfig.maxSequencesPerRun}
                   onChange={e => setIdleConfig(c => ({ ...c, maxSequencesPerRun: Number(e.target.value) }))}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                 />
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
-              <button onClick={() => setShowIdleConfig(false)} className="px-4 py-2 text-sm text-gray-400 hover:bg-dark-surface-hover rounded-lg">
+              <button onClick={() => setShowIdleConfig(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">
                 取消
               </button>
               <button onClick={saveIdleConfig} className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">

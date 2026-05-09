@@ -409,13 +409,13 @@ function WorkflowsContent() {
   const getStatusColor = (status: WorkflowStatus) => {
     switch (status) {
       case 'draft':
-        return 'bg-dark-surface-hover text-gray-200 border-gray-700/50';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
       case 'published':
-        return 'bg-green-500/15 text-green-400 border-green-500/20';
+        return 'bg-green-100 text-green-800 border-green-200';
       case 'archived':
-        return 'bg-red-500/15 text-red-400 border-red-500/20';
+        return 'bg-red-100 text-red-800 border-red-200';
       default:
-        return 'bg-dark-surface-hover text-gray-200 border-gray-700/50';
+        return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
@@ -464,15 +464,15 @@ function WorkflowsContent() {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">开发者编排</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900">开发者编排</h1>
+          <p className="mt-1 text-sm text-gray-600">
             创建和管理开发者编排
           </p>
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
           <Plus size={20} />
           <span>新建编排</span>
@@ -481,57 +481,57 @@ function WorkflowsContent() {
 
       {/* 错误提示 */}
       {error && (
-        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* 统计信息 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">总编排</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.total}</p>
+              <p className="text-sm font-medium text-gray-600">总编排</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
             </div>
-            <div className="p-3 bg-blue-600/10 rounded-lg">
-              <FileText className="h-6 w-6 text-blue-400" />
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <FileText className="h-6 w-6 text-blue-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">草稿</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.draft}</p>
+              <p className="text-sm font-medium text-gray-600">草稿</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.draft}</p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
-              <FileText className="h-6 w-6 text-gray-400" />
+            <div className="p-3 bg-gray-50 rounded-lg">
+              <FileText className="h-6 w-6 text-gray-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">已发布</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.published}</p>
+              <p className="text-sm font-medium text-gray-600">已发布</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.published}</p>
             </div>
-            <div className="p-3 bg-green-600/10 rounded-lg">
-              <CheckCircle className="h-6 w-6 text-green-400" />
+            <div className="p-3 bg-green-50 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-600" />
             </div>
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">已下线</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.archived}</p>
+              <p className="text-sm font-medium text-gray-600">已下线</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{stats.archived}</p>
             </div>
-            <div className="p-3 bg-red-600/10 rounded-lg">
-              <Archive className="h-6 w-6 text-red-400" />
+            <div className="p-3 bg-red-50 rounded-lg">
+              <Archive className="h-6 w-6 text-red-600" />
             </div>
           </div>
         </div>
@@ -546,7 +546,7 @@ function WorkflowsContent() {
             placeholder="搜索编排..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
 
@@ -555,7 +555,7 @@ function WorkflowsContent() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as WorkflowStatus | 'all')}
-            className="px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="all">全部状态</option>
             <option value="draft">草稿</option>
@@ -567,12 +567,12 @@ function WorkflowsContent() {
 
       {/* 编排列表 */}
       {filteredWorkflows.length === 0 ? (
-        <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
+        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <FileText className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-100">
+          <h3 className="mt-4 text-lg font-medium text-gray-900">
             {searchQuery || statusFilter !== 'all' ? '未找到匹配的编排' : '暂无编排'}
           </h3>
-          <p className="mt-2 text-sm text-gray-400">
+          <p className="mt-2 text-sm text-gray-600">
             {searchQuery || statusFilter !== 'all'
               ? '尝试调整搜索条件或筛选器'
               : '创建您的第一个开发者编排'}
@@ -583,11 +583,11 @@ function WorkflowsContent() {
           {filteredWorkflows.map((workflow) => (
             <div
               key={workflow.id}
-              className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow"
+              className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden hover:shadow-lg transition-shadow"
             >
               {/* 缩略图区域 */}
               {workflow.thumbnail && (
-                <div className="h-32 bg-dark-surface-hover relative">
+                <div className="h-32 bg-gray-100 relative">
                   <img
                     src={workflow.thumbnail.startsWith('data:') ? workflow.thumbnail : 
                          (workflow.thumbnail.startsWith('PHN2Z') ? `data:image/svg+xml;base64,${workflow.thumbnail}` : `data:image/png;base64,${workflow.thumbnail}`)}
@@ -602,15 +602,15 @@ function WorkflowsContent() {
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-lg font-semibold text-gray-100 truncate">
+                      <h3 className="text-lg font-semibold text-gray-900 truncate">
                         {workflow.name}
                       </h3>
                       {/* 编排类型标签 */}
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                           workflow.workflowType === 'fsm'
-                            ? 'bg-purple-500/15 text-purple-400'
-                            : 'bg-blue-500/15 text-blue-400'
+                            ? 'bg-purple-100 text-purple-700'
+                            : 'bg-blue-100 text-blue-700'
                         }`}
                       >
                         {workflow.workflowType === 'fsm' ? '威胁建模固定编排' : '用户自由编排'}
@@ -619,8 +619,8 @@ function WorkflowsContent() {
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
                           workflow.isPublic
-                            ? 'bg-blue-500/15 text-blue-400'
-                            : 'bg-dark-surface-hover text-gray-400'
+                            ? 'bg-blue-100 text-blue-700'
+                            : 'bg-gray-100 text-gray-600'
                         }`}
                       >
                         {workflow.isPublic ? <Globe size={12} /> : <Lock size={12} />}
@@ -644,7 +644,7 @@ function WorkflowsContent() {
                 </div>
 
                 {workflow.description && (
-                  <p className="mt-2 text-sm text-gray-400 line-clamp-2">
+                  <p className="mt-2 text-sm text-gray-600 line-clamp-2">
                     {workflow.description}
                   </p>
                 )}
@@ -662,14 +662,14 @@ function WorkflowsContent() {
               </div>
 
               {/* 操作按钮 */}
-              <div className="bg-[#0F172A] px-6 py-3 border-t border-gray-700/50">
+              <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
                     {/* 编辑流程按钮 - 仅管理员和作者显示"编辑"，其他人显示"查看" */}
                     {isAdmin || workflow.userId === user?.id ? (
                       <Link
                         href={`/dashboard/workflows/${workflow.id}`}
-                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-blue-400 hover:text-blue-800 bg-blue-600/10 hover:bg-blue-600/100/15 rounded-md transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 rounded-md transition-colors"
                       >
                         <Edit2 size={16} />
                         <span>编辑流程</span>
@@ -677,7 +677,7 @@ function WorkflowsContent() {
                     ) : (
                       <Link
                         href={`/dashboard/workflows/${workflow.id}`}
-                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-400 hover:text-gray-200 bg-[#0F172A] hover:bg-dark-surface-hover rounded-md transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-800 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
                       >
                         <FileText size={16} />
                         <span>查看流程</span>
@@ -687,7 +687,7 @@ function WorkflowsContent() {
                     {(isAdmin || workflow.userId === user?.id) && workflow.status === 'draft' && (
                       <button
                         onClick={() => publishWorkflow(workflow.id)}
-                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-400 hover:text-green-800 bg-green-600/10 hover:bg-green-600/100/15 rounded-md transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
                         title="发布"
                       >
                         <Send size={16} />
@@ -697,7 +697,7 @@ function WorkflowsContent() {
                     {(isAdmin || workflow.userId === user?.id) && workflow.status === 'published' && (
                       <button
                         onClick={() => archiveWorkflow(workflow.id)}
-                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-red-400 hover:text-red-800 bg-red-600/10 hover:bg-red-600/100/15 rounded-md transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-red-600 hover:text-red-800 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
                         title="下线"
                       >
                         <Archive size={16} />
@@ -707,7 +707,7 @@ function WorkflowsContent() {
                     {(isAdmin || workflow.userId === user?.id) && workflow.status === 'archived' && (
                       <button
                         onClick={() => restoreWorkflow(workflow.id)}
-                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-400 hover:text-green-800 bg-green-600/10 hover:bg-green-600/100/15 rounded-md transition-colors"
+                        className="flex items-center space-x-1 px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-800 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
                         title="恢复发布"
                       >
                         <RotateCcw size={16} />
@@ -722,7 +722,7 @@ function WorkflowsContent() {
                       <>
                         <button
                           onClick={() => openEditModal(workflow)}
-                          className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-600/100/100/10 rounded-md transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors"
                           title="编辑信息"
                         >
                           <FileText size={16} />
@@ -731,8 +731,8 @@ function WorkflowsContent() {
                           onClick={() => toggleShare(workflow)}
                           className={`p-1.5 rounded-md transition-colors ${
                             workflow.isPublic
-                              ? 'text-blue-400 bg-blue-600/10 hover:bg-blue-600/100/15'
-                              : 'text-gray-400 hover:text-blue-400 hover:bg-blue-600/100/10'
+                              ? 'text-blue-600 bg-blue-50 hover:bg-blue-100'
+                              : 'text-gray-400 hover:text-blue-600 hover:bg-blue-50'
                           }`}
                           title={workflow.isPublic ? '点击设为私有' : '点击设为公开分享'}
                         >
@@ -740,7 +740,7 @@ function WorkflowsContent() {
                         </button>
                         <button
                           onClick={() => deleteWorkflow(workflow.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-600/100/100/10 rounded-md transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                           title="删除"
                         >
                           <Trash2 size={16} />
@@ -758,9 +758,9 @@ function WorkflowsContent() {
       {/* 新建编排对话框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-100">新建编排</h3>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">新建编排</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -771,7 +771,7 @@ function WorkflowsContent() {
                   setWorkflowType('fsm');
                   setSelectedFsmTemplateId('');
                 }}
-                className="text-gray-400 hover:text-gray-400"
+                className="text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
               </button>
@@ -779,7 +779,7 @@ function WorkflowsContent() {
 
             <div className="p-6 space-y-4">
               <div>
-                <label htmlFor="workflowName" className="block text-sm font-medium text-gray-300">
+                <label htmlFor="workflowName" className="block text-sm font-medium text-gray-700">
                   编排名称 *
                 </label>
                 <input
@@ -790,13 +790,13 @@ function WorkflowsContent() {
                   minLength={2}
                   value={workflowName}
                   onChange={(e) => setWorkflowName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="请输入编排名称（2-100个字符）"
                 />
               </div>
 
               <div>
-                <label htmlFor="workflowDescription" className="block text-sm font-medium text-gray-300">
+                <label htmlFor="workflowDescription" className="block text-sm font-medium text-gray-700">
                   编排描述
                 </label>
                 <textarea
@@ -804,14 +804,14 @@ function WorkflowsContent() {
                   rows={3}
                   value={workflowDescription}
                   onChange={(e) => setWorkflowDescription(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="请输入编排描述（可选）"
                 />
               </div>
 
               {/* 工作流类型选择 */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   工作流类型 *
                 </label>
                 <div className="flex gap-4">
@@ -824,9 +824,9 @@ function WorkflowsContent() {
                       onChange={(e) => {
                         setWorkflowType(e.target.value as 'dag' | 'fsm');
                       }}
-                      className="w-4 h-4 text-blue-400 border-gray-600 focus:ring-primary-500"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-300 flex items-center gap-1">
+                    <span className="text-sm text-gray-700 flex items-center gap-1">
                       <Layers size={14} />
                       威胁建模固定编排
                     </span>
@@ -841,9 +841,9 @@ function WorkflowsContent() {
                         setWorkflowType(e.target.value as 'dag' | 'fsm');
                         setSelectedFsmTemplateId('');
                       }}
-                      className="w-4 h-4 text-blue-400 border-gray-600 focus:ring-primary-500"
+                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-300">用户自由编排</span>
+                    <span className="text-sm text-gray-700">用户自由编排</span>
                   </label>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
@@ -854,7 +854,7 @@ function WorkflowsContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   适合的技术栈
                 </label>
                 <div className="relative">
@@ -864,13 +864,13 @@ function WorkflowsContent() {
                       return (
                       <span
                         key={tsId}
-                        className="inline-flex items-center px-3 py-1 bg-blue-500/15 text-blue-400 rounded-full text-sm"
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                       >
                         {opt?.name || tsId}
                         <button
                           type="button"
                           onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== tsId))}
-                          className="ml-2 text-blue-400 hover:text-blue-800"
+                          className="ml-2 text-blue-600 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
@@ -888,11 +888,11 @@ function WorkflowsContent() {
                       }}
                       onFocus={() => setShowTechStackDropdown(true)}
                       placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       disabled={loadingTechStack}
                     />
                     {showTechStackDropdown && !loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
                           .filter((option) =>
                             option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
@@ -908,7 +908,7 @@ function WorkflowsContent() {
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
-                              className="w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm"
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
                             >
                               {option.name}
                             </button>
@@ -924,7 +924,7 @@ function WorkflowsContent() {
                       </div>
                     )}
 {loadingTechStack && (
-                       <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg p-4">
+                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
                          <div className="flex items-center justify-center">
                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
                            <span className="text-sm text-gray-500">加载技术栈选项...</span>
@@ -938,21 +938,21 @@ function WorkflowsContent() {
                  </div>
 
                 {/* 公开选项 */}
-                <div className="pt-4 border-t border-gray-700/50">
+                <div className="pt-4 border-t border-gray-200">
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={workflowIsPublic}
                       onChange={(e) => setWorkflowIsPublic(e.target.checked)}
-                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-300 flex items-center gap-1">
-                      {workflowIsPublic ? <Globe size={14} className="text-blue-400" /> : <Lock size={14} />}
+                    <span className="text-sm text-gray-700 flex items-center gap-1">
+                      {workflowIsPublic ? <Globe size={14} className="text-blue-600" /> : <Lock size={14} />}
                       公开（其他用户可在评估中使用）
                     </span>
                   </label>
                   {workflowIsPublic && (
-                    <p className="text-xs text-blue-400 mt-2 ml-6">
+                    <p className="text-xs text-blue-600 mt-2 ml-6">
                       公开的编排将出现在所有用户的评估编排选择列表中
                     </p>
                   )}
@@ -960,7 +960,7 @@ function WorkflowsContent() {
                </div>
              </div>
 
-            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -972,14 +972,14 @@ function WorkflowsContent() {
                   setSelectedFsmTemplateId('');
                 }}
                 disabled={creating}
-                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={createWorkflow}
                 disabled={creating || !workflowName.trim()}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {creating ? '创建中...' : '创建编排'}
               </button>
@@ -991,9 +991,9 @@ function WorkflowsContent() {
       {/* 编辑编排信息对话框 */}
       {showEditModal && editingWorkflow && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-100">编辑编排信息</h3>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">编辑编排信息</h3>
               <button
                 onClick={() => {
                   setShowEditModal(false);
@@ -1002,7 +1002,7 @@ function WorkflowsContent() {
                   setWorkflowDescription('');
                   setWorkflowTechStack([]);
                 }}
-                className="text-gray-400 hover:text-gray-400"
+                className="text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
               </button>
@@ -1010,7 +1010,7 @@ function WorkflowsContent() {
 
             <div className="p-6 space-y-4">
               <div>
-                <label htmlFor="editWorkflowName" className="block text-sm font-medium text-gray-300">
+                <label htmlFor="editWorkflowName" className="block text-sm font-medium text-gray-700">
                   编排名称 *
                 </label>
                 <input
@@ -1021,13 +1021,13 @@ function WorkflowsContent() {
                   minLength={2}
                   value={workflowName}
                   onChange={(e) => setWorkflowName(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="请输入编排名称（2-100个字符）"
                 />
               </div>
 
               <div>
-                <label htmlFor="editWorkflowDescription" className="block text-sm font-medium text-gray-300">
+                <label htmlFor="editWorkflowDescription" className="block text-sm font-medium text-gray-700">
                   编排描述
                 </label>
                 <textarea
@@ -1035,13 +1035,13 @@ function WorkflowsContent() {
                   rows={3}
                   value={workflowDescription}
                   onChange={(e) => setWorkflowDescription(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="请输入编排描述（可选）"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
                   适合的技术栈
                 </label>
                 <div className="relative">
@@ -1051,13 +1051,13 @@ function WorkflowsContent() {
                       return (
                       <span
                         key={tsId}
-                        className="inline-flex items-center px-3 py-1 bg-blue-500/15 text-blue-400 rounded-full text-sm"
+                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
                       >
                         {opt?.name || tsId}
                         <button
                           type="button"
                           onClick={() => setWorkflowTechStack(workflowTechStack.filter((t) => t !== tsId))}
-                          className="ml-2 text-blue-400 hover:text-blue-800"
+                          className="ml-2 text-blue-600 hover:text-blue-800"
                         >
                           <X size={14} />
                         </button>
@@ -1075,11 +1075,11 @@ function WorkflowsContent() {
                       }}
                       onFocus={() => setShowTechStackDropdown(true)}
                       placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       disabled={loadingTechStack}
                     />
                     {showTechStackDropdown && !loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
                         {techStackOptions
                           .filter((option) =>
                             option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
@@ -1095,7 +1095,7 @@ function WorkflowsContent() {
                                 setTechStackSearch('');
                                 setShowTechStackDropdown(false);
                               }}
-                              className="w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm"
+                              className="w-full px-4 py-2 text-left hover:bg-gray-100 text-sm"
                             >
                               {option.name}
                             </button>
@@ -1111,7 +1111,7 @@ function WorkflowsContent() {
                       </div>
                     )}
                     {loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg p-4">
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
                         <div className="flex items-center justify-center">
                           <Loader2 className="h-4 w-4 animate-spin mr-2" />
                           <span className="text-sm text-gray-500">加载技术栈选项...</span>
@@ -1126,7 +1126,7 @@ function WorkflowsContent() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowEditModal(false);
@@ -1136,14 +1136,14 @@ function WorkflowsContent() {
                   setWorkflowTechStack([]);
                 }}
                 disabled={updating}
-                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={updateWorkflowInfo}
                 disabled={updating || !workflowName.trim()}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {updating ? '保存中...' : '保存'}
               </button>

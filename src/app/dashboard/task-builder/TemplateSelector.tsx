@@ -12,25 +12,25 @@ const iconMap: Record<string, React.ComponentType<{ size?: number; className?: s
 
 const colorMap: Record<string, { bg: string; border: string; text: string; badge: string }> = {
   blue: {
-    bg: 'bg-blue-900/20',
+    bg: 'bg-blue-50',
     border: 'border-blue-200',
-    text: 'text-blue-400',
-    badge: 'bg-blue-100 text-blue-400',
+    text: 'text-blue-600',
+    badge: 'bg-blue-100 text-blue-700',
   },
   red: {
-    bg: 'bg-red-900/20',
+    bg: 'bg-red-50',
     border: 'border-red-200',
-    text: 'text-red-400',
-    badge: 'bg-red-100 text-red-400',
+    text: 'text-red-600',
+    badge: 'bg-red-100 text-red-700',
   },
   orange: {
-    bg: 'bg-orange-900/20',
+    bg: 'bg-orange-50',
     border: 'border-orange-200',
     text: 'text-orange-600',
     badge: 'bg-orange-100 text-orange-700',
   },
   purple: {
-    bg: 'bg-purple-900/20',
+    bg: 'bg-purple-50',
     border: 'border-purple-200',
     text: 'text-purple-600',
     badge: 'bg-purple-100 text-purple-700',
@@ -48,7 +48,7 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
   return (
     <div className="space-y-3">
       {!compact && (
-        <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <p className="text-sm text-blue-800">
             选择一个任务模板开始构建。每个模板预设了安全审计任务的标准参数配置。
           </p>
@@ -56,7 +56,7 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
       )}
 
       {compact && (
-        <p className="text-sm text-gray-400 mb-3">选择模板类型：</p>
+        <p className="text-sm text-gray-600 mb-3">选择模板类型：</p>
       )}
 
       <div className={`grid gap-3 ${compact ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-2'}`}>
@@ -72,7 +72,7 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
               className={`relative rounded-lg border-2 cursor-pointer transition-all ${
                 isSelected
                   ? `${colors.bg} ${colors.border} shadow-md`
-                  : 'bg-dark-surface border-gray-700/50 hover:border-gray-600 hover:shadow'
+                  : 'bg-white border-gray-200 hover:border-gray-300 hover:shadow'
               } ${compact ? 'p-3' : 'p-4'}`}
             >
               {isSelected && (
@@ -86,11 +86,11 @@ export default function TemplateSelector({ templates, selectedId, onSelect, comp
                   <Icon size={compact ? 18 : 24} className={colors.text} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className={`font-semibold text-gray-100 ${compact ? 'text-sm' : ''}`}>
+                  <h3 className={`font-semibold text-gray-900 ${compact ? 'text-sm' : ''}`}>
                     {template.name}
                   </h3>
                   {!compact && (
-                    <p className="text-sm text-gray-400 mt-1">{template.description}</p>
+                    <p className="text-sm text-gray-600 mt-1">{template.description}</p>
                   )}
 
                   {!compact && template.tags && (

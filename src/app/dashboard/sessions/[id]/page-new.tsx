@@ -120,13 +120,13 @@ export default function EvaluationDetailPage({
   const getAgentStyle = (status: string) => {
     switch (status) {
       case 'running':
-        return 'border-blue-500 bg-blue-900/20';
+        return 'border-blue-500 bg-blue-50';
       case 'completed':
-        return 'border-green-500 bg-green-900/20';
+        return 'border-green-500 bg-green-50';
       case 'failed':
-        return 'border-red-500 bg-red-900/20';
+        return 'border-red-500 bg-red-50';
       default:
-        return 'border-gray-600 bg-[#0F172A]';
+        return 'border-gray-300 bg-gray-50';
     }
   };
 
@@ -154,8 +154,8 @@ export default function EvaluationDetailPage({
   return (
     <div className="min-h-screen bg-gray-100">
       {/* 顶部导航栏 */}
-      <div className="bg-dark-surface shadow-sm px-4 py-3 flex items-center justify-between">
-        <button onClick={handleBack} className="flex items-center gap-2 text-gray-400 hover:text-gray-100">
+      <div className="bg-white shadow-sm px-4 py-3 flex items-center justify-between">
+        <button onClick={handleBack} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
           <ArrowLeft size={20} />
           <span>返回</span>
         </button>
@@ -178,7 +178,7 @@ export default function EvaluationDetailPage({
           {evaluation.status === 'running' && (
             <button
               onClick={handleStopEvaluation}
-              className="flex items-center gap-1 px-3 py-1 bg-red-600 text-white rounded hover:bg-red-600"
+              className="flex items-center gap-1 px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600"
             >
               <Square size={16} />
               <span>停止</span>
@@ -190,7 +190,7 @@ export default function EvaluationDetailPage({
       {/* 主内容区 */}
       <div className="max-w-6xl mx-auto p-4">
         {/* 评估标题 */}
-        <div className="bg-dark-surface rounded-lg shadow p-4 mb-4">
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
           <h1 className="text-xl font-semibold">{evaluation.Project?.name || '评估详情'}</h1>
           <p className="text-gray-500 text-sm mt-1">
             工作流: {evaluation.workflowType === 'fsm' ? 'FSM流程' : 'DAG编排'}
@@ -198,7 +198,7 @@ export default function EvaluationDetailPage({
         </div>
 
         {/* Agent列表 */}
-        <div className="bg-dark-surface rounded-lg shadow p-4 mb-4">
+        <div className="bg-white rounded-lg shadow p-4 mb-4">
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
             <span>Agent列表</span>
             <span className="text-sm text-gray-500">({agents.length}个)</span>
@@ -233,7 +233,7 @@ export default function EvaluationDetailPage({
 
         {/* 选中Agent的详情 */}
         {selectedAgentId && (
-          <div className="bg-dark-surface rounded-lg shadow p-4">
+          <div className="bg-white rounded-lg shadow p-4">
             <h2 className="text-lg font-semibold mb-4">
               Agent详情: {agents.find((a: any) => a.id === selectedAgentId)?.label}
             </h2>
@@ -242,7 +242,7 @@ export default function EvaluationDetailPage({
             <div className="mb-4 border rounded-lg p-3">
               <button
                 onClick={() => setIsMessagesExpanded(!isMessagesExpanded)}
-                className="flex items-center justify-between w-full font-medium text-gray-300"
+                className="flex items-center justify-between w-full font-medium text-gray-700"
               >
                 <span className="flex items-center gap-2">
                   <MessageSquare size={18} className="text-blue-500" />
@@ -260,12 +260,12 @@ export default function EvaluationDetailPage({
                     <p className="text-gray-500 text-sm">暂无消息</p>
                   ) : (
                     messages.slice(-20).map((msg: any) => (
-                      <div key={msg.id} className="p-2 bg-[#0F172A] rounded text-sm">
+                      <div key={msg.id} className="p-2 bg-gray-50 rounded text-sm">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-medium text-gray-400">{msg.role}</span>
+                          <span className="font-medium text-gray-600">{msg.role}</span>
                           <span className="text-xs text-gray-400">{new Date(msg.createdAt).toLocaleTimeString()}</span>
                         </div>
-                        <div className="text-gray-300 whitespace-pre-wrap">
+                        <div className="text-gray-700 whitespace-pre-wrap">
                           {getContentPreview(msg.content)}
                         </div>
                       </div>
@@ -279,7 +279,7 @@ export default function EvaluationDetailPage({
             <div className="mb-4 border rounded-lg p-3">
               <button
                 onClick={() => setIsTodosExpanded(!isTodosExpanded)}
-                className="flex items-center justify-between w-full font-medium text-gray-300"
+                className="flex items-center justify-between w-full font-medium text-gray-700"
               >
                 <span className="flex items-center gap-2">
                   <ListTodo size={18} className="text-green-500" />
@@ -297,7 +297,7 @@ export default function EvaluationDetailPage({
                     <p className="text-gray-500 text-sm">暂无任务</p>
                   ) : (
                     todos.map((todo: any, idx: number) => (
-                      <div key={idx} className="flex items-center gap-2 p-2 bg-[#0F172A] rounded text-sm">
+                      <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded text-sm">
                         <StatusIcon status={todo.status} />
                         <span>{todo.content}</span>
                       </div>
@@ -311,7 +311,7 @@ export default function EvaluationDetailPage({
             <div className="border rounded-lg p-3">
               <button
                 onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
-                className="flex items-center justify-between w-full font-medium text-gray-300"
+                className="flex items-center justify-between w-full font-medium text-gray-700"
               >
                 <span className="flex items-center gap-2">
                   <GitBranch size={18} className="text-purple-500" />
@@ -329,7 +329,7 @@ export default function EvaluationDetailPage({
                     <p className="text-gray-500 text-sm">暂无子Agent调用</p>
                   ) : (
                     children.map((child: any, idx: number) => (
-                      <div key={idx} className="p-2 bg-purple-900/20 rounded border border-purple-200 text-sm">
+                      <div key={idx} className="p-2 bg-purple-50 rounded border border-purple-200 text-sm">
                         <div className="font-medium text-purple-700">{child.title || `子Agent ${idx + 1}`}</div>
                         <div className="text-gray-500 text-xs mt-1">
                           状态: {child.status || '未知'}

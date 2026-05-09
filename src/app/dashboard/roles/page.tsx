@@ -144,8 +144,8 @@ function RolesPageContent() {
       {/* 页面标题和操作 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">角色与权限</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900">角色与权限</h1>
+          <p className="mt-1 text-sm text-gray-600">
             管理系统角色及其权限
           </p>
         </div>
@@ -153,7 +153,7 @@ function RolesPageContent() {
         <div className="flex space-x-3">
           <button
             onClick={() => setShowCreateRoleModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <Plus size={20} />
             <span>创建角色</span>
@@ -169,15 +169,15 @@ function RolesPageContent() {
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* 角色列表 */}
-      <div className="bg-dark-surface rounded-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between gap-4">
-          <h2 className="text-lg font-semibold text-gray-100">角色</h2>
+      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">角色</h2>
           <div className="flex items-center gap-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -189,7 +189,7 @@ function RolesPageContent() {
                   setSearchQuery(e.target.value);
                   setPage(1);
                 }}
-                className="pl-9 pr-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent w-48"
+                className="pl-9 pr-3 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent w-48"
               />
             </div>
           </div>
@@ -198,10 +198,10 @@ function RolesPageContent() {
         {roles.length === 0 ? (
           <div className="text-center py-12">
             <Shield className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-4 text-sm text-gray-400">未找到角色</p>
+            <p className="mt-4 text-sm text-gray-600">未找到角色</p>
           </div>
         ) : (
-           <div className="divide-y divide-gray-700/50">
+           <div className="divide-y divide-gray-200">
             {roles.map((role) => (
               <RoleCard
                 key={role.id}
@@ -218,23 +218,23 @@ function RolesPageContent() {
         )}
         {/* 分页 */}
         {totalCount > pageSize && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-700/50">
-            <span className="text-sm text-gray-400">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+            <span className="text-sm text-gray-600">
               共 {totalCount} 条，第 {page}/{Math.ceil(totalCount / pageSize)} 页
             </span>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronLeft size={16} />
               </button>
-              <span className="text-sm text-gray-400">第 {page} 页</span>
+              <span className="text-sm text-gray-600">第 {page} 页</span>
               <button
                 onClick={() => setPage(p => p + 1)}
                 disabled={page >= Math.ceil(totalCount / pageSize)}
-                className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ChevronRight size={16} />
               </button>
@@ -244,18 +244,18 @@ function RolesPageContent() {
       </div>
 
       {/* 权限列表 */}
-      <div className="bg-dark-surface rounded-lg overflow-hidden mt-6">
-        <div className="px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">权限</h2>
+      <div className="bg-white shadow-sm rounded-lg overflow-hidden mt-6">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">权限</h2>
         </div>
 
         {permissions.length === 0 ? (
           <div className="text-center py-12">
             <Settings className="mx-auto h-12 w-12 text-gray-400" />
-            <p className="mt-4 text-sm text-gray-400">未找到权限</p>
+            <p className="mt-4 text-sm text-gray-600">未找到权限</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-700/50">
+          <div className="divide-y divide-gray-200">
             {permissions.map((permission) => (
               <PermissionCard key={permission.id} permission={permission} />
             ))}
@@ -320,22 +320,22 @@ function RoleCard({
   const [showAllPermissions, setShowAllPermissions] = useState(false);
 
   return (
-    <div className="px-6 py-4 hover:bg-[#0F172A]">
+    <div className="px-6 py-4 hover:bg-gray-50">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <h3 className="text-lg font-semibold text-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900">
               {role.name}
             </h3>
             {role.isSystem && (
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                 系统
               </span>
             )}
           </div>
 
           {role.description && (
-            <p className="mt-1 text-sm text-gray-400">
+            <p className="mt-1 text-sm text-gray-600">
               {role.description}
             </p>
           )}
@@ -343,7 +343,7 @@ function RoleCard({
           <div className="mt-2 flex items-center space-x-4">
             <div className="flex items-center space-x-1">
               <Shield size={16} className="text-gray-400" />
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-gray-600">
                 {permissionCount} 个权限
               </span>
             </div>
@@ -353,7 +353,7 @@ function RoleCard({
                 {(showAllPermissions ? role.permissions : role.permissions.slice(0, 5)).map((permission: any) => (
                   <span
                     key={permission.id}
-                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-dark-surface-hover text-gray-200"
+                    className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800"
                   >
                     {permission.name}
                   </span>
@@ -361,7 +361,7 @@ function RoleCard({
                 {role.permissions.length > 5 && (
                   <button
                     onClick={() => setShowAllPermissions(!showAllPermissions)}
-                    className="text-xs text-blue-400 hover:text-blue-800 cursor-pointer"
+                    className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer"
                   >
                     {showAllPermissions ? '收起' : `+${role.permissions.length - 5} 更多`}
                   </button>
@@ -375,14 +375,14 @@ function RoleCard({
           <div className="flex space-x-2">
             <button
               onClick={onEdit}
-              className="p-2 text-gray-400 hover:text-gray-400"
+              className="p-2 text-gray-400 hover:text-gray-600"
               title="编辑角色"
             >
               <Edit size={16} />
             </button>
             <button
               onClick={onDelete}
-              className="p-2 text-gray-400 hover:text-red-400"
+              className="p-2 text-gray-400 hover:text-red-600"
               title="删除角色"
             >
               <Trash2 size={16} />
@@ -396,20 +396,20 @@ function RoleCard({
 
 function PermissionCard({ permission }: { permission: any }) {
   return (
-    <div className="px-6 py-4 hover:bg-[#0F172A]">
+    <div className="px-6 py-4 hover:bg-gray-50">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <h3 className="text-lg font-semibold text-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900">
               {permission.name}
             </h3>
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-400">
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
               {permission.module}
             </span>
           </div>
 
           {permission.description && (
-            <p className="mt-1 text-sm text-gray-400">
+            <p className="mt-1 text-sm text-gray-600">
               {permission.description}
             </p>
           )}
@@ -488,17 +488,17 @@ function CreateRoleModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50">
-          <h3 className="text-lg font-semibold text-gray-100">创建角色</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">创建角色</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             ×
           </button>
         </div>
 
         <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -506,7 +506,7 @@ function CreateRoleModal({
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               角色名称 *
             </label>
@@ -516,14 +516,14 @@ function CreateRoleModal({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               描述
             </label>
@@ -532,29 +532,29 @@ function CreateRoleModal({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               权限
             </label>
-            <div className="max-h-64 overflow-y-auto border border-gray-600 rounded-md p-3">
+            <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3">
               <div className="grid grid-cols-1 gap-2">
                 {permissions.map((permission: any) => (
                   <label
                     key={permission.id}
-                    className="flex items-start space-x-2 px-3 py-2 border border-gray-700/50 rounded-md cursor-pointer hover:bg-[#0F172A]"
+                    className="flex items-start space-x-2 px-3 py-2 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50"
                   >
                     <input
                       type="checkbox"
                       checked={selectedPermissions.includes(permission.id)}
                       onChange={() => togglePermission(permission.id)}
-                      className="mt-1 rounded border-gray-600 text-blue-400 focus:ring-primary-500"
+                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-100">
+                      <div className="text-sm font-medium text-gray-900">
                         {permission.name}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
@@ -572,14 +572,14 @@ function CreateRoleModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? '创建中...' : '创建角色'}
             </button>
@@ -654,17 +654,17 @@ function EditRoleModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50">
-          <h3 className="text-lg font-semibold text-gray-100">编辑角色</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">编辑角色</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             ×
           </button>
         </div>
 
         <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -672,7 +672,7 @@ function EditRoleModal({
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               角色名称 *
             </label>
@@ -682,14 +682,14 @@ function EditRoleModal({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               描述
             </label>
@@ -698,29 +698,29 @@ function EditRoleModal({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               权限
             </label>
-            <div className="max-h-64 overflow-y-auto border border-gray-600 rounded-md p-3">
+            <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3">
               <div className="grid grid-cols-1 gap-2">
                 {permissions.map((permission: any) => (
                   <label
                     key={permission.id}
-                    className="flex items-start space-x-2 px-3 py-2 border border-gray-700/50 rounded-md cursor-pointer hover:bg-[#0F172A]"
+                    className="flex items-start space-x-2 px-3 py-2 border border-gray-200 rounded-md cursor-pointer hover:bg-gray-50"
                   >
                     <input
                       type="checkbox"
                       checked={selectedPermissions.includes(permission.id)}
                       onChange={() => togglePermission(permission.id)}
-                      className="mt-1 rounded border-gray-600 text-blue-400 focus:ring-primary-500"
+                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-100">
+                      <div className="text-sm font-medium text-gray-900">
                         {permission.name}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
@@ -738,14 +738,14 @@ function EditRoleModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               取消
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? '更新中...' : '更新角色'}
             </button>
@@ -812,17 +812,17 @@ function CreatePermissionModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div className="px-6 py-4 border-b border-gray-700/50">
-          <h3 className="text-lg font-semibold text-gray-100">创建权限</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-400">
+      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h3 className="text-lg font-semibold text-gray-900">创建权限</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             ×
           </button>
         </div>
 
         <form className="p-6 space-y-4" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
               {error}
             </div>
           )}
@@ -830,7 +830,7 @@ function CreatePermissionModal({
           <div>
             <label
               htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               权限名称 *
             </label>
@@ -840,14 +840,14 @@ function CreatePermissionModal({
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label
               htmlFor="module"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               模块 *
             </label>
@@ -856,7 +856,7 @@ function CreatePermissionModal({
               required
               value={module}
               onChange={(e) => setModule(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">选择模块</option>
               {modules.map(m => (
@@ -870,7 +870,7 @@ function CreatePermissionModal({
           <div>
             <label
               htmlFor="action"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               操作 *
             </label>
@@ -879,7 +879,7 @@ function CreatePermissionModal({
               required
               value={action}
               onChange={(e) => setAction(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">选择操作</option>
               {actions.map(a => (
@@ -893,7 +893,7 @@ function CreatePermissionModal({
           <div>
             <label
               htmlFor="resource"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               资源（可选）
             </label>
@@ -902,14 +902,14 @@ function CreatePermissionModal({
               type="text"
               value={resource}
               onChange={(e) => setResource(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-gray-300"
+              className="block text-sm font-medium text-gray-700"
             >
               描述
             </label>
@@ -918,7 +918,7 @@ function CreatePermissionModal({
               rows={3}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -927,7 +927,7 @@ function CreatePermissionModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
+              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
             >
               取消
             </button>

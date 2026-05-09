@@ -187,21 +187,21 @@ export default function ClaudePage() {
       {/* 头部 */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">Claude 会话</h1>
-          <p className="text-sm text-gray-400 mt-1">管理和浏览所有 Claude Code 项目与多源会话</p>
+          <h1 className="text-2xl font-bold text-gray-900">Claude 会话</h1>
+          <p className="text-sm text-gray-600 mt-1">管理和浏览所有 Claude Code 项目与多源会话</p>
         </div>
         <div className="flex items-center space-x-3">
           <button
             onClick={() => fetchProjects(false)}
             disabled={refreshing}
-            className="flex items-center space-x-2 px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition-colors"
           >
             <RefreshCw size={18} className={refreshing ? 'animate-spin' : ''} />
             <span>刷新</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
           >
             <Plus size={20} />
             <span>添加项目</span>
@@ -211,25 +211,25 @@ export default function ClaudePage() {
 
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">项目总数</p>
-              <p className="text-3xl font-bold text-gray-100 mt-1">{stats.projectCount}</p>
+              <p className="text-sm font-medium text-gray-600">项目总数</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.projectCount}</p>
             </div>
-            <div className="p-3 bg-blue-600/10 rounded-full">
-              <FolderOpen size={24} className="text-blue-400" />
+            <div className="p-3 bg-blue-50 rounded-full">
+              <FolderOpen size={24} className="text-blue-600" />
             </div>
           </div>
         </div>
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 hover:shadow-md transition-shadow">
+        <div className="bg-white rounded-lg border border-gray-200 p-6 hover:shadow-md transition-shadow">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-400">会话总数</p>
-              <p className="text-3xl font-bold text-gray-100 mt-1">{stats.totalSessions}</p>
+              <p className="text-sm font-medium text-gray-600">会话总数</p>
+              <p className="text-3xl font-bold text-gray-900 mt-1">{stats.totalSessions}</p>
             </div>
-            <div className="p-3 bg-green-600/10 rounded-full">
-              <MessageSquare size={24} className="text-green-400" />
+            <div className="p-3 bg-green-50 rounded-full">
+              <MessageSquare size={24} className="text-green-600" />
             </div>
           </div>
         </div>
@@ -243,28 +243,28 @@ export default function ClaudePage() {
           placeholder="搜索项目..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       {/* 错误 */}
       {error && (
-        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
       {/* 项目列表 */}
       {regularProjects.length === 0 && !multiSource ? (
-        <div className="text-center py-16 bg-dark-surface rounded-lg border border-gray-700/50">
+        <div className="text-center py-16 bg-white rounded-lg border border-gray-200">
           <FolderOpen className="mx-auto h-16 w-16 text-gray-300 mb-4" />
-          <h3 className="text-lg font-medium text-gray-100">暂无项目</h3>
+          <h3 className="text-lg font-medium text-gray-900">暂无项目</h3>
           <p className="mt-2 text-sm text-gray-500 max-w-sm mx-auto">
             添加一个 Claude Code 项目路径，系统将自动扫描并管理该项目的所有会话
           </p>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="mt-6 px-6 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors inline-flex items-center space-x-2"
+            className="mt-6 px-6 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors inline-flex items-center space-x-2"
           >
             <Plus size={20} />
             <span>添加第一个项目</span>
@@ -279,28 +279,28 @@ export default function ClaudePage() {
             const lastActivity = sessions[0]?.lastActivity || project.lastActivity;
             
             return (
-              <div key={project.name} className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden hover:shadow-md transition-shadow">
+              <div key={project.name} className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
                 <div
-                  className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-[#0F172A] transition-colors"
+                  className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
                   onClick={() => toggleExpand(project.name)}
                 >
                   <div className="flex items-center space-x-4 flex-1 min-w-0">
                     <button
-                      className="p-1 hover:bg-dark-surface-hover rounded transition-colors"
+                      className="p-1 hover:bg-gray-100 rounded transition-colors"
                       aria-label={expanded ? '折叠' : '展开'}
                     >
                       {expanded ? <ChevronDown size={20} className="text-gray-400" /> : <ChevronRight size={20} className="text-gray-400" />}
                     </button>
-                    <div className="p-2 bg-blue-600/10 rounded-lg">
-                      <FolderOpen size={24} className="text-blue-400" />
+                    <div className="p-2 bg-blue-50 rounded-lg">
+                      <FolderOpen size={24} className="text-blue-600" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-gray-100 truncate">
+                        <h3 className="font-semibold text-gray-900 truncate">
                           {project.displayName || project.name}
                         </h3>
                         {sessionCount > 0 && (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             {sessionCount} 会话
                           </span>
                         )}
@@ -321,7 +321,7 @@ export default function ClaudePage() {
                         e.stopPropagation(); 
                         router.push(`/dashboard/claude/${encodeURIComponent(project.name)}`); 
                       }}
-                      className="p-2 text-blue-400 hover:bg-blue-600/100/100/10 rounded-lg transition-colors"
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="打开对话"
                       aria-label="打开对话"
                     >
@@ -332,7 +332,7 @@ export default function ClaudePage() {
                         e.stopPropagation(); 
                         deleteProject(project.name); 
                       }}
-                      className="p-2 text-red-500 hover:bg-red-600/100/100/10 rounded-lg transition-colors"
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                       title="删除项目"
                       aria-label="删除项目"
                     >
@@ -342,7 +342,7 @@ export default function ClaudePage() {
                 </div>
 
                 {expanded && sessions.length > 0 && (
-                  <div className="border-t border-gray-700/50 bg-[#0F172A]">
+                  <div className="border-t border-gray-200 bg-gray-50">
                     <div className="px-6 py-2 flex items-center justify-between">
                       <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">最近会话</p>
                       {sessionCount > 5 && (
@@ -351,7 +351,7 @@ export default function ClaudePage() {
                             e.stopPropagation();
                             router.push(`/dashboard/claude/${encodeURIComponent(project.name)}`);
                           }}
-                          className="text-xs text-blue-400 hover:text-blue-400 font-medium"
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                         >
                           查看全部 {sessionCount} 个会话 →
                         </button>
@@ -360,12 +360,12 @@ export default function ClaudePage() {
                     {sessions.slice(0, 5).map((session) => (
                       <div
                         key={session.id}
-                        className="flex items-center justify-between px-6 py-3 hover:bg-dark-surface-hover cursor-pointer border-t border-gray-700/50 transition-colors group"
+                        className="flex items-center justify-between px-6 py-3 hover:bg-white cursor-pointer border-t border-gray-100 transition-colors group"
                         onClick={() => router.push(`/dashboard/claude/${encodeURIComponent(project.name)}?session=${session.id}`)}
                       >
                         <div className="flex items-center space-x-3 flex-1 min-w-0">
-                          <MessageSquare size={16} className="text-gray-400 group-hover:text-blue-400 transition-colors" />
-                          <span className="text-sm text-gray-300 truncate flex-1">{session.summary || '新会话'}</span>
+                          <MessageSquare size={16} className="text-gray-400 group-hover:text-blue-600 transition-colors" />
+                          <span className="text-sm text-gray-700 truncate flex-1">{session.summary || '新会话'}</span>
                         </div>
                         <div className="flex items-center space-x-3 text-xs text-gray-400">
                           <span>{session.messageCount || 0} 条消息</span>
@@ -383,39 +383,39 @@ export default function ClaudePage() {
 
           {/* 多源会话 */}
           {multiSource && ((multiSource.cursorSessions?.length ?? 0) > 0 || (multiSource.codexSessions?.length ?? 0) > 0 || (multiSource.geminiSessions?.length ?? 0) > 0) && (
-            <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden hover:shadow-md transition-shadow">
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow">
               <div
-                className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-[#0F172A] transition-colors"
+                className="flex items-center justify-between px-6 py-4 cursor-pointer hover:bg-gray-50 transition-colors"
                 onClick={() => toggleExpand('multi-source-sessions')}
               >
                 <div className="flex items-center space-x-4">
                   <button
-                    className="p-1 hover:bg-dark-surface-hover rounded transition-colors"
+                    className="p-1 hover:bg-gray-100 rounded transition-colors"
                     aria-label={expandedProjects.has('multi-source-sessions') ? '折叠' : '展开'}
                   >
                     {expandedProjects.has('multi-source-sessions') ? <ChevronDown size={20} className="text-gray-400" /> : <ChevronRight size={20} className="text-gray-400" />}
                   </button>
-                  <div className="p-2 bg-yellow-600/10 rounded-lg">
-                    <Zap size={24} className="text-yellow-400" />
+                  <div className="p-2 bg-yellow-50 rounded-lg">
+                    <Zap size={24} className="text-yellow-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-100">多源会话</h3>
+                    <h3 className="font-semibold text-gray-900">多源会话</h3>
                     <p className="text-sm text-gray-500">来自 Cursor、Codex、Gemini 的会话</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   {(multiSource.cursorSessions?.length ?? 0) > 0 && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-500/15 text-purple-400">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                       {multiSource.cursorSessions?.length} Cursor
                     </span>
                   )}
                   {(multiSource.codexSessions?.length ?? 0) > 0 && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-400">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                       {multiSource.codexSessions?.length} Codex
                     </span>
                   )}
                   {(multiSource.geminiSessions?.length ?? 0) > 0 && (
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-500/15 text-yellow-400">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
                       {multiSource.geminiSessions?.length} Gemini
                     </span>
                   )}
@@ -429,22 +429,22 @@ export default function ClaudePage() {
       {/* 添加项目模态框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-100">添加项目</h3>
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">添加项目</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
                   setNewProjectPath('');
                 }}
-                className="text-gray-400 hover:text-gray-400 transition-colors"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
                 aria-label="关闭"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="p-6">
-              <label htmlFor="projectPath" className="block text-sm font-medium text-gray-300 mb-2">
+              <label htmlFor="projectPath" className="block text-sm font-medium text-gray-700 mb-2">
                 项目路径
               </label>
               <input
@@ -453,26 +453,26 @@ export default function ClaudePage() {
                 value={newProjectPath}
                 onChange={(e) => setNewProjectPath(e.target.value)}
                 placeholder="例如: D:\my-project 或 /Users/name/project"
-                className="w-full px-4 py-2.5 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
               />
               <p className="mt-3 text-xs text-gray-500">
                 输入包含 Claude Code 会话的项目目录路径，系统将自动扫描并列出所有会话
               </p>
             </div>
-            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end space-x-3">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
               <button
                 onClick={() => {
                   setShowCreateModal(false);
                   setNewProjectPath('');
                 }}
-                className="px-4 py-2 border border-gray-600 text-gray-300 rounded-md hover:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={addProject}
                 disabled={!newProjectPath.trim()}
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 添加项目
               </button>

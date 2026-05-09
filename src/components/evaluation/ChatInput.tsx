@@ -42,7 +42,7 @@ export function ChatInput({
   };
 
   return (
-    <div className="border-t border-gray-700/50 bg-dark-surface p-4">
+    <div className="border-t border-gray-200 bg-white p-4">
       <div className="flex items-end space-x-3">
         <div className="flex-1">
           <textarea
@@ -53,14 +53,14 @@ export function ChatInput({
             placeholder={placeholder}
             disabled={disabled}
             rows={1}
-            className="w-full resize-none bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-800 disabled:cursor-not-allowed"
+            className="w-full resize-none border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
             style={{ maxHeight: '200px' }}
           />
         </div>
         <button
           onClick={handleSubmit}
           disabled={!message.trim() || disabled}
-          className="flex-shrink-0 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-shrink-0 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {disabled ? (
             <Loader2 size={20} className="animate-spin" />

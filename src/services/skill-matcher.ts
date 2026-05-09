@@ -44,28 +44,28 @@ export async function matchSkillsByCategoryValues(
   // 查找关联的 Skills（包含更多信息用于调试）
   const skills = await prisma.skill.findMany({
     where: {
-      vulnerabilityTreeId: { in: patternIds },
+      vulnerabilityPatternId: { in: patternIds },
     },
-    select: {
-      id: true,
-      name: true,
-      categoryId: true,
-      isActive: true,
+    select: { 
+      id: true, 
+      name: true, 
+      techStackId: true, 
+      isActive: true, 
       isLatest: true,
-      vulnerabilityTreeId: true,
+      vulnerabilityPatternId: true,
     },
   });
   
   console.log(`[SkillMatcher] 找到 ${skills.length} 个关联的 Skills (未过滤状态)`);
   
   if (skills.length === 0) {
-    console.log(`[SkillMatcher] ⚠️ 漏洞模式下没有关联的 Skills，请检查 Skill 表的 vulnerabilityTreeId 字段`);
+    console.log(`[SkillMatcher] ⚠️ 漏洞模式下没有关联的 Skills，请检查 Skill 表的 vulnerabilityPatternId 字段`);
     return [];
   }
 
   // 调试：显示每个 Skill 的状态
   skills.forEach(s => {
-    console.log(`[SkillMatcher]   - ${s.name}: isActive=${s.isActive}, isLatest=${s.isLatest}, categoryId=${s.categoryId || '无'}`);
+    console.log(`[SkillMatcher]   - ${s.name}: isActive=${s.isActive}, isLatest=${s.isLatest}, techStackId=${s.techStackId || '无'}`);
   });
 
   // 过滤：isActive + isLatest
@@ -83,11 +83,11 @@ export async function matchSkillsByCategoryValues(
     return activeSkills.map(s => s.id);
   }
 
-  const matchedSkills = activeSkills.filter(s => !s.categoryId || techStack.includes(s.categoryId));
+  const matchedSkills = activeSkills.filter(s => !s.techStackId || techStack.includes(s.techStackId));
   console.log(`[SkillMatcher] 技术栈过滤后: ${matchedSkills.length} 个`);
   
   if (matchedSkills.length === 0) {
-    const skillTechStacks = [...new Set(activeSkills.map(s => s.categoryId).filter(Boolean))];
+    const skillTechStacks = [...new Set(activeSkills.map(s => s.techStackId).filter(Boolean))];
     console.log(`[SkillMatcher] ⚠️ 技术栈不匹配，Skills 的技术栈: ${skillTechStacks.join(', ')}, 项目技术栈: ${techStack.join(', ')}`);
   }
 

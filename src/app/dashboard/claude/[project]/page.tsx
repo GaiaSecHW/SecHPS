@@ -396,7 +396,7 @@ export default function ClaudeSessionPage({
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <p className="text-red-500 mb-4">{error}</p>
-        <button onClick={() => router.push('/dashboard/claude')} className="px-4 py-2 bg-primary-600 text-white rounded-md">
+        <button onClick={() => router.push('/dashboard/claude')} className="px-4 py-2 bg-blue-600 text-white rounded-md">
           返回
         </button>
       </div>
@@ -404,20 +404,20 @@ export default function ClaudeSessionPage({
   }
 
   return (
-    <div className="flex h-screen bg-[#0F172A]">
+    <div className="flex h-screen bg-gray-50">
       {/* 侧边栏 */}
-      <div className={`${sidebarOpen ? 'w-72' : 'w-0'} bg-dark-surface border-r transition-all overflow-hidden flex flex-col shadow-sm`}>
-        <div className="p-4 border-b bg-[#0F172A]">
+      <div className={`${sidebarOpen ? 'w-72' : 'w-0'} bg-white border-r transition-all overflow-hidden flex flex-col shadow-sm`}>
+        <div className="p-4 border-b bg-gray-50">
           <div className="flex items-center justify-between mb-3">
-            <button onClick={() => router.push('/dashboard/claude')} className="flex items-center text-gray-400 hover:text-gray-100 transition-colors">
+            <button onClick={() => router.push('/dashboard/claude')} className="flex items-center text-gray-600 hover:text-gray-900 transition-colors">
               <ArrowLeft size={18} className="mr-2" />
               <span className="font-medium text-sm">返回项目</span>
             </button>
-            <button onClick={() => setSidebarOpen(false)} className="p-1 text-gray-400 hover:text-gray-400">
+            <button onClick={() => setSidebarOpen(false)} className="p-1 text-gray-400 hover:text-gray-600">
               <X size={16} />
             </button>
           </div>
-          <h2 className="font-semibold text-gray-100 truncate" title={project?.displayName || project?.name}>
+          <h2 className="font-semibold text-gray-900 truncate" title={project?.displayName || project?.name}>
             {project?.displayName || project?.name}
           </h2>
           <p className="text-xs text-gray-500 truncate mt-0.5">{projectPath}</p>
@@ -425,7 +425,7 @@ export default function ClaudeSessionPage({
         
         <button 
           onClick={createSession} 
-          className="mx-4 mt-4 flex items-center justify-center space-x-2 px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-sm"
+          className="mx-4 mt-4 flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
         >
           <Plus size={18} />
           <span>新建会话</span>
@@ -447,8 +447,8 @@ export default function ClaudeSessionPage({
             sessions.map((session) => (
               <div
                 key={session.id}
-                className={`group px-4 py-3 cursor-pointer hover:bg-[#0F172A] border-l-3 transition-colors ${
-                  currentSession?.id === session.id ? 'bg-blue-600/10 border-l-3 border-blue-500' : 'border-l-3 border-transparent'
+                className={`group px-4 py-3 cursor-pointer hover:bg-gray-50 border-l-3 transition-colors ${
+                  currentSession?.id === session.id ? 'bg-blue-50 border-l-3 border-blue-500' : 'border-l-3 border-transparent'
                 }`}
                 onClick={() => {
                   setCurrentSession(session);
@@ -457,10 +457,10 @@ export default function ClaudeSessionPage({
                 }}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-sm truncate flex-1 text-gray-300">{session.summary || '新会话'}</span>
+                  <span className="text-sm truncate flex-1 text-gray-700">{session.summary || '新会话'}</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-600/100/100/10 rounded transition-all"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -477,11 +477,11 @@ export default function ClaudeSessionPage({
           
           {/* 加载更多按钮 */}
           {sessionsOffset < sessionsTotal && (
-            <div className="p-4 border-t bg-[#0F172A]">
+            <div className="p-4 border-t bg-gray-50">
               <button
                 onClick={loadMoreSessions}
                 disabled={loadingMoreSessions}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-dark-surface border border-gray-700/50 text-gray-300 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 transition-colors"
+                className="w-full flex items-center justify-center space-x-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
               >
                 {loadingMoreSessions ? (
                   <>
@@ -503,15 +503,15 @@ export default function ClaudeSessionPage({
       {/* 主内容区 */}
       <div className="flex-1 flex flex-col">
         {/* 顶部工具栏 */}
-        <div className="h-14 bg-dark-surface border-b flex items-center justify-between px-6 shadow-sm">
+        <div className="h-14 bg-white border-b flex items-center justify-between px-6 shadow-sm">
           <div className="flex items-center space-x-4">
             {!sidebarOpen && (
-              <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-dark-surface-hover rounded-lg transition-colors">
+              <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">
                 <FolderOpen size={18} />
               </button>
             )}
             <div>
-              <h1 className="font-semibold text-gray-100">{currentSession?.summary || '新会话'}</h1>
+              <h1 className="font-semibold text-gray-900">{currentSession?.summary || '新会话'}</h1>
               {currentSession && (
                 <p className="text-xs text-gray-500">{currentSession.messageCount || 0} 条消息</p>
               )}
@@ -519,11 +519,11 @@ export default function ClaudeSessionPage({
           </div>
           
           {/* 面板切换 */}
-          <div className="flex items-center space-x-1 bg-dark-surface-hover rounded-lg p-1">
+          <div className="flex items-center space-x-1 bg-gray-100 rounded-lg p-1">
             <button
               onClick={() => setActivePanel('chat')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                activePanel === 'chat' ? 'bg-dark-surface shadow text-blue-400' : 'text-gray-400 hover:text-gray-100'
+                activePanel === 'chat' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               聊天
@@ -531,7 +531,7 @@ export default function ClaudeSessionPage({
             <button
               onClick={() => setActivePanel('terminal')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                activePanel === 'terminal' ? 'bg-dark-surface shadow text-blue-400' : 'text-gray-400 hover:text-gray-100'
+                activePanel === 'terminal' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               终端
@@ -539,7 +539,7 @@ export default function ClaudeSessionPage({
             <button
               onClick={() => setActivePanel('files')}
               className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                activePanel === 'files' ? 'bg-dark-surface shadow text-blue-400' : 'text-gray-400 hover:text-gray-100'
+                activePanel === 'files' ? 'bg-white shadow text-blue-600' : 'text-gray-600 hover:text-gray-900'
               }`}
             >
               文件
@@ -547,10 +547,10 @@ export default function ClaudeSessionPage({
           </div>
           
           <div className="flex items-center space-x-2">
-            <button onClick={() => loadProject()} className="p-2 text-gray-500 hover:bg-dark-surface-hover rounded" title="刷新">
+            <button onClick={() => loadProject()} className="p-2 text-gray-500 hover:bg-gray-100 rounded" title="刷新">
               <RefreshCw size={18} />
             </button>
-            <button className="p-2 text-gray-500 hover:bg-dark-surface-hover rounded" title="设置">
+            <button className="p-2 text-gray-500 hover:bg-gray-100 rounded" title="设置">
               <Settings size={18} />
             </button>
           </div>
@@ -567,7 +567,7 @@ export default function ClaudeSessionPage({
               
               {/* 权限请求弹窗 */}
               {pendingToolCall && (
-                <div className="p-3 bg-dark-surface border-t shadow-sm">
+                <div className="p-3 bg-white border-t shadow-sm">
                   <PermissionRequest
                     toolName={pendingToolCall.name}
                     toolInput={pendingToolCall.input}
@@ -579,7 +579,7 @@ export default function ClaudeSessionPage({
                 </div>
               )}
               
-              <div className="p-3 bg-dark-surface border-t shadow-sm">
+              <div className="p-3 bg-white border-t shadow-sm">
                 <div className="flex items-end space-x-3 max-w-4xl mx-auto">
                   <div className="flex-1">
                     <textarea
@@ -588,14 +588,14 @@ export default function ClaudeSessionPage({
                       onKeyDown={handleKeyDown}
                       placeholder="输入消息... (Enter 发送)"
                       rows={1}
-                      className="w-full px-4 py-3 border border-gray-600 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 bg-dark-surface"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                       style={{ minHeight: '48px', maxHeight: '120px' }}
                     />
                   </div>
                   <button
                     onClick={sendMessage}
                     disabled={!input.trim() || sending}
-                    className="px-5 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-sm"
+                    className="px-5 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-sm"
                   >
                     {sending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                     <span>发送</span>
@@ -626,21 +626,21 @@ export default function ClaudeSessionPage({
 
           {/* 文件面板 */}
           {activePanel === 'files' && (
-            <div className="flex-1 flex flex-col bg-dark-surface">
-              <div className="h-10 bg-[#0F172A] flex items-center justify-between px-4 border-b shrink-0">
+            <div className="flex-1 flex flex-col bg-white">
+              <div className="h-10 bg-gray-50 flex items-center justify-between px-4 border-b shrink-0">
                 <div className="flex items-center space-x-2">
                   {fileEditorOpen ? (
                     <>
-                      <button onClick={() => { setFileEditorOpen(false); setSelectedFile(null); }} className="text-gray-400 hover:text-gray-400">
+                      <button onClick={() => { setFileEditorOpen(false); setSelectedFile(null); }} className="text-gray-400 hover:text-gray-600">
                         <ArrowLeft size={16} />
                       </button>
-                      <span className="text-gray-300 text-sm font-medium truncate max-w-xs">{selectedFile?.path}</span>
+                      <span className="text-gray-700 text-sm font-medium truncate max-w-xs">{selectedFile?.path}</span>
                     </>
                   ) : (
-                    <span className="text-gray-300 text-sm font-medium">文件浏览器</span>
+                    <span className="text-gray-700 text-sm font-medium">文件浏览器</span>
                   )}
                 </div>
-                <button onClick={() => setActivePanel('chat')} className="text-gray-400 hover:text-gray-400">
+                <button onClick={() => setActivePanel('chat')} className="text-gray-400 hover:text-gray-600">
                   <X size={16} />
                 </button>
               </div>

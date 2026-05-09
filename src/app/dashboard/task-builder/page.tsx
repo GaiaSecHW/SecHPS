@@ -40,7 +40,7 @@ interface TaskFormData {
 }
 
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '待执行' },
+  pending: { bg: 'bg-gray-100', text: 'text-gray-700', label: '待执行' },
   running: { bg: 'bg-blue-100', text: 'text-blue-700', label: '执行中' },
   completed: { bg: 'bg-green-100', text: 'text-green-700', label: '已完成' },
   failed: { bg: 'bg-red-100', text: 'text-red-700', label: '执行失败' },
@@ -226,8 +226,8 @@ export default function TaskBuilderPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">任务实例</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900">任务实例</h1>
+          <p className="mt-1 text-sm text-gray-600">
             管理您的安全审计任务实例
           </p>
         </div>
@@ -236,14 +236,14 @@ export default function TaskBuilderPage() {
           <button
             onClick={() => fetchTasks(currentPage, pageSize)}
             disabled={loading}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
           >
             <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
             <span>刷新</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <Plus size={20} />
             <span>创建任务</span>
@@ -252,18 +252,18 @@ export default function TaskBuilderPage() {
       </div>
 
       {tasks.length === 0 ? (
-        <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
+        <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
           <ClipboardList className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-100">暂无任务实例</h3>
-          <p className="mt-2 text-sm text-gray-400">
+          <h3 className="mt-4 text-lg font-medium text-gray-900">暂无任务实例</h3>
+          <p className="mt-2 text-sm text-gray-600">
             点击右上角"创建任务"开始构建安全审计任务
           </p>
         </div>
       ) : (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-700/50">
-              <thead className="bg-[#162032]">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     任务名称
@@ -282,19 +282,19 @@ export default function TaskBuilderPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-dark-surface divide-y divide-gray-700/50">
+              <tbody className="bg-white divide-y divide-gray-200">
                 {tasks.map((task) => {
                   const config = statusConfig[task.status] || statusConfig.pending;
 
                   return (
-                    <tr key={task.id} className="hover:bg-[#0F172A]">
+                    <tr key={task.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-100">
+                        <span className="text-sm font-medium text-gray-900">
                           {task.name}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-400">
+                        <span className="text-sm text-gray-600">
                           {task.agentName}
                         </span>
                       </td>
@@ -356,19 +356,19 @@ export default function TaskBuilderPage() {
       )}
 
       {/* 分页 */}
-      <div className="bg-dark-surface px-6 py-3 border border-gray-700/50 rounded-lg flex items-center justify-between">
+      <div className="bg-white px-6 py-3 border border-gray-200 rounded-lg flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <div className="text-sm text-gray-400">
+          <div className="text-sm text-gray-600">
             {totalCount > 0 
               ? `共 ${totalCount} 条记录，第 ${currentPage} / ${totalPages || 1} 页`
               : '暂无记录'}
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
             <span>每页显示</span>
             <select
               value={pageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="px-2 py-1 border border-gray-600 rounded-md bg-dark-surface focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="px-2 py-1 border border-gray-300 rounded-md bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>
@@ -383,7 +383,7 @@ export default function TaskBuilderPage() {
             <button
               onClick={handlePrevPage}
               disabled={currentPage === 1}
-              className="px-3 py-1 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               <ChevronLeft size={16} />
               上一页
@@ -391,7 +391,7 @@ export default function TaskBuilderPage() {
             <button
               onClick={handleNextPage}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+              className="px-3 py-1 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
             >
               下一页
               <ChevronRight size={16} />

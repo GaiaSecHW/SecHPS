@@ -103,21 +103,21 @@ export default function SkillCategoriesSection() {
 
   if (loading) {
     return (
-      <div className="space-y-4 border-t border-gray-700/50 pt-6">
-        <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
+      <div className="space-y-4 border-t border-gray-200 pt-6">
+        <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
           漏洞分类管理
         </h3>
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="animate-spin text-blue-400" size={24} />
+          <Loader2 className="animate-spin text-blue-600" size={24} />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4 border-t border-gray-700/50 pt-6">
+    <div className="space-y-4 border-t border-gray-200 pt-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
+        <h3 className="text-lg font-medium text-gray-900 flex items-center gap-2">
           漏洞分类管理
         </h3>
         <div className="flex items-center gap-2">
@@ -149,18 +149,18 @@ export default function SkillCategoriesSection() {
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-md">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-900/20 border border-green-200 text-green-400 px-4 py-3 rounded-md">
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
           {success}
         </div>
       )}
 
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-gray-600">
         管理漏洞分类列表，这些分类将在创建和编辑 Skill 时使用。分类值用于存储，分类标签用于显示。
       </p>
 
@@ -168,13 +168,13 @@ export default function SkillCategoriesSection() {
         {categories.map((category, index) => (
           <div
             key={index}
-            className="flex items-center gap-3 p-3 bg-[#0F172A] rounded-md border border-gray-700/50"
+            className="flex items-center gap-3 p-3 bg-gray-50 rounded-md border border-gray-200"
           >
             <GripVertical size={16} className="text-gray-400 cursor-move" />
             
             <div className="flex-1 grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   分类值（英文）
                 </label>
                 <input
@@ -182,11 +182,11 @@ export default function SkillCategoriesSection() {
                   value={category.value}
                   onChange={(e) => handleCategoryChange(index, 'value', e.target.value)}
                   placeholder="例如: code-audit"
-                  className="w-full px-2 py-1.5 text-sm border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-300 mb-1">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   分类标签（中文）
                 </label>
                 <input
@@ -194,14 +194,14 @@ export default function SkillCategoriesSection() {
                   value={category.label}
                   onChange={(e) => handleCategoryChange(index, 'label', e.target.value)}
                   placeholder="例如: 代码审计"
-                  className="w-full px-2 py-1.5 text-sm border border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
 
             <button
               onClick={() => handleRemoveCategory(index)}
-              className="p-1.5 text-red-400 hover:bg-red-900/20 rounded transition-colors"
+              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
               title="删除分类"
             >
               <Trash2 size={16} />

@@ -976,7 +976,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -986,8 +986,8 @@ const fetchChildrenSessions = async (nodeId?: string) => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <X className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-100 mb-2">加载失败</h2>
-          <p className="text-gray-400 mb-4">{error}</p>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">加载失败</h2>
+          <p className="text-gray-600 mb-4">{error}</p>
           <button
             onClick={() => router.push('/dashboard/sessions')}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -1004,7 +1004,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <Info className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-100 mb-2">未找到评估会话</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">未找到评估会话</h2>
           <button
             onClick={() => router.push('/dashboard/sessions')}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -1040,15 +1040,15 @@ const fetchChildrenSessions = async (nodeId?: string) => {
         <div
           className={`${
             selectedMessage ? 'w-1/2' : 'flex-1'
-          } bg-dark-bg overflow-y-auto transition-all duration-300`}
+          } bg-gray-50 overflow-y-auto transition-all duration-300`}
         >
           <div className="p-4">
             {/* 自主进化经验注入信息 */}
             {experienceInjectionChecked && (
               <div className={`mb-4 rounded-lg border px-4 py-3 text-sm flex items-start gap-2 ${
                 injectedExperiences.length > 0
-                  ? 'bg-purple-900/20 border-purple-200 text-purple-800'
-                  : 'bg-dark-bg border-gray-700/50 text-gray-500'
+                  ? 'bg-purple-50 border-purple-200 text-purple-800'
+                  : 'bg-gray-50 border-gray-200 text-gray-500'
               }`}>
                 <span className="mt-0.5 flex-shrink-0">{injectedExperiences.length > 0 ? '🧠' : '○'}</span>
                 <div>
@@ -1072,67 +1072,67 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
             {/* Vulnerability Summary */}
             {vulnerabilitySummary && (
-              <div className="mb-6 bg-dark-surface rounded-lg border border-gray-700/50 p-4">
-                <h3 className="text-lg font-semibold text-gray-100 mb-3 flex items-center">
+              <div className="mb-6 bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
                   <AlertTriangle size={18} className="mr-2 text-orange-600" />
                   漏洞总结
                 </h3>
                 <div className="grid grid-cols-6 gap-3 mb-3">
                   {vulnerabilitySummary.summary && (
                     <>
-                      <div className="text-center p-2 bg-red-900/20 rounded border border-red-200">
-                        <div className="text-2xl font-bold text-red-400">
+                      <div className="text-center p-2 bg-red-50 rounded border border-red-200">
+                        <div className="text-2xl font-bold text-red-600">
                           {vulnerabilitySummary.summary.critical || 0}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">严重</div>
+                        <div className="text-xs text-gray-600 mt-1">严重</div>
                       </div>
-                      <div className="text-center p-2 bg-orange-900/20 rounded border border-orange-200">
+                      <div className="text-center p-2 bg-orange-50 rounded border border-orange-200">
                         <div className="text-2xl font-bold text-orange-600">
                           {vulnerabilitySummary.summary.high || 0}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">高危</div>
+                        <div className="text-xs text-gray-600 mt-1">高危</div>
                       </div>
-                      <div className="text-center p-2 bg-yellow-900/20 rounded border border-yellow-200">
-                        <div className="text-2xl font-bold text-yellow-400">
+                      <div className="text-center p-2 bg-yellow-50 rounded border border-yellow-200">
+                        <div className="text-2xl font-bold text-yellow-600">
                           {vulnerabilitySummary.summary.medium || 0}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">中危</div>
+                        <div className="text-xs text-gray-600 mt-1">中危</div>
                       </div>
-                      <div className="text-center p-2 bg-blue-900/20 rounded border border-blue-200">
-                        <div className="text-2xl font-bold text-blue-400">
+                      <div className="text-center p-2 bg-blue-50 rounded border border-blue-200">
+                        <div className="text-2xl font-bold text-blue-600">
                           {vulnerabilitySummary.summary.low || 0}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">低危</div>
+                        <div className="text-xs text-gray-600 mt-1">低危</div>
                       </div>
-                      <div className="text-center p-2 bg-dark-bg rounded border border-gray-700/50">
-                        <div className="text-2xl font-bold text-gray-400">
+                      <div className="text-center p-2 bg-gray-50 rounded border border-gray-200">
+                        <div className="text-2xl font-bold text-gray-600">
                           {vulnerabilitySummary.summary.info || 0}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">信息</div>
+                        <div className="text-xs text-gray-600 mt-1">信息</div>
                       </div>
-                      <div className="text-center p-2 bg-purple-900/20 rounded border border-purple-200">
+                      <div className="text-center p-2 bg-purple-50 rounded border border-purple-200">
                         <div className="text-2xl font-bold text-purple-600">
                           {vulnerabilitySummary.summary.total || 0}
                         </div>
-                        <div className="text-xs text-gray-400 mt-1">总计</div>
+                        <div className="text-xs text-gray-600 mt-1">总计</div>
                       </div>
                     </>
                   )}
                 </div>
                 {vulnerabilitySummary.vulnerabilities && vulnerabilitySummary.vulnerabilities.length > 0 && (
                   <details className="text-sm">
-                    <summary className="cursor-pointer text-blue-400 hover:text-blue-800">
+                    <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
                       查看漏洞详情 ({vulnerabilitySummary.vulnerabilities.length} 个)
                     </summary>
                     <div className="mt-2 space-y-2 max-h-60 overflow-y-auto">
                       {vulnerabilitySummary.vulnerabilities.map((vuln: any, index: number) => (
                         <div
                           key={index}
-                          className="p-2 bg-dark-bg rounded border border-gray-700/50 cursor-pointer hover:border-blue-300 hover:bg-blue-900/20 transition-colors"
+                          className="p-2 bg-gray-50 rounded border border-gray-200 cursor-pointer hover:border-blue-300 hover:bg-blue-50 transition-colors"
                           onClick={() => setSelectedSessionVuln(vuln)}
                         >
-                          <div className="font-medium text-gray-100">{vuln.title}</div>
-                          <div className="text-xs text-gray-400 mt-1">
+                          <div className="font-medium text-gray-900">{vuln.title}</div>
+                          <div className="text-xs text-gray-600 mt-1">
                             {vuln.type && <span className="mr-2">类型: {vuln.type}</span>}
                             {vuln.cwe_id && <span className="mr-2">CWE: {vuln.cwe_id}</span>}
                             {vuln.skill && <span className="mr-2">工具: {vuln.skill}</span>}
@@ -1153,10 +1153,10 @@ const fetchChildrenSessions = async (nodeId?: string) => {
               <div className="mb-6">
                 <button
                   onClick={() => setIsRalphLoopExpanded(!isRalphLoopExpanded)}
-                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-100 mb-3 hover:text-gray-300 transition-colors"
+                  className="w-full flex items-center justify-between text-lg font-semibold text-gray-900 mb-3 hover:text-gray-700 transition-colors"
                 >
                   <div className="flex items-center">
-                    <Code size={18} className="mr-2 text-green-400" />
+                    <Code size={18} className="mr-2 text-green-600" />
                     Ralph Loop 记录 ({evaluation.EvaluationIteration.length})
                   </div>
                   {isRalphLoopExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
@@ -1164,18 +1164,18 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                 {isRalphLoopExpanded && (
                   <div className="space-y-3">
                     {evaluation.EvaluationIteration.map((iteration: any) => (
-                      <div key={iteration.id} className="p-4 bg-dark-surface rounded-lg border border-gray-700/50">
+                      <div key={iteration.id} className="p-4 bg-white rounded-lg border border-gray-200">
                         {/* 第一行：迭代编号 + 状态 + 时间 */}
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-gray-100">
+                            <span className="text-sm font-semibold text-gray-900">
                               迭代 #{iteration.iterationNumber}
                             </span>
                             <span className={`text-xs px-2 py-0.5 rounded ${
-                              iteration.status === 'completed' ? 'bg-green-100 text-green-400' :
-                              iteration.status === 'running' ? 'bg-blue-100 text-blue-400' :
-                              iteration.status === 'failed' ? 'bg-red-100 text-red-400' :
-                              'bg-dark-surface-hover text-gray-400'
+                              iteration.status === 'completed' ? 'bg-green-100 text-green-700' :
+                              iteration.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                              iteration.status === 'failed' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-600'
                             }`}>
                               {iteration.status === 'completed' ? '已完成' :
                                iteration.status === 'running' ? '运行中' :
@@ -1199,7 +1199,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                         {/* 第二行：验证原因或错误信息 */}
                         {(iteration.verificationReason || iteration.errorMessage) && (
                           <div className={`text-sm p-2 rounded mb-2 ${
-                            iteration.errorMessage ? 'bg-red-900/20 text-red-400 border border-red-200' : 'bg-blue-900/20 text-blue-400 border border-blue-200'
+                            iteration.errorMessage ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-blue-50 text-blue-700 border border-blue-200'
                           }`}>
                             <span className="font-medium">{iteration.errorMessage ? '错误: ' : '验证结果: '}</span>
                             {iteration.errorMessage || iteration.verificationReason}
@@ -1210,7 +1210,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-500">
                           {iteration.modelName && (
                             <span className="flex items-center gap-1">
-                              <span className="font-medium text-blue-400">模型:</span>
+                              <span className="font-medium text-blue-600">模型:</span>
                               {iteration.modelName}
                             </span>
                           )}
@@ -1252,7 +1252,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                 <div className="flex items-center justify-between mb-3">
                   <button
                     onClick={() => setIsNodesExpanded(!isNodesExpanded)}
-                    className="flex items-center text-lg font-semibold text-gray-100 hover:text-gray-300 transition-colors"
+                    className="flex items-center text-lg font-semibold text-gray-900 hover:text-gray-700 transition-colors"
                   >
                     <GitBranch size={18} className="mr-2 text-orange-600" />
                     节点列表 ({workflowNodes.length})
@@ -1271,8 +1271,8 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                     disabled={refreshCooldown > 0}
                     className={`flex items-center gap-1 px-3 py-1.5 text-sm rounded-md transition-colors ${
                       refreshCooldown > 0
-                        ? 'bg-dark-surface-hover text-gray-400 cursor-not-allowed'
-                        : 'bg-blue-100 text-blue-400 hover:bg-blue-200'
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
                     }`}
                     title={refreshCooldown > 0 ? `${refreshCooldown}秒后可刷新` : '刷新节点数据'}
                   >
@@ -1288,16 +1288,16 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                   <div className="mb-3 p-3 bg-gradient-to-r from-orange-50 to-blue-50 rounded-lg border border-orange-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <span className="text-sm font-medium text-gray-300">
+                        <span className="text-sm font-medium text-gray-700">
                           执行进度: 
                           <span className="text-orange-600 ml-1">{nodeProgress.completed + (nodeProgress.skipped || 0)}</span>
                           <span className="text-gray-400"> / </span>
-                          <span className="text-gray-100">{nodeProgress.total}</span>
+                          <span className="text-gray-900">{nodeProgress.total}</span>
                           <span className="text-gray-500 ml-1">节点</span>
                         </span>
                         {/* 进度条 - 完成和跳过都算作已完成 */}
                         <div className="flex-1 max-w-xs">
-                          <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-300"
                               style={{ width: `${((nodeProgress.completed + (nodeProgress.skipped || 0)) / nodeProgress.total) * 100}%` }}
@@ -1309,10 +1309,10 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       {nodeProgress.currentRunningNode && (
                         <div className="flex items-center gap-2 text-sm">
                           <Loader2 size={14} className="text-blue-500 animate-spin" />
-                          <span className="text-gray-400">当前:</span>
-                          <span className="font-medium text-blue-400">{nodeProgress.currentRunningNode.label}</span>
+                          <span className="text-gray-600">当前:</span>
+                          <span className="font-medium text-blue-700">{nodeProgress.currentRunningNode.label}</span>
                           {nodeProgress.currentRunningNode.modelName && (
-                            <span className="text-xs bg-blue-100 text-blue-400 px-2 py-0.5 rounded">
+                            <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
                               {nodeProgress.currentRunningNode.modelName}
                             </span>
                           )}
@@ -1323,7 +1323,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                     <div className="flex items-center gap-3 mt-2 text-xs">
                       <span className="flex items-center gap-1">
                         <CheckCircle2 size={12} className="text-green-500" />
-                        <span className="text-green-400">{nodeProgress.completed} 完成</span>
+                        <span className="text-green-700">{nodeProgress.completed} 完成</span>
                       </span>
                       {nodeProgress.skipped > 0 && (
                         <span className="flex items-center gap-1">
@@ -1334,7 +1334,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       {nodeProgress.running > 0 && (
                         <span className="flex items-center gap-1">
                           <Loader2 size={12} className="text-blue-500 animate-spin" />
-                          <span className="text-blue-400">{nodeProgress.running} 运行中</span>
+                          <span className="text-blue-700">{nodeProgress.running} 运行中</span>
                         </span>
                       )}
                       {nodeProgress.pending > 0 && (
@@ -1346,7 +1346,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       {nodeProgress.failed > 0 && (
                         <span className="flex items-center gap-1">
                           <X size={12} className="text-red-500" />
-                          <span className="text-red-400">{nodeProgress.failed} 失败</span>
+                          <span className="text-red-700">{nodeProgress.failed} 失败</span>
                         </span>
                       )}
                     </div>
@@ -1363,11 +1363,11 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       
                       // 状态图标和颜色（包含跳过状态）
                       const statusConfig = {
-                        completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-900/20', border: 'border-green-200', label: '完成' },
-                        running: { icon: Loader2, color: 'text-blue-500 animate-spin', bg: 'bg-blue-900/20', border: 'border-blue-200', label: '运行中' },
-                        pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-[#0F172A]', border: 'border-gray-700/50', label: '等待' },
-                        failed: { icon: X, color: 'text-red-500', bg: 'bg-red-900/20', border: 'border-red-200', label: '失败' },
-                        skipped: { icon: CheckCircle2, color: 'text-gray-400', bg: 'bg-[#0F172A]', border: 'border-gray-600', label: '跳过' },
+                        completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200', label: '完成' },
+                        running: { icon: Loader2, color: 'text-blue-500 animate-spin', bg: 'bg-blue-50', border: 'border-blue-200', label: '运行中' },
+                        pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200', label: '等待' },
+                        failed: { icon: X, color: 'text-red-500', bg: 'bg-red-50', border: 'border-red-200', label: '失败' },
+                        skipped: { icon: CheckCircle2, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-300', label: '跳过' },
                       };
                       // 如果节点是跳过的，使用 skipped 配置
                       const actualStatus = node.skipped ? 'skipped' : (node.status as keyof typeof statusConfig);
@@ -1426,13 +1426,13 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                               {isDirectoryNode && (
                                 <button
                                   onClick={toggleDirectoryExpand}
-                                  className="p-1 hover:bg-gray-700 rounded transition-colors"
+                                  className="p-1 hover:bg-gray-200 rounded transition-colors"
                                   title={isDirectoryExpanded ? '收缩' : '展开'}
                                 >
                                   {isDirectoryExpanded ? (
-                                    <ChevronDown size={16} className="text-gray-400" />
+                                    <ChevronDown size={16} className="text-gray-600" />
                                   ) : (
-                                    <ChevronRight size={16} className="text-gray-400" />
+                                    <ChevronRight size={16} className="text-gray-600" />
                                   )}
                                 </button>
                               )}
@@ -1440,12 +1440,12 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                               {/* 节点信息 */}
                               <div className="flex-1">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-sm font-medium text-gray-100">
+                                  <span className="text-sm font-medium text-gray-900">
                                     {node.label || `节点 ${index + 1}`}
                                   </span>
                                   {/* 跳过标记 */}
                                   {node.skipped && (
-                                    <span className="text-xs bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded border border-gray-600">
+                                    <span className="text-xs bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded border border-gray-300">
                                       跳过
                                     </span>
                                   )}
@@ -1480,7 +1480,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-gray-500">
                                   {/* 模型 */}
                                   {node.modelName && (
-                                    <span className="flex items-center gap-1 bg-blue-100 text-blue-400 px-1.5 py-0.5 rounded">
+                                    <span className="flex items-center gap-1 bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">
                                       {node.modelName}
                                     </span>
                                   )}
@@ -1516,7 +1516,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                       return (
                                         <div 
                                           key={skill.executionId || `skill-${skillIndex}`}
-                                          className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-dark-bg cursor-pointer hover:bg-dark-surface-hover"
+                                          className="flex items-center gap-2 text-xs py-1 px-2 rounded bg-gray-50 cursor-pointer hover:bg-gray-100"
                                           onClick={() => {
                                             setSelectedNodeId(null);  // 关闭节点详情
                                             setNodeMessages([]);
@@ -1525,7 +1525,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                           }}
                                         >
                                           <SkillStatusIcon size={14} className={skillStatusConfig.color} />
-                                          <span className="text-gray-300">
+                                          <span className="text-gray-700">
                                             {skill.displayName || skill.name || `Skill ${skillIndex + 1}`}
                                           </span>
                                           <span className={`ml-auto ${skillStatusConfig.color}`}>
@@ -1563,10 +1563,10 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
             {/* Skill Agent Messages Panel */}
             {selectedSkillExecution && (
-              <div className="mb-6 bg-dark-surface rounded-lg border border-purple-300 p-4">
+              <div className="mb-6 bg-white rounded-lg border border-purple-300 p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-semibold text-gray-100">
+                    <span className="text-lg font-semibold text-gray-900">
                       {selectedSkillExecution.displayName || selectedSkillExecution.name}
                     </span>
                     <span className="text-sm text-gray-500 bg-purple-100 px-2 py-0.5 rounded">
@@ -1578,7 +1578,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       setSelectedSkillExecution(null);
                       setSkillMessages([]);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-300 hover:bg-dark-surface-hover rounded transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                     title="关闭 Skill 详情"
                   >
                     <X size={14} />
@@ -1589,10 +1589,10 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                 {/* Skill 执行状态 */}
                 <div className="flex items-center gap-2 mb-4 text-xs">
                   <span className={`px-2 py-1 rounded ${
-                    selectedSkillExecution.executionStatus === 'completed' ? 'bg-green-100 text-green-400' :
-                    selectedSkillExecution.executionStatus === 'running' ? 'bg-blue-100 text-blue-400' :
-                    selectedSkillExecution.executionStatus === 'failed' ? 'bg-red-100 text-red-400' :
-                    'bg-dark-surface-hover text-gray-400'
+                    selectedSkillExecution.executionStatus === 'completed' ? 'bg-green-100 text-green-700' :
+                    selectedSkillExecution.executionStatus === 'running' ? 'bg-blue-100 text-blue-700' :
+                    selectedSkillExecution.executionStatus === 'failed' ? 'bg-red-100 text-red-700' :
+                    'bg-gray-100 text-gray-600'
                   }`}>
                     {selectedSkillExecution.executionStatus}
                   </span>
@@ -1665,13 +1665,13 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
             {/* Node Detail Panel - 当选中节点时显示节点的消息、任务、子Agent */}
             {selectedNodeId && (
-              <div className="mb-6 bg-dark-surface rounded-lg border border-blue-300 p-4">
+              <div className="mb-6 bg-white rounded-lg border border-blue-300 p-4">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-semibold text-gray-100">
+                    <span className="text-lg font-semibold text-gray-900">
                       {workflowNodes.find((n: any) => n.id === selectedNodeId)?.label || '未知节点'}
                     </span>
-                    <span className="text-sm text-gray-500 bg-dark-surface-hover px-2 py-0.5 rounded">
+                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                       节点详情
                     </span>
                   </div>
@@ -1680,7 +1680,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       setSelectedNodeId(null);
                       setNodeMessages([]);
                     }}
-                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-300 hover:bg-dark-surface-hover rounded transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded transition-colors"
                     title="关闭节点详情"
                   >
                     <X size={14} />
@@ -1703,8 +1703,8 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                   if (prevNodes.length === 0 && nextNodes.length === 0) return null;
                   
                   return (
-                    <div className="mb-4 p-3 bg-dark-bg rounded-lg border border-gray-700/50">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-2">
+                    <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
                         <GitBranch size={16} className="text-orange-600" />
                         <span>节点关系</span>
                       </div>
@@ -1717,7 +1717,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                               {prevNodes.map((n: any) => (
                                 <span 
                                   key={n.id}
-                                  className="px-2 py-0.5 bg-green-100 text-green-400 rounded cursor-pointer hover:bg-green-200"
+                                  className="px-2 py-0.5 bg-green-100 text-green-700 rounded cursor-pointer hover:bg-green-200"
                                   onClick={() => handleNodeClick(n.id)}
                                 >
                                   {n.label}
@@ -1736,7 +1736,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                               {nextNodes.map((n: any) => (
                                 <span 
                                   key={n.id}
-                                  className="px-2 py-0.5 bg-blue-100 text-blue-400 rounded cursor-pointer hover:bg-blue-200"
+                                  className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded cursor-pointer hover:bg-blue-200"
                                   onClick={() => handleNodeClick(n.id)}
                                 >
                                   {n.label}
@@ -1754,21 +1754,21 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                 
                 {loadingNodeMessages ? (
                   <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-blue-400" />
+                    <Loader2 className="h-5 w-5 animate-spin text-blue-600" />
                     <span className="ml-2 text-sm text-gray-500">加载节点数据...</span>
                   </div>
                 ) : (
                   <div className="space-y-4">
 {/* 节点任务 */}
-                     <div className="border border-gray-700/50 rounded-lg p-3">
+                     <div className="border border-gray-200 rounded-lg p-3">
                        <button
-                         className="w-full flex items-center justify-between text-sm font-semibold text-gray-300"
+                         className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
                          onClick={() => setIsTodosExpanded(!isTodosExpanded)}
                        >
                          <div className="flex items-center gap-2">
-                           <ListTodo size={16} className="text-blue-400" />
+                           <ListTodo size={16} className="text-blue-600" />
                            <span>节点任务</span>
-                           <span className="text-xs text-gray-500 bg-dark-surface-hover px-2 py-0.5 rounded">
+                           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                              {todos.filter((t: any) => 
                                t.nodeId === selectedNodeId || t.workflowNodeId === selectedNodeId
                              ).length} 个
@@ -1794,15 +1794,15 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                      </div>
                     
                     {/* 节点消息 */}
-                    <div className="border border-gray-700/50 rounded-lg p-3">
+                    <div className="border border-gray-200 rounded-lg p-3">
                       <button
-                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-300"
+                        className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
                         onClick={() => setIsNodeMessagesExpanded(!isNodeMessagesExpanded)}
                       >
                         <div className="flex items-center gap-2">
-                          <MessageSquare size={16} className="text-green-400" />
+                          <MessageSquare size={16} className="text-green-600" />
                           <span>节点消息</span>
-                          <span className="text-xs text-gray-500 bg-dark-surface-hover px-2 py-0.5 rounded">
+                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                             {nodeMessages.length} 条
                           </span>
                         </div>
@@ -1867,15 +1867,15 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                     </div>
                     
 {/* 节点子Agent - 使用API返回的children列表（而非从nodeMessages提取） */}
-                      <div className="border border-gray-700/50 rounded-lg p-3">
+                      <div className="border border-gray-200 rounded-lg p-3">
                         <button
-                          className="w-full flex items-center justify-between text-sm font-semibold text-gray-300"
+                          className="w-full flex items-center justify-between text-sm font-semibold text-gray-700"
                           onClick={() => setIsChildrenExpanded(!isChildrenExpanded)}
                         >
                           <div className="flex items-center gap-2">
                             <GitBranch size={16} className="text-purple-600" />
                             <span>子Agent调用</span>
-                            <span className="text-xs text-gray-500 bg-dark-surface-hover px-2 py-0.5 rounded">
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
                               {childrenSessions.length} 个
                             </span>
                           </div>
@@ -1901,7 +1901,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                 const StatusIcon = iconConfig.icon;
                                 
                                 return (
-                                  <div key={childKey} className="bg-purple-900/20 rounded border border-purple-200">
+                                  <div key={childKey} className="bg-purple-50 rounded border border-purple-200">
                                     <button
                                       className="w-full p-2 flex items-center justify-between hover:bg-purple-100 transition-colors"
                                       onClick={() => {
@@ -1936,7 +1936,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                         <span className="text-xs font-medium text-purple-700">
                                           {child.type === 'task' ? 'Task' : 'Agent'}
                                         </span>
-                                        <span className="text-xs text-gray-400 truncate max-w-[200px]">
+                                        <span className="text-xs text-gray-600 truncate max-w-[200px]">
                                           {child.title}
                                         </span>
                                         {child.messageCount && (
@@ -1949,7 +1949,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                     </button>
                                     
                                     {isExpanded && (
-                                      <div className="p-3 border-t border-purple-200 bg-dark-surface">
+                                      <div className="p-3 border-t border-purple-200 bg-white">
                                         {/* 显示子Agent消息 - 直接使用 childSessionMessages */}
                                         {childSessionMessages.length > 0 ? (
                                           <div className="space-y-2 max-h-[500px] overflow-y-auto">
@@ -2024,16 +2024,16 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
         {/* Right Panel: Message Detail */}
         {selectedMessage && (
-          <div className="w-1/2 bg-dark-surface border-l border-gray-700/50 overflow-y-auto">
+          <div className="w-1/2 bg-white border-l border-gray-200 overflow-y-auto">
             <div className="p-4">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-100">消息详情</h2>
+                <h2 className="text-lg font-semibold text-gray-900">消息详情</h2>
                 <button
                   onClick={() => {
                     setSelectedMessage(null);
                     setMessageDetail(null);
                   }}
-                  className="text-gray-400 hover:text-gray-400"
+                  className="text-gray-400 hover:text-gray-600"
                   title="关闭详情"
                 >
                   <X size={20} />
@@ -2042,7 +2042,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
               {loadingDetail ? (
                 <div className="flex items-center justify-center h-32">
-                  <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+                  <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
                 </div>
               ) : messageDetail ? (
                 <MessageDetailPanel messageDetail={messageDetail} />
@@ -2058,42 +2058,42 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
       {/* 漏洞全屏详情 */}
       {selectedSessionVuln && (
-        <div className="fixed inset-0 bg-dark-surface z-50 flex flex-col">
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-dark-surface shrink-0">
+        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setSelectedSessionVuln(null)}
-                className="flex items-center text-gray-500 hover:text-gray-200 transition-colors"
+                className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
               >
                 <ArrowLeft size={18} className="mr-1" />
                 返回
               </button>
               <span className="text-gray-300">|</span>
-              <h2 className="text-lg font-bold text-gray-100">{selectedSessionVuln.title}</h2>
+              <h2 className="text-lg font-bold text-gray-900">{selectedSessionVuln.title}</h2>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-5xl mx-auto p-6 space-y-4">
-              <div className="bg-dark-bg rounded-lg p-4 grid grid-cols-2 gap-3">
-                <div><span className="text-xs text-gray-500">漏洞类型</span><p className="text-sm font-medium text-gray-100">{selectedSessionVuln.type || '未知'}</p></div>
-                <div><span className="text-xs text-gray-500">CWE 编号</span><p className="text-sm font-medium text-gray-100">{selectedSessionVuln.cwe_id || '无'}</p></div>
-                <div><span className="text-xs text-gray-500">发现工具</span><p className="text-sm font-medium text-gray-100">{selectedSessionVuln.skill || '未知'}</p></div>
+              <div className="bg-gray-50 rounded-lg p-4 grid grid-cols-2 gap-3">
+                <div><span className="text-xs text-gray-500">漏洞类型</span><p className="text-sm font-medium text-gray-900">{selectedSessionVuln.type || '未知'}</p></div>
+                <div><span className="text-xs text-gray-500">CWE 编号</span><p className="text-sm font-medium text-gray-900">{selectedSessionVuln.cwe_id || '无'}</p></div>
+                <div><span className="text-xs text-gray-500">发现工具</span><p className="text-sm font-medium text-gray-900">{selectedSessionVuln.skill || '未知'}</p></div>
               </div>
               {selectedSessionVuln.description && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-2">漏洞描述</h4>
-                  <p className="text-sm text-gray-400 bg-dark-surface border border-gray-700/50 rounded-lg p-3">{selectedSessionVuln.description}</p>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
+                  <p className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3">{selectedSessionVuln.description}</p>
                 </div>
               )}
               {selectedSessionVuln.location && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-2">问题代码</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码</h4>
                   <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedSessionVuln.location}</pre>
                 </div>
               )}
               {selectedSessionVuln.POC && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-2">POC</h4>
+                  <h4 className="text-sm font-medium text-gray-700 mb-2">POC</h4>
                   <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-96 whitespace-pre-wrap">{selectedSessionVuln.POC}</pre>
                 </div>
               )}
@@ -2107,19 +2107,19 @@ const fetchChildrenSessions = async (nodeId?: string) => {
 
 function TodoItem({ todo }: { todo: any }) {
   const statusConfig = {
-    pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-[#0F172A]', border: 'border-gray-700/50' },
-    in_progress: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-900/20', border: 'border-blue-200' },
-    completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-900/20', border: 'border-green-200' },
-    cancelled: { icon: X, color: 'text-red-400', bg: 'bg-red-900/20', border: 'border-red-200' },
+    pending: { icon: Circle, color: 'text-gray-400', bg: 'bg-gray-50', border: 'border-gray-200' },
+    in_progress: { icon: Loader2, color: 'text-blue-500', bg: 'bg-blue-50', border: 'border-blue-200' },
+    completed: { icon: CheckCircle2, color: 'text-green-500', bg: 'bg-green-50', border: 'border-green-200' },
+    cancelled: { icon: X, color: 'text-red-400', bg: 'bg-red-50', border: 'border-red-200' },
   };
 
   const config = statusConfig[todo.status as keyof typeof statusConfig] || statusConfig.pending;
   const Icon = config.icon;
 
   const priorityConfig = {
-    high: 'bg-red-100 text-red-400',
-    medium: 'bg-yellow-100 text-yellow-400',
-    low: 'bg-dark-surface-hover text-gray-400',
+    high: 'bg-red-100 text-red-700',
+    medium: 'bg-yellow-100 text-yellow-700',
+    low: 'bg-gray-100 text-gray-600',
   };
 
   const priorityLabel = {
@@ -2139,7 +2139,7 @@ function TodoItem({ todo }: { todo: any }) {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm text-gray-100">{todo.content || todo.title || '无标题'}</p>
+          <p className="text-sm text-gray-900">{todo.content || todo.title || '无标题'}</p>
           {todo.priority && (
             <span
               className={`inline-block mt-1 px-2 py-0.5 text-xs rounded ${
@@ -2254,25 +2254,25 @@ function MessageBubble({
               ? 'bg-blue-600 text-white ring-2 ring-blue-400'
               : isToolCall
               ? 'bg-purple-100 text-purple-800 ring-2 ring-purple-400'
-              : 'bg-blue-900/20 border-2 border-blue-400 shadow-md'
+              : 'bg-blue-50 border-2 border-blue-400 shadow-md'
             : isRightSide
-            ? 'bg-blue-600 text-white hover:bg-blue-600'
+            ? 'bg-blue-500 text-white hover:bg-blue-600'
             : isToolCall
-            ? 'bg-purple-900/20 border border-purple-200 hover:bg-purple-100'
-            : 'bg-dark-surface border border-gray-700/50 shadow-sm hover:shadow-md'
+            ? 'bg-purple-50 border border-purple-200 hover:bg-purple-100'
+            : 'bg-white border border-gray-200 shadow-sm hover:shadow-md'
         }`}
       >
         {/* 可点击的标题行（摘要） - 点击展开/收缩 */}
         <button
           className={`w-full flex items-center justify-between px-4 py-2 text-left transition-colors ${
-            isCollapsed ? (isRightSide ? 'hover:bg-blue-600' : 'hover:bg-dark-surface-hover') : ''
+            isCollapsed ? (isRightSide ? 'hover:bg-blue-600' : 'hover:bg-gray-50') : ''
           } ${isRightSide && !isCollapsed ? 'rounded-t-lg' : ''} ${isRightSide && isCollapsed ? 'rounded-lg' : ''}`}
           onClick={() => setIsCollapsed(!isCollapsed)}
         >
           <div className="flex items-center space-x-2 min-w-0 flex-1 flex-wrap">
             {/* 角色图标 */}
             <span className={`text-xs font-medium flex-shrink-0 ${
-              isRightSide ? 'text-white' : isToolCall ? 'text-purple-700' : isThinking ? 'text-yellow-400' : 'text-gray-300'
+              isRightSide ? 'text-white' : isToolCall ? 'text-purple-700' : isThinking ? 'text-yellow-700' : 'text-gray-700'
             }`}>
               {isUser ? '👤 用户' : isToolResult ? '📤 执行结果' : isToolCall ? '🔧 工具调用' : isThinking ? '🧠 思考' : '🤖 AI'}
             </span>
@@ -2289,7 +2289,7 @@ function MessageBubble({
             {/* 工具调用标签 */}
             {toolUseParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isRightSide ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-400'
+                isRightSide ? 'bg-blue-400 text-white' : 'bg-blue-100 text-blue-700'
               }`}>
                 🔧 {toolUseParts.length}
               </span>
@@ -2298,7 +2298,7 @@ function MessageBubble({
             {/* 工具结果标签 */}
             {toolResultParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isRightSide ? 'bg-blue-300 text-white' : 'bg-gray-700 text-gray-300'
+                isRightSide ? 'bg-blue-300 text-white' : 'bg-gray-200 text-gray-700'
               }`}>
                 📤 {toolResultParts.length}
               </span>
@@ -2316,7 +2316,7 @@ function MessageBubble({
             {/* 思考标签 */}
             {thinkingParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isRightSide ? 'bg-yellow-400 text-white' : 'bg-yellow-100 text-yellow-400'
+                isRightSide ? 'bg-yellow-400 text-white' : 'bg-yellow-100 text-yellow-700'
               }`}>
                 思考
               </span>
@@ -2325,7 +2325,7 @@ function MessageBubble({
             {/* 子任务标签 */}
             {subtaskParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isUser ? 'bg-green-400 text-white' : 'bg-green-100 text-green-400'
+                isUser ? 'bg-green-400 text-white' : 'bg-green-100 text-green-700'
               }`}>
                 📋 {subtaskParts.length}
               </span>
@@ -2362,7 +2362,7 @@ function MessageBubble({
                   onCopy();
                 }}
                 className={`text-xs flex items-center space-x-1 ${
-                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-400'
+                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
                 }`}
                 title="复制内容"
               >
@@ -2374,7 +2374,7 @@ function MessageBubble({
                   onClick();
                 }}
                 className={`text-xs flex items-center space-x-1 ${
-                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-400'
+                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
                 }`}
                 title="查看详情"
               >
@@ -2401,7 +2401,7 @@ function MessageBubble({
 
             {/* 思考内容 */}
             {thinkingParts.length > 0 && (
-              <div className="mt-3 p-3 bg-yellow-900/20 rounded-lg border border-yellow-200">
+              <div className="mt-3 p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                 <div
                   className="text-xs font-medium text-yellow-800 mb-2 flex items-center justify-between cursor-pointer"
                   onClick={() => setExpandedThinking(!expandedThinking)}
@@ -2424,7 +2424,7 @@ function MessageBubble({
 
             {/* 推理内容 */}
             {reasoningParts.length > 0 && (
-              <div className="mt-3 p-3 bg-purple-900/20 rounded-lg border border-purple-200">
+              <div className="mt-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
                 <div
                   className="text-xs font-medium text-purple-800 mb-2 flex items-center justify-between cursor-pointer"
                   onClick={() => setExpandedReasoning(!expandedReasoning)}
@@ -2447,29 +2447,29 @@ function MessageBubble({
 
             {/* 子任务 */}
             {subtaskParts.length > 0 && (
-              <div className="mt-3 p-3 bg-green-900/20 rounded-lg border border-green-200">
+              <div className="mt-3 p-3 bg-green-50 rounded-lg border border-green-200">
                 <div className="text-xs font-medium text-green-800 mb-2 flex items-center">
                   <ListTodo size={14} className="mr-1" />
                   子任务 ({subtaskParts.length})
                 </div>
                 <div className="space-y-2">
                   {subtaskParts.map((subtask: any, idx: number) => (
-                    <div key={subtask.id || idx} className="bg-dark-surface p-2 rounded border border-green-200">
+                    <div key={subtask.id || idx} className="bg-white p-2 rounded border border-green-200">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-gray-100">
+                          <p className="text-sm font-medium text-gray-900">
                             {subtask.title || subtask.text || '无标题'}
                           </p>
                           {subtask.description && (
-                            <p className="text-xs text-gray-400 mt-1">{subtask.description}</p>
+                            <p className="text-xs text-gray-600 mt-1">{subtask.description}</p>
                           )}
                           {subtask.content && (
-                            <p className="text-xs text-gray-400 mt-1">{subtask.content}</p>
+                            <p className="text-xs text-gray-600 mt-1">{subtask.content}</p>
                           )}
                           {/* 时间信息 */}
                           <div className="flex items-center space-x-3 mt-1 flex-wrap gap-y-0.5">
                             {(subtask.startedAt || subtask.createdAt || subtask.timestamp) && (
-                              <span className="text-xs text-green-400 flex items-center">
+                              <span className="text-xs text-green-600 flex items-center">
                                 <Clock size={10} className="mr-1" />
                                 启动: {new Date(subtask.startedAt || subtask.createdAt || subtask.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                               </span>
@@ -2491,16 +2491,16 @@ function MessageBubble({
                           {subtask.status && (
                             <span className={`text-xs px-2 py-0.5 rounded ${
                               subtask.status === 'completed' || subtask.status === 'done'
-                                ? 'bg-green-100 text-green-400'
+                                ? 'bg-green-100 text-green-700'
                                 : subtask.status === 'in_progress'
-                                ? 'bg-blue-100 text-blue-400'
-                                : 'bg-dark-surface-hover text-gray-400'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-gray-100 text-gray-600'
                             }`}>
                               {subtask.status}
                             </span>
                           )}
                           {subtask.completed && (
-                            <CheckCircle2 size={16} className="text-green-400" />
+                            <CheckCircle2 size={16} className="text-green-600" />
                           )}
                         </div>
                       </div>
@@ -2510,11 +2510,11 @@ function MessageBubble({
                           {subtask.subtasks.map((child: any, childIdx: number) => (
                             <div key={child.id || childIdx} className="flex items-center space-x-2 text-xs">
                               {child.completed ? (
-                                <CheckCircle2 size={12} className="text-green-400" />
+                                <CheckCircle2 size={12} className="text-green-600" />
                               ) : (
                                 <Circle size={12} className="text-gray-400" />
                               )}
-                              <span className={child.completed ? 'text-gray-500 line-through' : 'text-gray-300'}>
+                              <span className={child.completed ? 'text-gray-500 line-through' : 'text-gray-700'}>
                                 {child.title || child.content || child.text || '未命名'}
                               </span>
                             </div>
@@ -2531,10 +2531,10 @@ function MessageBubble({
             {toolUseParts.length > 0 && (
               <div className="mt-2">
                 <button
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-blue-900/20 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-blue-50 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
                   onClick={() => setExpandedToolSection(!expandedToolSection)}
                 >
-                  <span className="text-xs font-medium text-blue-400">
+                  <span className="text-xs font-medium text-blue-700">
                     🔧 工具调用 ({toolUseParts.length})
                   </span>
                   <span className="text-xs text-gray-400">{expandedToolSection ? '▲' : '▼'}</span>
@@ -2544,12 +2544,12 @@ function MessageBubble({
                     {toolUseParts.map((tool: any, idx: number) => {
                       const isExpanded = expandedTools[`tool-${idx}`];
                       return (
-                        <div key={idx} className="bg-blue-900/20 rounded border border-blue-200 overflow-hidden">
+                        <div key={idx} className="bg-blue-50 rounded border border-blue-200 overflow-hidden">
                           <button
                             className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-blue-100 transition-colors"
                             onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
                           >
-                            <span className="text-xs font-medium text-blue-400 flex items-center gap-1">
+                            <span className="text-xs font-medium text-blue-700 flex items-center gap-1">
                               🔧 {tool.name || 'unknown'}
                               {tool.input && (
                                 <span className="text-gray-400 font-normal">
@@ -2561,7 +2561,7 @@ function MessageBubble({
                           </button>
                           {isExpanded && tool.input && (
                             <div className="px-2 pb-2 border-t border-blue-100">
-                              <pre className="text-xs overflow-auto max-h-40 text-gray-200 bg-dark-surface p-2 rounded mt-1">
+                              <pre className="text-xs overflow-auto max-h-40 text-gray-800 bg-white p-2 rounded mt-1">
                                 {JSON.stringify(tool.input, null, 2)}
                               </pre>
                             </div>
@@ -2578,10 +2578,10 @@ function MessageBubble({
             {toolResultParts.length > 0 && (
               <div className="mt-2">
                 <button
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-dark-bg rounded border border-gray-700/50 hover:bg-dark-surface-hover transition-colors"
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-gray-50 rounded border border-gray-200 hover:bg-gray-100 transition-colors"
                   onClick={() => setExpandedResultSection(!expandedResultSection)}
                 >
-                  <span className="text-xs font-medium text-gray-300">
+                  <span className="text-xs font-medium text-gray-700">
                     📤 工具结果 ({toolResultParts.length})
                   </span>
                   <span className="text-xs text-gray-400">{expandedResultSection ? '▲' : '▼'}</span>
@@ -2612,12 +2612,12 @@ function MessageBubble({
                         (result.tool_use_id ? `#${idx + 1}` : '工具结果');
 
                       return (
-                        <div key={idx} className={`bg-dark-bg rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-700/50'}`}>
+                        <div key={idx} className={`bg-gray-50 rounded border overflow-hidden ${isError ? 'border-red-300' : 'border-gray-200'}`}>
                           <button
-                            className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-dark-surface-hover transition-colors"
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-gray-100 transition-colors"
                             onClick={() => setExpandedTools(prev => ({ ...prev, [`result-${idx}`]: !prev[`result-${idx}`] }))}
                           >
-                            <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-400' : 'text-gray-300'}`}>
+                            <span className={`text-xs font-medium flex items-center gap-1 ${isError ? 'text-red-700' : 'text-gray-700'}`}>
                               📤 {toolName}
                               {content.length > 0 && (
                                 <span className="text-gray-400 font-normal">
@@ -2630,11 +2630,11 @@ function MessageBubble({
                           </button>
                           {isExpanded && (
                             <div className="px-2 pb-2 border-t border-gray-100">
-                              <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-900/20 text-red-800' : 'bg-dark-surface text-gray-200'}`}>
+                              <pre className={`text-xs overflow-auto max-h-40 p-2 rounded mt-1 whitespace-pre-wrap break-all ${isError ? 'bg-red-50 text-red-800' : 'bg-white text-gray-800'}`}>
                                 {content ? (content.length > 2000 ? content.substring(0, 2000) + '\n...(已截断)' : content) : '（无内容）'}
                               </pre>
                               {result.error && (
-                                <div className="text-xs text-red-400 mt-1">错误: {result.error}</div>
+                                <div className="text-xs text-red-600 mt-1">错误: {result.error}</div>
                               )}
                             </div>
                           )}
@@ -2650,9 +2650,9 @@ function MessageBubble({
             {parts.filter((p: any) =>
               !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
             ).length > 0 && (
-              <div className="mt-3 p-3 bg-dark-bg rounded-lg border border-gray-700/50">
-                <div className="text-xs font-medium text-gray-400 mb-2">其他内容</div>
-                <pre className="text-xs overflow-auto max-h-32 text-gray-300">
+              <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="text-xs font-medium text-gray-600 mb-2">其他内容</div>
+                <pre className="text-xs overflow-auto max-h-32 text-gray-700">
                   {JSON.stringify(
                     parts.filter((p: any) =>
                       !['text', 'reasoning', 'thinking', 'tool_use', 'tool_result', 'subtask', 'todo'].includes(p.type)
@@ -2711,24 +2711,24 @@ function MessageDetailPanel({ messageDetail }: { messageDetail: any }) {
   return (
     <div className="space-y-4">
       {/* Metadata */}
-      <div className="bg-dark-bg rounded-lg p-4 border border-gray-700/50">
-        <h3 className="text-sm font-semibold text-gray-100 mb-3 flex items-center">
+      <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+        <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center">
           <FileText size={14} className="mr-2" />
           消息元数据
         </h3>
         <div className="space-y-2 text-xs">
           <div className="flex justify-between">
             <span className="text-gray-500">ID</span>
-            <span className="font-mono text-gray-300">{info.id || '-'}</span>
+            <span className="font-mono text-gray-700">{info.id || '-'}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-500">角色</span>
-            <span className="text-gray-300">{info.role || '-'}</span>
+            <span className="text-gray-700">{info.role || '-'}</span>
           </div>
           {info.time?.created && (
             <div className="flex justify-between">
               <span className="text-gray-500">创建时间</span>
-              <span className="text-gray-300">
+              <span className="text-gray-700">
                 {new Date(info.time.created).toLocaleString('zh-CN')}
               </span>
             </div>
@@ -2736,7 +2736,7 @@ function MessageDetailPanel({ messageDetail }: { messageDetail: any }) {
           {info.time?.updated && (
             <div className="flex justify-between">
               <span className="text-gray-500">更新时间</span>
-              <span className="text-gray-300">
+              <span className="text-gray-700">
                 {new Date(info.time.updated).toLocaleString('zh-CN')}
               </span>
             </div>
@@ -2746,20 +2746,20 @@ function MessageDetailPanel({ messageDetail }: { messageDetail: any }) {
 
       {/* Parts */}
       {parts.length > 0 && (
-        <div className="bg-dark-bg rounded-lg p-4 border border-gray-700/50">
-          <h3 className="text-sm font-semibold text-gray-100 mb-3">消息部分 ({parts.length})</h3>
+        <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3">消息部分 ({parts.length})</h3>
           <div className="space-y-2">
             {parts.map((part: any, index: number) => (
-              <div key={index} className="border border-gray-700/50 rounded-lg bg-dark-surface">
+              <div key={index} className="border border-gray-200 rounded-lg bg-white">
                 <button
                   onClick={() => togglePart(index)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-dark-surface-hover"
+                  className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50"
                 >
-                  <span className="font-medium text-gray-300">{getPartLabel(part)}</span>
+                  <span className="font-medium text-gray-700">{getPartLabel(part)}</span>
                   {expandedParts[index] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
                 {expandedParts[index] && (
-                  <div className="px-3 py-2 bg-dark-bg border-t border-gray-700/50">
+                  <div className="px-3 py-2 bg-gray-50 border-t border-gray-200">
                     {part.type === 'text' && (
                       <div className="prose prose-sm max-w-none text-sm">
                         <ReactMarkdown>{part.text || ''}</ReactMarkdown>
@@ -2780,7 +2780,7 @@ function MessageDetailPanel({ messageDetail }: { messageDetail: any }) {
                       </pre>
                     )}
                     {part.type === 'reasoning' && (
-                      <div className="text-sm text-gray-400 italic p-2 bg-yellow-900/20 rounded">
+                      <div className="text-sm text-gray-600 italic p-2 bg-yellow-50 rounded">
                         {part.text || ''}
                       </div>
                     )}

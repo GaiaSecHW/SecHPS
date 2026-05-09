@@ -85,18 +85,18 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   };
 
   return (
-    <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
+    <div className="bg-white rounded-lg shadow border border-gray-200">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-dark-surface-hover transition-colors"
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
       >
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-blue-100 rounded-lg">
             <Play className="w-5 h-5 text-blue-600" />
           </div>
           <div className="text-left">
-            <h2 className="text-lg font-semibold text-gray-100">手动任务调试</h2>
+            <h2 className="text-lg font-semibold text-gray-900">手动任务调试</h2>
             <p className="text-sm text-gray-500">创建任务并分发给 Worker 执行</p>
           </div>
         </div>
@@ -109,14 +109,14 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
       {/* Form */}
       {expanded && (
-        <form onSubmit={handleSubmit} className="p-6 border-t border-gray-700/50 space-y-4">
+        <form onSubmit={handleSubmit} className="p-6 border-t border-gray-200 space-y-4">
           {/* Agent Selector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               执行器
             </label>
             <div className="flex gap-3">
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'opencode' ? 'border-blue-500 bg-primary-600/15 text-blue-700' : 'border-gray-600 text-gray-600 hover:bg-dark-surface-hover'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'opencode' ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <input
                   type="radio"
                   name="agent"
@@ -128,7 +128,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 <span className="font-medium">OpenCode</span>
                 <span className="text-xs opacity-70">opencode run</span>
               </label>
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'claude' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-600 text-gray-600 hover:bg-dark-surface-hover'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'claude' ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
                 <input
                   type="radio"
                   name="agent"
@@ -153,7 +153,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               onChange={(e) => setForm({ ...form, instruction: e.target.value })}
               placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
               rows={5}
-              className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -168,7 +168,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.gitUrl}
                 onChange={(e) => setForm({ ...form, gitUrl: e.target.value })}
                 placeholder="https://github.com/username/repo.git"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -180,7 +180,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.gitRef}
                 onChange={(e) => setForm({ ...form, gitRef: e.target.value })}
                 placeholder="main, v1.0, commit hash"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -196,7 +196,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.projectPath}
                 onChange={(e) => setForm({ ...form, projectPath: e.target.value })}
                 placeholder="/path/to/project"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -208,7 +208,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.workspacePath}
                 onChange={(e) => setForm({ ...form, workspacePath: e.target.value })}
                 placeholder="/shared/workspace/task-123"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -223,7 +223,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.model}
                 onChange={(e) => setForm({ ...form, model: e.target.value })}
                 placeholder="anthropic/claude-sonnet-4"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -235,7 +235,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.apiKey}
                 onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
                 placeholder="sk-ant-..."
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -248,7 +248,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 onChange={(e) => setForm({ ...form, timeoutSec: parseInt(e.target.value) || 300 })}
                 min={60}
                 max={3600}
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
@@ -264,7 +264,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.skills}
                 onChange={(e) => setForm({ ...form, skills: e.target.value })}
                 placeholder="security-audit, code-analysis"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
@@ -276,7 +276,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 value={form.mcps}
                 onChange={(e) => setForm({ ...form, mcps: e.target.value })}
                 placeholder='[{"type":"local","command":["npx","-y","@modelcontextprotocol/server-filesystem"]}]'
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
               />
             </div>
           </div>
@@ -286,7 +286,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             <button
               type="submit"
               disabled={loading || !form.instruction.trim()}
-              className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center space-x-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>

@@ -68,9 +68,9 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   if (messages.length === 0) {
     return (
       <div
-        className={`flex flex-col items-center justify-center h-full bg-[#0B1120] ${className}`}
+        className={`flex flex-col items-center justify-center h-full bg-gray-50 ${className}`}
       >
-        <MessageSquare size={48} className="text-gray-600 mb-4" />
+        <MessageSquare size={48} className="text-gray-300 mb-4" />
         <p className="text-gray-500 text-center">
           暂无消息
           <br />
@@ -83,7 +83,7 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
   return (
     <div
       ref={containerRef}
-      className={`flex flex-col overflow-y-auto bg-[#0B1120] p-4 ${className}`}
+      className={`flex flex-col overflow-y-auto bg-gray-50 p-4 ${className}`}
     >
       {/* 消息列表 */}
       <div className="flex-1 space-y-4">
@@ -103,10 +103,10 @@ export const ChatContainer = forwardRef<ChatContainerHandle, ChatContainerProps>
         {/* 流式输出指示器 */}
         {isStreaming && (
           <div className="flex justify-start">
-            <div className="bg-dark-surface border border-gray-700/50 rounded-lg px-3 py-2 shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-lg px-3 py-2 shadow-sm">
               <div className="flex items-center space-x-2">
-                <Loader2 size={14} className="animate-spin text-blue-400" />
-                <span className="text-sm text-gray-400">正在思考...</span>
+                <Loader2 size={14} className="animate-spin text-blue-600" />
+                <span className="text-sm text-gray-600">正在思考...</span>
               </div>
             </div>
           </div>

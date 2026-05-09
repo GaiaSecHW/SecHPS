@@ -162,10 +162,10 @@ export default function InstallPluginModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-xl font-semibold text-gray-100 flex items-center gap-2">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
             <Package className="h-5 w-5" />
             安装插件
           </h2>
@@ -190,8 +190,8 @@ export default function InstallPluginModal({
                 onClick={() => setFormData({ ...formData, method: 'upload' })}
                 className={`flex-1 px-4 py-3 border rounded-lg flex items-center justify-center gap-2 transition-colors ${
                   formData.method === 'upload'
-                    ? 'border-blue-500 bg-primary-600/15 text-blue-700'
-                    : 'border-gray-600 hover:bg-dark-surface-hover'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <Upload className="h-4 w-4" />
@@ -202,8 +202,8 @@ export default function InstallPluginModal({
                 onClick={() => setFormData({ ...formData, method: 'url' })}
                 className={`flex-1 px-4 py-3 border rounded-lg flex items-center justify-center gap-2 transition-colors ${
                   formData.method === 'url'
-                    ? 'border-blue-500 bg-primary-600/15 text-blue-700'
-                    : 'border-gray-600 hover:bg-dark-surface-hover'
+                    ? 'border-blue-500 bg-blue-50 text-blue-700'
+                    : 'border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 <Link className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function InstallPluginModal({
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                  file ? 'border-green-300 bg-green-50' : 'border-gray-600 hover:border-gray-400'
+                  file ? 'border-green-300 bg-green-50' : 'border-gray-300 hover:border-gray-400'
                 }`}
               >
                 <input
@@ -235,7 +235,7 @@ export default function InstallPluginModal({
                   <div className="space-y-3">
                     <FileArchive className="h-12 w-12 text-green-500 mx-auto" />
                     <div>
-                      <p className="text-sm font-medium text-gray-100">{file.name}</p>
+                      <p className="text-sm font-medium text-gray-900">{file.name}</p>
                       <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
                     </div>
                     <button
@@ -246,7 +246,7 @@ export default function InstallPluginModal({
                           fileInputRef.current.value = '';
                         }
                       }}
-                      className="text-sm text-red-400 hover:text-red-400"
+                      className="text-sm text-red-600 hover:text-red-700"
                     >
                       移除文件
                     </button>
@@ -270,10 +270,10 @@ export default function InstallPluginModal({
                 )}
               </div>
 
-              <div className="bg-[#0F172A] rounded-lg p-4">
+              <div className="bg-gray-50 rounded-lg p-4">
                 <h4 className="text-sm font-medium text-gray-700 mb-2">压缩包结构要求</h4>
                 <ul className="text-xs text-gray-600 space-y-1">
-                  <li>• 根目录必须包含 <code className="bg-gray-700 px-1 rounded">manifest.json</code> 文件</li>
+                  <li>• 根目录必须包含 <code className="bg-gray-200 px-1 rounded">manifest.json</code> 文件</li>
                   <li>• manifest.json 必须包含 name、displayName、version 字段</li>
                   <li>• 可选包含 index.js 或其他插件代码文件</li>
                 </ul>
@@ -292,7 +292,7 @@ export default function InstallPluginModal({
                 value={formData.url}
                 onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                 placeholder="https://example.com/plugins/my-plugin/manifest.json"
-                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <p className="text-xs text-gray-500 mt-1">
                 插件 manifest.json 文件的 URL，或包含 manifest.json 的压缩包 URL
@@ -302,7 +302,7 @@ export default function InstallPluginModal({
 
           {/* Error Message */}
           {error && (
-            <div className="mt-4 bg-red-900/20 border border-red-500/20 text-red-400 px-4 py-3 rounded-md flex items-center gap-2">
+            <div className="mt-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md flex items-center gap-2">
               <AlertCircle className="h-5 w-5 flex-shrink-0" />
               {error}
             </div>
@@ -310,7 +310,7 @@ export default function InstallPluginModal({
 
           {/* Success Message */}
           {success && (
-            <div className="mt-4 bg-green-900/20 border border-green-500/20 text-green-400 px-4 py-3 rounded-md flex items-center gap-2">
+            <div className="mt-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md flex items-center gap-2">
               <Check className="h-5 w-5 flex-shrink-0" />
               插件安装成功！
             </div>
@@ -318,12 +318,12 @@ export default function InstallPluginModal({
         </form>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
           <button
             type="button"
             onClick={onClose}
             disabled={loading}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-dark-surface border border-gray-600 rounded-md hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
             取消
           </button>

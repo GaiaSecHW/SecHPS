@@ -175,10 +175,10 @@ function UserDetailContent({
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-400">{error}</p>
+          <p className="text-gray-600">{error}</p>
           <button
             onClick={fetchUserAndProjects}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-600"
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             重试
           </button>
@@ -188,24 +188,24 @@ function UserDetailContent({
   }
 
   return (
-    <div className="min-h-screen bg-[#0F172A] p-6">
+    <div className="min-h-screen bg-gray-50 p-6">
       {/* Header */}
       <div className="mb-6">
         <Link
           href="/dashboard/token-stats/users"
-          className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回用户统计
         </Link>
         
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
           <div className="flex items-center">
             <div className="bg-blue-100 p-4 rounded-full mr-4">
-              <User className="text-blue-400" size={32} />
+              <User className="text-blue-600" size={32} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-gray-100">
+              <h1 className="text-2xl font-bold text-gray-900">
                 {user?.username || user?.name || '用户详情'}
               </h1>
               <p className="text-gray-500">{user?.email}</p>
@@ -216,38 +216,38 @@ function UserDetailContent({
 
       {/* 统计汇总 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-dark-surface rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
             <div className="text-blue-500">
               <TrendingUp size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalInputTokens)}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(totalInputTokens)}</p>
               <p className="text-xs text-gray-500">总输入 Token</p>
             </div>
           </div>
         </div>
-        <div className="bg-dark-surface rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
             <div className="text-green-500">
               <Activity size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalOutputTokens)}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatNumber(totalOutputTokens)}</p>
               <p className="text-xs text-gray-500">总输出 Token</p>
             </div>
           </div>
         </div>
-        <div className="bg-dark-surface rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
             <div className="text-orange-500">
               <Coins size={24} />
             </div>
             <div className="text-right">
-              <p className="text-xl font-bold text-orange-400 flex items-center">
+              <p className="text-xl font-bold text-orange-600 flex items-center">
                 {formatCost(totalCost)}
                 <span className="ml-1 cursor-help relative group">
-                  <Info size={12} className="text-orange-400 hover:text-orange-400" />
+                  <Info size={12} className="text-orange-400 hover:text-orange-600" />
                   <span className="absolute right-0 bottom-full mb-1 hidden group-hover:block bg-gray-800 text-white text-xs rounded p-1.5 whitespace-nowrap z-10 shadow-lg">
                     ¥6/百万输入 + ¥22/百万输出
                   </span>
@@ -257,13 +257,13 @@ function UserDetailContent({
             </div>
           </div>
         </div>
-        <div className="bg-dark-surface rounded-lg shadow p-4">
+        <div className="bg-white rounded-lg shadow p-4">
           <div className="flex items-center justify-between">
             <div className="text-purple-500">
               <Folder size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-100">{projects.length}</p>
+              <p className="text-2xl font-bold text-gray-900">{projects.length}</p>
               <p className="text-xs text-gray-500">项目数</p>
             </div>
           </div>
@@ -271,9 +271,9 @@ function UserDetailContent({
       </div>
 
       {/* 项目列表 */}
-      <div className="bg-dark-surface rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100 flex items-center">
+      <div className="bg-white rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 flex items-center">
             <Folder className="mr-2" size={20} />
             项目列表 ({projects.length})
           </h2>
@@ -284,22 +284,22 @@ function UserDetailContent({
             该用户暂无项目
           </div>
         ) : (
-          <div className="divide-y divide-gray-700/50">
+          <div className="divide-y divide-gray-200">
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="px-6 py-4 hover:bg-[#0F172A] cursor-pointer"
+                className="px-6 py-4 hover:bg-gray-50 cursor-pointer"
                 onClick={() => router.push(`/dashboard/projects/${project.id}`)}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center">
-                      <h3 className="text-sm font-medium text-gray-100">{project.name}</h3>
+                      <h3 className="text-sm font-medium text-gray-900">{project.name}</h3>
                       <span className={`ml-2 px-2 py-0.5 text-xs rounded-full ${
-                        project.status === 'running' ? 'bg-blue-100 text-blue-400' :
-                        project.status === 'completed' ? 'bg-green-100 text-green-400' :
-                        project.status === 'failed' ? 'bg-red-100 text-red-400' :
-                        'bg-dark-surface-hover text-gray-400'
+                        project.status === 'running' ? 'bg-blue-100 text-blue-700' :
+                        project.status === 'completed' ? 'bg-green-100 text-green-700' :
+                        project.status === 'failed' ? 'bg-red-100 text-red-700' :
+                        'bg-gray-100 text-gray-600'
                       }`}>
                         {project.status}
                       </span>
@@ -311,11 +311,11 @@ function UserDetailContent({
                   </div>
                   <div className="text-right">
                     <div className="flex items-center space-x-3 text-xs">
-                      <span className="text-blue-400">↑{formatNumber(project.tokenStats.totalInputTokens)}</span>
-                      <span className="text-green-400">↓{formatNumber(project.tokenStats.totalOutputTokens)}</span>
+                      <span className="text-blue-600">↑{formatNumber(project.tokenStats.totalInputTokens)}</span>
+                      <span className="text-green-600">↓{formatNumber(project.tokenStats.totalOutputTokens)}</span>
                     </div>
                     <div className="flex items-center text-xs text-gray-500 mt-1">
-                      <span className="text-orange-400">{formatCost(project.tokenStats.estimatedCost)}</span>
+                      <span className="text-orange-600">{formatCost(project.tokenStats.estimatedCost)}</span>
                       <span className="mx-1">·</span>
                       <span>{project.tokenStats.evaluationCount} 次评估</span>
                     </div>

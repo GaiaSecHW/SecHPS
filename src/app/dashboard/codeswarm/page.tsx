@@ -78,14 +78,14 @@ function StatsCards({ tasks, workers }: { tasks: Task[]; workers: Worker[] }) {
       label: '在线节点',
       value: `${stats.onlineWorkers}/${stats.totalWorkers}`,
       icon: Wifi,
-      color: stats.onlineWorkers > 0 ? 'text-green-400' : 'text-gray-400',
-      bg: stats.onlineWorkers > 0 ? 'bg-green-100' : 'bg-dark-surface-hover',
+      color: stats.onlineWorkers > 0 ? 'text-green-600' : 'text-gray-400',
+      bg: stats.onlineWorkers > 0 ? 'bg-green-100' : 'bg-gray-100',
     },
     {
       label: '活跃任务',
       value: stats.activeTasks,
       icon: Loader2,
-      color: 'text-blue-400',
+      color: 'text-blue-600',
       bg: 'bg-blue-100',
       spin: stats.activeTasks > 0,
     },
@@ -93,14 +93,14 @@ function StatsCards({ tasks, workers }: { tasks: Task[]; workers: Worker[] }) {
       label: '已完成',
       value: stats.completedTasks,
       icon: CheckCircle,
-      color: 'text-green-400',
+      color: 'text-green-600',
       bg: 'bg-green-100',
     },
     {
       label: '成功率',
       value: `${stats.successRate}%`,
       icon: Activity,
-      color: stats.successRate >= 80 ? 'text-green-400' : stats.successRate >= 50 ? 'text-yellow-400' : 'text-red-400',
+      color: stats.successRate >= 80 ? 'text-green-600' : stats.successRate >= 50 ? 'text-yellow-600' : 'text-red-600',
       bg: stats.successRate >= 80 ? 'bg-green-100' : stats.successRate >= 50 ? 'bg-yellow-100' : 'bg-red-100',
     },
   ];
@@ -108,11 +108,11 @@ function StatsCards({ tasks, workers }: { tasks: Task[]; workers: Worker[] }) {
   return (
     <div className="grid grid-cols-4 gap-4">
       {cards.map((card) => (
-        <div key={card.label} className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+        <div key={card.label} className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-500">{card.label}</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{card.value}</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">{card.value}</p>
             </div>
             <div className={`p-3 rounded-lg ${card.bg}`}>
               <card.icon className={`w-6 h-6 ${card.color} ${card.spin ? 'animate-spin' : ''}`} />
@@ -131,17 +131,17 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
     <div className="border rounded-lg overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center space-x-3 p-4 bg-[#0F172A] hover:bg-dark-surface-hover transition-colors"
+        className="w-full flex items-center space-x-3 p-4 bg-gray-50 hover:bg-gray-100 transition-colors"
       >
         <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-          endpoint.method === 'GET' ? 'bg-green-500/15 text-green-400' :
-          endpoint.method === 'POST' ? 'bg-blue-500/15 text-blue-400' :
-          endpoint.method === 'PATCH' ? 'bg-yellow-500/15 text-yellow-400' :
-          'bg-red-500/15 text-red-400'
+          endpoint.method === 'GET' ? 'bg-green-100 text-green-700' :
+          endpoint.method === 'POST' ? 'bg-blue-100 text-blue-700' :
+          endpoint.method === 'PATCH' ? 'bg-yellow-100 text-yellow-700' :
+          'bg-red-100 text-red-700'
         }`}>
           {endpoint.method}
         </span>
-        <code className="text-sm text-gray-200 font-mono flex-1 text-left">{endpoint.path}</code>
+        <code className="text-sm text-gray-800 font-mono flex-1 text-left">{endpoint.path}</code>
         <span className="text-sm text-gray-500">{endpoint.desc}</span>
         {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
       </button>
@@ -153,17 +153,17 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">URL 参数</h5>
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-gray-600">
                     <th className="pb-1">参数</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">必填</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-gray-700">
                   {endpoint.requestParams.map((p) => (
                     <tr key={p.name} className="border-t">
-                      <td className="py-2 font-mono text-blue-400">{p.name}</td>
+                      <td className="py-2 font-mono text-blue-600">{p.name}</td>
                       <td className="py-2 text-gray-500">{p.type}</td>
                       <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-gray-400">否</span>}</td>
                       <td className="py-2">{p.desc}</td>
@@ -185,17 +185,17 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               </pre>
               <table className="w-full text-sm mt-2">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-gray-600">
                     <th className="pb-1">字段</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">必填</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-gray-700">
                   {endpoint.requestBody.map((p) => (
                     <tr key={p.name} className="border-t">
-                      <td className="py-2 font-mono text-blue-400">{p.name}</td>
+                      <td className="py-2 font-mono text-blue-600">{p.name}</td>
                       <td className="py-2 text-gray-500">{p.type}</td>
                       <td className="py-2">{p.required ? <span className="text-red-500">是</span> : <span className="text-gray-400">否</span>}</td>
                       <td className="py-2">{p.desc}</td>
@@ -217,16 +217,16 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
               </pre>
               <table className="w-full text-sm mt-2">
                 <thead>
-                  <tr className="text-left text-gray-400">
+                  <tr className="text-left text-gray-600">
                     <th className="pb-1">字段</th>
                     <th className="pb-1">类型</th>
                     <th className="pb-1">说明</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-300">
+                <tbody className="text-gray-700">
                   {endpoint.response.map((p) => (
                     <tr key={p.name} className="border-t">
-                      <td className="py-2 font-mono text-blue-400">{p.name}</td>
+                      <td className="py-2 font-mono text-blue-600">{p.name}</td>
                       <td className="py-2 text-gray-500">{p.type}</td>
                       <td className="py-2">{p.desc}</td>
                     </tr>
@@ -409,11 +409,11 @@ function CodeSwarmPageContent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="p-2 bg-blue-100 rounded-lg">
-            <Server className="w-6 h-6 text-blue-400" />
+            <Server className="w-6 h-6 text-blue-600" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">CodeSwarm Worker 管理</h1>
-            <p className="text-sm text-gray-400">
+            <h1 className="text-2xl font-bold text-gray-900">CodeSwarm Worker 管理</h1>
+            <p className="text-sm text-gray-600">
               分布式 Agent 执行节点管理 & 手动任务调试
             </p>
           </div>
@@ -421,13 +421,13 @@ function CodeSwarmPageContent() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1 bg-dark-surface-hover p-1 rounded-lg w-fit">
+      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
         <button
           onClick={() => setActiveTab('overview')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'overview'
-              ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <Activity className="w-4 h-4" />
@@ -437,8 +437,8 @@ function CodeSwarmPageContent() {
           onClick={() => setActiveTab('debug')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'debug'
-              ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <Play className="w-4 h-4" />
@@ -448,8 +448,8 @@ function CodeSwarmPageContent() {
           onClick={() => setActiveTab('workers')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'workers'
-              ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <Server className="w-4 h-4" />
@@ -459,8 +459,8 @@ function CodeSwarmPageContent() {
           onClick={() => setActiveTab('tasks')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'tasks'
-              ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <List className="w-4 h-4" />
@@ -470,8 +470,8 @@ function CodeSwarmPageContent() {
           onClick={() => setActiveTab('api')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'api'
-              ? 'bg-dark-surface shadow text-blue-400'
-              : 'text-gray-400 hover:text-gray-100'
+              ? 'bg-white shadow text-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
           }`}
         >
           <BookOpen className="w-4 h-4" />
@@ -508,7 +508,7 @@ function CodeSwarmPageContent() {
       )}
 
       {activeTab === 'api' && (
-        <div className="bg-dark-surface rounded-lg">
+        <div className="bg-white rounded-lg shadow">
           <div className="p-4 border-b">
             <h2 className="text-lg font-semibold">CodeSwarm API 文档</h2>
             <p className="text-sm text-gray-500 mt-1">点击接口查看详细参数说明</p>
@@ -516,7 +516,7 @@ function CodeSwarmPageContent() {
           <div className="p-6 space-y-6">
             {apiDocs.map((section) => (
               <div key={section.category}>
-                <h3 className="text-sm font-medium text-gray-300 mb-3 uppercase tracking-wide">
+                <h3 className="text-sm font-medium text-gray-700 mb-3 uppercase tracking-wide">
                   {section.category}
                 </h3>
                 <div className="space-y-2">
@@ -527,7 +527,7 @@ function CodeSwarmPageContent() {
               </div>
             ))}
 
-            <div className="mt-6 p-4 bg-blue-600/10 rounded-lg">
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
               <h4 className="text-sm font-medium text-blue-800 mb-2">Worker 启动配置示例</h4>
               <pre className="text-xs bg-blue-100 p-3 rounded overflow-x-auto">
 {`# 环境变量配置
@@ -549,15 +549,15 @@ npx tsx packages/worker/src/index.ts`}
 
       {/* Callback URLs Info */}
       {activeTab !== 'api' && activeTab !== 'overview' && (
-        <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-4">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <h3 className="text-sm font-medium text-yellow-800 mb-2">Worker 配置说明</h3>
-          <p className="text-sm text-yellow-400 mb-2">
+          <p className="text-sm text-yellow-700 mb-2">
             Worker 启动时需要配置回调地址指向本服务：
           </p>
           <code className="block bg-yellow-100 p-2 rounded text-xs">
             ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs
           </code>
-          <p className="text-xs text-yellow-400 mt-2">
+          <p className="text-xs text-yellow-600 mt-2">
             Worker 注册后会在此页面显示，心跳间隔 30 秒，超时 90 秒判定离线
           </p>
         </div>

@@ -133,7 +133,7 @@ function AnalysisReviewDetailContent() {
   if (!analysis) {
     return (
       <div className="p-6">
-        <p className="text-gray-400">分析结果不存在</p>
+        <p className="text-gray-600">分析结果不存在</p>
       </div>
     );
   }
@@ -144,19 +144,19 @@ function AnalysisReviewDetailContent() {
       <div className="mb-6">
         <Link
           href="/dashboard/admin/skills-governance/analysis-review"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回审核列表
         </Link>
-        <h1 className="text-2xl font-bold text-gray-100">Skill 重复审核详情</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Skill 重复审核详情</h1>
       </div>
 
       {/* Skill 对比 */}
       <div className="grid grid-cols-2 gap-6 mb-6">
         {/* Skill A */}
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
-          <h3 className="font-semibold text-gray-100 mb-3">Skill A</h3>
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <h3 className="font-semibold text-gray-900 mb-3">Skill A</h3>
           <div className="space-y-2 text-sm">
             <div>
               <span className="text-gray-500">名称:</span>{' '}
@@ -179,7 +179,7 @@ function AnalysisReviewDetailContent() {
               {showSkillAContent ? '收起内容' : '展开内容'}
             </button>
             {showSkillAContent && analysis.skillA.content && (
-              <pre className="mt-2 p-3 bg-[#0F172A] rounded text-xs overflow-auto max-h-64">
+              <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-64">
                 {analysis.skillA.content.substring(0, 3000)}
               </pre>
             )}
@@ -187,8 +187,8 @@ function AnalysisReviewDetailContent() {
         </div>
 
         {/* Skill B */}
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
-          <h3 className="font-semibold text-gray-100 mb-3">Skill B</h3>
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <h3 className="font-semibold text-gray-900 mb-3">Skill B</h3>
           {analysis.skillB ? (
             <>
               <div className="space-y-2 text-sm">
@@ -213,7 +213,7 @@ function AnalysisReviewDetailContent() {
                   {showSkillBContent ? '收起内容' : '展开内容'}
                 </button>
                 {showSkillBContent && analysis.skillB.content && (
-                  <pre className="mt-2 p-3 bg-[#0F172A] rounded text-xs overflow-auto max-h-64">
+                  <pre className="mt-2 p-3 bg-gray-50 rounded text-xs overflow-auto max-h-64">
                     {analysis.skillB.content.substring(0, 3000)}
                   </pre>
                 )}
@@ -226,23 +226,23 @@ function AnalysisReviewDetailContent() {
       </div>
 
       {/* LLM 分析结果 */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6 mb-6">
-        <h3 className="font-semibold text-gray-100 mb-4">LLM 分析结果</h3>
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mb-6">
+        <h3 className="font-semibold text-gray-900 mb-4">LLM 分析结果</h3>
         
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="p-3 bg-[#0F172A] rounded">
+          <div className="p-3 bg-gray-50 rounded">
             <div className="text-sm text-gray-500">判断结果</div>
             <div className={`text-lg font-semibold ${analysis.isDuplicate ? 'text-red-600' : 'text-green-600'}`}>
               {analysis.isDuplicate ? '重复' : '不重复'}
             </div>
           </div>
-          <div className="p-3 bg-[#0F172A] rounded">
+          <div className="p-3 bg-gray-50 rounded">
             <div className="text-sm text-gray-500">置信度</div>
-            <div className="text-lg font-semibold text-gray-100">
+            <div className="text-lg font-semibold text-gray-900">
               {(analysis.confidence * 100).toFixed(0)}%
             </div>
           </div>
-          <div className="p-3 bg-[#0F172A] rounded">
+          <div className="p-3 bg-gray-50 rounded">
             <div className="text-sm text-gray-500">建议操作</div>
             <div className="text-lg font-semibold text-blue-600">
               {analysis.recommendation === 'merge' ? '合并' : 
@@ -253,16 +253,16 @@ function AnalysisReviewDetailContent() {
 
         {/* 入口点对比 */}
         {analysis.entryPointComparison && (
-          <div className="mb-4 p-4 bg-blue-900/20 rounded-lg border border-blue-500/20">
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h4 className="font-medium text-blue-900 mb-2">入口点对比</h4>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <span className="text-blue-700">Skill A 入口点:</span>
-                <p className="text-gray-300 mt-1">{analysis.entryPointComparison.skillAEntryPoint}</p>
+                <p className="text-gray-700 mt-1">{analysis.entryPointComparison.skillAEntryPoint}</p>
               </div>
               <div>
                 <span className="text-blue-700">Skill B 入口点:</span>
-                <p className="text-gray-300 mt-1">{analysis.entryPointComparison.skillBEntryPoint}</p>
+                <p className="text-gray-700 mt-1">{analysis.entryPointComparison.skillBEntryPoint}</p>
               </div>
             </div>
             <div className="mt-2 flex items-center">
@@ -274,7 +274,7 @@ function AnalysisReviewDetailContent() {
               )}
             </div>
             {analysis.entryPointComparison.difference && (
-              <p className="mt-2 text-sm text-gray-400">
+              <p className="mt-2 text-sm text-gray-600">
                 差异: {analysis.entryPointComparison.difference}
               </p>
             )}
@@ -284,16 +284,16 @@ function AnalysisReviewDetailContent() {
         {/* 判断理由 */}
         {analysis.llmReason && (
           <div className="mb-4">
-            <h4 className="font-medium text-gray-300 mb-2">判断理由</h4>
-            <p className="text-gray-400 bg-[#0F172A] p-3 rounded">{analysis.llmReason}</p>
+            <h4 className="font-medium text-gray-700 mb-2">判断理由</h4>
+            <p className="text-gray-600 bg-gray-50 p-3 rounded">{analysis.llmReason}</p>
           </div>
         )}
 
         {/* 主要差异 */}
         {analysis.keyDifferences && analysis.keyDifferences.length > 0 && (
           <div className="mb-4">
-            <h4 className="font-medium text-gray-300 mb-2">主要差异</h4>
-            <ul className="list-disc list-inside text-gray-400 space-y-1">
+            <h4 className="font-medium text-gray-700 mb-2">主要差异</h4>
+            <ul className="list-disc list-inside text-gray-600 space-y-1">
               {analysis.keyDifferences.map((diff, i) => (
                 <li key={i}>{diff}</li>
               ))}
@@ -303,16 +303,16 @@ function AnalysisReviewDetailContent() {
       </div>
 
       {/* 审核操作 */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h3 className="font-semibold text-gray-100 mb-4">审核操作</h3>
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h3 className="font-semibold text-gray-900 mb-4">审核操作</h3>
         
         {/* 备注 */}
         <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-300 mb-2">审核备注</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">审核备注</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             rows={3}
             placeholder="可选：填写审核备注..."
           />
@@ -339,7 +339,7 @@ function AnalysisReviewDetailContent() {
           <button
             onClick={() => handleReview('pending')}
             disabled={submitting}
-            className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-300 rounded-lg hover:bg-dark-surface-hover disabled:opacity-50"
+            className="inline-flex items-center px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50"
           >
             <Clock size={20} className="mr-2" />
             暂不决定
@@ -348,7 +348,7 @@ function AnalysisReviewDetailContent() {
 
         {/* 已审核信息 */}
         {analysis.reviewStatus !== 'pending' && (
-          <div className="mt-4 p-3 bg-[#0F172A] rounded text-sm text-gray-400">
+          <div className="mt-4 p-3 bg-gray-50 rounded text-sm text-gray-600">
             已由 {analysis.reviewedBy || '系统'} 于 {analysis.reviewedAt ? new Date(analysis.reviewedAt).toLocaleString() : '未知'} 审核
             {analysis.reviewNotes && `，备注: ${analysis.reviewNotes}`}
           </div>

@@ -63,7 +63,7 @@ export default function SessionList({
       <div className="p-4">
         <button
           onClick={onCreateNew}
-          className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
+          className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
         >
           <Plus size={18} />
           <span>新建会话</span>
@@ -72,15 +72,15 @@ export default function SessionList({
 
       {/* 来源筛选 */}
       {showSourceFilter && (
-        <div className="px-4 pb-3 border-b border-gray-700/50">
+        <div className="px-4 pb-3 border-b border-gray-200">
           <div className="flex items-center space-x-2 mb-2">
-            <Filter size={14} className="text-gray-500" />
-            <span className="text-xs font-medium text-gray-400">来源筛选</span>
+            <Filter size={14} className="text-gray-400" />
+            <span className="text-xs font-medium text-gray-600">来源筛选</span>
           </div>
           <select
             value={sourceFilter}
             onChange={(e) => setSourceFilter(e.target.value)}
-            className="w-full px-3 py-2 text-sm bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             {SOURCE_FILTERS.map((filter) => (
               <option key={filter.value} value={filter.value}>
@@ -95,9 +95,9 @@ export default function SessionList({
       <div className="flex-1 overflow-y-auto">
         {filteredSessions.length === 0 ? (
           <div className="px-4 py-8 text-center">
-            <MessageSquare className="mx-auto h-12 w-12 text-gray-600 mb-3" />
+            <MessageSquare className="mx-auto h-12 w-12 text-gray-300 mb-3" />
             <p className="text-sm text-gray-500">暂无会话</p>
-            <p className="text-xs text-gray-500 mt-1">点击上方按钮创建新会话</p>
+            <p className="text-xs text-gray-400 mt-1">点击上方按钮创建新会话</p>
           </div>
         ) : (
           filteredSessions.map((session) => (
@@ -105,14 +105,14 @@ export default function SessionList({
               key={session.id}
               className={`group px-4 py-3 cursor-pointer border-l-2 transition-colors ${
                 currentSessionId === session.id
-                  ? 'bg-primary-600/15 border-primary-500'
-                  : 'border-transparent hover:bg-dark-surface-hover'
+                  ? 'bg-blue-50 border-blue-500'
+                  : 'border-transparent hover:bg-gray-50'
               }`}
               onClick={() => onSelect(session)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-100 truncate">
+                  <h4 className="text-sm font-medium text-gray-900 truncate">
                     {session.summary || '新会话'}
                   </h4>
                   <div className="flex items-center space-x-2 mt-1">
@@ -121,7 +121,7 @@ export default function SessionList({
                     </span>
                     {session.lastActivity && (
                       <>
-                        <span className="text-xs text-gray-600">•</span>
+                        <span className="text-xs text-gray-300">•</span>
                         <span className="text-xs text-gray-500">
                           {formatTime(session.lastActivity)}
                         </span>
@@ -134,7 +134,7 @@ export default function SessionList({
                     e.stopPropagation();
                     onDelete(session.id);
                   }}
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-red-900/20 rounded transition-all"
+                  className="opacity-0 group-hover:opacity-100 p-1.5 text-red-500 hover:bg-red-50 rounded transition-all"
                   title="删除会话"
                   aria-label="删除会话"
                 >

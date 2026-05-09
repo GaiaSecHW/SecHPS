@@ -408,7 +408,7 @@ export default function SkillMergePage() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
         <button
@@ -427,7 +427,7 @@ export default function SkillMergePage() {
       {/* Back Button */}
       <Link 
         href="/dashboard/admin/skills-governance"
-        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回治理总览
@@ -437,8 +437,8 @@ export default function SkillMergePage() {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">Skill 合并操作</h1>
-            <p className="mt-1 text-sm text-gray-400">
+            <h1 className="text-2xl font-bold text-gray-900">Skill 合并操作</h1>
+            <p className="mt-1 text-sm text-gray-600">
               选择合并策略、目标 Skill 和源 Skills，执行合并操作
             </p>
           </div>
@@ -454,9 +454,9 @@ export default function SkillMergePage() {
       </div>
 
       {/* Merge Candidates Quick Select */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-100">合并候选快速选择</h2>
+          <h2 className="text-lg font-semibold text-gray-900">合并候选快速选择</h2>
           <button
             onClick={() => router.push('/dashboard/admin/skills-governance/merge-candidates')}
             className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
@@ -476,11 +476,11 @@ export default function SkillMergePage() {
             {candidates.slice(0, 6).map((candidate) => (
               <div
                 key={candidate.skillId}
-                className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer border border-gray-700/50"
+                className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer border border-gray-200"
                 onClick={() => selectFromCandidate(candidate)}
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-medium text-gray-100 truncate">
+                  <span className="font-medium text-gray-900 truncate">
                     {candidate.skillDisplayName}
                   </span>
                   <span className={`text-sm ${getOverlapScoreColor(candidate.overlapScore)}`}>
@@ -489,7 +489,7 @@ export default function SkillMergePage() {
                 </div>
                 <p className="text-sm text-gray-500 truncate mb-2">{candidate.skillName}</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-600">
                     {candidate.similarSkills.length} 个相似 Skill
                   </span>
                   <span className={`px-2 py-1 text-xs rounded-full ${
@@ -497,7 +497,7 @@ export default function SkillMergePage() {
                       ? 'bg-purple-100 text-purple-800'
                       : candidate.recommendation === 'techStack-split'
                       ? 'bg-green-100 text-green-800'
-                      : 'bg-dark-surface-hover text-gray-400'
+                      : 'bg-gray-100 text-gray-600'
                   }`}>
                     {candidate.recommendation === 'merge' ? '建议合并' 
                       : candidate.recommendation === 'techStack-split' ? '建议拆分' 
@@ -511,8 +511,8 @@ export default function SkillMergePage() {
       </div>
 
       {/* Step 1: Strategy Selection */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold mr-2">
             1
           </span>
@@ -527,14 +527,14 @@ export default function SkillMergePage() {
               className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                 selectedStrategy === strategy.id
                   ? `${strategy.color} border-current`
-                  : 'bg-[#0F172A] border-gray-700/50 hover:border-gray-600'
+                  : 'bg-gray-50 border-gray-200 hover:border-gray-300'
               }`}
             >
               <div className="flex items-center space-x-3 mb-2">
                 <strategy.icon size={24} />
                 <span className="font-semibold">{strategy.label}</span>
               </div>
-              <p className="text-sm text-gray-400 mb-2">{strategy.description}</p>
+              <p className="text-sm text-gray-600 mb-2">{strategy.description}</p>
               <p className="text-xs text-gray-500">{strategy.details}</p>
             </div>
           ))}
@@ -542,8 +542,8 @@ export default function SkillMergePage() {
       </div>
 
       {/* Step 2: Target/Source Selection */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold mr-2">
             2
           </span>
@@ -559,7 +559,7 @@ export default function SkillMergePage() {
               placeholder="搜索 Skills..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
             {searching && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -570,11 +570,11 @@ export default function SkillMergePage() {
           
           {/* Search Results */}
           {searchResults.length > 0 && (
-            <div className="mt-2 border border-gray-700/50 rounded-lg max-h-48 overflow-y-auto">
+            <div className="mt-2 border border-gray-200 rounded-lg max-h-48 overflow-y-auto">
               {searchResults.map((skill) => (
                 <div
                   key={skill.id}
-                  className="p-3 hover:bg-[#0F172A] cursor-pointer flex items-center justify-between"
+                  className="p-3 hover:bg-gray-50 cursor-pointer flex items-center justify-between"
                   onClick={() => {
                     if (!targetSkill) {
                       selectTargetSkill(skill);
@@ -584,7 +584,7 @@ export default function SkillMergePage() {
                   }}
                 >
                   <div>
-                    <span className="font-medium text-gray-100">{skill.displayName}</span>
+                    <span className="font-medium text-gray-900">{skill.displayName}</span>
                     <span className="text-sm text-gray-500 ml-2">{skill.name}</span>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -609,15 +609,15 @@ export default function SkillMergePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Target Skill */}
           <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-2">目标 Skill（主版本）</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-2">目标 Skill（主版本）</h3>
             {targetSkill ? (
-              <div className="p-4 bg-blue-900/20 border border-blue-500/20 rounded-lg">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-100">{targetSkill.displayName}</p>
+                    <p className="font-medium text-gray-900">{targetSkill.displayName}</p>
                     <p className="text-sm text-gray-500">{targetSkill.name}</p>
                     {targetSkill.techStackId && (
-                      <p className="text-xs text-gray-400 mt-1">{targetSkill.techStackId}</p>
+                      <p className="text-xs text-gray-600 mt-1">{targetSkill.techStackId}</p>
                     )}
                   </div>
                   <button
@@ -633,7 +633,7 @@ export default function SkillMergePage() {
                 </div>
               </div>
             ) : (
-              <div className="p-4 bg-[#0F172A] border border-gray-700/50 rounded-lg text-center text-gray-500">
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">
                 <Award className="mx-auto h-8 w-8 text-gray-400 mb-1" />
                 <p className="text-sm">请选择目标 Skill</p>
               </div>
@@ -642,7 +642,7 @@ export default function SkillMergePage() {
 
           {/* Source Skills */}
           <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-2">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">
               源 Skills（将被合并/废弃）
               {sourceSkills.length > 0 && (
                 <span className="ml-2 text-xs text-gray-500">({sourceSkills.length} 个)</span>
@@ -653,10 +653,10 @@ export default function SkillMergePage() {
                 {sourceSkills.map((skill) => (
                   <div
                     key={skill.id}
-                    className="p-3 bg-purple-900/20 border border-purple-500/20 rounded-lg flex items-center justify-between"
+                    className="p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center justify-between"
                   >
                     <div>
-                      <p className="font-medium text-gray-100">{skill.displayName}</p>
+                      <p className="font-medium text-gray-900">{skill.displayName}</p>
                       <p className="text-sm text-gray-500">{skill.name}</p>
                     </div>
                     <button
@@ -669,7 +669,7 @@ export default function SkillMergePage() {
                 ))}
               </div>
             ) : (
-              <div className="p-4 bg-[#0F172A] border border-gray-700/50 rounded-lg text-center text-gray-500">
+              <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg text-center text-gray-500">
                 <Layers className="mx-auto h-8 w-8 text-gray-400 mb-1" />
                 <p className="text-sm">请选择源 Skills</p>
               </div>
@@ -679,27 +679,27 @@ export default function SkillMergePage() {
 
         {/* New Skill Name (for content-merge) */}
         {selectedStrategy === 'content-merge' && targetSkill && (
-          <div className="mt-4 p-4 bg-[#0F172A] rounded-lg">
-            <h3 className="text-sm font-medium text-gray-300 mb-2">新 Skill 名称（可选）</h3>
+          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+            <h3 className="text-sm font-medium text-gray-700 mb-2">新 Skill 名称（可选）</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">内部名称</label>
+                <label className="text-xs text-gray-600 mb-1 block">内部名称</label>
                 <input
                   type="text"
                   placeholder={`${targetSkill.name}-merged`}
                   value={newSkillName}
                   onChange={(e) => setNewSkillName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">显示名称</label>
+                <label className="text-xs text-gray-600 mb-1 block">显示名称</label>
                 <input
                   type="text"
                   placeholder={`${targetSkill.displayName} (合并版)`}
                   value={newSkillDisplayName}
                   onChange={(e) => setNewSkillDisplayName(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
             </div>
@@ -708,8 +708,8 @@ export default function SkillMergePage() {
       </div>
 
       {/* Step 3: Merge Reason */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold mr-2">
             3
           </span>
@@ -724,7 +724,7 @@ export default function SkillMergePage() {
               className={`px-4 py-2 rounded-lg border transition-colors ${
                 mergeReason === reason.value
                   ? 'bg-blue-100 text-blue-800 border-blue-300'
-                  : 'bg-[#0F172A] text-gray-300 border-gray-700/50 hover:border-gray-600'
+                  : 'bg-gray-50 text-gray-700 border-gray-200 hover:border-gray-300'
               }`}
             >
               {reason.label}
@@ -734,8 +734,8 @@ export default function SkillMergePage() {
       </div>
 
       {/* Step 4: Preview */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold mr-2">
             4
           </span>
@@ -780,7 +780,7 @@ export default function SkillMergePage() {
           <div className="space-y-4">
             {/* Issues */}
             {compatibility.issues.length > 0 && (
-              <div className="p-4 bg-red-900/20 border border-red-500/20 rounded-lg">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                 <h3 className="text-sm font-medium text-red-800 mb-2 flex items-center">
                   <AlertTriangle size={16} className="mr-1" />
                   问题（必须解决）
@@ -797,7 +797,7 @@ export default function SkillMergePage() {
 
             {/* Warnings */}
             {compatibility.warnings.length > 0 && (
-              <div className="p-4 bg-yellow-900/20 border border-yellow-500/20 rounded-lg">
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                 <h3 className="text-sm font-medium text-yellow-800 mb-2 flex items-center">
                   <Info size={16} className="mr-1" />
                   警告（建议关注）
@@ -814,7 +814,7 @@ export default function SkillMergePage() {
 
             {/* Preview Summary */}
             {compatibility.compatible && (
-              <div className="p-4 bg-green-900/20 border border-green-500/20 rounded-lg">
+              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                 <h3 className="text-sm font-medium text-green-800 mb-2">合并预览</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-green-700">
                   <div>
@@ -834,7 +834,7 @@ export default function SkillMergePage() {
                 </div>
                 
                 {/* What will happen */}
-                <div className="mt-4 pt-4 border-t border-green-500/20">
+                <div className="mt-4 pt-4 border-t border-green-200">
                   <h4 className="text-sm font-medium text-green-800 mb-2">执行后将发生：</h4>
                   <ul className="space-y-1 text-sm text-green-700">
                     {selectedStrategy === 'content-merge' && (
@@ -867,7 +867,7 @@ export default function SkillMergePage() {
 
         {/* Merge Result */}
         {mergeResult && (
-          <div className="mt-4 p-4 bg-blue-900/20 border border-blue-500/20 rounded-lg">
+          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <h3 className="text-sm font-medium text-blue-800 mb-2 flex items-center">
               <CheckCircle size={16} className="mr-1" />
               合并成功
@@ -892,8 +892,8 @@ export default function SkillMergePage() {
       </div>
 
       {/* Step 5: Execute */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">
           <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold mr-2">
             5
           </span>
@@ -936,19 +936,19 @@ export default function SkillMergePage() {
       {/* Confirmation Dialog */}
       {showConfirmDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <AlertTriangle className="text-orange-500 mr-2" size={24} />
               确认执行合并
             </h3>
             
-            <div className="space-y-3 text-sm text-gray-300 mb-6">
+            <div className="space-y-3 text-sm text-gray-700 mb-6">
               <p><strong>策略:</strong> {strategies.find(s => s.id === selectedStrategy)?.label}</p>
               <p><strong>目标 Skill:</strong> {targetSkill?.displayName}</p>
               <p><strong>源 Skills:</strong> {sourceSkills.map(s => s.displayName).join(', ')}</p>
               <p><strong>合并原因:</strong> {mergeReasons.find(r => r.value === mergeReason)?.label}</p>
               
-              <div className="p-3 bg-yellow-900/20 border border-yellow-500/20 rounded-lg mt-4">
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mt-4">
                 <p className="text-yellow-800">
                   ⚠️ 此操作将修改 Skills 数据，原 Skills 将被标记为废弃。
                   <br />
@@ -960,7 +960,7 @@ export default function SkillMergePage() {
             <div className="flex items-center justify-end space-x-3">
               <button
                 onClick={() => setShowConfirmDialog(false)}
-                className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-lg hover:bg-dark-surface-hover"
+                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
               >
                 取消
               </button>

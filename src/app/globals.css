@@ -3,25 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0B1120;
-  --bg-surface: #1E293B;
-  --bg-surface-hover: #334155;
-  --bg-surface-alt: #162032;
-  --border: #374151;
-  --border-light: #1E293B;
-  --text-primary: #E2E8F0;
-  --text-secondary: #94A3B8;
-  --text-muted: #64748B;
+  --foreground-rgb: 0 0 0;
+  --background-start-rgb: 214 219 220;
+  --background-end-rgb: 255 255 255;
 }
 
 body {
-  color: var(--text-primary);
-  background-color: var(--bg);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      rgb(var(--background-start-rgb)),
+      rgb(var(--background-end-rgb))
+    );
 }
 
-/* Dark scrollbar */
+/* 自定义样式 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -32,32 +28,36 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(148, 163, 184, 0.2);
+  background-color: rgba(0, 0, 0, 0.2);
   border-radius: 3px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background-color: rgba(148, 163, 184, 0.35);
+  background-color: rgba(0, 0, 0, 0.3);
 }
 
+/* 代码块样式 */
 pre {
   overflow-x: auto;
 }
 
+/* 表格样式优化 */
 table {
   border-collapse: collapse;
 }
 
+/* 响应式容器 */
 .container-responsive {
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 1rem;
 }
 
+/* 卡片阴影 */
 .card-shadow {
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
 }
 
 .card-shadow-hover:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }

@@ -21,8 +21,9 @@ interface SkillNewVersionModalProps {
     description: string;
     content: string;
     isActive: boolean;
-    categoryId: string;
-    vulnerabilityTreeId: string;
+    vulnerabilityPatternId: string;
+    techStackId: string;
+    cwe: string | null;
   };
 }
 
@@ -78,8 +79,9 @@ export function SkillNewVersionModal({
           description: editData.description,
           content: editData.content,
           isActive: editData.isActive,
-          categoryId: editData.categoryId,
-          vulnerabilityTreeId: editData.vulnerabilityTreeId || null,
+          vulnerabilityPatternId: editData.vulnerabilityPatternId,
+          techStackId: editData.techStackId || null,
+          cwe: editData.cwe,
         }),
       });
 
@@ -109,12 +111,12 @@ export function SkillNewVersionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-blue-50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-blue-50">
           <div className="flex items-center gap-3">
             <Plus size={20} className="text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-100">保存为新版本</h2>
+            <h2 className="text-lg font-semibold text-gray-900">保存为新版本</h2>
           </div>
           <button
             onClick={handleClose}
@@ -127,18 +129,18 @@ export function SkillNewVersionModal({
         {/* Content */}
         <div className="px-6 py-5 space-y-4">
           {/* Info */}
-          <div className="bg-[#0F172A] rounded-lg p-4">
+          <div className="bg-gray-50 rounded-lg p-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-400">Skill 名称:</span>
-              <span className="font-medium text-gray-100">{skillDisplayName}</span>
+              <span className="text-gray-600">Skill 名称:</span>
+              <span className="font-medium text-gray-900">{skillDisplayName}</span>
             </div>
             <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-gray-400">当前版本:</span>
-              <span className="font-medium text-gray-100">v{currentVersionNumber}</span>
+              <span className="text-gray-600">当前版本:</span>
+              <span className="font-medium text-gray-900">v{currentVersionNumber}</span>
             </div>
             <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-gray-400">新版本:</span>
-              <span className="font-medium text-blue-400">v{currentVersionNumber + 1}</span>
+              <span className="text-gray-600">新版本:</span>
+              <span className="font-medium text-blue-700">v{currentVersionNumber + 1}</span>
             </div>
           </div>
 
@@ -155,8 +157,8 @@ export function SkillNewVersionModal({
                   onClick={() => setChangeType(type.value)}
                   className={`px-3 py-2 text-left rounded-lg border transition-all ${
                     changeType === type.value
-                      ? 'border-blue-500 bg-primary-600/15 text-blue-700'
-                      : 'border-gray-700/50 hover:border-gray-600 text-gray-700'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
                   }`}
                 >
                   <div className="text-sm font-medium">{type.label}</div>
@@ -176,7 +178,7 @@ export function SkillNewVersionModal({
               value={changeDesc}
               onChange={(e) => setChangeDesc(e.target.value)}
               placeholder="简要描述本次变更的内容，例如：添加了 SQL 注入检测规则"
-              className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
 
@@ -189,15 +191,15 @@ export function SkillNewVersionModal({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="说明为什么要进行这次变更，例如：之前的版本误报率较高，需要优化检测逻辑"
-              className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
             />
           </div>
 
           {/* Tip */}
-          <div className="flex items-start gap-2 p-3 bg-blue-900/20 border border-blue-500/20 rounded-lg">
-            <FileText size={16} className="text-blue-400 mt-0.5 flex-shrink-0" />
-            <p className="text-xs text-blue-400">
+          <div className="flex items-start gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <FileText size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-blue-700">
               创建新版本后，当前版本 v{currentVersionNumber} 将保留在历史记录中，
               可以随时通过版本回滚功能恢复。
             </p>
@@ -205,7 +207,7 @@ export function SkillNewVersionModal({
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 text-red-400 text-sm">
+            <div className="flex items-center gap-2 text-red-600 text-sm">
               <AlertTriangle size={16} />
               <span>{error}</span>
             </div>
@@ -213,18 +215,18 @@ export function SkillNewVersionModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-700/50 bg-[#0F172A] flex items-center justify-end gap-3">
+        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex items-center justify-end gap-3">
           <button
             onClick={handleClose}
             disabled={loading}
-            className="px-4 py-2 border border-gray-600 text-gray-700 rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
+            className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
           >
             取消
           </button>
           <button
             onClick={handleCreateVersion}
             disabled={loading || !changeDesc.trim() || !reason.trim()}
-            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

@@ -18,15 +18,15 @@ interface PermissionGuardProps {
 
 /**
  * 权限守卫组件
- *
+ * 
  * 用于页面级权限控制，检查用户是否拥有指定权限或角色
- *
+ * 
  * @example
  * // 检查权限
  * <PermissionGuard permission={PERMISSIONS.USER_READ}>
  *   <UsersPage />
  * </PermissionGuard>
- *
+ * 
  * @example
  * // 检查角色
  * <PermissionGuard role="admin">
@@ -99,7 +99,7 @@ export function DeveloperGuard({ children }: { children: React.ReactNode }) {
   }
 
   const isDeveloper = user?.roles?.includes('developer') || user?.roles?.includes('admin');
-
+  
   if (!isDeveloper) {
     return <AccessDenied message="此功能仅对开发者角色开放" />;
   }
@@ -113,12 +113,12 @@ export function DeveloperGuard({ children }: { children: React.ReactNode }) {
 export function AccessDenied({ message = '您没有权限访问此页面' }: { message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center h-64 space-y-4">
-      <div className="flex items-center justify-center w-16 h-16 bg-red-900/20 rounded-full">
-        <AlertCircle className="w-8 h-8 text-red-400" />
+      <div className="flex items-center justify-center w-16 h-16 bg-red-100 rounded-full">
+        <AlertCircle className="w-8 h-8 text-red-600" />
       </div>
-      <h2 className="text-xl font-semibold text-gray-100">访问被拒绝</h2>
+      <h2 className="text-xl font-semibold text-gray-900">访问被拒绝</h2>
       <p className="text-gray-500">{message}</p>
-      <p className="text-sm text-gray-500">如需访问，请联系管理员获取相应权限</p>
+      <p className="text-sm text-gray-400">如需访问，请联系管理员获取相应权限</p>
     </div>
   );
 }

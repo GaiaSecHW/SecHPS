@@ -347,7 +347,7 @@ async function getTrendData(tokenWhereClause: any, period: string) {
       groupByFormat = 'day';
   }
 
-  // 使用 JS 侧分组
+  // SQLite 不支持复杂的日期分组，使用原始查询
   const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
   
   // 调整时间范围（TokenUsage 使用 createdAt）

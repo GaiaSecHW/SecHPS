@@ -4,7 +4,6 @@ import { authenticateRequest, authErrorResponseNested } from '@/lib/api-auth';
 import { PERMISSIONS, ROLES } from '@/types/permissions';
 import { getOffsetPagination } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { fetchPermissionsPaginated } from '@/lib/auth';
 import { generateId } from '@/lib/id-generator';
 
 // 获取所有角色
@@ -43,6 +42,7 @@ export async function GET(request: Request) {
       skip,
       take,
       include: {
+        Permission: true,
         UserRole: {
           include: {
             User: {
@@ -58,25 +58,11 @@ export async function GET(request: Request) {
       },
     });
 
-    // Fetch permissions per role via paginated raw SQL (MTU black hole fix)
-    type PermRow = { id: string; name: string; description: string | null; module: string; action: string; resource: string | null; createdAt: Date; updatedAt: Date };
-    const rolePermMap = new Map<string, PermRow[]>();
-    for (const role of roles) {
-      const perms = await fetchPermissionsPaginated<PermRow>([role.id], 'p.*', 10);
-      rolePermMap.set(role.id, perms);
-    }
-
-    // Attach permissions to each role
-    const rolesWithPerms = roles.map(role => ({
-      ...role,
-      Permission: rolePermMap.get(role.id) ?? [],
-    }));
-
     // 计算总页数
     const totalPages = Math.ceil(total / currentLimit);
 
     return NextResponse.json({
-      roles: rolesWithPerms,
+      roles,
       pagination: {
         total,
         page: currentPage,

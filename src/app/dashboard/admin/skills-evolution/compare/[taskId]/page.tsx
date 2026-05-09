@@ -204,7 +204,7 @@ function VersionCompareContent() {
       case 'rejected':
         return 'bg-red-100 text-red-800';
       default:
-        return 'bg-dark-surface-hover text-gray-200';
+        return 'bg-gray-100 text-gray-800';
     }
   };
 
@@ -263,7 +263,7 @@ function VersionCompareContent() {
     before, 
     after, 
     label, 
-    colorClass = 'bg-blue-600'
+    colorClass = 'bg-blue-500'
   }: { 
     before: number | null; 
     after: number | null; 
@@ -277,29 +277,29 @@ function VersionCompareContent() {
     return (
       <div className="space-y-2">
         <div className="flex items-center justify-between text-sm">
-          <span className="text-gray-400">{label}</span>
-          <span className="text-gray-100 font-medium">
+          <span className="text-gray-600">{label}</span>
+          <span className="text-gray-900 font-medium">
             {formatPrecision(before)} → {formatPrecision(after)}
           </span>
         </div>
         <div className="flex items-center gap-2">
           {/* Before bar */}
-          <div className="flex-1 h-6 bg-dark-surface-hover rounded overflow-hidden relative">
+          <div className="flex-1 h-6 bg-gray-100 rounded overflow-hidden relative">
             <div 
               className="absolute left-0 top-0 h-full bg-gray-400 rounded transition-all"
               style={{ width: `${(beforeValue / maxValue) * 100}%` }}
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600">
               旧版本
             </span>
           </div>
           {/* After bar */}
-          <div className="flex-1 h-6 bg-dark-surface-hover rounded overflow-hidden relative">
+          <div className="flex-1 h-6 bg-gray-100 rounded overflow-hidden relative">
             <div 
               className={`absolute left-0 top-0 h-full ${colorClass} rounded transition-all`}
               style={{ width: `${(afterValue / maxValue) * 100}%` }}
             />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600">
               新版本
             </span>
           </div>
@@ -322,11 +322,11 @@ function VersionCompareContent() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
-          <h1 className="text-2xl font-bold text-gray-100">版本对比</h1>
+          <h1 className="text-2xl font-bold text-gray-900">版本对比</h1>
         </div>
         <Alert type="error">{error}</Alert>
         <button
@@ -359,13 +359,13 @@ function VersionCompareContent() {
         <div className="flex items-center gap-3">
           <button
             onClick={navigateToEvolutionList}
-            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">版本对比</h1>
-            <p className="text-sm text-gray-400">
+            <h1 className="text-2xl font-bold text-gray-900">版本对比</h1>
+            <p className="text-sm text-gray-600">
               {skill.displayName} - 进化任务 #{taskId.slice(-6)}
             </p>
           </div>
@@ -379,12 +379,12 @@ function VersionCompareContent() {
           {/* Success/Failure indicator */}
           {task.status === 'completed' && (
             isSuccess ? (
-              <span className="flex items-center gap-1 px-3 py-1.5 bg-green-900/20 text-green-700 rounded-full text-sm">
+              <span className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-full text-sm">
                 <CheckCircle size={14} />
                 进化成功
               </span>
             ) : (
-              <span className="flex items-center gap-1 px-3 py-1.5 bg-red-900/20 text-red-700 rounded-full text-sm">
+              <span className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-700 rounded-full text-sm">
                 <XCircle size={14} />
                 进化失败
               </span>
@@ -414,29 +414,29 @@ function VersionCompareContent() {
       </div>
 
       {/* Task Info */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
             <p className="text-sm text-gray-500">触发原因</p>
-            <p className="text-lg font-semibold text-gray-100">
+            <p className="text-lg font-semibold text-gray-900">
               {getTriggerReasonLabel(task.triggerReason)}
             </p>
           </div>
           <div>
             <p className="text-sm text-gray-500">创建时间</p>
-            <p className="text-lg font-semibold text-gray-100">
+            <p className="text-lg font-semibold text-gray-900">
               {formatDate(task.createdAt)}
             </p>
           </div>
           <div>
             <p className="text-sm text-gray-500">完成时间</p>
-            <p className="text-lg font-semibold text-gray-100">
+            <p className="text-lg font-semibold text-gray-900">
               {formatDate(task.completedAt)}
             </p>
           </div>
           <div>
             <p className="text-sm text-gray-500">改进记录</p>
-            <p className="text-lg font-semibold text-gray-100">
+            <p className="text-lg font-semibold text-gray-900">
               {improvement ? `#${improvement.id.slice(-6)}` : 'N/A'}
             </p>
           </div>
@@ -444,87 +444,87 @@ function VersionCompareContent() {
       </div>
 
       {/* Metrics Comparison Table */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center gap-2">
-          <BarChart3 size={18} className="text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-100">指标对比</h2>
+      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+          <BarChart3 size={18} className="text-gray-600" />
+          <h2 className="text-lg font-semibold text-gray-900">指标对比</h2>
         </div>
         
         <div className="p-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Precision */}
-            <div className="bg-[#0F172A] rounded-lg p-4">
+            <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Target size={18} className="text-blue-600" />
-                <h3 className="font-medium text-gray-100">精准率</h3>
+                <h3 className="font-medium text-gray-900">精准率</h3>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">旧版本</span>
-                  <span className="text-lg font-bold text-gray-100">
+                  <span className="text-sm text-gray-600">旧版本</span>
+                  <span className="text-lg font-bold text-gray-900">
                     {formatPrecision(task.precisionBefore)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">新版本</span>
+                  <span className="text-sm text-gray-600">新版本</span>
                   <span className="text-lg font-bold text-blue-600">
                     {formatPrecision(task.precisionAfter)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-700/50">
-                  <span className="text-sm text-gray-400">变化</span>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                  <span className="text-sm text-gray-600">变化</span>
                   <ChangeIndicator value={comparison?.precisionChange ?? task.analysisResult?.precisionChange} />
                 </div>
               </div>
             </div>
 
             {/* Recall */}
-            <div className="bg-[#0F172A] rounded-lg p-4">
+            <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Award size={18} className="text-green-600" />
-                <h3 className="font-medium text-gray-100">召回率（确认率）</h3>
+                <h3 className="font-medium text-gray-900">召回率（确认率）</h3>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">旧版本</span>
-                  <span className="text-lg font-bold text-gray-100">
+                  <span className="text-sm text-gray-600">旧版本</span>
+                  <span className="text-lg font-bold text-gray-900">
                     {formatPrecision(comparison?.recallBefore ?? (task.confirmedCount > 0 ? task.confirmedCount / (task.falsePositiveCount + task.confirmedCount) : null))}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">新版本</span>
+                  <span className="text-sm text-gray-600">新版本</span>
                   <span className="text-lg font-bold text-green-600">
                     {formatPrecision(task.recallAfter)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-700/50">
-                  <span className="text-sm text-gray-400">变化</span>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                  <span className="text-sm text-gray-600">变化</span>
                   <ChangeIndicator value={comparison?.recallChange ?? task.analysisResult?.recallChange} />
                 </div>
               </div>
             </div>
 
             {/* False Positive Rate */}
-            <div className="bg-[#0F172A] rounded-lg p-4">
+            <div className="bg-gray-50 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle size={18} className="text-red-600" />
-                <h3 className="font-medium text-gray-100">误报率</h3>
+                <h3 className="font-medium text-gray-900">误报率</h3>
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">旧版本</span>
-                  <span className="text-lg font-bold text-gray-100">
+                  <span className="text-sm text-gray-600">旧版本</span>
+                  <span className="text-lg font-bold text-gray-900">
                     {formatPrecision(comparison?.falsePositiveRateBefore ?? (task.falsePositiveCount > 0 ? task.falsePositiveCount / (task.falsePositiveCount + task.confirmedCount) : null))}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-gray-400">新版本</span>
+                  <span className="text-sm text-gray-600">新版本</span>
                   <span className="text-lg font-bold text-red-600">
                     {formatPrecision(comparison?.falsePositiveRateAfter)}
                   </span>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-700/50">
-                  <span className="text-sm text-gray-400">变化</span>
+                <div className="flex items-center justify-between pt-2 border-t border-gray-200">
+                  <span className="text-sm text-gray-600">变化</span>
                   <ChangeIndicator value={comparison?.falsePositiveRateChange ?? task.analysisResult?.falsePositiveRateChange} inverse />
                 </div>
               </div>
@@ -532,7 +532,7 @@ function VersionCompareContent() {
           </div>
 
           {/* Counts */}
-          <div className="mt-4 pt-4 border-t border-gray-700/50">
+          <div className="mt-4 pt-4 border-t border-gray-200">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
                 <p className="text-sm text-gray-500">误报数（旧版本）</p>
@@ -548,7 +548,7 @@ function VersionCompareContent() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">总发现数（旧版本）</p>
-                <p className="text-lg font-semibold text-gray-100">
+                <p className="text-lg font-semibold text-gray-900">
                   {task.falsePositiveCount + task.confirmedCount}
                 </p>
               </div>
@@ -564,10 +564,10 @@ function VersionCompareContent() {
       </div>
 
       {/* Trend Visualization */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-        <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center gap-2">
-          <TrendingUp size={18} className="text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-100">趋势可视化</h2>
+      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+          <TrendingUp size={18} className="text-gray-600" />
+          <h2 className="text-lg font-semibold text-gray-900">趋势可视化</h2>
         </div>
         
         <div className="p-4 space-y-6">
@@ -576,7 +576,7 @@ function VersionCompareContent() {
             before={task.precisionBefore}
             after={task.precisionAfter}
             label="精准率"
-            colorClass={(comparison?.precisionChange ?? 0) > 0 ? 'bg-green-600' : 'bg-red-600'}
+            colorClass={(comparison?.precisionChange ?? 0) > 0 ? 'bg-green-500' : 'bg-red-500'}
           />
           
           {/* Recall Trend */}
@@ -584,7 +584,7 @@ function VersionCompareContent() {
             before={comparison?.recallBefore ?? (task.confirmedCount > 0 ? task.confirmedCount / (task.falsePositiveCount + task.confirmedCount) : null)}
             after={task.recallAfter}
             label="召回率"
-            colorClass={(comparison?.recallChange ?? 0) >= 0 ? 'bg-green-600' : 'bg-yellow-600'}
+            colorClass={(comparison?.recallChange ?? 0) >= 0 ? 'bg-green-500' : 'bg-yellow-500'}
           />
           
           {/* False Positive Rate Trend */}
@@ -592,25 +592,25 @@ function VersionCompareContent() {
             before={comparison?.falsePositiveRateBefore ?? (task.falsePositiveCount > 0 ? task.falsePositiveCount / (task.falsePositiveCount + task.confirmedCount) : null)}
             after={comparison?.falsePositiveRateAfter ?? null}
             label="误报率"
-            colorClass={(comparison?.falsePositiveRateChange ?? 0) <= 0 ? 'bg-green-600' : 'bg-red-600'}
+            colorClass={(comparison?.falsePositiveRateChange ?? 0) <= 0 ? 'bg-green-500' : 'bg-red-500'}
           />
         </div>
       </div>
 
       {/* Success/Failure Analysis */}
       {task.analysisResult && (
-        <div className={`bg-dark-surface rounded-lg shadow border overflow-hidden ${
-          isSuccess ? 'border-green-500/20' : 'border-red-500/20'
+        <div className={`bg-white rounded-lg shadow border overflow-hidden ${
+          isSuccess ? 'border-green-200' : 'border-red-200'
         }`}>
           <div className={`px-4 py-3 border-b flex items-center gap-2 ${
-            isSuccess ? 'bg-green-900/20 border-green-500/20' : 'bg-red-900/20 border-red-500/20'
+            isSuccess ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
           }`}>
             {isSuccess ? (
               <CheckCircle size={18} className="text-green-600" />
             ) : (
               <XCircle size={18} className="text-red-600" />
             )}
-            <h2 className="text-lg font-semibold text-gray-100">
+            <h2 className="text-lg font-semibold text-gray-900">
               {isSuccess ? '进化成功分析' : '进化失败分析'}
             </h2>
           </div>
@@ -619,16 +619,16 @@ function VersionCompareContent() {
             <div className="space-y-3">
               {/* Success Reason */}
               {comparison?.successReason && (
-                <div className="bg-[#0F172A] rounded-lg p-3">
-                  <p className="text-sm text-gray-400 mb-1">原因说明</p>
-                  <p className="text-sm text-gray-100">{comparison.successReason}</p>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-sm text-gray-600 mb-1">原因说明</p>
+                  <p className="text-sm text-gray-900">{comparison.successReason}</p>
                 </div>
               )}
               
               {/* Success Criteria */}
-              <div className="bg-[#0F172A] rounded-lg p-3">
-                <p className="text-sm text-gray-400 mb-2">成功标准</p>
-                <ul className="text-sm text-gray-300 space-y-1">
+              <div className="bg-gray-50 rounded-lg p-3">
+                <p className="text-sm text-gray-600 mb-2">成功标准</p>
+                <ul className="text-sm text-gray-700 space-y-1">
                   <li className="flex items-center gap-2">
                     {(comparison?.precisionChange ?? 0) > 0 ? (
                       <CheckCircle size={14} className="text-green-600" />
@@ -650,7 +650,7 @@ function VersionCompareContent() {
               
               {/* Error message if failed */}
               {task.analysisResult.error && (
-                <div className="bg-red-900/20 border border-red-500/20 rounded-lg p-3">
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
                   <p className="text-sm text-red-700">
                     <strong>错误:</strong> {task.analysisResult.error}
                   </p>
@@ -663,10 +663,10 @@ function VersionCompareContent() {
 
       {/* Content Comparison */}
       {improvement && (
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
-          <div className="px-4 py-3 bg-[#162032] border-b border-gray-700/50 flex items-center gap-2">
-            <Clock size={18} className="text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-100">内容对比</h2>
+        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-2">
+            <Clock size={18} className="text-gray-600" />
+            <h2 className="text-lg font-semibold text-gray-900">内容对比</h2>
           </div>
           
           <div className="p-4">
@@ -675,14 +675,14 @@ function VersionCompareContent() {
               <div>
                 <button
                   onClick={() => setShowOldContent(!showOldContent)}
-                  className="w-full flex items-center justify-between px-4 py-2 bg-dark-surface-hover rounded-lg hover:bg-dark-surface-hover transition-colors"
+                  className="w-full flex items-center justify-between px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                 >
-                  <span className="font-medium text-gray-300">旧版本内容</span>
+                  <span className="font-medium text-gray-700">旧版本内容</span>
                   {showOldContent ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
                 {showOldContent && (
-                  <div className="mt-2 p-3 bg-[#0F172A] rounded-lg border border-gray-700/50">
-                    <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-[300px]">
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-[300px]">
                       {skill.content || '无内容'}
                     </pre>
                   </div>
@@ -699,8 +699,8 @@ function VersionCompareContent() {
                   {showNewContent ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
                 {showNewContent && (
-                  <div className="mt-2 p-3 bg-blue-900/20 rounded-lg border border-blue-500/20">
-                    <pre className="text-sm text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-[300px]">
+                  <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                    <pre className="text-sm text-gray-700 whitespace-pre-wrap overflow-x-auto max-h-[300px]">
                       {improvement.improvedContent || '无内容'}
                     </pre>
                   </div>

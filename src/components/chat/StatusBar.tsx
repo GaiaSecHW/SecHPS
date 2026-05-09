@@ -49,7 +49,7 @@ export default function StatusBar({
   };
 
   return (
-    <div className="h-7 bg-dark-surface border-t border-gray-700/50 flex items-center px-3 text-xs text-gray-400">
+    <div className="h-7 bg-gray-100 border-t border-gray-200 flex items-center px-3 text-xs text-gray-600">
       {cwd && (
         <div className="flex items-center gap-1 mr-4">
           <FolderOpen size={12} />
@@ -68,13 +68,13 @@ export default function StatusBar({
       </div>
 
       {version && (
-        <div className="text-gray-500">
+        <div className="text-gray-400">
           v{version}
         </div>
       )}
 
       {sessionCount !== undefined && (
-        <div className="ml-auto text-gray-500">
+        <div className="ml-auto text-gray-400">
           {sessionCount} 会话
         </div>
       )}

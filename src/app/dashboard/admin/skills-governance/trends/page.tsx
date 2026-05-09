@@ -170,12 +170,12 @@ function TrendsPageContent() {
       <div className="space-y-6">
         <Link 
           href="/dashboard/admin/skills-governance"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回治理总览
         </Link>
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
         <button
@@ -196,7 +196,7 @@ function TrendsPageContent() {
       {/* Back Button */}
       <Link 
         href="/dashboard/admin/skills-governance"
-        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回治理总览
@@ -205,8 +205,8 @@ function TrendsPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">观测趋势分析</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900">观测趋势分析</h1>
+          <p className="mt-1 text-sm text-gray-600">
             Skills 观测数据的整体趋势和统计摘要
           </p>
         </div>
@@ -221,8 +221,8 @@ function TrendsPageContent() {
       </div>
 
       {/* Summary Overview */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <BarChart3 className="mr-2" size={20} />
           统计摘要
         </h2>
@@ -231,7 +231,7 @@ function TrendsPageContent() {
           {trendMetrics.map((metric) => (
             <div
               key={metric.label}
-              className="p-4 bg-[#0F172A] rounded-lg border border-gray-700/50"
+              className="p-4 bg-gray-50 rounded-lg border border-gray-200"
             >
               <div className="flex items-center justify-between mb-2">
                 {metric.icon}
@@ -253,15 +253,15 @@ function TrendsPageContent() {
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <Clock className="mr-2" size={20} />
           最近7天活动
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Recent Observations */}
-          <div className="p-4 bg-blue-900/20 rounded-lg border border-blue-500/20">
+          <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center">
                 <Activity className="text-blue-600 mr-2" size={20} />
@@ -275,7 +275,7 @@ function TrendsPageContent() {
             <p className="text-sm text-blue-600">
               最近7天内的观测记录总数
             </p>
-            <div className="mt-3 pt-3 border-t border-blue-500/20">
+            <div className="mt-3 pt-3 border-t border-blue-200">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-blue-500">日均观测</span>
                 <span className="font-medium text-blue-700">
@@ -286,7 +286,7 @@ function TrendsPageContent() {
           </div>
 
           {/* Warning Rate */}
-          <div className="p-4 bg-orange-900/20 rounded-lg border border-orange-500/20">
+          <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center">
                 <AlertTriangle className="text-orange-600 mr-2" size={20} />
@@ -304,7 +304,7 @@ function TrendsPageContent() {
             <p className="text-sm text-orange-600">
               所有 Skills 的平均预警比例
             </p>
-            <div className="mt-3 pt-3 border-t border-orange-500/20">
+            <div className="mt-3 pt-3 border-t border-orange-200">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-orange-500">高风险 Skills</span>
                 <span className="font-medium text-red-700">
@@ -317,8 +317,8 @@ function TrendsPageContent() {
       </div>
 
       {/* Rate Analysis */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <BarChart3 className="mr-2" size={20} />
           比率分析
         </h2>
@@ -326,18 +326,18 @@ function TrendsPageContent() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Match Rate */}
           <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-3">匹配率分布</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">匹配率分布</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">平均匹配率</span>
+                <span className="text-sm text-gray-600">平均匹配率</span>
                 <div className="flex items-center">
                   <div className="w-24 bg-gray-200 rounded-full h-2 mr-2">
                     <div
-                      className="bg-blue-600 h-2 rounded-full"
+                      className="bg-blue-500 h-2 rounded-full"
                       style={{ width: `${Math.min((stats?.avgMatchRate || 0) * 100, 100)}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium text-gray-100">
+                  <span className="text-sm font-medium text-gray-900">
                     {((stats?.avgMatchRate || 0) * 100).toFixed(1)}%
                   </span>
                 </div>
@@ -350,22 +350,22 @@ function TrendsPageContent() {
 
           {/* Warning Rate */}
           <div>
-            <h3 className="text-sm font-medium text-gray-300 mb-3">预警率分布</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-3">预警率分布</h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">平均预警率</span>
+                <span className="text-sm text-gray-600">平均预警率</span>
                 <div className="flex items-center">
                   <div className="w-24 bg-gray-200 rounded-full h-2 mr-2">
                     <div
                       className={`h-2 rounded-full ${
-                        (stats?.avgWarningRate || 0) >= 0.5 ? 'bg-red-600' :
-                        (stats?.avgWarningRate || 0) >= 0.3 ? 'bg-orange-600' :
-                        'bg-yellow-600'
+                        (stats?.avgWarningRate || 0) >= 0.5 ? 'bg-red-500' :
+                        (stats?.avgWarningRate || 0) >= 0.3 ? 'bg-orange-500' :
+                        'bg-yellow-500'
                       }`}
                       style={{ width: `${Math.min((stats?.avgWarningRate || 0) * 100, 100)}%` }}
                     />
                   </div>
-                  <span className="text-sm font-medium text-gray-100">
+                  <span className="text-sm font-medium text-gray-900">
                     {((stats?.avgWarningRate || 0) * 100).toFixed(1)}%
                   </span>
                 </div>
@@ -379,33 +379,33 @@ function TrendsPageContent() {
       </div>
 
       {/* Data Overview */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-        <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
           <Layers className="mr-2" size={20} />
           数据概览
         </h2>
         
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总观测</p>
-            <p className="text-xl font-bold text-gray-100">{stats?.totalObservations || 0}</p>
+            <p className="text-xl font-bold text-gray-900">{stats?.totalObservations || 0}</p>
           </div>
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总匹配</p>
-            <p className="text-xl font-bold text-gray-100">{stats?.totalMatches || 0}</p>
+            <p className="text-xl font-bold text-gray-900">{stats?.totalMatches || 0}</p>
           </div>
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总预警</p>
-            <p className="text-xl font-bold text-gray-100">{stats?.totalWarnings || 0}</p>
+            <p className="text-xl font-bold text-gray-900">{stats?.totalWarnings || 0}</p>
           </div>
-          <div className="p-4 bg-[#0F172A] rounded-lg">
+          <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-xs text-gray-500 mb-1">总重叠</p>
-            <p className="text-xl font-bold text-gray-100">{stats?.totalOverlaps || 0}</p>
+            <p className="text-xl font-bold text-gray-900">{stats?.totalOverlaps || 0}</p>
           </div>
         </div>
         
-        <div className="mt-4 pt-4 border-t border-gray-700/50">
-          <p className="text-sm text-gray-400">
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <p className="text-sm text-gray-600">
             <Activity size={14} className="inline mr-1" />
             数据来源于 Skills 观测日志的聚合统计，反映整体 Skills 使用和治理情况。
           </p>
@@ -413,33 +413,33 @@ function TrendsPageContent() {
       </div>
 
       {/* Quick Links */}
-      <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
-        <h3 className="text-sm font-medium text-gray-300 mb-3">快速导航</h3>
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+        <h3 className="text-sm font-medium text-gray-700 mb-3">快速导航</h3>
         <div className="flex flex-wrap gap-2">
           <Link
             href="/dashboard/admin/skills-governance/high-frequency"
-            className="inline-flex items-center px-3 py-2 bg-dark-surface border border-gray-700/50 rounded-lg text-sm text-gray-300 hover:bg-dark-surface-hover transition-colors"
+            className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <TrendingUp size={16} className="mr-1" />
             高频重复排行
           </Link>
           <Link
             href="/dashboard/admin/skills-governance/merge-candidates"
-            className="inline-flex items-center px-3 py-2 bg-dark-surface border border-gray-700/50 rounded-lg text-sm text-gray-300 hover:bg-dark-surface-hover transition-colors"
+            className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <Layers size={16} className="mr-1" />
             合并候选列表
           </Link>
           <Link
             href="/dashboard/admin/skills-governance/new-impact"
-            className="inline-flex items-center px-3 py-2 bg-dark-surface border border-gray-700/50 rounded-lg text-sm text-gray-300 hover:bg-dark-surface-hover transition-colors"
+            className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <AlertTriangle size={16} className="mr-1" />
             新增影响分析
           </Link>
           <Link
             href="/dashboard/admin/skills-governance/merge"
-            className="inline-flex items-center px-3 py-2 bg-dark-surface border border-gray-700/50 rounded-lg text-sm text-gray-300 hover:bg-dark-surface-hover transition-colors"
+            className="inline-flex items-center px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-100 transition-colors"
           >
             <BarChart3 size={16} className="mr-1" />
             合并操作

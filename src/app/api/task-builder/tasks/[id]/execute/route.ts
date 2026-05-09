@@ -53,8 +53,8 @@ export async function POST(
       },
     });
 
-    const mergedSkills = task.mergedSkills || task.skills || undefined;
-    const mergedScripts = task.mergedScripts || task.scripts || undefined;
+    const mergedSkills = task.mergedSkills || task.skills;
+    const mergedScripts = task.mergedScripts || task.scripts;
 
     await prisma.taskInstance.update({
       where: { id },

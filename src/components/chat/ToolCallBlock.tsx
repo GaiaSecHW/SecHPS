@@ -47,30 +47,30 @@ const getToolIcon = (toolName: string) => {
 const statusConfig = {
   pending: {
     icon: Play,
-    color: 'text-gray-400',
-    bgColor: 'bg-[#0F172A]',
-    borderColor: 'border-gray-700/50',
+    color: 'text-gray-500',
+    bgColor: 'bg-gray-50',
+    borderColor: 'border-gray-200',
     label: '等待中',
   },
   running: {
     icon: Loader2,
-    color: 'text-blue-400',
-    bgColor: 'bg-blue-900/20',
-    borderColor: 'border-blue-500/30',
+    color: 'text-blue-600',
+    bgColor: 'bg-blue-50',
+    borderColor: 'border-blue-200',
     label: '运行中',
   },
   success: {
     icon: CheckCircle,
-    color: 'text-green-400',
-    bgColor: 'bg-green-900/20',
-    borderColor: 'border-green-500/30',
+    color: 'text-green-600',
+    bgColor: 'bg-green-50',
+    borderColor: 'border-green-200',
     label: '成功',
   },
   error: {
     icon: XCircle,
-    color: 'text-red-400',
-    bgColor: 'bg-red-900/20',
-    borderColor: 'border-red-500/30',
+    color: 'text-red-600',
+    bgColor: 'bg-red-50',
+    borderColor: 'border-red-200',
     label: '失败',
   },
 };
@@ -99,8 +99,8 @@ export function ToolCallBlock({
       {/* 头部 */}
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center space-x-2">
-          <Icon size={16} className="text-gray-400" />
-          <span className="text-sm font-medium text-gray-100">{toolName}</span>
+          <Icon size={16} className="text-gray-600" />
+          <span className="text-sm font-medium text-gray-900">{toolName}</span>
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${config.color}`}
           >
@@ -114,7 +114,7 @@ export function ToolCallBlock({
         </div>
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-gray-500 hover:text-gray-300 transition-colors"
+          className="text-gray-400 hover:text-gray-600 transition-colors"
         >
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </button>
@@ -122,23 +122,23 @@ export function ToolCallBlock({
 
       {/* 展开内容 */}
       {expanded && (
-        <div className="border-t border-gray-700/50 bg-[#0F172A]">
+        <div className="border-t border-gray-200 bg-white">
           {/* 输入参数 */}
-          <div className="border-b border-gray-700/50">
+          <div className="border-b border-gray-100">
             <button
               onClick={() => setShowInput(!showInput)}
-              className="w-full flex items-center justify-between px-3 py-2 hover:bg-dark-surface-hover transition-colors"
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
             >
-              <span className="text-xs font-medium text-gray-400">输入参数</span>
+              <span className="text-xs font-medium text-gray-600">输入参数</span>
               {showInput ? (
-                <ChevronUp size={14} className="text-gray-500" />
+                <ChevronUp size={14} className="text-gray-400" />
               ) : (
-                <ChevronDown size={14} className="text-gray-500" />
+                <ChevronDown size={14} className="text-gray-400" />
               )}
             </button>
             {showInput && (
-              <div className="px-3 py-2 bg-dark-surface">
-                <pre className="text-xs font-mono text-gray-300 whitespace-pre-wrap overflow-x-auto">
+              <div className="px-3 py-2 bg-gray-50">
+                <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap overflow-x-auto">
                   {JSON.stringify(toolInput, null, 2)}
                 </pre>
               </div>
@@ -150,25 +150,25 @@ export function ToolCallBlock({
             <div>
               <button
                 onClick={() => setShowResult(!showResult)}
-                className="w-full flex items-center justify-between px-3 py-2 hover:bg-dark-surface-hover transition-colors"
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50 transition-colors"
               >
-                <span className="text-xs font-medium text-gray-400">
+                <span className="text-xs font-medium text-gray-600">
                   {status === 'error' ? '错误信息' : '执行结果'}
                 </span>
                 {showResult ? (
-                  <ChevronUp size={14} className="text-gray-500" />
+                  <ChevronUp size={14} className="text-gray-400" />
                 ) : (
-                  <ChevronDown size={14} className="text-gray-500" />
+                  <ChevronDown size={14} className="text-gray-400" />
                 )}
               </button>
               {showResult && (
-                <div className="px-3 py-2 bg-dark-surface">
+                <div className="px-3 py-2 bg-gray-50">
                   {errorMessage ? (
-                    <p className="text-xs text-red-400 whitespace-pre-wrap">
+                    <p className="text-xs text-red-600 whitespace-pre-wrap">
                       {errorMessage}
                     </p>
                   ) : (
-                    <pre className="text-xs font-mono text-gray-300 whitespace-pre-wrap overflow-x-auto max-h-64 overflow-y-auto">
+                    <pre className="text-xs font-mono text-gray-800 whitespace-pre-wrap overflow-x-auto max-h-64 overflow-y-auto">
                       {typeof toolResult === 'string'
                         ? toolResult
                         : JSON.stringify(toolResult, null, 2)}

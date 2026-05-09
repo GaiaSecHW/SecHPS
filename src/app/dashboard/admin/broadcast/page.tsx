@@ -112,13 +112,13 @@ function BroadcastManageContent() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         {/* Header */}
-        <div className="p-6 border-b border-gray-700/50">
+        <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <Megaphone className="w-6 h-6 text-blue-500" />
-              <h1 className="text-xl font-semibold text-gray-100">通知广播管理</h1>
+              <h1 className="text-xl font-semibold text-gray-900">通知广播管理</h1>
             </div>
             <button
               onClick={handleSave}
@@ -138,7 +138,7 @@ function BroadcastManageContent() {
               )}
             </button>
           </div>
-          <p className="mt-2 text-sm text-gray-400">
+          <p className="mt-2 text-sm text-gray-600">
             配置顶部通知广播内容，支持多条消息轮播（用 || 分隔）
           </p>
         </div>
@@ -148,7 +148,7 @@ function BroadcastManageContent() {
           {/* Enable Toggle */}
           <div className="flex items-center justify-between">
             <div>
-              <label className="font-medium text-gray-100">启用广播</label>
+              <label className="font-medium text-gray-900">启用广播</label>
               <p className="text-sm text-gray-500">关闭后顶部将不显示跑马灯</p>
             </div>
             <button
@@ -158,7 +158,7 @@ function BroadcastManageContent() {
               }`}
             >
               <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-dark-surface transition-transform ${
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   config.enabled ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
@@ -167,14 +167,14 @@ function BroadcastManageContent() {
 
           {/* Content Input */}
           <div>
-            <label className="block font-medium text-gray-100 mb-2">
+            <label className="block font-medium text-gray-900 mb-2">
               广播内容
             </label>
             <textarea
               value={config.content}
               onChange={(e) => setConfig({ ...config, content: e.target.value })}
               rows={3}
-              className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="输入广播内容，多条消息用 || 分隔"
             />
             <p className="mt-1 text-xs text-gray-500">
@@ -184,7 +184,7 @@ function BroadcastManageContent() {
 
           {/* Color Selection */}
           <div>
-            <label className="block font-medium text-gray-100 mb-2">
+            <label className="block font-medium text-gray-900 mb-2">
               <Palette className="w-4 h-4 inline mr-1" />
               背景颜色
             </label>
@@ -195,7 +195,7 @@ function BroadcastManageContent() {
                   onClick={() => setConfig({ ...config, color: option.value })}
                   className={`relative h-10 rounded-lg ${option.preview} transition-all ${
                     config.color === option.value
-                      ? 'ring-2 ring-offset-2 ring-primary-500'
+                      ? 'ring-2 ring-offset-2 ring-blue-500'
                       : 'hover:opacity-80'
                   }`}
                 >
@@ -209,7 +209,7 @@ function BroadcastManageContent() {
 
           {/* Preview */}
           <div>
-            <label className="block font-medium text-gray-100 mb-2">
+            <label className="block font-medium text-gray-900 mb-2">
               <Eye className="w-4 h-4 inline mr-1" />
               效果预览
             </label>

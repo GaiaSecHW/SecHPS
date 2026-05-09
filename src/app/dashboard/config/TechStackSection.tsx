@@ -218,7 +218,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-blue-400" />
+        <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
       </div>
     );
   }
@@ -226,7 +226,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium text-gray-100">技术栈选项</h3>
+        <h3 className="text-lg font-medium text-gray-900">技术栈选项</h3>
         <button
           onClick={handleAdd}
           className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
@@ -237,13 +237,13 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
       </div>
 
       {error && (
-        <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-md">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-900/20 border border-green-200 text-green-400 px-4 py-3 rounded-md">
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-md">
           {success}
         </div>
       )}
@@ -256,7 +256,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
 
           return (
             <div key={category}>
-              <h4 className="text-sm font-semibold text-gray-300 mb-2 flex items-center gap-2">
+              <h4 className="text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                 <Icon size={16} />
                 {categoryInfo.label}
               </h4>
@@ -266,22 +266,22 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                     key={opt.id}
                     className={`flex items-center justify-between px-3 py-2 rounded-md border ${
                       opt.isActive
-                        ? 'bg-dark-surface border-gray-700/50'
-                        : 'bg-[#0F172A] border-gray-100 text-gray-400'
+                        ? 'bg-white border-gray-200'
+                        : 'bg-gray-50 border-gray-100 text-gray-400'
                     }`}
                   >
                     <span className="text-sm truncate">{opt.name}</span>
                     <div className="flex items-center gap-1 ml-2">
                       <button
                         onClick={() => handleEdit(opt)}
-                        className="p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-900/20 rounded"
+                        className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
                         title="编辑"
                       >
                         <Edit2 size={14} />
                       </button>
                       <button
                         onClick={() => handleDelete(opt.id)}
-                        className="p-1 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded"
+                        className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
                         title="删除"
                       >
                         <Trash2 size={14} />
@@ -290,8 +290,8 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                         onClick={() => handleToggleActive(opt)}
                         className={`p-1 rounded ${
                           opt.isActive
-                            ? 'text-green-400 hover:bg-green-900/20'
-                            : 'text-gray-400 hover:bg-dark-surface-hover'
+                            ? 'text-green-600 hover:bg-green-50'
+                            : 'text-gray-400 hover:bg-gray-100'
                         }`}
                         title={opt.isActive ? '禁用' : '启用'}
                       >
@@ -309,9 +309,9 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
       {/* 新增/编辑模态框 */}
       {showAddModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-100">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">
                 {editingId ? '编辑技术栈' : '添加技术栈'}
               </h3>
               <button
@@ -320,7 +320,7 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                   resetForm();
                   setError(null);
                 }}
-                className="text-gray-400 hover:text-gray-400"
+                className="text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
               </button>
@@ -329,13 +329,13 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
             <div className="p-6 space-y-4">
               {/* 错误提示放在模态框内 */}
               {error && (
-                <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-md">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
                   {error}
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   名称 <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -345,19 +345,19 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
                     setFormData({ ...formData, name: e.target.value });
                     setError(null); // 输入时清除错误
                   }}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="例如：Java、Spring、MySQL"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   分类 <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={formData.category}
                   onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {effectiveCategoryOptions.map((opt) => (
                     <option key={opt.value} value={opt.value}>
@@ -368,26 +368,26 @@ export default function TechStackSection({ token }: TechStackSectionProps) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   描述
                 </label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="可选描述"
                 />
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   resetForm();
                 }}
-                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 取消
               </button>

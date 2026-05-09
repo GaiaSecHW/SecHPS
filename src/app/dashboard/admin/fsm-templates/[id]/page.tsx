@@ -91,13 +91,13 @@ function FSMTemplateDetailPageContent() {
   const [template, setTemplate] = useState<FSMTemplate | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  
   // 阶段内容编辑状态
   const [editingPhase, setEditingPhase] = useState<string | null>(editPhaseParam);
   const [phaseContent, setPhaseContent] = useState('');
   const [phaseLoading, setPhaseLoading] = useState(false);
   const [phaseSaving, setPhaseSaving] = useState(false);
-
+  
   // 角色配置状态
   const [nodes, setNodes] = useState<FSMNode[]>([]);
   const [roles, setRoles] = useState<FSMRole[]>([]);
@@ -119,9 +119,9 @@ function FSMTemplateDetailPageContent() {
   const loadTemplate = async () => {
     setLoading(true);
     setError(null);
-
+    
     const result = await apiGet<{ template: FSMTemplate }>(`/api/admin/fsm-templates/${templateId}`);
-
+    
     if (result.error) {
       setError(result.error);
     } else if (result.data) {
@@ -130,7 +130,7 @@ function FSMTemplateDetailPageContent() {
       setNodes(tmpl.nodes || []);
       setRoles(tmpl.defaultRoles || []);
     }
-
+    
     setLoading(false);
   };
 
@@ -138,48 +138,48 @@ function FSMTemplateDetailPageContent() {
     setPhaseLoading(true);
     setEditingPhase(phase);
     setPhaseContent('');
-
+    
     const result = await apiGet<{ content: string }>(`/api/admin/fsm-templates/${templateId}/phases/${phase}`);
-
+    
     if (result.error) {
       toast.error(result.error);
       setPhaseContent('');
     } else if (result.data) {
       setPhaseContent(result.data.content);
     }
-
+    
     setPhaseLoading(false);
   };
 
   const savePhaseContent = async () => {
     if (!editingPhase) return;
-
+    
     setPhaseSaving(true);
-
+    
     const result = await apiPut(`/api/admin/fsm-templates/${templateId}/phases/${editingPhase}`, {
       content: phaseContent,
     });
-
+    
     if (result.error) {
       toast.error(result.error);
     } else {
       toast.success(`阶段 ${editingPhase} 内容已保存`);
     }
-
+    
     setPhaseSaving(false);
   };
 
   const saveRoleConfig = async () => {
     if (!template) return;
-
+    
     setRolesSaving(true);
-
+    
     // 更新 nodes 中的 roleId 和 defaultRoles
     const result = await apiPut<{ template: FSMTemplate }>(`/api/admin/fsm-templates/${templateId}`, {
       nodes: nodes,
       defaultRoles: roles,
     });
-
+    
     if (result.error) {
       toast.error(result.error);
     } else {
@@ -190,7 +190,7 @@ function FSMTemplateDetailPageContent() {
         setRoles(result.data.template.defaultRoles || []);
       }
     }
-
+    
     setRolesSaving(false);
   };
 
@@ -202,13 +202,13 @@ function FSMTemplateDetailPageContent() {
   };
 
   const handleNodeRoleChange = (nodeId: string, newRoleId: string) => {
-    setNodes(nodes.map(node =>
+    setNodes(nodes.map(node => 
       node.id === nodeId ? { ...node, roleId: newRoleId } : node
     ));
   };
 
   const handleRoleChange = (roleIndex: number, field: keyof FSMRole, value: string) => {
-    setRoles(roles.map((role, index) =>
+    setRoles(roles.map((role, index) => 
       index === roleIndex ? { ...role, [field]: value } : role
     ));
   };
@@ -226,7 +226,7 @@ function FSMTemplateDetailPageContent() {
       <div className="space-y-4">
         <button
           onClick={() => router.push('/dashboard/admin/fsm-templates')}
-          className="inline-flex items-center text-gray-400 hover:text-gray-100"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回
@@ -247,14 +247,14 @@ function FSMTemplateDetailPageContent() {
         <div className="flex items-center space-x-4">
           <button
             onClick={() => router.push('/dashboard/admin/fsm-templates')}
-            className="inline-flex items-center text-gray-400 hover:text-gray-100"
+            className="inline-flex items-center text-gray-600 hover:text-gray-900"
           >
             <ArrowLeft size={20} className="mr-2" />
             返回
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">威胁建模配置</h1>
-            <p className="mt-1 text-sm text-gray-400">
+            <h1 className="text-2xl font-bold text-gray-900">威胁建模配置</h1>
+            <p className="mt-1 text-sm text-gray-600">
               {template.displayName} (v{template.version})
             </p>
           </div>
@@ -264,7 +264,7 @@ function FSMTemplateDetailPageContent() {
             <button
               onClick={editingPhase ? savePhaseContent : saveRoleConfig}
               disabled={(editingPhase ? phaseSaving : rolesSaving) || !isAdmin}
-              className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
             >
               {editingPhase ? phaseSaving : rolesSaving ? (
                 <RefreshCw size={20} className="mr-2 animate-spin" />
@@ -278,14 +278,14 @@ function FSMTemplateDetailPageContent() {
       </div>
 
       {/* 功能切换标签 */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+      <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => { setShowRoleConfig(true); setEditingPhase(null); }}
             className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               showRoleConfig
                 ? 'bg-purple-600 text-white'
-                : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-700'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             <Users size={16} className="mr-2" />
@@ -295,8 +295,8 @@ function FSMTemplateDetailPageContent() {
             onClick={() => setShowRoleConfig(false)}
             className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               !showRoleConfig && editingPhase
-                ? 'bg-primary-600 text-white'
-                : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-700'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             <FileText size={16} className="mr-2" />
@@ -309,15 +309,15 @@ function FSMTemplateDetailPageContent() {
       {showRoleConfig ? (
         <div className="space-y-6">
           {/* 角色定义 */}
-          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-            <h2 className="text-lg font-semibold text-gray-100 flex items-center mb-4">
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center mb-4">
               <Users size={20} className="mr-2" />
               默认角色定义
             </h2>
             <p className="text-sm text-gray-500 mb-4">
               定义工作流的默认角色。启动评估时，管理员可以为每个角色配置对应的执行模型。
             </p>
-
+            
             {roles.length === 0 ? (
               <div className="text-center text-gray-500 py-8">
                 暂无角色定义
@@ -325,9 +325,9 @@ function FSMTemplateDetailPageContent() {
             ) : (
               <div className="space-y-3">
                 {roles.map((role, index) => (
-                  <div key={role.id} className="flex items-center gap-4 p-3 bg-dark-surface-hover rounded-lg">
-                    <div
-                      className="w-4 h-4 rounded-full flex-shrink-0"
+                  <div key={role.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                    <div 
+                      className="w-4 h-4 rounded-full flex-shrink-0" 
                       style={{ backgroundColor: role.color }}
                     />
                     <input
@@ -335,7 +335,7 @@ function FSMTemplateDetailPageContent() {
                       value={role.name}
                       onChange={(e) => handleRoleChange(index, 'name', e.target.value)}
                       disabled={!isAdmin}
-                      className="w-32 px-3 py-1 bg-[#0F172A] border border-gray-600 text-gray-100 rounded text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                      className="w-32 px-3 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100"
                       placeholder="角色名称"
                     />
                     <input
@@ -343,7 +343,7 @@ function FSMTemplateDetailPageContent() {
                       value={role.description || ''}
                       onChange={(e) => handleRoleChange(index, 'description', e.target.value)}
                       disabled={!isAdmin}
-                      className="flex-1 px-3 py-1 bg-[#0F172A] border border-gray-600 text-gray-100 rounded text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                      className="flex-1 px-3 py-1 border border-gray-300 rounded text-sm disabled:bg-gray-100"
                       placeholder="角色描述"
                     />
                     <input
@@ -360,39 +360,39 @@ function FSMTemplateDetailPageContent() {
           </div>
 
           {/* P 阶段角色配置 */}
-          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-            <h2 className="text-lg font-semibold text-gray-100 flex items-center mb-4">
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center mb-4">
               <Settings size={20} className="mr-2" />
               P 阶段角色分配
             </h2>
             <p className="text-sm text-gray-500 mb-4">
               为每个 P 阶段分配执行角色。每个 P 阶段相当于一个固定的 Agent，角色决定执行时的模型配置。
             </p>
-
+            
             <div className="space-y-2">
               {phaseNodes.map((node) => {
                 const phase = node.phase!;
                 return (
-                  <div key={node.id} className="flex items-center gap-4 p-3 bg-dark-surface-hover rounded-lg">
+                  <div key={node.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
                     {/* 阶段标识 */}
                     <div className="flex-shrink-0 flex items-center gap-2 w-20">
-                      <Lock size={14} className="text-gray-500" />
-                      <span className="text-sm font-semibold text-gray-100">{phase}</span>
+                      <Lock size={14} className="text-gray-400" />
+                      <span className="text-sm font-semibold text-gray-900">{phase}</span>
                     </div>
-
+                    
                     {/* 阶段名称和描述 */}
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-100">{phaseLabels[phase] || node.label}</div>
+                      <div className="text-sm font-medium text-gray-900">{phaseLabels[phase] || node.label}</div>
                       <div className="text-xs text-gray-500">{phaseDescriptions[phase] || node.description}</div>
                     </div>
-
+                    
                     {/* 角色选择 */}
                     <div className="flex-shrink-0 w-40">
                       <select
                         value={node.roleId || ''}
                         onChange={(e) => handleNodeRoleChange(node.id, e.target.value)}
                         disabled={!isAdmin}
-                        className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm disabled:bg-gray-100"
                       >
                         <option value="">选择角色...</option>
                         {roles.map((role) => (
@@ -402,10 +402,10 @@ function FSMTemplateDetailPageContent() {
                         ))}
                       </select>
                     </div>
-
+                    
                     {/* 当前角色颜色 */}
                     {node.roleId && (
-                      <div
+                      <div 
                         className="w-4 h-4 rounded-full flex-shrink-0"
                         style={{ backgroundColor: roles.find(r => r.id === node.roleId)?.color || '#999' }}
                       />
@@ -418,27 +418,27 @@ function FSMTemplateDetailPageContent() {
 
           {/* 渗透测试区（用户自由编排） */}
           {penetrationNode && (
-            <div className="bg-purple-900/20 rounded-lg shadow border border-purple-500/20 p-6">
-              <h2 className="text-lg font-semibold text-purple-300 flex items-center mb-4">
+            <div className="bg-purple-50 rounded-lg shadow border border-purple-200 p-6">
+              <h2 className="text-lg font-semibold text-purple-900 flex items-center mb-4">
                 <Edit3 size={20} className="mr-2" />
                 渗透测试区（用户自由编排）
               </h2>
-              <p className="text-sm text-purple-400 mb-4">
+              <p className="text-sm text-purple-700 mb-4">
                 此阶段为用户自由编排区，用户可添加自定义的渗透测试 Agent。管理员可配置默认角色。
               </p>
-
-              <div className="flex items-center gap-4 p-3 bg-dark-surface rounded-lg">
+              
+              <div className="flex items-center gap-4 p-3 bg-white rounded-lg">
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-100">{penetrationNode.label}</div>
+                  <div className="text-sm font-medium text-gray-900">{penetrationNode.label}</div>
                   <div className="text-xs text-gray-500">{penetrationNode.description}</div>
                 </div>
-
+                
                 <div className="flex-shrink-0 w-40">
                   <select
                     value={penetrationNode.roleId || ''}
                     onChange={(e) => handleNodeRoleChange(penetrationNode.id, e.target.value)}
                     disabled={!isAdmin}
-                    className="w-full px-3 py-2 bg-[#0F172A] border border-purple-500/30 text-gray-100 rounded-md text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                    className="w-full px-3 py-2 border border-purple-300 rounded-md text-sm disabled:bg-gray-100"
                   >
                     <option value="">选择角色...</option>
                     {roles.map((role) => (
@@ -448,9 +448,9 @@ function FSMTemplateDetailPageContent() {
                     ))}
                   </select>
                 </div>
-
+                
                 {penetrationNode.roleId && (
-                  <div
+                  <div 
                     className="w-4 h-4 rounded-full flex-shrink-0"
                     style={{ backgroundColor: roles.find(r => r.id === penetrationNode.roleId)?.color || '#999' }}
                   />
@@ -462,7 +462,7 @@ function FSMTemplateDetailPageContent() {
       ) : (
         <>
           {/* 阶段选择 */}
-          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+          <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
             <div className="flex flex-wrap gap-2">
               {['P1', 'P2', 'P3', 'P4', 'P5', 'P6'].map((phase) => (
                 <button
@@ -470,8 +470,8 @@ function FSMTemplateDetailPageContent() {
                   onClick={() => handlePhaseSelect(phase)}
                   className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                     editingPhase === phase
-                      ? 'bg-primary-600 text-white'
-                      : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-700'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
                   {phase} ({phaseLabels[phase]})
@@ -482,9 +482,9 @@ function FSMTemplateDetailPageContent() {
 
           {/* 编辑器区域 */}
           {editingPhase ? (
-            <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
               <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-100 flex items-center">
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
                   <FileText size={20} className="mr-2" />
                   {editingPhase} - {phaseLabels[editingPhase]}
                 </h2>
@@ -492,7 +492,7 @@ function FSMTemplateDetailPageContent() {
                   {phaseDescriptions[editingPhase]}
                 </p>
               </div>
-
+              
               {phaseLoading ? (
                 <div className="flex items-center justify-center h-64">
                   <LoadingSpinner size="lg" />
@@ -503,19 +503,19 @@ function FSMTemplateDetailPageContent() {
                   onChange={(e) => setPhaseContent(e.target.value)}
                   disabled={!isAdmin}
                   rows={25}
-                  className="w-full px-4 py-3 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-sm disabled:bg-dark-surface-hover disabled:text-gray-500"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-mono text-sm disabled:bg-gray-50 disabled:text-gray-500"
                   placeholder="阶段定义内容..."
                 />
               )}
-
+              
               <div className="mt-4 text-xs text-gray-500">
                 文件路径: {template.skillPath}/phases/{editingPhase}-*.md
               </div>
             </div>
           ) : (
-            <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12 text-center">
-              <FileText size={48} className="mx-auto text-gray-500 mb-4" />
-              <p className="text-gray-400">请选择要编辑的阶段</p>
+            <div className="bg-white rounded-lg shadow border border-gray-200 p-12 text-center">
+              <FileText size={48} className="mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-600">请选择要编辑的阶段</p>
             </div>
           )}
         </>

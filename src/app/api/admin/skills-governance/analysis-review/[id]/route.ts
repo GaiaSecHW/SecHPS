@@ -33,8 +33,8 @@ export async function GET(
             name: true,
             displayName: true,
             description: true,
-            categoryId: true,
-            vulnerabilityTreeId: true,
+            techStackId: true,
+            vulnerabilityPatternId: true,
             content: true,
           },
         },
@@ -55,8 +55,8 @@ export async function GET(
           name: true,
           displayName: true,
           description: true,
-          categoryId: true,
-          vulnerabilityTreeId: true,
+          techStackId: true,
+          vulnerabilityPatternId: true,
           content: true,
         },
       });
@@ -161,7 +161,7 @@ export async function PUT(
         // 获取技能信息
         const skillA = await prisma.skill.findUnique({
           where: { id: analysis.skillId },
-          select: { categoryId: true, vulnerabilityTreeId: true },
+          select: { techStackId: true, vulnerabilityPatternId: true },
         });
 
         const groupId = generateId('group');
@@ -169,8 +169,8 @@ export async function PUT(
         await prisma.skillDuplicateGroup.create({
           data: {
             id: groupId,
-            language: skillA?.categoryId || 'unknown',
-            vulnerabilityType: skillA?.vulnerabilityTreeId || 'unknown',
+            language: skillA?.techStackId || 'unknown',
+            vulnerabilityType: skillA?.vulnerabilityPatternId || 'unknown',
             status: 'pending_review',
             updatedAt: new Date(),
             skillCount: 2,

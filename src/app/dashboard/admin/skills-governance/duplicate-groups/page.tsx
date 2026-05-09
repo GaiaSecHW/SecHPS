@@ -69,8 +69,8 @@ interface ApiResponse {
 
 // Status colors
 const statusColors: Record<string, string> = {
-  pending_review: 'bg-yellow-100 text-yellow-800 border-yellow-500/20',
-  resolved: 'bg-green-100 text-green-800 border-green-500/20',
+  pending_review: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  resolved: 'bg-green-100 text-green-800 border-green-200',
 };
 
 const statusLabels: Record<string, string> = {
@@ -170,12 +170,12 @@ function DuplicateGroupsPageContent() {
       <div className="space-y-6">
         <Link
           href="/dashboard/admin/skills-governance"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回治理总览
         </Link>
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
         <button
@@ -197,7 +197,7 @@ function DuplicateGroupsPageContent() {
       {/* Back Button */}
       <Link
         href="/dashboard/admin/skills-governance"
-        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回治理总览
@@ -206,8 +206,8 @@ function DuplicateGroupsPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">重复组管理</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900">重复组管理</h1>
+          <p className="mt-1 text-sm text-gray-600">
             管理被检测为重复的 Skills 分组，进行合并或删除处理
           </p>
         </div>
@@ -223,11 +223,11 @@ function DuplicateGroupsPageContent() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">总重复组</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">
+              <p className="text-sm text-gray-600">总重复组</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
                 {data?.pagination?.total || 0}
               </p>
             </div>
@@ -235,10 +235,10 @@ function DuplicateGroupsPageContent() {
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">待审核</p>
+              <p className="text-sm text-gray-600">待审核</p>
               <p className="text-2xl font-bold text-yellow-600 mt-1">
                 {pendingCount}
               </p>
@@ -247,10 +247,10 @@ function DuplicateGroupsPageContent() {
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">已处理</p>
+              <p className="text-sm text-gray-600">已处理</p>
               <p className="text-2xl font-bold text-green-600 mt-1">
                 {resolvedCount}
               </p>
@@ -270,20 +270,20 @@ function DuplicateGroupsPageContent() {
               placeholder="搜索语言、漏洞类型或 Skill 名称..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
         <div className="flex items-center gap-2">
           <Filter className="text-gray-400" size={18} />
-          <label className="text-sm text-gray-400">状态:</label>
+          <label className="text-sm text-gray-600">状态:</label>
           <select
             value={statusFilter}
             onChange={(e) => {
               setStatusFilter(e.target.value);
               setPage(1);
             }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="all">全部</option>
             <option value="pending_review">待审核</option>
@@ -293,7 +293,7 @@ function DuplicateGroupsPageContent() {
       </div>
 
       {/* Groups List */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
+      <div className="bg-white rounded-lg shadow border border-gray-200">
         <div className="p-6">
           {filteredGroups.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -308,7 +308,7 @@ function DuplicateGroupsPageContent() {
               {filteredGroups.map((group) => (
                 <div
                   key={group.id}
-                  className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors cursor-pointer"
+                  className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
                   onClick={() => router.push(`/dashboard/admin/skills-governance/duplicate-groups/${group.id}`)}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -317,7 +317,7 @@ function DuplicateGroupsPageContent() {
                         <Layers className="w-5 h-5 text-purple-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-gray-100">
+                        <p className="font-medium text-gray-900">
                           {group.name || `${group.languageDisplayName} - ${group.vulnerabilityTypeDisplayName}`}
                         </p>
                         <div className="flex items-center space-x-2 text-sm text-gray-500 mt-1">
@@ -334,11 +334,11 @@ function DuplicateGroupsPageContent() {
                       </div>
                     </div>
                     <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-400">
+                      <span className="text-sm text-gray-600">
                         {group.skillCount} 个成员
                       </span>
                       <span className={`px-2 py-1 text-xs font-medium rounded border ${
-                        statusColors[group.status] || 'bg-dark-surface-hover text-gray-400'
+                        statusColors[group.status] || 'bg-gray-100 text-gray-600'
                       }`}>
                         {statusLabels[group.status] || group.status}
                       </span>
@@ -351,7 +351,7 @@ function DuplicateGroupsPageContent() {
                   </div>
 
                   {/* Members Preview */}
-                  <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  <div className="mt-3 pt-3 border-t border-gray-200">
                     <p className="text-xs text-gray-500 mb-2">成员 Skills:</p>
                     <div className="flex flex-wrap gap-2">
                       {group.members.slice(0, 5).map((member) => (
@@ -359,8 +359,8 @@ function DuplicateGroupsPageContent() {
                           key={member.id}
                           className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm ${
                             member.role === 'primary'
-                              ? 'bg-blue-100 border border-blue-500/20 text-blue-800'
-                              : 'bg-dark-surface border border-gray-700/50 text-gray-300'
+                              ? 'bg-blue-100 border border-blue-200 text-blue-800'
+                              : 'bg-white border border-gray-200 text-gray-700'
                           }`}
                         >
                           {member.role === 'primary' && (
@@ -396,26 +396,26 @@ function DuplicateGroupsPageContent() {
 
         {/* Pagination */}
         {data?.pagination && data.pagination.totalPages > 1 && (
-          <div className="border-t border-gray-700/50 px-6 py-4">
+          <div className="border-t border-gray-200 px-6 py-4">
             <div className="flex items-center justify-between">
-              <p className="text-sm text-gray-400">
+              <p className="text-sm text-gray-600">
                 显示 {(page - 1) * 20 + 1} - {Math.min(page * 20, data.pagination.total)} 条，共 {data.pagination.total} 条
               </p>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setPage(page - 1)}
                   disabled={page === 1}
-                  className="px-3 py-1 text-sm border border-gray-600 rounded hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   上一页
                 </button>
-                <span className="text-sm text-gray-400">
+                <span className="text-sm text-gray-600">
                   第 {page} / {data.pagination.totalPages} 页
                 </span>
                 <button
                   onClick={() => setPage(page + 1)}
                   disabled={page === data.pagination.totalPages}
-                  className="px-3 py-1 text-sm border border-gray-600 rounded hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   下一页
                 </button>

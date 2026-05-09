@@ -87,7 +87,7 @@ export async function POST(
         name: targetSkill.name,
         displayName: targetSkill.displayName,
         description: targetSkill.description,
-        vulnerabilityTreeId: targetSkill.vulnerabilityTreeId,
+        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
         cwe: targetSkill.cwe,
         severity: targetSkill.severity,
         content: targetSkill.content,

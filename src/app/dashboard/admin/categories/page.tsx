@@ -127,7 +127,7 @@ function CategoriesManagementContent() {
   if (!isAdmin) {
     return (
       <div className="p-8">
-        <div className="bg-yellow-900/20 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg">
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg">
           您没有权限访问此页面
         </div>
       </div>
@@ -141,13 +141,13 @@ function CategoriesManagementContent() {
         <div className="flex items-center space-x-4">
           <button
             onClick={() => router.back()}
-            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">漏洞分类管理</h1>
-            <p className="text-sm text-gray-400">管理 Skills 的漏洞分类列表</p>
+            <h1 className="text-2xl font-bold text-gray-900">漏洞分类管理</h1>
+            <p className="text-sm text-gray-600">管理 Skills 的漏洞分类列表</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -180,14 +180,14 @@ function CategoriesManagementContent() {
 
       {/* Messages */}
       {error && (
-        <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
           <AlertCircle size={16} />
           {error}
         </div>
       )}
 
       {success && (
-        <div className="bg-green-900/20 border border-green-200 text-green-400 px-4 py-3 rounded-lg flex items-center gap-2">
+        <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center gap-2">
           <CheckCircle size={16} />
           {success}
         </div>
@@ -196,11 +196,11 @@ function CategoriesManagementContent() {
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
-          <Loader2 className="animate-spin text-blue-400" size={32} />
+          <Loader2 className="animate-spin text-blue-600" size={32} />
         </div>
       ) : (
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-          <div className="mb-4 text-sm text-gray-400">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <div className="mb-4 text-sm text-gray-600">
             管理漏洞分类列表，这些分类将在创建和编辑 Skill 时使用。
             <br />
             <strong>分类值</strong>用于存储（英文，如 code-audit），
@@ -211,13 +211,13 @@ function CategoriesManagementContent() {
             {categories.map((category, index) => (
               <div
                 key={index}
-                className="flex items-center gap-4 p-4 bg-[#0F172A] rounded-lg border border-gray-700/50 hover:border-gray-600 transition-colors"
+                className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors"
               >
                 <GripVertical size={18} className="text-gray-400 cursor-move flex-shrink-0" />
                 
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-gray-300 mb-1.5">
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
                       分类值（英文）
                     </label>
                     <input
@@ -225,11 +225,11 @@ function CategoriesManagementContent() {
                       value={category.value}
                       onChange={(e) => handleCategoryChange(index, 'value', e.target.value)}
                       placeholder="例如: code-audit"
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-300 mb-1.5">
+                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
                       分类标签（中文）
                     </label>
                     <input
@@ -237,14 +237,14 @@ function CategoriesManagementContent() {
                       value={category.label}
                       onChange={(e) => handleCategoryChange(index, 'label', e.target.value)}
                       placeholder="例如: 代码审计"
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
                 </div>
 
                 <button
                   onClick={() => handleRemoveCategory(index)}
-                  className="p-2 text-red-400 hover:bg-red-900/20 rounded-md transition-colors flex-shrink-0"
+                  className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors flex-shrink-0"
                   title="删除分类"
                 >
                   <Trash2 size={18} />
@@ -253,7 +253,7 @@ function CategoriesManagementContent() {
             ))}
 
             {categories.length === 0 && (
-              <div className="text-center py-12 text-gray-500 bg-[#0F172A] rounded-lg border border-dashed border-gray-600">
+              <div className="text-center py-12 text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                 暂无分类，点击"添加分类"按钮创建新分类
               </div>
             )}
@@ -261,7 +261,7 @@ function CategoriesManagementContent() {
 
           {/* Summary */}
           {categories.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-gray-700/50 text-sm text-gray-400">
+            <div className="mt-6 pt-4 border-t border-gray-200 text-sm text-gray-600">
               共 {categories.length} 个分类
             </div>
           )}

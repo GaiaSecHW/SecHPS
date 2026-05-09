@@ -327,13 +327,13 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
             href={`/dashboard/skills/${skillId}`}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
-            <ArrowLeft size={20} className="text-gray-400" />
+            <ArrowLeft size={20} className="text-gray-600" />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">
+            <h1 className="text-2xl font-bold text-gray-900">
               进化分析
             </h1>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-gray-600 mt-1">
               {skill?.displayName || skill?.name || 'Skill'} - 误报分析与改进建议
             </p>
           </div>
@@ -367,8 +367,8 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
 
       {/* Metrics Section */}
       {metrics && (
-        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-6">
-          <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <BarChart3 size={20} className="mr-2 text-indigo-500" />
             当前效果指标
           </h2>
@@ -423,8 +423,8 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
       {cases && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* False Positives */}
-          <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-6">
-            <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <XCircle size={20} className="mr-2 text-red-500" />
               误报案例 ({cases.falsePositives.length})
             </h2>
@@ -444,8 +444,8 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
           </div>
 
           {/* Confirmed Cases */}
-          <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-6">
-            <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
               <CheckCircle size={20} className="mr-2 text-green-500" />
               正确发现案例 ({cases.confirmedCases.length})
             </h2>
@@ -468,8 +468,8 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
 
       {/* Analysis Results Section */}
       {analysis && (
-        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-6">
-          <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
             <Lightbulb size={20} className="mr-2 text-yellow-500" />
             LLM 分析结果
           </h2>
@@ -597,12 +597,12 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
 
       {/* Diff Preview Section */}
       {improvement && skill && (
-        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 overflow-hidden">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-[#0F172A]">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-gray-50">
             <div className="flex items-center gap-3">
               <GitCompare size={20} className="text-indigo-600" />
-              <h2 className="text-lg font-semibold text-gray-100">
+              <h2 className="text-lg font-semibold text-gray-900">
                 改进内容预览
               </h2>
             </div>
@@ -614,8 +614,8 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
                 className={cn(
                   'px-3 py-1 rounded text-sm transition-colors',
                   viewMode === 'side-by-side'
-                    ? 'bg-dark-surface shadow text-gray-100'
-                    : 'text-gray-400 hover:text-gray-100'
+                    ? 'bg-white shadow text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900'
                 )}
               >
                 并排对比
@@ -625,8 +625,8 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
                 className={cn(
                   'px-3 py-1 rounded text-sm transition-colors',
                   viewMode === 'inline'
-                    ? 'bg-dark-surface shadow text-gray-100'
-                    : 'text-gray-400 hover:text-gray-100'
+                    ? 'bg-white shadow text-gray-900'
+                    : 'text-gray-600 hover:text-gray-900'
                 )}
               >
                 内联对比
@@ -660,12 +660,12 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
             {viewMode === 'side-by-side' ? (
               <div className="grid grid-cols-2 gap-4">
                 {/* Original */}
-                <div className="border border-gray-700/50 rounded-lg overflow-hidden">
-                  <div className="px-4 py-2 bg-gray-100 border-b border-gray-700/50 flex items-center gap-2">
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
                     <FileText size={16} className="text-gray-500" />
-                    <span className="font-medium text-gray-300">原始内容</span>
+                    <span className="font-medium text-gray-700">原始内容</span>
                   </div>
-                  <pre className="p-4 text-sm text-gray-300 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono bg-[#0F172A]">
+                  <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono bg-gray-50">
                     {skill.content || '暂无内容'}
                   </pre>
                 </div>
@@ -676,17 +676,17 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
                     <FileText size={16} className="text-green-600" />
                     <span className="font-medium text-green-700">改进后内容</span>
                   </div>
-                  <pre className="p-4 text-sm text-gray-300 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono bg-green-50/30">
+                  <pre className="p-4 text-sm text-gray-700 overflow-auto max-h-[400px] whitespace-pre-wrap font-mono bg-green-50/30">
                     {improvement.improvedContent || '暂无内容'}
                   </pre>
                 </div>
               </div>
             ) : (
               /* Inline Diff View */
-              <div className="border border-gray-700/50 rounded-lg overflow-hidden">
-                <div className="px-4 py-2 bg-gray-100 border-b border-gray-700/50 flex items-center gap-2">
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-4 py-2 bg-gray-100 border-b border-gray-200 flex items-center gap-2">
                   <FileText size={16} className="text-gray-500" />
-                  <span className="font-medium text-gray-300">内联对比视图</span>
+                  <span className="font-medium text-gray-700">内联对比视图</span>
                   <div className="ml-auto flex items-center gap-3 text-xs">
                     <span className="flex items-center gap-1">
                       <span className="w-3 h-3 bg-red-200 rounded"></span>
@@ -731,7 +731,7 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
                       )}
                       {line.type === 'modified' && (
                         <>
-                          <span className="px-4 py-1 text-red-700 flex-1 border-r border-gray-700/50">
+                          <span className="px-4 py-1 text-red-700 flex-1 border-r border-gray-200">
                             <span className="text-red-400 mr-2">-</span>
                             {line.before}
                           </span>
@@ -742,7 +742,7 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
                         </>
                       )}
                       {line.type === 'same' && (
-                        <span className="px-4 py-1 text-gray-300 flex-1">
+                        <span className="px-4 py-1 text-gray-700 flex-1">
                           <span className="text-gray-300 mr-2"> </span>
                           {line.before}
                         </span>
@@ -758,10 +758,10 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
 
       {/* Action Buttons */}
       {analysis && improvement && (
-        <div className="flex items-center justify-end gap-4 bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-4">
+        <div className="flex items-center justify-end gap-4 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <button
             onClick={() => setShowRejectConfirm(true)}
-            className="flex items-center gap-2 px-4 py-2 text-gray-300 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
           >
             <X size={18} />
             拒绝改进
@@ -788,12 +788,12 @@ ${analysisData.recommendations?.filter(r => r.type === 'add_exception').map((r, 
 
       {/* No Analysis State */}
       {!analysis && !analyzing && (
-        <div className="bg-dark-surface rounded-lg shadow-sm border border-gray-700/50 p-12 text-center">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
           <Lightbulb size={48} className="mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-100 mb-2">
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
             尚未进行进化分析
           </h3>
-          <p className="text-gray-400 mb-6">
+          <p className="text-gray-600 mb-6">
             点击上方"运行分析"按钮，启动 LLM 分析误报和正确发现案例
           </p>
           <button
@@ -852,7 +852,7 @@ function MetricCard({
     purple: 'bg-purple-50 text-purple-600 border-purple-200',
     orange: 'bg-orange-50 text-orange-600 border-orange-200',
     red: 'bg-red-50 text-red-600 border-red-200',
-    gray: 'bg-[#0F172A] text-gray-400 border-gray-700/50',
+    gray: 'bg-gray-50 text-gray-600 border-gray-200',
   };
 
   return (
@@ -952,17 +952,17 @@ function RecommendationCard({
   };
 
   return (
-    <div className="bg-dark-surface border border-indigo-100 rounded-lg p-3">
+    <div className="bg-white border border-indigo-100 rounded-lg p-3">
       <div className="flex items-start gap-3">
         <span className="text-sm font-medium text-indigo-600 min-w-[24px]">
           #{index + 1}
         </span>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
-            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', typeColors[recommendation.type] || 'bg-gray-100 text-gray-300')}>
+            <span className={cn('px-2 py-0.5 rounded text-xs font-medium', typeColors[recommendation.type] || 'bg-gray-100 text-gray-700')}>
               {typeLabels[recommendation.type] || recommendation.type}
             </span>
-            <span className={cn('px-2 py-0.5 rounded text-xs', impactColors[recommendation.impact] || 'bg-[#0F172A] text-gray-400')}>
+            <span className={cn('px-2 py-0.5 rounded text-xs', impactColors[recommendation.impact] || 'bg-gray-50 text-gray-600')}>
               {impactLabels[recommendation.impact] || recommendation.impact}
             </span>
             {recommendation.priority && (
@@ -970,14 +970,14 @@ function RecommendationCard({
                 'px-2 py-0.5 rounded text-xs',
                 recommendation.priority === 'high' ? 'bg-red-50 text-red-600' :
                 recommendation.priority === 'medium' ? 'bg-yellow-50 text-yellow-600' :
-                'bg-[#0F172A] text-gray-400'
+                'bg-gray-50 text-gray-600'
               )}>
                 {recommendation.priority === 'high' ? '高优先级' :
                  recommendation.priority === 'medium' ? '中优先级' : '低优先级'}
               </span>
             )}
           </div>
-          <p className="text-sm text-gray-300">{recommendation.description}</p>
+          <p className="text-sm text-gray-700">{recommendation.description}</p>
         </div>
       </div>
     </div>

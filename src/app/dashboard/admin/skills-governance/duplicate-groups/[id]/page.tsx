@@ -94,8 +94,8 @@ interface DuplicateGroupDetail {
 
 // Status colors
 const statusColors: Record<string, string> = {
-  pending_review: 'bg-yellow-100 text-yellow-800 border-yellow-500/20',
-  resolved: 'bg-green-100 text-green-800 border-green-500/20',
+  pending_review: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  resolved: 'bg-green-100 text-green-800 border-green-200',
 };
 
 const statusLabels: Record<string, string> = {
@@ -259,12 +259,12 @@ function DuplicateGroupDetailPageContent() {
       <div className="space-y-6">
         <Link
           href="/dashboard/admin/skills-governance/duplicate-groups"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回重复组列表
         </Link>
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           缺少重复组 ID
         </div>
       </div>
@@ -284,12 +284,12 @@ function DuplicateGroupDetailPageContent() {
       <div className="space-y-6">
         <Link
           href="/dashboard/admin/skills-governance/duplicate-groups"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回重复组列表
         </Link>
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
         <button
@@ -308,12 +308,12 @@ function DuplicateGroupDetailPageContent() {
       <div className="space-y-6">
         <Link
           href="/dashboard/admin/skills-governance/duplicate-groups"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回重复组列表
         </Link>
-        <div className="bg-yellow-900/20 border border-yellow-500/20 text-yellow-700 px-4 py-3 rounded-lg">
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg">
           重复组不存在
         </div>
       </div>
@@ -325,7 +325,7 @@ function DuplicateGroupDetailPageContent() {
       {/* Back Button */}
       <Link
         href="/dashboard/admin/skills-governance/duplicate-groups"
-        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回重复组列表
@@ -334,10 +334,10 @@ function DuplicateGroupDetailPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">
+          <h1 className="text-2xl font-bold text-gray-900">
             {group.name || `${group.languageInfo?.displayName || group.language} - ${group.vulnerabilityTypeInfo?.displayName || group.vulnerabilityType}`}
           </h1>
-          <div className="flex items-center space-x-2 text-sm text-gray-400 mt-1">
+          <div className="flex items-center space-x-2 text-sm text-gray-600 mt-1">
             <span className="inline-flex items-center">
               <Code size={14} className="mr-1" />
               {group.languageInfo?.displayName || group.language}
@@ -356,7 +356,7 @@ function DuplicateGroupDetailPageContent() {
         </div>
         <div className="flex items-center space-x-3">
           <span className={`px-3 py-1.5 text-sm font-medium rounded border ${
-            statusColors[group.status] || 'bg-dark-surface-hover text-gray-400'
+            statusColors[group.status] || 'bg-gray-100 text-gray-600'
           }`}>
             {statusLabels[group.status] || group.status}
           </span>
@@ -373,11 +373,11 @@ function DuplicateGroupDetailPageContent() {
 
       {/* Info Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">成员数量</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">
+              <p className="text-sm text-gray-600">成员数量</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
                 {group.skillCount}
               </p>
             </div>
@@ -385,10 +385,10 @@ function DuplicateGroupDetailPageContent() {
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">分析记录</p>
+              <p className="text-sm text-gray-600">分析记录</p>
               <p className="text-2xl font-bold text-purple-600 mt-1">
                 {group.analyses.length}
               </p>
@@ -397,11 +397,11 @@ function DuplicateGroupDetailPageContent() {
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">创建时间</p>
-              <p className="text-sm font-medium text-gray-100 mt-1">
+              <p className="text-sm text-gray-600">创建时间</p>
+              <p className="text-sm font-medium text-gray-900 mt-1">
                 {new Date(group.createdAt).toLocaleDateString('zh-CN')}
               </p>
             </div>
@@ -409,11 +409,11 @@ function DuplicateGroupDetailPageContent() {
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">处理状态</p>
-              <p className="text-sm font-medium text-gray-100 mt-1">
+              <p className="text-sm text-gray-600">处理状态</p>
+              <p className="text-sm font-medium text-gray-900 mt-1">
                 {group.resolution ? (group.resolution === 'merged' ? '已合并' : group.resolution === 'keep_all' ? '保留全部' : '已删除重复') : '待处理'}
               </p>
             </div>
@@ -427,15 +427,15 @@ function DuplicateGroupDetailPageContent() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
-        <div className="border-b border-gray-700/50">
+      <div className="bg-white rounded-lg shadow border border-gray-200">
+        <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
             <button
               onClick={() => setActiveTab('members')}
               className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'members'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <Layers size={18} className="mr-2" />
@@ -446,7 +446,7 @@ function DuplicateGroupDetailPageContent() {
               className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'analyses'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <Brain size={18} className="mr-2" />
@@ -472,10 +472,10 @@ function DuplicateGroupDetailPageContent() {
                       key={member.id}
                       className={`p-4 rounded-lg border transition-colors ${
                         selectedPrimary === member.skillId
-                          ? 'bg-blue-900/20 border-blue-500/20'
+                          ? 'bg-blue-50 border-blue-200'
                           : selectedToDelete.includes(member.skillId)
-                            ? 'bg-red-900/20 border-red-500/20'
-                            : 'bg-[#0F172A] border-gray-700/50 hover:bg-dark-surface-hover'
+                            ? 'bg-red-50 border-red-200'
+                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                       }`}
                     >
                       <div className="flex items-center justify-between">
@@ -483,16 +483,16 @@ function DuplicateGroupDetailPageContent() {
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                             member.role === 'primary'
                               ? 'bg-blue-100'
-                              : 'bg-dark-surface-hover'
+                              : 'bg-gray-100'
                           }`}>
                             {member.role === 'primary' ? (
                               <CheckCircle className="w-5 h-5 text-blue-600" />
                             ) : (
-                              <FileText className="w-5 h-5 text-gray-400" />
+                              <FileText className="w-5 h-5 text-gray-600" />
                             )}
                           </div>
                           <div>
-                            <p className="font-medium text-gray-100">{member.skill.displayName}</p>
+                            <p className="font-medium text-gray-900">{member.skill.displayName}</p>
                             <p className="text-sm text-gray-500">{member.skill.name}</p>
                             <div className="flex items-center space-x-2 text-xs text-gray-400 mt-1">
                               <span>执行次数: {member.skill.execCount}</span>
@@ -504,7 +504,7 @@ function DuplicateGroupDetailPageContent() {
                           </div>
                         </div>
                         <div className="flex items-center space-x-3">
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-gray-600">
                             相似度: {(member.similarityScore * 100).toFixed(0)}%
                           </span>
                           {group.status === 'pending_review' && (
@@ -514,7 +514,7 @@ function DuplicateGroupDetailPageContent() {
                                 className={`px-2 py-1 text-xs rounded ${
                                   selectedPrimary === member.skillId
                                     ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-200 text-gray-300 hover:bg-dark-surface-hover'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                 }`}
                               >
                                 设为主 Skill
@@ -524,7 +524,7 @@ function DuplicateGroupDetailPageContent() {
                                 className={`px-2 py-1 text-xs rounded ${
                                   selectedToDelete.includes(member.skillId)
                                     ? 'bg-red-600 text-white'
-                                    : 'bg-gray-200 text-gray-300 hover:bg-dark-surface-hover'
+                                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
                                 }`}
                               >
                                 标记删除
@@ -536,8 +536,8 @@ function DuplicateGroupDetailPageContent() {
 
                       {/* Skill Description */}
                       {member.skill.description && (
-                        <div className="mt-3 pt-3 border-t border-gray-700/50">
-                          <p className="text-sm text-gray-400 line-clamp-2">
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <p className="text-sm text-gray-600 line-clamp-2">
                             {member.skill.description}
                           </p>
                         </div>
@@ -574,15 +574,15 @@ function DuplicateGroupDetailPageContent() {
                   {group.analyses.map((analysis) => (
                     <div
                       key={analysis.id}
-                      className="p-4 bg-[#0F172A] rounded-lg border border-gray-700/50"
+                      className="p-4 bg-gray-50 rounded-lg border border-gray-200"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-100">
+                          <span className="text-sm font-medium text-gray-900">
                             {group.members.find(m => m.skillId === analysis.skillId)?.skill.displayName || analysis.skillId}
                           </span>
                           <span className="text-gray-400">vs</span>
-                          <span className="text-sm font-medium text-gray-100">
+                          <span className="text-sm font-medium text-gray-900">
                             {group.members.find(m => m.skillId === analysis.relatedSkillId)?.skill.displayName || analysis.relatedSkillId}
                           </span>
                         </div>
@@ -594,7 +594,7 @@ function DuplicateGroupDetailPageContent() {
                           }`}>
                             {analysis.isDuplicate ? '重复' : '独立'}
                           </span>
-                          <span className="text-sm text-gray-400">
+                          <span className="text-sm text-gray-600">
                             置信度: {(analysis.confidence * 100).toFixed(0)}%
                           </span>
                         </div>
@@ -604,7 +604,7 @@ function DuplicateGroupDetailPageContent() {
                       {analysis.llmReason && (
                         <div className="mb-3">
                           <p className="text-xs text-gray-500 mb-1">LLM 判断理由:</p>
-                          <p className="text-sm text-gray-300 bg-dark-surface p-2 rounded border">
+                          <p className="text-sm text-gray-700 bg-white p-2 rounded border">
                             {analysis.llmReason}
                           </p>
                         </div>
@@ -614,7 +614,7 @@ function DuplicateGroupDetailPageContent() {
                       {analysis.keyDifferences && analysis.keyDifferences.length > 0 && (
                         <div className="mb-3">
                           <p className="text-xs text-gray-500 mb-1">主要差异:</p>
-                          <ul className="text-sm text-gray-300 space-y-1">
+                          <ul className="text-sm text-gray-700 space-y-1">
                             {analysis.keyDifferences.map((diff, idx) => (
                               <li key={idx} className="flex items-start">
                                 <span className="text-gray-400 mr-2">•</span>
@@ -627,7 +627,7 @@ function DuplicateGroupDetailPageContent() {
 
                       {/* Recommendation */}
                       {analysis.recommendation && (
-                        <div className="flex items-center justify-between pt-3 border-t border-gray-700/50">
+                        <div className="flex items-center justify-between pt-3 border-t border-gray-200">
                           <span className={`px-2 py-1 text-xs rounded ${
                             analysis.recommendation === 'merge'
                               ? 'bg-purple-100 text-purple-800'
@@ -653,17 +653,17 @@ function DuplicateGroupDetailPageContent() {
 
       {/* Action Panel (only for pending_review) */}
       {group.status === 'pending_review' && (
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
-          <h3 className="text-lg font-semibold text-gray-100 mb-4">审核处理</h3>
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">审核处理</h3>
 
           {/* Notes Input */}
           <div className="mb-4">
-            <label className="block text-sm text-gray-400 mb-2">审核备注:</label>
+            <label className="block text-sm text-gray-600 mb-2">审核备注:</label>
             <textarea
               value={actionNotes}
               onChange={(e) => setActionNotes(e.target.value)}
               placeholder="输入审核备注（可选）..."
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               rows={3}
             />
           </div>
@@ -711,11 +711,11 @@ function DuplicateGroupDetailPageContent() {
           </div>
 
           {/* Selection Summary */}
-          <div className="mt-4 pt-4 border-t border-gray-700/50">
-            <div className="flex items-center space-x-4 text-sm text-gray-400">
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center space-x-4 text-sm text-gray-600">
               {selectedPrimary && (
                 <span>
-                  主 Skill: <span className="font-medium text-gray-100">
+                  主 Skill: <span className="font-medium text-gray-900">
                     {group.members.find(m => m.skillId === selectedPrimary)?.skill.displayName}
                   </span>
                 </span>
@@ -736,7 +736,7 @@ function DuplicateGroupDetailPageContent() {
 
       {/* Resolution Info (for resolved groups) */}
       {group.status === 'resolved' && group.resolution && (
-        <div className="bg-green-900/20 border border-green-500/20 rounded-lg p-4">
+        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center space-x-3">
             <CheckCircle className="text-green-600" size={20} />
             <div>

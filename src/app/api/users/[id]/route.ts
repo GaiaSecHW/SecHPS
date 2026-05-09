@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
-import { hasPermission, fetchPermissionsPaginated } from '@/lib/auth';
+import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
@@ -34,7 +34,11 @@ export async function GET(
       include: {
         UserRole: {
           include: {
-            Role: true,
+            Role: {
+              include: {
+                Permission: true,
+              },
+            },
           },
         },
         OpencodeConfig: true,
@@ -43,14 +47,6 @@ export async function GET(
 
     if (!user) {
       return NextResponse.json({ error: '未找到用户' }, { status: 404 });
-    }
-
-    // Fetch permissions per role via paginated raw SQL (MTU black hole fix)
-    const roleIds = user.UserRole.map(ur => ur.roleId);
-    const rolePermMap = new Map<string, string[]>();
-    for (const roleId of roleIds) {
-      const rows = await fetchPermissionsPaginated<{ name: string }>([roleId], 'p.name');
-      rolePermMap.set(roleId, rows.map(r => r.name));
     }
 
     // 格式化返回数据
@@ -67,7 +63,7 @@ export async function GET(
         id: ur.Role.id,
         name: ur.Role.name,
         description: ur.Role.description,
-        permissions: rolePermMap.get(ur.roleId) ?? [],
+        permissions: ur.Role.Permission.map(p => p.name),
       })),
       opencodeConfigs: user.OpencodeConfig.map(config => ({
         id: config.id,

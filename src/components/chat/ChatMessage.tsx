@@ -56,13 +56,13 @@ export function ChatMessage({
   const [isContentExpanded, setIsContentExpanded] = useState(false);
 
   const handleCopy = async () => {
-    const textContent = typeof content === 'string'
-      ? content
+    const textContent = typeof content === 'string' 
+      ? content 
       : content
           .filter((part) => part.type === 'text')
           .map((part) => part.text || '')
           .join('\n');
-
+    
     await navigator.clipboard.writeText(textContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -92,12 +92,17 @@ export function ChatMessage({
   const lines = plainText.split('\n');
   const isLongContent = lines.length > 3;
 
+  // 移除空值过滤，显示所有消息
+  // if (!textContent && !hasThinking) {
+  //   return null;
+  // }
+
   // 获取角色图标
   const getRoleIcon = () => {
-    if (isUser) return <User size={16} className="text-blue-400" />;
-    if (isSystem) return <AlertCircle size={16} className="text-yellow-400" />;
-    if (isTool) return <Code size={16} className="text-purple-400" />;
-    return <Bot size={16} className="text-green-400" />;
+    if (isUser) return <User size={16} className="text-blue-600" />;
+    if (isSystem) return <AlertCircle size={16} className="text-yellow-600" />;
+    if (isTool) return <Code size={16} className="text-purple-600" />;
+    return <Bot size={16} className="text-green-600" />;
   };
 
   // 获取角色名称
@@ -117,8 +122,8 @@ export function ChatMessage({
   const renderTextContent = (text: string) => {
     return (
       <div className="relative">
-        <div
-          className={`prose prose-sm prose-invert max-w-none transition-all duration-200 ${
+        <div 
+          className={`prose prose-sm max-w-none transition-all duration-200 ${
             !isContentExpanded && isLongContent ? 'max-h-20 overflow-hidden relative' : ''
           }`}
         >
@@ -128,7 +133,7 @@ export function ChatMessage({
           )}
           {/* 渐变遮罩 */}
           {!isContentExpanded && isLongContent && (
-            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-dark-surface to-transparent pointer-events-none" />
+            <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent pointer-events-none" />
           )}
         </div>
       </div>
@@ -199,8 +204,8 @@ export function ChatMessage({
 
   // 系统消息样式
   if (isSystem) {
-    const textContent = typeof content === 'string'
-      ? content
+    const textContent = typeof content === 'string' 
+      ? content 
       : content
           .filter((part) => part.type === 'text')
           .map((part) => part.text || '')
@@ -208,17 +213,17 @@ export function ChatMessage({
 
     return (
       <div className={`flex justify-center ${className}`}>
-        <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg px-4 py-2 max-w-[80%]">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-2 max-w-[80%]">
           <div className="flex items-center space-x-2 mb-1">
             {getRoleIcon()}
-            <span className="text-xs font-medium text-yellow-300">系统消息</span>
+            <span className="text-xs font-medium text-yellow-800">系统消息</span>
             {timestamp && (
-              <span className="text-xs text-yellow-500">
+              <span className="text-xs text-yellow-600">
                 {new Date(timestamp).toLocaleTimeString('zh-CN')}
               </span>
             )}
           </div>
-          <p className="text-sm text-yellow-300">{textContent}</p>
+          <p className="text-sm text-yellow-800">{textContent}</p>
         </div>
       </div>
     );
@@ -229,21 +234,21 @@ export function ChatMessage({
       <div
         className={`max-w-[85%] rounded-lg ${
           isUser
-            ? 'bg-primary-600 text-white'
-            : 'bg-dark-surface border border-gray-700/50 shadow-sm'
+            ? 'bg-blue-600 text-white'
+            : 'bg-white border border-gray-200 shadow-sm'
         }`}
       >
         {/* 头部 */}
         <div
           className={`flex items-center justify-between px-3 py-2 border-b ${
-            isUser ? 'border-primary-500' : 'border-gray-700/50'
+            isUser ? 'border-blue-500' : 'border-gray-100'
           }`}
         >
           <div className="flex items-center space-x-2">
             {getRoleIcon()}
             <span
               className={`text-xs font-medium ${
-                isUser ? 'text-blue-100' : 'text-gray-400'
+                isUser ? 'text-blue-100' : 'text-gray-600'
               }`}
             >
               {getRoleName()}
@@ -253,7 +258,7 @@ export function ChatMessage({
               <button
                 onClick={() => setIsContentExpanded(!isContentExpanded)}
                 className={`flex items-center gap-0.5 text-xs ${
-                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-500 hover:text-gray-300'
+                  isUser ? 'text-blue-200 hover:text-white' : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
                 {isContentExpanded ? (
@@ -273,7 +278,7 @@ export function ChatMessage({
           <div className="flex items-center space-x-2">
             {timestamp && (
               <span
-                className={`text-xs ${isUser ? 'text-blue-200' : 'text-gray-500'}`}
+                className={`text-xs ${isUser ? 'text-blue-200' : 'text-gray-400'}`}
               >
                 {new Date(timestamp).toLocaleTimeString('zh-CN')}
               </span>
@@ -282,8 +287,8 @@ export function ChatMessage({
               onClick={handleCopy}
               className={`p-1 rounded transition-colors ${
                 isUser
-                  ? 'text-blue-200 hover:text-white hover:bg-primary-500'
-                  : 'text-gray-500 hover:text-gray-300 hover:bg-dark-surface-hover'
+                  ? 'text-blue-200 hover:text-white hover:bg-blue-500'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
               }`}
               title="复制内容"
             >
@@ -293,7 +298,7 @@ export function ChatMessage({
         </div>
 
         {/* 内容 */}
-        <div className={`px-3 py-2 ${isUser ? 'text-white' : 'text-gray-200'}`}>
+        <div className={`px-3 py-2 ${isUser ? 'text-white' : 'text-gray-800'}`}>
           {/* 思考过程 */}
           {thinking && <ThinkingBlock content={thinking} className="mb-2" />}
 

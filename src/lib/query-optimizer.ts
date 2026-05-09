@@ -89,8 +89,8 @@ export const skillSelectMinimal = {
   createdAt: true,
   updatedAt: true,
   userId: true,
-  categoryId: true,
-  vulnerabilityTreeId: true,
+  techStackId: true,
+  vulnerabilityPatternId: true,
   User: {
     select: {
       id: true,
@@ -98,30 +98,26 @@ export const skillSelectMinimal = {
       username: true,
     },
   },
-  SkillCategory: {
+  TechStackOption: {
     select: {
       id: true,
       name: true,
-      displayName: true,
-      icon: true,
-      hasSubDimension: true,
+      category: true,
     },
   },
-  VulnerabilityTree: {
+  VulnerabilityPattern: {
     select: {
       id: true,
       name: true,
       displayName: true,
-      type: true,
-      parentId: true,
-      VulnerabilityTree: {
+      categoryId: true,
+      VulnerabilityCategory: {
         select: {
-          id: true,
-          name: true,
-          displayName: true,
-          type: true,
+          value: true,
+          label: true,
         },
       },
+      cwe: true,
     },
   },
 };

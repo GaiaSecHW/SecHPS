@@ -2,30 +2,17 @@
 
 import { useState, useEffect } from 'react';
 import { HelpCircle, Lightbulb, Eye, X, ChevronDown, Loader2 } from 'lucide-react';
-import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
-
-interface CategoryItem {
-  id: string;
-  name: string;
-  displayName: string;
-  icon: string | null;
-  hasSubDimension: boolean;
-}
-
-interface TreeLanguage {
-  id: string;
-  name: string;
-  displayName: string;
-  patterns: Array<{ id: string; name: string; displayName: string }>;
-}
+import { useTechStackOptions } from '@/hooks/useTechStackOptions';
+import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
+import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 
 interface IntentData {
   name: string;
   description: string;
-  categoryId: string;
-  vulnerabilityTreeId?: string;
-  selectedLanguageId?: string;
-  productTagIds?: string[];
+  category: string; // 保留用于兼容，但实际使用 vulnerabilityPatternId
+  techStack: string[]; // 保留用于兼容，但实际使用 techStackId
+  techStackId?: string; // 新增：单选语言 ID
+  vulnerabilityPatternId?: string; // 新增：漏洞类型 ID
   whatDoesItDo: string;
   whenShouldItTrigger: string;
   expectedOutput: string;
@@ -42,80 +29,17 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   const [showExamples, setShowExamples] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  
+  // 技术栈选择相关（单选）
+  const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
+  
+  // 使用 Hook 获取技术栈选项
+  const { options: techStackOptions, categories: techStackCategories, loading: loadingTechStack } = useTechStackOptions();
 
-  const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [vulnerabilityTree, setVulnerabilityTree] = useState<TreeLanguage[]>([]);
-  const [loadingCategories, setLoadingCategories] = useState(false);
-  const [loadingTree, setLoadingTree] = useState(false);
+  // 获取全部技术栈选项（不限分类）
+  const languageOptions = techStackOptions || [];
 
-  // 加载分类数据
-  useEffect(() => {
-    const fetchCategories = async () => {
-      setLoadingCategories(true);
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/skills/categories', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const d = await res.json();
-          setCategories(d.categories || []);
-        }
-      } catch (e) {
-        console.error('加载分类失败:', e);
-      } finally {
-        setLoadingCategories(false);
-      }
-    };
-    fetchCategories();
-  }, []);
-
-  // 当分类有子维度时加载漏洞树
-  useEffect(() => {
-    const selectedCat = categories.find(c => c.id === data.categoryId);
-    if (selectedCat?.hasSubDimension && vulnerabilityTree.length === 0) {
-      const fetchTree = async () => {
-        setLoadingTree(true);
-        try {
-          const token = localStorage.getItem('token');
-          const res = await fetch('/api/skills/vulnerability-tree', {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const d = await res.json();
-            setVulnerabilityTree(d.tree || []);
-          }
-        } catch (e) {
-          console.error('加载漏洞树失败:', e);
-        } finally {
-          setLoadingTree(false);
-        }
-      };
-      fetchTree();
-    }
-  }, [data.categoryId, categories, vulnerabilityTree.length]);
-
-  // 获取当前选中分类
-  const selectedCategory = categories.find(c => c.id === data.categoryId);
-
-  // 获取可用模式列表（选中语言的模式 + 通用模式）
-  const availablePatterns = (() => {
-    if (!data.selectedLanguageId) return [];
-    const selectedLang = vulnerabilityTree.find(l => l.id === data.selectedLanguageId);
-    const generalLang = vulnerabilityTree.find(l => l.name === '通用');
-    const patterns = [...(selectedLang?.patterns || [])];
-    if (generalLang && generalLang.id !== data.selectedLanguageId) {
-      // 添加通用模式下不重复的模式
-      for (const p of generalLang.patterns) {
-        if (!patterns.find(ep => ep.id === p.id)) {
-          patterns.push(p);
-        }
-      }
-    }
-    return patterns;
-  })();
-
-  // 加载 Skill 标准输出模板
+  // 加载 Skill 标准输出模板（从系统配置）
   useEffect(() => {
     const fetchTemplate = async () => {
       try {
@@ -140,24 +64,45 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
   const handleChange = (field: keyof IntentData, value: string | boolean | string[]) => {
     onChange({ ...data, [field]: value });
   };
+  
+  // 处理语言选择（单选）
+  const handleLanguageSelect = (language: string) => {
+    onChange({ 
+      ...data, 
+      techStack: [language], // 保持兼容性
+      techStackId: language, // 新字段：语言名称作为 ID（或可改为实际 ID）
+    });
+    setShowTechStackDropdown(false);
+  };
+  
+  // 处理漏洞模式选择
+  const handlePatternSelect = (patternId: string, pattern: VulnerabilityPatternOption) => {
+    onChange({
+      ...data,
+      vulnerabilityPatternId: pattern.id,
+    });
+  };
 
   const isValid = () => {
-    if (!data.name.trim() || !data.description.trim()) return false;
-    if (!data.whatDoesItDo.trim() || !data.whenShouldItTrigger.trim()) return false;
-    if (!data.categoryId) return false;
-    if (selectedCategory?.hasSubDimension && !data.vulnerabilityTreeId) return false;
-    return true;
+    return (
+      data.name.trim() !== '' &&
+      data.description.trim() !== '' &&
+      data.whatDoesItDo.trim() !== '' &&
+      data.whenShouldItTrigger.trim() !== '' &&
+      data.techStackId && // 必须选择语言
+      data.vulnerabilityPatternId // 必须选择漏洞类型
+    );
   };
 
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
-          <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+          <HelpCircle className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-blue-800">
             <p className="font-medium mb-2">这一步做什么？</p>
-            <p className="text-blue-400">
+            <p className="text-blue-700">
               告诉我们你想创建什么样的 Skill。我们会根据你的描述，帮助你生成一个高质量的 Skill 定义。
               请尽量详细地描述你的需求。
             </p>
@@ -168,7 +113,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
       {/* Skill 基本信息 */}
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Skill 名称 <span className="text-red-500">*</span>
           </label>
           <input
@@ -176,7 +121,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
             value={data.name}
             onChange={(e) => handleChange('name', e.target.value)}
             placeholder="例如：sql-injection-detector"
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
           <p className="mt-1 text-xs text-gray-500">
             使用英文小写字母和连字符，简洁明了地描述 Skill 的功能
@@ -184,7 +129,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             简短描述 <span className="text-red-500">*</span>
           </label>
           <input
@@ -192,109 +137,97 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
             value={data.description}
             onChange={(e) => handleChange('description', e.target.value)}
             placeholder="一句话描述这个 Skill 的作用"
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
-        </div>
-
-        {/* SKILL类型（分类选择） */}
-        <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
-            SKILL类型 <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={data.categoryId}
-            onChange={(e) => {
-              onChange({
-                ...data,
-                categoryId: e.target.value,
-                selectedLanguageId: '',
-                vulnerabilityTreeId: '',
-              });
-            }}
-            disabled={loadingCategories}
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="">请选择分类</option>
-            {categories.map(cat => (
-              <option key={cat.id} value={cat.id}>
-                {cat.icon ? cat.icon + ' ' : ''}{cat.displayName}
-              </option>
-            ))}
-          </select>
           <p className="mt-1 text-xs text-gray-500">
-            选择 Skill 所属的功能类型
+            这会显示在 Skill 列表中，帮助用户快速了解
           </p>
         </div>
 
-        {/* 攻击模式（仅漏洞挖掘类显示） */}
-        {selectedCategory?.hasSubDimension && (
-          <>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                语言 <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={data.selectedLanguageId || ''}
-                onChange={(e) => {
-                  onChange({
-                    ...data,
-                    selectedLanguageId: e.target.value,
-                    vulnerabilityTreeId: '',
-                  });
-                }}
-                disabled={loadingTree}
-                className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              >
-                <option value="">请选择语言</option>
-                {vulnerabilityTree.map(lang => (
-                  <option key={lang.id} value={lang.id}>{lang.displayName}</option>
-                ))}
-              </select>
-            </div>
+        {/* 漏洞类型选择 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            漏洞类型 <span className="text-red-500">*</span>
+          </label>
+          <VulnerabilityPatternSelector
+            value={data.vulnerabilityPatternId || ''}
+            onChange={handlePatternSelect}
+            placeholder="选择漏洞类型"
+          />
+          <p className="mt-1 text-xs text-gray-500">
+            选择此 Skill 要检测的漏洞类型
+          </p>
+        </div>
 
-            {data.selectedLanguageId && availablePatterns.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  漏洞模式 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={data.vulnerabilityTreeId || ''}
-                  onChange={(e) => handleChange('vulnerabilityTreeId', e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">请选择漏洞模式</option>
-                  {availablePatterns.map(p => (
-                    <option key={p.id} value={p.id}>{p.displayName}</option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  选择此 Skill 要检测的漏洞模式
-                </p>
+        {/* 语言选择（单选） */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            适用语言 <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowTechStackDropdown(!showTechStackDropdown)}
+              className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent flex items-center justify-between bg-white"
+              disabled={loadingTechStack}
+            >
+              {loadingTechStack ? (
+                <span className="text-gray-500">加载中...</span>
+              ) : data.techStackId ? (
+                <span className="text-gray-900">{data.techStackId}</span>
+              ) : (
+                <span className="text-gray-500">请选择编程语言...</span>
+              )}
+              <ChevronDown size={16} className="text-gray-400" />
+            </button>
+            
+            {/* 下拉选项 */}
+            {showTechStackDropdown && !loadingTechStack && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                {languageOptions.map((language) => (
+                  <button
+                    key={language}
+                    type="button"
+                    onClick={() => handleLanguageSelect(language)}
+                    className={`w-full px-4 py-2 text-left hover:bg-gray-50 text-sm ${
+                      data.techStackId === language
+                        ? 'bg-blue-50 text-blue-700'
+                        : ''
+                    }`}
+                  >
+                    {language}
+                  </button>
+                ))}
+                {languageOptions.length === 0 && (
+                  <div className="px-4 py-2 text-sm text-gray-500">
+                    暂无语言数据
+                  </div>
+                )}
               </div>
             )}
-          </>
-        )}
-      </div>
-
-      {/* 适用产品（维度三） */}
-      <div>
-        <label className="block text-sm font-medium text-gray-300 mb-2">
-          适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
-        </label>
-        <ProductTagSelect
-          selectedIds={data.productTagIds || []}
-          onChange={(ids) => handleChange('productTagIds', ids)}
-        />
+            {loadingTechStack && (
+              <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+                <div className="flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-sm text-gray-500">加载中...</span>
+                </div>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-gray-500">
+              选择此 Skill 适用的编程语言
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 详细需求 */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-medium text-gray-100">详细需求</h3>
+          <h3 className="text-lg font-medium text-gray-900">详细需求</h3>
           <button
             type="button"
             onClick={() => setShowExamples(!showExamples)}
-            className="text-sm text-blue-400 hover:text-blue-800 flex items-center"
+            className="text-sm text-blue-600 hover:text-blue-800 flex items-center"
           >
             <Lightbulb size={16} className="mr-1" />
             {showExamples ? '隐藏示例' : '显示示例'}
@@ -302,9 +235,9 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         </div>
 
         {showExamples && (
-          <div className="bg-[#0F172A] border border-gray-700/50 rounded-lg p-4 mb-4">
-            <p className="text-sm font-medium text-gray-300 mb-2">示例回答：</p>
-            <div className="space-y-3 text-sm text-gray-400">
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-2">示例回答：</p>
+            <div className="space-y-3 text-sm text-gray-600">
               <div>
                 <span className="font-medium">功能：</span>
                 检测代码中的 SQL 注入漏洞，包括字符串拼接、参数化查询缺失等情况
@@ -322,7 +255,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             这个 Skill 要做什么？ <span className="text-red-500">*</span>
           </label>
           <textarea
@@ -330,12 +263,12 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
             onChange={(e) => handleChange('whatDoesItDo', e.target.value)}
             rows={3}
             placeholder="详细描述 Skill 的功能，例如：检测什么类型的问题，使用什么方法..."
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             什么时候应该触发这个 Skill？ <span className="text-red-500">*</span>
           </label>
           <textarea
@@ -343,31 +276,31 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
             onChange={(e) => handleChange('whenShouldItTrigger', e.target.value)}
             rows={3}
             placeholder="描述触发条件，例如：用户上传代码文件、用户提到安全审计、在特定类型的项目中..."
-            className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             期望的输出是什么？
           </label>
           {skillOutputTemplate ? (
-            <div className="bg-[#0F172A] border border-gray-700/50 rounded-md p-3">
+            <div className="bg-gray-50 border border-gray-200 rounded-md p-3">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <p className="text-xs text-gray-500 mb-1">
                     系统已配置标准输出模板，Skill 将按照此格式输出结果
                   </p>
-                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">
-                    {skillOutputTemplate.length > 200
-                      ? skillOutputTemplate.substring(0, 200) + '...'
+                  <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono max-h-32 overflow-y-auto">
+                    {skillOutputTemplate.length > 200 
+                      ? skillOutputTemplate.substring(0, 200) + '...' 
                       : skillOutputTemplate}
                   </pre>
                 </div>
                 <button
                   type="button"
                   onClick={() => setShowTemplateModal(true)}
-                  className="ml-2 p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-900/20 rounded"
+                  className="ml-2 p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded"
                   title="查看完整模板"
                 >
                   <Eye size={16} />
@@ -375,7 +308,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
               </div>
             </div>
           ) : (
-            <div className="bg-yellow-900/20 border border-yellow-200 rounded-md p-3">
+            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
               <p className="text-sm text-yellow-800">
                 系统尚未配置标准输出模板，请在"配置管理"中设置
               </p>
@@ -389,9 +322,9 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
               type="checkbox"
               checked={data.needsTestCases}
               onChange={(e) => handleChange('needsTestCases', e.target.checked)}
-              className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
             />
-            <span className="ml-2 text-sm text-gray-300">
+            <span className="ml-2 text-sm text-gray-700">
               我需要创建测试用例来验证 Skill 的效果
             </span>
           </label>
@@ -415,28 +348,28 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
       {/* 查看完整模板对话框 */}
       {showTemplateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-start mb-4">
               <div>
-                <h3 className="text-lg font-medium text-gray-100">Skill 标准输出模板</h3>
+                <h3 className="text-lg font-medium text-gray-900">Skill 标准输出模板</h3>
                 <p className="text-sm text-gray-500 mt-1">由系统配置定义，所有 Skill 统一使用此输出格式</p>
               </div>
               <button
                 onClick={() => setShowTemplateModal(false)}
-                className="text-gray-400 hover:text-gray-400"
+                className="text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
               </button>
             </div>
             <div>
-              <pre className="text-sm bg-[#0F172A] p-4 rounded border border-gray-700/50 whitespace-pre-wrap overflow-x-auto font-mono">
+              <pre className="text-sm bg-gray-50 p-4 rounded border border-gray-200 whitespace-pre-wrap overflow-x-auto font-mono">
                 {skillOutputTemplate || '（未配置）'}
               </pre>
             </div>
             <div className="flex justify-end pt-4">
               <button
                 onClick={() => setShowTemplateModal(false)}
-                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
               >
                 关闭
               </button>

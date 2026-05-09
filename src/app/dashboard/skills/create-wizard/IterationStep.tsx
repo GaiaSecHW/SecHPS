@@ -127,7 +127,7 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-purple-900/20 border border-purple-200 rounded-lg p-4">
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
         <div className="flex items-start">
           <RefreshCw className="w-5 h-5 text-purple-600 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-purple-800">
@@ -141,21 +141,21 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
 
       {/* 统计对比 */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">平均耗时</span>
+            <span className="text-sm font-medium text-gray-700">平均耗时</span>
             <BarChart2 className="w-5 h-5 text-gray-400" />
           </div>
-          <div className="text-2xl font-bold text-gray-100">
+          <div className="text-2xl font-bold text-gray-900">
             {avgDurationWithSkill.toFixed(0)}ms
           </div>
         </div>
-        <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-300">平均 Token 使用</span>
+            <span className="text-sm font-medium text-gray-700">平均 Token 使用</span>
             <BarChart2 className="w-5 h-5 text-gray-400" />
           </div>
-          <div className="text-2xl font-bold text-gray-100">
+          <div className="text-2xl font-bold text-gray-900">
             {avgTokensWithSkill.toFixed(0)}
           </div>
         </div>
@@ -163,24 +163,24 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
 
       {/* 结果对比 */}
       <div className="space-y-4">
-        <h3 className="text-lg font-medium text-gray-100">测试结果对比</h3>
+        <h3 className="text-lg font-medium text-gray-900">测试结果对比</h3>
         {Object.entries(groupedResults).map(([testCaseId, results]) => {
           const comparison = compareResults(results.withSkill, results.withoutSkill);
 
           return (
-            <div key={testCaseId} className="bg-dark-surface border border-gray-700/50 rounded-lg overflow-hidden">
-              <div className="px-4 py-3 bg-[#0F172A] border-b border-gray-700/50">
-                <h4 className="font-medium text-gray-100">{results.withSkill?.testCaseName || '测试用例'}</h4>
+            <div key={testCaseId} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                <h4 className="font-medium text-gray-900">{results.withSkill?.testCaseName || '测试用例'}</h4>
               </div>
 
               {/* 对比分析 */}
               {comparison && (comparison.improvements.length > 0 || comparison.regressions.length > 0) && (
-                <div className="px-4 py-3 border-b border-gray-700/50 bg-blue-900/20">
-                  <h5 className="text-sm font-medium text-gray-100 mb-2">分析结果</h5>
+                <div className="px-4 py-3 border-b border-gray-200 bg-blue-50">
+                  <h5 className="text-sm font-medium text-gray-900 mb-2">分析结果</h5>
                   {comparison.improvements.length > 0 && (
                     <div className="space-y-1">
                       {comparison.improvements.map((improvement, i) => (
-                        <div key={i} className="flex items-center text-sm text-green-400">
+                        <div key={i} className="flex items-center text-sm text-green-700">
                           <CheckCircle className="w-4 h-4 mr-2" />
                           {improvement}
                         </div>
@@ -190,7 +190,7 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
                   {comparison.regressions.length > 0 && (
                     <div className="space-y-1 mt-2">
                       {comparison.regressions.map((regression, i) => (
-                        <div key={i} className="flex items-center text-sm text-red-400">
+                        <div key={i} className="flex items-center text-sm text-red-700">
                           <XCircle className="w-4 h-4 mr-2" />
                           {regression}
                         </div>
@@ -201,16 +201,16 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
               )}
 
               {/* 详细输出 */}
-              <div className="grid grid-cols-2 divide-x divide-gray-700/50">
+              <div className="grid grid-cols-2 divide-x divide-gray-200">
                 {/* With Skill */}
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-green-400">使用 Skill</span>
+                    <span className="text-sm font-medium text-green-700">使用 Skill</span>
                     {results.withSkill?.duration && (
                       <span className="text-xs text-gray-500">{results.withSkill.duration}ms</span>
                     )}
                   </div>
-                  <pre className="text-xs bg-[#0F172A] p-2 rounded overflow-auto max-h-40">
+                  <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">
                     {results.withSkill?.output || '无输出'}
                   </pre>
                 </div>
@@ -218,12 +218,12 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
                 {/* Without Skill */}
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-300">不使用 Skill</span>
+                    <span className="text-sm font-medium text-gray-700">不使用 Skill</span>
                     {results.withoutSkill?.duration && (
                       <span className="text-xs text-gray-500">{results.withoutSkill.duration}ms</span>
                     )}
                   </div>
-                  <pre className="text-xs bg-[#0F172A] p-2 rounded overflow-auto max-h-40">
+                  <pre className="text-xs bg-gray-50 p-2 rounded overflow-auto max-h-40">
                     {results.withoutSkill?.output || '无输出'}
                   </pre>
                 </div>
@@ -235,16 +235,16 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
 
       {/* 迭代历史 */}
       {iterations.length > 0 && (
-        <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
-          <h3 className="text-lg font-medium text-gray-100 mb-3">迭代历史</h3>
+        <div className="bg-white border border-gray-200 rounded-lg p-4">
+          <h3 className="text-lg font-medium text-gray-900 mb-3">迭代历史</h3>
           <div className="space-y-3">
             {iterations.map((iteration, index) => (
               <div key={index} className="flex items-start space-x-3">
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-400 flex items-center justify-center font-medium">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-medium">
                   {iteration.version}
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-100">{iteration.changes}</div>
+                  <div className="text-sm font-medium text-gray-900">{iteration.changes}</div>
                   <div className="text-xs text-gray-500 mt-1">{iteration.feedback}</div>
                   <div className="text-xs text-gray-400 mt-1">
                     {new Date(iteration.timestamp).toLocaleString('zh-CN')}
@@ -257,9 +257,9 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
       )}
 
       {/* 反馈输入 */}
-      <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
-        <h3 className="text-lg font-medium text-gray-100 mb-3">提供反馈</h3>
-        <p className="text-sm text-gray-400 mb-3">
+      <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <h3 className="text-lg font-medium text-gray-900 mb-3">提供反馈</h3>
+        <p className="text-sm text-gray-600 mb-3">
           告诉我们你对测试结果的看法，以及你希望如何改进 Skill。我们会分析你的反馈并生成优化建议。
         </p>
         <textarea
@@ -267,12 +267,12 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
           onChange={(e) => setFeedback(e.target.value)}
           rows={4}
           placeholder="例如：&#10;- 输出太长，希望更简洁&#10;- 漏报了某些类型的漏洞&#10;- 修复建议不够具体..."
-          className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-full px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         />
         <div className="flex justify-end space-x-3 mt-3">
           <button
             onClick={onRerunTests}
-            className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] flex items-center"
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 flex items-center"
           >
             <RefreshCw size={16} className="mr-2" />
             重新测试
@@ -301,7 +301,7 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
       <div className="flex justify-between pt-4 border-t">
         <button
           onClick={onPrevious}
-          className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A]"
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
         >
           上一步
         </button>

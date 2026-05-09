@@ -71,7 +71,7 @@ const BaseNode = memo((props: NodeProps) => {
 
   return (
     <div
-      className="relative min-w-[100px] w-[100px] rounded-md border bg-dark-surface shadow-sm transition-all"
+      className="relative min-w-[100px] w-[100px] rounded-md border bg-white shadow-sm transition-all"
       style={{ 
         borderColor: nodeType?.color || '#3B82F6', 
         borderWidth: '1.5px',
@@ -112,7 +112,7 @@ const BaseNode = memo((props: NodeProps) => {
             <Icon size={12} style={{ color: nodeType?.color || '#3B82F6' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-[10px] font-medium text-gray-100 truncate leading-tight">
+            <h3 className="text-[10px] font-medium text-gray-900 truncate leading-tight">
               {displayLabel}
             </h3>
           </div>
@@ -159,7 +159,7 @@ const SubtaskNode = memo((props: NodeProps) => {
 
   return (
     <div
-      className="relative min-w-[80px] w-[80px] rounded-md border bg-dark-surface shadow-sm transition-all"
+      className="relative min-w-[80px] w-[80px] rounded-md border bg-white shadow-sm transition-all"
       style={{ 
         borderColor: nodeType?.color || '#8B5CF6', 
         borderWidth: '1.5px',
@@ -198,7 +198,7 @@ const SubtaskNode = memo((props: NodeProps) => {
             <Icon size={10} style={{ color: nodeType?.color || '#8B5CF6' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-[10px] font-medium text-gray-100 truncate leading-tight">
+            <h3 className="text-[10px] font-medium text-gray-900 truncate leading-tight">
               {nodeData.label}
             </h3>
           </div>
@@ -267,7 +267,7 @@ export const TaskNode = memo((props: NodeProps) => {
 
   return (
     <div
-      className="relative min-w-[100px] w-[100px] rounded-md border bg-dark-surface shadow-sm transition-all"
+      className="relative min-w-[100px] w-[100px] rounded-md border bg-white shadow-sm transition-all"
       style={{ 
         borderColor: nodeType?.color || '#3B82F6', 
         borderWidth: '1.5px',
@@ -306,7 +306,7 @@ export const TaskNode = memo((props: NodeProps) => {
             <Icon size={12} style={{ color: nodeType?.color || '#3B82F6' }} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="text-[10px] font-medium text-gray-100 truncate leading-tight">
+            <h3 className="text-[10px] font-medium text-gray-900 truncate leading-tight">
               {nodeData.label}
             </h3>
           </div>

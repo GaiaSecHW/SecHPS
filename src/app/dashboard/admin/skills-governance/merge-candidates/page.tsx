@@ -78,26 +78,26 @@ const recommendationConfig: Record<string, { label: string; icon: React.ReactNod
   merge: {
     label: '建议合并',
     icon: <GitMerge size={14} />,
-    color: 'bg-purple-100 text-purple-800 border-purple-500/20',
+    color: 'bg-purple-100 text-purple-800 border-purple-200',
   },
   'techStack-split': {
     label: '技术栈拆分',
     icon: <ArrowRightLeft size={14} />,
-    color: 'bg-green-100 text-green-800 border-green-500/20',
+    color: 'bg-green-100 text-green-800 border-green-200',
   },
   'manual-review': {
     label: '需人工审核',
     icon: <AlertTriangle size={14} />,
-    color: 'bg-orange-100 text-orange-800 border-orange-500/20',
+    color: 'bg-orange-100 text-orange-800 border-orange-200',
   },
 };
 
 // Status colors for merge records
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-500/20',
-  approved: 'bg-green-100 text-green-800 border-green-500/20',
-  rejected: 'bg-red-100 text-red-800 border-red-500/20',
-  completed: 'bg-blue-100 text-blue-800 border-blue-500/20',
+  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  approved: 'bg-green-100 text-green-800 border-green-200',
+  rejected: 'bg-red-100 text-red-800 border-red-200',
+  completed: 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
 const statusLabels: Record<string, string> = {
@@ -184,12 +184,12 @@ function MergeCandidatesPageContent() {
       <div className="space-y-6">
         <Link 
           href="/dashboard/admin/skills-governance"
-          className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+          className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           返回治理总览
         </Link>
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
         <button
@@ -210,7 +210,7 @@ function MergeCandidatesPageContent() {
       {/* Back Button */}
       <Link 
         href="/dashboard/admin/skills-governance"
-        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
+        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回治理总览
@@ -219,8 +219,8 @@ function MergeCandidatesPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">合并候选列表</h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <h1 className="text-2xl font-bold text-gray-900">合并候选列表</h1>
+          <p className="mt-1 text-sm text-gray-600">
             显示高重叠度的 Skills 对，提供合并或拆分建议
           </p>
         </div>
@@ -236,11 +236,11 @@ function MergeCandidatesPageContent() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">总候选数</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">
+              <p className="text-sm text-gray-600">总候选数</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
                 {summary?.totalCandidates || 0}
               </p>
             </div>
@@ -248,10 +248,10 @@ function MergeCandidatesPageContent() {
           </div>
         </div>
         
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">建议合并</p>
+              <p className="text-sm text-gray-600">建议合并</p>
               <p className="text-2xl font-bold text-purple-600 mt-1">
                 {summary?.mergeRecommendations || 0}
               </p>
@@ -260,10 +260,10 @@ function MergeCandidatesPageContent() {
           </div>
         </div>
         
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">技术栈拆分</p>
+              <p className="text-sm text-gray-600">技术栈拆分</p>
               <p className="text-2xl font-bold text-green-600 mt-1">
                 {summary?.techStackSplitRecommendations || 0}
               </p>
@@ -272,10 +272,10 @@ function MergeCandidatesPageContent() {
           </div>
         </div>
         
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">需人工审核</p>
+              <p className="text-sm text-gray-600">需人工审核</p>
               <p className="text-2xl font-bold text-orange-600 mt-1">
                 {summary?.manualReviewRecommendations || 0}
               </p>
@@ -284,10 +284,10 @@ function MergeCandidatesPageContent() {
           </div>
         </div>
         
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
+        <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-400">待处理合并</p>
+              <p className="text-sm text-gray-600">待处理合并</p>
               <p className="text-2xl font-bold text-blue-600 mt-1">
                 {summary?.pendingMergeRecords || 0}
               </p>
@@ -307,16 +307,16 @@ function MergeCandidatesPageContent() {
               placeholder="搜索 Skill 名称或分类..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400">最小重叠度:</label>
+          <label className="text-sm text-gray-600">最小重叠度:</label>
           <select
             value={minOverlapScore}
             onChange={(e) => setMinOverlapScore(e.target.value)}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="0.9">90%+</option>
             <option value="0.85">85%+</option>
@@ -327,15 +327,15 @@ function MergeCandidatesPageContent() {
       </div>
 
       {/* Tab Navigation */}
-      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
-        <div className="border-b border-gray-700/50">
+      <div className="bg-white rounded-lg shadow border border-gray-200">
+        <div className="border-b border-gray-200">
           <nav className="-mb-px flex space-x-8 px-6" aria-label="Tabs">
             <button
               onClick={() => setActiveTab('candidates')}
               className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'candidates'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <Layers size={18} className="mr-2" />
@@ -346,7 +346,7 @@ function MergeCandidatesPageContent() {
               className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                 activeTab === 'pending'
                   ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
               <Clock size={18} className="mr-2" />
@@ -373,7 +373,7 @@ function MergeCandidatesPageContent() {
                   {filteredCandidates.map((candidate) => (
                     <div
                       key={candidate.skillId}
-                      className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors"
+                      className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-3">
@@ -381,7 +381,7 @@ function MergeCandidatesPageContent() {
                             <Layers className="w-5 h-5 text-blue-600" />
                           </div>
                           <div>
-                            <p className="font-medium text-gray-100">{candidate.skillDisplayName}</p>
+                            <p className="font-medium text-gray-900">{candidate.skillDisplayName}</p>
                             <p className="text-sm text-gray-500">{candidate.skillName}</p>
                             <p className="text-xs text-gray-400">
                               {candidate.skillCategory}
@@ -393,7 +393,7 @@ function MergeCandidatesPageContent() {
                             {(candidate.overlapScore * 100).toFixed(0)}%
                           </span>
                           <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${
-                            recommendationConfig[candidate.recommendation]?.color || 'bg-dark-surface-hover text-gray-400'
+                            recommendationConfig[candidate.recommendation]?.color || 'bg-gray-100 text-gray-600'
                           }`}>
                             {recommendationConfig[candidate.recommendation]?.icon}
                             {recommendationConfig[candidate.recommendation]?.label || candidate.recommendation}
@@ -402,15 +402,15 @@ function MergeCandidatesPageContent() {
                       </div>
                       
                       {/* Similar Skills */}
-                      <div className="mt-3 pt-3 border-t border-gray-700/50">
+                      <div className="mt-3 pt-3 border-t border-gray-200">
                         <p className="text-xs text-gray-500 mb-2">相似 Skills:</p>
                         <div className="flex flex-wrap gap-2">
                           {candidate.similarSkills.map((similar) => (
                             <div
                               key={similar.skillId}
-                              className="inline-flex items-center px-3 py-1.5 bg-dark-surface border border-gray-700/50 rounded-lg text-sm"
+                              className="inline-flex items-center px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm"
                             >
-                              <span className="font-medium text-gray-100">{similar.skillName}</span>
+                              <span className="font-medium text-gray-900">{similar.skillName}</span>
                               <span className="text-gray-400 mx-2">|</span>
                               <span className={`text-xs ${getOverlapScoreColor(similar.overlapScore)}`}>
                                 {(similar.overlapScore * 100).toFixed(0)}%
@@ -453,13 +453,13 @@ function MergeCandidatesPageContent() {
                   {data?.pendingMergeRecords?.map((record) => (
                     <div
                       key={record.id}
-                      className="p-4 bg-[#0F172A] rounded-lg hover:bg-dark-surface-hover transition-colors"
+                      className="p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center space-x-3">
                           <GitMerge className="text-purple-500" size={20} />
                           <div>
-                            <p className="font-medium text-gray-100">
+                            <p className="font-medium text-gray-900">
                               {record.sourceSkillDisplayName} → {record.targetSkillDisplayName}
                             </p>
                             <p className="text-sm text-gray-500">
@@ -469,7 +469,7 @@ function MergeCandidatesPageContent() {
                         </div>
                         <div className="flex items-center space-x-2">
                           <span className={`px-2 py-1 text-xs font-medium rounded border ${
-                            statusColors[record.status] || 'bg-dark-surface-hover text-gray-400'
+                            statusColors[record.status] || 'bg-gray-100 text-gray-600'
                           }`}>
                             {statusLabels[record.status] || record.status}
                           </span>
@@ -480,7 +480,7 @@ function MergeCandidatesPageContent() {
                       </div>
                       
                       {/* Consent Status */}
-                      <div className="flex items-center space-x-4 text-xs text-gray-400">
+                      <div className="flex items-center space-x-4 text-xs text-gray-600">
                         <span className="flex items-center">
                           {record.sourceOwnerConsent ? (
                             <CheckCircle className="text-green-500 mr-1" size={14} />

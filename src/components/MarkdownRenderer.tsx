@@ -22,32 +22,32 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
   };
 
   return (
-    <div className="prose prose-sm prose-invert max-w-none">
+    <div className="prose prose-sm max-w-none dark:prose-invert">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center space-x-2">
-          <AlertCircle className="h-4 w-4 text-blue-400" />
-          <span className="text-sm text-gray-400">AI 回复</span>
+          <AlertCircle className="h-4 w-4 text-blue-600" />
+          <span className="text-sm text-gray-600">AI 回复</span>
         </div>
         <button
           onClick={handleCopy}
-          className="flex items-center space-x-2 px-3 py-1.5 rounded-md bg-dark-surface hover:bg-dark-surface-hover transition-colors border border-gray-700/50"
+          className="flex items-center space-x-2 px-3 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 transition-colors"
           title="复制到剪贴板"
         >
           {copied ? (
             <>
-              <Check className="h-4 w-4 text-green-400" />
-              <span className="text-sm text-green-400">已复制!</span>
+              <Check className="h-4 w-4 text-green-600" />
+              <span className="text-sm text-green-600">已复制!</span>
             </>
           ) : (
             <>
-              <Copy className="h-4 w-4 text-gray-400" />
-              <span className="text-sm text-gray-400">复制</span>
+              <Copy className="h-4 w-4 text-gray-600" />
+              <span className="text-sm text-gray-600">复制</span>
             </>
           )}
         </button>
       </div>
 
-      <div className="bg-dark-surface rounded-lg p-6 shadow-sm border border-gray-700/50">
+      <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
         <ReactMarkdown
           components={{
             // 自定义代码块样式
@@ -55,7 +55,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
               if (inline) {
                 return (
                   <code
-                    className="px-1.5 py-0.5 rounded bg-gray-800 text-blue-400 font-mono text-sm"
+                    className="px-1.5 py-0.5 rounded bg-gray-100 text-blue-600 font-mono text-sm"
                     {...props}
                   >
                     {children}
@@ -76,7 +76,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
               if (inline) {
                 return (
                   <code
-                    className="px-1.5 py-0.5 rounded bg-gray-800 text-blue-400 font-mono text-sm"
+                    className="px-1.5 py-0.5 rounded bg-gray-100 text-blue-600 font-mono text-sm"
                     {...props}
                   >
                     {children}
@@ -95,7 +95,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             // 自定义标题样式
             h1: ({ children, ...props }: any) => (
               <h1
-                className="text-2xl font-bold text-gray-100 mt-6 mb-4 pb-2 border-b border-gray-700/50"
+                className="text-2xl font-bold text-gray-900 mt-6 mb-4 pb-2 border-b border-gray-200"
                 {...props}
               >
                 {children}
@@ -103,7 +103,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             h2: ({ children, ...props }: any) => (
               <h2
-                className="text-xl font-semibold text-gray-100 mt-5 mb-3 pb-2 border-b border-gray-700/50"
+                className="text-xl font-semibold text-gray-900 mt-5 mb-3 pb-2 border-b border-gray-200"
                 {...props}
               >
                 {children}
@@ -111,7 +111,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             h3: ({ children, ...props }: any) => (
               <h3
-                className="text-lg font-semibold text-gray-100 mt-4 mb-2"
+                className="text-lg font-semibold text-gray-900 mt-4 mb-2"
                 {...props}
               >
                 {children}
@@ -119,7 +119,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             h4: ({ children, ...props }: any) => (
               <h4
-                className="text-base font-semibold text-gray-100 mt-3 mb-2"
+                className="text-base font-semibold text-gray-900 mt-3 mb-2"
                 {...props}
               >
                 {children}
@@ -128,7 +128,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             // 自定义列表样式
             ul: ({ children, ...props }: any) => (
               <ul
-                className="mt-4 space-y-2 list-disc list-inside marker:text-blue-400"
+                className="mt-4 space-y-2 list-disc list-inside marker:text-blue-600"
                 {...props}
               >
                 {children}
@@ -136,7 +136,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             li: ({ children, ...props }: any) => (
               <li
-                className="text-gray-300 ml-6"
+                className="text-gray-700 ml-6"
                 {...props}
               >
                 {children}
@@ -145,7 +145,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             // 自定义引用块样式
             blockquote: ({ children, ...props }: any) => (
               <blockquote
-                className="border-l-4 border-blue-500 pl pl-4 italic my-4 text-gray-400"
+                className="border-l-4 border-blue-500 pl pl-4 italic my-4 text-gray-600"
                 {...props}
               >
                 {children}
@@ -155,7 +155,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             table: ({ children, ...props }: any) => (
               <div className="my-6 overflow-x-auto">
                 <table
-                  className="min-w-full divide-y divide-gray-700/50 border border-gray-600"
+                  className="min-w-full divide-y divide-gray-200 border border-gray-300"
                   {...props}
                 >
                   {children}
@@ -164,7 +164,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             thead: ({ children, ...props }: any) => (
               <thead
-                className="bg-[#162032]"
+                className="bg-gray-50"
                 {...props}
               >
                 {children}
@@ -172,7 +172,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             tbody: ({ children, ...props }: any) => (
               <tbody
-                className="divide-y divide-gray-700/50"
+                className="divide-y divide-gray-200"
                 {...props}
               >
                 {children}
@@ -180,7 +180,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             tr: ({ children, ...props }: any) => (
               <tr
-                className="hover:bg-dark-surface-hover"
+                className="hover:bg-gray-50"
                 {...props}
               >
                 {children}
@@ -188,7 +188,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             th: ({ children, ...props }: any) => (
               <th
-                className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase tracking-wider"
+                className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
                 {...props}
               >
                 {children}
@@ -196,7 +196,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             ),
             td: ({ children, ...props }: any) => (
               <td
-                className="px-4 py-2 text-sm text-gray-300"
+                className="px-4 py-2 text-sm text-gray-700"
                 {...props}
               >
                 {children}
@@ -206,7 +206,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             a: ({ children, href, ...props }: any) => (
               <a
                 href={href}
-                className="text-blue-400 hover:text-blue-300 underline"
+                className="text-blue-600 hover:text-blue-800 underline"
                 target="_blank"
                 rel="noopener noreferrer"
                 {...props}
@@ -217,7 +217,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             // 自定义强调样式
             strong: ({ children, ...props }: any) => (
               <strong
-                className="font-semibold text-gray-100"
+                className="font-semibold text-gray-900"
                 {...props}
               >
                 {children}
@@ -226,7 +226,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             // 自定义删除线样式
             del: ({ children, ...props }: any) => (
               <del
-                className="text-red-400 line-through"
+                className="text-red-600 line-through"
                 {...props}
               >
                 {children}
@@ -235,7 +235,7 @@ export default function MarkdownRenderer({ content, onCopy }: MarkdownRendererPr
             // 自定义引用样式
             p: ({ children, ...props }: any) => (
               <p
-                className="text-gray-300 leading-relaxed"
+                className="text-gray-700 leading-relaxed"
                 {...props}
               >
                 {children}

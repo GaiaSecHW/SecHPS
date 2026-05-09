@@ -139,15 +139,15 @@ export function SkillVersionHistory({
   }
 
   return (
-    <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       {/* Header */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-[#0F172A] hover:bg-dark-surface-hover transition-colors"
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <History size={18} className="text-gray-400" />
-          <span className="font-medium text-gray-100">版本历史</span>
+          <History size={18} className="text-gray-600" />
+          <span className="font-medium text-gray-900">版本历史</span>
           <span className="text-sm text-gray-500">
             ({versions.length} 个版本)
           </span>
@@ -160,11 +160,11 @@ export function SkillVersionHistory({
 
       {/* Version List */}
       {expanded && (
-        <div className="divide-y divide-gray-700/50">
+        <div className="divide-y divide-gray-100">
           {versions.map((v, index) => (
             <div
               key={v.id}
-              className={`p-4 ${v.id === currentVersionId ? 'bg-blue-50' : 'hover:bg-dark-surface-hover'} transition-colors`}
+              className={`p-4 ${v.id === currentVersionId ? 'bg-blue-50' : 'hover:bg-gray-50'} transition-colors`}
             >
               <div className="flex items-start justify-between">
                 {/* Version Info */}
@@ -173,7 +173,7 @@ export function SkillVersionHistory({
                     {/* Version Number */}
                     <span className={`px-3 py-1 rounded-lg font-medium text-sm ${
                       v.isLatest
-                        ? 'bg-green-500/15 text-green-400'
+                        ? 'bg-green-100 text-green-800'
                         : 'bg-gray-100 text-gray-700'
                     }`}>
                       v{v.version}
@@ -221,7 +221,7 @@ export function SkillVersionHistory({
                   {/* View Version */}
                   <button
                     onClick={() => onSelectVersion(v.id, v.version)}
-                    className="inline-flex items-center px-2 py-1 text-xs bg-dark-surface-hover text-gray-700 rounded hover:bg-dark-surface-hover transition-colors"
+                    className="inline-flex items-center px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
                     title="查看此版本内容"
                   >
                     <Eye size={14} className="mr-1" />
@@ -244,7 +244,7 @@ export function SkillVersionHistory({
                   {!v.isLatest && canEdit && (
                     <button
                       onClick={() => onRollback(v.id, v.version)}
-                      className="inline-flex items-center px-2 py-1 text-xs bg-orange-100 text-orange-400 rounded hover:bg-orange-200 transition-colors"
+                      className="inline-flex items-center px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors"
                       title="回滚到此版本"
                     >
                       <RotateCcw size={14} className="mr-1" />
