@@ -204,4 +204,120 @@ export function isGiteaConfigured(): boolean {
   return config !== null;
 }
 
+export interface GiteaFile {
+  path: string;
+  content: Buffer;
+  size: number;
+}
+
+export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]> {
+  const config = getGiteaConfig();
+  if (!config) {
+    console.log('[Gitea] 配置不完整，无法下载文件');
+    return [];
+  }
+
+  const files: GiteaFile[] = [];
+  
+  try {
+    const treeUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/git/trees/${config.branch}?recursive=1`;
+    
+    const treeResponse = await fetch(treeUrl, {
+      headers: {
+        Authorization: `token ${config.token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!treeResponse.ok) {
+      throw new Error(`获取文件树失败: ${treeResponse.status}`);
+    }
+
+    const treeData = await treeResponse.json();
+    const entries = treeData.tree || [];
+    
+    const appEntries = entries.filter((entry: { path: string; type: string }) => 
+      entry.path.startsWith(`${appId}/`) && entry.type === 'blob'
+    );
+
+    console.log(`[Gitea] 找到 ${appEntries.length} 个文件需要下载`);
+
+    for (const entry of appEntries) {
+      const filePath = entry.path;
+      const relativePath = filePath.replace(`${appId}/`, '');
+      
+      try {
+        const contentUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
+        
+        const contentResponse = await fetch(contentUrl, {
+          headers: {
+            Authorization: `token ${config.token}`,
+            Accept: 'application/json',
+          },
+        });
+
+        if (!contentResponse.ok) {
+          console.error(`[Gitea] 下载文件失败: ${filePath}`);
+          continue;
+        }
+
+        const contentData = await contentResponse.json();
+        const decodedContent = Buffer.from(contentData.content, 'base64');
+        
+        files.push({
+          path: relativePath,
+          content: decodedContent,
+          size: decodedContent.length,
+        });
+        
+        console.log(`[Gitea] 下载文件成功: ${relativePath} (${decodedContent.length} bytes)`);
+      } catch (downloadError) {
+        console.error(`[Gitea] 下载文件失败: ${filePath}`, downloadError);
+      }
+    }
+
+    console.log(`[Gitea] 共下载 ${files.length} 个文件`);
+    return files;
+  } catch (error) {
+    console.error('[Gitea] 获取文件树失败:', error);
+    return [];
+  }
+}
+
+export async function downloadSingleFileFromGitea(appId: string, fileName: string): Promise<Buffer | null> {
+  const config = getGiteaConfig();
+  if (!config) {
+    return null;
+  }
+
+  try {
+    const filePath = `${appId}/${fileName}`;
+    const contentUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
+    
+    const response = await fetch(contentUrl, {
+      headers: {
+        Authorization: `token ${config.token}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log(`[Gitea] 文件不存在: ${filePath}`);
+        return null;
+      }
+      throw new Error(`下载文件失败: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = Buffer.from(data.content, 'base64');
+    
+    console.log(`[Gitea] 下载单个文件成功: ${filePath}`);
+    return content;
+  } catch (error) {
+    console.error(`[Gitea] 下载单个文件失败:`, error);
+    return null;
+  }
+}
+
 export type { GiteaConfig, FileUploadResult };

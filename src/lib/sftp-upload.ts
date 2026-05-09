@@ -12,6 +12,12 @@ interface SftpConfig {
   remotePath: string;
 }
 
+interface GiteaFile {
+  path: string;
+  content: Buffer;
+  size: number;
+}
+
 function getSftpConfig(): SftpConfig | null {
   const host = process.env.SFTP_HOST;
   const port = parseInt(process.env.SFTP_PORT || '22');
@@ -257,6 +263,62 @@ export async function uploadAndExtractArchive(
       remoteDirPath,
       extracted,
     };
+  } finally {
+    await sftp.end();
+  }
+}
+
+export async function uploadFilesToRemote(
+  taskId: string,
+  files: GiteaFile[],
+  targetSubDir?: string
+): Promise<{ uploadedCount: number; remoteDirPath: string }> {
+  const config = getSftpConfig();
+
+  if (!config) {
+    throw new Error('SFTP configuration is incomplete. Please check environment variables.');
+  }
+
+  if (files.length === 0) {
+    return { uploadedCount: 0, remoteDirPath: '' };
+  }
+
+  const sftp = new SftpClient();
+
+  try {
+    await sftp.connect({
+      host: config.host,
+      port: config.port,
+      username: config.username,
+      password: config.password,
+      privateKey: config.privateKey,
+    });
+
+    const remoteDirPath = targetSubDir 
+      ? `${config.remotePath}/${taskId}/${targetSubDir}`
+      : `${config.remotePath}/${taskId}`;
+
+    await sftp.mkdir(remoteDirPath, true);
+
+    let uploadedCount = 0;
+
+    for (const file of files) {
+      const remoteFilePath = `${remoteDirPath}/${file.path}`;
+      
+      const parentDir = path.dirname(remoteFilePath);
+      await sftp.mkdir(parentDir, true);
+
+      try {
+        await sftp.put(file.content, remoteFilePath);
+        uploadedCount++;
+        console.log(`[SFTP] 上传文件成功: ${file.path}`);
+      } catch (uploadError) {
+        console.error(`[SFTP] 上传文件失败: ${file.path}`, uploadError);
+      }
+    }
+
+    console.log(`[SFTP] 共上传 ${uploadedCount}/${files.length} 个文件到 ${remoteDirPath}`);
+    return { uploadedCount, remoteDirPath };
   } finally {
     await sftp.end();
   }
