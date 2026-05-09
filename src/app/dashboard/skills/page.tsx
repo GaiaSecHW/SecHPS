@@ -645,7 +645,7 @@ function SkillsPageContent() {
                 {/* Admin checkbox */}
                 {isAdmin && (
                   <div
-                    className="absolute top-3 left-3 z-10"
+                    className="absolute top-3 right-3 z-10"
                     onClick={(e) => { e.stopPropagation(); }}
                   >
                     <input
@@ -659,7 +659,7 @@ function SkillsPageContent() {
 
                 {/* More menu */}
                 <div
-                  className="absolute top-3 right-3 z-10"
+                  className="absolute top-3 right-10 z-10"
                   onClick={(e) => { e.stopPropagation(); }}
                   ref={menuOpenId === skill.id ? menuRef : null}
                 >
