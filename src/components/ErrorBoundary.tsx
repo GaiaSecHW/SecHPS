@@ -16,10 +16,10 @@ interface State {
 
 /**
  * ErrorBoundary 组件
- * 
+ *
  * 捕获子组件树中的 JavaScript 错误，记录错误并显示备用 UI。
  * 用于防止整个应用因组件错误而崩溃。
- * 
+ *
  * @example
  * <ErrorBoundary>
  *   <MyComponent />
@@ -44,7 +44,7 @@ export class ErrorBoundary extends Component<Props, State> {
     // 记录错误信息
     console.error('ErrorBoundary caught an error:', error);
     console.error('Error info:', errorInfo);
-    
+
     this.setState({
       error,
       errorInfo,
@@ -79,22 +79,22 @@ export class ErrorBoundary extends Component<Props, State> {
       // 默认的错误 UI
       return (
         <div className="min-h-[400px] flex items-center justify-center p-6">
-          <div className="max-w-md w-full bg-white rounded-lg shadow-lg border border-gray-200 p-6">
-            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
-              <AlertTriangle className="w-6 h-6 text-red-600" />
+          <div className="max-w-md w-full bg-dark-surface rounded-lg shadow-lg border border-gray-700/50 p-6">
+            <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-900/20 rounded-full mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-400" />
             </div>
-            
-            <h2 className="text-xl font-semibold text-gray-900 text-center mb-2">
+
+            <h2 className="text-xl font-semibold text-gray-100 text-center mb-2">
               页面出现错误
             </h2>
-            
-            <p className="text-gray-600 text-center mb-4">
+
+            <p className="text-gray-400 text-center mb-4">
               很抱歉，页面加载时出现了问题。您可以尝试刷新页面或返回首页。
             </p>
 
             {process.env.NODE_ENV === 'development' && error && (
-              <div className="mb-4 p-3 bg-gray-100 rounded-md overflow-auto max-h-32">
-                <p className="text-sm font-mono text-red-600 whitespace-pre-wrap">
+              <div className="mb-4 p-3 bg-[#0F172A] rounded-md overflow-auto max-h-32">
+                <p className="text-sm font-mono text-red-400 whitespace-pre-wrap">
                   {error.message}
                 </p>
               </div>
@@ -103,15 +103,15 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex items-center justify-center space-x-3">
               <button
                 onClick={this.handleRetry}
-                className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>重试</span>
               </button>
-              
+
               <button
                 onClick={this.handleGoHome}
-                className="flex items-center space-x-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+                className="flex items-center space-x-2 px-4 py-2 bg-dark-surface border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover transition-colors"
               >
                 <Home className="w-4 h-4" />
                 <span>返回首页</span>
@@ -162,11 +162,11 @@ export class PageErrorBoundary extends Component<Props, State> {
       return (
         <div className="flex flex-col items-center justify-center py-12">
           <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">加载失败</h3>
+          <h3 className="text-lg font-medium text-gray-100 mb-2">加载失败</h3>
           <p className="text-gray-500 mb-4">页面加载时出现错误</p>
           <button
             onClick={this.handleRetry}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
           >
             <RefreshCw className="w-4 h-4" />
             <span>重新加载</span>

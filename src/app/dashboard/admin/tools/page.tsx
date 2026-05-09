@@ -57,7 +57,7 @@ function ToolsPageContent() {
   const router = useRouter();
   const { isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const { data, loading, error, refetch } = useApiFetch<ToolsResponse>('/api/tools');
   const tools = data?.tools || [];
 
@@ -96,15 +96,15 @@ function ToolsPageContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">工具管理</h1>
-          <p className="mt-1 text-sm text-gray-600">
+          <h1 className="text-2xl font-bold text-gray-100">工具管理</h1>
+          <p className="mt-1 text-sm text-gray-400">
             管理 Skills 可使用的工具，共 {tools.length} 个工具
           </p>
         </div>
         {isAdmin && (
           <button
             onClick={() => router.push('/dashboard/admin/tools/create')}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
           >
             <Plus size={20} className="mr-2" />
             创建工具
@@ -113,9 +113,9 @@ function ToolsPageContent() {
       </div>
 
       {/* 使用说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-blue-800 mb-2">工具使用说明</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
+      <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-blue-400 mb-2">工具使用说明</h3>
+        <ul className="text-sm text-blue-300 space-y-1">
           <li>• <strong>工具用途</strong>：工具是 Skills 可以调用的能力，如文件读取、代码分析、安全检测等</li>
           <li>• <strong>创建工具</strong>：点击右上角"创建工具"按钮，定义工具名称、参数和执行方式</li>
           <li>• <strong>编辑工具</strong>：点击工具卡片或编辑图标进入编辑页面</li>
@@ -126,13 +126,13 @@ function ToolsPageContent() {
 
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={20} />
         <input
           type="text"
           placeholder="搜索工具..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         />
       </div>
 
@@ -144,11 +144,11 @@ function ToolsPageContent() {
       {/* Tools List */}
       <div className="space-y-4">
         {filteredTools.length === 0 ? (
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-12">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12">
             <div className="text-center">
-              <Cog className="mx-auto h-16 w-16 text-gray-400" />
-              <h3 className="mt-4 text-lg font-medium text-gray-900">暂无工具</h3>
-              <p className="mt-2 text-sm text-gray-600">
+              <Cog className="mx-auto h-16 w-16 text-gray-500" />
+              <h3 className="mt-4 text-lg font-medium text-gray-100">暂无工具</h3>
+              <p className="mt-2 text-sm text-gray-400">
                 工具库为空，请添加工具
               </p>
             </div>
@@ -157,25 +157,25 @@ function ToolsPageContent() {
           filteredTools.map((tool) => (
             <div
               key={tool.id}
-              className="bg-white rounded-lg shadow border border-gray-200 p-4 hover:border-gray-300 transition-colors cursor-pointer"
+              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4 hover:border-gray-600/50 transition-colors cursor-pointer"
               onClick={() => router.push(`/dashboard/admin/tools/${tool.id}`)}
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
-                    <div className={`p-2 rounded-lg ${tool.isActive ? 'bg-green-100' : 'bg-gray-100'}`}>
-                      <Cog className={tool.isActive ? 'text-green-600' : 'text-gray-400'} size={20} />
+                    <div className={`p-2 rounded-lg ${tool.isActive ? 'bg-green-500/15' : 'bg-dark-surface-hover'}`}>
+                      <Cog className={tool.isActive ? 'text-green-400' : 'text-gray-500'} size={20} />
                     </div>
                     <div>
                       <div className="flex items-center space-x-2">
-                        <h3 className="font-semibold text-gray-900">{tool.displayName}</h3>
+                        <h3 className="font-semibold text-gray-100">{tool.displayName}</h3>
                         {tool.isBuiltin && (
-                          <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full">
+                          <span className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 border border-purple-500/20 rounded-full">
                             内置
                           </span>
                         )}
                         {tool.requiresPermission && (
-                          <span className="px-2 py-0.5 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                          <span className="px-2 py-0.5 text-xs bg-yellow-500/15 text-yellow-400 border border-yellow-500/20 rounded-full">
                             需要权限
                           </span>
                         )}
@@ -183,7 +183,7 @@ function ToolsPageContent() {
                       <p className="text-sm text-gray-500">{tool.name}</p>
                     </div>
                   </div>
-                  <p className="mt-2 text-sm text-gray-600">{tool.description}</p>
+                  <p className="mt-2 text-sm text-gray-400">{tool.description}</p>
                   <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
                     <span>{categoryLabels[tool.category] || tool.category}</span>
                     <span>执行器: {tool.executor}</span>
@@ -192,13 +192,13 @@ function ToolsPageContent() {
                 </div>
                 <div className="flex items-center space-x-2">
                   {!tool.isActive && (
-                    <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                    <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded-full">
                       已禁用
                     </span>
                   )}
                   <button
                     onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/admin/tools/${tool.id}`); }}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-blue-400 hover:bg-blue-600/10 rounded-lg transition-colors"
                     title="编辑工具"
                   >
                     <Edit size={18} />
@@ -206,7 +206,7 @@ function ToolsPageContent() {
                   {!tool.isBuiltin && isAdmin && (
                     <button
                       onClick={(e) => handleDelete(tool.id, tool.displayName, e)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-600/10 rounded-lg transition-colors"
                       title="删除工具"
                     >
                       <Trash2 size={18} />

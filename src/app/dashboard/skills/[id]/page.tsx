@@ -24,13 +24,16 @@ import {
   Eye,
   History,
   Plus,
+  Bug,
+  Search,
+  Shield,
+  Code,
+  LayoutDashboard,
+  TrendingUp,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { exportAsSkillFile, copySkillMdToClipboard } from '@/lib/skill-export';
-import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
-import { VulnerabilityPatternSelector } from '@/components/skills/VulnerabilityPatternSelector';
-import type { VulnerabilityPatternOption } from '@/types/vulnerability-pattern';
 import { buildFullSkill, getFormatGuideData, cleanSkillContentForOptimization, type SkillIntent } from '@/lib/skill-builder';
 import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
@@ -43,8 +46,8 @@ interface Skill {
   name: string;
   displayName: string;
   description: string;
-  techStackId: string | null;
-  techStackName?: string | null;
+  categoryId: string;
+  vulnerabilityTreeId: string | null;
   cwe: string | null;
   severity: string | null;
   content: string;
@@ -62,9 +65,12 @@ interface Skill {
   updatedAt: string;
   userId: string | null;
   isPublic: boolean;
-  vulnerabilityPatternId: string | null;
-  vulnerabilityPatternName?: string | null;
-  vulnerabilityPatternCategory?: string | null;
+  categoryName: string | null;
+  categoryIcon: string | null;
+  hasSubDimension: boolean;
+  patternName: string | null;
+  languageName: string | null;
+  productTags: Array<{ id: string; name: string; displayName: string }>;
 }
 
 export default function SkillDetailPage() {
@@ -82,8 +88,9 @@ export default function SkillDetailPage() {
   const [editName, setEditName] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
-  const [editVulnerabilityPatternId, setEditVulnerabilityPatternId] = useState<string>('');
-  const [selectedVulnerabilityPattern, setSelectedVulnerabilityPattern] = useState<VulnerabilityPatternOption | null>(null);
+  const [editCategoryId, setEditCategoryId] = useState<string>('');
+  const [editVulnerabilityTreeId, setEditVulnerabilityTreeId] = useState<string>('');
+  const [editSelectedLanguageId, setEditSelectedLanguageId] = useState<string>('');
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
@@ -222,11 +229,11 @@ export default function SkillDetailPage() {
     }
   };
 
-  // 技术栈选择相关
-  const [editTechStackId, setEditTechStackId] = useState('');
-
-  // 使用 Hook 获取技术栈选项
-  const { options: techStackOptionsWithIds, loading: loadingTechStack } = useTechStackOptionsWithIds();
+  // 分类选择相关
+  const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; icon: string | null; hasSubDimension: boolean }>>([]);
+  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; patterns: Array<{ id: string; name: string; displayName: string }> }>>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [loadingTree, setLoadingTree] = useState(false);
   
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -339,14 +346,56 @@ export default function SkillDetailPage() {
     }
   };
 
-  const startEditing = () => {
+  const startEditing = async () => {
     if (!skill) return;
     setEditName(skill.displayName);
-    setEditVulnerabilityPatternId(skill.vulnerabilityPatternId || '');
-    setEditTechStackId(skill.techStackId || '');
+    setEditCategoryId(skill.categoryId || '');
+    setEditVulnerabilityTreeId(skill.vulnerabilityTreeId || '');
+    setEditSelectedLanguageId('');
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
     setIsEditing(true);
+
+    // 加载分类和漏洞树数据
+    const token = localStorage.getItem('token');
+    setLoadingCategories(true);
+    try {
+      const res = await fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setCategories(data.categories || []);
+      }
+    } catch (e) {
+      console.error('获取分类失败:', e);
+    } finally {
+      setLoadingCategories(false);
+    }
+
+    // 如果有子维度，加载漏洞树并回显语言
+    if (skill.hasSubDimension) {
+      setLoadingTree(true);
+      try {
+        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } });
+        if (res.ok) {
+          const data = await res.json();
+          setVulnerabilityTree(data.tree || []);
+          // 回显：根据当前 vulnerabilityTreeId 找到所属语言
+          if (skill.vulnerabilityTreeId) {
+            for (const lang of (data.tree || [])) {
+              const found = lang.patterns.find((p: { id: string }) => p.id === skill.vulnerabilityTreeId);
+              if (found) {
+                setEditSelectedLanguageId(lang.id);
+                break;
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('获取漏洞树失败:', e);
+      } finally {
+        setLoadingTree(false);
+      }
+    }
   };
 
   const cancelEditing = () => {
@@ -361,15 +410,15 @@ export default function SkillDetailPage() {
       return;
     }
 
-    if (!editVulnerabilityPatternId) {
-      alert('请选择漏洞模式');
+    if (!editCategoryId) {
+      alert('请选择分类');
       return;
     }
 
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      
+
       // 直接保存用户编辑的内容，不清理输出格式
       const response = await fetch(`/api/skills/${skillId}`, {
         method: 'PUT',
@@ -380,9 +429,8 @@ export default function SkillDetailPage() {
         body: JSON.stringify({
           displayName: editName.trim(),
           description: editName.trim(),
-          vulnerabilityPatternId: editVulnerabilityPatternId,
-          techStackId: editTechStackId || null,
-          cwe: selectedVulnerabilityPattern?.cwe || null,
+          categoryId: editCategoryId,
+          vulnerabilityTreeId: editVulnerabilityTreeId || null,
           content: editContent,
           isActive: editIsActive,
         }),
@@ -584,7 +632,7 @@ export default function SkillDetailPage() {
 
   if (error || !skill) {
     return (
-      <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+      <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
         {error || 'Skill 不存在'}
       </div>
     );
@@ -595,16 +643,16 @@ export default function SkillDetailPage() {
       {/* AI 优化全屏遮罩 */}
       {aiOptimizing && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
+          <div className="bg-dark-surface rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
             <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center animate-pulse">
               <Sparkles size={32} className="text-white" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">AI 正在优化 Skill</h3>
+            <h3 className="text-lg font-semibold text-gray-100">AI 正在优化 Skill</h3>
             <p className="text-sm text-gray-500 text-center">
               大模型分析中，请勿关闭页面或进行其他操作...
             </p>
             {/* 进度条动画 */}
-            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
               <div className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full animate-[progress_2s_ease-in-out_infinite]"
                 style={{ width: `${Math.max(5, 100 - (aiCountdown / 300) * 100)}%`, transition: 'width 1s linear' }} />
             </div>
@@ -622,36 +670,36 @@ export default function SkillDetailPage() {
         <div className="flex items-center space-x-4">
           <button
             onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
           >
             <ArrowLeft size={20} />
           </button>
           <div>
             <div className="flex items-center space-x-3">
-              <h1 className="text-2xl font-bold text-gray-900">{skill.displayName}</h1>
+              <h1 className="text-2xl font-bold text-gray-100">{skill.displayName}</h1>
               {skill.isBuiltin && (
                 <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-800 rounded-full">
                   内置
                 </span>
               )}
               {!skill.isActive && (
-                <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">
+                <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded-full">
                   已禁用
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-600">{skill.name}</p>
+            <p className="text-sm text-gray-400">{skill.name}</p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
           {/* 导出按钮 */}
           <button
             onClick={handleCopyMd}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors"
           >
             {copied ? (
               <>
-                <CheckCircle size={16} className="mr-2 text-green-600" />
+                <CheckCircle size={16} className="mr-2 text-green-400" />
                 已复制
               </>
             ) : (
@@ -738,14 +786,14 @@ export default function SkillDetailPage() {
                     <button
                       onClick={cancelEditing}
                       disabled={saving}
-                      className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                      className="px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors disabled:opacity-50"
                     >
                       取消
                     </button>
                     <button
                       onClick={() => setShowNewVersionModal(true)}
                       disabled={saving}
-                      className="inline-flex items-center px-4 py-2 border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors disabled:opacity-50"
+                      className="inline-flex items-center px-4 py-2 border border-blue-300 text-blue-400 rounded-lg hover:bg-blue-900/20 transition-colors disabled:opacity-50"
                     >
                       <Plus size={16} className="mr-2" />
                       保存为新版本
@@ -776,62 +824,112 @@ export default function SkillDetailPage() {
       </div>
 
       {/* Content */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
+      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
         {isEditing ? (
           <div className="space-y-6">
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Skill 名称 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
                 />
               </div>
               
-              {/* 漏洞模式选择 */}
+              {/* 分类选择 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  漏洞模式 <span className="text-red-500">*</span>
-                </label>
-                <VulnerabilityPatternSelector
-                  value={editVulnerabilityPatternId}
-                  onChange={(id, pattern) => {
-                    setEditVulnerabilityPatternId(id);
-                    setSelectedVulnerabilityPattern(pattern);
-                  }}
-                  placeholder="选择漏洞模式"
-                />
-              </div>
-
-              {/* 技术栈选择 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  适合的技术栈
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  分类 <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={editTechStackId}
-                  onChange={(e) => setEditTechStackId(e.target.value)}
-                  disabled={loadingTechStack}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={editCategoryId}
+                  onChange={(e) => {
+                    setEditCategoryId(e.target.value);
+                    setEditVulnerabilityTreeId('');
+                    setEditSelectedLanguageId('');
+                    // 检查选中的分类是否有子维度
+                    const selected = categories.find(c => c.id === e.target.value);
+                    if (selected?.hasSubDimension) {
+                      setLoadingTree(true);
+                      const token = localStorage.getItem('token');
+                      fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } })
+                        .then(res => res.ok ? res.json() : { tree: [] })
+                        .then(data => setVulnerabilityTree(data.tree || []))
+                        .catch(() => setVulnerabilityTree([]))
+                        .finally(() => setLoadingTree(false));
+                    } else {
+                      setVulnerabilityTree([]);
+                    }
+                  }}
+                  disabled={loadingCategories}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
-                  <option value="">无（通用）</option>
-                  {techStackOptionsWithIds.map((opt) => (
-                    <option key={opt.id} value={opt.id}>{opt.name}</option>
+                  <option value="">选择分类</option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={cat.id}>{cat.icon ? cat.icon + ' ' : ''}{cat.displayName}</option>
                   ))}
                 </select>
               </div>
+
+              {/* 语言选择（仅当分类有子维度时显示） */}
+              {(() => {
+                const selectedCat = categories.find(c => c.id === editCategoryId);
+                return selectedCat?.hasSubDimension ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      语言
+                    </label>
+                    <select
+                      value={editSelectedLanguageId}
+                      onChange={(e) => {
+                        setEditSelectedLanguageId(e.target.value);
+                        setEditVulnerabilityTreeId('');
+                      }}
+                      disabled={loadingTree}
+                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="">选择语言</option>
+                      {vulnerabilityTree.map((lang) => (
+                        <option key={lang.id} value={lang.id}>{lang.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* 模式选择（级联，选择语言后显示） */}
+              {editSelectedLanguageId && (() => {
+                const selectedLang = vulnerabilityTree.find(l => l.id === editSelectedLanguageId);
+                return selectedLang && selectedLang.patterns.length > 0 ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      模式
+                    </label>
+                    <select
+                      value={editVulnerabilityTreeId}
+                      onChange={(e) => setEditVulnerabilityTreeId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    >
+                      <option value="">选择模式</option>
+                      {selectedLang.patterns.map((p) => (
+                        <option key={p.id} value={p.id}>{p.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
             </div>
 
             {/* Markdown 内容 */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-300">
                   Skill 内容（Markdown 格式）
                 </label>
                 <div className="flex items-center gap-2">
@@ -864,7 +962,7 @@ export default function SkillDetailPage() {
                     <button
                       type="button"
                       onClick={() => setShowDiffModal(true)}
-                      className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
+                      className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
                       title="重新打开上次 AI 优化结果的对比弹窗"
                     >
                       <Eye size={14} className="mr-1.5" />
@@ -878,7 +976,7 @@ export default function SkillDetailPage() {
                         setEditContent(skill.content || '');
                       }
                     }}
-                    className="text-sm text-blue-600 hover:text-blue-800"
+                    className="text-sm text-blue-400 hover:text-blue-800"
                   >
                     重置为原始内容
                   </button>
@@ -887,7 +985,7 @@ export default function SkillDetailPage() {
 
               {/* AI 优化错误提示 */}
               {aiOptimizeError && (
-                <div className="mb-3 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                <div className="mb-3 flex items-start gap-2 bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg text-sm">
                   <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
                   <span>{aiOptimizeError}</span>
                 </div>
@@ -895,7 +993,7 @@ export default function SkillDetailPage() {
 
               {/* AI 优化建议 */}
               {aiSuggestions.length > 0 && (
-                <div className="mb-3 bg-purple-50 border border-purple-200 rounded-lg overflow-hidden">
+                <div className="mb-3 bg-purple-900/20 border border-purple-200 rounded-lg overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setShowAiSuggestions(!showAiSuggestions)}
@@ -922,11 +1020,11 @@ export default function SkillDetailPage() {
                 </div>
               )}
 
-              <div className="mb-3 border border-gray-200 rounded-lg overflow-hidden">
+              <div className="mb-3 border border-gray-700/50 rounded-lg overflow-hidden">
                 <button
                   type="button"
                   onClick={() => setShowFormatHint(!showFormatHint)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors text-sm text-gray-600"
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-dark-bg hover:bg-dark-surface-hover transition-colors text-sm text-gray-400"
                 >
                   <span className="flex items-center gap-1.5">
                     <FileText size={14} />
@@ -935,13 +1033,13 @@ export default function SkillDetailPage() {
                   {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </button>
                 {showFormatHint && (
-                  <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
+                  <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50">
                     {/* 新格式建议 */}
                     <div className="space-y-4">
                       {/* 禁止生成提醒 */}
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-red-700 mb-2">⛔ 禁止生成（系统会自动添加）</p>
-                        <ul className="text-xs text-red-600 space-y-1">
+                      <div className="bg-red-900/20 border border-red-200 rounded-lg p-3">
+                        <p className="text-xs font-semibold text-red-400 mb-2">⛔ 禁止生成（系统会自动添加）</p>
+                        <ul className="text-xs text-red-400 space-y-1">
                           <li>❌ YAML frontmatter（--- name: xxx ---）</li>
                           <li>❌ 一级标题（# 漏洞名称）</li>
                           <li>❌ ## 输出格式 章节</li>
@@ -950,10 +1048,10 @@ export default function SkillDetailPage() {
                       
                       {/* 推荐章节 */}
                       <div>
-                        <p className="text-xs font-semibold text-gray-700 mb-2">必须包含的章节：</p>
-                        <div className="text-xs text-gray-600 font-mono space-y-1">
+                        <p className="text-xs font-semibold text-gray-300 mb-2">必须包含的章节：</p>
+                        <div className="text-xs text-gray-400 font-mono space-y-1">
                           {getFormatGuideData().sections.map((section, idx) => (
-                            <p key={idx} className={section.highlight ? 'text-blue-600 font-medium' : ''}>
+                            <p key={idx} className={section.highlight ? 'text-blue-400 font-medium' : ''}>
                               {section.name}
                             </p>
                           ))}
@@ -962,8 +1060,8 @@ export default function SkillDetailPage() {
                       
                       {/* 关键原则 */}
                       <div>
-                        <p className="text-xs font-semibold text-gray-700 mb-2">关键原则：</p>
-                        <ul className="text-xs text-gray-600 space-y-1">
+                        <p className="text-xs font-semibold text-gray-300 mb-2">关键原则：</p>
+                        <ul className="text-xs text-gray-400 space-y-1">
                           {getFormatGuideData().principles.slice(0, 4).map((p, idx) => (
                             <li key={idx}>{p.title} — {p.description}</li>
                           ))}
@@ -976,7 +1074,7 @@ export default function SkillDetailPage() {
               <textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-[500px] px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                className="w-full h-[500px] px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
                 placeholder="输入 Markdown 格式的 Skill 定义..."
               />
             </div>
@@ -988,9 +1086,9 @@ export default function SkillDetailPage() {
                   type="checkbox"
                   checked={editIsActive}
                   onChange={(e) => setEditIsActive(e.target.checked)}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
                 />
-                <span className="ml-2 text-sm text-gray-700">启用此 Skill</span>
+                <span className="ml-2 text-sm text-gray-300">启用此 Skill</span>
               </label>
             </div>
           </div>
@@ -998,14 +1096,14 @@ export default function SkillDetailPage() {
           /* 查看模式 */
           <div className="space-y-6">
             {/* 关键指标（靠前显示） */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-dark-bg p-4 rounded-lg border border-gray-700/50">
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">版本</h3>
-                <p className="text-lg font-semibold text-gray-900">v{skill.version}</p>
+                <p className="text-lg font-semibold text-gray-100">v{skill.version}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">执行次数</h3>
-                <p className="text-lg font-semibold text-gray-900">{skill.execCount}</p>
+                <p className="text-lg font-semibold text-gray-100">{skill.execCount}</p>
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">发现问题</h3>
@@ -1016,7 +1114,7 @@ export default function SkillDetailPage() {
                       fetchVulnerabilities(1, 'all');
                     }
                   }}
-                  className="text-lg font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
+                  className="text-lg font-semibold text-blue-400 hover:text-blue-800 hover:underline flex items-center gap-1"
                 >
                   {vulnStats.total || skill.vulnerabilityCount || 0} 个
                   {showVulnerabilities ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -1036,7 +1134,7 @@ export default function SkillDetailPage() {
               </div>
               <div>
                 <h3 className="text-sm font-medium text-gray-500 mb-1">成功率</h3>
-                <p className="text-lg font-semibold text-gray-900">
+                <p className="text-lg font-semibold text-gray-100">
                   {skill.successRate ? `${(skill.successRate * 100).toFixed(1)}%` : 'N/A'}
                   {skill.execCount > 0 && skill.successExecCount > 0 && (
                     <span className="text-xs text-gray-500 ml-1">
@@ -1049,33 +1147,33 @@ export default function SkillDetailPage() {
             
             {/* 漏洞明细列表 */}
             {showVulnerabilities && (
-              <div className="p-4 bg-white rounded-lg border border-gray-200">
+              <div className="p-4 bg-dark-surface rounded-lg border border-gray-700/50">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="font-medium text-gray-900">发现的漏洞明细</h4>
+                  <h4 className="font-medium text-gray-100">发现的漏洞明细</h4>
                   <div className="flex items-center gap-4">
                     {/* 筛选按钮 */}
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => fetchVulnerabilities(1, 'all')}
-                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'all' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'all' ? 'bg-blue-100 text-blue-400' : 'bg-dark-surface-hover text-gray-400 hover:bg-gray-200'}`}
                       >
                         全部 ({vulnStats.total})
                       </button>
                       <button
                         onClick={() => fetchVulnerabilities(1, 'new')}
-                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'new' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'new' ? 'bg-green-100 text-green-400' : 'bg-dark-surface-hover text-gray-400 hover:bg-gray-200'}`}
                       >
                         新发现 ({vulnStats.new})
                       </button>
                       <button
                         onClick={() => fetchVulnerabilities(1, 'confirmed')}
-                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'confirmed' ? 'bg-blue-100 text-blue-400' : 'bg-dark-surface-hover text-gray-400 hover:bg-gray-200'}`}
                       >
                         已确认 ({vulnStats.confirmed})
                       </button>
                       <button
                         onClick={() => fetchVulnerabilities(1, 'false-positive')}
-                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'false-positive' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'false-positive' ? 'bg-orange-100 text-orange-700' : 'bg-dark-surface-hover text-gray-400 hover:bg-gray-200'}`}
                       >
                         误报 ({vulnStats.falsePositive})
                       </button>
@@ -1096,25 +1194,25 @@ export default function SkillDetailPage() {
                   <>
                     <div className="space-y-3">
                       {vulnerabilities.map((item, index) => (
-                        <div key={item.mappingId || index} className="p-3 bg-gray-50 rounded border border-gray-100 hover:border-gray-200">
+                        <div key={item.mappingId || index} className="p-3 bg-dark-bg rounded border border-gray-100 hover:border-gray-700/50">
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  item.vulnerability?.severity === 'critical' ? 'bg-red-100 text-red-700' :
+                                  item.vulnerability?.severity === 'critical' ? 'bg-red-100 text-red-400' :
                                   item.vulnerability?.severity === 'high' ? 'bg-orange-100 text-orange-700' :
-                                  item.vulnerability?.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                                  item.vulnerability?.severity === 'low' ? 'bg-blue-100 text-blue-700' :
-                                  'bg-gray-100 text-gray-700'
+                                  item.vulnerability?.severity === 'medium' ? 'bg-yellow-100 text-yellow-400' :
+                                  item.vulnerability?.severity === 'low' ? 'bg-blue-100 text-blue-400' :
+                                  'bg-dark-surface-hover text-gray-300'
                                 }`}>
                                   {item.vulnerability?.severity || 'info'}
                                 </span>
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                                  item.vulnerability?.status === 'false-positive' ? 'bg-orange-50 text-orange-600' :
-                                  item.vulnerability?.status === 'confirmed' ? 'bg-green-50 text-green-600' :
-                                  item.vulnerability?.status === 'fixed' ? 'bg-blue-50 text-blue-600' :
-                                  item.vulnerability?.status === 'verified' ? 'bg-purple-50 text-purple-600' :
-                                  'bg-gray-50 text-gray-600'
+                                  item.vulnerability?.status === 'false-positive' ? 'bg-orange-900/20 text-orange-600' :
+                                  item.vulnerability?.status === 'confirmed' ? 'bg-green-900/20 text-green-400' :
+                                  item.vulnerability?.status === 'fixed' ? 'bg-blue-900/20 text-blue-400' :
+                                  item.vulnerability?.status === 'verified' ? 'bg-purple-900/20 text-purple-600' :
+                                  'bg-dark-bg text-gray-400'
                                 }`}>
                                   {item.vulnerability?.status === 'false-positive' ? '误报' :
                                    item.vulnerability?.status === 'confirmed' ? '已确认' :
@@ -1122,9 +1220,9 @@ export default function SkillDetailPage() {
                                    item.vulnerability?.status === 'verified' ? '已验证' :
                                    '新发现'}
                                 </span>
-                                <span className="font-medium text-gray-900">{item.vulnerability?.title || '未命名漏洞'}</span>
+                                <span className="font-medium text-gray-100">{item.vulnerability?.title || '未命名漏洞'}</span>
                               </div>
-                              <div className="mt-1 text-sm text-gray-600">
+                              <div className="mt-1 text-sm text-gray-400">
                                 {item.vulnerability?.type && <span className="mr-2">类型: {item.vulnerability.type}</span>}
                                 {item.vulnerability?.location && <span className="mr-2">位置: {item.vulnerability.location}</span>}
                               </div>
@@ -1135,7 +1233,7 @@ export default function SkillDetailPage() {
                             </div>
                             <a
                               href={`/vulnerabilities/${item.vulnerability?.id}`}
-                              className="px-2 py-1 rounded text-xs bg-blue-50 text-blue-600 hover:bg-blue-100"
+                              className="px-2 py-1 rounded text-xs bg-blue-900/20 text-blue-400 hover:bg-blue-100"
                             >
                               查看
                             </a>
@@ -1150,17 +1248,17 @@ export default function SkillDetailPage() {
                         <button
                           onClick={() => fetchVulnerabilities(vulnPage - 1, vulnFilter)}
                           disabled={vulnPage === 1}
-                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-dark-surface-hover"
                         >
                           上一页
                         </button>
-                        <span className="text-sm text-gray-600">
+                        <span className="text-sm text-gray-400">
                           {vulnPage} / {vulnTotalPages}
                         </span>
                         <button
                           onClick={() => fetchVulnerabilities(vulnPage + 1, vulnFilter)}
                           disabled={vulnPage === vulnTotalPages}
-                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100"
+                          className="px-3 py-1 text-sm border rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-dark-surface-hover"
                         >
                           下一页
                         </button>
@@ -1174,29 +1272,62 @@ export default function SkillDetailPage() {
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">分类</h3>
-                <p className="text-gray-900">
-                  {skill.vulnerabilityPatternCategory || skill.vulnerabilityPatternName || '无'}
+                <h3 className="text-sm font-medium text-gray-500 mb-1">SKILL类型</h3>
+                <p className="text-gray-100">
+                  {skill.categoryName ? (() => {
+                    const iconMap: Record<string, any> = { Bug, Search, Shield, Code, LayoutDashboard, TrendingUp };
+                    const Icon = skill.categoryIcon ? iconMap[skill.categoryIcon] : null;
+                    return (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm bg-purple-900/20 text-purple-700 rounded-md">
+                        {Icon && <Icon size={14} />}
+                        {skill.categoryName}
+                      </span>
+                    );
+                  })() : '无'}
                 </p>
               </div>
+              {skill.hasSubDimension && (
+                <div>
+                  <h3 className="text-sm font-medium text-gray-500 mb-1">攻击模式</h3>
+                  <p className="text-gray-100">
+                    <div className="flex items-center gap-1">
+                      {skill.languageName && (
+                        <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-400 rounded">
+                          {skill.languageName}
+                        </span>
+                      )}
+                      {skill.patternName && (
+                        <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
+                          {skill.patternName}
+                        </span>
+                      )}
+                      {!skill.languageName && !skill.patternName && <span>无</span>}
+                    </div>
+                  </p>
+                </div>
+              )}
               <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">所属技术栈</h3>
-                {skill.techStackName ? (
-                  <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded">
-                    {skill.techStackName}
-                  </span>
-                ) : <p className="text-gray-900">无</p>}
-              </div>
-              <div>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">CWE</h3>
-                <p className="text-gray-900">{skill.cwe || '无'}</p>
+                <h3 className="text-sm font-medium text-gray-500 mb-1">适用产品</h3>
+                <p className="text-gray-100">
+                  {skill.productTags && skill.productTags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {skill.productTags.map(tag => (
+                        <span key={tag.id} className="px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">
+                          {tag.displayName}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="px-2 py-0.5 text-xs bg-green-100 text-green-400 rounded">所有产品</span>
+                  )}
+                </p>
               </div>
             </div>
 
             {/* Markdown 内容 */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-lg font-medium text-gray-900">Skill 内容</h3>
+                <h3 className="text-lg font-medium text-gray-100">Skill 内容</h3>
                 <button
                   onClick={async () => {
                     if (skill.content) {
@@ -1208,19 +1339,19 @@ export default function SkillDetailPage() {
                       copyToClipboard(content);
                     }
                   }}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+                  className="inline-flex items-center text-sm text-blue-400 hover:text-blue-800"
                 >
                   <Copy size={14} className="mr-1" />
                   复制 Markdown
                 </button>
               </div>
-              <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
+              <div className="bg-dark-bg p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
                 <ReactMarkdown
                   components={{
                     code: ({ node, inline, className, children, ...props }: any) => {
                       if (inline) {
                         return (
-                          <code className="px-1.5 py-0.5 rounded bg-gray-100 text-blue-600 font-mono text-sm" {...props}>
+                          <code className="px-1.5 py-0.5 rounded bg-dark-surface-hover text-blue-400 font-mono text-sm" {...props}>
                             {children}
                           </code>
                         );
@@ -1237,27 +1368,27 @@ export default function SkillDetailPage() {
                       </pre>
                     ),
                     h1: ({ children, ...props }: any) => (
-                      <h1 className="text-2xl font-bold text-gray-900 mt-6 mb-4 pb-2 border-b border-gray-200" {...props}>
+                      <h1 className="text-2xl font-bold text-gray-100 mt-6 mb-4 pb-2 border-b border-gray-700/50" {...props}>
                         {children}
                       </h1>
                     ),
                     h2: ({ children, ...props }: any) => (
-                      <h2 className="text-xl font-semibold text-gray-900 mt-5 mb-3 pb-2 border-b border-gray-200" {...props}>
+                      <h2 className="text-xl font-semibold text-gray-100 mt-5 mb-3 pb-2 border-b border-gray-700/50" {...props}>
                         {children}
                       </h2>
                     ),
                     h3: ({ children, ...props }: any) => (
-                      <h3 className="text-lg font-semibold text-gray-900 mt-4 mb-2" {...props}>
+                      <h3 className="text-lg font-semibold text-gray-100 mt-4 mb-2" {...props}>
                         {children}
                       </h3>
                     ),
                     h4: ({ children, ...props }: any) => (
-                      <h4 className="text-base font-semibold text-gray-900 mt-3 mb-2" {...props}>
+                      <h4 className="text-base font-semibold text-gray-100 mt-3 mb-2" {...props}>
                         {children}
                       </h4>
                     ),
                     ul: ({ children, ...props }: any) => (
-                      <ul className="mt-4 space-y-2 list-disc list-inside marker:text-blue-600" {...props}>
+                      <ul className="mt-4 space-y-2 list-disc list-inside marker:text-blue-400" {...props}>
                         {children}
                       </ul>
                     ),
@@ -1267,30 +1398,30 @@ export default function SkillDetailPage() {
                       </ol>
                     ),
                     li: ({ children, ...props }: any) => (
-                      <li className="text-gray-700 ml-6" {...props}>
+                      <li className="text-gray-300 ml-6" {...props}>
                         {children}
                       </li>
                     ),
                     blockquote: ({ children, ...props }: any) => (
-                      <blockquote className="border-l-4 border-blue-500 pl-4 italic my-4 text-gray-600" {...props}>
+                      <blockquote className="border-l-4 border-blue-500 pl-4 italic my-4 text-gray-400" {...props}>
                         {children}
                       </blockquote>
                     ),
                     table: ({ children, ...props }: any) => (
                       <div className="my-6 overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200 border border-gray-300" {...props}>
+                        <table className="min-w-full divide-y divide-gray-700/50 border border-gray-600" {...props}>
                           {children}
                         </table>
                       </div>
                     ),
                     thead: ({ children, ...props }: any) => (
-                      <thead className="bg-gray-50" {...props}>{children}</thead>
+                      <thead className="bg-[#0F172A]" {...props}>{children}</thead>
                     ),
                     tbody: ({ children, ...props }: any) => (
-                      <tbody className="divide-y divide-gray-200" {...props}>{children}</tbody>
+                      <tbody className="divide-y divide-gray-700/50" {...props}>{children}</tbody>
                     ),
                     tr: ({ children, ...props }: any) => (
-                      <tr className="hover:bg-gray-50" {...props}>{children}</tr>
+                      <tr className="hover:bg-dark-surface-hover" {...props}>{children}</tr>
                     ),
                     th: ({ children, ...props }: any) => (
                       <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" {...props}>
@@ -1298,26 +1429,26 @@ export default function SkillDetailPage() {
                       </th>
                     ),
                     td: ({ children, ...props }: any) => (
-                      <td className="px-4 py-2 text-sm text-gray-700" {...props}>
+                      <td className="px-4 py-2 text-sm text-gray-300" {...props}>
                         {children}
                       </td>
                     ),
                     a: ({ children, href, ...props }: any) => (
-                      <a href={href} className="text-blue-600 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer" {...props}>
+                      <a href={href} className="text-blue-400 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer" {...props}>
                         {children}
                       </a>
                     ),
                     strong: ({ children, ...props }: any) => (
-                      <strong className="font-semibold text-gray-900" {...props}>{children}</strong>
+                      <strong className="font-semibold text-gray-100" {...props}>{children}</strong>
                     ),
                     del: ({ children, ...props }: any) => (
-                      <del className="text-red-600 line-through" {...props}>{children}</del>
+                      <del className="text-red-400 line-through" {...props}>{children}</del>
                     ),
                     p: ({ children, ...props }: any) => (
-                      <p className="text-gray-700 leading-relaxed mb-3" {...props}>{children}</p>
+                      <p className="text-gray-300 leading-relaxed mb-3" {...props}>{children}</p>
                     ),
                     hr: ({ ...props }: any) => (
-                      <hr className="my-4 border-gray-200" {...props} />
+                      <hr className="my-4 border-gray-700/50" {...props} />
                     ),
                   }}
                 >
@@ -1336,7 +1467,7 @@ export default function SkillDetailPage() {
         <>
           {/* 版本查看提示条 */}
           {viewingVersionId && viewingVersionId !== skill.id && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between">
+            <div className="bg-indigo-900/20 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <History size={18} className="text-indigo-600" />
                 <div>
@@ -1371,9 +1502,9 @@ export default function SkillDetailPage() {
 
       {/* 版本内容查看区域 */}
       {viewingVersionId && viewingVersionId !== skill?.id && !isEditing && (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-6 mt-4">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6 mt-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">
+            <h3 className="text-lg font-medium text-gray-100">
               v{viewingVersionNumber} 版本内容
             </h3>
             <button
@@ -1383,13 +1514,13 @@ export default function SkillDetailPage() {
                   toast.success('已复制版本内容');
                 }
               }}
-              className="inline-flex items-center text-sm text-blue-600 hover:text-blue-800"
+              className="inline-flex items-center text-sm text-blue-400 hover:text-blue-800"
             >
               <Copy size={14} className="mr-1" />
               复制内容
             </button>
           </div>
-          <div className="bg-gray-50 p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
+          <div className="bg-dark-bg p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
             <ReactMarkdown>{viewingVersionContent || '暂无内容'}</ReactMarkdown>
           </div>
         </div>
@@ -1437,9 +1568,8 @@ export default function SkillDetailPage() {
             description: editName,
             content: editContent,
             isActive: editIsActive,
-            vulnerabilityPatternId: editVulnerabilityPatternId,
-            techStackId: editTechStackId,
-            cwe: selectedVulnerabilityPattern?.cwe || null,
+            categoryId: editCategoryId,
+            vulnerabilityTreeId: editVulnerabilityTreeId,
           }}
         />
       )}
@@ -1491,22 +1621,22 @@ export default function SkillDetailPage() {
         const { left: leftDiff, right: rightDiff } = buildDiff(leftLines, rightLines);
 
         const rowBg = (type: DiffRow['type'], side: 'left'|'right') => {
-          if (type === 'removed') return 'bg-red-50';
-          if (type === 'added') return 'bg-green-50';
-          if (type === 'empty') return side === 'left' ? 'bg-green-50/40' : 'bg-red-50/40';
+          if (type === 'removed') return 'bg-red-900/20';
+          if (type === 'added') return 'bg-green-900/20';
+          if (type === 'empty') return side === 'left' ? 'bg-green-900/20/40' : 'bg-red-900/20/40';
           return '';
         };
         const textColor = (type: DiffRow['type']) => {
-          if (type === 'removed') return 'text-red-700';
-          if (type === 'added') return 'text-green-700';
+          if (type === 'removed') return 'text-red-400';
+          if (type === 'added') return 'text-green-400';
           if (type === 'empty') return 'text-transparent select-none';
-          return 'text-gray-700';
+          return 'text-gray-300';
         };
         const lineNoBg = (type: DiffRow['type']) => {
           if (type === 'removed') return 'bg-red-100 text-red-400';
           if (type === 'added') return 'bg-green-100 text-green-500';
-          if (type === 'empty') return 'bg-gray-50 text-transparent';
-          return 'bg-gray-50 text-gray-300';
+          if (type === 'empty') return 'bg-dark-bg text-transparent';
+          return 'bg-dark-bg text-gray-300';
         };
         const marker = (type: DiffRow['type']) => {
           if (type === 'removed') return <span className="text-red-400 select-none mr-1">−</span>;
@@ -1531,16 +1661,16 @@ export default function SkillDetailPage() {
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
+            <div className="bg-dark-surface rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
 
               {/* 弹窗头部 */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
                     <Sparkles size={16} className="text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900">AI 优化内容对比</h2>
+                    <h2 className="text-lg font-semibold text-gray-100">AI 优化内容对比</h2>
                     <p className="text-xs text-gray-500">
                       共 <span className="font-medium text-orange-500">{changedCount}</span> 处变更 &nbsp;·&nbsp;
                       <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block"/>删除</span> &nbsp;
@@ -1549,33 +1679,33 @@ export default function SkillDetailPage() {
                   </div>
                 </div>
                 <button onClick={() => setShowDiffModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">
+                  className="p-2 text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover rounded-lg transition-colors">
                   <X size={20} />
                 </button>
               </div>
 
               {/* AI 优化建议 */}
               {aiSuggestions.length > 0 && (
-                <div className="px-6 py-2.5 bg-purple-50 border-b border-purple-100 flex-shrink-0">
+                <div className="px-6 py-2.5 bg-purple-900/20 border-b border-purple-100 flex-shrink-0">
                   <span className="text-xs font-medium text-purple-700">AI 优化说明：</span>
                   <span className="text-xs text-purple-600 ml-2">{aiSuggestions.join('；')}</span>
                 </div>
               )}
 
               {/* 列标题 */}
-              <div className="flex divide-x divide-gray-200 flex-shrink-0 border-b border-gray-200">
-                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-gray-50">
+              <div className="flex divide-x divide-gray-700/50 flex-shrink-0 border-b border-gray-700/50">
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0F172A]">
                   <span className="w-2 h-2 rounded-full bg-red-400"/>
-                  <span className="text-sm font-medium text-gray-600">原始内容（你编辑的）</span>
+                  <span className="text-sm font-medium text-gray-400">原始内容（你编辑的）</span>
                 </div>
-                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-50">
-                  <span className="w-2 h-2 rounded-full bg-purple-500"/>
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-900/20">
+                  <span className="w-2 h-2 rounded-full bg-purple-600"/>
                   <span className="text-sm font-medium text-purple-700">AI 优化后的内容</span>
                 </div>
               </div>
 
               {/* diff 主体 — 同步滚动 */}
-              <div className="flex-1 flex divide-x divide-gray-200 min-h-0 overflow-hidden">
+              <div className="flex-1 flex divide-x divide-gray-700/50 min-h-0 overflow-hidden">
                 {/* 左侧 */}
                 <div ref={leftRef} onScroll={onLeftScroll}
                   className="flex-1 overflow-auto font-mono text-xs leading-5">
@@ -1614,10 +1744,10 @@ export default function SkillDetailPage() {
               </div>
 
               {/* 底部操作 */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200 flex-shrink-0 bg-gray-50 rounded-b-2xl">
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 flex-shrink-0 bg-dark-bg rounded-b-2xl">
                 <button
                   onClick={() => { setShowDiffModal(false); }}
-                  className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
                 >
                   放弃，保留原始内容
                 </button>

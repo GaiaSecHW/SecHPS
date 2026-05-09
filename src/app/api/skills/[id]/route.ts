@@ -27,13 +27,14 @@ export async function GET(
     const skill = await prisma.skill.findUnique({
       where: { id },
       include: {
-        TechStackOption: { select: { id: true, name: true, category: true } },
-        VulnerabilityPattern: {
+        SkillCategory: { select: { id: true, name: true, displayName: true, icon: true, hasSubDimension: true } },
+        VulnerabilityTree: {
           select: {
-            id: true, name: true, displayName: true, cwe: true,
-            VulnerabilityCategory: { select: { value: true } },
+            id: true, name: true, displayName: true, type: true,
+            VulnerabilityTree: { select: { id: true, name: true, displayName: true } },
           },
         },
+        SkillProductTag: { select: { id: true, productTagId: true, ProductTag: { select: { id: true, name: true, displayName: true } } } },
         SkillExecution: {
           take: 10,
           orderBy: { createdAt: 'desc' },
@@ -58,15 +59,20 @@ export async function GET(
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    const { TechStackOption, VulnerabilityPattern, ...rest } = skill;
+    const { SkillCategory, VulnerabilityTree, SkillProductTag, ...rest } = skill;
     return NextResponse.json({
       skill: {
         ...rest,
-        techStackName: TechStackOption?.name || null,
-        techStackCategory: TechStackOption?.category || null,
-        vulnerabilityPatternName: VulnerabilityPattern?.displayName || VulnerabilityPattern?.name || null,
-        vulnerabilityPatternCategory: VulnerabilityPattern?.VulnerabilityCategory?.value || null,
-        vulnerabilityPatternCwe: VulnerabilityPattern?.cwe || null,
+        categoryName: SkillCategory?.displayName || null,
+        categoryIcon: SkillCategory?.icon || null,
+        hasSubDimension: SkillCategory?.hasSubDimension || false,
+        patternName: VulnerabilityTree?.displayName || null,
+        languageName: VulnerabilityTree?.VulnerabilityTree?.displayName || null,
+        productTags: SkillProductTag.map(spt => ({
+          id: spt.ProductTag.id,
+          name: spt.ProductTag.name,
+          displayName: spt.ProductTag.displayName,
+        })),
       },
     });
   } catch (error) {
@@ -147,8 +153,8 @@ export async function PUT(
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
-      if (updates.techStackId !== undefined) updateData.techStackId = updates.techStackId;
-      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityPatternId = updates.vulnerabilityPatternId;
+      if (updates.techStackId !== undefined) updateData.categoryId = updates.categoryId;
+      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityTreeId = updates.vulnerabilityTreeId;
 
       // 创建新版本
       updatedSkill = await prisma.skill.create({
@@ -157,8 +163,8 @@ export async function PUT(
           name: skill.name,
           displayName: (updateData.displayName as string) ?? skill.displayName,
           description: (updateData.description as string) ?? skill.description,
-          techStackId: (updateData.techStackId as string | null) ?? skill.techStackId,
-          vulnerabilityPatternId: (updateData.vulnerabilityPatternId as string | null) ?? skill.vulnerabilityPatternId,
+          categoryId: skill.categoryId,
+          vulnerabilityTreeId: (updateData.vulnerabilityTreeId as string | null) ?? skill.vulnerabilityTreeId,
           cwe: (updateData.cwe as string | null) ?? skill.cwe,
           content: (updateData.content as string) ?? skill.content,
           userId: skill.userId,
@@ -220,8 +226,8 @@ export async function PUT(
       if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
       if (updates.content !== undefined) updateData.content = updates.content;
       if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
-      if (updates.techStackId !== undefined) updateData.techStackId = updates.techStackId;
-      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityPatternId = updates.vulnerabilityPatternId;
+      if (updates.techStackId !== undefined) updateData.categoryId = updates.categoryId;
+      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityTreeId = updates.vulnerabilityTreeId;
       // 处理 isPublic 分享状态（只有私有 Skill 的所有者可以切换）
       if (updates.isPublic !== undefined && skill.userId !== null) {
         updateData.isPublic = updates.isPublic;

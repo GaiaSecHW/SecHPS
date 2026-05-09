@@ -378,11 +378,11 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
   if (fileInfo?.isBinary) {
     return (
       <div className="flex flex-col h-full">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-gray-50">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/50 bg-[#0F172A]">
           <div className="flex items-center space-x-3">
             <FileText size={20} className="text-gray-500" />
             <div>
-              <h3 className="text-sm font-medium text-gray-900 truncate max-w-md">
+              <h3 className="text-sm font-medium text-gray-100 truncate max-w-md">
                 {fileInfo.fileName}
               </h3>
               <p className="text-xs text-gray-500">{fileInfo.path}</p>
@@ -398,7 +398,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
 
         <div className="flex-1 flex flex-col items-center justify-center">
           <AlertCircle size={48} className="text-yellow-500" />
-          <p className="mt-4 text-sm text-gray-600">{fileInfo.message}</p>
+          <p className="mt-4 text-sm text-gray-400">{fileInfo.message}</p>
           <p className="mt-2 text-xs text-gray-400">大小: {(fileInfo.size / 1024).toFixed(2)} KB</p>
         </div>
       </div>
@@ -408,14 +408,14 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
   return (
     <div className="flex flex-col h-full">
       {/* 头部工具栏 */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700/50 bg-[#0F172A]">
         <div className="flex items-center space-x-3">
           <FileCode size={18} className="text-gray-500" />
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-900 truncate max-w-xs">
+            <span className="text-sm font-medium text-gray-100 truncate max-w-xs">
               {fileInfo?.fileName || filePath.split('/').pop()}
             </span>
-            <span className="px-2 py-0.5 text-xs bg-gray-200 text-gray-600 rounded">
+            <span className="px-2 py-0.5 text-xs bg-gray-700 text-gray-300 rounded">
               {language}
             </span>
             {fileInfo && (
@@ -428,11 +428,11 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
 
         <div className="flex items-center space-x-2">
           {/* 模式切换 */}
-          <div className="flex border border-gray-300 rounded overflow-hidden">
+          <div className="flex border border-gray-600 rounded overflow-hidden">
             <button
               onClick={() => setIsEditing(true)}
               className={`px-3 py-1 text-xs ${
-                isEditing ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                isEditing ? 'bg-blue-500 text-white' : 'bg-dark-surface text-gray-400 hover:bg-dark-surface-hover'
               }`}
             >
               <Edit3 size={14} className="inline mr-1" />
@@ -441,7 +441,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
             <button
               onClick={() => setIsEditing(false)}
               className={`px-3 py-1 text-xs ${
-                !isEditing ? 'bg-blue-500 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'
+                !isEditing ? 'bg-blue-500 text-white' : 'bg-dark-surface text-gray-400 hover:bg-dark-surface-hover'
               }`}
             >
               <Eye size={14} className="inline mr-1" />
@@ -452,14 +452,14 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
           {/* 操作按钮 */}
           <button
             onClick={handleCopy}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-300 hover:bg-gray-50"
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-600 hover:bg-dark-surface-hover"
             title="复制内容"
           >
             <Copy size={16} />
           </button>
           <button
             onClick={handleDownload}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-300 hover:bg-gray-50"
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-600 hover:bg-dark-surface-hover"
             title="下载文件"
           >
             <Download size={16} />
@@ -482,7 +482,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-300 hover:bg-gray-50"
+            className="p-1.5 text-gray-400 hover:text-gray-600 rounded border border-gray-600 hover:bg-dark-surface-hover"
           >
             <X size={16} />
           </button>
@@ -494,7 +494,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
         <div className="px-4 py-2 bg-red-50 border-b border-red-100 flex items-center space-x-2">
           <AlertCircle size={16} className="text-red-500" />
           <span className="text-sm text-red-600">{error}</span>
-          <button onClick={() => setError('')} className="ml-auto text-red-500 hover:text-red-700">
+          <button onClick={() => setError('')} className="ml-auto text-red-500 hover:text-red-400">
             <X size={14} />
           </button>
         </div>
@@ -503,7 +503,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
         <div className="px-4 py-2 bg-green-50 border-b border-green-100 flex items-center space-x-2">
           <CheckCircle size={16} className="text-green-500" />
           <span className="text-sm text-green-600">{success}</span>
-          <button onClick={() => setSuccess('')} className="ml-auto text-green-500 hover:text-green-700">
+          <button onClick={() => setSuccess('')} className="ml-auto text-green-500 hover:text-green-400">
             <X size={14} />
           </button>
         </div>
@@ -514,7 +514,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
         {/* 行号 */}
         <div
           ref={lineNumbersRef}
-          className="flex-shrink-0 bg-gray-50 border-r border-gray-200 overflow-hidden select-none"
+          className="flex-shrink-0 bg-[#0F172A] border-r border-gray-700/50 overflow-hidden select-none"
           style={{ width: '50px' }}
         >
           <div className="py-2 px-2 text-right font-mono text-xs text-gray-400 leading-6">
@@ -531,7 +531,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onScroll={handleScroll}
-            className="flex-1 p-2 font-mono text-sm leading-6 resize-none focus:outline-none bg-white"
+            className="flex-1 p-2 font-mono text-sm leading-6 resize-none focus:outline-none bg-[#0F172A]"
             spellCheck={false}
             style={{
               whiteSpace: 'pre',
@@ -540,12 +540,12 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
             }}
           />
         ) : (
-          <div className="flex-1 overflow-auto bg-white">
+          <div className="flex-1 overflow-auto bg-dark-surface">
             <pre className="p-2 font-mono text-sm leading-6">
               {lines.map((line, i) => (
                 <div
                   key={i}
-                    className="hover:bg-gray-50"
+                    className="hover:bg-dark-surface-hover"
                     dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(getHighlightedLine(line) || '&nbsp;') }}
                   />
               ))}
@@ -555,7 +555,7 @@ export default function ClaudeFileEditor({ projectName, filePath, language, onCl
       </div>
 
       {/* 底部状态栏 */}
-      <div className="flex items-center justify-between px-4 py-1 text-xs text-gray-400 border-t border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-4 py-1 text-xs text-gray-400 border-t border-gray-700/50 bg-[#0F172A]">
         <div className="flex items-center space-x-4">
           <span>{lines.length} 行</span>
           <span>{content.length} 字符</span>

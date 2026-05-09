@@ -351,16 +351,13 @@ export async function batchInferSkills(
   const languages = await getActiveTechStackOptions();
   const vulnerabilityPatterns = await getActiveVulnerabilityPatterns();
 
-  // 过滤已分析的 Skill（已有 techStackId 或 vulnerabilityPatternId 的视为已分析）
+  // 过滤已分析的 Skill（已有 vulnerabilityTreeId 的视为已分析）
   let skillsToAnalyze = skills;
   if (skipAnalyzed) {
     const existingSkills = await prisma.skill.findMany({
       where: {
         id: { in: skills.map(s => s.id) },
-        OR: [
-          { techStackId: { not: null } },
-          { vulnerabilityPatternId: { not: null } },
-        ],
+        vulnerabilityTreeId: { not: null },
       },
       select: { id: true },
     });

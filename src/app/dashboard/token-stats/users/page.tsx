@@ -171,10 +171,10 @@ export default function UserTokenStatsPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-600">此页面仅管理员可访问</p>
+          <p className="text-gray-400">此页面仅管理员可访问</p>
           <button
             onClick={() => router.push('/dashboard/token-stats')}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-600"
           >
             返回 Token 统计
           </button>
@@ -188,10 +188,10 @@ export default function UserTokenStatsPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <p className="text-gray-600">{error}</p>
+          <p className="text-gray-400">{error}</p>
           <button
             onClick={checkAdminAndFetch}
-            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-600"
           >
             重试
           </button>
@@ -201,23 +201,23 @@ export default function UserTokenStatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-[#0F172A] p-6">
       {/* Header */}
       <div className="mb-6">
         <button
           onClick={() => router.push('/dashboard/token-stats')}
-          className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
+          className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
         >
           <ArrowLeft size={20} className="mr-2" />
           返回 Token 统计
         </button>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+            <h1 className="text-2xl font-bold text-gray-100 flex items-center">
               <Users className="mr-2" size={28} />
               用户 Token 统计
             </h1>
-            <p className="text-gray-600 mt-1">查看所有用户的 Token 使用情况</p>
+            <p className="text-gray-400 mt-1">查看所有用户的 Token 使用情况</p>
           </div>
           <div className="flex items-center space-x-3">
             {/* 搜索框 */}
@@ -228,7 +228,7 @@ export default function UserTokenStatsPage() {
                 placeholder="搜索用户..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 w-200"
+                className="pl-10 pr-4 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 w-200"
               />
             </div>
             {/* 时间选择 */}
@@ -237,7 +237,7 @@ export default function UserTokenStatsPage() {
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="day">今日</option>
                 <option value="week">本周</option>
@@ -248,7 +248,7 @@ export default function UserTokenStatsPage() {
             {/* 导出按钮 */}
             <button
               onClick={exportCSV}
-              className="flex items-center px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-600 transition-colors"
             >
               <Download size={18} className="mr-2" />
               导出 CSV
@@ -259,29 +259,29 @@ export default function UserTokenStatsPage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-dark-surface rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="text-blue-500">
               <TrendingUp size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(totalInputTokens)}</p>
+              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalInputTokens)}</p>
               <p className="text-xs text-gray-500">总输入 Token</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-dark-surface rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="text-green-500">
               <TrendingUp size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-900">{formatNumber(totalOutputTokens)}</p>
+              <p className="text-2xl font-bold text-gray-100">{formatNumber(totalOutputTokens)}</p>
               <p className="text-xs text-gray-500">总输出 Token</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-dark-surface rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="text-orange-500">
               <Coins size={24} />
@@ -300,13 +300,13 @@ export default function UserTokenStatsPage() {
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-lg shadow p-4">
+        <div className="bg-dark-surface rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="text-purple-500">
               <Users size={24} />
             </div>
             <div className="text-right">
-              <p className="text-2xl font-bold text-gray-900">{userStats.length}</p>
+              <p className="text-2xl font-bold text-gray-100">{userStats.length}</p>
               <p className="text-xs text-gray-500">活跃用户数</p>
             </div>
           </div>
@@ -314,9 +314,9 @@ export default function UserTokenStatsPage() {
       </div>
 
       {/* User Stats Table */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">用户消耗排行</h2>
+      <div className="bg-dark-surface rounded-lg">
+        <div className="px-6 py-4 border-b border-gray-700/50">
+          <h2 className="text-lg font-semibold text-gray-100">用户消耗排行</h2>
           <p className="text-sm text-gray-500 mt-1">按 Token 使用量排序</p>
         </div>
         
@@ -327,10 +327,10 @@ export default function UserTokenStatsPage() {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full">
-              <thead className="bg-gray-50">
+              <thead className="bg-[#162032]">
                 <tr>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('username')}
                   >
                     <div className="flex items-center">
@@ -347,7 +347,7 @@ export default function UserTokenStatsPage() {
                     输出 Token
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('totalTokens')}
                   >
                     <div className="flex items-center">
@@ -358,7 +358,7 @@ export default function UserTokenStatsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('estimatedCost')}
                   >
                     <div className="flex items-center">
@@ -369,7 +369,7 @@ export default function UserTokenStatsPage() {
                     </div>
                   </th>
                   <th 
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-dark-surface-hover"
                     onClick={() => toggleSort('evaluationCount')}
                   >
                     <div className="flex items-center">
@@ -384,28 +384,28 @@ export default function UserTokenStatsPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200">
+              <tbody className="divide-y divide-gray-700/50">
                 {filteredAndSortedStats.map((user, index) => (
-                  <tr key={user.userId} className="hover:bg-gray-50">
+                  <tr key={user.userId} className="hover:bg-[#0F172A]">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-gray-100">
                           {user.username}
                         </span>
                         {index === 0 && (
-                          <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-100 text-yellow-700 rounded-full">
+                          <span className="ml-2 px-2 py-0.5 text-xs bg-yellow-500/15 text-yellow-400 rounded-full">
                             🏆 Top 1
                           </span>
                         )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-blue-600 font-medium">
+                      <span className="text-sm text-blue-400 font-medium">
                         {formatNumber(user.inputTokens)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-green-600 font-medium">
+                      <span className="text-sm text-green-400 font-medium">
                         {formatNumber(user.outputTokens)}
                       </span>
                     </td>
@@ -426,14 +426,14 @@ export default function UserTokenStatsPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-400">
                         {user.evaluationCount}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => router.push(`/dashboard/users/${user.userId}`)}
-                        className="text-blue-600 hover:text-blue-800 flex items-center"
+                        className="text-blue-400 hover:text-blue-800 flex items-center"
                       >
                         查看详情
                         <ChevronRight size={16} className="ml-1" />

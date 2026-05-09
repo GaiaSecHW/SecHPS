@@ -51,10 +51,10 @@ interface Stats {
 const statusColors: Record<string, string> = {
   new: 'bg-blue-100 text-blue-800',
   confirmed: 'bg-yellow-100 text-yellow-800',
-  'false-positive': 'bg-gray-100 text-gray-800',
+  'false-positive': 'bg-dark-surface-hover text-gray-200',
   fixed: 'bg-green-100 text-green-800',
   verified: 'bg-purple-100 text-purple-800',
-  closed: 'bg-gray-100 text-gray-600',
+  closed: 'bg-dark-surface-hover text-gray-400',
 };
 
 const statusLabels: Record<string, string> = {
@@ -354,8 +354,8 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">漏洞管理</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <h1 className="text-2xl font-bold text-gray-100">漏洞管理</h1>
+        <p className="mt-1 text-sm text-gray-400">
           查看和管理系统中的安全漏洞
         </p>
       </div>
@@ -363,54 +363,54 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
       {/* Stats Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 rounded-lg">
-                <Bug className="h-6 w-6 text-blue-600" />
+                <Bug className="h-6 w-6 text-blue-400" />
               </div>
               <div className="ml-4">
                 <p className="text-sm text-gray-500">总漏洞数</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-2xl font-bold text-gray-100">{stats.total}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
             <div className="flex items-center">
               <div className="p-2 bg-orange-100 rounded-lg">
-                <AlertTriangle className="h-6 w-6 text-orange-600" />
+                <AlertTriangle className="h-6 w-6 text-orange-400" />
               </div>
               <div className="ml-4">
                 <p className="text-sm text-gray-500">待处理</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-100">
                   {stats.byStatus['new'] || 0}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
-                <Clock className="h-6 w-6 text-yellow-600" />
+                <Clock className="h-6 w-6 text-yellow-400" />
               </div>
               <div className="ml-4">
                 <p className="text-sm text-gray-500">已确认</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-100">
                   {stats.byStatus['confirmed'] || 0}
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-4">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-4">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+                <CheckCircle className="h-6 w-6 text-green-400" />
               </div>
               <div className="ml-4">
                 <p className="text-sm text-gray-500">已修复</p>
-                <p className="text-2xl font-bold text-gray-900">
+                <p className="text-2xl font-bold text-gray-100">
                   {(stats.byStatus['fixed'] || 0) + (stats.byStatus['verified'] || 0)}
                 </p>
               </div>
@@ -429,14 +429,14 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
               placeholder="搜索漏洞..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
         </div>
         <select
           value={selectedProject}
           onChange={(e) => { setSelectedProject(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         >
           <option value="">所有项目</option>
           {projects.map(project => (
@@ -446,7 +446,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
         <select
           value={selectedStatus}
           onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
         >
           <option value="">所有状态</option>
           <option value="new">新建</option>
@@ -460,11 +460,11 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
       {/* Vulnerabilities List */}
       <div className="space-y-4">
         {filteredVulnerabilities.length === 0 ? (
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-12">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12">
             <div className="text-center">
               <Shield className="mx-auto h-16 w-16 text-gray-400" />
-              <h3 className="mt-4 text-lg font-medium text-gray-900">暂无漏洞</h3>
-              <p className="mt-2 text-sm text-gray-600">
+              <h3 className="mt-4 text-lg font-medium text-gray-100">暂无漏洞</h3>
+              <p className="mt-2 text-sm text-gray-400">
                 {searchTerm || selectedStatus || selectedProject
                   ? '没有找到匹配的漏洞'
                   : '系统运行良好，暂未发现安全漏洞'}
@@ -475,20 +475,20 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
           filteredVulnerabilities.map((vuln) => (
             <div
               key={vuln.id}
-              className="bg-white rounded-lg shadow border border-gray-200 px-4 py-3 hover:border-gray-300 transition-colors cursor-pointer"
+              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 px-4 py-3 hover:border-gray-600 transition-colors cursor-pointer"
               onClick={() => setSelectedVuln(vuln)}
             >
               <div className="flex items-center gap-3">
-                <span className={`px-2 py-0.5 text-xs font-medium rounded flex-shrink-0 ${statusColors[vuln.status] || 'bg-gray-100 text-gray-800'}`}>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded flex-shrink-0 ${statusColors[vuln.status] || 'bg-dark-surface-hover text-gray-200'}`}>
                   {statusLabels[vuln.status] || vuln.status}
                 </span>
-                <h3 className="font-semibold text-gray-900 truncate flex-1 min-w-0">{vuln.title}</h3>
-                {vuln.project && <span className="text-sm text-blue-600 flex-shrink-0">项目: {vuln.project.name}</span>}
+                <h3 className="font-semibold text-gray-100 truncate flex-1 min-w-0">{vuln.title}</h3>
+                {vuln.project && <span className="text-sm text-blue-400 flex-shrink-0">项目: {vuln.project.name}</span>}
                 <span className="text-sm text-gray-500 flex-shrink-0">类型: {vuln.type}</span>
                 <span className="text-sm text-gray-400 flex-shrink-0">{new Date(vuln.createdAt).toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                 <button
                   onClick={(e) => handleDelete(vuln.id, vuln.title, e)}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                  className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors flex-shrink-0"
                   title="删除漏洞"
                 >
                   <Trash2 size={16} />
@@ -502,24 +502,24 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
       {/* Pagination */}
       {totalCount > 0 && (
         <div className="flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-400">
             共 {totalCount} 条记录，第 {currentPage}/{Math.ceil(totalCount / pageSize)} 页
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}
-              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronLeft size={16} />
             </button>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-400">
               第 {currentPage} 页
             </span>
             <button
               onClick={() => setCurrentPage(p => p + 1)}
               disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <ChevronRight size={16} />
             </button>
@@ -529,26 +529,26 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 
       {/* Detail Modal */}
       {selectedVuln && (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+        <div className="fixed inset-0 bg-dark-surface z-50 flex flex-col">
           {/* 顶部导航栏 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-dark-surface shrink-0">
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setSelectedVuln(null)}
-                className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
+                className="flex items-center text-gray-500 hover:text-gray-200 transition-colors"
               >
                 <XCircle size={20} className="mr-1" />
                 返回
               </button>
               <span className="text-gray-300">|</span>
-              <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusColors[selectedVuln.status] || 'bg-gray-100 text-gray-800'}`}>
+              <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusColors[selectedVuln.status] || 'bg-dark-surface-hover text-gray-200'}`}>
                 {statusLabels[selectedVuln.status] || selectedVuln.status}
               </span>
-              <h2 className="text-lg font-bold text-gray-900">{selectedVuln.title}</h2>
+              <h2 className="text-lg font-bold text-gray-100">{selectedVuln.title}</h2>
             </div>
             {/* 操作按钮 */}
             <div className="flex items-center space-x-2">
-              <button onClick={() => handleCopyAsMarkdown(selectedVuln)} className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+              <button onClick={() => handleCopyAsMarkdown(selectedVuln)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
                 <Copy size={14} className="mr-1" />复制MD
               </button>
               {selectedVuln.status === 'new' && (
@@ -556,7 +556,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                   <button onClick={() => handleStatusChange(selectedVuln.id, 'confirm')} className="inline-flex items-center px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">
                     <CheckCircle size={14} className="mr-1" />确认漏洞
                   </button>
-                  <button onClick={() => handleStatusChange(selectedVuln.id, 'false-positive')} className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 text-sm">
+                  <button onClick={() => handleStatusChange(selectedVuln.id, 'false-positive')} className="inline-flex items-center px-3 py-1.5 bg-dark-surface-hover text-gray-200 rounded hover:bg-gray-700 text-sm">
                     <XCircle size={14} className="mr-1" />标记误报
                   </button>
                 </>
@@ -571,7 +571,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                   <CheckCircle size={14} className="mr-1" />验证修复
                 </button>
               )}
-              <button onClick={() => handleDelete(selectedVuln.id, selectedVuln.title)} className="inline-flex items-center px-3 py-1.5 bg-red-50 text-red-700 border border-red-200 rounded hover:bg-red-100 text-sm">
+              <button onClick={() => handleDelete(selectedVuln.id, selectedVuln.title)} className="inline-flex items-center px-3 py-1.5 bg-red-900/20 text-red-400 border border-red-200 rounded hover:bg-red-100 text-sm">
                 <Trash2 size={14} className="mr-1" />删除
               </button>
             </div>
@@ -583,37 +583,37 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 
               <div className="mt-4 space-y-4">
                 {/* 基本信息 */}
-                <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                <div className="bg-[#0F172A] rounded-lg p-4 space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <span className="text-xs text-gray-500">漏洞类型</span>
-                      <p className="text-sm font-medium text-gray-900">{selectedVuln.type}</p>
+                      <p className="text-sm font-medium text-gray-100">{selectedVuln.type}</p>
                     </div>
                     <div>
                       <span className="text-xs text-gray-500">CWE 编号</span>
-                      <p className="text-sm font-medium text-gray-900">{selectedVuln.cwe || '无'}</p>
+                      <p className="text-sm font-medium text-gray-100">{selectedVuln.cwe || '无'}</p>
                     </div>
                     <div>
                       <span className="text-xs text-gray-500">发现工具</span>
-                      <p className="text-sm font-medium text-gray-900">{selectedVuln.skill || '未知'}</p>
+                      <p className="text-sm font-medium text-gray-100">{selectedVuln.skill || '未知'}</p>
                     </div>
                     <div>
                       <span className="text-xs text-gray-500">发现时间</span>
-                      <p className="text-sm font-medium text-gray-900">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
+                      <p className="text-sm font-medium text-gray-100">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* 描述 */}
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">漏洞描述</h4>
-                  <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">漏洞描述</h4>
+                  <div className="text-sm text-gray-400 bg-dark-surface border border-gray-700/50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
                 </div>
 
                 {/* 问题代码位置 */}
                 {selectedVuln.location && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">问题代码位置</h4>
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">问题代码位置</h4>
                     <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.location}</pre>
                   </div>
                 )}
@@ -621,7 +621,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                 {/* POC 验证代码 */}
                 {selectedVuln.POC && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">POC 验证代码</h4>
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">POC 验证代码</h4>
                     <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.POC}</pre>
                   </div>
                 )}
@@ -629,8 +629,8 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                 {/* 修复建议 */}
                 {selectedVuln.fixSuggestion && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-2">修复建议</h4>
-                    <div className="text-sm text-gray-600 bg-white border border-gray-200 rounded-lg p-3 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">修复建议</h4>
+                    <div className="text-sm text-gray-400 bg-dark-surface border border-gray-700/50 rounded-lg p-3 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
                   </div>
                 )}
               </div>
@@ -643,16 +643,16 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
       {/* 误报原因输入弹窗 */}
       {showFalsePositiveModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">标记为误报</h3>
-            <p className="text-sm text-gray-600 mb-4">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-100 mb-4">标记为误报</h3>
+            <p className="text-sm text-gray-400 mb-4">
               请输入误报原因（可选）。此原因将用于后续的 Skill 进化改进。
             </p>
             <textarea
               value={falsePositiveReason}
               onChange={(e) => setFalsePositiveReason(e.target.value)}
               placeholder="例如：该代码已进行输入验证，不存在漏洞..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
               rows={4}
             />
             <div className="mt-4 flex justify-end gap-3">
@@ -661,7 +661,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                   setShowFalsePositiveModal(false);
                   setFalsePositiveReason('');
                 }}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+                className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-200"
               >
                 取消
               </button>

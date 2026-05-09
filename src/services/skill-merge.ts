@@ -65,7 +65,7 @@ export interface MergeDetails {
     displayName: string;
     version: number;
     content: string;
-    techStackId: string | null;
+    categoryId: string | null;
   };
   originalSourceSkills: Array<{
     id: string;
@@ -73,7 +73,7 @@ export interface MergeDetails {
     displayName: string;
     version: number;
     content: string;
-    techStackId: string | null;
+    categoryId: string | null;
   }>;
   mergedContent?: string;  // For content-merge
   techStackAssignments?: Array<{  // For techStack-split
@@ -211,8 +211,8 @@ async function executeContentMerge(
         severity: mergedSeverity,
         cwe: mergedCwe,
         content: mergedContent,
-        techStackId: targetSkill.techStackId,
-        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
+        categoryId: targetSkill.categoryId,
+        vulnerabilityTreeId: targetSkill.vulnerabilityTreeId,
         userId: targetSkill.userId,  // 继承目标 Skill 的所有者
         isBuiltin: false,
         isActive: true,
@@ -257,7 +257,7 @@ async function executeContentMerge(
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStackId: targetSkill.techStackId,
+        categoryId: targetSkill.categoryId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -265,7 +265,7 @@ async function executeContentMerge(
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStackId: s.techStackId,
+        categoryId: s.categoryId,
       })),
       mergedContent: mergedContent,
       mergedAt: new Date().toISOString(),
@@ -373,8 +373,8 @@ async function executeReplaceMerge(
         severity: targetSkill.severity || 'medium',
         cwe: targetSkill.cwe,
         content: updatedContent,
-        techStackId: targetSkill.techStackId,
-        vulnerabilityPatternId: targetSkill.vulnerabilityPatternId,
+        categoryId: targetSkill.categoryId,
+        vulnerabilityTreeId: targetSkill.vulnerabilityTreeId,
         userId: targetSkill.userId,
         isBuiltin: targetSkill.isBuiltin,
         isActive: targetSkill.isActive,
@@ -410,7 +410,7 @@ async function executeReplaceMerge(
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStackId: targetSkill.techStackId,
+        categoryId: targetSkill.categoryId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -418,7 +418,7 @@ async function executeReplaceMerge(
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStackId: s.techStackId,
+        categoryId: s.categoryId,
       })),
       mergedAt: new Date().toISOString(),
       mergedBy: options.userId,
@@ -534,8 +534,8 @@ async function executeTechStackSplit(
           severity: skill.severity || 'medium',
           cwe: skill.cwe,
           content: skill.content || '',
-          techStackId: skill.techStackId,
-          vulnerabilityPatternId: skill.vulnerabilityPatternId,
+          categoryId: skill.categoryId,
+          vulnerabilityTreeId: skill.vulnerabilityTreeId,
           userId: skill.userId,
           isBuiltin: skill.isBuiltin,
           isActive: skill.isActive,
@@ -567,7 +567,7 @@ async function executeTechStackSplit(
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStackId: targetSkill.techStackId,
+        categoryId: targetSkill.categoryId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -575,7 +575,7 @@ async function executeTechStackSplit(
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStackId: s.techStackId,
+        categoryId: s.categoryId,
       })),
       techStackAssignments,
       mergedAt: new Date().toISOString(),
@@ -695,7 +695,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
         displayName: targetSkill.displayName,
         version: targetSkill.version,
         content: targetSkill.content || '',
-        techStackId: targetSkill.techStackId,
+        categoryId: targetSkill.categoryId,
       },
       originalSourceSkills: sourceSkills.map(s => ({
         id: s.id,
@@ -703,7 +703,7 @@ export async function createMergeRequest(options: MergeOptions): Promise<{
         displayName: s.displayName,
         version: s.version,
         content: s.content || '',
-        techStackId: s.techStackId,
+        categoryId: s.categoryId,
       })),
       mergedAt: new Date().toISOString(),
       mergedBy: options.userId,

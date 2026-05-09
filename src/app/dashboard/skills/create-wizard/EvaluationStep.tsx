@@ -216,12 +216,12 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+      <div className="bg-green-900/20 border border-green-200 rounded-lg p-4">
         <div className="flex items-start">
-          <Play className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" />
+          <Play className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
           <div className="text-sm text-green-800">
             <p className="font-medium mb-2">评估说明</p>
-            <p className="text-green-700">
+            <p className="text-green-400">
               我们会对每个测试用例运行两次：一次使用你的 Skill，一次不使用。
               对比两者的效果，帮助你改进 Skill 质量。
             </p>
@@ -232,21 +232,21 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
       {/* 统计信息 */}
       {runs.length > 0 && (
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-600">总测试数</div>
-            <div className="text-2xl font-bold text-gray-900">{runs.length}</div>
+          <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+            <div className="text-sm text-gray-400">总测试数</div>
+            <div className="text-2xl font-bold text-gray-100">{runs.length}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-600">已完成</div>
-            <div className="text-2xl font-bold text-green-600">{completedCount}</div>
+          <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+            <div className="text-sm text-gray-400">已完成</div>
+            <div className="text-2xl font-bold text-green-400">{completedCount}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-600">失败</div>
-            <div className="text-2xl font-bold text-red-600">{failedCount}</div>
+          <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+            <div className="text-sm text-gray-400">失败</div>
+            <div className="text-2xl font-bold text-red-400">{failedCount}</div>
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-4">
-            <div className="text-sm text-gray-600">进度</div>
-            <div className="text-2xl font-bold text-blue-600">
+          <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
+            <div className="text-sm text-gray-400">进度</div>
+            <div className="text-2xl font-bold text-blue-400">
               {progress.current}/{progress.total}
             </div>
           </div>
@@ -255,14 +255,14 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
 
       {/* 进度条 */}
       {isRunning && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
+        <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-gray-700">运行进度</span>
-            <span className="text-sm text-gray-600">
+            <span className="text-sm font-medium text-gray-300">运行进度</span>
+            <span className="text-sm text-gray-400">
               {progress.current}/{progress.total}
             </span>
           </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
+          <div className="w-full bg-gray-700 rounded-full h-2">
             <div
               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
               style={{ width: `${(progress.current / progress.total) * 100}%` }}
@@ -305,18 +305,18 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
       {/* 测试用例列表 */}
       {runs.length > 0 && (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-900">测试运行详情</h3>
+          <h3 className="text-lg font-medium text-gray-100">测试运行详情</h3>
           {testCases.map((tc) => {
             const withSkillRun = runs.find((r) => r.testCaseId === tc.id && r.type === 'with_skill');
             const withoutSkillRun = runs.find((r) => r.testCaseId === tc.id && r.type === 'without_skill');
 
             return (
-              <div key={tc.id} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
-                  <h4 className="font-medium text-gray-900">{tc.name}</h4>
+              <div key={tc.id} className="bg-dark-surface border border-gray-700/50 rounded-lg overflow-hidden">
+                <div className="px-4 py-3 bg-[#0F172A] border-b border-gray-700/50">
+                  <h4 className="font-medium text-gray-100">{tc.name}</h4>
                   <p className="text-sm text-gray-500 mt-1 line-clamp-1">{tc.prompt}</p>
                 </div>
-                <div className="divide-y divide-gray-200">
+                <div className="divide-y divide-gray-700/50">
                   {/* With Skill */}
                   {withSkillRun && (
                     <TestRunItem 
@@ -348,12 +348,12 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
 
       {/* 提示 */}
       {testCases.length === 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-start">
-            <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+            <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
             <div className="text-sm text-yellow-800">
               <p className="font-medium mb-1">没有测试用例</p>
-              <p className="text-yellow-700">
+              <p className="text-yellow-400">
                 请先在上一步添加测试用例，或者选择跳过评估步骤。
               </p>
             </div>
@@ -366,7 +366,7 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
         <button
           onClick={onPrevious}
           disabled={isRunning}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-[#0F172A] disabled:opacity-50"
         >
           上一步
         </button>
@@ -401,15 +401,15 @@ function TestRunItem({
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="bg-white">
+    <div className="bg-dark-surface">
       <div 
-        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-gray-50"
+        className="px-4 py-3 flex items-center justify-between cursor-pointer hover:bg-[#0F172A]"
         onClick={() => run.output && setIsExpanded(!isExpanded)}
       >
         <div className="flex items-center space-x-3">
           {getStatusIcon(run.status)}
           <div>
-            <div className="text-sm font-medium text-gray-900">{label}</div>
+            <div className="text-sm font-medium text-gray-100">{label}</div>
             {run.status === 'completed' && (
               <div className="text-xs text-gray-500 mt-1">
                 耗时: {run.duration}ms | Tokens: {run.tokens}
@@ -440,12 +440,12 @@ function TestRunItem({
       </div>
       
       {run.error && (
-        <div className="px-4 py-2 bg-red-50 text-red-600 text-sm flex items-center justify-between">
+        <div className="px-4 py-2 bg-red-900/20 text-red-400 text-sm flex items-center justify-between">
           <span>{run.error}</span>
           <button
             onClick={() => onRetry(run.id)}
             disabled={isRunning}
-            className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-50 ml-2"
+            className="px-2 py-1 text-xs bg-red-100 text-red-400 rounded hover:bg-red-200 disabled:opacity-50 ml-2"
           >
             重试
           </button>
@@ -453,20 +453,20 @@ function TestRunItem({
       )}
       
       {isExpanded && run.output && (
-        <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+        <div className="px-4 py-3 border-t border-gray-100 bg-[#0F172A]">
           <div className="prose prose-sm max-w-none">
             <ReactMarkdown
               components={{
-                h1: ({ children }) => <h1 className="text-base font-bold text-gray-900 mb-2">{children}</h1>,
-                h2: ({ children }) => <h2 className="text-sm font-semibold text-gray-900 mb-2">{children}</h2>,
-                h3: ({ children }) => <h3 className="text-xs font-semibold text-gray-800 mb-1">{children}</h3>,
-                p: ({ children }) => <p className="text-xs text-gray-700 mb-2">{children}</p>,
-                ul: ({ children }) => <ul className="list-disc list-inside text-xs text-gray-700 space-y-1 mb-2">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside text-xs text-gray-700 space-y-1 mb-2">{children}</ol>,
+                h1: ({ children }) => <h1 className="text-base font-bold text-gray-100 mb-2">{children}</h1>,
+                h2: ({ children }) => <h2 className="text-sm font-semibold text-gray-100 mb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-xs font-semibold text-gray-200 mb-1">{children}</h3>,
+                p: ({ children }) => <p className="text-xs text-gray-300 mb-2">{children}</p>,
+                ul: ({ children }) => <ul className="list-disc list-inside text-xs text-gray-300 space-y-1 mb-2">{children}</ul>,
+                ol: ({ children }) => <ol className="list-decimal list-inside text-xs text-gray-300 space-y-1 mb-2">{children}</ol>,
                 code: ({ children, className }) => {
                   const isInline = !className;
                   return isInline ? (
-                    <code className="px-1 py-0.5 bg-gray-100 text-gray-800 rounded text-xs font-mono">{children}</code>
+                    <code className="px-1 py-0.5 bg-gray-100 text-gray-200 rounded text-xs font-mono">{children}</code>
                   ) : (
                     <code className="block bg-gray-900 text-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
                   );

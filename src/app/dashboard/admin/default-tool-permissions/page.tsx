@@ -37,9 +37,9 @@ const BUILTIN_TOOLS = [
 ];
 
 const PERMISSION_OPTIONS = [
-  { value: 'allow', label: '允许', color: 'bg-green-100 text-green-700' },
-  { value: 'ask', label: '询问', color: 'bg-yellow-100 text-yellow-700' },
-  { value: 'deny', label: '拒绝', color: 'bg-red-100 text-red-700' },
+  { value: 'allow', label: '允许', color: 'bg-green-500/15 text-green-400 border border-green-500/20' },
+  { value: 'ask', label: '询问', color: 'bg-yellow-500/15 text-yellow-400 border border-yellow-500/20' },
+  { value: 'deny', label: '拒绝', color: 'bg-red-500/15 text-red-400 border border-red-500/20' },
 ];
 
 interface ToolPermission {
@@ -214,7 +214,7 @@ function DefaultToolPermissionsContent() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -224,18 +224,18 @@ function DefaultToolPermissionsContent() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
             <Shield className="h-6 w-6" />
             默认工具权限配置
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-400 mt-1">
             配置新建项目时继承的工具权限规则
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            className="flex items-center gap-2 px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
           >
             <Plus size={16} />
             添加规则
@@ -253,38 +253,38 @@ function DefaultToolPermissionsContent() {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-green-700">{stats.allow}</div>
-          <div className="text-sm text-green-600">允许的工具</div>
+        <div className="bg-green-900/20 border border-green-500/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-green-400">{stats.allow}</div>
+          <div className="text-sm text-green-400/80">允许的工具</div>
         </div>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-yellow-700">{stats.ask}</div>
-          <div className="text-sm text-yellow-600">需要询问</div>
+        <div className="bg-yellow-900/20 border border-yellow-500/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-yellow-400">{stats.ask}</div>
+          <div className="text-sm text-yellow-400/80">需要询问</div>
         </div>
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="text-2xl font-bold text-red-700">{stats.deny}</div>
-          <div className="text-sm text-red-600">拒绝的工具</div>
+        <div className="bg-red-900/20 border border-red-500/20 rounded-lg p-4">
+          <div className="text-2xl font-bold text-red-400">{stats.deny}</div>
+          <div className="text-sm text-red-400/80">拒绝的工具</div>
         </div>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded flex items-center gap-2">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded flex items-center gap-2">
           <AlertCircle size={20} />
           {error}
         </div>
       )}
 
       {/* Quick Add - Built-in Tools */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <h3 className="text-sm font-medium text-gray-700 mb-3">快速添加内置工具</h3>
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+        <h3 className="text-sm font-medium text-gray-300 mb-3">快速添加内置工具</h3>
         <div className="flex flex-wrap gap-2">
           {BUILTIN_TOOLS.map(tool => (
             <button
               key={tool.name}
               onClick={() => handleAddBuiltinTool(tool.name)}
               disabled={permissions.some(p => p.toolPattern === tool.name)}
-              className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:bg-gray-100"
+              className="px-3 py-1 text-sm border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover disabled:opacity-50 disabled:bg-dark-surface-hover"
             >
               {tool.name}
             </button>
@@ -293,22 +293,22 @@ function DefaultToolPermissionsContent() {
       </div>
 
       {/* Permissions List */}
-      <div className="bg-white rounded-lg border border-gray-200">
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50">
         {permissions.length === 0 ? (
           <div className="text-center py-12">
-            <Shield className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">暂无默认工具权限配置</p>
-            <p className="text-sm text-gray-400">
+            <Shield className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+            <p className="text-gray-400 mb-4">暂无默认工具权限配置</p>
+            <p className="text-sm text-gray-500">
               点击"添加规则"按钮或使用上方快速添加内置工具
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-700/50">
             {permissions.map((perm, index) => (
               <div key={perm.toolPattern} className="px-6 py-4 flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
-                    <span className="font-medium text-gray-900">{perm.toolPattern}</span>
+                    <span className="font-medium text-gray-100">{perm.toolPattern}</span>
                     <span className={`px-2 py-0.5 text-xs rounded ${PERMISSION_OPTIONS.find(o => o.value === perm.permission)?.color}`}>
                       {PERMISSION_OPTIONS.find(o => o.value === perm.permission)?.label}
                     </span>
@@ -320,13 +320,13 @@ function DefaultToolPermissionsContent() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => handleEdit(index)}
-                    className="p-2 text-gray-400 hover:text-blue-600"
+                    className="p-2 text-gray-400 hover:text-blue-400"
                   >
                     <Edit size={16} />
                   </button>
                   <button
                     onClick={() => handleDelete(index)}
-                    className="p-2 text-gray-400 hover:text-red-600"
+                    className="p-2 text-gray-400 hover:text-red-400"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -338,10 +338,10 @@ function DefaultToolPermissionsContent() {
       </div>
 
       {/* Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <Info className="h-5 w-5 text-blue-600 mt-0.5" />
-          <div className="text-sm text-blue-700">
+          <Info className="h-5 w-5 text-blue-400 mt-0.5" />
+          <div className="text-sm text-blue-300">
             <p className="font-medium mb-1">说明</p>
             <ul className="list-disc list-inside space-y-1">
               <li>toolPattern 支持精确匹配（如 "Bash"）或模式匹配（如 "Bash(npm:*)"）</li>
@@ -358,9 +358,9 @@ function DefaultToolPermissionsContent() {
       {/* Add/Edit Modal */}
       {(showAddModal || editingIndex !== null) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4 border border-gray-700/50">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">
                 {editingIndex !== null ? '编辑权限规则' : '添加权限规则'}
               </h3>
               <button
@@ -369,7 +369,7 @@ function DefaultToolPermissionsContent() {
                   setEditingIndex(null);
                   setFormData({ toolPattern: '', permission: 'ask', description: '' });
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-200"
               >
                 <X size={20} />
               </button>
@@ -377,27 +377,27 @@ function DefaultToolPermissionsContent() {
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  工具名称/模式 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  工具名称/模式 <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.toolPattern}
                   onChange={(e) => setFormData({ ...formData, toolPattern: e.target.value })}
                   disabled={editingIndex !== null}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:ring-2 focus:ring-primary-500 disabled:bg-dark-surface-hover disabled:text-gray-500"
                   placeholder="例如：Bash 或 Bash(npm:*)"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  权限类型 <span className="text-red-500">*</span>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  权限类型 <span className="text-red-400">*</span>
                 </label>
                 <select
                   value={formData.permission}
                   onChange={(e) => setFormData({ ...formData, permission: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 rounded-md focus:ring-2 focus:ring-primary-500"
                 >
                   {PERMISSION_OPTIONS.map(opt => (
                     <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -406,33 +406,33 @@ function DefaultToolPermissionsContent() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   描述（可选）
                 </label>
                 <input
                   type="text"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:ring-2 focus:ring-primary-500"
                   placeholder="描述这条权限规则的用途"
                 />
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end gap-3">
               <button
                 onClick={() => {
                   setShowAddModal(false);
                   setEditingIndex(null);
                   setFormData({ toolPattern: '', permission: 'ask', description: '' });
                 }}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-sm bg-dark-surface border border-gray-600 text-gray-300 rounded-md hover:bg-dark-surface-hover"
               >
                 取消
               </button>
               <button
                 onClick={editingIndex !== null ? handleUpdate : handleAdd}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                className="px-4 py-2 text-sm bg-primary-600 text-white rounded-md hover:bg-primary-700"
               >
                 {editingIndex !== null ? '更新' : '添加'}
               </button>

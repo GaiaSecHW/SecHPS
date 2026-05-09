@@ -78,15 +78,15 @@ const severityColors: Record<string, { bg: string; text: string; border: string 
   high: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300' },
   medium: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300' },
   low: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
-  info: { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300' },
+  info: { bg: 'bg-gray-100', text: 'text-gray-300', border: 'border-gray-600' },
 };
 
 // Status color mapping
 const statusColors: Record<string, { bg: string; text: string }> = {
   new: { bg: 'bg-purple-100', text: 'text-purple-700' },
   confirmed: { bg: 'bg-green-100', text: 'text-green-700' },
-  'false-positive': { bg: 'bg-gray-100', text: 'text-gray-600' },
-  false_positive: { bg: 'bg-gray-100', text: 'text-gray-600' }, // 兼容旧格式
+  'false-positive': { bg: 'bg-gray-100', text: 'text-gray-400' },
+  false_positive: { bg: 'bg-gray-100', text: 'text-gray-400' }, // 兼容旧格式
   ignored: { bg: 'bg-gray-100', text: 'text-gray-500' },
   fixed: { bg: 'bg-blue-100', text: 'text-blue-700' },
   verified: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
@@ -207,7 +207,7 @@ export default function VulnerabilityDetailPage() {
         </div>
         <button
           onClick={() => router.back()}
-          className="mt-4 inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          className="mt-4 inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] transition-colors"
         >
           <ArrowLeft size={16} className="mr-2" />
           返回
@@ -232,7 +232,7 @@ export default function VulnerabilityDetailPage() {
           </button>
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-gray-100">
                 {vulnerability.title}
               </h1>
               <span
@@ -246,7 +246,7 @@ export default function VulnerabilityDetailPage() {
                 {statusNames[vulnerability.status] || vulnerability.status}
               </span>
             </div>
-            <div className="flex items-center gap-4 text-sm text-gray-600">
+            <div className="flex items-center gap-4 text-sm text-gray-400">
               <span className="flex items-center gap-1">
                 <Shield size={14} />
                 {vulnerability.type}
@@ -287,7 +287,7 @@ export default function VulnerabilityDetailPage() {
               </button>
               <button
                 onClick={() => openConfirmDialog('ignored')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-[#0F172A] transition-colors"
               >
                 <Ban size={16} className="mr-2" />
                 忽略
@@ -305,7 +305,7 @@ export default function VulnerabilityDetailPage() {
               </button>
               <button
                 onClick={() => openConfirmDialog('ignored')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                className="inline-flex items-center px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-[#0F172A] transition-colors"
               >
                 <Ban size={16} className="mr-2" />
                 忽略
@@ -320,18 +320,18 @@ export default function VulnerabilityDetailPage() {
         {/* Left column - Details */}
         <div className="lg:col-span-2 space-y-6">
           {/* Description */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+            <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
               <MessageSquare size={18} />
               漏洞描述
             </h2>
-            <p className="text-gray-700 leading-relaxed">{vulnerability.description}</p>
+            <p className="text-gray-300 leading-relaxed">{vulnerability.description}</p>
           </div>
 
           {/* Code snippet / Location */}
           {vulnerability.location && (
-            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+              <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
                 <Code size={18} />
                 问题代码位置
               </h2>
@@ -343,8 +343,8 @@ export default function VulnerabilityDetailPage() {
 
           {/* POC */}
           {vulnerability.POC && (
-            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+              <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
                 <Code size={18} />
                 POC 验证代码
               </h2>
@@ -369,12 +369,12 @@ export default function VulnerabilityDetailPage() {
 
           {/* Notes */}
           {vulnerability.notes && (
-            <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+              <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
                 <MessageSquare size={18} />
                 备注
               </h2>
-              <p className="text-gray-700 leading-relaxed">{vulnerability.notes}</p>
+              <p className="text-gray-300 leading-relaxed">{vulnerability.notes}</p>
             </div>
           )}
         </div>
@@ -382,8 +382,8 @@ export default function VulnerabilityDetailPage() {
         {/* Right column - Info panel */}
         <div className="space-y-6">
           {/* Basic info */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">基本信息</h2>
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+            <h2 className="text-lg font-semibold text-gray-100 mb-4">基本信息</h2>
             <div className="space-y-4">
               {/* Severity */}
               <div>
@@ -401,14 +401,14 @@ export default function VulnerabilityDetailPage() {
               {/* Type */}
               <div>
                 <label className="text-sm text-gray-500">漏洞类型</label>
-                <p className="mt-1 text-gray-900 font-medium">{vulnerability.type}</p>
+                <p className="mt-1 text-gray-100 font-medium">{vulnerability.type}</p>
               </div>
 
               {/* CWE */}
               {vulnerability.cwe && (
                 <div>
                   <label className="text-sm text-gray-500">CWE 编号</label>
-                  <p className="mt-1 text-gray-900">
+                  <p className="mt-1 text-gray-100">
                     <a
                       href={`https://cwe.mitre.org/data/definitions/${vulnerability.cwe}.html`}
                       target="_blank"
@@ -425,7 +425,7 @@ export default function VulnerabilityDetailPage() {
               {vulnerability.skill && (
                 <div>
                   <label className="text-sm text-gray-500">检测 Skill</label>
-                  <p className="mt-1 text-gray-900">{vulnerability.skill}</p>
+                  <p className="mt-1 text-gray-100">{vulnerability.skill}</p>
                 </div>
               )}
 
@@ -447,8 +447,8 @@ export default function VulnerabilityDetailPage() {
           </div>
 
           {/* Location info */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+            <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
               <MapPin size={18} />
               位置信息
             </h2>
@@ -456,7 +456,7 @@ export default function VulnerabilityDetailPage() {
               {/* Vulnerable status */}
               <div>
                 <label className="text-sm text-gray-500">漏洞状态</label>
-                <p className="mt-1 text-gray-900">
+                <p className="mt-1 text-gray-100">
                   {vulnerability.vulnerable ? '真实漏洞' : '待确认'}
                 </p>
               </div>
@@ -464,8 +464,8 @@ export default function VulnerabilityDetailPage() {
           </div>
 
           {/* History */}
-          <div className="bg-white rounded-lg shadow border border-gray-200 p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+          <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
+            <h2 className="text-lg font-semibold text-gray-100 mb-4 flex items-center gap-2">
               <Clock size={18} />
               标记历史
             </h2>
@@ -476,7 +476,7 @@ export default function VulnerabilityDetailPage() {
                   <Eye size={14} className="text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900">发现漏洞</p>
+                  <p className="text-sm font-medium text-gray-100">发现漏洞</p>
                   <p className="text-xs text-gray-500">
                     {new Date(vulnerability.createdAt).toLocaleString()}
                   </p>
@@ -490,7 +490,7 @@ export default function VulnerabilityDetailPage() {
                     <CheckCircle size={14} className="text-green-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">确认漏洞</p>
+                    <p className="text-sm font-medium text-gray-100">确认漏洞</p>
                     <p className="text-xs text-gray-500">
                       {new Date(vulnerability.confirmedAt).toLocaleString()}
                       {vulnerability.confirmedBy && (
@@ -511,7 +511,7 @@ export default function VulnerabilityDetailPage() {
                     <Wrench size={14} className="text-blue-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">修复漏洞</p>
+                    <p className="text-sm font-medium text-gray-100">修复漏洞</p>
                     <p className="text-xs text-gray-500">
                       {new Date(vulnerability.fixedAt).toLocaleString()}
                       {vulnerability.fixedBy && (
@@ -532,7 +532,7 @@ export default function VulnerabilityDetailPage() {
                     <Shield size={14} className="text-emerald-600" />
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">验证修复</p>
+                    <p className="text-sm font-medium text-gray-100">验证修复</p>
                     <p className="text-xs text-gray-500">
                       {new Date(vulnerability.verifiedAt).toLocaleString()}
                       {vulnerability.verifiedBy && (
@@ -549,10 +549,10 @@ export default function VulnerabilityDetailPage() {
               {/* Last updated */}
               <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Clock size={14} className="text-gray-600" />
+                  <Clock size={14} className="text-gray-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-gray-900">最后更新</p>
+                  <p className="text-sm font-medium text-gray-100">最后更新</p>
                   <p className="text-xs text-gray-500">
                     {new Date(vulnerability.updatedAt).toLocaleString()}
                   </p>

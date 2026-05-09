@@ -32,7 +32,7 @@ export async function runHealthChecks(): Promise<SystemHealthReport> {
     metrics: {
       cpu: 0, // Node.js 不直接提供 CPU 使用率
       memory: memoryUsage.heapUsed / memoryUsage.heapTotal,
-      dbConnections: 1, // SQLite 只有一个连接
+      dbConnections: 0, // PG 使用连接池
       cacheHitRate: Object.values(cacheStats).reduce(
         (sum, s) => sum + s.hitRate,
         0

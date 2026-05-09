@@ -59,10 +59,10 @@ interface Pagination {
 
 // Status badge colors
 const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-  analyzed: 'bg-blue-100 text-blue-800 border-blue-200',
-  actioned: 'bg-green-100 text-green-800 border-green-200',
-  dismissed: 'bg-gray-100 text-gray-600 border-gray-200',
+  pending: 'bg-yellow-100 text-yellow-800 border-yellow-500/20',
+  analyzed: 'bg-blue-100 text-blue-800 border-blue-500/20',
+  actioned: 'bg-green-100 text-green-800 border-green-500/20',
+  dismissed: 'bg-dark-surface-hover text-gray-400 border-gray-700/50',
 };
 
 const statusLabels: Record<string, string> = {
@@ -77,17 +77,17 @@ const recommendationConfig: Record<string, { label: string; icon: React.ReactNod
   merge: {
     label: '建议合并',
     icon: <GitMerge size={14} />,
-    color: 'bg-purple-100 text-purple-800 border-purple-200',
+    color: 'bg-purple-100 text-purple-800 border-purple-500/20',
   },
   keep_separate: {
     label: '保持独立',
     icon: <ArrowRightLeft size={14} />,
-    color: 'bg-blue-100 text-blue-800 border-blue-200',
+    color: 'bg-blue-100 text-blue-800 border-blue-500/20',
   },
   deprecate_old: {
     label: '废弃旧版',
     icon: <Archive size={14} />,
-    color: 'bg-orange-100 text-orange-800 border-orange-200',
+    color: 'bg-orange-100 text-orange-800 border-orange-500/20',
   },
 };
 
@@ -204,7 +204,7 @@ export default function NewImpactPage() {
       {/* Back Button */}
       <Link 
         href="/dashboard/admin/skills-governance"
-        className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-4"
+        className="inline-flex items-center text-gray-400 hover:text-gray-100 mb-4"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
         返回治理总览
@@ -212,8 +212,8 @@ export default function NewImpactPage() {
 
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">新增 Skill 影响分析</h1>
-        <p className="mt-1 text-sm text-gray-600">
+        <h1 className="text-2xl font-bold text-gray-100">新增 Skill 影响分析</h1>
+        <p className="mt-1 text-sm text-gray-400">
           分析新创建的 Skill 与现有 Skills 的重叠情况，提供合并建议
         </p>
       </div>
@@ -228,7 +228,7 @@ export default function NewImpactPage() {
               placeholder="搜索 Skill ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -237,7 +237,7 @@ export default function NewImpactPage() {
           <select
             value={selectedStatus}
             onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">所有状态</option>
             <option value="pending">待审核</option>
@@ -251,7 +251,7 @@ export default function NewImpactPage() {
           <select
             value={minOverlapScore}
             onChange={(e) => { setMinOverlapScore(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="px-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
           >
             <option value="">所有重叠度</option>
             <option value="0.85">高重叠 (≥85%)</option>
@@ -262,7 +262,7 @@ export default function NewImpactPage() {
         <button
           onClick={fetchAnalyses}
           disabled={loading}
-          className="inline-flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50"
+          className="inline-flex items-center px-4 py-2 bg-dark-surface-hover text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
         >
           <RefreshCw size={16} className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
           刷新
@@ -271,19 +271,19 @@ export default function NewImpactPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}
 
       {/* Analyses List */}
-      <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
+      <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
         {analyses.length === 0 ? (
           <div className="p-12">
             <div className="text-center">
               <AlertTriangle className="mx-auto h-16 w-16 text-gray-400" />
-              <h3 className="mt-4 text-lg font-medium text-gray-900">暂无影响分析</h3>
-              <p className="mt-2 text-sm text-gray-600">
+              <h3 className="mt-4 text-lg font-medium text-gray-100">暂无影响分析</h3>
+              <p className="mt-2 text-sm text-gray-400">
                 {searchTerm || selectedStatus || minOverlapScore
                   ? '没有找到匹配的分析记录'
                   : '新创建的 Skill 将自动进行影响分析'}
@@ -292,8 +292,8 @@ export default function NewImpactPage() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-gray-700/50">
+              <thead className="bg-[#0F172A]">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Skill 名称
@@ -315,11 +315,11 @@ export default function NewImpactPage() {
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-dark-surface divide-y divide-gray-700/50">
                 {analyses.map((analysis) => (
                   <tr
                     key={analysis.id}
-                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="hover:bg-[#0F172A] transition-colors cursor-pointer"
                     onClick={() => setSelectedAnalysis(analysis)}
                   >
                     <td className="px-4 py-4">
@@ -330,7 +330,7 @@ export default function NewImpactPage() {
                           </div>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-100">
                             {analysis.skillDisplayName}
                           </p>
                           <p className="text-xs text-gray-500">
@@ -358,7 +358,7 @@ export default function NewImpactPage() {
                           analysis.similarSkills.slice(0, 3).map((similar) => (
                             <span
                               key={similar.skillId}
-                              className="inline-flex items-center px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded border border-gray-200"
+                              className="inline-flex items-center px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-300 rounded border border-gray-700/50"
                             >
                               {similar.skillName}
                               {similar.similarity && (
@@ -379,13 +379,13 @@ export default function NewImpactPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded border ${statusColors[analysis.status] || 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`inline-flex items-center px-2 py-1 text-xs font-medium rounded border ${statusColors[analysis.status] || 'bg-dark-surface-hover text-gray-400'}`}>
                         {statusLabels[analysis.status] || analysis.status}
                       </span>
                     </td>
                     <td className="px-4 py-4">
                       {analysis.recommendation ? (
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${recommendationConfig[analysis.recommendation]?.color || 'bg-gray-100 text-gray-600'}`}>
+                        <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded border ${recommendationConfig[analysis.recommendation]?.color || 'bg-dark-surface-hover text-gray-400'}`}>
                           {recommendationConfig[analysis.recommendation]?.icon}
                           {recommendationConfig[analysis.recommendation]?.label || analysis.recommendation}
                         </span>
@@ -397,7 +397,7 @@ export default function NewImpactPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); setSelectedAnalysis(analysis); }}
-                          className="inline-flex items-center px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                          className="inline-flex items-center px-2 py-1 text-xs bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded hover:bg-blue-100 transition-colors"
                           title="查看详情"
                         >
                           <Eye size={12} className="mr-1" />
@@ -407,7 +407,7 @@ export default function NewImpactPage() {
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleAction(analysis.id, 'approve-merge'); }}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-purple-50 text-purple-700 border border-purple-200 rounded hover:bg-purple-100 transition-colors"
+                              className="inline-flex items-center px-2 py-1 text-xs bg-purple-900/20 text-purple-700 border border-purple-500/20 rounded hover:bg-purple-100 transition-colors"
                               title="批准合并"
                             >
                               <GitMerge size={12} className="mr-1" />
@@ -415,7 +415,7 @@ export default function NewImpactPage() {
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleAction(analysis.id, 'keep-separate'); }}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded hover:bg-blue-100 transition-colors"
+                              className="inline-flex items-center px-2 py-1 text-xs bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded hover:bg-blue-100 transition-colors"
                               title="保持独立"
                             >
                               <ArrowRightLeft size={12} className="mr-1" />
@@ -423,7 +423,7 @@ export default function NewImpactPage() {
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleAction(analysis.id, 'mark-pending'); }}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-yellow-50 text-yellow-700 border border-yellow-200 rounded hover:bg-yellow-100 transition-colors"
+                              className="inline-flex items-center px-2 py-1 text-xs bg-yellow-900/20 text-yellow-700 border border-yellow-500/20 rounded hover:bg-yellow-100 transition-colors"
                               title="标记待审核"
                             >
                               <Clock size={12} className="mr-1" />
@@ -443,15 +443,15 @@ export default function NewImpactPage() {
 
       {/* Pagination */}
       {pagination && pagination.total > 0 && (
-        <div className="flex items-center justify-between bg-white rounded-lg shadow border border-gray-200 px-4 py-3">
+        <div className="flex items-center justify-between bg-dark-surface rounded-lg shadow border border-gray-700/50 px-4 py-3">
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
+            <span className="text-sm text-gray-400">
               共 {pagination.total} 条记录，第 {pagination.page} / {pagination.totalPages} 页
             </span>
             <select
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
-              className="px-2 py-1 border border-gray-300 rounded text-sm"
+              className="px-2 py-1 border border-gray-600 rounded text-sm"
             >
               <option value="10">10 条/页</option>
               <option value="20">20 条/页</option>
@@ -463,7 +463,7 @@ export default function NewImpactPage() {
             <button
               onClick={() => setCurrentPage(1)}
               disabled={currentPage === 1}
-              className="flex items-center p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="首页"
             >
               <ChevronLeft size={16} />
@@ -472,18 +472,18 @@ export default function NewImpactPage() {
             <button
               onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
               disabled={currentPage === 1}
-              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="上一页"
             >
               <ChevronLeft size={20} />
             </button>
-            <span className="px-3 py-1 text-sm text-gray-700">
+            <span className="px-3 py-1 text-sm text-gray-300">
               {currentPage} / {pagination.totalPages}
             </span>
             <button
               onClick={() => setCurrentPage(Math.min(pagination.totalPages, currentPage + 1))}
               disabled={currentPage >= pagination.totalPages}
-              className="p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="下一页"
             >
               <ChevronRight size={20} />
@@ -491,7 +491,7 @@ export default function NewImpactPage() {
             <button
               onClick={() => setCurrentPage(pagination.totalPages)}
               disabled={currentPage >= pagination.totalPages}
-              className="flex items-center p-1.5 text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center p-1.5 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 disabled:cursor-not-allowed"
               title="末页"
             >
               <ChevronRight size={16} />
@@ -503,13 +503,13 @@ export default function NewImpactPage() {
 
       {/* Detail Modal */}
       {selectedAnalysis && (
-        <div className="fixed inset-0 bg-white z-50 flex flex-col">
+        <div className="fixed inset-0 bg-dark-surface z-50 flex flex-col">
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 bg-white shrink-0">
+          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-dark-surface shrink-0">
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => setSelectedAnalysis(null)}
-                className="flex items-center text-gray-500 hover:text-gray-800 transition-colors"
+                className="flex items-center text-gray-500 hover:text-gray-200 transition-colors"
               >
                 <XCircle size={20} className="mr-1" />
                 返回
@@ -518,7 +518,7 @@ export default function NewImpactPage() {
               <span className={`px-2 py-0.5 text-xs font-medium rounded border ${statusColors[selectedAnalysis.status]}`}>
                 {statusLabels[selectedAnalysis.status]}
               </span>
-              <h2 className="text-lg font-bold text-gray-900">
+              <h2 className="text-lg font-bold text-gray-100">
                 {selectedAnalysis.skillDisplayName}
               </h2>
             </div>
@@ -556,23 +556,23 @@ export default function NewImpactPage() {
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-4xl mx-auto p-6 space-y-6">
               {/* Basic Info */}
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+              <div className="bg-[#0F172A] rounded-lg p-4 space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <span className="text-xs text-gray-500">Skill ID</span>
-                    <p className="text-sm font-medium text-gray-900">{selectedAnalysis.skillId}</p>
+                    <p className="text-sm font-medium text-gray-100">{selectedAnalysis.skillId}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">Skill 名称</span>
-                    <p className="text-sm font-medium text-gray-900">{selectedAnalysis.skillName}</p>
+                    <p className="text-sm font-medium text-gray-100">{selectedAnalysis.skillName}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">显示名称</span>
-                    <p className="text-sm font-medium text-gray-900">{selectedAnalysis.skillDisplayName}</p>
+                    <p className="text-sm font-medium text-gray-100">{selectedAnalysis.skillDisplayName}</p>
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">分类</span>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-gray-100">
                       {selectedAnalysis.skillCategory}
                     </p>
                   </div>
@@ -584,7 +584,7 @@ export default function NewImpactPage() {
                   </div>
                   <div>
                     <span className="text-xs text-gray-500">创建时间</span>
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-gray-100">
                       {new Date(selectedAnalysis.createdAt).toLocaleString('zh-CN')}
                     </p>
                   </div>
@@ -593,20 +593,20 @@ export default function NewImpactPage() {
 
               {/* Similar Skills */}
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">相似 Skills</h4>
+                <h4 className="text-sm font-medium text-gray-300 mb-2">相似 Skills</h4>
                 {selectedAnalysis.similarSkills && selectedAnalysis.similarSkills.length > 0 ? (
-                  <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+                  <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4 space-y-2">
                     {selectedAnalysis.similarSkills.map((similar) => (
                       <div
                         key={similar.skillId}
                         className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
                       >
                         <div className="flex items-center space-x-3">
-                          <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                          <div className="w-6 h-6 bg-dark-surface-hover rounded flex items-center justify-center">
                             <Layers size={12} className="text-gray-500" />
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{similar.skillName}</p>
+                            <p className="text-sm font-medium text-gray-100">{similar.skillName}</p>
                             {similar.displayName && (
                               <p className="text-xs text-gray-500">{similar.displayName}</p>
                             )}
@@ -614,7 +614,7 @@ export default function NewImpactPage() {
                         </div>
                         <div className="flex items-center space-x-2">
                           {similar.overlapType && (
-                            <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                            <span className="px-2 py-0.5 text-xs bg-dark-surface-hover text-gray-400 rounded">
                               {similar.overlapType}
                             </span>
                           )}
@@ -628,7 +628,7 @@ export default function NewImpactPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="bg-white border border-gray-200 rounded-lg p-4 text-center text-gray-500">
+                  <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4 text-center text-gray-500">
                     无相似 Skills
                   </div>
                 )}
@@ -636,8 +636,8 @@ export default function NewImpactPage() {
 
               {/* Recommendation */}
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">推荐操作</h4>
-                <div className="bg-white border border-gray-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">推荐操作</h4>
+                <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
                   {selectedAnalysis.recommendation ? (
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
@@ -647,7 +647,7 @@ export default function NewImpactPage() {
                         </span>
                       </div>
                       {selectedAnalysis.recommendationReason && (
-                        <p className="text-sm text-gray-600 mt-2">
+                        <p className="text-sm text-gray-400 mt-2">
                           {selectedAnalysis.recommendationReason}
                         </p>
                       )}
@@ -661,13 +661,13 @@ export default function NewImpactPage() {
               {/* Affected Workflows */}
               {selectedAnalysis.affectedWorkflows && selectedAnalysis.affectedWorkflows.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700 mb-2">受影响的工作流</h4>
-                  <div className="bg-white border border-gray-200 rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">受影响的工作流</h4>
+                  <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4">
                     <div className="flex flex-wrap gap-2">
                       {selectedAnalysis.affectedWorkflows.map((workflow) => (
                         <span
                           key={workflow}
-                          className="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded border border-orange-200"
+                          className="px-2 py-1 text-xs bg-orange-100 text-orange-800 rounded border border-orange-500/20"
                         >
                           {workflow}
                         </span>
@@ -679,18 +679,18 @@ export default function NewImpactPage() {
 
               {/* Timeline */}
               <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-2">处理时间线</h4>
-                <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-2">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">处理时间线</h4>
+                <div className="bg-dark-surface border border-gray-700/50 rounded-lg p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-gray-500">创建时间</span>
-                    <span className="text-sm text-gray-900">
+                    <span className="text-sm text-gray-100">
                       {new Date(selectedAnalysis.createdAt).toLocaleString('zh-CN')}
                     </span>
                   </div>
                   {selectedAnalysis.analyzedAt && (
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">分析时间</span>
-                      <span className="text-sm text-gray-900">
+                      <span className="text-sm text-gray-100">
                         {new Date(selectedAnalysis.analyzedAt).toLocaleString('zh-CN')}
                       </span>
                     </div>
@@ -698,7 +698,7 @@ export default function NewImpactPage() {
                   {selectedAnalysis.actionedAt && (
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-gray-500">处理时间</span>
-                      <span className="text-sm text-gray-900">
+                      <span className="text-sm text-gray-100">
                         {new Date(selectedAnalysis.actionedAt).toLocaleString('zh-CN')}
                       </span>
                     </div>

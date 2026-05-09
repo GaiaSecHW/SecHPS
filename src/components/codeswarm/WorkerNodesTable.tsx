@@ -108,7 +108,7 @@ export function WorkerNodesTable() {
         <h2 className="text-lg font-semibold">Worker 节点列表</h2>
         <button
           onClick={() => refetch()}
-          className="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          className="flex items-center space-x-2 px-3 py-2 bg-dark-surface-hover hover:bg-gray-700 rounded-lg transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
           <span>刷新</span>
@@ -116,22 +116,22 @@ export function WorkerNodesTable() {
       </div>
 
       {workers.length === 0 ? (
-        <div className="bg-white rounded-lg shadow border border-gray-200 p-12">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-12">
           <div className="text-center">
             <Server className="mx-auto h-16 w-16 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-900">暂无 Worker 节点</h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Worker 节点</h3>
+            <p className="mt-2 text-sm text-gray-400">
               启动 Worker 后会自动注册到此处
             </p>
-            <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+            <div className="mt-4 text-xs text-gray-500 bg-[#0F172A] p-3 rounded-lg">
               <code>ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs</code>
             </div>
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow border border-gray-200 overflow-hidden">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-700/50">
+            <thead className="bg-[#162032]">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   节点
@@ -153,12 +153,12 @@ export function WorkerNodesTable() {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-dark-surface divide-y divide-gray-700/50">
               {workers.map((worker) => (
-                <tr key={worker.id} className="hover:bg-gray-50">
+                <tr key={worker.id} className="hover:bg-dark-surface-hover">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
-                      <div className={`p-2 rounded-lg ${worker.status === 'online' ? 'bg-green-100' : 'bg-gray-100'}`}>
+                      <div className={`p-2 rounded-lg ${worker.status === 'online' ? 'bg-green-900/30' : 'bg-gray-700'}`}>
                         {worker.status === 'online' ? (
                           <Wifi className="w-5 h-5 text-green-600" />
                         ) : (
@@ -166,7 +166,7 @@ export function WorkerNodesTable() {
                         )}
                       </div>
                       <div className="ml-3">
-                        <div className="text-sm font-medium text-gray-900">
+                        <div className="text-sm font-medium text-gray-100">
                           {worker.name || worker.nodeId}
                         </div>
                         <div className="text-xs text-gray-500">{worker.address}</div>
@@ -176,10 +176,10 @@ export function WorkerNodesTable() {
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                       worker.status === 'online'
-                        ? 'bg-green-100 text-green-800'
+                        ? 'bg-green-500/15 text-green-400'
                         : worker.status === 'busy'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : 'bg-gray-100 text-gray-800'
+                        ? 'bg-yellow-900/20 text-yellow-400'
+                        : 'bg-gray-700 text-gray-300'
                     }`}>
                       {worker.status === 'online' ? '在线' : worker.status === 'busy' ? '忙碌' : '离线'}
                     </span>
@@ -202,14 +202,14 @@ export function WorkerNodesTable() {
                         />
                         <button
                           onClick={() => handleSaveConcurrent(worker.nodeId)}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded"
+                          className="p-1 text-green-400 hover:bg-green-50 rounded"
                           title="保存"
                         >
                           <Check className="w-4 h-4" />
                         </button>
                         <button
                           onClick={cancelEditing}
-                          className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+                          className="p-1 text-gray-400 hover:bg-dark-surface-hover rounded"
                           title="取消"
                         >
                           <X className="w-4 h-4" />
@@ -218,7 +218,7 @@ export function WorkerNodesTable() {
                     ) : (
                       <button
                         onClick={() => startEditing(worker)}
-                        className="flex items-center space-x-1 text-sm text-gray-700 hover:text-blue-600 group"
+                        className="flex items-center space-x-1 text-sm text-gray-700 hover:text-blue-400 group"
                         title="点击编辑并发数"
                       >
                         <span className="font-medium">{worker.maxConcurrent}</span>
@@ -228,7 +228,7 @@ export function WorkerNodesTable() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
-                      <div className="w-24 bg-gray-200 rounded-full h-2">
+                      <div className="w-24 bg-gray-700 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full ${
                             worker.currentTasks >= worker.maxConcurrent
@@ -242,7 +242,7 @@ export function WorkerNodesTable() {
                           }}
                         />
                       </div>
-                      <span className="text-sm text-gray-600">
+                      <span className="text-sm text-gray-400">
                         {worker.currentTasks}/{worker.maxConcurrent}
                       </span>
                     </div>
@@ -257,7 +257,7 @@ export function WorkerNodesTable() {
                     <button
                       onClick={() => handleDelete(worker.nodeId)}
                       disabled={deleting === worker.nodeId}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                      className="p-2 text-gray-400 hover:text-red-400 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
                       title="删除节点"
                     >
                       {deleting === worker.nodeId ? (

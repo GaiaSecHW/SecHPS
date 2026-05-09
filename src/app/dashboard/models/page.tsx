@@ -435,7 +435,7 @@ export default function ModelsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
       </div>
     );
   }
@@ -445,17 +445,17 @@ export default function ModelsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
             <Cpu className="h-6 w-6" />
             我的模型
           </h1>
-          <p className="text-gray-600 mt-1">
+          <p className="text-gray-400 mt-1">
             管理您创建的大模型配置。设置公开后，其他用户在评估时也可使用。
           </p>
         </div>
         <button
           onClick={fetchModels}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+          className="flex items-center gap-2 px-3 py-2 text-sm bg-dark-surface-hover text-gray-300 rounded-md hover:bg-gray-700 transition-colors"
         >
           <RefreshCw size={16} />
           刷新
@@ -464,23 +464,23 @@ export default function ModelsPage() {
 
       {/* Success/Error Messages */}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-md flex items-start gap-2">
+        <div className="bg-green-900/20 border border-green-800/40 text-green-300 px-4 py-3 rounded-md flex items-start gap-2">
           <Check className="h-5 w-5 flex-shrink-0 mt-0.5" />
           <pre className="whitespace-pre-wrap text-sm font-mono overflow-auto max-h-60">{success}</pre>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-md flex items-start gap-2">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-md flex items-start gap-2">
           <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
           <pre className="whitespace-pre-wrap text-sm font-mono">{error}</pre>
         </div>
       )}
 
       {/* 模型列表 */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">
+          <h2 className="text-lg font-semibold text-gray-100">
             {user?.roles?.includes('admin') ? '所有模型配置' : '我的模型配置'}
           </h2>
           <div className="flex items-center gap-3">
@@ -488,7 +488,7 @@ export default function ModelsPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">全部</option>
               <option value="active">启用</option>
@@ -497,7 +497,7 @@ export default function ModelsPage() {
             </select>
             <button
               onClick={handleOpenAddModal}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
             >
               <Plus size={18} />
               添加模型
@@ -507,8 +507,8 @@ export default function ModelsPage() {
 
         {/* 表格 */}
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-700/50">
+            <thead className="bg-[#162032]">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   名称
@@ -541,7 +541,7 @@ export default function ModelsPage() {
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-dark-surface divide-y divide-gray-700/50">
               {filteredModels.length === 0 ? (
                 <tr>
                   <td colSpan={user?.roles?.includes('admin') ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
@@ -553,13 +553,13 @@ export default function ModelsPage() {
                   const modelList = parseModels(model.models);
                   const isOwner = model.userId === user?.id || model.userId === null;
                   return (
-                    <tr key={model.id} className="hover:bg-gray-50">
+                    <tr key={model.id} className="hover:bg-[#0F172A]">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           <Cpu size={16} className="text-gray-400" />
-                          <span className="font-medium text-gray-900">{model.name}</span>
+                          <span className="font-medium text-gray-100">{model.name}</span>
                           {model.isDefault && (
-                            <span className="px-1.5 py-0.5 text-xs font-medium bg-orange-100 text-orange-800 rounded">
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-orange-500/15 text-orange-400 rounded">
                               默认
                             </span>
                           )}
@@ -573,9 +573,9 @@ export default function ModelsPage() {
                           <div className="flex items-center gap-2">
                             <User size={16} className="text-gray-400" />
                             {model.userId === null ? (
-                              <span className="text-sm text-gray-600">系统模型</span>
+                              <span className="text-sm text-gray-400">系统模型</span>
                             ) : (
-                              <span className="text-sm text-gray-600">
+                              <span className="text-sm text-gray-400">
                                 {model.userName || model.userUsername || '未知用户'}
                               </span>
                             )}
@@ -585,8 +585,8 @@ export default function ModelsPage() {
                       <td className="px-4 py-4">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           model.providerType === 'claude'
-                            ? 'bg-purple-100 text-purple-800'
-                            : 'bg-green-100 text-green-800'
+                            ? 'bg-purple-500/15 text-purple-400'
+                            : 'bg-green-500/15 text-green-400'
                         }`}>
                           {PROVIDER_TYPE_LABELS[model.providerType] || model.providerType}
                         </span>
@@ -594,7 +594,7 @@ export default function ModelsPage() {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           <Globe size={16} className="text-gray-400" />
-                          <span className="text-sm text-gray-600 font-mono max-w-xs truncate">
+                          <span className="text-sm text-gray-400 font-mono max-w-xs truncate">
                             {model.apiBaseUrl}
                           </span>
                         </div>
@@ -604,7 +604,7 @@ export default function ModelsPage() {
                           {modelList.slice(0, 3).map((m, i) => (
                             <span
                               key={i}
-                              className="px-2 py-0.5 bg-gray-100 text-gray-700 text-xs rounded"
+                              className="px-2 py-0.5 bg-dark-surface-hover text-gray-300 text-xs rounded"
                             >
                               {m}
                             </span>
@@ -620,13 +620,13 @@ export default function ModelsPage() {
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isActive
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
+                              ? 'bg-green-500/15 text-green-400'
+                              : 'bg-dark-surface-hover text-gray-200'
                           }`}
                         >
                           <span
                             className={`w-1.5 h-1.5 rounded-full ${
-                              model.isActive ? 'bg-green-500' : 'bg-gray-500'
+                              model.isActive ? 'bg-green-600' : 'bg-[#0F172A]0'
                             }`}
                           />
                           {model.isActive ? '启用' : '禁用'}
@@ -636,8 +636,8 @@ export default function ModelsPage() {
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isPublic
-                              ? 'bg-blue-100 text-blue-800'
-                              : 'bg-gray-100 text-gray-600'
+                              ? 'bg-blue-500/15 text-blue-400'
+                              : 'bg-dark-surface-hover text-gray-400'
                           }`}
                         >
                           {model.isPublic ? <Globe size={12} /> : <Lock size={12} />}
@@ -650,8 +650,8 @@ export default function ModelsPage() {
                             <span
                               className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                                 testResults[model.id].success
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-red-100 text-red-800'
+                                  ? 'bg-green-500/15 text-green-400'
+                                  : 'bg-red-500/15 text-red-400'
                               }`}
                             >
                               {testResults[model.id].success ? (
@@ -665,7 +665,7 @@ export default function ModelsPage() {
                               )}
                             </span>
                             {testResults[model.id].response && (
-                              <div className="mt-1 p-2 bg-gray-50 rounded text-xs text-gray-700 max-w-xs overflow-hidden">
+                              <div className="mt-1 p-2 bg-[#0F172A] rounded text-xs text-gray-300 max-w-xs overflow-hidden">
                                 <div className="font-medium text-gray-500 mb-1">模型响应:</div>
                                 <div className="break-words">{testResults[model.id].response}</div>
                                 {testResults[model.id].usage && (
@@ -687,8 +687,8 @@ export default function ModelsPage() {
                             disabled={testingModelId === model.id}
                             className={`p-1.5 rounded-md transition-colors ${
                               testingModelId === model.id
-                                ? 'text-blue-600 bg-blue-50 cursor-wait'
-                                : 'text-gray-600 hover:text-green-600 hover:bg-green-50'
+                                ? 'text-blue-400 bg-blue-600/10 cursor-wait'
+                                : 'text-gray-400 hover:text-green-400 hover:bg-green-600/100/10'
                             }`}
                             title="测试连接"
                           >
@@ -701,7 +701,7 @@ export default function ModelsPage() {
                           {canEditModel(model) && (
                             <button
                               onClick={() => handleOpenEditModal(model)}
-                              className="p-1.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                              className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-600/100/100/10 rounded-md transition-colors"
                               title="编辑"
                             >
                               <Edit2 size={16} />
@@ -710,7 +710,7 @@ export default function ModelsPage() {
                           {canEditModel(model) && (
                             <button
                               onClick={() => handleDeleteClick(model)}
-                              className="p-1.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                              className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-600/100/100/10 rounded-md transition-colors"
                               title="删除"
                             >
                               <Trash2 size={16} />
@@ -730,14 +730,14 @@ export default function ModelsPage() {
       {/* 添加/编辑模型模态框 */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
+              <h3 className="text-lg font-semibold text-gray-100">
                 {editingModel ? '编辑模型' : '添加模型'}
               </h3>
               <button
                 onClick={handleCloseModal}
-                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                className="p-1 text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover rounded-md transition-colors"
               >
                 <X size={20} />
               </button>
@@ -746,21 +746,21 @@ export default function ModelsPage() {
             <div className="p-6 space-y-4">
               {/* 名称 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   名称 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="例如：内部大模型 或 Claude"
                 />
               </div>
 
               {/* API类型 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   API类型 <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -772,7 +772,7 @@ export default function ModelsPage() {
                       : formData.apiBaseUrl;
                     setFormData({ ...formData, providerType, apiBaseUrl: formData.apiBaseUrl || defaultBaseUrl });
                   }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="openai">OpenAI</option>
                   <option value="claude">Claude</option>
@@ -786,14 +786,14 @@ export default function ModelsPage() {
 
               {/* API 地址 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   API 地址 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.apiBaseUrl}
                   onChange={(e) => setFormData({ ...formData, apiBaseUrl: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
                   placeholder={formData.providerType === 'claude'
                     ? '请输入 Claude API 地址（如 https://api.anthropic.com/v1/messages）'
                     : 'http://192.168.1.100:8000/v1/chat/completions'}
@@ -805,14 +805,14 @@ export default function ModelsPage() {
                 {/* 新建时直接显示输入框 */}
                 {!editingModel ? (
                   <>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-300 mb-1">
                       API Key <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="password"
                       value={formData.apiKey}
                       onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono text-sm"
                       placeholder="输入 API Key"
                     />
                   </>
@@ -821,11 +821,11 @@ export default function ModelsPage() {
                     {/* 编辑时需要确认才能修改 */}
                     <div className="flex items-center gap-2 mb-2">
                       <Key size={16} className="text-gray-400" />
-                      <span className="text-sm text-gray-700">
+                      <span className="text-sm text-gray-300">
                         API Key: {editingModel.hasApiKey ? (
-                          <span className="text-green-600 font-medium">已设置</span>
+                          <span className="text-green-400 font-medium">已设置</span>
                         ) : (
-                          <span className="text-red-600 font-medium">未设置</span>
+                          <span className="text-red-400 font-medium">未设置</span>
                         )}
                       </span>
                     </div>
@@ -835,7 +835,7 @@ export default function ModelsPage() {
                         type="checkbox"
                         checked={formData.changeApiKey}
                         onChange={(e) => setFormData({ ...formData, changeApiKey: e.target.checked })}
-                        className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                        className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
                       />
                       <span className="text-sm text-orange-700 font-medium">修改 API Key</span>
                     </label>
@@ -861,14 +861,14 @@ export default function ModelsPage() {
 
               {/* 模型名称 */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   模型名称 <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.models}
                   onChange={(e) => setFormData({ ...formData, models: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="例如：gpt-4、claude-3-opus-20240229"
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -880,14 +880,14 @@ export default function ModelsPage() {
               <div className="grid grid-cols-2 gap-4">
                 {/* 最大输出 Token */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     最大输出 Token
                   </label>
                   <input
                     type="number"
                     value={formData.maxTokens}
                     onChange={(e) => setFormData({ ...formData, maxTokens: parseInt(e.target.value) || 32000 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     min={256}
                     max={192000}
                     step={256}
@@ -899,14 +899,14 @@ export default function ModelsPage() {
 
                 {/* 温度参数 */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
                     温度 (Temperature)
                   </label>
                   <input
                     type="number"
                     value={formData.temperature}
                     onChange={(e) => setFormData({ ...formData, temperature: parseFloat(e.target.value) || 0.7 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                     min={0}
                     max={2}
                     step={0.1}
@@ -919,18 +919,18 @@ export default function ModelsPage() {
 
               {/* Context Window - 只读显示（仅编辑模式） */}
               {editingModel && (
-                <div className="bg-gray-50 border border-gray-200 rounded-md p-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Context Window</label>
+                <div className="bg-[#0F172A] border border-gray-700/50 rounded-md p-4">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Context Window</label>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-lg font-semibold text-gray-900">{editingModel?.contextWindow ?? 0}</span>
+                      <span className="text-lg font-semibold text-gray-100">{editingModel?.contextWindow ?? 0}</span>
                       <span className="text-sm text-gray-500">tokens</span>
                     </div>
                     {editingModel?.contextWindow > 0 && (
                       <button 
                         onClick={() => handleResetContextWindow(editingModel.id)} 
                         disabled={resettingContextWindow === editingModel.id}
-                        className="px-3 py-1.5 text-sm text-orange-600 bg-orange-50 border border-orange-200 rounded-md hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-3 py-1.5 text-sm text-orange-600 bg-orange-600/10 border border-orange-500/20 rounded-md hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {resettingContextWindow === editingModel.id ? '复位中...' : '复位'}
                       </button>
@@ -950,9 +950,9 @@ export default function ModelsPage() {
                       type="checkbox"
                       checked={formData.isActive}
                       onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">启用</span>
+                    <span className="text-sm text-gray-300">启用</span>
                   </label>
 
                   <label className="flex items-center gap-2 cursor-pointer">
@@ -960,21 +960,21 @@ export default function ModelsPage() {
                       type="checkbox"
                       checked={formData.isPublic}
                       onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
                     />
-                    <span className="text-sm text-gray-700">公开（其他用户可使用）</span>
+                    <span className="text-sm text-gray-300">公开（其他用户可使用）</span>
                   </label>
                 </div>
 
                 {/* 管理员专属选项 */}
                 {user?.roles?.includes('admin') && (
-                  <div className="flex items-center gap-6 pt-2 border-t border-gray-200">
+                  <div className="flex items-center gap-6 pt-2 border-t border-gray-700/50">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={formData.isSystemModel}
                         onChange={(e) => setFormData({ ...formData, isSystemModel: e.target.checked, isDefault: e.target.checked ? formData.isDefault : false })}
-                        className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                        className="w-4 h-4 text-purple-600 border-gray-600 rounded focus:ring-purple-500"
                       />
                       <span className="text-sm text-purple-700 font-medium">系统模型（所有用户可见）</span>
                     </label>
@@ -985,7 +985,7 @@ export default function ModelsPage() {
                           type="checkbox"
                           checked={formData.isDefault}
                           onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
-                          className="w-4 h-4 text-orange-600 border-gray-300 rounded focus:ring-orange-500"
+                          className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
                         />
                         <span className="text-sm text-orange-700 font-medium">默认模型</span>
                       </label>
@@ -995,7 +995,7 @@ export default function ModelsPage() {
               </div>
 
               {formData.isPublic && (
-                <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <div className="bg-blue-900/20 border border-blue-800/40 rounded-md p-3">
                   <p className="text-sm text-blue-800">
                     <Globe size={16} className="inline mr-1" />
                     公开的模型将出现在所有用户的评估模型选择列表中。请确保 API Key 安全。
@@ -1004,17 +1004,17 @@ export default function ModelsPage() {
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-700/50">
               <button
                 onClick={handleCloseModal}
-                className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-700 transition-colors"
               >
                 取消
               </button>
               <button
                 onClick={handleSaveModel}
                 disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
               >
                 {saving ? (
                   <>
@@ -1036,15 +1036,15 @@ export default function ModelsPage() {
       {/* 删除确认对话框 */}
       {showDeleteConfirm && deletingModel && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full">
             <div className="p-6">
               <div className="flex items-center gap-3 mb-4">
                 <AlertCircle className="h-6 w-6 text-red-500" />
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-gray-100">
                   认删除
                 </h3>
               </div>
-              <p className="text-gray-600 mb-6">
+              <p className="text-gray-400 mb-6">
                 确定要删除模型 <span className="font-semibold">{deletingModel.name}</span> 吗？
                 此操作无法撤销。
               </p>
@@ -1054,14 +1054,14 @@ export default function ModelsPage() {
                     setShowDeleteConfirm(false);
                     setDeletingModel(null);
                   }}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                  className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-700 transition-colors"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleDeleteConfirm}
                   disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
                 >
                   {saving ? (
                     <>

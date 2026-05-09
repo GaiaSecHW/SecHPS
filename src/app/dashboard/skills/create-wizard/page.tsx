@@ -45,10 +45,10 @@ interface SkillWizardData {
   intent: {
     name: string;
     description: string;
-    category: string; // 保留用于兼容
-    techStack: string[]; // 保留用于兼容
-    techStackId?: string; // 新增：单选语言 ID
-    vulnerabilityPatternId?: string; // 新增：漏洞类型 ID
+    categoryId: string;
+    vulnerabilityTreeId?: string;
+    selectedLanguageId?: string;
+    productTagIds?: string[];
     whatDoesItDo: string;
     whenShouldItTrigger: string;
     expectedOutput: string;
@@ -69,8 +69,8 @@ interface SkillWizardData {
     name: string;
     displayName: string;
     description: string;
-    vulnerabilityPatternId?: string;
-    techStackId?: string;
+    categoryId?: string;
+    vulnerabilityTreeId?: string;
     cwe?: string;
     content: string;
   };
@@ -126,10 +126,9 @@ const initialWizardData: SkillWizardData = {
   intent: {
     name: '',
     description: '',
-    category: '', // 保留用于兼容
-    techStack: [], // 保留用于兼容
-    techStackId: '', // 新增：单选语言
-    vulnerabilityPatternId: '', // 新增：漏洞类型 ID
+    categoryId: '',
+    vulnerabilityTreeId: '',
+    selectedLanguageId: '',
     whatDoesItDo: '',
     whenShouldItTrigger: '',
     expectedOutput: '',
@@ -146,8 +145,8 @@ const initialWizardData: SkillWizardData = {
     name: '',
     displayName: '',
     description: '',
-    vulnerabilityPatternId: undefined,
-    techStackId: undefined,
+    categoryId: undefined,
+    vulnerabilityTreeId: undefined,
     content: '',
   },
   testCases: [],
@@ -324,20 +323,20 @@ export default function SkillCreateWizardPage() {
       
       const skillData = {
         ...wizardData.skill,
-        isPublic: false, // 默认私有
-        // 新增字段：从 intent 步骤传递
-        techStackId: wizardData.intent.techStackId || null,
-        vulnerabilityPatternId: wizardData.intent.vulnerabilityPatternId || null,
+        isPublic: false,
+        categoryId: wizardData.intent.categoryId,
+        vulnerabilityTreeId: wizardData.intent.vulnerabilityTreeId || null,
+        productTagIds: wizardData.intent.productTagIds || [],
       };
-      
+
       // 检查必填字段
       const missingFields = [];
       if (!skillData.name) missingFields.push('name');
       if (!skillData.displayName) missingFields.push('displayName');
       if (!skillData.description) missingFields.push('description');
       if (!skillData.content) missingFields.push('content');
-      if (!wizardData.intent.techStackId) missingFields.push('techStackId (语言)');
-      if (!wizardData.intent.vulnerabilityPatternId) missingFields.push('vulnerabilityPatternId (漏洞类型)');
+      if (!wizardData.intent.categoryId) missingFields.push('分类');
+      if (!wizardData.intent.vulnerabilityTreeId) missingFields.push('漏洞模式');
       
       if (missingFields.length > 0) {
         throw new Error(`缺少必填字段: ${missingFields.join(', ')}`);
@@ -388,9 +387,9 @@ export default function SkillCreateWizardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#0F172A]">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-dark-surface border-b border-gray-700/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-4">
             <div className="flex items-center justify-between">
@@ -401,32 +400,32 @@ export default function SkillCreateWizardPage() {
                       router.push('/dashboard/skills');
                     }
                   }}
-                  className="flex items-center text-gray-600 hover:text-gray-900 mb-2"
+                  className="flex items-center text-gray-400 hover:text-gray-100 mb-2"
                 >
                   <ArrowLeft size={20} className="mr-2" />
                   返回 Skills 列表
                 </button>
-                <h1 className="text-2xl font-bold text-gray-900">创建新 Skill</h1>
-                <p className="text-sm text-gray-600 mt-1">引导式创建流程</p>
+                <h1 className="text-2xl font-bold text-gray-100">创建新 Skill</h1>
+                <p className="text-sm text-gray-400 mt-1">引导式创建流程</p>
               </div>
               
               {/* 草稿操作按钮 */}
               <div className="flex items-center gap-3">
                 <button
                   onClick={saveAsDraft}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-dark-bg transition-colors"
                 >
                   <Save size={16} className="mr-2" />
                   保存草稿
                 </button>
                 <button
                   onClick={() => setShowDrafts(!showDrafts)}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors relative"
+                  className="inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg text-gray-300 hover:bg-dark-bg transition-colors relative"
                 >
                   <FolderOpen size={16} className="mr-2" />
                   加载草稿
                   {drafts.length > 0 && (
-                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center">
                       {drafts.length}
                     </span>
                   )}
@@ -436,12 +435,12 @@ export default function SkillCreateWizardPage() {
             
             {/* 草稿列表 */}
             {showDrafts && (
-              <div className="mt-4 border border-gray-200 rounded-lg bg-gray-50 p-4">
+              <div className="mt-4 border border-gray-700/50 rounded-lg bg-dark-bg p-4">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-medium text-gray-900">已保存的草稿</h3>
+                  <h3 className="font-medium text-gray-100">已保存的草稿</h3>
                   <button
                     onClick={() => setShowDrafts(false)}
-                    className="text-gray-400 hover:text-gray-600"
+                    className="text-gray-400 hover:text-gray-400"
                   >
                     ✕
                   </button>
@@ -456,15 +455,15 @@ export default function SkillCreateWizardPage() {
                         key={draft.id}
                         className={`flex items-center justify-between p-3 rounded-lg border ${
                           currentDraftId === draft.id
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                            ? 'border-blue-500 bg-blue-900/20'
+                            : 'border-gray-700/50 bg-dark-surface hover:bg-dark-surface-hover'
                         }`}
                       >
                         <div className="flex-1 cursor-pointer" onClick={() => loadDraft(draft.id)}>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-gray-900">{draft.name}</span>
+                            <span className="font-medium text-gray-100">{draft.name}</span>
                             {currentDraftId === draft.id && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                              <span className="text-xs bg-blue-100 text-blue-400 px-2 py-0.5 rounded">
                                 当前
                               </span>
                             )}
@@ -481,7 +480,7 @@ export default function SkillCreateWizardPage() {
                             e.stopPropagation();
                             deleteDraft(draft.id);
                           }}
-                          className="ml-3 p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+                          className="ml-3 p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-900/20 rounded"
                         >
                           <Trash2 size={16} />
                         </button>
@@ -496,7 +495,7 @@ export default function SkillCreateWizardPage() {
       </div>
 
       {/* Progress Steps */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-dark-surface border-b border-gray-700/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="py-4">
             <div className="flex items-center justify-between">
@@ -509,7 +508,7 @@ export default function SkillCreateWizardPage() {
                     <button
                       onClick={() => handleGoToStep(step.id)}
                       className={`flex items-center space-x-2 group ${
-                        isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                        isActive ? 'text-blue-400' : isCompleted ? 'text-green-400' : 'text-gray-400'
                       }`}
                     >
                       <div
@@ -518,7 +517,7 @@ export default function SkillCreateWizardPage() {
                             ? 'bg-blue-600 text-white'
                             : isCompleted
                             ? 'bg-green-600 text-white'
-                            : 'bg-gray-200 text-gray-600'
+                            : 'bg-gray-700 text-gray-400'
                         }`}
                       >
                         {isCompleted ? <CheckCircle2 size={16} /> : index + 1}
@@ -529,7 +528,7 @@ export default function SkillCreateWizardPage() {
                       </div>
                     </button>
                     {index < WIZARD_STEPS.length - 1 && (
-                      <div className="flex-1 h-0.5 bg-gray-200 mx-4" />
+                      <div className="flex-1 h-0.5 bg-gray-700 mx-4" />
                     )}
                   </div>
                 );
@@ -541,7 +540,7 @@ export default function SkillCreateWizardPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow">
+        <div className="bg-dark-surface rounded-lg shadow">
           {/* 步骤内容 */}
           <div className="p-6">
             {currentStep === 'intent' && (
