@@ -28,7 +28,11 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!name || !agentId) {
-      return NextResponse.json({ error: '缺少必填参数' }, { status: 400 });
+      return NextResponse.json({ error: '缺少必填参数：name 和 agentId' }, { status: 400 });
+    }
+
+    if (!notes || notes.trim() === '') {
+      return NextResponse.json({ error: '任务描述（notes）为必填字段，这是 Agent 执行的指令提示词' }, { status: 400 });
     }
 
     const taskId = randomUUID();

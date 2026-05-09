@@ -185,6 +185,10 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       toast.error('请输入任务名称');
       return;
     }
+    if (!description.trim()) {
+      toast.error('请输入任务描述（这是 Agent 执行的指令）');
+      return;
+    }
     if (!selectedAgentId) {
       toast.error('请选择 Agent');
       return;
@@ -264,15 +268,17 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           <div>
             <label htmlFor="taskDescription" className="block text-sm font-medium text-gray-300">
-              任务描述
+              任务描述 <span className="text-red-400">*</span>
             </label>
+            <p className="text-xs text-gray-500 mt-1 mb-2">这是 Agent 执行的指令提示词，请清晰描述任务目标</p>
             <textarea
               id="taskDescription"
-              rows={3}
+              rows={5}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="请输入任务描述（可选）"
+              placeholder="例如：分析项目代码结构、修复 XX bug、生成安全审查报告..."
+              required
             />
           </div>
 
