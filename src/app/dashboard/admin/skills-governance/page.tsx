@@ -365,15 +365,15 @@ function SkillsGovernanceContent() {
       </div>
 
       {/* LLM 全量分析卡片 */}
-      <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg border border-purple-500/20 p-6">
+      <div className="bg-gradient-to-r from-purple-900/30 to-indigo-900/30 rounded-lg border border-purple-500/30 p-6">
         <div className="flex items-start justify-between">
           <div className="flex items-start space-x-4">
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Brain className="text-purple-600" size={24} />
+            <div className="p-3 bg-purple-500/20 rounded-lg">
+              <Brain className="text-purple-400" size={24} />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-100">LLM 深度分析</h3>
-              <p className="text-sm text-gray-400 mt-1">
+              <h3 className="text-lg font-semibold text-purple-300">LLM 深度分析</h3>
+              <p className="text-sm text-gray-300 mt-1">
                 使用 AI 模型智能判断 Skills 是否真正功能重复，减少误报
               </p>
               {analysisPreview && (
@@ -417,7 +417,7 @@ function SkillsGovernanceContent() {
           {analysisPreview?.progress?.status === 'running' && isProgressStuck() && (
             <button
               onClick={handleResetProgress}
-              className="inline-flex items-center px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm"
+              className="inline-flex items-center px-3 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors text-sm border border-red-500/30"
               title="分析任务可能已停止，点击重置进度状态"
             >
               重置进度
@@ -427,18 +427,18 @@ function SkillsGovernanceContent() {
         
         {(analysisRunning || analysisPreview?.progress?.status === 'running') && (analysisProgress || analysisPreview?.progress) && (
           <div className="mt-4">
-            <div className="flex items-center justify-between text-sm text-gray-400 mb-1">
+            <div className="flex items-center justify-between text-sm text-gray-300 mb-1">
               <span>分析进度</span>
               <span>{analysisProgress?.current ?? analysisPreview?.progress?.current ?? 0} / {analysisProgress?.total ?? analysisPreview?.progress?.total ?? 0}</span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
+            <div className="w-full bg-gray-700 rounded-full h-2">
               <div 
-                className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                className="bg-purple-500 h-2 rounded-full transition-all duration-300"
                 style={{ width: `${((analysisProgress?.current ?? analysisPreview?.progress?.current ?? 0) / (analysisProgress?.total ?? analysisPreview?.progress?.total ?? 1)) * 100}%` }}
               />
             </div>
             {analysisPreview?.progress?.results && (
-              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-500">
+              <div className="flex items-center space-x-4 mt-2 text-xs text-gray-400">
                 <span>重复: {analysisPreview.progress.results.duplicates}</span>
                 <span>相关: {analysisPreview.progress.results.related}</span>
                 <span>独立: {analysisPreview.progress.results.distinct}</span>
@@ -452,16 +452,16 @@ function SkillsGovernanceContent() {
       {overview?.pendingItems.llmAnalysis && overview.pendingItems.llmAnalysis > 0 && (
         <Link
           href="/dashboard/admin/skills-governance/analysis-review?status=pending"
-          className="block bg-gradient-to-r from-orange-50 to-yellow-50 rounded-lg border border-orange-500/20 p-4 hover:shadow-md transition-shadow"
+          className="block bg-gradient-to-r from-orange-900/30 to-yellow-900/30 rounded-lg border border-orange-500/30 p-4 hover:shadow-md transition-shadow"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <AlertTriangle className="text-orange-600" size={20} />
+              <div className="p-2 bg-orange-500/20 rounded-lg">
+                <AlertTriangle className="text-orange-400" size={20} />
               </div>
               <div>
-                <h4 className="font-semibold text-gray-100">待审核分析结果</h4>
-                <p className="text-sm text-gray-400">有 {overview.pendingItems.llmAnalysis} 个 LLM 分析结果等待人工确认</p>
+                <h4 className="font-semibold text-orange-300">待审核分析结果</h4>
+                <p className="text-sm text-gray-300">有 {overview.pendingItems.llmAnalysis} 个 LLM 分析结果等待人工确认</p>
               </div>
             </div>
             <ChevronRight className="text-gray-400" size={24} />
@@ -717,12 +717,12 @@ function SkillsGovernanceContent() {
                 </button>
               </div>
               
-              <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
+              <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <Sparkles className="text-blue-600" size={20} />
-                    <span className="text-sm text-blue-800">
-                      待处理影响分析: <span className="font-semibold">{overview?.pendingItems.impactAnalysis || 0}</span> 个
+                    <Sparkles className="text-blue-400" size={20} />
+                    <span className="text-sm text-blue-300">
+                      待处理影响分析: <span className="font-semibold text-blue-200">{overview?.pendingItems.impactAnalysis || 0}</span> 个
                     </span>
                   </div>
                   {(overview?.pendingItems.impactAnalysis ?? 0) > 0 && (

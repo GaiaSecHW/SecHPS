@@ -74,22 +74,22 @@ interface Vulnerability {
 
 // Severity color mapping
 const severityColors: Record<string, { bg: string; text: string; border: string }> = {
-  critical: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300' },
-  high: { bg: 'bg-orange-100', text: 'text-orange-700', border: 'border-orange-300' },
-  medium: { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300' },
-  low: { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300' },
-  info: { bg: 'bg-gray-100', text: 'text-gray-300', border: 'border-gray-600' },
+  critical: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-red-500/30' },
+  high: { bg: 'bg-orange-500/20', text: 'text-orange-400', border: 'border-orange-500/30' },
+  medium: { bg: 'bg-yellow-500/20', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+  low: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-blue-500/30' },
+  info: { bg: 'bg-gray-500/20', text: 'text-gray-400', border: 'border-gray-500/30' },
 };
 
 // Status color mapping
 const statusColors: Record<string, { bg: string; text: string }> = {
-  new: { bg: 'bg-purple-100', text: 'text-purple-700' },
-  confirmed: { bg: 'bg-green-100', text: 'text-green-700' },
-  'false-positive': { bg: 'bg-gray-100', text: 'text-gray-400' },
-  false_positive: { bg: 'bg-gray-100', text: 'text-gray-400' }, // 兼容旧格式
-  ignored: { bg: 'bg-gray-100', text: 'text-gray-500' },
-  fixed: { bg: 'bg-blue-100', text: 'text-blue-700' },
-  verified: { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+  new: { bg: 'bg-purple-500/20', text: 'text-purple-400' },
+  confirmed: { bg: 'bg-green-500/20', text: 'text-green-400' },
+  'false-positive': { bg: 'bg-gray-500/20', text: 'text-gray-400' },
+  false_positive: { bg: 'bg-gray-500/20', text: 'text-gray-400' }, // 兼容旧格式
+  ignored: { bg: 'bg-gray-500/20', text: 'text-gray-500' },
+  fixed: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
+  verified: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
 };
 
 const statusNames: Record<string, string> = {
@@ -200,18 +200,20 @@ export default function VulnerabilityDetailPage() {
   // Error state
   if (error || !vulnerability) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
-          <AlertTriangle size={20} />
-          <span>{error || '漏洞不存在'}</span>
+      <div className="min-h-screen bg-[#0F172A] p-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg flex items-center gap-2">
+            <AlertTriangle size={20} />
+            <span>{error || '漏洞不存在'}</span>
+          </div>
+          <button
+            onClick={() => router.back()}
+            className="mt-4 inline-flex items-center px-4 py-2 bg-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <ArrowLeft size={16} className="mr-2" />
+            返回
+          </button>
         </div>
-        <button
-          onClick={() => router.back()}
-          className="mt-4 inline-flex items-center px-4 py-2 border border-gray-600 rounded-lg hover:bg-[#0F172A] transition-colors"
-        >
-          <ArrowLeft size={16} className="mr-2" />
-          返回
-        </button>
       </div>
     );
   }
@@ -220,100 +222,101 @@ export default function VulnerabilityDetailPage() {
   const statusStyle = statusColors[vulnerability.status] || statusColors.new;
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div className="flex items-start gap-4">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors mt-1"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-gray-100">
-                {vulnerability.title}
-              </h1>
-              <span
-                className={`px-2.5 py-1 rounded-full text-sm font-medium ${severityStyle.bg} ${severityStyle.text}`}
-              >
-                {vulnerability.severity.toUpperCase()}
-              </span>
-              <span
-                className={`px-2.5 py-1 rounded-full text-sm font-medium ${statusStyle.bg} ${statusStyle.text}`}
-              >
-                {statusNames[vulnerability.status] || vulnerability.status}
-              </span>
-            </div>
-            <div className="flex items-center gap-4 text-sm text-gray-400">
-              <span className="flex items-center gap-1">
-                <Shield size={14} />
-                {vulnerability.type}
-              </span>
-              {vulnerability.cwe && (
-                <span className="flex items-center gap-1">
-                  <AlertTriangle size={14} />
-                  CWE-{vulnerability.cwe}
+    <div className="min-h-screen bg-[#0F172A] p-6">
+      <div className="max-w-5xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-4">
+            <button
+              onClick={() => router.back()}
+              className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors mt-1"
+            >
+              <ArrowLeft size={20} className="text-gray-400" />
+            </button>
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-2xl font-bold text-gray-100">
+                  {vulnerability.title}
+                </h1>
+                <span
+                  className={`px-2.5 py-1 rounded-full text-sm font-medium border ${severityStyle.bg} ${severityStyle.text} ${severityStyle.border}`}
+                >
+                  {vulnerability.severity.toUpperCase()}
                 </span>
-              )}
-              {vulnerability.Project && (
-                <span className="flex items-center gap-1">
-                  <FileCode size={14} />
-                  项目: {vulnerability.Project.name}
+                <span
+                  className={`px-2.5 py-1 rounded-full text-sm font-medium ${statusStyle.bg} ${statusStyle.text}`}
+                >
+                  {statusNames[vulnerability.status] || vulnerability.status}
                 </span>
-              )}
+              </div>
+              <div className="flex items-center gap-4 text-sm text-gray-400">
+                <span className="flex items-center gap-1">
+                  <Shield size={14} />
+                  {vulnerability.type}
+                </span>
+                {vulnerability.cwe && (
+                  <span className="flex items-center gap-1">
+                    <AlertTriangle size={14} />
+                    CWE-{vulnerability.cwe}
+                  </span>
+                )}
+                {vulnerability.Project && (
+                  <span className="flex items-center gap-1">
+                    <FileCode size={14} />
+                    项目: {vulnerability.Project.name}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Action buttons */}
-        <div className="flex items-center gap-2">
-          {vulnerability.status === 'new' && (
-            <>
-              <button
-                onClick={() => openConfirmDialog('confirmed')}
-                className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-              >
-                <CheckCircle size={16} className="mr-2" />
-                确认漏洞
-              </button>
-              <button
-                onClick={() => openConfirmDialog('false-positive')}
-                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <XCircle size={16} className="mr-2" />
-                标记误报
-              </button>
-              <button
-                onClick={() => openConfirmDialog('ignored')}
-                className="inline-flex items-center px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-[#0F172A] transition-colors"
-              >
-                <Ban size={16} className="mr-2" />
-                忽略
-              </button>
-            </>
-          )}
-          {vulnerability.status === 'confirmed' && (
-            <>
-              <button
-                onClick={() => openConfirmDialog('false-positive')}
-                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-              >
-                <XCircle size={16} className="mr-2" />
-                标记误报
-              </button>
-              <button
-                onClick={() => openConfirmDialog('ignored')}
-                className="inline-flex items-center px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-[#0F172A] transition-colors"
-              >
-                <Ban size={16} className="mr-2" />
-                忽略
-              </button>
-            </>
-          )}
+          {/* Action buttons */}
+          <div className="flex items-center gap-2">
+            {vulnerability.status === 'new' && (
+              <>
+                <button
+                  onClick={() => openConfirmDialog('confirmed')}
+                  className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                >
+                  <CheckCircle size={16} className="mr-2" />
+                  确认漏洞
+                </button>
+                <button
+                  onClick={() => openConfirmDialog('false-positive')}
+                  className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <XCircle size={16} className="mr-2" />
+                  标记误报
+                </button>
+                <button
+                  onClick={() => openConfirmDialog('ignored')}
+                  className="inline-flex items-center px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
+                >
+                  <Ban size={16} className="mr-2" />
+                  忽略
+                </button>
+              </>
+            )}
+            {vulnerability.status === 'confirmed' && (
+              <>
+                <button
+                  onClick={() => openConfirmDialog('false-positive')}
+                  className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                >
+                  <XCircle size={16} className="mr-2" />
+                  标记误报
+                </button>
+                <button
+                  onClick={() => openConfirmDialog('ignored')}
+                  className="inline-flex items-center px-4 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
+                >
+                  <Ban size={16} className="mr-2" />
+                  忽略
+                </button>
+              </>
+            )}
+          </div>
         </div>
-      </div>
 
       {/* Main content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -356,12 +359,12 @@ export default function VulnerabilityDetailPage() {
 
           {/* Fix suggestion */}
           {vulnerability.fixSuggestion && (
-            <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg shadow border border-green-200 p-6">
-              <h2 className="text-lg font-semibold text-green-900 mb-4 flex items-center gap-2">
+            <div className="bg-gradient-to-br from-green-900/30 to-emerald-900/30 rounded-lg shadow border border-green-500/30 p-6">
+              <h2 className="text-lg font-semibold text-green-300 mb-4 flex items-center gap-2">
                 <Wrench size={18} />
                 修复建议
               </h2>
-              <div className="text-green-800 leading-relaxed whitespace-pre-wrap">
+              <div className="text-gray-200 leading-relaxed whitespace-pre-wrap">
                 {vulnerability.fixSuggestion}
               </div>
             </div>
@@ -472,8 +475,8 @@ export default function VulnerabilityDetailPage() {
             <div className="space-y-3">
               {/* Created */}
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                  <Eye size={14} className="text-purple-600" />
+                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <Eye size={14} className="text-purple-400" />
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-100">发现漏洞</p>
@@ -486,8 +489,8 @@ export default function VulnerabilityDetailPage() {
               {/* Confirmed */}
               {vulnerability.confirmedAt && (
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
-                    <CheckCircle size={14} className="text-green-600" />
+                  <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center">
+                    <CheckCircle size={14} className="text-green-400" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-100">确认漏洞</p>
@@ -507,8 +510,8 @@ export default function VulnerabilityDetailPage() {
               {/* Fixed */}
               {vulnerability.fixedAt && (
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                    <Wrench size={14} className="text-blue-600" />
+                  <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <Wrench size={14} className="text-blue-400" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-100">修复漏洞</p>
@@ -528,8 +531,8 @@ export default function VulnerabilityDetailPage() {
               {/* Verified */}
               {vulnerability.verifiedAt && (
                 <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                    <Shield size={14} className="text-emerald-600" />
+                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                    <Shield size={14} className="text-emerald-400" />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-100">验证修复</p>
@@ -548,7 +551,7 @@ export default function VulnerabilityDetailPage() {
 
               {/* Last updated */}
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full bg-gray-500/20 flex items-center justify-center">
                   <Clock size={14} className="text-gray-400" />
                 </div>
                 <div>

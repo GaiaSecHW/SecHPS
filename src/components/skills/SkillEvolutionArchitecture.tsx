@@ -30,14 +30,14 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
   return (
     <div className={`bg-dark-surface rounded-lg shadow border border-gray-700/50 ${className}`}>
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-700/50 bg-gradient-to-r from-blue-50 to-indigo-50">
+      <div className="px-6 py-4 border-b border-gray-700/50 bg-gradient-to-r from-blue-900/30 to-indigo-900/30">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-blue-100 rounded-lg">
-            <RefreshCw className="h-5 w-5 text-blue-600" />
+          <div className="p-2 bg-blue-500/20 rounded-lg">
+            <RefreshCw className="h-5 w-5 text-blue-400" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-100">Skill 自我进化架构</h2>
-            <p className="text-sm text-gray-400">基于误报学习的精准率优化系统</p>
+            <h2 className="text-lg font-semibold text-blue-300">Skill 自我进化架构</h2>
+            <p className="text-sm text-gray-300">基于误报学习的精准率优化系统</p>
           </div>
         </div>
       </div>
@@ -61,8 +61,8 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
               <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 {/* Step 1: 数据收集 */}
                 <div className="flex flex-col items-center text-center w-full md:w-auto">
-                  <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-2">
-                    <Database className="h-7 w-7 text-blue-600" />
+                  <div className="w-16 h-16 rounded-full bg-blue-500/20 flex items-center justify-center mb-2">
+                    <Database className="h-7 w-7 text-blue-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-100">数据收集</span>
                   <span className="text-xs text-gray-500 mt-1">SkillExecution + Vulnerability</span>
@@ -72,8 +72,8 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
 
                 {/* Step 2: 指标计算 */}
                 <div className="flex flex-col items-center text-center w-full md:w-auto">
-                  <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mb-2">
-                    <BarChart3 className="h-7 w-7 text-green-600" />
+                  <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center mb-2">
+                    <BarChart3 className="h-7 w-7 text-green-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-100">指标计算</span>
                   <span className="text-xs text-gray-500 mt-1">精准率 / 误报率</span>
@@ -83,8 +83,8 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
 
                 {/* Step 3: 案例提取 */}
                 <div className="flex flex-col items-center text-center w-full md:w-auto">
-                  <div className="w-16 h-16 rounded-full bg-yellow-100 flex items-center justify-center mb-2">
-                    <FileText className="h-7 w-7 text-yellow-600" />
+                  <div className="w-16 h-16 rounded-full bg-yellow-500/20 flex items-center justify-center mb-2">
+                    <FileText className="h-7 w-7 text-yellow-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-100">案例提取</span>
                   <span className="text-xs text-gray-500 mt-1">误报 + 正确发现</span>
@@ -94,8 +94,8 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
 
                 {/* Step 4: LLM 分析 */}
                 <div className="flex flex-col items-center text-center w-full md:w-auto">
-                  <div className="w-16 h-16 rounded-full bg-purple-100 flex items-center justify-center mb-2">
-                    <Brain className="h-7 w-7 text-purple-600" />
+                  <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center mb-2">
+                    <Brain className="h-7 w-7 text-purple-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-100">LLM 分析</span>
                   <span className="text-xs text-gray-500 mt-1">平衡改进建议</span>
@@ -105,8 +105,8 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
 
                 {/* Step 5: 人工审批 */}
                 <div className="flex flex-col items-center text-center w-full md:w-auto">
-                  <div className="w-16 h-16 rounded-full bg-orange-100 flex items-center justify-center mb-2">
-                    <CheckCircle className="h-7 w-7 text-orange-600" />
+                  <div className="w-16 h-16 rounded-full bg-orange-500/20 flex items-center justify-center mb-2">
+                    <CheckCircle className="h-7 w-7 text-orange-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-100">人工审批</span>
                   <span className="text-xs text-gray-500 mt-1">应用 / 拒绝</span>
@@ -116,8 +116,8 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
 
                 {/* Step 6: 效果对比 */}
                 <div className="flex flex-col items-center text-center w-full md:w-auto">
-                  <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mb-2">
-                    <GitCompare className="h-7 w-7 text-red-600" />
+                  <div className="w-16 h-16 rounded-full bg-red-500/20 flex items-center justify-center mb-2">
+                    <GitCompare className="h-7 w-7 text-red-400" />
                   </div>
                   <span className="text-sm font-medium text-gray-100">效果对比</span>
                   <span className="text-xs text-gray-500 mt-1">新版本验证</span>
@@ -126,19 +126,19 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
 
               {/* 关键公式 */}
               <div className="mt-6 p-4 bg-[#0F172A] rounded-lg border border-gray-700/50">
-                <h4 className="text-sm font-medium text-gray-700 mb-3">关键公式</h4>
+                <h4 className="text-sm font-medium text-gray-300 mb-3">关键公式</h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                   <div className="p-3 bg-dark-surface rounded border border-gray-700/50">
                     <span className="text-gray-400">精准率 = </span>
-                    <span className="font-mono text-blue-600">confirmed / (confirmed + falsePositive)</span>
+                    <span className="font-mono text-blue-400">confirmed / (confirmed + falsePositive)</span>
                   </div>
                   <div className="p-3 bg-dark-surface rounded border border-gray-700/50">
                     <span className="text-gray-400">误报率 = </span>
-                    <span className="font-mono text-red-600">falsePositive / totalFindings</span>
+                    <span className="font-mono text-red-400">falsePositive / totalFindings</span>
                   </div>
                   <div className="p-3 bg-dark-surface rounded border border-gray-700/50">
                     <span className="text-gray-400">F1 Score = </span>
-                    <span className="font-mono text-green-600">2 * (P * R) / (P + R)</span>
+                    <span className="font-mono text-green-400">2 * (P * R) / (P + R)</span>
                   </div>
                 </div>
               </div>
@@ -161,25 +161,25 @@ export function SkillEvolutionArchitecture({ className = '' }: Props) {
           {expandedSection === 'trigger' && (
             <div className="px-4 py-4">
               <div className="space-y-3">
-                <div className="flex items-center gap-4 p-3 bg-red-50 rounded-lg border border-red-200">
-                  <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0" />
+                <div className="flex items-center gap-4 p-3 bg-red-900/20 rounded-lg border border-red-500/30">
+                  <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0" />
                   <div>
-                    <span className="font-medium text-red-800">精准率低于阈值</span>
-                    <p className="text-sm text-red-600">precision &lt; 0.7（默认）时触发进化</p>
+                    <span className="font-medium text-red-300">精准率低于阈值</span>
+                    <p className="text-sm text-gray-300">precision &lt; 0.7（默认）时触发进化</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 p-3 bg-orange-50 rounded-lg border border-orange-200">
-                  <AlertTriangle className="h-5 w-5 text-orange-500 flex-shrink-0" />
+                <div className="flex items-center gap-4 p-3 bg-orange-900/20 rounded-lg border border-orange-500/30">
+                  <AlertTriangle className="h-5 w-5 text-orange-400 flex-shrink-0" />
                   <div>
-                    <span className="font-medium text-orange-800">误报数超标</span>
-                    <p className="text-sm text-orange-600">falsePositiveCount ≥ 5（默认）时触发进化</p>
+                    <span className="font-medium text-orange-300">误报数超标</span>
+                    <p className="text-sm text-gray-300">falsePositiveCount ≥ 5（默认）时触发进化</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 p-3 bg-primary-600/15 rounded-lg border border-blue-200">
-                  <CheckCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                <div className="flex items-center gap-4 p-3 bg-blue-900/20 rounded-lg border border-blue-500/30">
+                  <CheckCircle className="h-5 w-5 text-blue-400 flex-shrink-0" />
                   <div>
-                    <span className="font-medium text-blue-800">最小数据要求</span>
-                    <p className="text-sm text-blue-600">需同时有 ≥3 个正确发现和 ≥5 个误报案例</p>
+                    <span className="font-medium text-blue-300">最小数据要求</span>
+                    <p className="text-sm text-gray-300">需同时有 ≥3 个正确发现和 ≥5 个误报案例</p>
                   </div>
                 </div>
               </div>

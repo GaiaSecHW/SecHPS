@@ -247,9 +247,9 @@ function GovernancePageContent() {
       </div>
 
       {/* 说明信息 */}
-      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-blue-800 mb-2">治理流程说明</h3>
-        <ol className="text-sm text-blue-400 space-y-1 list-decimal list-inside">
+      <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+        <h3 className="text-sm font-medium text-blue-300 mb-2">治理流程说明</h3>
+        <ol className="text-sm text-gray-300 space-y-1 list-decimal list-inside">
           <li>系统使用规则引擎自动推断存量 Skill 的语言和漏洞类型</li>
           <li>高置信度结果自动迁移，中置信度结果需要人工审核</li>
           <li>审核完成后可运行重复检测，识别相似的 Skill</li>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import {
@@ -49,12 +50,12 @@ interface Stats {
 }
 
 const statusColors: Record<string, string> = {
-  new: 'bg-blue-100 text-blue-800',
-  confirmed: 'bg-yellow-100 text-yellow-800',
-  'false-positive': 'bg-dark-surface-hover text-gray-200',
-  fixed: 'bg-green-100 text-green-800',
-  verified: 'bg-purple-100 text-purple-800',
-  closed: 'bg-dark-surface-hover text-gray-400',
+  new: 'bg-blue-500/20 text-blue-400',
+  confirmed: 'bg-yellow-500/20 text-yellow-400',
+  'false-positive': 'bg-gray-500/20 text-gray-400',
+  fixed: 'bg-green-500/20 text-green-400',
+  verified: 'bg-purple-500/20 text-purple-400',
+  closed: 'bg-gray-500/20 text-gray-400',
 };
 
 const statusLabels: Record<string, string> = {
@@ -419,7 +420,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
         </div>
       )}
 
-      {/* Filters */}
+{/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1">
           <div className="relative">
@@ -429,24 +430,24 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
               placeholder="搜索漏洞..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
             />
           </div>
         </div>
         <select
           value={selectedProject}
           onChange={(e) => { setSelectedProject(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-40 px-4 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
         >
           <option value="">所有项目</option>
           {projects.map(project => (
             <option key={project.id} value={project.id}>{project.name}</option>
           ))}
-</select>
+        </select>
         <select
           value={selectedStatus}
           onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
-          className="px-4 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          className="w-40 px-4 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
         >
           <option value="">所有状态</option>
           <option value="new">新建</option>
@@ -527,123 +528,144 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
         </div>
       )}
 
-      {/* Detail Modal */}
-      {selectedVuln && (
-        <div className="fixed inset-0 bg-dark-surface z-50 flex flex-col">
-          {/* 顶部导航栏 */}
-          <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 bg-dark-surface shrink-0">
-            <div className="flex items-center space-x-3">
-              <button
-                onClick={() => setSelectedVuln(null)}
-                className="flex items-center text-gray-500 hover:text-gray-200 transition-colors"
-              >
-                <XCircle size={20} className="mr-1" />
-                返回
-              </button>
-              <span className="text-gray-300">|</span>
-              <span className={`px-2 py-0.5 text-xs font-medium rounded ${statusColors[selectedVuln.status] || 'bg-dark-surface-hover text-gray-200'}`}>
-                {statusLabels[selectedVuln.status] || selectedVuln.status}
-              </span>
-              <h2 className="text-lg font-bold text-gray-100">{selectedVuln.title}</h2>
-            </div>
-            {/* 操作按钮 */}
-            <div className="flex items-center space-x-2">
-              <button onClick={() => handleCopyAsMarkdown(selectedVuln)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
-                <Copy size={14} className="mr-1" />复制MD
-              </button>
-              {selectedVuln.status === 'new' && (
-                <>
-                  <button onClick={() => handleStatusChange(selectedVuln.id, 'confirm')} className="inline-flex items-center px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">
-                    <CheckCircle size={14} className="mr-1" />确认漏洞
-                  </button>
-                  <button onClick={() => handleStatusChange(selectedVuln.id, 'false-positive')} className="inline-flex items-center px-3 py-1.5 bg-dark-surface-hover text-gray-200 rounded hover:bg-gray-700 text-sm">
-                    <XCircle size={14} className="mr-1" />标记误报
-                  </button>
-                </>
-              )}
-              {selectedVuln.status === 'confirmed' && (
-                <button onClick={() => handleStatusChange(selectedVuln.id, 'fix')} className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm">
-                  <RefreshCw size={14} className="mr-1" />标记已修复
+{/* Detail Modal */}
+      {selectedVuln && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          {/* 背景遮罩 */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => setSelectedVuln(null)}
+          />
+          
+          {/* 模态框内容 */}
+          <div className="relative bg-dark-surface rounded-lg shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-700/50">
+            {/* 顶部导航栏 */}
+            <div className="flex items-center justify-between px-4 py-5 border-b border-gray-700/50 bg-[#0F172A] shrink-0">
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => setSelectedVuln(null)}
+                  className="flex items-center gap-2 px-3 py-2 text-gray-400 hover:text-gray-200 hover:bg-dark-surface-hover rounded-lg transition-colors"
+                >
+                  <XCircle size={18} />
+                  <span>关闭</span>
                 </button>
-              )}
-              {selectedVuln.status === 'fixed' && (
-                <button onClick={() => handleStatusChange(selectedVuln.id, 'verify')} className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm">
-                  <CheckCircle size={14} className="mr-1" />验证修复
+                <div className="h-6 w-px bg-gray-600" />
+                <span className={`px-3 py-1.5 rounded-lg text-xs font-medium ${statusColors[selectedVuln.status] || 'bg-gray-500/20 text-gray-400 border border-gray-500/30'}`}>
+                  {statusLabels[selectedVuln.status] || selectedVuln.status}
+                </span>
+                <h2 className="text-xl font-bold text-gray-100 w-[400px] truncate">{selectedVuln.title}</h2>
+              </div>
+              {/* 操作按钮 */}
+              <div className="flex items-center gap-3">
+                <button onClick={() => handleCopyAsMarkdown(selectedVuln)} className="inline-flex items-center px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-colors">
+                  <Copy size={16} className="mr-2" />
+                  复制MD
                 </button>
-              )}
-              <button onClick={() => handleDelete(selectedVuln.id, selectedVuln.title)} className="inline-flex items-center px-3 py-1.5 bg-red-900/20 text-red-400 border border-red-200 rounded hover:bg-red-100 text-sm">
-                <Trash2 size={14} className="mr-1" />删除
-              </button>
+                {selectedVuln.status === 'new' && (
+                  <>
+                    <button onClick={() => handleStatusChange(selectedVuln.id, 'confirm')} className="inline-flex items-center px-4 py-2 bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg hover:bg-yellow-500/30 transition-colors">
+                      <CheckCircle size={16} className="mr-2" />
+                      确认漏洞
+                    </button>
+                    <button onClick={() => handleStatusChange(selectedVuln.id, 'false-positive')} className="inline-flex items-center px-4 py-2 bg-gray-500/20 text-gray-400 border border-gray-500/30 rounded-lg hover:bg-gray-500/30 transition-colors">
+                      <XCircle size={16} className="mr-2" />
+                      标记误报
+                    </button>
+                  </>
+                )}
+                {selectedVuln.status === 'confirmed' && (
+                  <button onClick={() => handleStatusChange(selectedVuln.id, 'fix')} className="inline-flex items-center px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors">
+                    <RefreshCw size={16} className="mr-2" />
+                    标记已修复
+                  </button>
+                )}
+                {selectedVuln.status === 'fixed' && (
+                  <button onClick={() => handleStatusChange(selectedVuln.id, 'verify')} className="inline-flex items-center px-4 py-2 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-lg hover:bg-purple-500/30 transition-colors">
+                    <CheckCircle size={16} className="mr-2" />
+                    验证修复
+                  </button>
+                )}
+                <button onClick={() => handleDelete(selectedVuln.id, selectedVuln.title)} className="inline-flex items-center px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors">
+                  <Trash2 size={16} className="mr-2" />
+                  删除
+                </button>
+              </div>
             </div>
-          </div>
-          {/* 内容区域 */}
-          <div className="flex-1 overflow-y-auto">
-          <div className="max-w-5xl mx-auto p-6">
-            <div className="space-y-4">
-
-              <div className="mt-4 space-y-4">
+            {/* 内容区域 */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
+              <div className="max-w-3xl mx-auto space-y-6">
                 {/* 基本信息 */}
-                <div className="bg-[#0F172A] rounded-lg p-4 space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <span className="text-xs text-gray-500">漏洞类型</span>
-                      <p className="text-sm font-medium text-gray-100">{selectedVuln.type}</p>
+                      <p className="text-sm font-medium text-gray-100 mt-1">{selectedVuln.type}</p>
                     </div>
                     <div>
                       <span className="text-xs text-gray-500">CWE 编号</span>
-                      <p className="text-sm font-medium text-gray-100">{selectedVuln.cwe || '无'}</p>
+                      <p className="text-sm font-medium text-gray-100 mt-1">{selectedVuln.cwe || '无'}</p>
                     </div>
                     <div>
                       <span className="text-xs text-gray-500">发现工具</span>
-                      <p className="text-sm font-medium text-gray-100">{selectedVuln.skill || '未知'}</p>
+                      <p className="text-sm font-medium text-gray-100 mt-1">{selectedVuln.skill || '未知'}</p>
                     </div>
                     <div>
                       <span className="text-xs text-gray-500">发现时间</span>
-                      <p className="text-sm font-medium text-gray-100">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
+                      <p className="text-sm font-medium text-gray-100 mt-1">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* 描述 */}
-                <div>
-                  <h4 className="text-sm font-medium text-gray-300 mb-2">漏洞描述</h4>
-                  <div className="text-sm text-gray-400 bg-dark-surface border border-gray-700/50 rounded-lg p-3 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
+                <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
+                  <h4 className="text-sm font-medium text-gray-300 mb-3">漏洞描述</h4>
+                  <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
                 </div>
 
                 {/* 问题代码位置 */}
                 {selectedVuln.location && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-300 mb-2">问题代码位置</h4>
-                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.location}</pre>
+                  <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-3">问题代码位置</h4>
+                    <pre className="text-sm bg-gray-900 text-gray-200 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.location}</pre>
                   </div>
                 )}
 
                 {/* POC 验证代码 */}
                 {selectedVuln.POC && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-300 mb-2">POC 验证代码</h4>
-                    <pre className="text-xs bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.POC}</pre>
+                  <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
+                    <h4 className="text-sm font-medium text-gray-300 mb-3">POC 验证代码</h4>
+                    <pre className="text-sm bg-gray-900 text-gray-200 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.POC}</pre>
                   </div>
                 )}
 
                 {/* 修复建议 */}
                 {selectedVuln.fixSuggestion && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-300 mb-2">修复建议</h4>
-                    <div className="text-sm text-gray-400 bg-dark-surface border border-gray-700/50 rounded-lg p-3 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
+                  <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-lg border border-green-500/30 p-4">
+                    <h4 className="text-sm font-medium text-green-300 mb-3">修复建议</h4>
+                    <div className="text-sm text-gray-200 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
                   </div>
                 )}
               </div>
             </div>
           </div>
-          </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 误报原因输入弹窗 */}
-      {showFalsePositiveModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+      {showFalsePositiveModal && typeof window !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          {/* 背景遮罩 */}
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            onClick={() => {
+              setShowFalsePositiveModal(false);
+              setFalsePositiveReason('');
+            }}
+          />
+          
+          {/* 弹窗内容 */}
+          <div className="relative bg-dark-surface rounded-lg shadow-2xl max-w-md w-full p-6 border border-gray-700/50">
             <h3 className="text-lg font-semibold text-gray-100 mb-4">标记为误报</h3>
             <p className="text-sm text-gray-400 mb-4">
               请输入误报原因（可选）。此原因将用于后续的 Skill 进化改进。
@@ -652,7 +674,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
               value={falsePositiveReason}
               onChange={(e) => setFalsePositiveReason(e.target.value)}
               placeholder="例如：该代码已进行输入验证，不存在漏洞..."
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm text-gray-200"
               rows={4}
             />
             <div className="mt-4 flex justify-end gap-3">
@@ -661,7 +683,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                   setShowFalsePositiveModal(false);
                   setFalsePositiveReason('');
                 }}
-                className="px-4 py-2 text-gray-300 bg-dark-surface-hover rounded-md hover:bg-gray-200"
+                className="px-4 py-2 text-gray-400 bg-dark-surface-hover rounded-md hover:bg-gray-600 border border-gray-600"
               >
                 取消
               </button>
@@ -673,7 +695,8 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

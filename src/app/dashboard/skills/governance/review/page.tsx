@@ -169,9 +169,9 @@ function ReviewPageContent() {
       </div>
 
       {/* 说明 */}
-      <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4 mb-6">
-        <h3 className="text-sm font-medium text-yellow-800 mb-2">使用说明</h3>
-        <ol className="text-sm text-yellow-400 space-y-1 list-decimal list-inside">
+      <div className="bg-yellow-900/20 border border-yellow-500/30 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-medium text-yellow-300 mb-2">使用说明</h3>
+        <ol className="text-sm text-gray-300 space-y-1 list-decimal list-inside">
           <li>点击"运行全量分析"扫描所有 Skill 的相似性</li>
           <li>系统会识别出可能重复的 Skill 组</li>
           <li>审核每组，决定是合并还是保留全部</li>

@@ -542,7 +542,7 @@ function SkillsPageContent() {
               setCurrentPage(1);
               updateUrlParams({ categoryId: e.target.value || null, languageId: null, patternId: null, page: null });
             }}
-            className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+            className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有分类</option>
             {categories.map((cat) => (
@@ -560,7 +560,7 @@ function SkillsPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ languageId: e.target.value || null, patternId: null, page: null });
                 }}
-                className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+                className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">所有语言</option>
                 {vulnerabilityTree.map((lang) => (
@@ -579,7 +579,7 @@ function SkillsPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ patternId: e.target.value || null, page: null });
                 }}
-                className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+                className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">所有模式</option>
                 {selectedLang.patterns.map((pat) => (
@@ -595,7 +595,7 @@ function SkillsPageContent() {
               setCurrentPage(1);
               updateUrlParams({ isActive: e.target.value || null, page: null });
             }}
-            className="px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+            className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有状态</option>
             {activeStatusOptions.map((opt) => (

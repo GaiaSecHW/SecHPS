@@ -109,3 +109,79 @@ table {
 .card-shadow-hover:hover {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
 }
+
+/* Global form input styles */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="url"],
+input[type="search"],
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+textarea,
+select {
+  color: var(--text-primary);
+  background-color: #0F172A;
+  border-color: #4B5563;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="url"]:focus,
+input[type="search"]:focus,
+input[type="date"]:focus,
+input[type="datetime-local"]:focus,
+input[type="time"]:focus,
+textarea:focus,
+select:focus {
+  border-color: #3B82F6;
+  outline-color: #3B82F6;
+}
+
+/* Placeholder styles */
+input::placeholder,
+textarea::placeholder {
+  color: #6B7280;
+}
+
+/* Select dropdown styles */
+select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239CA3AF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'%3e%3c/path%3e%3c/svg%3e");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Select option styles for dropdown menu */
+select option {
+  color: #E2E8F0;
+  background-color: #1E293B;
+  padding: 0.5rem;
+}
+
+select option:hover,
+select option:checked {
+  background-color: #334155;
+  color: #F9FAFB;
+}
+
+/* Checkbox and radio button styles */
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: #3B82F6;
+}
+
+/* Disabled state */
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  color: #9CA3AF;
+}
