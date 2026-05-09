@@ -8,6 +8,21 @@ export interface EnvironmentFactoryConfig {
   skillsRegistryPath?: string;
 }
 
+function mapRemotePathToLocal(remotePath: string): string {
+  const pathMapping = process.env.PATH_MAPPING;
+  if (!pathMapping) {
+    return remotePath;
+  }
+  const [remotePrefix, localPrefix] = pathMapping.split('=');
+  if (!remotePrefix || !localPrefix) {
+    return remotePath;
+  }
+  if (remotePath.startsWith(remotePrefix)) {
+    return remotePath.replace(remotePrefix, localPrefix);
+  }
+  return remotePath;
+}
+
 export class EnvironmentFactory {
   private readonly workspaceBasePath: string;
   private readonly skillsRegistryPath: string;
@@ -23,12 +38,14 @@ export class EnvironmentFactory {
    */
   async build(payload: TaskPayload): Promise<string> {
     // NFS passthrough mode: use the provided workspace path directly
+    // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
     if (payload.workspacePath) {
-      fs.writeFileSync(
-        path.join(payload.workspacePath, 'instruction.txt'),
-        payload.instruction
-      );
-      return payload.workspacePath;
+      const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
+      const instructionPath = localWorkspacePath.endsWith('/')
+        ? `${localWorkspacePath}instruction.txt`
+        : `${localWorkspacePath}/instruction.txt`;
+      fs.writeFileSync(instructionPath, payload.instruction);
+      return localWorkspacePath;
     }
 
     // Local workspace mode
@@ -109,7 +126,14 @@ export class EnvironmentFactory {
    * Skips cleanup if the path is not under the local workspaceBasePath (NFS paths).
    */
   async cleanup(workspacePath: string): Promise<void> {
-    // Never delete NFS paths
+    // Never delete mapped remote paths (they come from NFS/remote server)
+    const pathMapping = process.env.PATH_MAPPING;
+    if (pathMapping) {
+      const localPrefix = pathMapping.split('=')[1];
+      if (localPrefix && workspacePath.startsWith(localPrefix)) {
+        return;
+      }
+    }
     const resolved = path.resolve(workspacePath);
     const base = path.resolve(this.workspaceBasePath);
     if (!resolved.startsWith(base)) {
