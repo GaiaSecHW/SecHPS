@@ -9,7 +9,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "node --watch src/index.ts",
+    "dev": "npx tsx --env-file=../../../.env --watch src/index.ts",
+    "start": "node --env-file=../../../.env dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
