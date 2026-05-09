@@ -79,6 +79,7 @@ function DashboardLayoutContent({
       console.error('Failed to parse user data:', e);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
       router.push('/login');
       return;
     }
@@ -88,6 +89,7 @@ function DashboardLayoutContent({
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    document.cookie = 'auth-token=; path=/; max-age=0';
     router.push('/login');
   };
 

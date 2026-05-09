@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
 import { uploadFileToGitea, deleteFileFromGitea, isGiteaConfigured, getGiteaRepoUrl } from '@/lib/gitea';
 import AdmZip from 'adm-zip';
@@ -46,16 +47,18 @@ export async function PUT(
   request: NextRequest,
   context: RouteContext
 ) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     console.log('[agent-apps PUT] Auth failed:', auth.error);
     return authErrorResponse(auth);
   }
 
+  const { tenant, payload } = auth as AuthSuccessResult;
+
   try {
     const params = await context.params;
     const appId = params.id;
-    
+
     let name: string;
     let engine: string;
     let startCommand: string | null;
@@ -65,9 +68,9 @@ export async function PUT(
     let agentHarnessFile: File | null = null;
     let filesJson: string | null = null;
     let formData: FormData | null = null;
-    
+
     const contentType = request.headers.get('content-type') || '';
-    
+
     if (contentType.includes('application/json')) {
       const body = await request.json();
       name = body.name;
@@ -94,11 +97,16 @@ export async function PUT(
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
     }
 
+    const whereCondition: Record<string, unknown> = { id: appId };
+    if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      // 平台管理员和 ICS 租户可操作任何应用
+    } else {
+      // 普通租户用户：必须是自己创建的应用
+      whereCondition.userId = payload.userId;
+    }
+
     const existing = await prisma.agentApp.findFirst({
-      where: {
-        id: appId,
-        userId: auth.payload.userId,
-      },
+      where: whereCondition,
     });
 
     if (!existing) {
@@ -172,23 +180,30 @@ export async function DELETE(
   request: NextRequest,
   context: RouteContext
 ) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     console.log('[agent-apps DELETE] Auth failed:', auth.error);
     return authErrorResponse(auth);
   }
 
+  const { tenant, payload } = auth as AuthSuccessResult;
+
   try {
     const params = await context.params;
     const appId = params.id;
-    
-    console.log('[agent-apps DELETE] Delete request:', { appId, userId: auth.payload.userId });
-    
+
+    console.log('[agent-apps DELETE] Delete request:', { appId, userId: payload.userId });
+
+    const whereCondition: Record<string, unknown> = { id: appId };
+    if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      // 平台管理员和 ICS 租户可操作任何应用
+    } else {
+      // 普通租户用户：必须是自己创建的应用
+      whereCondition.userId = payload.userId;
+    }
+
     const existing = await prisma.agentApp.findFirst({
-      where: {
-        id: appId,
-        userId: auth.payload.userId,
-      },
+      where: whereCondition,
     });
 
     if (!existing) {

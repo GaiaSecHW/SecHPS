@@ -19,7 +19,8 @@ import {
 } from 'lucide-react';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { extractErrorMessage } from '@/lib/api-client';
-import { QueueMonitor } from '@/components/evaluation/QueueMonitor';
+import dynamic from 'next/dynamic';
+const QueueMonitor = dynamic(() => import('@/components/evaluation/QueueMonitor').then(m => ({ default: m.QueueMonitor })), { ssr: false });
 
 interface Session {
   id: string;

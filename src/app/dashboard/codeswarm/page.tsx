@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
-import { WorkerNodesTable } from '@/components/codeswarm/WorkerNodesTable';
-import { TaskDebugPanel } from '@/components/codeswarm/TaskDebugPanel';
-import { TaskResultViewer } from '@/components/codeswarm/TaskResultViewer';
+import dynamic from 'next/dynamic';
+const WorkerNodesTable = dynamic(() => import('@/components/codeswarm/WorkerNodesTable').then(m => ({ default: m.WorkerNodesTable })), { ssr: false });
+const TaskDebugPanel = dynamic(() => import('@/components/codeswarm/TaskDebugPanel').then(m => ({ default: m.TaskDebugPanel })), { ssr: false });
+const TaskResultViewer = dynamic(() => import('@/components/codeswarm/TaskResultViewer').then(m => ({ default: m.TaskResultViewer })), { ssr: false });
 import { AdminGuard } from '@/components/PermissionGuard';
 import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react';
 
@@ -412,7 +413,7 @@ function CodeSwarmPageContent() {
             <Server className="w-6 h-6 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">CodeSwarm Worker 管理</h1>
+            <h1 className="text-2xl font-bold text-gray-100">智能体 Worker 管理</h1>
             <p className="text-sm text-gray-400">
               分布式 Agent 执行节点管理 & 手动任务调试
             </p>
