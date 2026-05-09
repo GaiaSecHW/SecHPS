@@ -130,7 +130,7 @@ function DashboardLayoutContent({
           )}
         </div>
 
-        <nav className="flex-1 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
+        <nav className="flex-1 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden custom-scrollbar sidebar-scrollbar">
           <NavLink href="/dashboard" icon={<LayoutDashboard size={18} />} collapsed={collapsed} exact>
             仪表盘
           </NavLink>
@@ -314,7 +314,7 @@ function DashboardLayoutContent({
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-6 custom-scrollbar content-scrollbar">
           <ErrorBoundary>
             {children}
           </ErrorBoundary>
