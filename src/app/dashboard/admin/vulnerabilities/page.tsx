@@ -593,39 +593,39 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
             </div>
             {/* 内容区域 */}
             <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-              <div className="max-w-3xl mx-auto space-y-6">
+              <div className="space-y-6">
                 {/* 基本信息 */}
                 <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                      <span className="text-xs text-gray-500">漏洞类型</span>
-                      <p className="text-sm font-medium text-gray-100 mt-1">{selectedVuln.type}</p>
+                      <span className="text-sm text-gray-500">漏洞类型</span>
+                      <p className="text-base font-medium text-gray-100 mt-1">{selectedVuln.type}</p>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-500">CWE 编号</span>
-                      <p className="text-sm font-medium text-gray-100 mt-1">{selectedVuln.cwe || '无'}</p>
+                      <span className="text-sm text-gray-500">CWE 编号</span>
+                      <p className="text-base font-medium text-gray-100 mt-1">{selectedVuln.cwe || '无'}</p>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-500">发现工具</span>
-                      <p className="text-sm font-medium text-gray-100 mt-1">{selectedVuln.skill || '未知'}</p>
+                      <span className="text-sm text-gray-500">发现工具</span>
+                      <p className="text-base font-medium text-gray-100 mt-1">{selectedVuln.skill || '未知'}</p>
                     </div>
                     <div>
-                      <span className="text-xs text-gray-500">发现时间</span>
-                      <p className="text-sm font-medium text-gray-100 mt-1">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
+                      <span className="text-sm text-gray-500">发现时间</span>
+                      <p className="text-base font-medium text-gray-100 mt-1">{new Date(selectedVuln.createdAt).toLocaleString('zh-CN')}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* 描述 */}
                 <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
-                  <h4 className="text-sm font-medium text-gray-300 mb-3">漏洞描述</h4>
-                  <div className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
+                  <h4 className="text-base font-medium text-gray-300 mb-3">漏洞描述</h4>
+                  <div className="text-base text-gray-300 whitespace-pre-wrap leading-relaxed">{formatDescription(selectedVuln.description)}</div>
                 </div>
 
                 {/* 问题代码位置 */}
                 {selectedVuln.location && (
                   <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
-                    <h4 className="text-sm font-medium text-gray-300 mb-3">问题代码位置</h4>
+                    <h4 className="text-base font-medium text-gray-300 mb-3">问题代码位置</h4>
                     <pre className="text-sm bg-gray-900 text-gray-200 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.location}</pre>
                   </div>
                 )}
@@ -633,7 +633,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                 {/* POC 验证代码 */}
                 {selectedVuln.POC && (
                   <div className="bg-[#0F172A] rounded-lg border border-gray-700/50 p-4">
-                    <h4 className="text-sm font-medium text-gray-300 mb-3">POC 验证代码</h4>
+                    <h4 className="text-base font-medium text-gray-300 mb-3">POC 验证代码</h4>
                     <pre className="text-sm bg-gray-900 text-gray-200 p-4 rounded-lg overflow-x-auto max-h-64 whitespace-pre-wrap">{selectedVuln.POC}</pre>
                   </div>
                 )}
@@ -641,8 +641,8 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
                 {/* 修复建议 */}
                 {selectedVuln.fixSuggestion && (
                   <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 rounded-lg border border-green-500/30 p-4">
-                    <h4 className="text-sm font-medium text-green-300 mb-3">修复建议</h4>
-                    <div className="text-sm text-gray-200 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
+                    <h4 className="text-base font-medium text-green-300 mb-3">修复建议</h4>
+                    <div className="text-base text-gray-200 whitespace-pre-wrap">{selectedVuln.fixSuggestion}</div>
                   </div>
                 )}
               </div>
