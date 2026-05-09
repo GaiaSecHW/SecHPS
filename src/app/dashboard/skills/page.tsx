@@ -808,7 +808,7 @@ function SkillsPageContent() {
                 setCurrentPage(1);
                 updateUrlParams({ limit: Number(e.target.value), page: null });
               }}
-              className="px-3 py-1.5 border border-gray-600 rounded-lg text-sm bg-[#0F172A] text-gray-100"
+              className="w-[100px] px-3 py-1.5 border border-gray-600 rounded-lg text-sm bg-[#0F172A] text-gray-100"
             >
               <option value="10">10/页</option>
               <option value="20">20/页</option>
@@ -816,13 +816,13 @@ function SkillsPageContent() {
               <option value="100">100/页</option>
             </select>
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={() => { setCurrentPage(1); updateUrlParams({ page: null }); }}
               disabled={currentPage === 1}
-              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50"
+              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 flex items-center flex-shrink-0"
             >
-              <ChevronLeft size={18} /><ChevronLeft size={18} className="-ml-2" />
+              <ChevronLeft size={18} className="flex-shrink-0" /><ChevronLeft size={18} className="-ml-2 flex-shrink-0" />
             </button>
             <button
               onClick={() => { const p = Math.max(1, currentPage - 1); setCurrentPage(p); updateUrlParams({ page: p === 1 ? null : p }); }}
@@ -831,7 +831,7 @@ function SkillsPageContent() {
             >
               <ChevronLeft size={20} />
             </button>
-            <span className="px-4 py-1.5 text-sm text-gray-300">{currentPage} / {totalPages}</span>
+            <span className="px-3 py-1.5 text-sm text-gray-300 whitespace-nowrap">{currentPage} / {totalPages}</span>
             <button
               onClick={() => { const p = Math.min(totalPages, currentPage + 1); setCurrentPage(p); updateUrlParams({ page: p === 1 ? null : p }); }}
               disabled={currentPage === totalPages}
@@ -842,9 +842,9 @@ function SkillsPageContent() {
             <button
               onClick={() => { setCurrentPage(totalPages); updateUrlParams({ page: totalPages === 1 ? null : totalPages }); }}
               disabled={currentPage === totalPages}
-              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50"
+              className="p-2 text-gray-400 hover:bg-dark-surface-hover rounded disabled:opacity-50 flex items-center flex-shrink-0"
             >
-              <ChevronRight size={18} /><ChevronRight size={18} className="-ml-2" />
+              <ChevronRight size={18} className="flex-shrink-0" /><ChevronRight size={18} className="-ml-2 flex-shrink-0" />
             </button>
           </div>
         </div>
