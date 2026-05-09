@@ -80,7 +80,7 @@ export async function POST(
       timestamp: new Date(),
     });
 
-    const instruction = task.notes || 'opencode run';
+    const instruction = task.notes || '';
     const workspacePath = task.projectPath || undefined;
 
     let model: string | undefined;
