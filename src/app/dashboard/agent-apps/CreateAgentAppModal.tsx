@@ -7,11 +7,11 @@ import toast from 'react-hot-toast';
 interface FormData {
   name: string;
   engine: 'opencode' | 'claudecode' | '';
-  startCommand: string;
+  startCommand?: string;
   notes: string;
 }
 
-interface SkillFileData {
+interface AgentHarnessFileData {
   type: 'folder' | 'archive';
   name: string;
   files?: File[];
@@ -22,7 +22,7 @@ interface SkillFileData {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (formData: FormData, skillFile: SkillFileData) => Promise<void>;
+  onSubmit: (formData: FormData, agentHarnessFile: AgentHarnessFileData) => Promise<void>;
 }
 
 export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props) {
@@ -32,7 +32,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     startCommand: '',
     notes: '',
   });
-  const [skillFile, setSkillFile] = useState<SkillFileData | null>(null);
+  const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,18 +47,14 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       toast.error('请选择使用引擎');
       return;
     }
-    if (!skillFile) {
-      toast.error('请上传 Skill 文件');
-      return;
-    }
-    if (!formData.startCommand.trim()) {
-      toast.error('请输入启动命令');
+    if (!agentHarnessFile) {
+      toast.error('请上传 AgentHarness 文件');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await onSubmit(formData, skillFile);
+      await onSubmit(formData, agentHarnessFile);
       toast.success('应用创建成功');
       handleClose();
     } catch (error: any) {
@@ -70,7 +66,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
   const handleClose = () => {
     setFormData({ name: '', engine: '', startCommand: '', notes: '' });
-    setSkillFile(null);
+    setAgentHarnessFile(null);
     onClose();
   };
 
@@ -79,7 +75,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     if (files && files.length > 0) {
       const firstFile = files[0];
       if (firstFile.webkitRelativePath) {
-        setSkillFile({
+        setAgentHarnessFile({
           type: 'folder',
           name: firstFile.webkitRelativePath.split('/')[0],
           files: Array.from(files),
@@ -89,7 +85,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
           toast.error('请上传压缩包（zip/rar/7z/tar.gz）或文件夹');
           return;
         }
-        setSkillFile({
+        setAgentHarnessFile({
           type: 'archive',
           name: firstFile.name,
           file: firstFile,
@@ -143,9 +139,9 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Skill 文件上传 <span className="text-red-500">*</span>
+              AgentHarness 文件上传 <span className="text-red-500">*</span>
             </label>
-            {!skillFile ? (
+            {!agentHarnessFile ? (
               <div>
                 <div
                   className="border-2 border-dashed border-gray-600 rounded-md p-6 hover:border-primary-500 cursor-pointer"
@@ -187,19 +183,19 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                   <File size={20} className="text-primary-600" />
                   <div>
                     <p className="text-sm font-medium text-gray-100">
-                      {skillFile.type === 'folder' ? `📁 ${skillFile.name}` : skillFile.name}
+                      {agentHarnessFile.type === 'folder' ? `📁 ${agentHarnessFile.name}` : agentHarnessFile.name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {skillFile.type === 'folder' 
-                        ? `${skillFile.files?.length || 0} 个文件`
-                        : `${((skillFile.size || 0) / 1024).toFixed(2)} KB`
+                      {agentHarnessFile.type === 'folder' 
+                        ? `${agentHarnessFile.files?.length || 0} 个文件`
+                        : `${((agentHarnessFile.size || 0) / 1024).toFixed(2)} KB`
                       }
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSkillFile(null)}
+                  onClick={() => setAgentHarnessFile(null)}
                   className="text-gray-400 hover:text-red-500 transition-colors"
                   disabled={isSubmitting}
                 >
@@ -211,7 +207,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              启动命令 <span className="text-red-500">*</span>
+              启动命令
             </label>
             <input
               type="text"

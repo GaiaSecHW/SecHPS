@@ -8,7 +8,7 @@ interface AgentApp {
   id: string;
   name: string;
   engine: string;
-  startCommand: string;
+  startCommand?: string | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -17,11 +17,11 @@ interface AgentApp {
 interface FormData {
   name: string;
   engine: 'opencode' | 'claudecode' | '';
-  startCommand: string;
+  startCommand?: string;
   notes: string;
 }
 
-interface SkillFileData {
+interface AgentHarnessFileData {
   type: 'folder' | 'archive';
   name: string;
   files?: File[];
@@ -33,7 +33,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   app: AgentApp | null;
-  onUpdate: (appId: string, formData: FormData, skillFile?: SkillFileData) => Promise<void>;
+  onUpdate: (appId: string, formData: FormData, agentHarnessFile?: AgentHarnessFileData) => Promise<void>;
 }
 
 export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props) {
@@ -43,7 +43,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     startCommand: '',
     notes: '',
   });
-  const [skillFile, setSkillFile] = useState<SkillFileData | null>(null);
+  const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,10 +52,10 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
       setFormData({
         name: app.name,
         engine: app.engine as any,
-        startCommand: app.startCommand,
+        startCommand: app.startCommand || '',
         notes: app.notes || '',
       });
-      setSkillFile(null);
+      setAgentHarnessFile(null);
     }
   }, [app, isOpen]);
 
@@ -70,14 +70,10 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
       toast.error('请选择使用引擎');
       return;
     }
-    if (!formData.startCommand.trim()) {
-      toast.error('请输入启动命令');
-      return;
-    }
 
     setIsSubmitting(true);
     try {
-      await onUpdate(app.id, formData, skillFile || undefined);
+      await onUpdate(app.id, formData, agentHarnessFile || undefined);
       toast.success('应用更新成功');
       handleClose();
     } catch (error: any) {
@@ -89,7 +85,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
   const handleClose = () => {
     setFormData({ name: '', engine: '', startCommand: '', notes: '' });
-    setSkillFile(null);
+    setAgentHarnessFile(null);
     onClose();
   };
 
@@ -98,7 +94,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     if (files && files.length > 0) {
       const firstFile = files[0];
       if (firstFile.webkitRelativePath) {
-        setSkillFile({
+        setAgentHarnessFile({
           type: 'folder',
           name: firstFile.webkitRelativePath.split('/')[0],
           files: Array.from(files),
@@ -108,7 +104,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           toast.error('请上传压缩包（zip/rar/7z/tar.gz）或文件夹');
           return;
         }
-        setSkillFile({
+        setAgentHarnessFile({
           type: 'archive',
           name: firstFile.name,
           file: firstFile,
@@ -167,8 +163,8 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Skill 文件更新（可选）</label>
-            {!skillFile ? (
+            <label className="block text-sm font-medium text-gray-300 mb-2">AgentHarness 文件更新（可选）</label>
+            {!agentHarnessFile ? (
               <div>
                 <div
                   className="border-2 border-dashed border-gray-600 rounded-md p-4 hover:border-primary-500 cursor-pointer"
@@ -210,19 +206,19 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                   <File size={18} className="text-primary-600" />
                   <div>
                     <p className="text-sm font-medium text-gray-100">
-                      {skillFile.type === 'folder' ? `📁 ${skillFile.name}` : skillFile.name}
+                      {agentHarnessFile.type === 'folder' ? `📁 ${agentHarnessFile.name}` : agentHarnessFile.name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {skillFile.type === 'folder' 
-                        ? `${skillFile.files?.length || 0} 个文件`
-                        : `${((skillFile.size || 0) / 1024).toFixed(2)} KB`
+                      {agentHarnessFile.type === 'folder' 
+                        ? `${agentHarnessFile.files?.length || 0} 个文件`
+                        : `${((agentHarnessFile.size || 0) / 1024).toFixed(2)} KB`
                       }
                     </p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setSkillFile(null)}
+                  onClick={() => setAgentHarnessFile(null)}
                   className="text-gray-400 hover:text-red-500 transition-colors"
                   disabled={isSubmitting}
                 >
@@ -234,7 +230,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              启动命令 <span className="text-red-500">*</span>
+              启动命令
             </label>
             <input
               type="text"

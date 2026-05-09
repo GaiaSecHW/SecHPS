@@ -4,25 +4,25 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model AgentApp {
-  id           String   @id
-  userId       String
-  tenantId     String?
-  visibility   String   @default("private")
-  name         String
-  engine       String
-  skillPath    String
-  startCommand String
-  notes        String?
-  status       String   @default("active")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime
-  Tenant       Tenant?  @relation(fields: [tenantId], references: [id])
-  User         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                String   @id
+  userId            String
+  tenantId          String?
+  visibility        String   @default("private")
+  name              String
+  engine            String
+  agentHarnessPath  String
+  startCommand      String?
+  notes             String?
+  status            String   @default("active")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime
+  Tenant            Tenant?  @relation(fields: [tenantId], references: [id])
+  User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([visibility])
   @@index([tenantId])
