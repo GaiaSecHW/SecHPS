@@ -221,7 +221,7 @@ export function SkillVersionHistory({
                   {/* View Version */}
                   <button
                     onClick={() => onSelectVersion(v.id, v.version)}
-                    className="inline-flex items-center px-2 py-1 text-xs bg-dark-surface-hover text-gray-700 rounded hover:bg-dark-surface-hover transition-colors"
+                    className="inline-flex items-center px-2 py-1 text-xs bg-dark-surface-hover text-gray-100 rounded hover:bg-dark-surface-hover transition-colors"
                     title="查看此版本内容"
                   >
                     <Eye size={14} className="mr-1" />
