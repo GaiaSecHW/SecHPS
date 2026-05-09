@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, Pause, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -64,7 +64,6 @@ export default function TaskDetailPage() {
   const [logs, setLogs] = useState<TaskExecutionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [isStopping, setIsStopping] = useState(false);
   const [eventSourceRef, setEventSourceRef] = useState<EventSource | null>(null);
 
   useEffect(() => {
@@ -165,38 +164,6 @@ export default function TaskDetailPage() {
     }
   };
 
-  const handleStop = async () => {
-    if (!confirm('确定要停止正在执行的任务吗？')) return;
-    
-    setIsStopping(true);
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`/api/task-builder/tasks/${taskId}/stop`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '停止失败');
-      }
-
-      if (eventSourceRef) {
-        eventSourceRef.close();
-        setEventSourceRef(null);
-        setIsStreaming(false);
-      }
-
-      toast.success('任务已停止');
-      fetchTaskDetail(taskId);
-    } catch (error) {
-      console.error('停止失败:', error);
-      toast.error(error instanceof Error ? error.message : '停止失败');
-    } finally {
-      setIsStopping(false);
-    }
-  };
-
   useEffect(() => {
     return () => {
       if (eventSourceRef) {
@@ -266,18 +233,10 @@ export default function TaskDetailPage() {
               </button>
             )}
             {task.status === 'running' && (
-              <button
-                onClick={handleStop}
-                disabled={isStopping}
-                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-              >
-                {isStopping ? (
-                  <Loader2 size={16} className="animate-spin" />
-                ) : (
-                  <Pause size={16} />
-                )}
-                {isStopping ? '停止中...' : '停止任务'}
-              </button>
+              <span className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md">
+                <Loader2 size={16} className="animate-spin" />
+                执行中...
+              </span>
             )}
           </div>
         </div>
