@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, AlertCircle, Loader2, Eye, Edit2, Lock } from 'lucide-react';
-import WorkflowEditor from '@/components/workflow/WorkflowEditor';
+import dynamic from 'next/dynamic';
+const WorkflowEditor = dynamic(() => import('@/components/workflow/WorkflowEditor'), { ssr: false });
 import { WorkflowData } from '@/types/workflow';
 import '@xyflow/react/dist/style.css';
 

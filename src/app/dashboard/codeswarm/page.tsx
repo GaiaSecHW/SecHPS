@@ -2,9 +2,10 @@
 
 import { useState, useMemo } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
-import { WorkerNodesTable } from '@/components/codeswarm/WorkerNodesTable';
-import { TaskDebugPanel } from '@/components/codeswarm/TaskDebugPanel';
-import { TaskResultViewer } from '@/components/codeswarm/TaskResultViewer';
+import dynamic from 'next/dynamic';
+const WorkerNodesTable = dynamic(() => import('@/components/codeswarm/WorkerNodesTable').then(m => ({ default: m.WorkerNodesTable })), { ssr: false });
+const TaskDebugPanel = dynamic(() => import('@/components/codeswarm/TaskDebugPanel').then(m => ({ default: m.TaskDebugPanel })), { ssr: false });
+const TaskResultViewer = dynamic(() => import('@/components/codeswarm/TaskResultViewer').then(m => ({ default: m.TaskResultViewer })), { ssr: false });
 import { AdminGuard } from '@/components/PermissionGuard';
 import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react';
 
@@ -177,7 +178,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
           {endpoint.requestBody && endpoint.requestBody.length > 0 && (
             <div>
               <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">请求体 (JSON)</h5>
-              <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto">
+              <pre className="bg-gray-900 text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-gray-700">
 {JSON.stringify(
   endpoint.requestBody.reduce((acc, p) => ({ ...acc, [p.name]: p.type }), {}),
   null, 2
@@ -209,7 +210,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
           {endpoint.response && endpoint.response.length > 0 && (
             <div>
               <h5 className="text-xs font-medium text-gray-500 uppercase mb-2">响应示例</h5>
-              <pre className="bg-gray-800 text-green-400 p-3 rounded text-xs overflow-x-auto">
+              <pre className="bg-gray-900 text-cyan-400 p-3 rounded text-xs overflow-x-auto border border-gray-700">
 {JSON.stringify(
   endpoint.response.reduce((acc, p) => ({ ...acc, [p.name]: p.type }), {}),
   null, 2
@@ -412,7 +413,7 @@ function CodeSwarmPageContent() {
             <Server className="w-6 h-6 text-blue-400" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">CodeSwarm Worker 管理</h1>
+            <h1 className="text-2xl font-bold text-gray-100">智能体 Worker 管理</h1>
             <p className="text-sm text-gray-400">
               分布式 Agent 执行节点管理 & 手动任务调试
             </p>
@@ -527,9 +528,9 @@ function CodeSwarmPageContent() {
               </div>
             ))}
 
-            <div className="mt-6 p-4 bg-blue-600/10 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-800 mb-2">Worker 启动配置示例</h4>
-              <pre className="text-xs bg-blue-100 p-3 rounded overflow-x-auto">
+            <div className="mt-6 p-4 bg-primary-900/20 border border-primary-700/40 rounded-lg">
+              <h4 className="text-sm font-medium text-primary-400 mb-2">Worker 启动配置示例</h4>
+              <pre className="text-xs bg-gray-800 text-gray-200 p-3 rounded overflow-x-auto">
 {`# 环境变量配置
 ORCHESTRATOR_URL=http://your-domain.com   # 指向本服务
 NODE_ID=worker-1                           # 唯一节点标识
@@ -549,15 +550,15 @@ npx tsx packages/worker/src/index.ts`}
 
       {/* Callback URLs Info */}
       {activeTab !== 'api' && activeTab !== 'overview' && (
-        <div className="bg-yellow-900/20 border border-yellow-800/40 rounded-lg p-4">
-          <h3 className="text-sm font-medium text-yellow-800 mb-2">Worker 配置说明</h3>
-          <p className="text-sm text-yellow-400 mb-2">
+        <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
+          <h3 className="text-sm font-medium text-cyan-400 mb-2">Worker 配置说明</h3>
+          <p className="text-sm text-gray-300 mb-2">
             Worker 启动时需要配置回调地址指向本服务：
           </p>
-          <code className="block bg-yellow-100 p-2 rounded text-xs">
+          <code className="block bg-gray-800 p-2 rounded text-xs text-green-400">
             ORCHESTRATOR_URL=http://localhost:3000 node scripts/test-worker.mjs
           </code>
-          <p className="text-xs text-yellow-400 mt-2">
+          <p className="text-xs text-gray-400 mt-2">
             Worker 注册后会在此页面显示，心跳间隔 30 秒，超时 90 秒判定离线
           </p>
         </div>

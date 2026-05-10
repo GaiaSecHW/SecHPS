@@ -6,12 +6,13 @@ import {
   ArrowLeft, Send, RefreshCw, Settings, Terminal, FileText,
   FolderOpen, Trash2, Plus, Loader2, Square, X, ArrowRight, MessageSquare
 } from 'lucide-react';
-import { ChatContainer } from '@/components/chat/ChatContainer';
+import dynamic from 'next/dynamic';
+const ChatContainer = dynamic(() => import('@/components/chat/ChatContainer').then(m => ({ default: m.ChatContainer })), { ssr: false });
+const TerminalComponent = dynamic(() => import('@/components/terminal/TerminalComponent'), { ssr: false });
+const ClaudeFileBrowser = dynamic(() => import('@/components/files/ClaudeFileBrowser'), { ssr: false });
+const ClaudeFileEditor = dynamic(() => import('@/components/files/ClaudeFileEditor'), { ssr: false });
 import { PermissionRequest } from '@/components/chat/PermissionRequest';
 import StatusBar from '@/components/chat/StatusBar';
-import TerminalComponent from '@/components/terminal/TerminalComponent';
-import ClaudeFileBrowser from '@/components/files/ClaudeFileBrowser';
-import ClaudeFileEditor from '@/components/files/ClaudeFileEditor';
 
 interface Session {
   id: string;

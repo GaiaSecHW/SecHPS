@@ -17,10 +17,10 @@ export default function MigrationReviewPage() {
         <h1 className="text-2xl font-bold text-gray-100">存量迁移审核</h1>
       </div>
 
-      <div className="bg-green-900/20 border border-green-200 rounded-lg p-8 text-center">
-        <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-        <h2 className="text-lg font-semibold text-green-800 mb-2">迁移已完成</h2>
-        <p className="text-green-400">
+      <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-8 text-center">
+        <CheckCircle className="h-12 w-12 text-green-400 mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-green-300 mb-2">迁移已完成</h2>
+        <p className="text-gray-300">
           所有 Skill 数据已完成迁移，迁移字段已清理。此页面不再需要。
         </p>
       </div>

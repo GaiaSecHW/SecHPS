@@ -31,6 +31,58 @@ export async function GET() {
   }
 }
 
+async function dispatchTaskToWorker(task: any, worker: any): Promise<boolean> {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+  
+  try {
+    const resp = await fetch(`http://${worker.address}/task`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        taskId: task.taskId,
+        instruction: task.instruction,
+        projectPath: task.projectPath || '',
+        workspacePath: task.workspacePath || undefined,
+        skills: task.skills ? JSON.parse(task.skills) : undefined,
+        mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
+        model: task.model || undefined,
+        apiKey: task.apiKey || undefined,
+        timeoutSec: task.timeoutSec || undefined,
+        nazhuaCallbackUrl: baseUrl,
+        gitUrl: task.gitUrl || undefined,
+        gitRef: task.gitRef || undefined,
+        agent: task.agent || undefined,
+      }),
+      signal: AbortSignal.timeout(10000),
+    });
+
+    if (!resp.ok) {
+      return false;
+    }
+
+    await prisma.codeswarmTask.update({
+      where: { id: task.id },
+      data: {
+        state: 'dispatched',
+        workerId: worker.id,
+        startedAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+
+    await prisma.codeswarmWorker.update({
+      where: { id: worker.id },
+      data: { currentTasks: { increment: 1 } },
+    });
+
+    console.log(`[CodeSwarm] Task ${task.taskId} dispatched to ${worker.nodeId}`);
+    return true;
+  } catch (error) {
+    console.error(`[CodeSwarm] Dispatch error for task ${task.taskId}:`, error);
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -46,7 +98,47 @@ export async function POST(request: Request) {
       gitUrl,
       gitRef,
       agent,
+      action,
     } = body;
+
+    if (action === 'dispatch-queued') {
+      const queuedTasks = await prisma.codeswarmTask.findMany({
+        where: { state: 'queued' },
+        orderBy: { createdAt: 'asc' },
+        take: 10,
+      });
+
+      if (queuedTasks.length === 0) {
+        return NextResponse.json({ message: 'No queued tasks', dispatched: 0 });
+      }
+
+      const availableWorkers = await prisma.codeswarmWorker.findMany({
+        where: {
+          status: 'online',
+        },
+        orderBy: { currentTasks: 'asc' },
+      });
+
+      const workersWithCapacity = availableWorkers.filter(w => w.currentTasks < w.maxConcurrent);
+
+      if (workersWithCapacity.length === 0) {
+        return NextResponse.json({ message: 'No available workers', dispatched: 0 });
+      }
+
+      let dispatched = 0;
+      for (const task of queuedTasks) {
+        const worker = workersWithCapacity.find(w => w.currentTasks < w.maxConcurrent);
+        if (!worker) break;
+
+        const success = await dispatchTaskToWorker(task, worker);
+        if (success) {
+          worker.currentTasks++;
+          dispatched++;
+        }
+      }
+
+      return NextResponse.json({ message: 'Queued tasks dispatched', dispatched });
+    }
 
     if (!instruction) {
       return NextResponse.json({ error: 'instruction is required' }, { status: 400 });
@@ -54,16 +146,13 @@ export async function POST(request: Request) {
 
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
-    // Find the least loaded available worker
-    const worker = await prisma.codeswarmWorker.findFirst({
-      where: {
-        status: 'online',
-        currentTasks: { lt: prisma.codeswarmWorker.fields.maxConcurrent },
-      },
+    const allWorkers = await prisma.codeswarmWorker.findMany({
+      where: { status: 'online' },
       orderBy: { currentTasks: 'asc' },
     });
 
-    // Create task record
+    const worker = allWorkers.find(w => w.currentTasks < w.maxConcurrent);
+
     const task = await prisma.codeswarmTask.create({
       data: {
         id: `db-${Date.now()}`,
@@ -84,46 +173,9 @@ export async function POST(request: Request) {
       },
     }) as any;
 
-    // If worker available, dispatch task
     if (worker) {
-      try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-        const resp = await fetch(`http://${worker.address}/task`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            taskId,
-            instruction,
-            projectPath: projectPath || '',
-            workspacePath,
-            skills,
-            mcps,
-            model,
-            apiKey,
-            timeoutSec,
-            nazhuaCallbackUrl: baseUrl,
-            gitUrl,
-            gitRef,
-            agent,
-          }),
-          signal: AbortSignal.timeout(10000),
-        });
-
-        if (!resp.ok) {
-          // Worker rejected, mark as queued
-          await prisma.codeswarmTask.update({
-            where: { id: task.id },
-            data: { state: 'queued', workerId: null },
-          });
-        } else {
-          // Update worker currentTasks
-          await prisma.codeswarmWorker.update({
-            where: { id: worker.id },
-            data: { currentTasks: { increment: 1 } },
-          });
-        }
-      } catch (dispatchError) {
-        console.error('[CodeSwarm] Dispatch error:', dispatchError);
+      const success = await dispatchTaskToWorker(task, worker);
+      if (!success) {
         await prisma.codeswarmTask.update({
           where: { id: task.id },
           data: { state: 'queued', workerId: null },

@@ -69,6 +69,7 @@ export default function ClaudePage() {
       if (!response.ok) {
         if (response.status === 401) {
           localStorage.removeItem('token');
+          document.cookie = 'auth-token=; path=/; max-age=0';
           router.push('/login');
           return;
         }

@@ -114,6 +114,7 @@ export function useAuth(): UseAuthReturn {
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
     }
     setUser(null);
   }, []);

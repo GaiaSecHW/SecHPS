@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Plus, ClipboardList, Play, Trash2, Eye, Calendar, User, Shield, Bug, Sword, Network, Loader2, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { Plus, ClipboardList, Play, Trash2, Eye, Calendar, User, Shield, Bug, Sword, Network, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ConfirmDialog } from '@/components/ui/Modal';
@@ -154,6 +154,28 @@ export default function TaskBuilderPage() {
       await fetchTasks(currentPage, pageSize);
     } catch (error) {
       toast.error(`执行失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    }
+  };
+
+  const handleStopTask = async (taskId: string) => {
+    if (!confirm('确定要停止正在执行的任务吗？')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`/api/task-builder/tasks/${taskId}/stop`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '停止失败');
+      }
+
+      toast.success('任务已停止');
+      await fetchTasks(currentPage, pageSize);
+    } catch (error) {
+      toast.error(`停止失败: ${error instanceof Error ? error.message : '未知错误'}`);
     }
   };
 
@@ -311,40 +333,49 @@ export default function TaskBuilderPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          {task.status === 'pending' && (
-                            <button
-                              onClick={() => handleRunTask(task.id)}
-                              className="text-green-600 hover:text-green-900 flex items-center gap-1"
-                            >
-                              <Play size={14} />
-                              执行
-                            </button>
-                          )}
-                          {(task.status === 'completed' || task.status === 'failed') && (
-                            <button
-                              onClick={() => handleRunTask(task.id)}
-                              className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                            >
-                              <RefreshCw size={14} />
-                              重新执行
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleViewDetail(task.id)}
-                            className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                          >
-                            <Eye size={14} />
-                            详情
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTask(task.id, task.name)}
-                            className="text-red-600 hover:text-red-900 flex items-center gap-1"
-                          >
-                            <Trash2 size={14} />
-                            删除
-                          </button>
-                        </div>
+<div className="flex items-center justify-end gap-2">
+                           {task.status === 'pending' && (
+                             <button
+                               onClick={() => handleRunTask(task.id)}
+                               className="text-green-600 hover:text-green-900 flex items-center gap-1"
+                             >
+                               <Play size={14} />
+                               执行
+                             </button>
+                           )}
+                           {task.status === 'running' && (
+                             <button
+                               onClick={() => handleStopTask(task.id)}
+                               className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                             >
+                               <Square size={14} />
+                               停止
+                             </button>
+                           )}
+                           {(task.status === 'completed' || task.status === 'failed') && (
+                             <button
+                               onClick={() => handleRunTask(task.id)}
+                               className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                             >
+                               <RefreshCw size={14} />
+                               重新执行
+                             </button>
+                           )}
+                           <button
+                             onClick={() => handleViewDetail(task.id)}
+                             className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                           >
+                             <Eye size={14} />
+                             详情
+                           </button>
+                           <button
+                             onClick={() => handleDeleteTask(task.id, task.name)}
+                             className="text-red-600 hover:text-red-900 flex items-center gap-1"
+                           >
+                             <Trash2 size={14} />
+                             删除
+                           </button>
+                         </div>
                       </td>
                     </tr>
                   );

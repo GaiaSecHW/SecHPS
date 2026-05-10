@@ -228,7 +228,6 @@ export async function triggerGovernanceAnalysis(skillId: string): Promise<Govern
       reviewStatus: 'pending',
       analyzedBy: 'system',
     })),
-    skipDuplicates: true,
   });
 
   // 4. 返回任务状态

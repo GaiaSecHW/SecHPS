@@ -73,14 +73,13 @@ export async function GET(request: Request) {
 
     // 作用域过滤 - 整合多租户
     if (scope === 'public') {
-      // 选择模式：公共技能 + 公开分享的技能（用于执行时选择）
+      // 选择模式：公共技能（系统内置 + visibility=public）
       where.OR = [
         { userId: null },           // 公共技能（系统内置）
         { visibility: 'public' },    // 公开分享的技能
-        { isPublic: true },          // 其他用户公开分享的技能
       ];
     } else if (scope === 'mine') {
-      // 管理模式：自己的技能 + 系统内置的 + 公开共享的 + 同租户的
+      // 管理模式：自己的技能 + 系统内置的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
         visibilityField: 'visibility',
@@ -88,12 +87,11 @@ export async function GET(request: Request) {
       where.OR = [
         { userId: payload.userId }, // 自己创建的技能
         { userId: null },           // 系统内置技能
-        { isPublic: true },         // 其他用户公开分享的技能
-        { ...tenantFilter },        // 同租户的技能
+        { ...tenantFilter },        // 同租户的技能（含 public 可见）
       ];
     } else {
       // scope === 'all': 选择模式（用于执行时选择技能）
-      // 用户可用的所有 Skills：公共 + 自己的 + 公开分享的 + 同租户的
+      // 用户可用的所有 Skills：公共 + 自己的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
         visibilityField: 'visibility',
@@ -101,8 +99,7 @@ export async function GET(request: Request) {
       where.OR = [
         { userId: null },           // 公共技能（系统内置）
         { userId: payload.userId }, // 自己创建的技能
-        { isPublic: true },         // 其他用户公开分享的技能
-        { ...tenantFilter },        // 同租户的技能
+        { ...tenantFilter },        // 同租户的技能（含 public 可见）
       ];
     }
 
@@ -130,7 +127,7 @@ export async function GET(request: Request) {
       prisma.skill.findMany({
         where,
         select: skillSelectMinimal,
-      orderBy: [{ displayName: 'asc' }],
+      orderBy: [{ execCount: 'desc' }, { updatedAt: 'desc' }],
         skip,
         take,
       }),

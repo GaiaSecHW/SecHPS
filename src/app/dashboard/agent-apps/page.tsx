@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2 } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
 import toast from 'react-hot-toast';
@@ -10,13 +10,13 @@ interface AgentApp {
   id: string;
   name: string;
   engine: string;
-  startCommand: string;
+  startCommand?: string | null;
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-interface SkillFileData {
+interface AgentHarnessFileData {
   type: 'folder' | 'archive';
   name: string;
   files?: File[];
@@ -31,6 +31,7 @@ export default function AgentAppsPage() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AgentApp | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchApps();
@@ -70,36 +71,73 @@ export default function AgentAppsPage() {
     setIsCreateModalOpen(true);
   };
 
-  const handleAppClick = (app: AgentApp) => {
+  const handleEdit = (app: AgentApp) => {
     setSelectedApp(app);
     setIsDetailModalOpen(true);
   };
 
-  const handleCreateSubmit = async (formData: any, skillFile: SkillFileData) => {
+  const handleDelete = async (app: AgentApp) => {
+    if (!confirm(`确定要删除应用 "${app.name}" 吗？此操作不可恢复。`)) {
+      return;
+    }
+
+    try {
+      setDeletingId(app.id);
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch(`/api/agent-apps/${app.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`服务器返回非 JSON 格式响应`);
+      }
+      
+      if (!response.ok) {
+        throw new Error(data.error || '删除失败');
+      }
+      
+      toast.success('应用删除成功');
+      await fetchApps();
+    } catch (error: any) {
+      toast.error(error.message || '删除失败，请重试');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleCreateSubmit = async (formData: any, agentHarnessFile: AgentHarnessFileData) => {
     try {
       const token = localStorage.getItem('token');
       
       const fd = new FormData();
       fd.append('name', formData.name);
       fd.append('engine', formData.engine);
-      fd.append('startCommand', formData.startCommand);
+      if (formData.startCommand) {
+        fd.append('startCommand', formData.startCommand);
+      }
       fd.append('notes', formData.notes || '');
-      fd.append('skillFileType', skillFile.type);
+      fd.append('agentHarnessFileType', agentHarnessFile.type);
       
-      if (skillFile.type === 'archive') {
-        fd.append('skillFile', skillFile.file!);
-      } else if (skillFile.type === 'folder') {
-        const filesJson = skillFile.files!.map((f, i) => ({
+      if (agentHarnessFile.type === 'archive') {
+        fd.append('agentHarnessFile', agentHarnessFile.file!);
+      } else if (agentHarnessFile.type === 'folder') {
+        const filesJson = agentHarnessFile.files!.map((f, i) => ({
           key: `file_${i}`,
           relativePath: f.webkitRelativePath,
         }));
         fd.append('filesJson', JSON.stringify(filesJson));
-        skillFile.files!.forEach((f, i) => {
+        agentHarnessFile.files!.forEach((f, i) => {
           fd.append(`file_${i}`, f);
         });
         
-        const folderFile = new File([], skillFile.name, { type: 'application/x-directory' });
-        fd.append('skillFile', folderFile);
+        const folderFile = new File([], agentHarnessFile.name, { type: 'application/x-directory' });
+        fd.append('agentHarnessFile', folderFile);
       }
       
       const response = await fetch('/api/agent-apps', {
@@ -119,48 +157,80 @@ export default function AgentAppsPage() {
     }
   };
 
-  const handleUpdateSubmit = async (appId: string, formData: any, skillFile?: SkillFileData) => {
+  const handleUpdateSubmit = async (appId: string, formData: any, agentHarnessFile?: AgentHarnessFileData) => {
     try {
       const token = localStorage.getItem('token');
       
-      const fd = new FormData();
-      fd.append('name', formData.name);
-      fd.append('engine', formData.engine);
-      fd.append('startCommand', formData.startCommand);
-      fd.append('notes', formData.notes || '');
-      
-      if (skillFile) {
-        fd.append('skillFileType', skillFile.type);
+      // 如果有文件上传，使用 FormData；否则使用 JSON
+      if (agentHarnessFile) {
+        const fd = new FormData();
+        fd.append('name', formData.name);
+        fd.append('engine', formData.engine);
+        if (formData.startCommand) {
+          fd.append('startCommand', formData.startCommand);
+        }
+        fd.append('notes', formData.notes || '');
+        fd.append('agentHarnessFileType', agentHarnessFile.type);
         
-        if (skillFile.type === 'archive') {
-          fd.append('skillFile', skillFile.file!);
-        } else if (skillFile.type === 'folder') {
-          const filesJson = skillFile.files!.map((f, i) => ({
+        if (agentHarnessFile.type === 'archive') {
+          fd.append('agentHarnessFile', agentHarnessFile.file!);
+        } else if (agentHarnessFile.type === 'folder') {
+          const filesJson = agentHarnessFile.files!.map((f, i) => ({
             key: `file_${i}`,
             relativePath: f.webkitRelativePath,
           }));
           fd.append('filesJson', JSON.stringify(filesJson));
-          skillFile.files!.forEach((f, i) => {
+          agentHarnessFile.files!.forEach((f, i) => {
             fd.append(`file_${i}`, f);
           });
           
-          const folderFile = new File([], skillFile.name, { type: 'application/x-directory' });
-          fd.append('skillFile', folderFile);
+          const folderFile = new File([], agentHarnessFile.name, { type: 'application/x-directory' });
+          fd.append('agentHarnessFile', folderFile);
         }
-      }
-      
-      const response = await fetch(`/api/agent-apps/${appId}`, {
-        method: 'PUT',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
-      
-      if (!response.ok) {
+        
+        const response = await fetch(`/api/agent-apps/${appId}`, {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        
+        const text = await response.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          throw new Error(`服务器返回非 JSON 格式响应: ${text.substring(0, 100)}`);
+        }
+        
+        if (!response.ok) {
+          throw new Error(data.error || '更新失败');
+        }
+        
+        await fetchApps();
+      } else {
+        // 无文件上传，使用 JSON body（避免 Turbopack FormData 问题）
+        const response = await fetch(`/api/agent-apps/${appId}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            engine: formData.engine,
+            startCommand: formData.startCommand || null,
+            notes: formData.notes || null,
+          }),
+        });
+        
         const data = await response.json();
-        throw new Error(data.error || '更新失败');
+        
+        if (!response.ok) {
+          throw new Error(data.error || '更新失败');
+        }
+        
+        await fetchApps();
       }
-      
-      await fetchApps();
     } catch (error: any) {
       throw new Error(error.message || '更新失败，请重试');
     }
@@ -209,26 +279,62 @@ export default function AgentAppsPage() {
               <p className="text-sm mt-1">点击"创建新应用"开始创建您的第一个Agent应用</p>
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {apps.map((app) => (
-                <div
-                  key={app.id}
-                  className="border border-gray-700/50 rounded-lg p-4 hover:shadow-md hover:border-primary-300 transition-all cursor-pointer"
-                  onClick={() => handleAppClick(app)}
-                >
-                  <h3 className="font-semibold text-gray-100">{app.name}</h3>
-                  <div className="mt-2 flex items-center space-x-2">
-                    <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-1 rounded">{app.engine}</span>
-                    <span className="text-xs text-gray-500">{app.startCommand}</span>
-                  </div>
-                  {app.notes && (
-                    <p className="mt-2 text-sm text-gray-400 line-clamp-2">{app.notes}</p>
-                  )}
-                  <p className="mt-3 text-xs text-gray-500">
-                    创建于 {new Date(app.createdAt).toLocaleDateString('zh-CN')}
-                  </p>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-700/50">
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">名称</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">引擎</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">启动命令</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">备注</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">创建时间</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">更新时间</th>
+                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">操作</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {apps.map((app) => (
+                    <tr key={app.id} className="border-b border-gray-700/30 hover:bg-gray-800/30">
+                      <td className="py-3 px-4 text-sm text-gray-100 font-medium">{app.name}</td>
+                      <td className="py-3 px-4">
+                        <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-1 rounded">{app.engine}</span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-300">{app.startCommand || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-400">{app.notes || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-500">
+                        {new Date(app.createdAt).toLocaleString('zh-CN')}
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-500">
+                        {new Date(app.updatedAt).toLocaleString('zh-CN')}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            onClick={() => handleEdit(app)}
+                            disabled={deletingId === app.id}
+                            className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-primary-400 hover:bg-primary-500/10 rounded transition-colors disabled:opacity-50"
+                          >
+                            <Edit2 size={14} className="mr-1" />
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => handleDelete(app)}
+                            disabled={deletingId === app.id}
+                            className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
+                          >
+                            {deletingId === app.id ? (
+                              <Loader2 size={14} className="mr-1 animate-spin" />
+                            ) : (
+                              <Trash2 size={14} className="mr-1" />
+                            )}
+                            删除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Toaster } from 'react-hot-toast';
 import { BroadcastMarquee } from '@/components/BroadcastMarquee';
@@ -79,6 +79,7 @@ function DashboardLayoutContent({
       console.error('Failed to parse user data:', e);
       localStorage.removeItem('token');
       localStorage.removeItem('user');
+      document.cookie = 'auth-token=; path=/; max-age=0';
       router.push('/login');
       return;
     }
@@ -88,6 +89,7 @@ function DashboardLayoutContent({
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    document.cookie = 'auth-token=; path=/; max-age=0';
     router.push('/login');
   };
 
@@ -100,10 +102,10 @@ function DashboardLayoutContent({
   }
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen">
       {/* Sidebar */}
       <div
-        className={`${collapsed ? 'w-16' : 'w-56'} bg-[#0F172A] text-gray-300 flex flex-col transition-all duration-300 ease-in-out relative flex-shrink-0 border-r border-gray-800/50`}
+        className={`fixed left-0 top-0 h-screen ${collapsed ? 'w-16' : 'w-56'} bg-[#0F172A] text-gray-300 flex flex-col transition-all duration-300 ease-in-out z-20 border-r border-gray-800/50`}
       >
         {/* Collapse toggle */}
         <button
@@ -130,8 +132,8 @@ function DashboardLayoutContent({
           )}
         </div>
 
-        <nav className="flex-1 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-          <NavLink href="/dashboard" icon={<LayoutDashboard size={18} />} collapsed={collapsed}>
+        <nav className="flex-1 py-2 space-y-0.5 overflow-y-auto overflow-x-hidden custom-scrollbar sidebar-scrollbar">
+          <NavLink href="/dashboard" icon={<LayoutDashboard size={18} />} collapsed={collapsed} exact>
             仪表盘
           </NavLink>
           <NavLink href="/dashboard/sessions" icon={<MessageSquare size={18} />} collapsed={collapsed}>
@@ -260,11 +262,11 @@ function DashboardLayoutContent({
       </div>
 
       {/* Main content area */}
-      <div className="flex-1 bg-dark-bg overflow-hidden flex flex-col">
+      <div className={`fixed right-0 top-0 h-screen ${collapsed ? 'left-16' : 'left-56'} bg-dark-bg overflow-hidden flex flex-col transition-all duration-300`}>
         {/* Header */}
         <header className="bg-dark-surface border-b border-gray-800/60 flex-shrink-0">
           <div className="h-14 flex items-center justify-between px-4 sm:px-6 lg:px-8">
-            <div className="flex items-center space-x-4 flex-1">
+            <div className="flex items-center space-x-4 flex-1 mr-6">
               <h2 className="text-sm font-semibold text-gray-300 whitespace-nowrap">
                 AI4WEB 测试平台
               </h2>
@@ -302,12 +304,19 @@ function DashboardLayoutContent({
                 </div>
                 <p className="text-gray-500 text-xs">{user?.email}</p>
               </div>
+              <button
+                onClick={handleLogout}
+                className="ml-2 p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                title="退出登录"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-6 custom-scrollbar content-scrollbar">
           <ErrorBoundary>
             {children}
           </ErrorBoundary>
@@ -347,16 +356,25 @@ function NavLink({
   icon,
   children,
   collapsed,
+  exact,
 }: {
   href: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   collapsed?: boolean;
+  exact?: boolean;
 }) {
+  const pathname = usePathname();
+  const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/');
+
   return (
     <Link
       href={href}
-      className={`flex items-center px-3 py-2 mx-2 rounded-md text-gray-400 hover:bg-dark-surface-hover hover:text-gray-200 transition-colors text-sm ${collapsed ? 'justify-center' : 'space-x-3'}`}
+      className={`flex items-center px-3 py-2 mx-2 rounded-md transition-colors text-sm ${
+        isActive
+          ? 'bg-primary-600/20 text-primary-400 border-l-2 border-primary-500'
+          : 'text-gray-400 hover:bg-dark-surface-hover hover:text-gray-200'
+      } ${collapsed ? 'justify-center' : 'space-x-3'}`}
       title={collapsed ? String(children) : undefined}
     >
       <span className="flex-shrink-0">{icon}</span>

@@ -3,7 +3,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hasPermission } from '@/lib/auth';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 import { getSkillOutputTemplate } from '@/lib/skill-template';
@@ -16,11 +17,11 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = authenticateRequest(request);
+    const auth = authenticateRequestEnhanced(request);
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const { id } = await params;
 
@@ -55,8 +56,16 @@ export async function GET(
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
     }
 
+    // 租户隔离访问检查
     if (skill.userId && skill.userId !== payload.userId) {
-      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+      // 非所有者：平台管理员和 ICSL 可访问
+      if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+        const isPublic = skill.visibility === 'public';
+        const sameTenant = tenant.tenantId && skill.tenantId === tenant.tenantId;
+        if (!isPublic && !sameTenant) {
+          return NextResponse.json({ error: '禁止访问' }, { status: 403 });
+        }
+      }
     }
 
     const { SkillCategory, VulnerabilityTree, SkillProductTag, ...rest } = skill;
@@ -90,11 +99,11 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = authenticateRequest(request);
+    const auth = authenticateRequestEnhanced(request);
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const { id } = await params;
     const body = await request.json();
@@ -272,11 +281,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = authenticateRequest(request);
+    const auth = authenticateRequestEnhanced(request);
     if (!auth.success) {
       return authErrorResponse(auth);
     }
-    const payload = auth.payload;
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     const { id } = await params;
 

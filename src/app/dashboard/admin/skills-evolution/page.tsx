@@ -429,15 +429,15 @@ function SkillsEvolutionContent() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
+        return 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
       case 'analyzing':
-        return 'bg-blue-100 text-blue-800';
+        return 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
       case 'completed':
-        return 'bg-green-100 text-green-800';
+        return 'bg-green-500/20 text-green-400 border border-green-500/30';
       case 'rejected':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-500/20 text-red-400 border border-red-500/30';
       default:
-        return 'bg-dark-surface-hover text-gray-200';
+        return 'bg-dark-surface-hover text-gray-400';
     }
   };
 
@@ -636,18 +636,18 @@ function SkillsEvolutionContent() {
           </div>
           <div className="flex items-center gap-2">
             {config?.config.isActive ? (
-              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+              <span className="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded-full border border-green-500/30">
                 已启用
               </span>
             ) : (
-              <span className="px-2 py-1 text-xs bg-dark-surface-hover text-gray-400 rounded-full">
+              <span className="px-2 py-1 text-xs bg-gray-500/20 text-gray-400 rounded-full border border-gray-500/30">
                 已禁用
               </span>
             )}
             {!editingConfig && (
               <button
                 onClick={() => setEditingConfig(true)}
-                className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 border border-blue-500/30"
               >
                 <Settings size={16} className="mr-1" />
                 编辑
@@ -807,18 +807,18 @@ function SkillsEvolutionContent() {
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-yellow-400" />
             <h2 className="text-lg font-semibold text-gray-100">待进化 Skills</h2>
-            <span className="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+            <span className="px-2 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded-full border border-yellow-500/30">
               {metrics?.overview.skillsNeedingEvolution || 0} 个
             </span>
           </div>
         </div>
         
         {/* 触发条件说明 */}
-        <div className="px-4 py-2 bg-blue-900/20 border-b border-blue-100">
-          <div className="text-xs text-blue-800">
-            <span className="font-medium">触发条件：</span> 有执行记录 + 有误报记录 + 精准率 &lt; {formatPrecision(metrics?.config.precisionThreshold || 0.7)}
-            <span className="mx-2 text-blue-400">|</span>
-            <span className="font-medium">精准率公式：</span> confirmedCount / (confirmedCount + falsePositiveCount)
+        <div className="px-4 py-2 bg-blue-900/20 border-b border-blue-500/30">
+          <div className="text-xs text-blue-300">
+            <span className="font-medium text-blue-200">触发条件：</span> 有执行记录 + 有误报记录 + 精准率 &lt; {formatPrecision(metrics?.config.precisionThreshold || 0.7)}
+            <span className="mx-2 text-blue-400/50">|</span>
+            <span className="font-medium text-blue-200">精准率公式：</span> confirmedCount / (confirmedCount + falsePositiveCount)
           </div>
         </div>
         
@@ -884,28 +884,28 @@ function SkillsEvolutionContent() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => navigateToSkillDetail(skill.skillId)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 border border-blue-500/30"
                       >
                         <ExternalLink size={16} className="mr-1" />
                         详情
                       </button>
                       <button
                         onClick={() => handleManualTriggerEvolution(skill.skillId)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200"
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-yellow-500/20 text-yellow-400 rounded hover:bg-yellow-500/30 border border-yellow-500/30"
                       >
                         <Play size={16} className="mr-1" />
                         触发进化
                       </button>
                       <button
                         onClick={() => navigateToVulnerabilities(skill.skillId, 'false-positive')}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-red-500/20 text-red-400 rounded hover:bg-red-500/30 border border-red-500/30"
                       >
                         <XCircle size={16} className="mr-1" />
                         查看误报
                       </button>
                       <button
                         onClick={() => navigateToVulnerabilities(skill.skillId, 'confirmed')}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-green-100 text-green-800 rounded hover:bg-green-200"
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 border border-green-500/30"
                       >
                         <CheckCircle size={16} className="mr-1" />
                         查看正确发现
@@ -1054,7 +1054,7 @@ function SkillsEvolutionContent() {
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => navigateToSkillDetail(task.skillId)}
-                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-100 text-blue-800 rounded hover:bg-blue-200"
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-blue-500/20 text-blue-400 rounded hover:bg-blue-500/30 border border-blue-500/30"
                       >
                         <ExternalLink size={16} className="mr-1" />
                         Skill 详情
@@ -1062,7 +1062,7 @@ function SkillsEvolutionContent() {
                       {(task.status === 'completed' || task.status === 'rejected' || task.status === 'analyzing') && (
                         <button
                           onClick={() => navigateToAnalysis(task.id)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm bg-green-100 text-green-800 rounded hover:bg-green-200"
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-green-500/20 text-green-400 rounded hover:bg-green-500/30 border border-green-500/30"
                         >
                           <Zap size={16} className="mr-1" />
                           查看分析
@@ -1071,7 +1071,7 @@ function SkillsEvolutionContent() {
                       {task.status === 'pending' && (
                         <button
                           onClick={() => handleTriggerEvolution(task.skillId, task.id)}
-                          className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-100 text-purple-800 rounded hover:bg-purple-200"
+                          className="inline-flex items-center px-3 py-1.5 text-sm bg-purple-500/20 text-purple-400 rounded hover:bg-purple-500/30 border border-purple-500/30"
                         >
                           <Play size={16} className="mr-1" />
                           触发分析

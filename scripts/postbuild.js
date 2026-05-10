@@ -16,52 +16,47 @@ const path = require('path');
 const ROOT_DIR = path.join(__dirname, '..');
 const STANDALONE_DIR = path.join(ROOT_DIR, '.next/standalone');
 
-// 需要复制到 standalone 输出目录的目录
+// 检查是否保留 Windows 文件（本地开发测试用）
+const KEEP_WINDOWS = process.env.KEEP_WINDOWS_FILES === 'true' || process.platform === 'win32';
+
 const DIR_COPY_RULES = {
-  // ⭐ 复制 @anthropic-ai SDK（claude-agent-sdk 内嵌 Linux 二进制）
   'anthropic-sdk': {
     src: path.join(ROOT_DIR, 'node_modules', '@anthropic-ai'),
     dest: 'node_modules/@anthropic-ai',
     mode: 'all',
   },
-  // 从 .next 复制必要文件（排除 cache, dev 等）
   'next-files': {
     src: path.join(ROOT_DIR, '.next'),
     dest: '.next',
     mode: 'exclude-next',
     exclude: ['cache', 'dev', 'diagnostics', 'standalone', 'types', 'turbopack', 'trace', 'trace-build', 'build', 'export-marker.json', 'fallback-build-manifest.json', 'images-manifest.json', 'next-minimal-server.js.nft.json', 'next-server.js.nft.json', 'standalone.zip', 'required-server-files.js'],
   },
-  // 从 .next/node_modules 复制 Prisma 客户端
   'next-node-modules': {
     src: path.join(ROOT_DIR, '.next', 'node_modules'),
     dest: '.next/node_modules',
     mode: 'all',
   },
-  // data 目录：运行时不需要，可以排除
   'data': {
-    mode: 'none',  // 不复制
-  },  // data 目录：运行时不需要，可以排除
+    mode: 'none',
+  },
   'dataXXX': {
-    mode: 'none',  // 不复制
+    mode: 'none',
   },
-    'backups': {
-    mode: 'none',  // 不复制
+  'backups': {
+    mode: 'none',
   },
-  // prisma: 只复制必要文件（schema + 数据库）
   'prisma': {
     mode: 'selective',
     include: ['schema.prisma', 'dev.db', 'prod.db'],
   },
-  // plugins: 全部复制
   'plugins': {
     mode: 'all',
-  },// plugins: 全部复制
+  },
   'skills': {
     mode: 'all',
   },
-  // uploads: 不复制（用户上传文件目录）
   'uploads': {
-    mode: 'none',  // 不复制
+    mode: 'none',
   },
 };
 
@@ -72,14 +67,12 @@ function shouldExclude(name, rules) {
 }
 
 function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
-  // mode: 'none' 表示不复制
   if (rules.mode === 'none') {
     console.log(`  ⏭️  跳过 (不需要)`);
     console.log(`✅ ${dirName}/ (0 项)`);
     return false;
   }
   
-  // 使用传入的 srcRoot，如果指定了 rules.src 则使用它
   const src = rules.src || path.join(srcRoot, dirName);
   const dest = rules.dest ? path.join(STANDALONE_DIR, rules.dest) : path.join(STANDALONE_DIR, dirName);
   
@@ -88,24 +81,20 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
     return false;
   }
 
-  // 确保目标父目录存在
   const destParent = path.dirname(dest);
   if (!fs.existsSync(destParent)) {
     fs.mkdirSync(destParent, { recursive: true });
   }
 
-  // 如果目标已存在，先删除
   if (fs.existsSync(dest)) {
     fs.rmSync(dest, { recursive: true, force: true });
   }
 
-  // 模式：exclude-next - 排除不需要的 .next 项
   if (rules.mode === 'exclude-next') {
     const entries = fs.readdirSync(src, { withFileTypes: true });
     fs.mkdirSync(dest, { recursive: true });
     
     for (const entry of entries) {
-      // 跳过排除的项
       if (rules.exclude && rules.exclude.includes(entry.name)) {
         console.log(`  ⏭️  跳过 ${entry.name}`);
         continue;
@@ -127,12 +116,10 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
     return true;
   }
 
-  // 对于目录，直接复制
   if (fs.statSync(src).isDirectory()) {
     fs.mkdirSync(dest, { recursive: true });
     fs.cpSync(src, dest, { recursive: true });
   } else {
-    // 对于文件，直接复制
     fs.copyFileSync(src, dest);
   }
   
@@ -143,13 +130,11 @@ function copyDir(dirName, rules, srcRoot = ROOT_DIR) {
 function main() {
   console.log('🚀 开始复制运行时目录...\n');
 
-  // 检查 standalone 目录是否存在
   if (!fs.existsSync(STANDALONE_DIR)) {
     console.error('❌ Standalone 目录不存在，请先运行 npm run build');
     process.exit(1);
   }
 
-  // 第一步：清理不应该存在的目录（Next.js 可能错误复制了）
   console.log('🧹 清理不应该存在的目录...\n');
   const CLEANUP_DIRS = [
     'prisma_prod',
@@ -178,7 +163,6 @@ function main() {
 
   for (const [dirName, rules] of Object.entries(DIR_COPY_RULES)) {
     console.log(`📦 处理 ${dirName}/...`);
-    // 对于 next-files，需要使用 ROOT_DIR 作为 srcRoot
     const srcRoot = dirName === 'next-files' ? ROOT_DIR : ROOT_DIR;
     if (copyDir(dirName, rules, srcRoot)) {
       copiedCount++;
@@ -187,12 +171,17 @@ function main() {
 
   console.log(`\n✨ 完成！共处理 ${copiedCount}/${Object.keys(DIR_COPY_RULES).length} 个目录`);
 
-  // ========================================
   // 清理 Windows/macOS 专用文件（只保留 Linux）
-  // ========================================
+  // 如果 KEEP_WINDOWS_FILES=true 或当前是 Windows 平台，则保留 Windows 文件
+  if (KEEP_WINDOWS) {
+    console.log('\n⚠️  保留 Windows 文件用于本地测试');
+    console.log(`📁 输出目录: ${STANDALONE_DIR}`);
+    return;
+  }
+  
   console.log('\n🧹 清理 Windows/macOS 专用文件（只保留 Linux）...\n');
   
-  const NON_LINUX_PLATFORMS = ['darwin', 'win32', 'freebsd', 'android'];
+  const NON_LINUX_PLATFORMS = ['darwin', 'freebsd', 'android'];
   const platformPattern = NON_LINUX_PLATFORMS.join('|');
   
   function isNonLinuxPlatformDir(dirName) {

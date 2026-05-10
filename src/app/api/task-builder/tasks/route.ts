@@ -4,8 +4,9 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
-import { uploadAndExtractArchive, testSftpConnection } from '@/lib/sftp-upload';
+import { uploadAndExtractArchive, testSftpConnection, uploadFilesToRemote } from '@/lib/sftp-upload';
 import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { downloadFilesFromGitea, isGiteaConfigured } from '@/lib/gitea';
 
 export async function POST(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -27,12 +28,25 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File | null;
 
     if (!name || !agentId) {
-      return NextResponse.json({ error: '缺少必填参数' }, { status: 400 });
+      return NextResponse.json({ error: '缺少必填参数：name 和 agentId' }, { status: 400 });
+    }
+
+    if (!notes || notes.trim() === '') {
+      return NextResponse.json({ error: '任务描述（notes）为必填字段，这是 Agent 执行的指令提示词' }, { status: 400 });
     }
 
     const taskId = randomUUID();
     let filePath: string | null = null;
     let projectPath: string | null = null;
+
+    const agentApp = await prisma.agentApp.findUnique({
+      where: { id: agentId },
+      select: {
+        engine: true,
+        name: true,
+        agentHarnessPath: true,
+      },
+    });
 
     if (file && file.size > 0) {
       try {
@@ -50,10 +64,39 @@ export async function POST(request: NextRequest) {
           projectPath = result.remoteDirPath;
           console.log(`File uploaded to: ${filePath}`);
         }
+
+        if (agentApp?.agentHarnessPath && isGiteaConfigured()) {
+          try {
+            console.log(`[Task] 开始下载 AgentApp 文件: ${agentId}`);
+            const giteaFiles = await downloadFilesFromGitea(agentId);
+            
+            if (giteaFiles.length > 0) {
+              console.log(`[Task] 下载 ${giteaFiles.length} 个文件，开始上传到远程目录`);
+              
+              const uploadResult = await uploadFilesToRemote(taskId, giteaFiles, 'agent-harness');
+              console.log(`[Task] AgentApp 文件上传完成: ${uploadResult.uploadedCount} 个文件`);
+            }
+          } catch (giteaError) {
+            console.error('[Task] 下载/上传 AgentApp 文件失败:', giteaError);
+          }
+        }
       } catch (uploadError) {
         console.error('文件上传/解压失败:', uploadError);
         const errorMessage = uploadError instanceof Error ? uploadError.message : '文件上传失败';
         return NextResponse.json({ error: errorMessage }, { status: 500 });
+      }
+    } else if (agentApp?.agentHarnessPath && isGiteaConfigured()) {
+      try {
+        console.log(`[Task] 无用户文件，仅下载 AgentApp 文件: ${agentId}`);
+        const giteaFiles = await downloadFilesFromGitea(agentId);
+        
+        if (giteaFiles.length > 0) {
+          const uploadResult = await uploadFilesToRemote(taskId, giteaFiles);
+          projectPath = uploadResult.remoteDirPath;
+          console.log(`[Task] AgentApp 文件上传完成: ${projectPath}`);
+        }
+      } catch (giteaError) {
+        console.error('[Task] 下载/上传 AgentApp 文件失败:', giteaError);
       }
     }
 
