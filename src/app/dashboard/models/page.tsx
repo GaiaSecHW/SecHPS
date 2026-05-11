@@ -837,7 +837,7 @@ export default function ModelsPage() {
                         onChange={(e) => setFormData({ ...formData, changeApiKey: e.target.checked })}
                         className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
                       />
-                      <span className="text-sm text-orange-700 font-medium">修改 API Key</span>
+                      <span className="text-sm text-orange-400 font-medium">修改 API Key</span>
                     </label>
 
                     {formData.changeApiKey && (
@@ -851,7 +851,7 @@ export default function ModelsPage() {
                     )}
                     
                     {formData.changeApiKey && (
-                      <p className="text-xs text-orange-600 mt-1">
+                      <p className="text-xs text-orange-400 mt-1">
                         请输入新的 API Key，原有 Key 将被替换
                       </p>
                     )}
@@ -930,7 +930,7 @@ export default function ModelsPage() {
                       <button 
                         onClick={() => handleResetContextWindow(editingModel.id)} 
                         disabled={resettingContextWindow === editingModel.id}
-                        className="px-3 py-1.5 text-sm text-orange-600 bg-orange-600/10 border border-orange-500/20 rounded-md hover:bg-orange-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="px-3 py-1.5 text-sm text-orange-400 bg-orange-600/10 border border-orange-500/20 rounded-md hover:bg-orange-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                       >
                         {resettingContextWindow === editingModel.id ? '复位中...' : '复位'}
                       </button>
@@ -976,7 +976,7 @@ export default function ModelsPage() {
                         onChange={(e) => setFormData({ ...formData, isSystemModel: e.target.checked, isDefault: e.target.checked ? formData.isDefault : false })}
                         className="w-4 h-4 text-purple-600 border-gray-600 rounded focus:ring-purple-500"
                       />
-                      <span className="text-sm text-purple-700 font-medium">系统模型（所有用户可见）</span>
+                      <span className="text-sm text-purple-400 font-medium">系统模型（所有用户可见）</span>
                     </label>
 
                     {formData.isSystemModel && (
@@ -987,7 +987,7 @@ export default function ModelsPage() {
                           onChange={(e) => setFormData({ ...formData, isDefault: e.target.checked })}
                           className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
                         />
-                        <span className="text-sm text-orange-700 font-medium">默认模型</span>
+                        <span className="text-sm text-orange-400 font-medium">默认模型</span>
                       </label>
                     )}
                   </div>
@@ -996,7 +996,7 @@ export default function ModelsPage() {
 
               {formData.isPublic && (
                 <div className="bg-blue-900/20 border border-blue-800/40 rounded-md p-3">
-                  <p className="text-sm text-blue-800">
+                  <p className="text-sm text-blue-300">
                     <Globe size={16} className="inline mr-1" />
                     公开的模型将出现在所有用户的评估模型选择列表中。请确保 API Key 安全。
                   </p>

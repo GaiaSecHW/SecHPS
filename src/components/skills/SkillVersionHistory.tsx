@@ -105,12 +105,12 @@ export function SkillVersionHistory({
 
   const getChangeTypeColor = (changeType: string) => {
     const colors: Record<string, string> = {
-      'prompt-update': 'bg-blue-100 text-blue-700',
-      'parameter-tune': 'bg-yellow-100 text-yellow-700',
-      'tool-add': 'bg-green-100 text-green-700',
-      'tool-remove': 'bg-red-100 text-red-700',
+      'prompt-update': 'bg-blue-900/20 text-blue-400',
+      'parameter-tune': 'bg-yellow-900/20 text-yellow-400',
+      'tool-add': 'bg-green-900/20 text-green-400',
+      'tool-remove': 'bg-red-900/20 text-red-400',
     };
-    return colors[changeType] || 'bg-gray-100 text-gray-700';
+    return colors[changeType] || 'bg-gray-700/20 text-gray-400';
   };
 
   if (loading) {
@@ -123,7 +123,7 @@ export function SkillVersionHistory({
 
   if (error) {
     return (
-      <div className="flex items-center gap-2 py-4 text-red-600">
+      <div className="flex items-center gap-2 py-4 text-red-400">
         <AlertTriangle size={16} />
         <span>{error}</span>
       </div>
@@ -181,7 +181,7 @@ export function SkillVersionHistory({
 
                     {/* Latest Badge */}
                     {v.isLatest && (
-                      <span className="flex items-center gap-1 text-xs text-green-600">
+                      <span className="flex items-center gap-1 text-xs text-green-400">
                         <CheckCircle size={14} />
                         当前版本
                       </span>
@@ -232,7 +232,7 @@ export function SkillVersionHistory({
                   {!v.isLatest && index < versions.length - 1 && (
                     <button
                       onClick={() => onCompare(v.id, v.version)}
-                      className="inline-flex items-center px-2 py-1 text-xs bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                      className="inline-flex items-center px-2 py-1 text-xs bg-indigo-900/20 text-indigo-400 rounded hover:bg-indigo-900/30 transition-colors"
                       title="对比此版本与当前版本"
                     >
                       <GitCompare size={14} className="mr-1" />

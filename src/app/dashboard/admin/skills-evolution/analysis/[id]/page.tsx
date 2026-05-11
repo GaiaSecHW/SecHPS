@@ -1227,7 +1227,7 @@ function EvolutionAnalysisContent() {
               </div>
               <button
                 onClick={() => setExpandedFalsePositives(!expandedFalsePositives)}
-                className="p-1 hover:bg-red-100 rounded transition-colors"
+                className="p-1 hover:bg-red-900/20 rounded transition-colors"
               >
                 {expandedFalsePositives ? (
                   <ChevronUp size={20} className="text-red-600" />
@@ -1279,7 +1279,7 @@ function EvolutionAnalysisContent() {
                         </div>
                         <Link
                           href={`/dashboard/admin/vulnerabilities?id=${caseItem.vulnerabilityId}`}
-                          className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                          className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-red-900/20 text-red-400 rounded hover:bg-red-900/30"
                         >
                           <Bug size={14} className="mr-1" />
                           详情
@@ -1304,7 +1304,7 @@ function EvolutionAnalysisContent() {
               </div>
               <button
                 onClick={() => setExpandedConfirmed(!expandedConfirmed)}
-                className="p-1 hover:bg-green-100 rounded transition-colors"
+                className="p-1 hover:bg-green-900/20 rounded transition-colors"
               >
                 {expandedConfirmed ? (
                   <ChevronUp size={20} className="text-green-600" />
@@ -1350,7 +1350,7 @@ function EvolutionAnalysisContent() {
                         </div>
                         <Link
                           href={`/dashboard/admin/vulnerabilities?id=${caseItem.vulnerabilityId}`}
-                          className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-green-100 text-green-800 rounded hover:bg-green-200"
+                          className="ml-4 inline-flex items-center px-3 py-1.5 text-sm bg-green-900/20 text-green-400 rounded hover:bg-green-900/30"
                         >
                           <Bug size={14} className="mr-1" />
                           详情
@@ -1554,7 +1554,7 @@ function EvolutionAnalysisContent() {
                   {backtestResult && (
                     <button
                       onClick={() => setExpandedBacktest(!expandedBacktest)}
-                      className="p-1 hover:bg-purple-100 rounded transition-colors"
+                      className="p-1 hover:bg-purple-900/20 rounded transition-colors"
                     >
                       {expandedBacktest ? (
                         <ChevronUp size={20} className="text-purple-600" />
@@ -1576,7 +1576,7 @@ function EvolutionAnalysisContent() {
                     </div>
                     <div className="p-3 bg-green-900/20 rounded-lg">
                       <p className="text-xs text-gray-500">通过数</p>
-                      <p className="text-lg font-semibold text-green-600">{backtestResult.summary.passedCount}</p>
+                      <p className="text-lg font-semibold text-green-400">{backtestResult.summary.passedCount}</p>
                     </div>
                     <div className="p-3 bg-red-900/20 rounded-lg">
                       <p className="text-xs text-gray-500">失败数</p>
@@ -2011,7 +2011,7 @@ function EvolutionAnalysisContent() {
                   <button
                     onClick={() => setShowRejectInput(true)}
                     disabled={submitting}
-                    className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-lg hover:bg-red-200 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center px-4 py-2 bg-red-900/20 text-red-400 rounded-lg hover:bg-red-900/30 disabled:opacity-50 transition-colors"
                   >
                     <XCircle size={16} className="mr-2" />
                     拒绝改进

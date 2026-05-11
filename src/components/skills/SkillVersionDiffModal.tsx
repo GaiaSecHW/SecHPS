@@ -114,12 +114,12 @@ export function SkillVersionDiffModal({
 
   const getChangeTypeColor = (changeType: string) => {
     const colors: Record<string, string> = {
-      'prompt-update': 'bg-blue-100 text-blue-700',
-      'parameter-tune': 'bg-yellow-100 text-yellow-700',
-      'tool-add': 'bg-green-100 text-green-700',
-      'tool-remove': 'bg-red-100 text-red-700',
+      'prompt-update': 'bg-blue-900/20 text-blue-400',
+      'parameter-tune': 'bg-yellow-900/20 text-yellow-400',
+      'tool-add': 'bg-green-900/20 text-green-400',
+      'tool-remove': 'bg-red-900/20 text-red-400',
     };
-    return colors[changeType] || 'bg-gray-100 text-gray-700';
+    return colors[changeType] || 'bg-gray-700/20 text-gray-400';
   };
 
   // Simple diff - find differences between two texts

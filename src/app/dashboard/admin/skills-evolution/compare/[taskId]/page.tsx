@@ -395,7 +395,7 @@ function VersionCompareContent() {
           {canRollback && (
             <button
               onClick={handleRollback}
-              className="inline-flex items-center px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 transition-colors"
+              className="inline-flex items-center px-4 py-2 bg-orange-900/20 text-orange-400 rounded-lg hover:bg-orange-900/30 transition-colors"
             >
               <RotateCcw size={16} className="mr-2" />
               回滚到旧版本
@@ -405,7 +405,7 @@ function VersionCompareContent() {
           {/* Skill detail button */}
           <button
             onClick={() => navigateToSkillDetail(skill.id)}
-            className="inline-flex items-center px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-blue-900/20 text-blue-400 rounded-lg hover:bg-blue-900/30 transition-colors"
           >
             <ExternalLink size={16} className="mr-2" />
             Skill 详情
@@ -693,9 +693,9 @@ function VersionCompareContent() {
               <div>
                 <button
                   onClick={() => setShowNewContent(!showNewContent)}
-                  className="w-full flex items-center justify-between px-4 py-2 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors"
-                >
-                  <span className="font-medium text-blue-700">新版本内容</span>
+className="w-full flex items-center justify-between px-4 py-2 bg-blue-900/20 rounded-lg hover:bg-blue-900/30 transition-colors"
+                  >
+                  <span className="font-medium text-blue-400">新版本内容</span>
                   {showNewContent ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
                 {showNewContent && (

@@ -275,7 +275,7 @@ function HighFrequencyPageContent() {
               <button
                 onClick={handleBatchMarkReviewed}
                 disabled={batchOperating}
-                className="inline-flex items-center px-3 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors disabled:opacity-50"
+                className="inline-flex items-center px-3 py-2 bg-green-900/20 text-green-400 rounded-lg hover:bg-green-900/30 transition-colors disabled:opacity-50"
                 title="批量标记为已审核"
               >
                 <CheckCircle size={16} className="mr-1" />
@@ -284,7 +284,7 @@ function HighFrequencyPageContent() {
               <button
                 onClick={handleBatchSuggestMerge}
                 disabled={batchOperating}
-                className="inline-flex items-center px-3 py-2 bg-purple-100 text-purple-800 rounded-lg hover:bg-purple-200 transition-colors disabled:opacity-50"
+                className="inline-flex items-center px-3 py-2 bg-purple-900/20 text-purple-400 rounded-lg hover:bg-purple-900/30 transition-colors disabled:opacity-50"
                 title="批量生成合并建议"
               >
                 <Merge size={16} className="mr-1" />
@@ -326,8 +326,8 @@ function HighFrequencyPageContent() {
 
       {/* Info box */}
       <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4">
-        <h3 className="text-sm font-medium text-blue-800 mb-2">高频重复排行说明</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
+        <h3 className="text-sm font-medium text-blue-300 mb-2">高频重复排行说明</h3>
+        <ul className="text-sm text-blue-400 space-y-1">
           <li>• <strong>重叠次数</strong>：该 Skill 在观测日志中与其他 Skill 同时出现的次数</li>
           <li>• <strong>选择率</strong>：该 Skill 在匹配请求中被选中的比例</li>
           <li>• <strong>决策状态</strong>：基于预警率和重叠次数的风险等级评估</li>
@@ -366,7 +366,7 @@ function HighFrequencyPageContent() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-900/20 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}

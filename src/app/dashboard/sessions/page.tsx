@@ -2889,7 +2889,7 @@ if (loading) {
             <div className="flex items-center gap-2">
               {selectedVulnerability.status === 'new' && (
                 <>
-                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-900/30 text-sm">
                     <Copy size={14} className="mr-1" />复制MD
                   </button>
                   <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'confirm')} className="px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm">确认漏洞</button>
@@ -2898,18 +2898,18 @@ if (loading) {
               )}
               {selectedVulnerability.status === 'confirmed' && (
                 <>
-                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-900/30 text-sm">
                     <Copy size={14} className="mr-1" />复制MD
                   </button>
-                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')} className="px-3 py-1.5 bg-green-100 text-green-800 rounded hover:bg-green-200 text-sm">标记已修复</button>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'fix')} className="px-3 py-1.5 bg-green-900/20 text-green-400 rounded hover:bg-green-900/30 text-sm">标记已修复</button>
                 </>
               )}
               {selectedVulnerability.status === 'fixed' && (
                 <>
-                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-200 rounded hover:bg-blue-100 text-sm">
+                  <button onClick={() => handleCopyVulnerabilityAsMarkdown(selectedVulnerability)} className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 border border-blue-500/30 rounded hover:bg-blue-900/30 text-sm">
                     <Copy size={14} className="mr-1" />复制MD
                   </button>
-                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')} className="px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm">验证修复</button>
+                  <button onClick={() => handleVulnerabilityStatusChange(selectedVulnerability.id, 'verify')} className="px-3 py-1.5 bg-purple-900/20 text-purple-400 rounded hover:bg-purple-900/30 text-sm">验证修复</button>
                 </>
               )}
             </div>

@@ -426,7 +426,7 @@ function TestRunItem({
                 onRetry(run.id);
               }}
               disabled={isRunning}
-              className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 disabled:opacity-50"
+              className="px-2 py-1 text-xs bg-orange-900/20 text-orange-400 rounded hover:bg-orange-900/30 disabled:opacity-50"
             >
               重试
             </button>
@@ -445,7 +445,7 @@ function TestRunItem({
           <button
             onClick={() => onRetry(run.id)}
             disabled={isRunning}
-            className="px-2 py-1 text-xs bg-red-100 text-red-400 rounded hover:bg-red-200 disabled:opacity-50 ml-2"
+            className="px-2 py-1 text-xs bg-red-900/20 text-red-400 rounded hover:bg-red-900/30 disabled:opacity-50 ml-2"
           >
             重试
           </button>
