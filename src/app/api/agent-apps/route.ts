@@ -45,27 +45,35 @@ async function extractAndUploadArchive(appId: string, fileBuffer: Buffer, archiv
     
     console.log(`[agent-apps] 解压 ${archiveName}, 共 ${zipEntries.length} 个文件`);
     
-    const uploadedFiles: string[] = [];
+    const filesToUpload: Array<{ name: string; content: Buffer }> = [];
     
     for (const entry of zipEntries) {
       if (!entry.isDirectory) {
-        const entryName = entry.entryName;
-        const content = entry.getData();
-        
-        try {
-          const result = await uploadFileToGitea(appId, entryName, content);
-          if (result) {
-            uploadedFiles.push(entryName);
-            console.log(`[agent-apps] 上传文件: ${entryName}`);
-          }
-        } catch (uploadError) {
-          console.error(`[agent-apps] 上传失败 ${entryName}:`, uploadError);
-        }
+        filesToUpload.push({
+          name: entry.entryName,
+          content: entry.getData(),
+        });
       }
     }
     
-    console.log(`[agent-apps] 解压上传完成，共上传 ${uploadedFiles.length} 个文件`);
-    return `${getGiteaRepoUrl()}/src/branch/main/agent-apps/${appId}`;
+    console.log(`[agent-apps] 开始并行上传 ${filesToUpload.length} 个文件...`);
+    
+    const uploadPromises = filesToUpload.map(async (file) => {
+      try {
+        const result = await uploadFileToGitea(appId, file.name, file.content);
+        console.log(`[agent-apps] 上传成功: ${file.name}`);
+        return { success: true, name: file.name };
+      } catch (uploadError) {
+        console.error(`[agent-apps] 上传失败 ${file.name}:`, uploadError);
+        return { success: false, name: file.name };
+      }
+    });
+    
+    const results = await Promise.all(uploadPromises);
+    const successCount = results.filter(r => r.success).length;
+    
+    console.log(`[agent-apps] 解压上传完成，成功上传 ${successCount}/${filesToUpload.length} 个文件`);
+    return `${getGiteaRepoUrl()}/src/branch/main/${appId}`;
   } catch (extractError) {
     console.error('[agent-apps] 解压失败:', extractError);
     return null;
@@ -134,7 +142,7 @@ export async function POST(request: NextRequest) {
         } else if (fileType === 'folder' && filesJson) {
           const filesInfo = JSON.parse(filesJson);
           
-          for (const info of filesInfo) {
+          const uploadPromises = filesInfo.map(async (info) => {
             const file = formData.get(info.key) as File;
             if (file) {
               const fileBuffer = Buffer.from(await file.arrayBuffer());
@@ -144,12 +152,18 @@ export async function POST(request: NextRequest) {
                 const result = await uploadFileToGitea(appId, relativePath, fileBuffer);
                 if (result) {
                   console.log(`[agent-apps POST] Gitea 文件上传: ${relativePath}`);
-                  giteaUploaded = true;
+                  return { success: true, name: relativePath };
                 }
               } catch (uploadError) {
                 console.error(`[agent-apps POST] Gitea 上传失败 ${relativePath}:`, uploadError);
               }
             }
+            return { success: false };
+          });
+          
+          const results = await Promise.all(uploadPromises);
+          if (results.some(r => r.success)) {
+            giteaUploaded = true;
           }
 
           agentHarnessPath = `${getGiteaRepoUrl()}/src/branch/main/${appId}`;
