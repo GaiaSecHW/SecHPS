@@ -80,9 +80,47 @@ export async function POST(request: Request) {
   }
 }
 
-// DB fallback：心跳触发的排队任务分发
+// DB fallback：心跳触发的掉线检测 + 排队任务分发
 async function dispatchQueuedTasks(): Promise<void> {
   try {
+    // 1. 检查心跳过期的 Worker，标记为 offline
+    const offlineThreshold = new Date(Date.now() - 90_000);
+    const staleWorkers = await prisma.codeswarmWorker.findMany({
+      where: {
+        status: 'online',
+        lastHeartbeat: { lt: offlineThreshold },
+      },
+      select: { id: true, nodeId: true, currentTasks: true },
+    });
+
+    for (const w of staleWorkers) {
+      console.warn(`[CodeSwarm] DB fallback: Worker ${w.nodeId} 心跳过期，标记为 offline`);
+      await prisma.codeswarmWorker.update({
+        where: { id: w.id },
+        data: { status: 'offline', currentTasks: 0 },
+      });
+
+      // 重调度该 Worker 的任务
+      if (w.currentTasks > 0) {
+        const stuckTasks = await prisma.codeswarmTask.findMany({
+          where: {
+            workerId: w.id,
+            state: { in: ['dispatched', 'running'] },
+          },
+          select: { id: true, taskId: true },
+        });
+
+        for (const task of stuckTasks) {
+          await prisma.codeswarmTask.update({
+            where: { id: task.id },
+            data: { state: 'queued', workerId: null, updatedAt: new Date() },
+          });
+          console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 重新入队`);
+        }
+      }
+    }
+
+    // 2. 分发排队任务
     const queuedTasks = await prisma.codeswarmTask.findMany({
       where: { state: 'queued' },
       orderBy: { createdAt: 'asc' },

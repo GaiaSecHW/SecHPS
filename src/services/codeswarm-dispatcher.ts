@@ -292,25 +292,82 @@ class CodeswarmDispatcher {
   private async checkOfflineWorkers() {
     const now = Date.now();
     for (const [nodeId, worker] of this.workers) {
-      if (now - worker.lastHeartbeat > 90_000 && worker.currentTasks > 0) {
-        console.warn(`[CodeSwarm] Worker ${nodeId} 掉线（90s 无心跳），重调度其任务`);
+      if (now - worker.lastHeartbeat > 90_000) {
+        console.warn(`[CodeSwarm] Worker ${nodeId} 掉线（90s 无心跳），currentTasks=${worker.currentTasks}`);
 
-        // 标记 Worker 离线
+        const hadTasks = worker.currentTasks > 0;
         worker.currentTasks = 0;
+        this.workers.delete(nodeId);
 
-        // 尽力通知 Worker 取消
-        try {
-          await fetch(`http://${worker.address}/task/cancel`, {
-            method: 'POST',
-            signal: AbortSignal.timeout(5000),
-          });
-        } catch { /* Worker 可能已离线 */ }
-
-        // 异步重调度任务
-        this.rescheduleWorkerTasks(worker).catch(e =>
-          console.error('[CodeSwarm] 重调度任务失败:', e)
-        );
+        if (hadTasks) {
+          try {
+            await fetch(`http://${worker.address}/task/cancel`, {
+              method: 'POST',
+              signal: AbortSignal.timeout(5000),
+            });
+          } catch { /* Worker 可能已离线 */ }
+          this.rescheduleWorkerTasks(worker).catch(e =>
+            console.error('[CodeSwarm] 重调度任务失败:', e)
+          );
+        } else {
+          await prisma.codeswarmWorker.update({
+            where: { id: worker.id },
+            data: { status: 'offline', currentTasks: 0 },
+          }).catch(() => {});
+        }
       }
+    }
+
+    // 同时检查 DB 中状态为 online 但心跳过期的 workers（处理重启后遗漏的）
+    try {
+      const dbOfflineWorkers = await prisma.codeswarmWorker.findMany({
+        where: {
+          status: 'online',
+          lastHeartbeat: { lt: new Date(now - 90_000) },
+        },
+        select: { id: true, nodeId: true, currentTasks: true },
+      });
+
+      for (const w of dbOfflineWorkers) {
+        console.warn(`[CodeSwarm] DB Worker ${w.nodeId} 标记为 offline`);
+        await prisma.codeswarmWorker.update({
+          where: { id: w.id },
+          data: { status: 'offline', currentTasks: 0 },
+        });
+
+        if (w.currentTasks > 0) {
+          this.rescheduleWorkerTasksById(w.id).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.error('[CodeSwarm] 检查 DB offline workers 失败:', e);
+    }
+  }
+
+  private async rescheduleWorkerTasksById(workerId: string) {
+    try {
+      const stuckTasks = await prisma.codeswarmTask.findMany({
+        where: {
+          workerId,
+          state: { in: ['dispatched', 'running'] },
+        },
+        select: { id: true, taskId: true },
+      });
+
+      for (const task of stuckTasks) {
+        await prisma.codeswarmTask.update({
+          where: { id: task.id },
+          data: { state: 'queued', workerId: null, updatedAt: new Date() },
+        });
+
+        if (this.redis) {
+          await this.redis.xadd(STREAM_KEY, '*', 'dbTaskId', task.id);
+        }
+
+        console.log(`[CodeSwarm] 任务 ${task.taskId} 已重新入队`);
+      }
+    } catch (e) {
+      console.error('[CodeSwarm] rescheduleWorkerTasksById 异常:', e);
     }
   }
 
