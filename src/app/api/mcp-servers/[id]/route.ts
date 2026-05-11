@@ -1,23 +1,41 @@
 // src/app/api/mcp-servers/[id]/route.ts
-// 单个 MCP 服务器配置 API（支持所有权检查）
+// MCP 服务器配置 API（支持所有权检查 + 多租户）
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 // 检查用户是否有权限操作此 MCP
-// - 管理员：可以操作所有 MCP
-// - 普通用户：只能操作自己的 MCP（isShared=false 的只能查看）
-function canManageMcp(userId: string, isAdmin: boolean, mcp: { userId: string; isShared: boolean }): boolean {
-  if (isAdmin) return true;
-  return mcp.userId === userId;
+function canManageMcp(
+  userId: string,
+  isAdmin: boolean,
+  isIcsTenant: boolean,
+  mcp: { userId: string; tenantId: string | null; isPublic: boolean }
+): boolean {
+  // 平台管理员和 ICSL 租户可以操作所有
+  if (isAdmin || isIcsTenant) return true;
+  // 所有者可以操作
+  if (mcp.userId === userId) return true;
+  // public 资源不能被普通租户修改/删除
+  return false;
 }
 
-function canViewMcp(userId: string, isAdmin: boolean, mcp: { userId: string; isShared: boolean }): boolean {
-  if (isAdmin) return true;
+// 检查用户是否有权限查看此 MCP
+function canViewMcp(
+  userId: string,
+  tenantId: string | null,
+  isAdmin: boolean,
+  isIcsTenant: boolean,
+  mcp: { userId: string; tenantId: string | null; isPublic: boolean }
+): boolean {
+  if (isAdmin || isIcsTenant) return true;
   if (mcp.userId === userId) return true;
-  if (mcp.isShared) return true;
+  if (mcp.isPublic) return true;
+  // 同租户可以查看
+  if (tenantId && mcp.tenantId === tenantId) return true;
   return false;
 }
 
@@ -26,15 +44,13 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload } = auth;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
-    const userIsAdmin = isAdmin(payload);
     const { id } = await params;
 
     const mcpServer = await prisma.mcpServerConfig.findFirst({
@@ -53,8 +69,8 @@ export async function GET(
       return NextResponse.json({ error: 'MCP 服务器配置不存在' }, { status: 404 });
     }
 
-    // 检查查看权限
-    if (!canViewMcp(payload.userId, userIsAdmin, mcpServer)) {
+    // 检查查看权限（多租户）
+    if (!canViewMcp(payload.userId, tenant.tenantId, tenant.isPlatformAdmin, tenant.isIcsTenant, mcpServer)) {
       return NextResponse.json({ error: '无权限访问此 MCP' }, { status: 403 });
     }
 
@@ -71,15 +87,13 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload } = auth;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
-    const userIsAdmin = isAdmin(payload);
     const { id } = await params;
     const body = await request.json();
 
@@ -95,66 +109,37 @@ export async function PATCH(
       return NextResponse.json({ error: 'MCP 服务器配置不存在' }, { status: 404 });
     }
 
-    // 检查管理权限
-    if (!canManageMcp(payload.userId, userIsAdmin, existing)) {
+    // 检查管理权限（多租户）
+    if (!canManageMcp(payload.userId, tenant.isPlatformAdmin, tenant.isIcsTenant, existing)) {
       return NextResponse.json({ error: '无权限修改此 MCP' }, { status: 403 });
     }
 
-    // 非管理员不能修改 isShared
-    if (body.isShared !== undefined && !userIsAdmin) {
-      return NextResponse.json({ error: '只有管理员可以设置共享状态' }, { status: 403 });
+    // ICSL/Admin 可以设置 isPublic，普通用户不能
+    const isPublic = body.isPublic ?? existing.isPublic;
+    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
     }
 
-    // 准备更新数据
-    const updateData: any = {};
-
-    if (body.name !== undefined) {
-      // 检查名称是否与其他配置冲突（同用户范围内）
-      const nameConflict = await prisma.mcpServerConfig.findFirst({
-        where: {
-          name: body.name,
-          userId: existing.userId,
-          projectId: null,
-          id: { not: id },
-        },
-      });
-
-      if (nameConflict) {
-        return NextResponse.json(
-          { error: 'MCP 服务器名称已存在' },
-          { status: 400 }
-        );
-      }
-
-      updateData.name = body.name;
-    }
-
-    if (body.type !== undefined) {
-      if (!['local', 'sse', 'http'].includes(body.type)) {
-        return NextResponse.json(
-          { error: 'type 必须是 local、sse 或 http' },
-          { status: 400 }
-        );
-      }
-      updateData.type = body.type;
-    }
-
-    if (body.command !== undefined) updateData.command = body.command || null;
-    if (body.args !== undefined) updateData.args = body.args ? JSON.stringify(body.args) : null;
-    if (body.url !== undefined) updateData.url = body.url || null;
-    if (body.env !== undefined) updateData.env = body.env ? JSON.stringify(body.env) : null;
-    if (body.isEnabled !== undefined) updateData.isEnabled = body.isEnabled;
-    if (body.autoStart !== undefined) updateData.autoStart = body.autoStart;
-    if (body.isShared !== undefined && userIsAdmin) updateData.isShared = body.isShared;
-
-    // 更新
-    const mcpServer = await prisma.mcpServerConfig.update({
+    // 更新配置
+    const updated = await prisma.mcpServerConfig.update({
       where: { id },
-      data: updateData,
+      data: {
+        name: body.name ?? existing.name,
+        type: body.type ?? existing.type,
+        command: body.command ?? existing.command,
+        args: body.args ?? existing.args,
+        url: body.url ?? existing.url,
+        env: body.env ?? existing.env,
+        tools: body.tools ?? existing.tools,
+        isEnabled: body.isEnabled ?? existing.isEnabled,
+        autoStart: body.autoStart ?? existing.autoStart,
+        isPublic: isPublic,
+        updatedAt: new Date(),
+      },
     });
 
-    logger.update(LOG_MODULES.MCP, payload, `mcp:${mcpServer.id}`, { name: mcpServer.name });
-    return NextResponse.json({ mcpServer });
+    logger.update(LOG_MODULES.MCP, payload, 'mcp', id, { name: updated.name });
+    return NextResponse.json({ mcpServer: updated });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.MCP, '更新 MCP 服务器配置失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
@@ -166,15 +151,13 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload } = auth;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
-    const userIsAdmin = isAdmin(payload);
     const { id } = await params;
 
     // 检查是否存在
@@ -189,18 +172,18 @@ export async function DELETE(
       return NextResponse.json({ error: 'MCP 服务器配置不存在' }, { status: 404 });
     }
 
-    // 检查删除权限
-    if (!canManageMcp(payload.userId, userIsAdmin, existing)) {
+    // 检查管理权限（多租户）- public 资源不能被普通租户删除
+    if (!canManageMcp(payload.userId, tenant.isPlatformAdmin, tenant.isIcsTenant, existing)) {
       return NextResponse.json({ error: '无权限删除此 MCP' }, { status: 403 });
     }
 
-    // 删除
+    // 删除配置
     await prisma.mcpServerConfig.delete({
       where: { id },
     });
 
-    logger.delete(LOG_MODULES.MCP, payload, `mcp:${id}`, { name: existing.name });
-    return NextResponse.json({ message: 'MCP 服务器配置已删除' });
+    logger.delete(LOG_MODULES.MCP, payload, 'mcp', id, { name: existing.name });
+    return NextResponse.json({ success: true });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.MCP, '删除 MCP 服务器配置失败', error instanceof Error ? error.message : error);
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });

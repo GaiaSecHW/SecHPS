@@ -24,7 +24,7 @@ export async function GET(request: Request) {
       // 普通用户：只能查看自己的 + 共享的
       where.OR = [
         { userId: payload.userId },
-        { isShared: true },
+        { isPublic: true },
       ];
     }
 
@@ -45,7 +45,7 @@ export async function GET(request: Request) {
       tools: server.tools ? JSON.parse(server.tools) : null,
       isEnabled: server.isEnabled,
       autoStart: server.autoStart,
-      isShared: server.isShared,
+      isPublic: server.isPublic,
       projectId: server.projectId,
       userId: server.userId,
       lastTestedAt: server.lastTestedAt,
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
     const payload = auth.payload;
 
     const body = await request.json();
-    const { name, type, command, args, url, env, tools, isEnabled, autoStart, isShared, projectId } = body;
+    const { name, type, command, args, url, env, tools, isEnabled, autoStart, isPublic, projectId } = body;
 
     // 验证必填字段
     if (!name || !type) {
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         tools: tools ? JSON.stringify(tools) : null,
         isEnabled: isEnabled ?? true,
         autoStart: autoStart ?? false,
-        isShared: isShared ?? false,
+        isPublic: isPublic ?? false,
         updatedAt: new Date(),
       },
     });

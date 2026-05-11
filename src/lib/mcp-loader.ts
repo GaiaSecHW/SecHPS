@@ -13,8 +13,8 @@ import type { AppMcpServerConfig } from '@/services/ai';
  * 
  * 优先级：
  * 1. 项目级 MCP（projectId 关联）
- * 2. 用户私有 MCP（userId 关联，isShared=false）
- * 3. 用户可访问的共享 MCP（isShared=true）
+ * 2. 用户私有 MCP（userId 关联，isPublic=false）
+ * 3. 用户可访问的共享 MCP（isPublic=true）
  * 
  * @param projectId 项目 ID
  * @param userId 用户 ID
@@ -38,7 +38,7 @@ export async function loadMcpServersForProject(
       where: {
         userId,
         projectId: null,  // 全局级，不属于特定项目
-        isShared: false,
+        isPublic: false,
         isEnabled: true,
       },
     });
@@ -46,7 +46,7 @@ export async function loadMcpServersForProject(
     // 3. 查询用户可访问的共享 MCP
     const sharedMcps = await prisma.mcpServerConfig.findMany({
       where: {
-        isShared: true,
+        isPublic: true,
         isEnabled: true,
         projectId: null,  // 全局级共享
       },
@@ -108,7 +108,7 @@ export async function loadMcpServersForUser(
     // 添加共享 MCP
     const sharedMcps = await prisma.mcpServerConfig.findMany({
       where: {
-        isShared: true,
+        isPublic: true,
         isEnabled: true,
         projectId: null,
       },

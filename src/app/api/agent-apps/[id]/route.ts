@@ -206,8 +206,9 @@ export async function DELETE(
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
       // 平台管理员和 ICS 租户可操作任何应用
     } else {
-      // 普通租户用户：必须是自己创建的应用
+      // 普通租户用户：必须是自己创建的应用（不能删除 public 资源）
       whereCondition.userId = payload.userId;
+      whereCondition.isPublic = false;  // 防止普通租户删除公共资源
     }
 
     const existing = await prisma.agentApp.findFirst({
@@ -215,7 +216,7 @@ export async function DELETE(
     });
 
     if (!existing) {
-      return NextResponse.json({ error: '应用不存在' }, { status: 404 });
+      return NextResponse.json({ error: '应用不存在或无权限删除公共资源' }, { status: 404 });
     }
 
     if (isGiteaConfigured()) {

@@ -2,21 +2,24 @@
 // POST - 分析技能平衡性并生成改进建议
 
 import { NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { processEvolutionTask } from '@/services/skill-evolution/task-manager';
 import { createEvolutionTask } from '@/services/skill-evolution/evolution-scheduler';
 import { getCompactCases } from '@/services/skill-evolution/case-extractor';
 import { calculateSkillMetrics } from '@/services/skill-evolution/metrics-calculator';
 import { prisma } from '@/lib/prisma';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   const { id } = await params;
 
@@ -29,6 +32,9 @@ export async function POST(
         name: true,
         displayName: true,
         content: true,
+        userId: true,
+        tenantId: true,
+        isPublic: true,
       },
     });
 
@@ -39,7 +45,27 @@ export async function POST(
       );
     }
 
-    // 2. 获取案例数据
+    // 2. 租户隔离检查（非所有者需要验证访问权限）
+    if (skill.userId && skill.userId !== payload.userId) {
+      if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+        const tenantFilter = buildTenantFilter(tenant, {
+          tenantField: 'tenantId',
+          isPublicField: 'isPublic',
+        });
+        const matchesFilter =
+          (tenantFilter as any).OR?.some((cond: any) => {
+            if (cond.isPublic && skill.isPublic) return true;
+            if (cond.tenantId && skill.tenantId === cond.tenantId) return true;
+            return false;
+          }) ?? false;
+
+        if (!matchesFilter) {
+          return NextResponse.json({ error: '禁止访问此 Skill' }, { status: 403 });
+        }
+      }
+    }
+
+    // 3. 获取案例数据
     const cases = await getCompactCases(id);
 
     // 检查是否有足够的案例进行分析

@@ -2,10 +2,12 @@
 // POST - 应用改进建议进化技能
 
 import { NextResponse } from 'next/server';
-import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { applyImprovement, rejectImprovement } from '@/services/skill-evolution/version-creator';
 import { getImprovementDetail } from '@/services/skill-evolution/improvement-generator';
 import { prisma } from '@/lib/prisma';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 interface EvolveRequest {
   improvementId: string;
@@ -17,10 +19,11 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   const { id } = await params;
   const body: EvolveRequest = await request.json();
@@ -55,6 +58,35 @@ export async function POST(
         { error: '改进记录不属于该 Skill' },
         { status: 400 }
       );
+    }
+
+    // 租户隔离检查：验证 Skill 访问权限
+    const skill = await prisma.skill.findUnique({
+      where: { id },
+      select: { userId: true, tenantId: true, isPublic: true },
+    });
+
+    if (!skill) {
+      return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
+    }
+
+    if (skill.userId && skill.userId !== payload.userId) {
+      if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+        const tenantFilter = buildTenantFilter(tenant, {
+          tenantField: 'tenantId',
+          isPublicField: 'isPublic',
+        });
+        const matchesFilter = 
+          (tenantFilter as any).OR?.some((cond: any) => {
+            if (cond.isPublic && skill.isPublic) return true;
+            if (cond.tenantId && skill.tenantId === cond.tenantId) return true;
+            return false;
+          }) ?? false;
+        
+        if (!matchesFilter) {
+          return NextResponse.json({ error: '禁止访问此 Skill' }, { status: 403 });
+        }
+      }
     }
 
     if (improvement.status !== 'pending') {

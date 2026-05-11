@@ -41,7 +41,7 @@ interface McpServer {
   env?: string;
   isEnabled: boolean;
   autoStart: boolean;
-  isShared: boolean;
+  isPublic: boolean;
   userId: string;
   user?: McpServerUser;
   createdAt: string;
@@ -90,7 +90,7 @@ function McpServersContent() {
     env: '{}',
     isEnabled: true,
     autoStart: false,
-    isShared: false,
+    isPublic: false,
   });
 
   // 初始化：检查用户权限
@@ -224,7 +224,7 @@ function McpServersContent() {
       env: server.env || '{}',
       isEnabled: server.isEnabled,
       autoStart: server.autoStart,
-      isShared: server.isShared || false,
+      isPublic: server.isPublic || false,
     });
     setShowForm(true);
   };
@@ -292,7 +292,7 @@ function McpServersContent() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ isShared: !server.isShared }),
+        body: JSON.stringify({ isPublic: !server.isPublic }),
       });
 
       if (!response.ok) {
@@ -364,7 +364,7 @@ function McpServersContent() {
       env: '{}',
       isEnabled: true,
       autoStart: false,
-      isShared: false,
+      isPublic: false,
     });
   };
 
@@ -542,7 +542,7 @@ function McpServersContent() {
                     </td>
                     {/* 共享状态 */}
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {server.isShared ? (
+                      {server.isPublic ? (
                         <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-500/15 text-purple-400">
                           <Share2 size={12} className="mr-1" />
                           共享
@@ -587,11 +587,11 @@ function McpServersContent() {
                         <button
                           onClick={() => handleToggleShared(server)}
                           className={`mr-3 ${
-                            server.isShared
+                            server.isPublic
                               ? 'text-purple-600 hover:text-purple-700'
                               : 'text-gray-400 hover:text-purple-600'
                           }`}
-                          title={server.isShared ? '取消共享' : '设置为共享'}
+                          title={server.isPublic ? '取消共享' : '设置为共享'}
                         >
                           <Share2 size={16} />
                         </button>

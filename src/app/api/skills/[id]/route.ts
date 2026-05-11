@@ -10,6 +10,7 @@ import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 // GET /api/skills/:id - 获取 Skill 详情
 export async function GET(
@@ -56,13 +57,25 @@ export async function GET(
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
     }
 
-    // 租户隔离访问检查
+    // 租户隔离访问检查（使用 buildTenantFilter）
+    // 系统内置技能（userId=null）所有人可访问
+    // 所有者可以访问自己的技能
     if (skill.userId && skill.userId !== payload.userId) {
-      // 非所有者：平台管理员和 ICSL 可访问
+      // 非所有者：使用标准租户过滤
       if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
-        const isPublic = skill.isPublic;
-        const sameTenant = tenant.tenantId && skill.tenantId === tenant.tenantId;
-        if (!isPublic && !sameTenant) {
+        const tenantFilter = buildTenantFilter(tenant, {
+          tenantField: 'tenantId',
+          isPublicField: 'isPublic',
+        });
+        // 验证是否符合租户过滤条件
+        const matchesFilter = 
+          (tenantFilter as any).OR?.some((cond: any) => {
+            if (cond.isPublic && skill.isPublic) return true;
+            if (cond.tenantId && skill.tenantId === cond.tenantId) return true;
+            return false;
+          }) ?? false;
+        
+        if (!matchesFilter) {
           return NextResponse.json({ error: '禁止访问' }, { status: 403 });
         }
       }

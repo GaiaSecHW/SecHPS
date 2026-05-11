@@ -139,8 +139,8 @@ export async function POST(request: NextRequest) {
             console.log('[agent-apps POST] Gitea 解压上传成功:', result);
           }
         } else if (fileType === 'folder' && filesJson) {
-          const filesInfo = JSON.parse(filesJson);
-          
+          const filesInfo: { key: string; relativePath: string }[] = JSON.parse(filesJson);
+
           const uploadPromises = filesInfo.map(async (info) => {
             const file = formData.get(info.key) as File;
             if (file) {

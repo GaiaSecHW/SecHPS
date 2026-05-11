@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { authenticateRequest, authErrorResponse, isAdmin } from '@/lib/api-auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
@@ -26,22 +28,56 @@ function formatModel(model: any, includeApiKey: boolean = false) {
   };
 }
 
+// 检查用户是否有权限查看模型（多租户）
+function canViewModel(
+  userId: string,
+  tenantId: string | null,
+  isPlatformAdmin: boolean,
+  isIcsTenant: boolean,
+  model: { userId: string | null; tenantId: string | null; isPublic: boolean }
+): boolean {
+  // 平台管理员和 ICSL 租户可以查看所有
+  if (isPlatformAdmin || isIcsTenant) return true;
+  // 用户可以查看自己的模型
+  if (model.userId === userId) return true;
+  // 用户可以查看公开的模型
+  if (model.isPublic) return true;
+  // 用户可以查看系统级模型（userId为null）
+  if (model.userId === null) return true;
+  // 同租户可以查看
+  if (tenantId && model.tenantId === tenantId) return true;
+  return false;
+}
+
+// 检查用户是否有权限管理模型（多租户）
+function canManageModel(
+  userId: string,
+  isPlatformAdmin: boolean,
+  isIcsTenant: boolean,
+  model: { userId: string | null; tenantId: string | null; isPublic: boolean }
+): boolean {
+  // 平台管理员和 ICSL 租户可以管理所有
+  if (isPlatformAdmin || isIcsTenant) return true;
+  // 用户只能管理自己的模型（非 public）
+  if (model.userId === userId && !model.isPublic) return true;
+  // public 资源不能被普通租户修改
+  return false;
+}
+
 // 获取单个模型详情
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload } = auth;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const { id } = await params;
 
-    // 获取模型
     const model = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
@@ -55,32 +91,18 @@ export async function GET(
       return NextResponse.json({ error: '模型不存在' }, { status: 404 });
     }
 
-    // 检查访问权限：
-    // 1. 用户可以查看自己的模型
-    // 2. 用户可以查看公开的模型
-    // 3. 用户可以查看系统级模型（userId为null）
-    // 4. 管理员可以查看所有模型
-    const userIsAdmin = isAdmin(payload);
-    const canAccess = userIsAdmin || 
-      model.userId === payload.userId || 
-      model.isPublic === true || 
-      model.userId === null;
-
-    if (!canAccess) {
-      // 权限拒绝日志
+    // 检查访问权限（多租户）
+    if (!canViewModel(payload.userId, tenant.tenantId, tenant.isPlatformAdmin, tenant.isIcsTenant, model)) {
       logger.permissionDenied(LOG_MODULES.MODEL, payload, 'MODEL_READ', id, { modelName: model.name });
       return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    // 记录读取日志 - 区分是否跨用户
+    // 记录读取日志
     if (model.userId && model.userId !== payload.userId) {
-      // 管理员访问他人模型
       logger.readOther(LOG_MODULES.MODEL, payload, model.userId, model.User?.email, 'model', id, { name: model.name });
     } else if (!model.userId) {
-      // 系统模型访问
       logger.read(LOG_MODULES.MODEL, payload, 'system_model', id, { name: model.name, isSystem: true });
     } else {
-      // 自己的模型
       logger.read(LOG_MODULES.MODEL, payload, 'model', id, { name: model.name });
     }
 
@@ -96,17 +118,15 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload } = auth;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const { id } = await params;
 
-    // 获取模型
     const existingModel = await prisma.modelConfig.findUnique({
       where: { id },
       include: {
@@ -120,10 +140,8 @@ export async function PUT(
       return NextResponse.json({ error: '模型不存在' }, { status: 404 });
     }
 
-    // 检查权限：只能更新自己创建的模型，管理员可以更新所有模型
-    const userIsAdmin = isAdmin(payload);
-    if (!userIsAdmin && existingModel.userId !== payload.userId) {
-      // 权限拒绝日志
+    // 检查管理权限（多租户）
+    if (!canManageModel(payload.userId, tenant.isPlatformAdmin, tenant.isIcsTenant, existingModel)) {
       logger.permissionDenied(LOG_MODULES.MODEL, payload, 'MODEL_UPDATE', id, { modelName: existingModel.name });
       return NextResponse.json({ error: '禁止访问：只能更新自己创建的模型' }, { status: 403 });
     }
@@ -171,8 +189,14 @@ export async function PUT(
       );
     }
 
-    // 验证管理员专属字段
-    if (isSystemModel !== undefined && !userIsAdmin) {
+    // ICSL/Admin 可以设置 isPublic，普通用户不能
+    const newIsPublic = isPublic ?? existingModel.isPublic;
+    if (newIsPublic !== existingModel.isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+      return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
+    }
+
+    // 管理员专属字段
+    if (isSystemModel !== undefined && !tenant.isPlatformAdmin) {
       return NextResponse.json(
         { error: '只有管理员可以修改系统模型属性' },
         { status: 403 }
@@ -193,8 +217,8 @@ export async function PUT(
     if (isActive !== undefined) updateData.isActive = isActive;
     if (isPublic !== undefined) updateData.isPublic = isPublic;
 
-    // 管理员专属字段
-    if (userIsAdmin) {
+    // 平台管理员专属字段
+    if (tenant.isPlatformAdmin) {
       // 系统模型属性
       if (isSystemModel !== undefined) {
         updateData.userId = isSystemModel ? null : payload.userId;
@@ -224,29 +248,26 @@ export async function PUT(
       }
     }
 
+    updateData.updatedAt = new Date();
+
     // 更新模型
     const model = await prisma.modelConfig.update({
       where: { id },
       data: updateData,
     });
 
-    // 记录更新日志 - 区分是否跨用户
+    // 记录更新日志
     if (existingModel.userId && existingModel.userId !== payload.userId) {
-      // 管理员更新他人模型
       const targetUserId = existingModel.userId;
       logger.updateOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.User?.email, { name: model.name });
     } else {
-      // 自己的模型或系统模型
-      logger.update(LOG_MODULES.MODEL, payload, id, { name: model.name });
+      logger.update(LOG_MODULES.MODEL, payload, 'model', id, { name: model.name });
     }
 
     return NextResponse.json({ model: formatModel(model) });
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.MODEL, '更新模型配置失败', { details: { error: String(error) } });
-    return NextResponse.json(
-      { error: '服务器内部错误', details: String(error) },
-      { status: 500 }
-    );
+    logger.errorNoUser(LOG_MODULES.MODEL, '更新模型失败', { details: { error: String(error) } });
+    return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
 
@@ -255,34 +276,25 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  // 使用统一认证中间件（无权限要求，只需登录）
-  const auth = authenticateRequest(request);
+  const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
     return authErrorResponse(auth);
   }
-  const { payload } = auth;
+  const { payload, tenant } = auth as AuthSuccessResult;
 
   try {
     const { id } = await params;
 
-    // 获取模型
     const existingModel = await prisma.modelConfig.findUnique({
       where: { id },
-      include: {
-        User: {
-          select: { id: true, email: true, username: true },
-        },
-      },
     });
 
     if (!existingModel) {
       return NextResponse.json({ error: '模型不存在' }, { status: 404 });
     }
 
-    // 检查权限：只能删除自己创建的模型，管理员可以删除所有模型
-    const userIsAdmin = isAdmin(payload);
-    if (!userIsAdmin && existingModel.userId !== payload.userId) {
-      // 权限拒绝日志
+    // 检查管理权限（多租户）- public 资源不能被普通租户删除
+    if (!canManageModel(payload.userId, tenant.isPlatformAdmin, tenant.isIcsTenant, existingModel)) {
       logger.permissionDenied(LOG_MODULES.MODEL, payload, 'MODEL_DELETE', id, { modelName: existingModel.name });
       return NextResponse.json({ error: '禁止访问：只能删除自己创建的模型' }, { status: 403 });
     }
@@ -292,19 +304,10 @@ export async function DELETE(
       where: { id },
     });
 
-    // 记录删除日志 - 区分是否跨用户
-    if (existingModel.userId && existingModel.userId !== payload.userId) {
-      // 管理员删除他人模型
-      const targetUserId = existingModel.userId;
-      logger.deleteOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.User?.email, { name: existingModel.name });
-    } else {
-      // 自己的模型或系统模型
-      logger.delete(LOG_MODULES.MODEL, payload, id, { name: existingModel.name });
-    }
-
-    return NextResponse.json({ success: true, message: '模型已删除' });
+    logger.delete(LOG_MODULES.MODEL, payload, 'model', id, { name: existingModel.name });
+    return NextResponse.json({ success: true });
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.MODEL, '删除模型配置失败', { details: { error: String(error) } });
+    logger.errorNoUser(LOG_MODULES.MODEL, '删除模型失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }

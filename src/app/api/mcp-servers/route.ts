@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       if (filter === 'mine') {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
-        where.OR = [{ isShared: true }];
+        where.OR = [{ isPublic: true }];
       }
     } else if (tenant.tenantId) {
       // 普通租户用户：自己的 MCP + 共享的 MCP + 同租户的 MCP
@@ -51,14 +51,14 @@ export async function GET(request: Request) {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
         where.OR = [
-          { isShared: true },
+          { isPublic: true },
           { tenantId: tenant.tenantId },
         ];
       } else {
         // all: 自己的 + 共享的 + 同租户的
         where.OR = [
           { userId: payload.userId },
-          { isShared: true },
+          { isPublic: true },
           { tenantId: tenant.tenantId },
         ];
       }
@@ -76,11 +76,11 @@ export async function GET(request: Request) {
       if (filter === 'mine') {
         where.userId = payload.userId;
       } else if (filter === 'shared') {
-        where.OR = [{ isShared: true }];
+        where.OR = [{ isPublic: true }];
       } else {
         where.OR = [
           { userId: payload.userId },
-          { isShared: true },
+          { isPublic: true },
         ];
       }
       if (search) {
@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       env,
       isEnabled = true,
       autoStart = false,
-      isShared = false, // 只有 ICSL/管理员可以设置为共享
+      isPublic = false, // 只有 ICSL/管理员可以设置为共享
     } = body;
 
     // 验证必填字段
@@ -173,7 +173,7 @@ export async function POST(request: Request) {
     }
 
     // 非管理员/ICSL 不能创建共享 MCP
-    if (isShared && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
+    if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
       return NextResponse.json(
         { error: '只有 ICSL 或平台管理员可以创建共享 MCP' },
         { status: 403 }
@@ -181,7 +181,7 @@ export async function POST(request: Request) {
     }
 
     // 获取租户 ID
-    const tenantId = getTenantIdForCreate(tenant, isShared);
+    const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // 检查名称是否已存在（用户自己的 MCP 名称不能重复）
     const existing = await prisma.mcpServerConfig.findFirst({
@@ -211,7 +211,7 @@ export async function POST(request: Request) {
         env: env ? JSON.stringify(env) : null,
         isEnabled,
         autoStart,
-        isShared: tenant.isIcsTenant || tenant.isPlatformAdmin ? isShared : false, // 非管理员/ICSL 强制为 false
+        isPublic: tenant.isIcsTenant || tenant.isPlatformAdmin ? isPublic : false, // 非管理员/ICSL 强制为 false
         userId: payload.userId,
         tenantId,
         projectId: null,

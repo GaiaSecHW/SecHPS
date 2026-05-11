@@ -322,10 +322,10 @@ export async function POST(
     }
 
     // 加载 MCP 服务器配置（用户私有 + 共享 + 项目级别）
-    // 加载共享的 MCP 配置（isShared=true，管理员设置的共享 MCP）
+    // 加载共享的 MCP 配置（isPublic=true，管理员设置的共享 MCP）
     const sharedMcpServers = await prisma.mcpServerConfig.findMany({
       where: { 
-        isShared: true, 
+        isPublic: true, 
         isEnabled: true,
       },
     });

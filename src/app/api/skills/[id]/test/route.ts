@@ -2,11 +2,14 @@
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { verifyToken, hasPermission } from '@/lib/auth';
+import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
+import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
+import { hasPermission } from '@/lib/auth';
 import { createClaudeAgentService, ClaudeAgentService } from '@/services/ai';
 import { trackSystemTokenUsage, calculateSystemCost } from '@/lib/system-token-tracker';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 
 // 全局 AI Service 用于测试（懒加载）
 let globalTestService: ClaudeAgentService | null = null;
@@ -38,17 +41,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+    const auth = authenticateRequestEnhanced(request);
+    if (!auth.success) {
+      return authErrorResponse(auth);
     }
-
-    const token = authHeader.replace('Bearer ', '');
-    const payload = verifyToken(token);
-
-    if (!payload) {
-      return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
-    }
+    const { payload, tenant } = auth as AuthSuccessResult;
 
     // 只有管理员可以测试 Skill
     if (!hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE)) {
@@ -66,6 +63,26 @@ export async function POST(
 
     if (!skill) {
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
+    }
+
+    // 租户隔离检查（非所有者需要验证访问权限）
+    if (skill.userId && skill.userId !== payload.userId) {
+      if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
+        const tenantFilter = buildTenantFilter(tenant, {
+          tenantField: 'tenantId',
+          isPublicField: 'isPublic',
+        });
+        const matchesFilter = 
+          (tenantFilter as any).OR?.some((cond: any) => {
+            if (cond.isPublic && skill.isPublic) return true;
+            if (cond.tenantId && skill.tenantId === cond.tenantId) return true;
+            return false;
+          }) ?? false;
+        
+        if (!matchesFilter) {
+          return NextResponse.json({ error: '禁止访问此 Skill' }, { status: 403 });
+        }
+      }
     }
 
     if (!skill.isActive) {

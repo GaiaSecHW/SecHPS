@@ -117,7 +117,7 @@ export async function POST(
         env: env ? JSON.stringify(env) : null,
         isEnabled: isEnabled ?? true,
         autoStart: autoStart ?? false,
-        isShared: false,  // 项目级 MCP 不共享
+        isPublic: false,  // 项目级 MCP 不共享
         updatedAt: new Date(),
       },
     });

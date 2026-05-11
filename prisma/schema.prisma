@@ -31,6 +31,7 @@ model AgentApp {
 model AgentDefinition {
   id              String            @id
   userId          String?
+  tenantId        String?
   name            String            @unique
   displayName     String
   description     String?
@@ -42,16 +43,20 @@ model AgentDefinition {
   skills          String?
   isActive        Boolean           @default(true)
   isBuiltin       Boolean           @default(false)
+  isPublic        Boolean           @default(false)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime
   ModelConfig     ModelConfig?      @relation(fields: [modelConfigId], references: [id])
   User            User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Tenant          Tenant?           @relation(fields: [tenantId], references: [id])
   AgentTeam       AgentTeam[]
   AgentTeamMember AgentTeamMember[]
 
   @@index([isActive])
   @@index([category])
   @@index([name])
+  @@index([tenantId])
+  @@index([isPublic])
 }
 
 model AgentMemberExecution {
@@ -601,7 +606,7 @@ model McpServerConfig {
   tools        String?
   isEnabled    Boolean   @default(true)
   autoStart    Boolean   @default(false)
-  isShared     Boolean   @default(false)
+  isPublic     Boolean   @default(false)
   lastTestedAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime
@@ -613,7 +618,7 @@ model McpServerConfig {
   @@index([userId])
   @@index([projectId])
   @@index([name])
-  @@index([isShared])
+  @@index([isPublic])
 }
 
 model ModelConfig {
@@ -1614,6 +1619,7 @@ model Tenant {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime
   AgentApp        AgentApp[]
+  AgentDefinition AgentDefinition[]
   AgentTeam       AgentTeam[]
   McpServerConfig McpServerConfig[]
   ModelConfig     ModelConfig[]
