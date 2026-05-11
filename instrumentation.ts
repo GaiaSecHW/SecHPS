@@ -2,7 +2,19 @@
 // Next.js 服务启动钩子 - 恢复评估状态和触发队列调度
 // 使用动态导入避免 Edge Runtime 加载 Node.js 模块
 
+import { PrismaClient } from '@prisma/client';
+
 const LOG_PREFIX = '[Instrumentation]';
+
+// 直接创建 Prisma 客户端（避免动态导入返回 undefined）
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: process.env.DATABASE_URL,
+    },
+  },
+  log: ['error'],
+});
 
 /**
  * 服务启动时执行
@@ -19,7 +31,6 @@ export async function register() {
     const { restoreLocksFromDatabase } = await import('./src/lib/evaluation-lock');
     const { processQueue } = await import('./src/services/evaluation-queue');
     const { recoverInterruptedEvaluations } = await import('./src/services/evaluation-recovery');
-    const { prisma } = await import('./src/lib/prisma');
     
     try {
       // Step 1: 恢复项目锁状态
