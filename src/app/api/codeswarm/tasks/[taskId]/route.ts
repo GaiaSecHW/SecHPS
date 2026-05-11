@@ -81,8 +81,16 @@ export async function DELETE(
   try {
     const { taskId } = await params;
 
-    await prisma.codeswarmEvent.deleteMany({ where: { taskId } });
-    await prisma.codeswarmTask.delete({ where: { taskId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.codeswarmEvent.deleteMany({ where: { taskId } });
+      await tx.codeswarmTask.delete({ where: { taskId } });
+
+      await tx.taskInstance.updateMany({
+        where: { codeswarmTaskId: taskId, status: { in: ['pending', 'running'] } },
+        data: { status: 'failed', errorMessage: 'CodeSwarm 任务已被删除', updatedAt: new Date() },
+      });
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('[CodeSwarm] Delete task error:', error);
