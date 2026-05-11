@@ -76,7 +76,7 @@ const DEFAULT_IDLE_TIMEOUT = 7200000;
 /** 默认最大运行时间：2 小时 */
 const DEFAULT_MAX_RUN_TIME = 7200000;
 /** 默认心跳间隔：30 秒 */
-const DEFAULT_HEARTBEAT_INTERVAL = 30 * 1000;
+const DEFAULT_HEARTBEAT_INTERVAL = 60 * 1000;
 
 // ============================================================================
 // StreamWatchdog 类

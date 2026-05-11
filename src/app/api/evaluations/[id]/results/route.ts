@@ -32,15 +32,21 @@ export async function GET(
     // 先查询评估会话以验证归属
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: { Project: { select: { userId: true } } },
+      select: { id: true, projectId: true },
     });
 
     if (!evaluation) {
       return NextResponse.json({ result: null });
     }
 
+    // Separate query for Project
+    const resProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 归属校验
-    if (evaluation.Project.userId !== payload.userId) {
+    if (resProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估结果' }, { status: 403 });
     }
 

@@ -565,6 +565,7 @@ export default function VulnerabilityDetailPage() {
           </div>
         </div>
       </div>
+      </div>
 
       {/* Confirmation dialog */}
       <ConfirmDialog

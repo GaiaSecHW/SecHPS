@@ -33,7 +33,6 @@ export async function GET(
       where: { id },
       select: {
         projectId: true,
-        Project: { select: { userId: true } },
       },
     });
 
@@ -41,8 +40,14 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const msgProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 归属校验
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && msgProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

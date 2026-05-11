@@ -35,14 +35,22 @@ export async function GET(request: Request, context: RouteContext) {
     // 获取评估会话
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: {
-        Project: { select: { name: true, displayName: true, projectPath: true } },
+      select: {
+        id: true,
+        projectId: true,
+        workflowId: true,
       },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
+
+    // Separate query for Project
+    const dlProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { name: true, displayName: true, projectPath: true },
+    }) : null;
 
     // 检查是否是 FSM 类型 (通过 EvaluationSession.workflowId 关联)
     let workflow = null;
@@ -62,7 +70,7 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: '报告尚未生成' }, { status: 404 });
     }
 
-    const projectName = evaluation.Project?.displayName || evaluation.Project?.name || 'project';
+    const projectName = dlProject?.displayName || dlProject?.name || 'project';
     const timestamp = new Date().toISOString().split('T')[0];
 
     if (format === 'json') {
@@ -94,7 +102,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     // Markdown 格式 - 使用 outputs/skills 替代 .claude/skills
-    const workspacePath = evaluation.Project?.projectPath || '';
+    const workspacePath = dlProject?.projectPath || '';
     const templateName = workflow?.FSMTemplate?.name || 'threat-modeling';
     const reportsPath = path.join(workspacePath, 'outputs', 'skills', templateName, 'reports');
 

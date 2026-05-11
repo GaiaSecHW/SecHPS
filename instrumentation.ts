@@ -33,18 +33,27 @@ export async function register() {
         where: {
           status: { in: ['preparing', 'running'] },
         },
-        include: {
-          Project: {
-            select: { name: true },
-          },
+        take: 50,
+        select: {
+          id: true,
+          status: true,
+          projectId: true,
         },
       });
-      
+
+      // 单独查询项目名称（避免 include 触发 Prisma findMany bug）
+      const runningProjectIds = [...new Set(runningEvaluations.map(e => e.projectId))];
+      const runningProjects = runningProjectIds.length > 0
+        ? await prisma.project.findMany({ where: { id: { in: runningProjectIds } }, select: { id: true, name: true } })
+        : [];
+      const runningProjectMap = new Map(runningProjects.map(p => [p.id, p]));
+
       console.log(`${LOG_PREFIX} 发现 ${runningEvaluations.length} 个活跃评估`);
-      
+
       if (runningEvaluations.length > 0) {
         runningEvaluations.forEach((session, index) => {
-          console.log(`  ${index + 1}. ${session.id} - ${session.Project?.name || '未知'} - 状态: ${session.status}`);
+          const projectName = runningProjectMap.get(session.projectId)?.name || '未知';
+          console.log(`  ${index + 1}. ${session.id} - ${projectName} - 状态: ${session.status}`);
         });
       }
       
@@ -75,19 +84,28 @@ export async function register() {
       
       const queuedEvaluations = await prisma.evaluationSession.findMany({
         where: { status: 'queued' },
-        include: {
-          Project: {
-            select: { name: true },
-          },
+        take: 50,
+        select: {
+          id: true,
+          projectId: true,
+          startedAt: true,
         },
         orderBy: { startedAt: 'asc' },
       });
-      
+
+      // 单独查询排队评估的项目名称
+      const queuedProjectIds = [...new Set(queuedEvaluations.map(e => e.projectId))];
+      const queuedProjects = queuedProjectIds.length > 0
+        ? await prisma.project.findMany({ where: { id: { in: queuedProjectIds } }, select: { id: true, name: true } })
+        : [];
+      const queuedProjectMap = new Map(queuedProjects.map(p => [p.id, p]));
+
       console.log(`${LOG_PREFIX} 发现 ${queuedEvaluations.length} 个排队评估`);
-      
+
       if (queuedEvaluations.length > 0) {
         queuedEvaluations.forEach((session, index) => {
-          console.log(`  ${index + 1}. ${session.id} - ${session.Project?.name || '未知'} - 入队时间: ${session.startedAt?.toISOString() || '未知'}`);
+          const projectName = queuedProjectMap.get(session.projectId)?.name || '未知';
+          console.log(`  ${index + 1}. ${session.id} - ${projectName} - 入队时间: ${session.startedAt?.toISOString() || '未知'}`);
         });
         
         // 延迟触发队列调度（不阻塞服务启动）
@@ -102,6 +120,10 @@ export async function register() {
       }
       
       console.log(`${LOG_PREFIX} 评估状态恢复完成，服务继续启动...`);
+
+      // Step 5: 初始化 CodeSwarm 调度器
+      const { codeswarmDispatcher } = await import('./src/services/codeswarm-dispatcher');
+      await codeswarmDispatcher.init();
       
     } catch (error) {
       console.error(`${LOG_PREFIX} 评估状态恢复失败:`, error);

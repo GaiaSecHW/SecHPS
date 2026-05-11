@@ -111,8 +111,8 @@ export const TaskPayloadSchema = z.object({
   apiKey: z.string().optional(),
   // NFS passthrough: skip copying project files, use this path directly as workspace
   workspacePath: z.string().optional(),
-  // Override callback URL (NAZHUA backend address)
-  nazhuaCallbackUrl: z.string().optional(),
+  // Override callback URL (orchestrator backend address)
+  callbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
   env: z.record(z.string(), z.string()).optional(),
   // Git repository URL to clone into workspace (takes priority over projectPath)

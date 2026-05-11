@@ -133,7 +133,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // 验证 Token 和权限
-    const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.USER_CREATE });
+    const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.USER_CREATE });
     if (!auth.success) {
       return authErrorResponse(auth);
     }

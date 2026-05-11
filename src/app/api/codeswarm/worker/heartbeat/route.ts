@@ -1,79 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-
-async function dispatchQueuedTasks(): Promise<void> {
-  try {
-    const queuedTasks = await prisma.codeswarmTask.findMany({
-      where: { state: 'queued' },
-      orderBy: { createdAt: 'asc' },
-      take: 5,
-    });
-
-    if (queuedTasks.length === 0) return;
-
-    const availableWorkers = await prisma.codeswarmWorker.findMany({
-      where: { status: 'online' },
-      orderBy: { currentTasks: 'asc' },
-    });
-
-    const workersWithCapacity = availableWorkers.filter(w => w.currentTasks < w.maxConcurrent);
-    if (workersWithCapacity.length === 0) return;
-
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-
-    for (const task of queuedTasks) {
-      const worker = workersWithCapacity.find(w => w.currentTasks < w.maxConcurrent);
-      if (!worker) break;
-
-      try {
-        const resp = await fetch(`http://${worker.address}/task`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            taskId: task.taskId,
-            instruction: task.instruction,
-            projectPath: task.projectPath || '',
-            workspacePath: task.workspacePath || undefined,
-            skills: task.skills ? JSON.parse(task.skills) : undefined,
-            mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
-            model: task.model || undefined,
-            apiKey: task.apiKey || undefined,
-            timeoutSec: task.timeoutSec || undefined,
-            nazhuaCallbackUrl: baseUrl,
-            gitUrl: task.gitUrl || undefined,
-            gitRef: task.gitRef || undefined,
-            agent: task.agent || undefined,
-          }),
-          signal: AbortSignal.timeout(5000),
-        });
-
-        if (resp.ok) {
-          await prisma.codeswarmTask.update({
-            where: { id: task.id },
-            data: {
-              state: 'dispatched',
-              workerId: worker.id,
-              startedAt: new Date(),
-              updatedAt: new Date(),
-            },
-          });
-
-          await prisma.codeswarmWorker.update({
-            where: { id: worker.id },
-            data: { currentTasks: { increment: 1 } },
-          });
-
-          worker.currentTasks++;
-          console.log(`[CodeSwarm] Auto-dispatched task ${task.taskId} to ${worker.nodeId}`);
-        }
-      } catch (dispatchError) {
-        console.error(`[CodeSwarm] Auto-dispatch failed for ${task.taskId}:`, dispatchError);
-      }
-    }
-  } catch (error) {
-    console.error('[CodeSwarm] Auto-dispatch error:', error);
-  }
-}
+import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
+import { generateWorkerToken, verifyWorkerToken, extractBearerToken } from '@/lib/codeswarm-worker-auth';
 
 export async function POST(request: Request) {
   try {
@@ -84,7 +12,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });
     }
 
-    await prisma.codeswarmWorker.upsert({
+    // 如果携带 token，验证身份
+    const bearerToken = extractBearerToken(request);
+    let authenticatedNodeId: string | null = null;
+    if (bearerToken) {
+      const payload = verifyWorkerToken(bearerToken);
+      if (payload && payload.nodeId === nodeId) {
+        authenticatedNodeId = payload.nodeId;
+      }
+    }
+
+    // 更新 dispatcher 内存拓扑（不阻塞）
+    const worker = await prisma.codeswarmWorker.upsert({
       where: { nodeId },
       update: {
         address: address || '',
@@ -106,16 +45,72 @@ export async function POST(request: Request) {
       },
     });
 
-    dispatchQueuedTasks().catch(err => {
-      console.error('[CodeSwarm] Background dispatch error:', err);
+    // 首次注册或无 token 时分配新 token
+    let workerToken = worker.token;
+    if (!workerToken || !authenticatedNodeId) {
+      workerToken = generateWorkerToken(worker.id, nodeId);
+      await prisma.codeswarmWorker.update({
+        where: { id: worker.id },
+        data: { token: workerToken },
+      });
+    }
+
+    codeswarmDispatcher.onHeartbeat({
+      nodeId,
+      id: worker.id,
+      address: address || worker.address,
+      maxConcurrent: maxConcurrent || 5,
+      currentTasks,
     });
 
-    return NextResponse.json({ success: true, nodeId });
+    // DB 模式 fallback：Redis 不可用时仍用心跳触发分发
+    if (!codeswarmDispatcher.isAvailable) {
+      dispatchQueuedTasks().catch(err => {
+        console.error('[CodeSwarm] Background dispatch error:', err);
+      });
+    }
+
+    return NextResponse.json({ success: true, nodeId, token: workerToken });
   } catch (error) {
     console.error('[CodeSwarm] Heartbeat error:', error);
     return NextResponse.json(
       { error: 'Failed to register heartbeat' },
       { status: 500 }
     );
+  }
+}
+
+// DB fallback：心跳触发的排队任务分发
+async function dispatchQueuedTasks(): Promise<void> {
+  try {
+    const queuedTasks = await prisma.codeswarmTask.findMany({
+      where: { state: 'queued' },
+      orderBy: { createdAt: 'asc' },
+      take: 5,
+    });
+
+    if (queuedTasks.length === 0) return;
+
+    const availableWorkers = await prisma.codeswarmWorker.findMany({
+      where: { status: 'online' },
+      orderBy: { currentTasks: 'asc' },
+      take: 50,
+    });
+
+    const workersWithCapacity = availableWorkers.filter(w => w.currentTasks < w.maxConcurrent);
+    if (workersWithCapacity.length === 0) return;
+
+    for (const task of queuedTasks) {
+      const worker = workersWithCapacity.find(w => w.currentTasks < w.maxConcurrent);
+      if (!worker) break;
+
+      const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
+      if (success) {
+        worker.currentTasks++;
+        console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}`);
+      }
+    }
+  } catch (error) {
+    console.error('[CodeSwarm] DB fallback 分发错误:', error);
   }
 }

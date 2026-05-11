@@ -43,14 +43,22 @@ export async function GET(request: Request, context: RouteContext) {
     // 获取评估会话
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: {
-        Project: { select: { projectPath: true } },
+      select: {
+        id: true,
+        projectId: true,
+        workflowId: true,
       },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
+
+    // Separate query for Project
+    const secProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { projectPath: true },
+    }) : null;
 
     // 检查是否是 FSM 类型 (通过 EvaluationSession.workflowId 关联)
     let workflow = null;
@@ -81,7 +89,7 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     // 读取章节内容 - 使用 outputs/skills 替代 .claude/skills
-    const workspacePath = evaluation.Project?.projectPath || '';
+    const workspacePath = secProject?.projectPath || '';
     const reportsPath = path.join(workspacePath, 'outputs', 'skills', workflow.FSMTemplate?.name || 'threat-modeling', 'reports');
     const filePath = path.join(reportsPath, sectionFile);
 

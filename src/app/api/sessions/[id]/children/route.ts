@@ -30,14 +30,20 @@ export async function GET(
     // 查找关联的项目
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
-      include: {
-        Project: {
-          select: { projectPath: true }
-        }
-      }
+      select: {
+        id: true,
+        projectId: true,
+        opencodeSessionId: true,
+      },
     });
 
-    const projectPath = evaluation?.Project?.projectPath;
+    // Separate query for Project
+    const childProject = evaluation?.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { projectPath: true },
+    }) : null;
+
+    const projectPath = childProject?.projectPath;
 
     // 如果请求子会话消息
     if (childId) {

@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { generateId } from '@/lib/id-generator';
@@ -47,20 +47,13 @@ export async function GET(request: Request) {
     const projects = await prisma.project.findMany({
       where,
       orderBy: {
-        createdAt: 'desc',  // 按创建时间降序排列
+        createdAt: 'desc',
       },
       include: {
         ProjectFile: {
           orderBy: {
             uploadedAt: 'desc',
           },
-        },
-        EvaluationSession: {
-          orderBy: {
-            startedAt: 'desc',
-          },
-          // 不限制数量，确保能获取到所有运行中的评估
-          // 之前 take: 3 可能导致运行中的评估不在返回列表中
         },
         User: {
           select: {
@@ -81,47 +74,61 @@ export async function GET(request: Request) {
       },
     });
 
+    // 用原生 SQL 获取评估状态汇总（绕过 Prisma findMany 在远端 DB 上挂起的 bug）
+    const projectIds = projects.map(p => p.id);
+    type EvalRow = { projectId: string; id: string; status: string; startedAt: Date; completedAt: Date | null };
+    const evalRows: EvalRow[] = projectIds.length > 0
+      ? await prisma.$queryRaw`
+          SELECT "projectId", id, status, "startedAt", "completedAt"
+          FROM "EvaluationSession"
+          WHERE "projectId" IN (${Prisma.join(projectIds)})
+          ORDER BY "startedAt" DESC
+        `
+      : [];
+
+    // 按项目分组
+    const evalMap = new Map<string, EvalRow[]>();
+    for (const row of evalRows) {
+      let arr = evalMap.get(row.projectId);
+      if (!arr) { arr = []; evalMap.set(row.projectId, arr); }
+      arr.push(row);
+    }
+
+    // 计算状态统计
+    const evalCountMap = new Map<string, Map<string, number>>();
+    for (const row of evalRows) {
+      let statusMap = evalCountMap.get(row.projectId);
+      if (!statusMap) { statusMap = new Map(); evalCountMap.set(row.projectId, statusMap); }
+      statusMap.set(row.status, (statusMap.get(row.status) || 0) + 1);
+    }
+
     // 转换数据格式，添加漏洞数量和运行状态
     const projectsWithVulnCount = projects.map(project => {
-      // 计算评估状态（preparing、running、queued 都算活跃状态）
-      // queued 状态也应该阻止新的评估启动
-      const runningCount = project.EvaluationSession?.filter((e: any) => 
-        e.status === 'running' || e.status === 'preparing' || e.status === 'queued'
-      ).length || 0;
-      const waitingCount = project.EvaluationSession?.filter((e: any) => e.status === 'ready').length || 0;
-      const completedCount = project.EvaluationSession?.filter((e: any) => e.status === 'completed').length || 0;
-      const failedCount = project.EvaluationSession?.filter((e: any) => e.status === 'failed' || e.status === 'cancelled').length || 0;
-      
-      // 状态优先级：running > waiting > 最新评估状态
-      // 如果有运行中的评估，显示 running
-      // 如果有排队的评估，显示 waiting
-      // 否则显示最新评估的状态（按 startedAt 排序）
+      const statusMap = evalCountMap.get(project.id);
+      const getCnt = (statuses: string[]) => statuses.reduce((sum, s) => sum + (statusMap?.get(s) || 0), 0);
+
+      const runningCount = getCnt(['running', 'preparing', 'queued']);
+      const waitingCount = getCnt(['ready']);
+      const completedCount = getCnt(['completed']);
+      const failedCount = getCnt(['failed', 'cancelled']);
+
       let evaluationStatus = 'idle';
-      
-      // 先检查是否有运行中/排队中的评估
+      const projectEvals = evalMap.get(project.id) || [];
       if (runningCount > 0) {
         evaluationStatus = 'running';
       } else if (waitingCount > 0) {
         evaluationStatus = 'waiting';
-      } else {
-        // 没有运行/排队的，显示最新评估的状态
-        const allEvals = project.EvaluationSession || [];
-        if (allEvals.length > 0) {
-          // 按 startedAt 降序排序，取最新的评估状态
-          const latestEval = allEvals.sort((a: any, b: any) => 
-            new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-          )[0];
-          evaluationStatus = latestEval.status || 'idle';
-        }
+      } else if (projectEvals.length > 0) {
+        evaluationStatus = projectEvals[0].status || 'idle';
       }
-      
+
       return {
         ...project,
-        evaluations: project.EvaluationSession || [],
+        evaluations: projectEvals,
         vulnerabilityCount: project._count?.Vulnerability || 0,
         hasRunningEvaluation: runningCount > 0,
         hasWaitingEvaluation: waitingCount > 0,
-        evaluationStatus, // 新增：综合评估状态（与页面显示一致）
+        evaluationStatus,
         evaluationCounts: { running: runningCount, waiting: waitingCount, completed: completedCount, failed: failedCount },
         userName: project.User?.name || null,
         userUsername: project.User?.username || null,

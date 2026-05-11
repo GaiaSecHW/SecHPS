@@ -26,14 +26,20 @@ export async function GET(
     // 获取项目路径
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
-      include: {
-        Project: {
-          select: { projectPath: true }
-        }
-      }
+      select: {
+        id: true,
+        projectId: true,
+        opencodeSessionId: true,
+      },
     });
 
-    const projectPath = evaluation?.Project?.projectPath;
+    // Separate query for Project
+    const todoProject = evaluation?.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { projectPath: true },
+    }) : null;
+
+    const projectPath = todoProject?.projectPath;
 
     // 使用 SDK 获取消息
     const messages = await getSessionMessages(sessionId, projectPath ? { dir: projectPath } : undefined);

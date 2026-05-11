@@ -32,14 +32,20 @@ export async function GET(
     // 评估归属校验
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: { Project: { select: { userId: true } } },
+      select: { id: true, projectId: true },
     });
 
     if (!evaluation) {
       return NextResponse.json({ vulnerabilities: [] });
     }
 
-    if (evaluation.Project.userId !== payload.userId) {
+    // Separate query for Project
+    const vulnProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
+    if (vulnProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估漏洞' }, { status: 403 });
     }
 

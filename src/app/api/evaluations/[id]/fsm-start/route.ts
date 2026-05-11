@@ -55,16 +55,45 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
 
     const { id } = await params;
+    // Fetch evaluation without include to avoid Prisma hang
     const evaluation = await prisma.evaluationSession.findFirst({
-      where: isAdmin(payload) ? { id } : { id, Project: { userId: payload.userId } },
-      include: { Project: { select: { id: true, name: true, projectPath: true, userId: true } }, Workflow: { include: { FSMTemplate: true } } },
+      where: { id },
+      select: {
+        id: true,
+        projectId: true,
+        workflowId: true,
+        status: true,
+        opencodeSessionId: true,
+        workflowType: true,
+      },
     });
     if (!evaluation) return NextResponse.json({ error: 'Evaluation not found' }, { status: 404 });
+
+    // Ownership check: separate query for Project
+    if (!isAdmin(payload)) {
+      const ownerProject = evaluation.projectId ? await prisma.project.findUnique({
+        where: { id: evaluation.projectId },
+        select: { userId: true },
+      }) : null;
+      if (ownerProject?.userId !== payload.userId) return NextResponse.json({ error: 'Evaluation not found' }, { status: 404 });
+    }
+
+    // Separate query for Project
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { id: true, name: true, projectPath: true, userId: true },
+    }) : null;
+
+    // Separate query for Workflow + FSMTemplate
+    const workflow = evaluation.workflowId ? await prisma.workflow.findUnique({
+      where: { id: evaluation.workflowId },
+      include: { FSMTemplate: true },
+    }) : null;
     if (evaluation.status === 'running') return NextResponse.json({ error: 'Already running' }, { status: 400 });
 
     const body = await request.json();
     let fsmTemplateId = body.fsmTemplateId as string | undefined;
-    if (!fsmTemplateId && evaluation.Workflow) fsmTemplateId = (evaluation.Workflow as any).fsmTemplateId;
+    if (!fsmTemplateId && workflow) fsmTemplateId = (workflow as any).fsmTemplateId;
     if (!fsmTemplateId) return NextResponse.json({ error: 'FSM template ID required' }, { status: 400 });
     const fsmTemplate = await prisma.fSMTemplate.findUnique({ where: { id: fsmTemplateId } });
     if (!fsmTemplate) return NextResponse.json({ error: 'FSM template not found' }, { status: 404 });
@@ -73,13 +102,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!modelConfig) return NextResponse.json({ error: 'No active model config' }, { status: 404 });
 
     await prisma.evaluationSession.update({ where: { id }, data: { status: 'running', startedAt: new Date() } });
-    const workspacePath = evaluation.Project.projectPath || process.cwd();
+    const workspacePath = project?.projectPath || process.cwd();
     const workflowId = evaluation.workflowId || 'fsm-default';
     const maxIterationsPerPhase = body.maxIterationsPerPhase as number || 10;
     const maxCostPerPhase = body.maxCostPerPhase as number || 2.0;
 
     // 加载 MCP 服务器配置
-    const mcpServers = await loadMcpServersForProject(evaluation.projectId, evaluation.Project.userId);
+    const mcpServers = await loadMcpServersForProject(evaluation.projectId, project?.userId || '');
     logger.debug(LOG_MODULES.MCP, 'FSM 加载 MCP 配置', { count: mcpServers.length, names: mcpServers.map(m => m.name) });
 
     // 加载系统提示词（从全局配置）
@@ -99,7 +128,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         maxIterationsPerPhase, 
         maxCostPerPhase, 
         modelConfig,
-        userId: evaluation.Project.userId,  // 传递 userId 用于加载 MCP
+        userId: project?.userId || '',  // 传递 userId 用于加载 MCP
         mcpServers,  // 传递 MCP 配置
         systemPrompt,  // 传递系统提示词
       },

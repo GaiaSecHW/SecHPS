@@ -37,27 +37,13 @@ export async function GET(
     
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: {
-        Project: { select: { userId: true, configId: true, techStack: true } },
-        NodeExecution: {
-          orderBy: { order: 'asc' },
-          select: {
-            id: true,
-            workflowNodeId: true,
-            nodeLabel: true,
-            nodeType: true,
-            status: true,
-            skipped: true,
-            skipReason: true,
-            startedAt: true,
-            completedAt: true,
-            order: true,
-            modelConfigId: true,
-            modelName: true,
-            inputTokens: true,
-            outputTokens: true,
-          },
-        },
+      select: {
+        id: true,
+        projectId: true,
+        workflowId: true,
+        status: true,
+        opencodeSessionId: true,
+        roleModels: true,
       },
     });
 
@@ -65,8 +51,36 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true, configId: true, techStack: true },
+    }) : null;
+
+    // Separate query for NodeExecution
+    const nodeExecutions = await prisma.nodeExecution.findMany({
+      where: { evaluationSessionId: evaluation.id },
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        workflowNodeId: true,
+        nodeLabel: true,
+        nodeType: true,
+        status: true,
+        skipped: true,
+        skipReason: true,
+        startedAt: true,
+        completedAt: true,
+        order: true,
+        modelConfigId: true,
+        modelName: true,
+        inputTokens: true,
+        outputTokens: true,
+      },
+    });
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && project?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -79,7 +93,7 @@ export async function GET(
     } | null = null;
     
     // 优先使用项目关联的配置，否则使用全局激活配置
-    const projectConfigId = evaluation.Project.configId;
+    const projectConfigId = project?.configId;
     if (projectConfigId) {
       const projectConfig = await prisma.opencodeConfig.findUnique({
         where: { id: projectConfigId },
@@ -433,7 +447,7 @@ export async function GET(
     if (workflowNodes.length > 0) {
       // 创建执行记录映射
       const executionMap = new Map<string, any>();
-      evaluation.NodeExecution.forEach(exec => {
+      nodeExecutions.forEach(exec => {
         executionMap.set(exec.workflowNodeId, exec);
       });
       
@@ -516,7 +530,7 @@ export async function GET(
       });
     } else {
       // 没有工作流配置，只显示执行记录
-      mergedNodes = evaluation.NodeExecution.map(exec => ({
+      mergedNodes = nodeExecutions.map(exec => ({
         id: exec.workflowNodeId || exec.id,
         workflowNodeId: exec.workflowNodeId,
         label: exec.nodeLabel,
@@ -550,7 +564,7 @@ export async function GET(
 
     return NextResponse.json({
       nodes: mergedNodes,
-      executions: evaluation.NodeExecution,
+      executions: nodeExecutions,
       workflowNodes,
       roleModels,
       roleModelConfig,
@@ -608,18 +622,24 @@ export async function POST(
 
     // 验证评估会话存在并验证所有权
     let where: any = { id };
-    
+
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: { Project: { select: { userId: true } } },
+      select: { id: true, projectId: true },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const postProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && postProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -700,18 +720,24 @@ export async function PUT(
 
     // 验证评估会话存在并验证所有权
     let where: any = { id };
-    
+
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: { Project: { select: { userId: true } } },
+      select: { id: true, projectId: true },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const putProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && putProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

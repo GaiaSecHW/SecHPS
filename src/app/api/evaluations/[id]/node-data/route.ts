@@ -44,19 +44,24 @@ export async function GET(
     // 获取 evaluationSession 以获取 projectId（归属校验）
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id: evaluationId },
-      select: { 
+      select: {
         projectId: true,
-        Project: { select: { userId: true } }
       },
     });
-    
+
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const ndProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 归属校验（管理员绕过）
     const userIsAdmin = payload.roles?.includes('admin');
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && ndProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 

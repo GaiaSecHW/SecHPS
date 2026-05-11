@@ -160,11 +160,43 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (!payload) return NextResponse.json({ error: '无效的令牌' }, { status: 401 });
 
     const { id } = await params;
+    // Fetch evaluation without include to avoid Prisma hang
     const evaluation = await prisma.evaluationSession.findFirst({
-      where: isAdmin(payload) ? { id } : { id, Project: { userId: payload.userId } },
-      include: { Project: { select: { id: true, name: true, projectPath: true, userId: true, OpencodeConfig: true, ProjectFile: true } }, Workflow: { include: { FSMTemplate: true } } },
+      where: { id },
+      select: {
+        id: true,
+        projectId: true,
+        workflowId: true,
+        workflowType: true,
+        status: true,
+        opencodeSessionId: true,
+      },
     });
     if (!evaluation) return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+
+    // Ownership check: separate query for Project
+    if (!isAdmin(payload)) {
+      const ownerProject = evaluation.projectId ? await prisma.project.findUnique({
+        where: { id: evaluation.projectId },
+        select: { userId: true },
+      }) : null;
+      if (ownerProject?.userId !== payload.userId) return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+    }
+
+    // Separate query for Project with related data
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { id: true, name: true, projectPath: true, userId: true, OpencodeConfig: true, ProjectFile: true },
+    }) : null;
+
+    // Separate query for Workflow + FSMTemplate
+    const workflow = evaluation.workflowId ? await prisma.workflow.findUnique({
+      where: { id: evaluation.workflowId },
+      include: { FSMTemplate: true },
+    }) : null;
+
+    // Reconstruct evaluation object with Project and Workflow for engine functions
+    const evaluationWithRelations = { ...evaluation, Project: project, Workflow: workflow };
     if (evaluation.status !== 'ready') return NextResponse.json({ error: `状态必须为 'ready'，当前: ${evaluation.status}` }, { status: 400 });
 
     const modelConfig = await getModelConfig();
@@ -189,9 +221,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await prisma.evaluationSession.update({ where: { id }, data: { status: 'running', startedAt: new Date() } });
 
     switch (workflowType) {
-      case 'fsm': await executeFSM(id, evaluation, modelConfig, body, mcpServers, payload.userId, systemPrompt); break;
-      case 'dag': await executeDAG(id, evaluation, modelConfig, body, mcpServers, systemPrompt); break;
-      case 'ralph': await executeRalph(id, evaluation, modelConfig, body, mcpServers, systemPrompt); break;
+      case 'fsm': await executeFSM(id, evaluationWithRelations, modelConfig, body, mcpServers, payload.userId, systemPrompt); break;
+      case 'dag': await executeDAG(id, evaluationWithRelations, modelConfig, body, mcpServers, systemPrompt); break;
+      case 'ralph': await executeRalph(id, evaluationWithRelations, modelConfig, body, mcpServers, systemPrompt); break;
       default: 
         await prisma.evaluationSession.update({ where: { id }, data: { status: 'ready', errorMessage: `未知的 workflowType: ${workflowType}` } });
         return NextResponse.json({ error: `未知的 workflowType: ${workflowType}` }, { status: 400 });

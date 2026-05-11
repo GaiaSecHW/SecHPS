@@ -116,7 +116,7 @@ export class WorkerDaemon {
 
   /** Resolve the callback base URL from payload override or default config. */
   private getCallbackUrl(payload: TaskPayload): string {
-    return payload.nazhuaCallbackUrl || this.config.orchestratorUrl;
+    return payload.callbackUrl || this.config.orchestratorUrl;
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {

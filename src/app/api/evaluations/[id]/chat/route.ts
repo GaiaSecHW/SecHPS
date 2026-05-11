@@ -46,13 +46,11 @@ export async function POST(
     
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: {
-        Project: {
-          include: {
-            ProjectFile: true,
-            OpencodeConfig: true,
-          },
-        },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+        opencodeSessionId: true,
       },
     });
 
@@ -60,8 +58,17 @@ export async function POST(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      include: {
+        ProjectFile: true,
+        OpencodeConfig: true,
+      },
+    }) : null;
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && project?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -70,12 +77,11 @@ export async function POST(
     }
 
     // 构建上下文
-    const project = evaluation.Project;
-    const files = project.ProjectFile.map(f => ({
+    const files = project?.ProjectFile?.map(f => ({
       name: f.fileName,
       type: f.fileType,
       size: f.fileSize,
-    }));
+    })) || [];
 
     // 获取模型配置
     const modelConfig = await getModelConfig();
@@ -92,22 +98,22 @@ export async function POST(
     logger.debug(LOG_MODULES.SKILL, 'Skills 不包含工具定义，使用默认工具');
 
     // 创建评估调用器，传递项目目录作为工作目录和允许的工具
-    const caller = createEvaluationCaller(modelConfig, project.projectPath || undefined, allowedTools);
+    const caller = createEvaluationCaller(modelConfig, project?.projectPath || undefined, allowedTools);
 
     // 创建 SSE 流
     const stream = new ReadableStream({
       async start(controller) {
         try {
           await caller.continueConversation(id, body.message, {
-            projectName: project.name,
-            projectDescription: project.description || undefined,
-            environmentUrl: project.environmentUrl || undefined,
+            projectName: project?.name || '',
+            projectDescription: project?.description || undefined,
+            environmentUrl: project?.environmentUrl || undefined,
             files,
-            taskDescription: project.OpencodeConfig?.taskDescription || undefined,
+            taskDescription: project?.OpencodeConfig?.taskDescription || undefined,
             // 添加 Skills
             skills,
             skillsContext: {
-              projectPath: project.projectPath || undefined,
+              projectPath: project?.projectPath || undefined,
             },
           }, {
             onChunk: (text) => {

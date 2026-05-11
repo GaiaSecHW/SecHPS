@@ -33,16 +33,22 @@ export async function POST(
     // 检查评估会话是否存在
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: { Project: { select: { userId: true } } },
+      select: { id: true, projectId: true, status: true },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const stopProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 权限检查：管理员 或 项目所有者 可以停止评估
     const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
-    const isProjectOwner = evaluation.Project.userId === payload.userId;
+    const isProjectOwner = stopProject?.userId === payload.userId;
     
     if (!isAdmin && !isProjectOwner) {
       return NextResponse.json({ error: '无权操作此评估' }, { status: 403 });

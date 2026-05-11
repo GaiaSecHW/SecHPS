@@ -99,13 +99,15 @@ export async function processQueue(): Promise<void> {
       
       // 获取最早的排队评估
       console.log(`${LOG_PREFIX} 查询最早的排队评估...`);
+      // 使用 select 而非 include 避免 Prisma findMany bug
       const queuedEvaluation = await prisma.evaluationSession.findFirst({
         where: { status: 'queued' },
         orderBy: { startedAt: 'asc' },
-        include: {
-          Project: {
-            select: { id: true, name: true, projectPath: true },
-          },
+        select: {
+          id: true,
+          projectId: true,
+          startedAt: true,
+          status: true,
         },
       });
       
@@ -114,8 +116,13 @@ export async function processQueue(): Promise<void> {
         logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 没有排队评估`);
         break;
       }
-      
-      const projectName = queuedEvaluation.Project?.name || '未知项目';
+
+      // 单独查询项目名称
+      const project = await prisma.project.findUnique({
+        where: { id: queuedEvaluation.projectId },
+        select: { id: true, name: true, projectPath: true },
+      });
+      const projectName = project?.name || '未知项目';
       console.log(`${LOG_PREFIX} 发现排队评估: ID=${queuedEvaluation.id}, 项目=${projectName}, projectId=${queuedEvaluation.projectId}`);
       logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现排队评估`, {
         evaluationId: queuedEvaluation.id,
@@ -270,21 +277,30 @@ export async function getQueueStatus(): Promise<{
   const queuedCount = await getQueuedCount();
   const maxConcurrent = await getMaxConcurrent();
   
+  // 使用 select 而非 include 避免 Prisma findMany bug
   const queuedEvaluations = await prisma.evaluationSession.findMany({
     where: { status: 'queued' },
     orderBy: { startedAt: 'asc' },
-    include: {
-      Project: {
-        select: { id: true, name: true },
-      },
+    take: 50,
+    select: {
+      id: true,
+      projectId: true,
+      startedAt: true,
     },
   });
-  
+
+  // 单独查询项目名称
+  const qProjectIds = [...new Set(queuedEvaluations.map(e => e.projectId))];
+  const qProjects = qProjectIds.length > 0
+    ? await prisma.project.findMany({ where: { id: { in: qProjectIds } }, select: { id: true, name: true } })
+    : [];
+  const qProjectMap = new Map(qProjects.map(p => [p.id, p]));
+
   // 计算队列位置
   const queueList = queuedEvaluations.map((evaluation, index) => ({
     id: evaluation.id,
     projectId: evaluation.projectId,
-    projectName: evaluation.Project?.name || '未知项目',
+    projectName: qProjectMap.get(evaluation.projectId)?.name || '未知项目',
     createdAt: evaluation.startedAt,
     queuePosition: index + 1,
   }));

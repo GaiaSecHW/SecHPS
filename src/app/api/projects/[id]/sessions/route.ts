@@ -58,27 +58,37 @@ export async function GET(
       where.provider = provider;
     }
 
-    // 从数据库获取评估会话
+    // 从数据库获取评估会话（使用 select 避免 Prisma findMany + include bug）
     const [sessions, total] = await Promise.all([
       prisma.evaluationSession.findMany({
         where,
         orderBy: { startedAt: 'desc' },
         skip: offset,
         take: limit,
-        include: {
-          AgentTeam: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          _count: {
-            select: { SessionMessage: true },
-          },
+        select: {
+          id: true,
+          opencodeSessionId: true,
+          status: true,
+          startedAt: true,
+          completedAt: true,
+          title: true,
+          summary: true,
+          messageCount: true,
+          provider: true,
+          agentTeamId: true,
+          errorMessage: true,
+          lastActivity: true,
         },
       }),
       prisma.evaluationSession.count({ where }),
     ]);
+
+    // 单独查询 AgentTeam 名称
+    const agentTeamIds = [...new Set(sessions.map(s => s.agentTeamId).filter(Boolean))] as string[];
+    const agentTeams = agentTeamIds.length > 0
+      ? await prisma.agentTeam.findMany({ where: { id: { in: agentTeamIds } }, select: { id: true, name: true } })
+      : [];
+    const agentTeamMap = new Map(agentTeams.map(t => [t.id, t]));
 
     // 转换数据格式以匹配前端期望
     const formattedSessions = sessions.map((session) => ({
@@ -89,10 +99,10 @@ export async function GET(
       completedAt: session.completedAt?.toISOString() || null,
       title: session.title || `评估会话`,
       summary: session.summary,
-      messageCount: session.messageCount || session._count.SessionMessage,
+      messageCount: session.messageCount,
       provider: session.provider,
       agentTeamId: session.agentTeamId,
-      agentTeamName: session.AgentTeam?.name,
+      agentTeamName: session.agentTeamId ? agentTeamMap.get(session.agentTeamId)?.name : undefined,
       errorMessage: session.errorMessage,
       lastActivity: session.lastActivity?.toISOString() || session.startedAt.toISOString(),
     }));

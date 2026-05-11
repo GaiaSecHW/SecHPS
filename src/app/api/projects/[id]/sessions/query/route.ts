@@ -41,17 +41,23 @@ export async function GET(
       where.status = status;
     }
 
-    // 查询会话列表
+    // 查询会话列表（使用 select 避免 Prisma findMany + include bug）
     const [sessions, total] = await Promise.all([
       prisma.evaluationSession.findMany({
         where,
         orderBy: { lastActivity: 'desc' },
         take: limit,
         skip: offset,
-        include: {
-          _count: {
-            select: { SessionMessage: true },
-          },
+        select: {
+          id: true,
+          provider: true,
+          title: true,
+          summary: true,
+          status: true,
+          messageCount: true,
+          lastActivity: true,
+          startedAt: true,
+          completedAt: true,
         },
       }),
       prisma.evaluationSession.count({ where }),
@@ -64,7 +70,7 @@ export async function GET(
       title: session.title,
       summary: session.summary,
       status: session.status,
-      messageCount: session.messageCount || session._count.SessionMessage,
+      messageCount: session.messageCount,
       lastActivity: session.lastActivity,
       startedAt: session.startedAt,
       completedAt: session.completedAt,
@@ -103,14 +109,21 @@ export async function POST(
     const body = await request.json();
     const { limit = 20, offset = 0, providers } = body;
 
-    // 查询所有提供者的会话
+    // 查询所有提供者的会话（使用 select 避免 Prisma findMany + include bug）
     const allSessions = await prisma.evaluationSession.findMany({
       where: { projectId: id },
       orderBy: { lastActivity: 'desc' },
-      include: {
-        _count: {
-          select: { SessionMessage: true },
-        },
+      take: 200,
+      select: {
+        id: true,
+        provider: true,
+        title: true,
+        summary: true,
+        status: true,
+        messageCount: true,
+        lastActivity: true,
+        startedAt: true,
+        completedAt: true,
       },
     });
 
@@ -139,7 +152,7 @@ export async function POST(
       title: session.title,
       summary: session.summary,
       status: session.status,
-      messageCount: session.messageCount || session._count.SessionMessage,
+      messageCount: session.messageCount,
       lastActivity: session.lastActivity,
       startedAt: session.startedAt,
       completedAt: session.completedAt,

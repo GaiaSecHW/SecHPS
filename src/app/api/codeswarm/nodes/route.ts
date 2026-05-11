@@ -5,6 +5,7 @@ export async function GET() {
   try {
     const workers = await prisma.codeswarmWorker.findMany({
       orderBy: { lastHeartbeat: 'desc' },
+      take: 100,
     });
 
     return NextResponse.json({ workers });

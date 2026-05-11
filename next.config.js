@@ -94,6 +94,9 @@ const nextConfig = {
   images: {
     unoptimized: true, // 如果不需要图片优化可以启用
   },
+
+  // ssh2 使用原生模块，不兼容 ESM 打包
+  serverExternalPackages: ['ssh2'],
 };
 
 module.exports = nextConfig;

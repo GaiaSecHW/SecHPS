@@ -182,6 +182,7 @@ export async function GET(request: Request) {
     if (!projectId) {
       const evaluations = await prisma.evaluationSession.findMany({
         where: evalWhereClause,
+        take: 500,
         select: {
           projectId: true,
           totalInputTokens: true,

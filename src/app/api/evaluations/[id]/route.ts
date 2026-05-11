@@ -42,58 +42,28 @@ export async function GET(
     
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: {
-        Project: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
-            environmentUrl: true,
-            userId: true,
-            User: {
-              select: {
-                id: true,
-                name: true,
-                username: true,
-              },
-            },
-          },
-        },
-        // 添加迭代记录（包含模型信息）
-        EvaluationIteration: {
-          orderBy: { iterationNumber: 'asc' },
-          select: {
-            id: true,
-            iterationNumber: true,
-            status: true,
-            startedAt: true,
-            completedAt: true,
-            duration: true,
-            inputTokens: true,
-            outputTokens: true,
-            modelConfigId: true,
-            modelName: true,
-            roleId: true,
-          },
-        },
-        // 添加节点执行记录（包含模型信息和Token）
-        NodeExecution: {
-          orderBy: { order: 'asc' },
-          select: {
-            id: true,
-            workflowNodeId: true,
-            nodeLabel: true,
-            nodeType: true,
-            status: true,
-            startedAt: true,
-            completedAt: true,
-            modelConfigId: true,
-            modelName: true,
-            roleId: true,
-            inputTokens: true,
-            outputTokens: true,
-          },
-        },
+      select: {
+        id: true,
+        projectId: true,
+        modelConfigId: true,
+        modelName: true,
+        providerType: true,
+        status: true,
+        opencodeSessionId: true,
+        workflowId: true,
+        workflowType: true,
+        roleModels: true,
+        startedAt: true,
+        completedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        lastActivity: true,
+        errorMessage: true,
+        score: true,
+        maxScore: true,
+        totalTokens: true,
+        fsmTemplateId: true,
+        evaluationName: true,
       },
     });
 
@@ -101,8 +71,66 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        environmentUrl: true,
+        userId: true,
+        User: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+      },
+    }) : null;
+
+    // Separate query for EvaluationIteration
+    const evaluationIterations = await prisma.evaluationIteration.findMany({
+      where: { evaluationSessionId: evaluation.id },
+      orderBy: { iterationNumber: 'asc' },
+      select: {
+        id: true,
+        iterationNumber: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        duration: true,
+        inputTokens: true,
+        outputTokens: true,
+        modelConfigId: true,
+        modelName: true,
+        roleId: true,
+      },
+    });
+
+    // Separate query for NodeExecution
+    const nodeExecutions = await prisma.nodeExecution.findMany({
+      where: { evaluationSessionId: evaluation.id },
+      orderBy: { order: 'asc' },
+      select: {
+        id: true,
+        workflowNodeId: true,
+        nodeLabel: true,
+        nodeType: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        modelConfigId: true,
+        modelName: true,
+        roleId: true,
+        inputTokens: true,
+        outputTokens: true,
+      },
+    });
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && project?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -147,6 +175,9 @@ export async function GET(
     // 格式化返回数据
     const response = {
       ...evaluation,
+      Project: project,
+      EvaluationIteration: evaluationIterations,
+      NodeExecution: nodeExecutions,
       modelConfigId: evaluation.modelConfigId || null,
       modelConfigName: modelConfigInfo?.name || evaluation.modelName || null,
       modelConfigProviderType: modelConfigInfo?.providerType || evaluation.providerType || null,
@@ -193,17 +224,11 @@ export async function DELETE(
 
     // 检查评估会话是否存在并获取项目归属（使用 findFirst 支持条件过滤）
     let where: any = { id };
-    
+
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
       select: {
         projectId: true,
-        Project: {
-          select: {
-            userId: true,
-            id: true,
-          },
-        },
       },
     });
 
@@ -211,13 +236,19 @@ export async function DELETE(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const deleteProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true, id: true },
+    }) : null;
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && deleteProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
     // 删除 JSONL 存储目录（如果存在）
-    const projectId = evaluation.Project?.id || evaluation.projectId;
+    const projectId = deleteProject?.id || evaluation.projectId;
     if (projectId) {
       try {
         const store = createEvaluationMessageStore(projectId, id);

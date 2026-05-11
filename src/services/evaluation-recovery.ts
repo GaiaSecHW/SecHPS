@@ -58,27 +58,41 @@ export async function recoverInterruptedEvaluations(): Promise<{
   
   try {
     // 1. 查找所有 preparing/running 状态的评估
-    // preparing 状态的评估可能刚创建就被中断，需要从头启动
-    // 注意：EvaluationSession 没有 Workflow 关系，只有 workflowId 字段
-    const activeEvaluations = await prisma.evaluationSession.findMany({
+    // 使用 select 而非 include 避免 Prisma findMany bug
+    const activeEvaluationsRaw = await prisma.evaluationSession.findMany({
       where: {
         status: { in: ['preparing', 'running'] },
       },
-      include: {
-        Project: {
-          select: {
-            id: true,
-            name: true,
-            projectPath: true,
-            userId: true,
-          },
-        },
-        // ❌ EvaluationSession 没有 Workflow 关系
-        // Workflow: { ... } // 移除
-        NodeExecution: {
+      take: 50,
+      select: {
+        id: true,
+        projectId: true,
+        workflowId: true,
+        workflowType: true,
+        modelConfigId: true,
+        status: true,
+      },
+    });
+
+    // 单独查询 Project 信息
+    const projectIds = [...new Set(activeEvaluationsRaw.map(e => e.projectId))];
+    const projects = projectIds.length > 0
+      ? await prisma.project.findMany({
+          where: { id: { in: projectIds } },
+          select: { id: true, name: true, projectPath: true, userId: true, description: true },
+        })
+      : [];
+    const projectMap = new Map(projects.map(p => [p.id, p]));
+
+    // 单独查询 NodeExecution
+    const evalIds = activeEvaluationsRaw.map(e => e.id);
+    const nodeExecutions = evalIds.length > 0
+      ? await prisma.nodeExecution.findMany({
+          where: { evaluationSessionId: { in: evalIds } },
           orderBy: { order: 'asc' },
           select: {
             id: true,
+            evaluationSessionId: true,
             workflowNodeId: true,
             nodeLabel: true,
             nodeType: true,
@@ -88,13 +102,26 @@ export async function recoverInterruptedEvaluations(): Promise<{
             completedAt: true,
             inputTokens: true,
             outputTokens: true,
-            opencodeSessionId: true,  // 🔑 关键：用于恢复对话
+            opencodeSessionId: true,
             modelConfigId: true,
             modelName: true,
+            updatedAt: true,
           },
-        },
-      },
-    });
+        })
+      : [];
+    const nodeExecMap = new Map<string, typeof nodeExecutions>();
+    for (const ne of nodeExecutions) {
+      const arr = nodeExecMap.get(ne.evaluationSessionId) || [];
+      arr.push(ne);
+      nodeExecMap.set(ne.evaluationSessionId, arr);
+    }
+
+    // 重组为带关联的评估对象
+    const activeEvaluations = activeEvaluationsRaw.map(evaluation => ({
+      ...evaluation,
+      Project: projectMap.get(evaluation.projectId) || null,
+      NodeExecution: nodeExecMap.get(evaluation.id) || [],
+    }));
     
     logger.info(LOG_MODULES.EVALUATION, `${LOG_PREFIX} 发现 ${activeEvaluations.length} 个活跃评估 (preparing/running)`);
     

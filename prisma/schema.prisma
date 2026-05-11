@@ -344,9 +344,21 @@ model CodeswarmWorker {
   maxConcurrent Int             @default(5)
   currentTasks  Int             @default(0)
   lastHeartbeat DateTime        @default(now())
+  token         String?
   createdAt     DateTime        @default(now())
   updatedAt     DateTime
   CodeswarmTask CodeswarmTask[]
+}
+
+model CodeswarmEvent {
+  id        String   @id @default(cuid())
+  taskId    String
+  type      String
+  data      String
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
+  @@index([taskId, createdAt])
 }
 
 model DataFlow {

@@ -23,11 +23,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { id },
-      include: { Project: { include: { OpencodeConfig: true, ProjectFile: true } } },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+        opencodeSessionId: true,
+      },
     });
 
     if (!evaluation) return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
+
+    // Separate query for Project
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      include: { OpencodeConfig: true, ProjectFile: true },
+    }) : null;
+
+    if (!userIsAdmin && project?.userId !== payload.userId) return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     if (evaluation.status === 'running') return NextResponse.json({ error: '评估会话已在运行中' }, { status: 400 });
 
     const modelConfig = await getRalphModelConfig();
@@ -54,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     }
 
     // 加载 MCP 服务器配置
-    const mcpServers = await loadMcpServersForProject(evaluation.projectId, evaluation.Project.userId);
+    const mcpServers = await loadMcpServersForProject(evaluation.projectId, project?.userId || '');
     logger.debug(LOG_MODULES.MCP, 'Ralph 加载 MCP 配置', { count: mcpServers.length, names: mcpServers.map(m => m.name) });
 
     // 加载系统提示词（从全局配置）
@@ -67,12 +79,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const result = await executeRalphLoop({
       evaluationId: id,
       projectId: evaluation.projectId,
-      projectPath: evaluation.Project.projectPath || undefined,
-      projectName: evaluation.Project.name,
-      projectDescription: evaluation.Project.description || undefined,
-      environmentUrl: evaluation.Project.environmentUrl || undefined,
-      files: evaluation.Project.ProjectFile.map(f => ({ name: f.fileName, type: f.fileType, size: f.fileSize })),
-      taskDescription: evaluation.Project.OpencodeConfig?.taskDescription || undefined,
+      projectPath: project?.projectPath || undefined,
+      projectName: project?.name || '',
+      projectDescription: project?.description || undefined,
+      environmentUrl: project?.environmentUrl || undefined,
+      files: project?.ProjectFile.map(f => ({ name: f.fileName, type: f.fileType, size: f.fileSize })) || [],
+      taskDescription: project?.OpencodeConfig?.taskDescription || undefined,
       modelConfig,
       ralphConfig: { maxIterations, maxTokens, maxCost, verifyCompletion },
       mcpServers,  // 传递 MCP 配置

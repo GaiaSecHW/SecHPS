@@ -17,7 +17,6 @@
     "@codeswarm/acp": "workspace:*",
     "@codeswarm/types": "workspace:*",
     "fastify": "^5.3.0",
-    "ioredis": "^5.6.0",
     "zod": "^3.24.4"
   },
   "devDependencies": {

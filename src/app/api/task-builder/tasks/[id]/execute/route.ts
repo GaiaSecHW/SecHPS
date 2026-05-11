@@ -3,6 +3,7 @@ import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
+import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -186,47 +187,151 @@ export async function POST(
 }
 
 async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): Promise<void> {
+  // 优先使用 Redis 订阅
+  if (codeswarmDispatcher.isAvailable) {
+    await pollViaRedis(localTaskId, codeswarmTaskId);
+  } else {
+    await pollViaDB(localTaskId, codeswarmTaskId);
+  }
+}
+
+// Redis 订阅模式：实时接收任务状态变更
+async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promise<void> {
+  const Redis = (await import('ioredis')).default;
+  const redisUrl = process.env.REDIS_URL;
+  if (!redisUrl) throw new Error('REDIS_URL 未配置');
+
+  const subscriber = new Redis(redisUrl);
+  const channel = `codeswarm:task:${codeswarmTaskId}`;
+
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      subscriber.disconnect();
+      reject(new Error('任务执行超时（超过20分钟）'));
+    }, 20 * 60 * 1000);
+
+    subscriber.subscribe(channel);
+    subscriber.on('message', async (_ch: string, data: string) => {
+      try {
+        const event = JSON.parse(data);
+
+        if (event.type === 'task_completed') {
+          clearTimeout(timeout);
+          subscriber.disconnect();
+
+          // 从 DB 读取最终结果
+          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
+          const resp = await fetch(`${baseUrl}/api/codeswarm/tasks/${codeswarmTaskId}`);
+          const taskData = resp.ok ? (await resp.json()).task : null;
+
+          if (event.status === 'completed') {
+            await prisma.taskInstance.update({
+              where: { id: localTaskId },
+              data: {
+                status: 'completed',
+                completedAt: new Date(),
+                updatedAt: new Date(),
+                executionResult: taskData?.result || null,
+                reportPath: taskData?.reportContent || null,
+              },
+            });
+            eventBus.emit(`task:${localTaskId}`, {
+              type: 'completed', level: 'success',
+              message: '任务执行完成', details: '所有步骤已完成',
+              timestamp: new Date(),
+            });
+            resolve();
+          } else {
+            reject(new Error(taskData?.error || 'CodeSwarm 任务执行失败'));
+          }
+        }
+
+        if (event.type === 'task_event' && event.data) {
+          const e = event.data;
+          if (e.type === 'agent_message_chunk') {
+            await prisma.taskExecutionLog.create({
+              data: { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, taskId: localTaskId, level: 'info', message: 'Agent 输出', details: e.content || null },
+            });
+          } else if (e.type === 'tool_call') {
+            await prisma.taskExecutionLog.create({
+              data: { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, taskId: localTaskId, level: 'info', message: '工具调用', details: `工具: ${e.tool}` },
+            });
+          } else if (e.type === 'error') {
+            await prisma.taskExecutionLog.create({
+              data: { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, taskId: localTaskId, level: 'error', message: '执行错误', details: e.message || null },
+            });
+          }
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+
+    subscriber.on('error', (err) => {
+      clearTimeout(timeout);
+      subscriber.disconnect();
+      reject(err);
+    });
+  });
+}
+
+// DB 轮询 fallback：Redis 不可用时使用
+async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<void> {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-  const maxPolls = 600; // 600 * 2s = 1200s (20 minutes max)
+  const maxPolls = 600;
+  const logBuffer: { level: string; message: string; details: string | null }[] = [];
+  let lastFlush = 0;
+
+  const flushLogs = async () => {
+    if (logBuffer.length === 0) return;
+    const batch = logBuffer.splice(0);
+    try {
+      await prisma.taskExecutionLog.createMany({
+        data: batch.map(log => ({
+          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          taskId: localTaskId,
+          level: log.level,
+          message: log.message,
+          details: log.details,
+        })),
+      });
+    } catch { /* non-critical */ }
+  };
 
   for (let i = 0; i < maxPolls; i++) {
+    const now = Date.now();
+    // 每 10s 批量写入一次日志
+    if (now - lastFlush >= 10000) {
+      await flushLogs();
+      lastFlush = now;
+    }
+
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     try {
       const response = await fetch(`${baseUrl}/api/codeswarm/tasks/${codeswarmTaskId}`);
-      
+
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error('CodeSwarm 任务已被删除');
-        }
+        if (response.status === 404) throw new Error('CodeSwarm 任务已被删除');
         throw new Error(`查询 CodeSwarm 任务失败: ${response.status}`);
       }
 
       const data = await response.json();
       const task = data.task;
-
-      if (!task) {
-        throw new Error('CodeSwarm 任务不存在');
-      }
+      if (!task) throw new Error('CodeSwarm 任务不存在');
 
       if (task.state === 'completed') {
+        await flushLogs();
         await prisma.taskInstance.update({
           where: { id: localTaskId },
           data: {
-            status: 'completed',
-            completedAt: new Date(),
-            updatedAt: new Date(),
-            executionResult: task.result || null,
-            reportPath: task.reportContent || null,
+            status: 'completed', completedAt: new Date(), updatedAt: new Date(),
+            executionResult: task.result || null, reportPath: task.reportContent || null,
           },
         });
-
         eventBus.emit(`task:${localTaskId}`, {
-          type: 'completed',
-          level: 'success',
-          message: '任务执行完成',
-          details: '所有步骤已完成',
-          timestamp: new Date(),
+          type: 'completed', level: 'success',
+          message: '任务执行完成', details: '所有步骤已完成', timestamp: new Date(),
         });
         return;
       }
@@ -239,43 +344,20 @@ async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): 
         const recentEvents = task.events.slice(-5);
         for (const event of recentEvents) {
           if (event.type === 'agent_message_chunk') {
-            await prisma.taskExecutionLog.create({
-              data: {
-                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                taskId: localTaskId,
-                level: 'info',
-                message: 'Agent 输出',
-                details: event.content || null,
-              },
-            });
+            logBuffer.push({ level: 'info', message: 'Agent 输出', details: event.content || null });
           } else if (event.type === 'tool_call') {
-            await prisma.taskExecutionLog.create({
-              data: {
-                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                taskId: localTaskId,
-                level: 'info',
-                message: '工具调用',
-                details: `工具: ${event.tool}`,
-              },
-            });
+            logBuffer.push({ level: 'info', message: '工具调用', details: `工具: ${event.tool}` });
           } else if (event.type === 'error') {
-            await prisma.taskExecutionLog.create({
-              data: {
-                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                taskId: localTaskId,
-                level: 'error',
-                message: '执行错误',
-                details: event.message || null,
-              },
-            });
+            logBuffer.push({ level: 'error', message: '执行错误', details: event.message || null });
           }
         }
       }
     } catch (pollError) {
-      console.error(`[pollCodeswarmTask] 轮询失败:`, pollError);
+      await flushLogs();
       throw pollError;
     }
   }
 
+  await flushLogs();
   throw new Error('任务执行超时（超过20分钟）');
 }

@@ -36,6 +36,7 @@ export async function GET(
       where: { id },
       select: {
         id: true,
+        projectId: true,
         status: true,
         startedAt: true,
         completedAt: true,
@@ -44,17 +45,6 @@ export async function GET(
         lastActivity: true,
         opencodeSessionId: true,
         agentTeamId: true,
-        AgentTeam: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        Project: {
-          select: {
-            userId: true,
-          },
-        },
       },
     });
 
@@ -62,8 +52,14 @@ export async function GET(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const statusProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 归属校验
-    if (evaluation.Project.userId !== payload.userId) {
+    if (statusProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估状态' }, { status: 403 });
     }
 

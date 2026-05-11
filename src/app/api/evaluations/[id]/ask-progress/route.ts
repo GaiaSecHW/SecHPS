@@ -36,10 +36,11 @@ export async function POST(
     
     const evaluation = await prisma.evaluationSession.findFirst({
       where,
-      include: {
-        Project: {
-          include: { ProjectFile: true, OpencodeConfig: true, User: true },
-        },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+        opencodeSessionId: true,
       },
     });
 
@@ -47,8 +48,14 @@ export async function POST(
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const project = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      include: { ProjectFile: true, OpencodeConfig: true, User: true },
+    }) : null;
+
     // 归属校验（管理员绕过）
-    if (!userIsAdmin && evaluation.Project.userId !== payload.userId) {
+    if (!userIsAdmin && project?.userId !== payload.userId) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
@@ -60,8 +67,8 @@ export async function POST(
     let progressQuestion = '';
     
     // 方法1: 从项目的关联配置中获取 progressQuestion
-    if (evaluation.Project?.OpencodeConfig?.progressQuestion) {
-      progressQuestion = evaluation.Project.OpencodeConfig.progressQuestion;
+    if (project?.OpencodeConfig?.progressQuestion) {
+      progressQuestion = project.OpencodeConfig.progressQuestion;
       logger.debug(LOG_MODULES.EVALUATION, '使用项目关联配置的进展询问消息');
     }
     
@@ -104,7 +111,7 @@ export async function POST(
       model: modelConfig.model,
       baseUrl: modelConfig.baseUrl,
       maxTokens: 4096,
-      cwd: evaluation.Project?.projectPath || undefined,
+      cwd: project?.projectPath || undefined,
       allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash'],
       resumeSession: evaluation.opencodeSessionId || undefined,
     });

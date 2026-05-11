@@ -86,6 +86,7 @@ export async function restoreLocksFromDatabase(prismaClient: any): Promise<void>
       where: {
         status: { in: ['preparing', 'running', 'queued'] }
       },
+      take: 50,
       select: {
         id: true,
         projectId: true,

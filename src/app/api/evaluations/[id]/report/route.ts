@@ -173,29 +173,43 @@ export async function GET(
     // 获取评估会话基本信息
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      include: {
-        Project: {
-          select: {
-            id: true,
-            name: true,
-            displayName: true,
-            projectPath: true,
-            techStack: true,
-          },
-        },
-        AgentTeam: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
+      select: {
+        id: true,
+        projectId: true,
+        status: true,
+        startedAt: true,
+        completedAt: true,
+        endReason: true,
+        endMessage: true,
+        totalInputTokens: true,
+        totalOutputTokens: true,
+        workflowType: true,
+        agentTeamId: true,
       },
     });
-    
+
     if (!evaluation) {
       logger.debug(LOG_MODULES.EVALUATION, '评估会话不存在:', { details: { id } });
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
+
+    // Separate query for Project
+    const reportProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        projectPath: true,
+        techStack: true,
+      },
+    }) : null;
+
+    // Separate query for AgentTeam
+    const agentTeam = evaluation.agentTeamId ? await prisma.agentTeam.findUnique({
+      where: { id: evaluation.agentTeamId },
+      select: { id: true, name: true },
+    }) : null;
     
     logger.debug(LOG_MODULES.EVALUATION, '找到评估会话:', { details: { id, projectId: evaluation.projectId } });
     
@@ -245,8 +259,8 @@ export async function GET(
     const evaluationOverview = {
       id: evaluation.id,
       projectId: evaluation.projectId,
-      projectName: evaluation.Project?.displayName || evaluation.Project?.name || '未知项目',
-      workflowName: evaluation.AgentTeam?.name || '未指定',
+      projectName: reportProject?.displayName || reportProject?.name || '未知项目',
+      workflowName: agentTeam?.name || '未指定',
       workflowType: evaluation.workflowType || 'dag',  // FSM 报告类型标识
       status: evaluation.status,
       startedAt: evaluation.startedAt,

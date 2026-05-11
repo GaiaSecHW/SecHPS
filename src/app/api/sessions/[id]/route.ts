@@ -30,19 +30,25 @@ export async function GET(
     // 查找关联的项目
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
-      include: {
-        Project: {
-          select: { projectPath: true, userId: true }
-        }
-      }
+      select: {
+        id: true,
+        projectId: true,
+        opencodeSessionId: true,
+      },
     });
 
+    // Separate query for Project
+    const project = evaluation?.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { projectPath: true, userId: true },
+    }) : null;
+
     // 用户归属校验：检查项目是否属于当前用户（管理员可访问所有会话）
-    if (evaluation?.Project && evaluation.Project.userId !== payload.userId && !isAdmin(payload)) {
+    if (project && project.userId !== payload.userId && !isAdmin(payload)) {
       return NextResponse.json({ error: '无权限访问此会话' }, { status: 403 });
     }
 
-    const projectPath = evaluation?.Project?.projectPath;
+    const projectPath = project?.projectPath;
 
     // 使用 SDK 获取会话信息
     const sessionInfo = await getSessionInfo(sessionId, projectPath ? { dir: projectPath } : undefined);
@@ -105,15 +111,21 @@ export async function DELETE(
     // 查找关联的评估会话
     const evaluation = await prisma.evaluationSession.findFirst({
       where: { opencodeSessionId: sessionId },
-      include: {
-        Project: {
-          select: { userId: true }
-        }
-      }
+      select: {
+        id: true,
+        projectId: true,
+        opencodeSessionId: true,
+      },
     });
 
+    // Separate query for Project
+    const deleteProject = evaluation?.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 用户归属校验：检查项目是否属于当前用户（管理员可删除所有会话）
-    if (evaluation?.Project && evaluation.Project.userId !== payload.userId && !isAdmin(payload)) {
+    if (deleteProject && deleteProject.userId !== payload.userId && !isAdmin(payload)) {
       return NextResponse.json({ error: '无权限删除此会话' }, { status: 403 });
     }
 

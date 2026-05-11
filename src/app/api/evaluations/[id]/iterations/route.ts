@@ -54,15 +54,21 @@ export async function GET(
     // 5. 验证评估会话存在并检查归属
     const evaluation = await prisma.evaluationSession.findUnique({
       where: { id },
-      select: { id: true, projectId: true, status: true, Project: { select: { userId: true } } },
+      select: { id: true, projectId: true, status: true },
     });
 
     if (!evaluation) {
       return NextResponse.json({ error: '评估会话不存在' }, { status: 404 });
     }
 
+    // Separate query for Project
+    const iterProject = evaluation.projectId ? await prisma.project.findUnique({
+      where: { id: evaluation.projectId },
+      select: { userId: true },
+    }) : null;
+
     // 6. 归属校验
-    if (evaluation.Project.userId !== payload.userId) {
+    if (iterProject?.userId !== payload.userId) {
       return NextResponse.json({ error: '无权查看此评估' }, { status: 403 });
     }
 
