@@ -41,9 +41,9 @@ interface TaskFormData {
 
 const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
   pending: { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '待执行' },
-  running: { bg: 'bg-blue-100', text: 'text-blue-700', label: '执行中' },
-  completed: { bg: 'bg-green-100', text: 'text-green-700', label: '已完成' },
-  failed: { bg: 'bg-red-100', text: 'text-red-700', label: '执行失败' },
+  running: { bg: 'bg-blue-900/20', text: 'text-blue-400', label: '执行中' },
+  completed: { bg: 'bg-green-900/20', text: 'text-green-400', label: '已完成' },
+  failed: { bg: 'bg-red-900/20', text: 'text-red-400', label: '执行失败' },
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];

@@ -1057,7 +1057,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       <span className="font-medium">已注入 {injectedExperiences.length} 条自主进化经验</span>
                       <ul className="mt-1 space-y-0.5">
                         {injectedExperiences.map(e => (
-                          <li key={e.id} className="text-xs text-purple-700">
+                          <li key={e.id} className="text-xs text-purple-400">
                             · [{e.errorCategory}] {e.title}（命中 {e.hitCount} 次）
                           </li>
                         ))}
@@ -1290,7 +1290,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                       <div className="flex items-center gap-4">
                         <span className="text-sm font-medium text-gray-300">
                           执行进度: 
-                          <span className="text-orange-600 ml-1">{nodeProgress.completed + (nodeProgress.skipped || 0)}</span>
+                          <span className="text-orange-400 ml-1">{nodeProgress.completed + (nodeProgress.skipped || 0)}</span>
                           <span className="text-gray-400"> / </span>
                           <span className="text-gray-100">{nodeProgress.total}</span>
                           <span className="text-gray-500 ml-1">节点</span>
@@ -1451,7 +1451,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                   )}
                                   {/* FSM 阶段编号 */}
                                   {node.fsmPhase && (
-                                    <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                    <span className="text-xs bg-purple-900/20 text-purple-400 px-1.5 py-0.5 rounded">
                                       Phase {node.fsmPhase}
                                     </span>
                                   )}
@@ -1903,7 +1903,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                 return (
                                   <div key={childKey} className="bg-purple-900/20 rounded border border-purple-200">
                                     <button
-                                      className="w-full p-2 flex items-center justify-between hover:bg-purple-100 transition-colors"
+                                      className="w-full p-2 flex items-center justify-between hover:bg-purple-900/20 transition-colors"
                                       onClick={() => {
                                         const newExpanded = !expandedChildMessages.has(childKey);
                                         setExpandedChildMessages(prev => {
@@ -1933,7 +1933,7 @@ const fetchChildrenSessions = async (nodeId?: string) => {
                                     >
                                       <div className="flex items-center gap-2">
                                         <StatusIcon size={14} className={iconConfig.color} />
-                                        <span className="text-xs font-medium text-purple-700">
+                                        <span className="text-xs font-medium text-purple-400">
                                           {child.type === 'task' ? 'Task' : 'Agent'}
                                         </span>
                                         <span className="text-xs text-gray-400 truncate max-w-[200px]">
@@ -2258,7 +2258,7 @@ function MessageBubble({
             : isRightSide
             ? 'bg-blue-600 text-white hover:bg-blue-600'
             : isToolCall
-            ? 'bg-purple-900/20 border border-purple-200 hover:bg-purple-100'
+            ? 'bg-purple-900/20 border border-purple-500/30 hover:bg-purple-900/30'
             : 'bg-dark-surface border border-gray-700/50 shadow-sm hover:shadow-md'
         }`}
       >
@@ -2272,7 +2272,7 @@ function MessageBubble({
           <div className="flex items-center space-x-2 min-w-0 flex-1 flex-wrap">
             {/* 角色图标 */}
             <span className={`text-xs font-medium flex-shrink-0 ${
-              isRightSide ? 'text-white' : isToolCall ? 'text-purple-700' : isThinking ? 'text-yellow-400' : 'text-gray-300'
+              isRightSide ? 'text-white' : isToolCall ? 'text-purple-400' : isThinking ? 'text-yellow-400' : 'text-gray-300'
             }`}>
               {isUser ? '👤 用户' : isToolResult ? '📤 执行结果' : isToolCall ? '🔧 工具调用' : isThinking ? '🧠 思考' : '🤖 AI'}
             </span>
@@ -2307,7 +2307,7 @@ function MessageBubble({
             {/* 推理标签 */}
             {reasoningParts.length > 0 && (
               <span className={`text-xs px-1.5 py-0.5 rounded flex-shrink-0 ${
-                isRightSide ? 'bg-purple-400 text-white' : 'bg-purple-100 text-purple-700'
+                isRightSide ? 'bg-purple-400 text-white' : 'bg-purple-900/20 text-purple-400'
               }`}>
                 推理
               </span>
@@ -2531,7 +2531,7 @@ function MessageBubble({
             {toolUseParts.length > 0 && (
               <div className="mt-2">
                 <button
-                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-blue-900/20 rounded border border-blue-200 hover:bg-blue-100 transition-colors"
+                  className="w-full flex items-center justify-between px-2 py-1.5 text-left bg-blue-900/20 rounded border border-blue-500/30 hover:bg-blue-900/30 transition-colors"
                   onClick={() => setExpandedToolSection(!expandedToolSection)}
                 >
                   <span className="text-xs font-medium text-blue-400">
@@ -2546,7 +2546,7 @@ function MessageBubble({
                       return (
                         <div key={idx} className="bg-blue-900/20 rounded border border-blue-200 overflow-hidden">
                           <button
-                            className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-blue-100 transition-colors"
+                            className="w-full flex items-center justify-between px-2 py-1.5 text-left hover:bg-blue-900/30 transition-colors"
                             onClick={() => setExpandedTools(prev => ({ ...prev, [`tool-${idx}`]: !prev[`tool-${idx}`] }))}
                           >
                             <span className="text-xs font-medium text-blue-400 flex items-center gap-1">

@@ -354,8 +354,8 @@ export default function WorkflowEditPage() {
                 <span className="text-xs text-gray-500 ml-1">(P5)</span>
               </div>
               <span className="text-gray-400">→</span>
-              <div className="px-3 py-2 border border-purple-300 rounded bg-purple-100 text-center">
-                <span className="text-sm font-medium text-purple-700">N. 渗透测试</span>
+              <div className="px-3 py-2 border border-purple-500/30 rounded bg-purple-600/10 text-center">
+                <span className="text-sm font-medium text-purple-400">N. 渗透测试</span>
                 <span className="text-xs text-purple-500 ml-1">(可编辑)</span>
               </div>
               <span className="text-gray-400">→</span>
@@ -407,10 +407,10 @@ export default function WorkflowEditPage() {
                       </div>
                     ))}
                     
-                    <div className="text-xs font-medium text-purple-600 uppercase tracking-wide mt-4 mb-2">渗透测试区</div>
+                    <div className="text-xs font-medium text-purple-400 uppercase tracking-wide mt-4 mb-2">渗透测试区</div>
                     <div className="p-2 bg-purple-600/10 rounded-lg border border-purple-500/20">
-                      <div className="text-sm font-medium text-purple-700 mb-1">渗透测试</div>
-                      <div className="text-xs text-purple-600">添加自定义测试节点</div>
+                      <div className="text-sm font-medium text-purple-400 mb-1">渗透测试</div>
+                      <div className="text-xs text-purple-400">添加自定义测试节点</div>
                     </div>
                     
                     <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mt-4 mb-2">后置阶段</div>

@@ -962,7 +962,7 @@ export default function SkillDetailPage() {
                     <button
                       type="button"
                       onClick={() => setShowDiffModal(true)}
-                      className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
+                      className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-900/30 transition-all"
                       title="重新打开上次 AI 优化结果的对比弹窗"
                     >
                       <Eye size={14} className="mr-1.5" />
@@ -997,7 +997,7 @@ export default function SkillDetailPage() {
                   <button
                     type="button"
                     onClick={() => setShowAiSuggestions(!showAiSuggestions)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-purple-800 hover:bg-purple-100 transition-colors"
+                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-900/20 transition-colors"
                   >
                     <span className="flex items-center gap-1.5">
                       <Sparkles size={14} />
@@ -1008,7 +1008,7 @@ export default function SkillDetailPage() {
                   {showAiSuggestions && (
                     <ul className="px-4 pb-3 space-y-1.5">
                       {aiSuggestions.map((suggestion, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-purple-700">
+                        <li key={idx} className="flex items-start gap-2 text-sm text-purple-400">
                           <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center text-xs font-bold">
                             {idx + 1}
                           </span>
@@ -1127,7 +1127,7 @@ export default function SkillDetailPage() {
                     setShowVulnerabilities(true);
                     fetchVulnerabilities(1, 'false-positive');
                   }}
-                  className={`text-lg font-semibold flex items-center gap-1 ${(vulnStats.falsePositive || 0) > 0 ? 'text-orange-600 hover:text-orange-800 hover:underline' : 'text-gray-400'}`}
+                  className={`text-lg font-semibold flex items-center gap-1 ${(vulnStats.falsePositive || 0) > 0 ? 'text-orange-400 hover:text-orange-300 hover:underline' : 'text-gray-400'}`}
                 >
                   {vulnStats.falsePositive || 0} 个
                 </button>
@@ -1173,7 +1173,7 @@ export default function SkillDetailPage() {
                       </button>
                       <button
                         onClick={() => fetchVulnerabilities(1, 'false-positive')}
-                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'false-positive' ? 'bg-orange-100 text-orange-700' : 'bg-dark-surface-hover text-gray-400 hover:bg-gray-200'}`}
+                        className={`px-2 py-1 text-xs rounded ${vulnFilter === 'false-positive' ? 'bg-orange-900/20 text-orange-400' : 'bg-dark-surface-hover text-gray-400 hover:bg-gray-700'}`}
                       >
                         误报 ({vulnStats.falsePositive})
                       </button>
@@ -1200,7 +1200,7 @@ export default function SkillDetailPage() {
                               <div className="flex items-center gap-2">
                                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${
                                   item.vulnerability?.severity === 'critical' ? 'bg-red-100 text-red-400' :
-                                  item.vulnerability?.severity === 'high' ? 'bg-orange-100 text-orange-700' :
+                                  item.vulnerability?.severity === 'high' ? 'bg-orange-900/20 text-orange-400' :
                                   item.vulnerability?.severity === 'medium' ? 'bg-yellow-100 text-yellow-400' :
                                   item.vulnerability?.severity === 'low' ? 'bg-blue-100 text-blue-400' :
                                   'bg-dark-surface-hover text-gray-300'
@@ -1278,7 +1278,7 @@ export default function SkillDetailPage() {
                     const iconMap: Record<string, any> = { Bug, Search, Shield, Code, LayoutDashboard, TrendingUp };
                     const Icon = skill.categoryIcon ? iconMap[skill.categoryIcon] : null;
                     return (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm bg-purple-900/20 text-purple-700 rounded-md">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-sm bg-purple-900/20 text-purple-400 rounded-md">
                         {Icon && <Icon size={14} />}
                         {skill.categoryName}
                       </span>
@@ -1296,7 +1296,7 @@ export default function SkillDetailPage() {
                       </span>
                     )}
                     {skill.patternName && (
-                      <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
+                      <span className="px-2 py-0.5 text-xs bg-orange-900/20 text-orange-400 rounded">
                         {skill.patternName}
                       </span>
                     )}
@@ -1467,19 +1467,19 @@ export default function SkillDetailPage() {
           {viewingVersionId && viewingVersionId !== skill.id && (
             <div className="bg-indigo-900/20 border border-indigo-200 rounded-lg px-4 py-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <History size={18} className="text-indigo-600" />
-                <div>
-                  <span className="text-sm font-medium text-indigo-800">
-                    正在查看历史版本 v{viewingVersionNumber}
-                  </span>
-                  <span className="text-xs text-indigo-600 ml-2">
+<History size={18} className="text-indigo-400" />
+                  <div>
+                    <span className="text-sm font-medium text-indigo-300">
+                      正在查看历史版本 v{viewingVersionNumber}
+                    </span>
+                    <span className="text-xs text-indigo-400 ml-2">
                     (当前版本: v{skill.version})
                   </span>
                 </div>
               </div>
               <button
                 onClick={handleCloseVersionView}
-                className="px-3 py-1 text-sm bg-indigo-100 text-indigo-700 rounded hover:bg-indigo-200 transition-colors"
+                className="px-3 py-1 text-sm bg-indigo-900/20 text-indigo-400 rounded hover:bg-indigo-900/30 transition-colors"
               >
                 返回当前版本
               </button>
@@ -1685,8 +1685,8 @@ export default function SkillDetailPage() {
               {/* AI 优化建议 */}
               {aiSuggestions.length > 0 && (
                 <div className="px-6 py-2.5 bg-purple-900/20 border-b border-purple-100 flex-shrink-0">
-                  <span className="text-xs font-medium text-purple-700">AI 优化说明：</span>
-                  <span className="text-xs text-purple-600 ml-2">{aiSuggestions.join('；')}</span>
+                  <span className="text-xs font-medium text-purple-400">AI 优化说明：</span>
+                  <span className="text-xs text-purple-400 ml-2">{aiSuggestions.join('；')}</span>
                 </div>
               )}
 
@@ -1698,7 +1698,7 @@ export default function SkillDetailPage() {
                 </div>
                 <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-900/20">
                   <span className="w-2 h-2 rounded-full bg-purple-600"/>
-                  <span className="text-sm font-medium text-purple-700">AI 优化后的内容</span>
+                  <span className="text-sm font-medium text-purple-400">AI 优化后的内容</span>
                 </div>
               </div>
 

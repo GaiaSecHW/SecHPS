@@ -271,7 +271,7 @@ export default function NewImpactPage() {
 
       {/* Error */}
       {error && (
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-900/20 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}
@@ -397,7 +397,7 @@ export default function NewImpactPage() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); setSelectedAnalysis(analysis); }}
-                          className="inline-flex items-center px-2 py-1 text-xs bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded hover:bg-blue-100 transition-colors"
+                          className="inline-flex items-center px-2 py-1 text-xs bg-blue-900/20 text-blue-400 border border-blue-500/20 rounded hover:bg-blue-900/30 transition-colors"
                           title="查看详情"
                         >
                           <Eye size={12} className="mr-1" />
@@ -407,7 +407,7 @@ export default function NewImpactPage() {
                           <>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleAction(analysis.id, 'approve-merge'); }}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-purple-900/20 text-purple-700 border border-purple-500/20 rounded hover:bg-purple-100 transition-colors"
+                              className="inline-flex items-center px-2 py-1 text-xs bg-purple-900/20 text-purple-400 border border-purple-500/20 rounded hover:bg-purple-900/30 transition-colors"
                               title="批准合并"
                             >
                               <GitMerge size={12} className="mr-1" />
@@ -415,7 +415,7 @@ export default function NewImpactPage() {
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleAction(analysis.id, 'keep-separate'); }}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded hover:bg-blue-100 transition-colors"
+                              className="inline-flex items-center px-2 py-1 text-xs bg-blue-900/20 text-blue-400 border border-blue-500/20 rounded hover:bg-blue-900/30 transition-colors"
                               title="保持独立"
                             >
                               <ArrowRightLeft size={12} className="mr-1" />
@@ -423,7 +423,7 @@ export default function NewImpactPage() {
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleAction(analysis.id, 'mark-pending'); }}
-                              className="inline-flex items-center px-2 py-1 text-xs bg-yellow-900/20 text-yellow-700 border border-yellow-500/20 rounded hover:bg-yellow-100 transition-colors"
+                              className="inline-flex items-center px-2 py-1 text-xs bg-yellow-900/20 text-yellow-400 border border-yellow-500/20 rounded hover:bg-yellow-900/30 transition-colors"
                               title="标记待审核"
                             >
                               <Clock size={12} className="mr-1" />
@@ -528,21 +528,21 @@ export default function NewImpactPage() {
                 <>
                   <button
                     onClick={() => handleAction(selectedAnalysis.id, 'approve-merge')}
-                    className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded hover:bg-purple-200 text-sm"
+                    className="inline-flex items-center px-3 py-1.5 bg-purple-900/20 text-purple-400 rounded hover:bg-purple-900/30 text-sm"
                   >
                     <GitMerge size={14} className="mr-1" />
                     批准合并
                   </button>
                   <button
                     onClick={() => handleAction(selectedAnalysis.id, 'keep-separate')}
-                    className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded hover:bg-blue-200 text-sm"
+                    className="inline-flex items-center px-3 py-1.5 bg-blue-900/20 text-blue-400 rounded hover:bg-blue-900/30 text-sm"
                   >
                     <ArrowRightLeft size={14} className="mr-1" />
                     保持独立
                   </button>
                   <button
                     onClick={() => handleAction(selectedAnalysis.id, 'mark-pending')}
-                    className="inline-flex items-center px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded hover:bg-yellow-200 text-sm"
+                    className="inline-flex items-center px-3 py-1.5 bg-yellow-900/20 text-yellow-400 rounded hover:bg-yellow-900/30 text-sm"
                   >
                     <Clock size={14} className="mr-1" />
                     标记待审核

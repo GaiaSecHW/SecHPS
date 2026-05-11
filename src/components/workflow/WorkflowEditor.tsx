@@ -1816,7 +1816,7 @@ return (
                       <p className="text-sm text-blue-300 font-medium mb-2">
                         系统节点配置
                       </p>
-                      <p className="text-xs text-blue-600">
+                      <p className="text-xs text-blue-400">
                         此节点为系统节点，名称和描述由系统配置管理
                       </p>
                     </div>
@@ -1866,8 +1866,8 @@ return (
                         return (
                           <div className="flex items-center gap-2">
                             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: parentRole.color || '#3B82F6' }} />
-                            <span className="text-sm text-purple-700">
-                              继承自 {parentNode?.data?.label}: {parentRole.name}
+<span className="text-sm text-purple-400">
+                               继承自 {parentNode?.data?.label}: {parentRole.name}
                             </span>
                           </div>
                         );
@@ -1879,7 +1879,7 @@ return (
                         );
                       }
                     })()}
-                    <p className="text-xs text-purple-600 mt-2">
+                    <p className="text-xs text-purple-400 mt-2">
                       Subtask 自动继承父 Agent 的角色配置
                     </p>
                   </div>

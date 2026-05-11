@@ -332,7 +332,7 @@ function AutonomousEvolutionContent() {
             onClick={toggleInjection}
             className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors ${
               injectionEnabled
-                ? 'bg-green-900/20 text-green-700 border-green-500/20 hover:bg-green-100'
+                ? 'bg-green-900/20 text-green-400 border-green-500/20 hover:bg-green-900/30'
                 : 'bg-[#0F172A] text-gray-500 border-gray-700/50 hover:bg-dark-surface-hover'
             }`}
             title="控制提取时新经验是否默认启用"
@@ -522,7 +522,7 @@ function AutonomousEvolutionContent() {
                 <>
                   <button
                     onClick={() => handleBatchInject('enable')}
-                    className="px-3 py-1 text-xs bg-green-900/20 text-green-700 border border-green-500/20 rounded hover:bg-green-100"
+                    className="px-3 py-1 text-xs bg-green-900/20 text-green-400 border border-green-500/20 rounded hover:bg-green-900/30"
                   >
                     批量启用
                   </button>
@@ -589,7 +589,7 @@ function AutonomousEvolutionContent() {
                     {!exp.isInjected && (
                       <button
                         onClick={() => handleToggleInject(exp.id)}
-                        className="px-2 py-1 text-xs bg-green-900/20 text-green-700 border border-green-500/20 rounded hover:bg-green-100"
+                        className="px-2 py-1 text-xs bg-green-900/20 text-green-400 border border-green-500/20 rounded hover:bg-green-900/30"
                       >
                         启用
                       </button>
@@ -604,7 +604,7 @@ function AutonomousEvolutionContent() {
                     )}
                     <button
                       onClick={() => router.push(`/dashboard/admin/autonomous-evolution/${exp.id}`)}
-                      className="px-2 py-1 text-xs bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded hover:bg-blue-100"
+                      className="px-2 py-1 text-xs bg-blue-900/20 text-blue-400 border border-blue-500/20 rounded hover:bg-blue-900/30"
                     >
                       详情
                     </button>

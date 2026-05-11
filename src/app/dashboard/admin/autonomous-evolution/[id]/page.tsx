@@ -181,7 +181,7 @@ export default function ExperienceDetailPage() {
             className={`px-3 py-1.5 text-sm rounded-lg border ${
               exp.isInjected
                 ? 'bg-[#0F172A] text-gray-400 border-gray-700/50 hover:bg-dark-surface-hover'
-                : 'bg-green-900/20 text-green-700 border-green-500/20 hover:bg-green-100'
+                : 'bg-green-900/20 text-green-400 border-green-500/20 hover:bg-green-900/30'
             }`}
           >
             {exp.isInjected ? '停用' : '启用'}
@@ -189,14 +189,14 @@ export default function ExperienceDetailPage() {
           {!editing && (
             <button
               onClick={() => setEditing(true)}
-              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-900/20 text-blue-700 border border-blue-500/20 rounded-lg hover:bg-blue-100"
+              className="flex items-center gap-1 px-3 py-1.5 text-sm bg-blue-900/20 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-900/30"
             >
               <Edit2 size={13} /> 编辑
             </button>
           )}
           <button
             onClick={handleDelete}
-            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-900/20 text-red-700 border border-red-500/20 rounded-lg hover:bg-red-100"
+            className="flex items-center gap-1 px-3 py-1.5 text-sm bg-red-900/20 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-900/30"
           >
             <Trash2 size={13} /> 删除
           </button>

@@ -127,7 +127,7 @@ function GovernancePageContent() {
             审核 LLM 推断结果，完成存量数据迁移
           </p>
           {status?.migration.pendingReview ? (
-            <p className="text-sm text-orange-600 mt-2">
+            <p className="text-sm text-orange-400 mt-2">
               {status.migration.pendingReview} 条待审核
             </p>
           ) : null}
@@ -146,9 +146,9 @@ function GovernancePageContent() {
             查看和处理重复 Skill 组
           </p>
           {status?.duplicateGroups.pending ? (
-            <p className="text-sm text-orange-600 mt-2">
-              {status.duplicateGroups.pending} 组待处理
-            </p>
+<p className="text-sm text-orange-400 mt-2">
+               {status.duplicateGroups.pending} 组待处理
+             </p>
           ) : null}
         </Link>
 
@@ -219,9 +219,9 @@ function GovernancePageContent() {
           <div className="bg-orange-900/20 rounded-lg p-4">
             <div className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-orange-500" />
-              <p className="text-sm text-orange-600">待审核</p>
+              <p className="text-sm text-orange-400">待审核</p>
             </div>
-            <p className="text-2xl font-bold text-orange-700">
+            <p className="text-2xl font-bold text-orange-400">
               {status?.migration.pendingReview || 0}
             </p>
           </div>

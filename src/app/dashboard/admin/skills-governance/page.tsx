@@ -313,7 +313,7 @@ function SkillsGovernanceContent() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div className="bg-red-900/20 border border-red-500/20 text-red-700 px-4 py-3 rounded-lg">
+        <div className="bg-red-900/20 border border-red-500/20 text-red-400 px-4 py-3 rounded-lg">
           {error}
         </div>
         <button
@@ -476,12 +476,12 @@ function SkillsGovernanceContent() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">Skills总数</p>
-              <p className="text-3xl font-bold text-blue-600 mt-1">
+              <p className="text-3xl font-bold text-blue-400 mt-1">
                 {stats?.totalSkills || 0}
               </p>
             </div>
-            <div className="p-3 bg-blue-100 rounded-lg">
-              <Award className="text-blue-600" size={24} />
+            <div className="p-3 bg-blue-900/20 rounded-lg">
+              <Award className="text-blue-400" size={24} />
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -494,12 +494,12 @@ function SkillsGovernanceContent() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">预警记录</p>
-              <p className="text-3xl font-bold text-orange-600 mt-1">
+              <p className="text-3xl font-bold text-orange-400 mt-1">
                 {stats?.totalWarnings || 0}
               </p>
             </div>
-            <div className="p-3 bg-orange-100 rounded-lg">
-              <AlertTriangle className="text-orange-600" size={24} />
+            <div className="p-3 bg-orange-900/20 rounded-lg">
+              <AlertTriangle className="text-orange-400" size={24} />
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -512,12 +512,12 @@ function SkillsGovernanceContent() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">高频重复</p>
-              <p className="text-3xl font-bold text-red-600 mt-1">
+              <p className="text-3xl font-bold text-red-400 mt-1">
                 {stats?.highRiskSkills || 0}
               </p>
             </div>
-            <div className="p-3 bg-red-100 rounded-lg">
-              <TrendingUp className="text-red-600" size={24} />
+            <div className="p-3 bg-red-900/20 rounded-lg">
+              <TrendingUp className="text-red-400" size={24} />
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -530,12 +530,12 @@ function SkillsGovernanceContent() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-400">待处理</p>
-              <p className="text-3xl font-bold text-purple-600 mt-1">
+              <p className="text-3xl font-bold text-purple-400 mt-1">
                 {pendingTotal}
               </p>
             </div>
-            <div className="p-3 bg-purple-100 rounded-lg">
-              <Clock className="text-purple-600" size={24} />
+            <div className="p-3 bg-purple-900/20 rounded-lg">
+              <Clock className="text-purple-400" size={24} />
             </div>
           </div>
           <p className="text-xs text-gray-500 mt-2">
@@ -563,7 +563,7 @@ function SkillsGovernanceContent() {
             </span>
           </div>
           <span className="text-gray-400">
-            平均匹配率: <span className="font-semibold text-blue-600">{((stats?.avgMatchRate || 0) * 100).toFixed(1)}%</span>
+            平均匹配率: <span className="font-semibold text-blue-400">{((stats?.avgMatchRate || 0) * 100).toFixed(1)}%</span>
           </span>
         </div>
       </div>
@@ -578,7 +578,7 @@ function SkillsGovernanceContent() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === tab.id
-                    ? 'border-blue-500 text-blue-600'
+                    ? 'border-blue-500 text-blue-400'
                     : 'border-transparent text-gray-500 hover:text-gray-300 hover:border-gray-600'
                 }`}
               >
@@ -598,7 +598,7 @@ function SkillsGovernanceContent() {
                 <h3 className="text-lg font-semibold text-gray-100">高频重叠 Skills</h3>
                 <button
                   onClick={() => router.push('/dashboard/admin/skills-governance/high-frequency')}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+                  className="inline-flex items-center text-sm text-blue-400 hover:text-blue-300"
                 >
                   查看全部
                   <ChevronRight size={16} className="ml-1" />
@@ -650,7 +650,7 @@ function SkillsGovernanceContent() {
                 <h3 className="text-lg font-semibold text-gray-100">重叠技能组</h3>
                 <button
                   onClick={() => router.push('/dashboard/admin/skills-governance/merge-candidates')}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+                  className="inline-flex items-center text-sm text-blue-400 hover:text-blue-300"
                 >
                   查看合并候选
                   <ChevronRight size={16} className="ml-1" />
@@ -679,14 +679,14 @@ function SkillsGovernanceContent() {
                         <div className="flex items-center space-x-2">
                           <button
                             onClick={() => router.push(`/dashboard/skills/${pair.skillId1}`)}
-                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                            className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
                           >
                             {pair.skillName1}
                           </button>
                           <span className="text-gray-400">+</span>
                           <button
                             onClick={() => router.push(`/dashboard/skills/${pair.skillId2}`)}
-                            className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                            className="text-sm text-blue-400 hover:text-blue-300 hover:underline"
                           >
                             {pair.skillName2}
                           </button>
@@ -710,7 +710,7 @@ function SkillsGovernanceContent() {
                 <h3 className="text-lg font-semibold text-gray-100">新增 Skill 影响分析</h3>
                 <button
                   onClick={() => router.push('/dashboard/admin/skills-governance/new-impact')}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+                  className="inline-flex items-center text-sm text-blue-400 hover:text-blue-300"
                 >
                   查看全部
                   <ChevronRight size={16} className="ml-1" />
@@ -753,7 +753,7 @@ function SkillsGovernanceContent() {
                 <h3 className="text-lg font-semibold text-gray-100">观测趋势</h3>
                 <button
                   onClick={() => router.push('/dashboard/admin/skills-governance/trends')}
-                  className="inline-flex items-center text-sm text-blue-600 hover:text-blue-700"
+                  className="inline-flex items-center text-sm text-blue-400 hover:text-blue-300"
                 >
                   查看详细趋势
                   <ChevronRight size={16} className="ml-1" />
