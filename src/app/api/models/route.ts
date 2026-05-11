@@ -5,7 +5,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 
 // 格式化模型数据 - 不返回 apiKey 以保护安全
 function formatModel(model: any, includeApiKey: boolean = false) {
@@ -134,8 +134,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 获取租户 ID 和可见性
-    const visibility = getVisibility(isPublic);
+    // 获取租户 ID
     const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // 验证 providerType

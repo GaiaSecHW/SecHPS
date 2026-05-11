@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       where.OR = [
         { userId: null },

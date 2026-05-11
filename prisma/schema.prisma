@@ -12,19 +12,18 @@ model AgentApp {
   id                String   @id
   userId            String
   tenantId          String?
-  visibility        String   @default("private")
   name              String
   engine            String
   agentHarnessPath  String
   startCommand      String?
   notes             String?
   status            String   @default("active")
+  isPublic          Boolean  @default(false)
   createdAt         DateTime @default(now())
   updatedAt         DateTime
   Tenant            Tenant?  @relation(fields: [tenantId], references: [id])
   User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([visibility])
   @@index([tenantId])
   @@index([userId])
 }
@@ -77,7 +76,6 @@ model AgentTeam {
   id                 String               @id
   userId             String
   tenantId           String?
-  visibility         String               @default("private")
   name               String
   description        String?
   leadAgentId        String
@@ -96,7 +94,6 @@ model AgentTeam {
 
   @@index([leadAgentId])
   @@index([status])
-  @@index([visibility])
   @@index([tenantId])
   @@index([userId])
 }
@@ -798,7 +795,6 @@ model Project {
   id                        String                      @id
   userId                    String
   tenantId                  String?
-  visibility                String                      @default("private")
   configId                  String?
   name                      String
   displayName               String?
@@ -833,7 +829,6 @@ model Project {
   ToolPermission            ToolPermission[]
   Vulnerability             Vulnerability[]
 
-  @@index([visibility])
   @@index([name])
   @@index([status])
   @@index([configId])
@@ -1022,7 +1017,6 @@ model Skill {
   id                                                     String                      @id
   userId                                                 String?
   tenantId                                               String?
-  visibility                                             String                      @default("private")
   name                                                   String
   displayName                                            String
   description                                            String
@@ -1560,7 +1554,6 @@ model TaskInstance {
   id               String             @id
   userId           String?
   tenantId         String?
-  visibility       String             @default("private")
   name             String
   agentId          String
   agentName        String
@@ -1573,6 +1566,7 @@ model TaskInstance {
   scripts          String?
   notes            String?
   status           String             @default("pending")
+  isPublic         Boolean            @default(false)
   startedAt        DateTime?
   completedAt      DateTime?
   errorMessage     String?
@@ -1592,7 +1586,6 @@ model TaskInstance {
   @@index([modelId])
   @@index([agentId])
   @@index([status])
-  @@index([visibility])
   @@index([tenantId])
   @@index([userId])
 }
@@ -1830,7 +1823,6 @@ model Workflow {
   id                String              @id
   userId            String
   tenantId          String?
-  visibility        String              @default("private")
   name              String
   description       String?
   thumbnail         String?
@@ -1857,7 +1849,6 @@ model Workflow {
   @@index([isPublic])
   @@index([isActive])
   @@index([status])
-  @@index([visibility])
   @@index([tenantId])
   @@index([userId])
   @@index([workflowType])

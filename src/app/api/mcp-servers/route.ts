@@ -8,7 +8,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { getOffsetPagination, createPaginatedResponse } from '@/lib/pagination';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { getTenantIdForCreate } from '@/lib/tenant-filter';
 
 // GET /api/mcp-servers - 获取用户可访问的 MCP 服务器列表
 // 普通用户：自己的 MCP + 共享的 MCP + 同租户的 MCP
@@ -180,8 +180,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 获取租户 ID 和可见性
-    const visibility = getVisibility(isShared);
+    // 获取租户 ID
     const tenantId = getTenantIdForCreate(tenant, isShared);
 
     // 检查名称是否已存在（用户自己的 MCP 名称不能重复）

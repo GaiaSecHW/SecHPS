@@ -6,7 +6,7 @@ import { buildSearchFilter, combineWhereClauses } from '@/lib/query-optimizer';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { authenticateRequestEnhanced, authErrorResponse, isAdmin } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 import { AuditLogger } from '@/lib/audit/logger';
 import { generateId } from '@/lib/id-generator';
 
@@ -18,7 +18,6 @@ function formatWorkflow(workflow: any) {
     userName: workflow.user?.name || workflow.user?.username || null,
     userUsername: workflow.user?.username || null,
     tenantId: workflow.tenantId,
-    visibility: workflow.visibility,
     name: workflow.name,
     description: workflow.description,
     thumbnail: workflow.thumbnail,
@@ -66,7 +65,7 @@ export async function GET(request: Request) {
       // 用于评估时：用户可以看到自己的 + 公开的
       baseWhere.OR = [
         { userId: payload.userId },
-        { visibility: 'public' },
+        { isPublic: true },
       ];
     } else if (userIsAdmin || tenant.isIcsTenant) {
       // 管理员/ICSL 可以看到所有
@@ -75,7 +74,7 @@ export async function GET(request: Request) {
       // 普通用户管理页面：可以看到自己的 + 公开共享的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       baseWhere.OR = [
         { userId: payload.userId },
@@ -105,7 +104,6 @@ export async function GET(request: Request) {
           version: true,
           isActive: true,
           isPublic: true,
-          visibility: true,
           tenantId: true,
           workflowType: true,
           createdAt: true,
@@ -176,7 +174,6 @@ export async function POST(request: Request) {
     }
 
     // 验证：只有 ICSL 或平台管理员可创建 public
-    const visibility = getVisibility(isPublic);
     if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
       return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
     }
@@ -209,7 +206,6 @@ export async function POST(request: Request) {
         id: generateId('wf'),
         userId: payload.userId,
         tenantId,
-        visibility,
         name: trimmedName,
         description: description?.trim() || undefined,
         techStack: techStackJson,

@@ -14,7 +14,7 @@ import { logger, LOG_MODULES } from '@/lib/logger';
 import { findSimilarSkills, SkillForSimilarity, SimilarSkill } from '@/services/skill-similarity';
 import { triggerGovernanceAnalysis } from '@/services/skill-governance';
 import { generateId } from '@/lib/id-generator';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 
 // GET /api/skills - 获取 Skills 列表
 // 支持作用域过滤：
@@ -73,16 +73,16 @@ export async function GET(request: Request) {
 
     // 作用域过滤 - 整合多租户
     if (scope === 'public') {
-      // 选择模式：公共技能（系统内置 + visibility=public）
+      // 选择模式：公共技能（系统内置 + isPublic=true）
       where.OR = [
         { userId: null },           // 公共技能（系统内置）
-        { visibility: 'public' },    // 公开分享的技能
+        { isPublic: true },         // 公开分享的技能
       ];
     } else if (scope === 'mine') {
       // 管理模式：自己的技能 + 系统内置的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       where.OR = [
         { userId: payload.userId }, // 自己创建的技能
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
       // 用户可用的所有 Skills：公共 + 自己的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       where.OR = [
         { userId: null },           // 公共技能（系统内置）
@@ -187,8 +187,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 获取租户 ID 和可见性
-    const visibility = getVisibility(isPublic);
+    // 获取租户 ID
     const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // 验证 categoryId 存在性
@@ -257,7 +256,7 @@ export async function POST(request: Request) {
         content,
         userId,
         tenantId,
-        visibility,
+        isPublic,
         isBuiltin,
         version: 1,
         isLatest: true,

@@ -152,7 +152,7 @@ export async function POST(request: Request) {
     // 获取所有可用的 Skills（带租户过滤）
     const tenantFilter = buildTenantFilter(tenant, {
       tenantField: 'tenantId',
-      visibilityField: 'visibility',
+      isPublicField: 'isPublic',
     });
     const skills = await prisma.skill.findMany({
       where: {

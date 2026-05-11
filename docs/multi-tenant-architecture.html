@@ -186,7 +186,7 @@
     padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600;
   }
   .mod-tag.tenant-id { background: rgba(96,165,250,0.15); color: #60a5fa; }
-  .mod-tag.visibility { background: rgba(250,204,21,0.15); color: #fbbf24; }
+  .mod-tag.isPublic { background: rgba(250,204,21,0.15); color: #fbbf24; }
   .mod-tag.public { background: rgba(34,197,94,0.15); color: #4ade80; }
   .mod-tag.private { background: rgba(239,68,68,0.12); color: #f87171; }
   .mod-tag.no-isolation { background: rgba(148,163,184,0.1); color: #94a3b8; }
@@ -377,7 +377,7 @@
         <li><span class="dot"></span>仅可见本租户 private + 所有 public</li>
         <li><span class="dot"></span>不可创建 public 资源</li>
         <li><span class="dot"></span>不可访问租户管理 API</li>
-        <li><span class="dot"></span>查询条件：tenantId OR visibility=public</li>
+        <li><span class="dot"></span>查询条件：tenantId OR isPublic=true</li>
       </ul>
     </div>
   </div>
@@ -452,7 +452,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -464,7 +464,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -476,7 +476,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -488,7 +488,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -500,7 +500,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -512,7 +512,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -535,7 +535,7 @@
           </div>
           <div class="mod-tags">
             <span class="mod-tag tenant-id">tenantId</span>
-            <span class="mod-tag visibility">visibility</span>
+            <span class="mod-tag isPublic">isPublic</span>
           </div>
         </div>
 
@@ -735,11 +735,11 @@
       </div>
       <div class="rule-card">
         <div class="rule-user" style="color:#60a5fa;">普通租户用户</div>
-        <div class="rule-cond">{ OR: [{ tenantId }, { visibility: 'public' }] }</div>
+        <div class="rule-cond">{ OR: [{ tenantId }, { isPublic: true }] }</div>
       </div>
       <div class="rule-card">
         <div class="rule-user" style="color:#94a3b8;">无租户用户</div>
-        <div class="rule-cond">{ visibility: 'public' }</div>
+        <div class="rule-cond">{ isPublic: true }</div>
       </div>
     </div>
   </div>
@@ -764,27 +764,27 @@
         </div>
         <div class="er-model-card">
           <div class="er-model-name">AgentApp</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
         <div class="er-model-card">
           <div class="er-model-name">AgentTeam</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
         <div class="er-model-card">
           <div class="er-model-name">Project</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
         <div class="er-model-card">
           <div class="er-model-name">Workflow</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
         <div class="er-model-card">
           <div class="er-model-name">Skill</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
         <div class="er-model-card">
           <div class="er-model-name">ModelConfig</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
         <div class="er-model-card">
           <div class="er-model-name">McpServerConfig</div>
@@ -792,7 +792,7 @@
         </div>
         <div class="er-model-card">
           <div class="er-model-name">TaskInstance</div>
-          <div class="er-model-fields">tenantId + visibility</div>
+          <div class="er-model-fields">tenantId + isPublic</div>
         </div>
       </div>
 
@@ -818,7 +818,7 @@
     </div>
     <div class="legend-item">
       <div class="legend-dot" style="background:rgba(250,204,21,0.6);"></div>
-      visibility 字段
+      isPublic 字段
     </div>
     <div class="legend-item">
       <div class="legend-dot" style="background:rgba(168,85,247,0.6);"></div>

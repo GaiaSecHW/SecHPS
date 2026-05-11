@@ -70,16 +70,16 @@ model Tenant {
 
 ### 2.2 业务表添加租户隔离字段
 
-| 表名 | tenantId | visibility | 说明 |
-|------|----------|------------|------|
+| 表名 | tenantId | isPublic | 说明 |
+|------|----------|----------|------|
 | User | ✅ | ❌ | 用户所属租户 |
 | AgentApp | ✅ | ✅ | Agent 应用 |
 | Project | ✅ | ✅ | 项目 |
 | Workflow | ✅ | ✅ | 工作流 |
 | Skill | ✅ | ✅ | 技能 |
-| AgentTeam | ✅ | ✅ | Agent 团队 |
+| AgentTeam | ✅ | ❌ | Agent 团队 |
 | ModelConfig | ✅ | ✅ | 模型配置 |
-| McpServerConfig | ✅ | ❌ | MCP 服务器 |
+| McpServerConfig | ✅ | ✅ | MCP 服务器 |
 | TaskInstance | ✅ | ✅ | 任务实例 |
 
 ---
@@ -129,14 +129,11 @@ export function getTenantContext(payload: JWTPayload): TenantContext {
 // 构建基于租户的 WHERE 条件
 export function buildTenantFilter(
   context: TenantContext,
-  options?: { tenantField?: string; visibilityField?: string; }
+  options?: { tenantField?: string; isPublicField?: string; }
 ): object
 
 // 获取创建资源时的租户字段值
 export function getTenantIdForCreate(context: TenantContext, isPublic: boolean): string | null
-
-// 获取 visibility 值
-export function getVisibility(isPublic: boolean): string
 ```
 
 ### 4.3 API 认证中间件扩展 (`src/lib/api-auth.ts`)
@@ -180,7 +177,7 @@ if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
   // 普通用户：public + 同租户
   const filter = buildTenantFilter(tenant, {
     tenantField: 'tenantId',
-    visibilityField: 'visibility',
+    isPublicField: 'isPublic',
   });
   where.OR = [
     { userId: payload.userId },
@@ -199,7 +196,6 @@ if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
   return NextResponse.json({ error: '只有 ICSL 租户可以创建公共资源' }, { status: 403 });
 }
 
-const visibility = getVisibility(isPublic);
 const tenantId = getTenantIdForCreate(tenant, isPublic);
 ```
 
@@ -346,7 +342,7 @@ HTTP 请求
     ▼           ▼               ▼
   {}           {}         { OR: [
 (不过滤,      (不过滤,      { tenantId },
- 全部可见)     全部可见)     { visibility: 'public' }
+ 全部可见)     全部可见)     { isPublic: true }
                           ] }
 ```
 

@@ -111,10 +111,10 @@ The platform implements application-level multi-tenancy with three user classes:
 
 **Core tenant files:**
 - `src/lib/tenant.ts` — `TenantContext` interface and `getTenantContext()` resolution from JWT
-- `src/lib/tenant-filter.ts` — `buildTenantFilter()` for Prisma WHERE conditions, `getTenantIdForCreate()`, `getVisibility()`
+- `src/lib/tenant-filter.ts` — `buildTenantFilter()` for Prisma WHERE conditions, `getTenantIdForCreate()`
 - `src/lib/api-auth.ts` — `authenticateRequestEnhanced()` returns `AuthSuccessResult` with tenant context
 
-**Data isolation model:** Business tables (AgentApp, Project, Workflow, Skill, AgentTeam, ModelConfig, McpServerConfig, TaskInstance) include `tenantId` (nullable) and `visibility` (`'public'`|`'private'`) fields. Queries apply tenant filters at the application layer.
+**Data isolation model:** Business tables (AgentApp, Project, Workflow, Skill, AgentTeam, ModelConfig, McpServerConfig, TaskInstance) include `tenantId` (nullable) and `isPublic` (Boolean) fields. Queries apply tenant filters at the application layer.
 
 **Tenant admin API:** `/api/admin/tenants` — CRUD for tenants and user assignment (Platform Admin only).
 **Tenant admin UI:** `/dashboard/admin/tenants` — tenant management page with user assignment.

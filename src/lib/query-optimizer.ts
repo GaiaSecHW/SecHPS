@@ -74,7 +74,6 @@ export const skillSelectMinimal = {
   isActive: true,
   isBuiltin: true,
   isPublic: true,
-  visibility: true,
   tenantId: true,
   version: true,
   parentId: true,

@@ -7,10 +7,10 @@ export function buildTenantFilter(
   context: TenantContext,
   options?: {
     tenantField?: string;
-    visibilityField?: string;
+    isPublicField?: string;
   }
 ): object {
-  const { tenantField = 'tenantId', visibilityField = 'visibility' } = options ?? {};
+  const { tenantField = 'tenantId', isPublicField = 'isPublic' } = options ?? {};
 
   // 平台管理员（admin，无租户）：返回空条件（不过滤）
   if (context.isPlatformAdmin) {
@@ -22,16 +22,16 @@ export function buildTenantFilter(
     return {};
   }
 
-  // 无租户普通用户：只能看 public
+  // 无租户普通用户：只能看 isPublic 的
   if (!context.tenantId) {
-    return { [visibilityField]: 'public' };
+    return { [isPublicField]: true };
   }
 
-  // 普通租户用户：看 public 或同租户
+  // 普通租户用户：看 isPublic 或同租户
   return {
     OR: [
       { [tenantField]: context.tenantId },
-      { [visibilityField]: 'public' },
+      { [isPublicField]: true },
     ],
   };
 }
@@ -46,11 +46,4 @@ export function getTenantIdForCreate(
   if (isPublic) return null;
   if (context.isPlatformAdmin) return null;
   return context.tenantId;
-}
-
-/**
- * 获取 visibility 值
- */
-export function getVisibility(isPublic: boolean): string {
-  return isPublic ? 'public' : 'private';
 }

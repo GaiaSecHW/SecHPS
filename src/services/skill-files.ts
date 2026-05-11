@@ -370,7 +370,6 @@ export async function copySkillsToProject(
         displayName: true,
         userId: true,
         tenantId: true,
-        visibility: true,
         version: true,
         categoryId: true,
         content: true,
@@ -505,7 +504,6 @@ export async function copySkillsToProject(
           successExecCount: skill.successExecCount ?? 0,
           vulnerabilityTreeId: skill.vulnerabilityTreeId ?? null,
           tenantId: skill.tenantId ?? null,
-          visibility: skill.visibility ?? 'private',
           createdAt: new Date(),
           updatedAt: new Date(),
         };

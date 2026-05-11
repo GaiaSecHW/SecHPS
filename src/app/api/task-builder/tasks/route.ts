@@ -5,7 +5,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { uploadAndExtractArchive, testSftpConnection, uploadFilesToRemote } from '@/lib/sftp-upload';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 import { downloadFilesFromGitea, isGiteaConfigured } from '@/lib/gitea';
 
 export async function POST(request: NextRequest) {
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         id: taskId,
         userId: payload.userId,
         tenantId: tenant.tenantId,
-        visibility: tenant.isIcsTenant ? 'public' : 'private',
+        isPublic: tenant.isIcsTenant,
         name,
         agentId,
         agentName,
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
       // 普通用户：自己的 + 公开的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       where.OR = [
         { userId: payload.userId },

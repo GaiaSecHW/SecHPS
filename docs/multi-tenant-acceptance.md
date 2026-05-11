@@ -41,14 +41,14 @@ AI4WEB 平台支持多部门独立使用，确保各部门数据互相隔离，�
 
 ### 1.3 数据隔离方式
 
-采用**应用层过滤**（非数据库 RLS），通过 `tenantId` + `visibility` 字段实现：
+采用**应用层过滤**（非数据库 RLS），通过 `tenantId` + `isPublic` 字段实现：
 
 | 字段 | 值 | 含义 |
 |------|------|------|
 | `tenantId` | `"xxx"` | 属于指定租户 |
 | `tenantId` | `null` | 公共资源，不属于任何租户 |
-| `visibility` | `"public"` | 所有用户可见 |
-| `visibility` | `"private"` | 仅同租户用户可见 |
+| `isPublic` | `true` | 所有用户可见 |
+| `isPublic` | `false` | 仅同租户用户可见 |
 
 **查询过滤规则：**
 
@@ -56,12 +56,12 @@ AI4WEB 平台支持多部门独立使用，确保各部门数据互相隔离，�
 |---------|---------|
 | 平台管理员 | 无过滤（可见所有） |
 | ICSL 租户 | 无过滤（可见所有） |
-| 无租户用户 | `visibility = 'public'` |
-| 普通租户用户 | `tenantId = 自己的租户ID OR visibility = 'public'` |
+| 无租户用户 | `isPublic = true` |
+| 普通租户用户 | `tenantId = 自己的租户ID OR isPublic = true` |
 
 ### 1.4 涉及租户隔离的业务表
 
-| 表名 | tenantId | visibility | 说明 |
+| 表名 | tenantId | isPublic | 说明 |
 |------|----------|------------|------|
 | User | ✅ | — | 用户所属租户 |
 | AgentApp | ✅ | ✅ | Agent 应用 |
@@ -93,7 +93,7 @@ AI4WEB 平台支持多部门独立使用，确保各部门数据互相隔离，�
 | 查看所有租户数据 | ✅ | ✅ | ❌ |
 | 查看本租户 + 公共资源 | ✅ | ✅ | ✅ |
 | 创建私有资源（自动绑定租户） | ✅ | ✅ | ✅ |
-| 创建公共资源（visibility=public） | ✅ | ✅ | ❌ |
+| 创建公共资源（isPublic=true） | ✅ | ✅ | ❌ |
 | 管理租户（CRUD） | ✅ | ❌ | ❌ |
 | 分配/移除租户用户 | ✅ | ❌ | ❌ |
 | 删除租户 | ✅（无用户时） | ❌ | ❌ |
@@ -141,13 +141,13 @@ AI4WEB 平台支持多部门独立使用，确保各部门数据互相隔离，�
 
 | API 路径 | GET 行为 | POST 行为 |
 |----------|---------|----------|
-| `/api/workflows` | 按租户过滤 | 绑定 tenantId + visibility |
-| `/api/agent-apps` | 按租户过滤 | 绑定 tenantId + visibility |
-| `/api/skills` | 按租户过滤 | 绑定 tenantId + visibility |
-| `/api/models` | 按租户过滤 | 绑定 tenantId + visibility |
+| `/api/workflows` | 按租户过滤 | 绑定 tenantId + isPublic |
+| `/api/agent-apps` | 按租户过滤 | 绑定 tenantId + isPublic |
+| `/api/skills` | 按租户过滤 | 绑定 tenantId + isPublic |
+| `/api/models` | 按租户过滤 | 绑定 tenantId + isPublic |
 | `/api/mcp-servers` | 按租户过滤 | 绑定 tenantId |
-| `/api/projects` | 按租户过滤 | 绑定 tenantId + visibility |
-| `/api/task-builder/tasks` | 按租户过滤 | 绑定 tenantId + visibility |
+| `/api/projects` | 按租户过滤 | 绑定 tenantId + isPublic |
+| `/api/task-builder/tasks` | 按租户过滤 | 绑定 tenantId + isPublic |
 
 ---
 
@@ -247,12 +247,12 @@ curl -X POST http://localhost:3000/api/skills \
 {
   "skill": {
     "tenantId": "tenant_team_a_xxx",
-    "visibility": "private",
+    "isPublic": false,
     "userId": "user_team_a_xxx"
   }
 }
 ```
-验证点：`tenantId` 为当前用户的租户 ID，`visibility` 为 `private`。
+验证点：`tenantId` 为当前用户的租户 ID，`isPublic` 为 `false`。
 
 **步骤 2：普通租户用户尝试创建公共资源（应被拒绝）**
 ```bash
@@ -280,11 +280,11 @@ curl -X POST http://localhost:3000/api/skills \
 {
   "skill": {
     "tenantId": null,
-    "visibility": "public"
+    "isPublic": true
   }
 }
 ```
-验证点：公共资源 `tenantId` 为 `null`，`visibility` 为 `public`。
+验证点：公共资源 `tenantId` 为 `null`，`isPublic` 为 `true`。
 
 ---
 
@@ -302,7 +302,7 @@ curl http://localhost:3000/api/skills?scope=all \
 
 **预期结果**：返回列表仅包含：
 - 本租户的私有资源
-- 所有公共资源（visibility=public）
+- 所有公共资源（isPublic=true）
 
 **验证点**：不包含其他租户的私有资源。
 

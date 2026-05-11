@@ -7,7 +7,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { mkdir, writeFile, readdir } from 'fs/promises';
 import { join } from 'path';
 import { logger, LOG_MODULES } from '@/lib/logger';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 
 // 获取项目列表
 export async function GET(request: Request) {
@@ -36,7 +36,7 @@ export async function GET(request: Request) {
       // 普通用户：自己的 + 公开的 + 同租户的
       const tenantFilter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       where.OR = [
         { userId: payload.userId },
@@ -183,8 +183,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '只有 ICSL 租户可以创建公共资源' } }, { status: 403 });
     }
 
-    // 获取租户 ID 和可见性
-    const visibility = getVisibility(isPublic);
+    // 获取租户 ID
     const tenantId = getTenantIdForCreate(tenant, isPublic);
 
     // 获取系统配置中的项目上传目录
@@ -231,7 +230,6 @@ export async function POST(request: Request) {
         techStack: techStack.length > 0 ? JSON.stringify(techStack) : null,
         userId: payload.userId,
         tenantId,
-        visibility,
         status: 'idle',
         updatedAt: new Date(),
       },

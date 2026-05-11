@@ -60,7 +60,7 @@ export async function GET(
     if (skill.userId && skill.userId !== payload.userId) {
       // 非所有者：平台管理员和 ICSL 可访问
       if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
-        const isPublic = skill.visibility === 'public';
+        const isPublic = skill.isPublic;
         const sameTenant = tenant.tenantId && skill.tenantId === tenant.tenantId;
         if (!isPublic && !sameTenant) {
           return NextResponse.json({ error: '禁止访问' }, { status: 403 });

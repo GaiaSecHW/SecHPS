@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     // 构建租户过滤条件
     const tenantFilter = buildTenantFilter(tenant, {
       tenantField: 'tenantId',
-      visibilityField: 'visibility',
+      isPublicField: 'isPublic',
     });
 
     // 获取所有指定的 Skills（带租户过滤）

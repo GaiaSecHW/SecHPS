@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
-import { buildTenantFilter, getTenantIdForCreate, getVisibility } from '@/lib/tenant-filter';
+import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
 import { uploadFileToGitea, isGiteaConfigured, getGiteaRepoUrl } from '@/lib/gitea';
 import AdmZip from 'adm-zip';
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     } else {
       const filter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
-        visibilityField: 'visibility',
+        isPublicField: 'isPublic',
       });
       apps = await prisma.agentApp.findMany({
         where: {
@@ -120,7 +120,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const visibility = getVisibility(isPublic);
     const tenantId = getTenantIdForCreate(tenant, isPublic);
     const appId = crypto.randomUUID();
 
@@ -184,7 +183,7 @@ export async function POST(request: NextRequest) {
         notes: notes || null,
         status: 'active',
         tenantId,
-        visibility,
+        isPublic,
         updatedAt: new Date(),
       },
     });
