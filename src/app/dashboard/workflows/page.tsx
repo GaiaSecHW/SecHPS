@@ -593,7 +593,7 @@ function WorkflowsContent() {
           {filteredWorkflows.map((workflow) => (
             <div
               key={workflow.id}
-              className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow"
+              className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
             >
               {/* 缩略图区域 */}
               {workflow.thumbnail && (
@@ -608,7 +608,7 @@ function WorkflowsContent() {
               )}
 
               {/* 内容区域 */}
-              <div className="p-6">
+              <div className="p-6 flex-1">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
@@ -671,8 +671,8 @@ function WorkflowsContent() {
                 </p>
               </div>
 
-              {/* 操作按钮 */}
-              <div className="bg-[#0F172A] px-6 py-3 border-t border-gray-700/50">
+              {/* 操作按钮 - 自动向下对齐 */}
+              <div className="bg-[#0F172A] px-6 py-3 border-t border-gray-700/50 mt-auto">
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
                     {/* 编辑流程按钮 - 仅管理员和作者显示"编辑"，其他人显示"查看" */}
