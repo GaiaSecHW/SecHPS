@@ -202,7 +202,8 @@ function executeSSHCommand(config: SftpConfig, command: string): Promise<{ succe
 export async function uploadAndExtractArchive(
   taskId: string,
   fileName: string,
-  fileBuffer: Buffer
+  fileBuffer: Buffer,
+  targetDir?: string
 ): Promise<{ remoteFilePath: string; remoteDirPath: string; extracted: boolean }> {
   const config = getSftpConfig();
 
@@ -221,7 +222,7 @@ export async function uploadAndExtractArchive(
       privateKey: config.privateKey,
     });
 
-    const remoteDirPath = `${config.remotePath}/${taskId}`;
+    const remoteDirPath = targetDir || `${config.remotePath}/${taskId}`;
     const remoteFilePath = `${remoteDirPath}/${fileName}`;
 
     await sftp.mkdir(remoteDirPath, true);
@@ -294,16 +295,29 @@ export async function uploadFilesToRemote(
       privateKey: config.privateKey,
     });
 
-    const remoteDirPath = targetSubDir 
+    const baseDirPath = targetSubDir 
       ? `${config.remotePath}/${taskId}/${targetSubDir}`
       : `${config.remotePath}/${taskId}`;
 
-    await sftp.mkdir(remoteDirPath, true);
+    await sftp.mkdir(baseDirPath, true);
 
     let uploadedCount = 0;
+    let actualProjectPath = baseDirPath;
+
+    // 检测所有文件的公共父目录
+    if (!targetSubDir && files.length > 0) {
+      const firstPathParts = files[0].path.split('/');
+      if (firstPathParts.length > 1) {
+        const topDir = firstPathParts[0];
+        const allInTopDir = files.every(f => f.path.startsWith(`${topDir}/`));
+        if (allInTopDir) {
+          actualProjectPath = `${baseDirPath}/${topDir}`;
+        }
+      }
+    }
 
     for (const file of files) {
-      const remoteFilePath = `${remoteDirPath}/${file.path}`;
+      const remoteFilePath = `${baseDirPath}/${file.path}`;
       
       const parentDir = path.dirname(remoteFilePath);
       await sftp.mkdir(parentDir, true);
@@ -317,8 +331,8 @@ export async function uploadFilesToRemote(
       }
     }
 
-    console.log(`[SFTP] 共上传 ${uploadedCount}/${files.length} 个文件到 ${remoteDirPath}`);
-    return { uploadedCount, remoteDirPath };
+    console.log(`[SFTP] 共上传 ${uploadedCount}/${files.length} 个文件到 ${baseDirPath}`);
+    return { uploadedCount, remoteDirPath: actualProjectPath };
   } finally {
     await sftp.end();
   }

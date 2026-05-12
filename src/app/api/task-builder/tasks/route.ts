@@ -48,46 +48,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (file && file.size > 0) {
+    // 1. 先拉取 Gitea AgentApp 文件，直接放到 taskId 目录下
+    if (agentApp?.agentHarnessPath && isGiteaConfigured()) {
       try {
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        const result = await uploadAndExtractArchive(taskId, file.name, buffer);
-        
-        if (result.extracted) {
-          projectPath = result.remoteDirPath;
-          filePath = null;
-          console.log(`Archive extracted to: ${projectPath}`);
-        } else {
-          filePath = result.remoteFilePath;
-          projectPath = result.remoteDirPath;
-          console.log(`File uploaded to: ${filePath}`);
-        }
-
-        if (agentApp?.agentHarnessPath && isGiteaConfigured()) {
-          try {
-            console.log(`[Task] 开始下载 AgentApp 文件: ${agentId}`);
-            const giteaFiles = await downloadFilesFromGitea(agentId);
-            
-            if (giteaFiles.length > 0) {
-              console.log(`[Task] 下载 ${giteaFiles.length} 个文件，开始上传到远程目录`);
-              
-              const uploadResult = await uploadFilesToRemote(taskId, giteaFiles, 'agent-harness');
-              console.log(`[Task] AgentApp 文件上传完成: ${uploadResult.uploadedCount} 个文件`);
-            }
-          } catch (giteaError) {
-            console.error('[Task] 下载/上传 AgentApp 文件失败:', giteaError);
-          }
-        }
-      } catch (uploadError) {
-        console.error('文件上传/解压失败:', uploadError);
-        const errorMessage = uploadError instanceof Error ? uploadError.message : '文件上传失败';
-        return NextResponse.json({ error: errorMessage }, { status: 500 });
-      }
-    } else if (agentApp?.agentHarnessPath && isGiteaConfigured()) {
-      try {
-        console.log(`[Task] 无用户文件，仅下载 AgentApp 文件: ${agentId}`);
+        console.log(`[Task] 开始下载 AgentApp 文件: ${agentId}`);
         const giteaFiles = await downloadFilesFromGitea(agentId);
         
         if (giteaFiles.length > 0) {
@@ -97,6 +61,35 @@ export async function POST(request: NextRequest) {
         }
       } catch (giteaError) {
         console.error('[Task] 下载/上传 AgentApp 文件失败:', giteaError);
+      }
+    }
+
+    // 2. 后上传用户文件到 Gitea 文件目录内
+    if (file && file.size > 0) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        // 如果有 projectPath（Gitea 文件目录），用户文件上传到其中
+        // 否则创建新的 taskId 目录
+        const targetDir = projectPath || undefined;
+        const result = await uploadAndExtractArchive(taskId, file.name, buffer, targetDir);
+        
+        if (!projectPath) {
+          if (result.extracted) {
+            projectPath = result.remoteDirPath;
+            filePath = null;
+          } else {
+            filePath = result.remoteFilePath;
+            projectPath = result.remoteDirPath;
+          }
+        }
+        
+        console.log(`[Task] 用户文件上传完成: ${result.extracted ? '已解压' : '未解压'}，目录: ${projectPath}`);
+      } catch (uploadError) {
+        console.error('文件上传/解压失败:', uploadError);
+        const errorMessage = uploadError instanceof Error ? uploadError.message : '文件上传失败';
+        return NextResponse.json({ error: errorMessage }, { status: 500 });
       }
     }
 
