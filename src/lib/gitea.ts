@@ -73,7 +73,8 @@ export async function uploadFileToGitea(
   appId: string,
   fileName: string,
   fileContent: Buffer | string,
-  isBase64: boolean = false
+  isBase64: boolean = false,
+  retries: number = 3
 ): Promise<FileUploadResult | null> {
   const config = getGiteaConfig();
   if (!config) {
@@ -90,7 +91,15 @@ export async function uploadFileToGitea(
       ? fileContent.toString('base64') 
       : Buffer.from(fileContent).toString('base64');
 
-  const existingFile = await getFileContent(config, filePath);
+  let existingFile = null;
+  try {
+    existingFile = await getFileContent(config, filePath);
+  } catch (getError) {
+    if (getError instanceof GiteaAuthError) {
+      throw getError;
+    }
+    console.log('[Gitea] getFileContent error (will retry):', getError);
+  }
 
   const body = {
     message: existingFile 
@@ -103,29 +112,43 @@ export async function uploadFileToGitea(
 
   const method = existingFile ? 'PUT' : 'POST';
 
-  const response = await fetch(apiUrl, {
-    method,
-    headers: {
-      Authorization: `token ${config.token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    const response = await fetch(apiUrl, {
+      method,
+      headers: {
+        Authorization: `token ${config.token}`,
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!response.ok) {
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`[Gitea] 文件上传成功: ${filePath}`);
+      return {
+        path: filePath,
+        sha: data.content.sha,
+        url: `${config.url}/${config.repoOwner}/${config.repoName}/src/branch/${config.branch}/${filePath}`,
+      };
+    }
+
     const errorText = await response.text();
+    
+    if (response.status === 403 && errorText.includes('push is rejected') && attempt < retries) {
+      console.log(`[Gitea] Push rejected (attempt ${attempt}/${retries}), waiting 500ms...`);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      continue;
+    }
+    
+    if (response.status === 401 || response.status === 403) {
+      throw new GiteaAuthError(`Gitea 认证失败 (${response.status})，请检查 GITEA_TOKEN 权限配置`);
+    }
+    
     throw new Error(`上传文件失败: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
-  const data = await response.json();
-  console.log(`[Gitea] 文件上传成功: ${filePath}`);
-
-  return {
-    path: filePath,
-    sha: data.content.sha,
-    url: `${config.url}/${config.repoOwner}/${config.repoName}/src/branch/${config.branch}/${filePath}`,
-  };
+  throw new Error(`上传文件失败: 超过最大重试次数 ${retries}`);
 }
 
 export async function uploadMultipleFilesToGitea(

@@ -66,21 +66,20 @@ async function extractAndUploadArchive(appId: string, fileBuffer: Buffer, archiv
       }
     }
     
-    console.log(`[agent-apps] 开始并行上传 ${filesToUpload.length} 个文件...`);
+    console.log(`[agent-apps] 开始串行上传 ${filesToUpload.length} 个文件 (避免 Gitea push reject)...`);
     
-    const uploadPromises = filesToUpload.map(async (file) => {
+    let successCount = 0;
+    for (const file of filesToUpload) {
       try {
-        const result = await uploadFileToGitea(appId, file.name, file.content);
+        await uploadFileToGitea(appId, file.name, file.content);
         console.log(`[agent-apps] 上传成功: ${file.name}`);
-        return { success: true, name: file.name };
+        successCount++;
+        await new Promise(resolve => setTimeout(resolve, 100));
       } catch (uploadError) {
         console.error(`[agent-apps] 上传失败 ${file.name}:`, uploadError);
         throw uploadError;
       }
-    });
-    
-    const results = await Promise.all(uploadPromises);
-    const successCount = results.filter(r => r.success).length;
+    }
     
     console.log(`[agent-apps] 解压上传完成，成功上传 ${successCount}/${filesToUpload.length} 个文件`);
     return `${getGiteaRepoUrl()}/src/branch/main/${appId}`;
