@@ -51,6 +51,7 @@ export async function POST(
       select: {
         engine: true,
         name: true,
+        startCommand: true,
       },
     });
 
@@ -81,8 +82,9 @@ export async function POST(
       timestamp: new Date(),
     });
 
-    const instruction = task.notes || '';
     const workspacePath = task.projectPath || undefined;
+    const skills = mergedSkills ? parseJsonArray(mergedSkills) : undefined;
+    const scripts = mergedScripts ? parseJsonArray(mergedScripts) : undefined;
 
     let model: string | undefined;
     if (task.ModelConfig?.models) {
@@ -102,18 +104,21 @@ export async function POST(
     const apiKey = task.ModelConfig?.apiKey || undefined;
     const timeoutSec = 300;
     const agent = agentApp?.engine || 'opencode';
+    const startCommand = agentApp?.startCommand || undefined;
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const codeswarmResponse = await fetch(`${baseUrl}/api/codeswarm/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        instruction,
         workspacePath,
+        skills,
+        scripts,
         model,
         apiKey,
         timeoutSec,
         agent,
+        startCommand,
       }),
     });
 

@@ -3,7 +3,7 @@ import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
-import { uploadFileToGitea, isGiteaConfigured, getGiteaRepoUrl } from '@/lib/gitea';
+import { uploadFileToGitea, isGiteaConfigured, getGiteaRepoUrl, GiteaAuthError } from '@/lib/gitea';
 import AdmZip from 'adm-zip';
 
 export async function GET(request: NextRequest) {
@@ -65,7 +65,7 @@ async function extractAndUploadArchive(appId: string, fileBuffer: Buffer, archiv
         return { success: true, name: file.name };
       } catch (uploadError) {
         console.error(`[agent-apps] 上传失败 ${file.name}:`, uploadError);
-        return { success: false, name: file.name };
+        throw uploadError;
       }
     });
     
@@ -76,7 +76,7 @@ async function extractAndUploadArchive(appId: string, fileBuffer: Buffer, archiv
     return `${getGiteaRepoUrl()}/src/branch/main/${appId}`;
   } catch (extractError) {
     console.error('[agent-apps] 解压失败:', extractError);
-    return null;
+    throw extractError;
   }
 }
 
@@ -155,6 +155,7 @@ export async function POST(request: NextRequest) {
                 }
               } catch (uploadError) {
                 console.error(`[agent-apps POST] Gitea 上传失败 ${relativePath}:`, uploadError);
+                throw uploadError;
               }
             }
             return { success: false };
@@ -169,6 +170,18 @@ export async function POST(request: NextRequest) {
         }
       } catch (giteaError) {
         console.error('[agent-apps POST] Gitea 上传失败:', giteaError);
+        
+        if (giteaError instanceof GiteaAuthError) {
+          return NextResponse.json({ 
+            error: 'Gitea 认证失败', 
+            details: 'GITEA_TOKEN 无效或权限不足，请检查 Gitea 配置。需要具有 repo 写权限的 Access Token。'
+          }, { status: 401 });
+        }
+        
+        return NextResponse.json({ 
+          error: 'Gitea 上传失败', 
+          details: giteaError instanceof Error ? giteaError.message : 'Unknown error'
+        }, { status: 500 });
       }
     }
 

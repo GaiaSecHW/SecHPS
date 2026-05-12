@@ -120,56 +120,41 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId } = payload;
+    const { taskId, agent, startCommand } = payload;
     let workspace: string | null = null;
 
     try {
-      // 1. Build isolated workspace
+      // 1. Get workspace path (NFS passthrough or build)
       workspace = await this.envFactory.build(payload);
-      this.server.log.info({ taskId, workspace }, 'Workspace built');
+      this.server.log.info({ taskId, workspace }, 'Workspace ready');
 
-      // 2. Start OpenCode ACP process + create session
-      const client = await this.processMgr.start(
-        taskId, workspace,
-        payload.apiKey || '',
+      // 2. Run agent command in workspace based on agent type
+      const agentType = agent || 'opencode';
+      this.server.log.info({ taskId, agent: agentType, startCommand }, 'Starting agent execution');
+
+      const result = await this.processMgr.runAgent(
+        taskId,
+        workspace,
+        agentType,
+        startCommand,
+        payload.apiKey,
         payload.model,
-        payload.env,
+        payload.env
       );
 
-      // 3. Register event handlers to forward to NAZHUA
-      let textOutput = '';
-      client.on({
-        text: (content) => {
-          textOutput += content;
-          this.postEvent(payload, [{ type: 'agent_message_chunk', content, timestamp: new Date().toISOString() }]);
-          process.stdout.write(content);
-        },
-        toolCall: (tool, input) => {
-          this.postEvent(payload, [{ type: 'tool_call', tool, input, timestamp: new Date().toISOString() }]);
-        },
-        toolCallUpdate: (output) => {
-          this.postEvent(payload, [{ type: 'tool_call_update', output, timestamp: new Date().toISOString() }]);
-        },
-        error: (message) => {
-          this.postEvent(payload, [{ type: 'error', message, timestamp: new Date().toISOString() }]);
-        },
-      });
+      this.server.log.info({ taskId, exitCode: result.exitCode, stdoutLen: result.stdout.length }, 'Agent execution completed');
 
-      // 4. Send prompt (blocks until agent finishes)
-      this.server.log.info({ taskId }, 'Sending prompt');
-      const stopReason = await this.processMgr.sendPrompt(taskId, payload.instruction);
-      this.server.log.info({ taskId, stopReason }, 'Prompt completed');
-
-      // 5. Collect security report if present
+      // 3. Collect security report if present
       const reportContent = this.collectReport(workspace);
 
-      // 6. Report result
-      this.server.log.info({ taskId, outputLen: textOutput.length }, 'Agent output');
+      // 4. Report result
+      const status: TaskResultStatus = result.exitCode === 0 ? 'completed' : 'failed';
       await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
-        status: 'completed',
-        result: textOutput,
+        status,
+        result: result.stdout || result.stderr,
+        error: result.exitCode !== 0 ? result.stderr : undefined,
         reportContent,
       });
     } catch (error) {

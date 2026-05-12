@@ -312,17 +312,19 @@ model CodeswarmTask {
   taskId          String           @unique
   workerId        String?
   state           String           @default("queued")
-  instruction     String
+  instruction     String?
   projectPath     String?
   workspacePath   String?
   gitUrl          String?
   gitRef          String?
   skills          String?
+  scripts         String?
   mcps            String?
   model           String?
   apiKey          String?
   timeoutSec      Int?
   agent           String?
+  startCommand    String?
   events          String?
   result          String?
   error           String?

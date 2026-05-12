@@ -3,6 +3,13 @@
  * 用于将 AgentHarness 文件上传到 Gitea 仓库
  */
 
+export class GiteaAuthError extends Error {
+  constructor(message: string = 'Gitea 认证失败，请检查 GITEA_TOKEN 配置') {
+    super(message);
+    this.name = 'GiteaAuthError';
+  }
+}
+
 interface GiteaConfig {
   url: string;
   token: string;
@@ -48,6 +55,9 @@ async function getFileContent(
   if (!response.ok) {
     if (response.status === 404) {
       return null;
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new GiteaAuthError(`Gitea 认证失败 (${response.status})，请检查 GITEA_TOKEN 权限配置`);
     }
     throw new Error(`获取文件失败: ${response.status} ${response.statusText}`);
   }

@@ -32,7 +32,7 @@ export class EnvironmentFactory {
     this.skillsRegistryPath = path.resolve(config.skillsRegistryPath || './shared/skills_registry');
   }
 
-  /**
+/**
    * Build an isolated workspace for a task.
    * Priority: gitUrl > workspacePath (NFS) > projectPath (local copy)
    */
@@ -41,12 +41,75 @@ export class EnvironmentFactory {
     // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
     if (payload.workspacePath) {
       const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
-      const instructionPath = localWorkspacePath.endsWith('/')
-        ? `${localWorkspacePath}instruction.txt`
-        : `${localWorkspacePath}/instruction.txt`;
-      fs.writeFileSync(instructionPath, payload.instruction);
       return localWorkspacePath;
     }
+
+    // Local workspace mode
+    const workspacePath = path.join(this.workspaceBasePath, payload.taskId);
+
+    try {
+      // Step 1: Create workspace directory
+      fs.mkdirSync(workspacePath, { recursive: true });
+
+      // Step 2: Populate workspace from git or local copy
+      if (payload.gitUrl) {
+        // Git clone mode: clone repo into a 'code' subdirectory
+        const codeDir = path.join(workspacePath, 'code');
+        this.gitClone(payload.gitUrl, codeDir, payload.gitRef);
+      } else {
+        // Local copy mode
+        const projectPath = payload.projectPath;
+        if (!projectPath || !fs.existsSync(projectPath)) {
+          throw new Error(`Project path does not exist: ${projectPath}`);
+        }
+        fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
+      }
+
+      // Step 3: Create .opencode/skills/ subdirectory
+      const skillsDir = path.join(workspacePath, '.opencode', 'skills');
+      fs.mkdirSync(skillsDir, { recursive: true });
+
+      // Step 4: Copy skill files
+      if (payload.skills && payload.skills.length > 0) {
+        for (const skillId of payload.skills) {
+          const sourceSkillPath = path.join(this.skillsRegistryPath, skillId, 'latest', 'SKILL.md');
+          const destSkillPath = path.join(skillsDir, skillId);
+
+          if (!fs.existsSync(sourceSkillPath)) {
+            console.warn(`Skill file not found: ${sourceSkillPath}`);
+            continue;
+          }
+
+          fs.mkdirSync(destSkillPath, { recursive: true });
+          fs.copyFileSync(sourceSkillPath, path.join(destSkillPath, 'SKILL.md'));
+        }
+      }
+
+      // Step 5: Generate opencode.json if model or MCP config given
+      const opencodeConfig: Record<string, any> = {};
+      if (payload.model) {
+        opencodeConfig.model = payload.model;
+      }
+      if (payload.mcps && payload.mcps.length > 0) {
+        opencodeConfig.mcp = this.normalizeMcpServices(payload.mcps);
+      }
+      if (Object.keys(opencodeConfig).length > 0) {
+        opencodeConfig["$schema"] = "https://opencode.ai/config.json";
+        fs.writeFileSync(
+          path.join(workspacePath, 'opencode.json'),
+          JSON.stringify(opencodeConfig, null, 2)
+        );
+      }
+
+      return workspacePath;
+    } catch (error) {
+      // Clean up partial workspace on error
+      if (fs.existsSync(workspacePath)) {
+        this.cleanup(workspacePath);
+      }
+      throw error;
+    }
+  }
 
     // Local workspace mode
     const workspacePath = path.join(this.workspaceBasePath, payload.taskId);
