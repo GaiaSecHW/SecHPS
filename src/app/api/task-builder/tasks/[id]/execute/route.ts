@@ -51,7 +51,7 @@ export async function POST(
       select: {
         engine: true,
         name: true,
-        startCommand: true,
+        defaultAgentName: true,
       },
     });
 
@@ -104,7 +104,7 @@ export async function POST(
     const apiKey = task.ModelConfig?.apiKey || undefined;
     const timeoutSec = 300;
     const agent = agentApp?.engine || 'opencode';
-    const startCommand = agentApp?.startCommand || undefined;
+    const defaultAgentName = agentApp?.defaultAgentName || undefined;
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const codeswarmResponse = await fetch(`${baseUrl}/api/codeswarm/tasks`, {
@@ -118,7 +118,7 @@ export async function POST(
         apiKey,
         timeoutSec,
         agent,
-        startCommand,
+        defaultAgentName,
       }),
     });
 

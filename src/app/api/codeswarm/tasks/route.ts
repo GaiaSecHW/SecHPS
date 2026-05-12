@@ -50,7 +50,7 @@ export async function POST(request: Request) {
       gitUrl,
       gitRef,
       agent,
-      startCommand,
+      defaultAgentName,
       action,
     } = body;
 
@@ -131,7 +131,7 @@ export async function POST(request: Request) {
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
-        startCommand: startCommand || null,
+        defaultAgentName: defaultAgentName || null,
         updatedAt: new Date(),
       },
     }) as any;

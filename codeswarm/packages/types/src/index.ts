@@ -122,8 +122,8 @@ export const TaskPayloadSchema = z.object({
   gitRef: z.string().optional(),
   // Agent type (opencode, claudecode, etc.)
   agent: z.string().optional(),
-  // Start command from AgentApp configuration
-  startCommand: z.string().optional(),
+  // Default agent name for command execution
+  defaultAgentName: z.string().optional(),
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

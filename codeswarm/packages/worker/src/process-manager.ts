@@ -84,10 +84,10 @@ export class ProcessManager {
 
   /** 
    * Run agent command based on agent type
-   * - opencode: `opencode run --command "${startCommand}"`
-   * - claudecode: `claude --command "${startCommand}"` (or similar)
+   * - opencode: `opencode run --command "${defaultAgentName}"`
+   * - claudecode: `claude --prompt "${defaultAgentName}"` (or similar)
    */
-  async runAgent(taskId: string, workspace: string, agentType: AgentType, startCommand?: string, apiKey?: string, model?: string, env?: Record<string, string>): Promise<RunResult> {
+  async runAgent(taskId: string, workspace: string, agentType: AgentType, defaultAgentName?: string, apiKey?: string, model?: string, env?: Record<string, string>): Promise<RunResult> {
     const mergedEnv: Record<string, string> = { ...env };
     if (apiKey) {
       mergedEnv.ANTHROPIC_API_KEY = apiKey;
@@ -99,8 +99,8 @@ export class ProcessManager {
     if (agentType === 'opencode') {
       command = 'opencode';
       args = ['run'];
-      if (startCommand) {
-        args.push('--command', startCommand);
+      if (defaultAgentName) {
+        args.push('--command', defaultAgentName);
       }
       if (model) {
         mergedEnv.OPENCODE_MODEL = model;
@@ -108,13 +108,13 @@ export class ProcessManager {
     } else if (agentType === 'claudecode' || agentType === 'claude') {
       command = 'claude';
       args = [];
-      if (startCommand) {
-        args.push('--prompt', startCommand);
+      if (defaultAgentName) {
+        args.push('--prompt', defaultAgentName);
       }
     } else {
       command = agentType;
-      if (startCommand) {
-        args.push(startCommand);
+      if (defaultAgentName) {
+        args.push(defaultAgentName);
       }
     }
 

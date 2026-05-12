@@ -122,7 +122,7 @@ class CodeswarmDispatcher {
           gitUrl: task.gitUrl || undefined,
           gitRef: task.gitRef || undefined,
           agent: task.agent || undefined,
-          startCommand: task.startCommand || undefined,
+          defaultAgentName: task.defaultAgentName || undefined,
         }),
         signal: AbortSignal.timeout(10000),
       });
