@@ -12,13 +12,22 @@ export async function GET(request: NextRequest) {
 
   const { tenant, payload } = auth as AuthSuccessResult;
 
+  console.log('[agent-apps GET] Auth info:', { 
+    userId: payload.userId, 
+    tenantId: payload.tenantId,
+    isPlatformAdmin: tenant?.isPlatformAdmin,
+    isIcsTenant: tenant?.isIcsTenant 
+  });
+
   try {
     let apps;
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      console.log('[agent-apps GET] Fetching all apps (admin)');
       apps = await prisma.agentApp.findMany({
         orderBy: { createdAt: 'desc' },
       });
     } else {
+      console.log('[agent-apps GET] Fetching filtered apps');
       const filter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
         isPublicField: 'isPublic',
@@ -31,10 +40,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    console.log('[agent-apps GET] Found apps:', apps?.length);
     return NextResponse.json({ apps });
   } catch (error) {
     console.error('获取应用列表失败:', error);
-    return NextResponse.json({ error: '获取应用列表失败' }, { status: 500 });
+    return NextResponse.json({ error: '获取应用列表失败', details: error instanceof Error ? error.message : 'Unknown' }, { status: 500 });
   }
 }
 
