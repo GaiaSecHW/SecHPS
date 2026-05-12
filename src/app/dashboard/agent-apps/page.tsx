@@ -10,6 +10,7 @@ interface AgentApp {
   id: string;
   name: string;
   engine: string;
+  defaultAgentName: string;
   startCommand?: string | null;
   notes?: string | null;
   createdAt: string;
@@ -118,6 +119,7 @@ export default function AgentAppsPage() {
       const fd = new FormData();
       fd.append('name', formData.name);
       fd.append('engine', formData.engine);
+      fd.append('defaultAgentName', formData.defaultAgentName);
       if (formData.startCommand) {
         fd.append('startCommand', formData.startCommand);
       }
@@ -166,6 +168,7 @@ export default function AgentAppsPage() {
         const fd = new FormData();
         fd.append('name', formData.name);
         fd.append('engine', formData.engine);
+        fd.append('defaultAgentName', formData.defaultAgentName);
         if (formData.startCommand) {
           fd.append('startCommand', formData.startCommand);
         }
@@ -218,6 +221,7 @@ export default function AgentAppsPage() {
           body: JSON.stringify({
             name: formData.name,
             engine: formData.engine,
+            defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
             notes: formData.notes || null,
           }),
@@ -285,6 +289,7 @@ export default function AgentAppsPage() {
                   <tr className="border-b border-gray-700/50">
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">名称</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">引擎</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">默认智能体</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">启动命令</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">备注</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">创建时间</th>
@@ -299,6 +304,7 @@ export default function AgentAppsPage() {
                       <td className="py-3 px-4">
                         <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-1 rounded">{app.engine}</span>
                       </td>
+                      <td className="py-3 px-4 text-sm text-gray-300">{app.defaultAgentName || '-'}</td>
                       <td className="py-3 px-4 text-sm text-gray-300">{app.startCommand || '-'}</td>
                       <td className="py-3 px-4 text-sm text-gray-400">{app.notes || '-'}</td>
                       <td className="py-3 px-4 text-sm text-gray-500">

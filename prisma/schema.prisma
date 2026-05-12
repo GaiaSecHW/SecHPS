@@ -15,6 +15,7 @@ model AgentApp {
   name              String
   engine            String
   agentHarnessPath  String
+  defaultAgentName  String   @default("default-agent")
   startCommand      String?
   notes             String?
   status            String   @default("active")

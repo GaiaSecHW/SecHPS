@@ -106,6 +106,7 @@ export async function POST(request: NextRequest) {
 
     const name = formData.get('name') as string;
     const engine = formData.get('engine') as string;
+    const defaultAgentName = formData.get('defaultAgentName') as string;
     const startCommand = formData.get('startCommand') as string | null;
     const notes = formData.get('notes') as string | null;
     const isPublic = formData.get('isPublic') === 'true';
@@ -113,9 +114,9 @@ export async function POST(request: NextRequest) {
     const agentHarnessFile = formData.get('agentHarnessFile') as File | null;
     const filesJson = formData.get('filesJson') as string | null;
 
-    console.log('[agent-apps POST] Extracted fields:', { name, engine, startCommand, notes, isPublic, fileType });
+    console.log('[agent-apps POST] Extracted fields:', { name, engine, defaultAgentName, startCommand, notes, isPublic, fileType });
 
-    if (!name || !engine) {
+    if (!name || !engine || !defaultAgentName) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
     }
 
@@ -202,6 +203,7 @@ export async function POST(request: NextRequest) {
         name,
         engine,
         agentHarnessPath,
+        defaultAgentName,
         startCommand: startCommand || null,
         notes: notes || null,
         status: 'active',

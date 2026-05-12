@@ -8,6 +8,7 @@ interface AgentApp {
   id: string;
   name: string;
   engine: string;
+  defaultAgentName: string;
   startCommand?: string | null;
   notes?: string | null;
   createdAt: string;
@@ -17,6 +18,7 @@ interface AgentApp {
 interface FormData {
   name: string;
   engine: 'opencode' | 'claudecode' | '';
+  defaultAgentName: string;
   startCommand?: string;
   notes: string;
 }
@@ -40,6 +42,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   const [formData, setFormData] = useState<FormData>({
     name: '',
     engine: '',
+    defaultAgentName: '',
     startCommand: '',
     notes: '',
   });
@@ -52,6 +55,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
       setFormData({
         name: app.name,
         engine: app.engine as any,
+        defaultAgentName: app.defaultAgentName || '',
         startCommand: app.startCommand || '',
         notes: app.notes || '',
       });
@@ -70,6 +74,10 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
       toast.error('请选择使用引擎');
       return;
     }
+    if (!formData.defaultAgentName.trim()) {
+      toast.error('请输入默认智能体名称');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -84,7 +92,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', startCommand: '', notes: '' });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', notes: '' });
     setAgentHarnessFile(null);
     onClose();
   };
@@ -226,6 +234,20 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                 </button>
               </div>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              默认智能体名称 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.defaultAgentName}
+              onChange={(e) => setFormData({ ...formData, defaultAgentName: e.target.value })}
+              placeholder="例如: code-assistant"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={isSubmitting}
+            />
           </div>
 
           <div>

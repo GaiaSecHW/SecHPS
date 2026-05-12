@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 interface FormData {
   name: string;
   engine: 'opencode' | 'claudecode' | '';
+  defaultAgentName: string;
   startCommand?: string;
   notes: string;
 }
@@ -29,6 +30,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   const [formData, setFormData] = useState<FormData>({
     name: '',
     engine: '',
+    defaultAgentName: '',
     startCommand: '',
     notes: '',
   });
@@ -51,6 +53,10 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       toast.error('请上传 AgentHarness 文件');
       return;
     }
+    if (!formData.defaultAgentName.trim()) {
+      toast.error('请输入默认智能体名称');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -65,7 +71,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', startCommand: '', notes: '' });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', notes: '' });
     setAgentHarnessFile(null);
     onClose();
   };
@@ -203,6 +209,20 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                 </button>
               </div>
             )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              默认智能体名称 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.defaultAgentName}
+              onChange={(e) => setFormData({ ...formData, defaultAgentName: e.target.value })}
+              placeholder="例如: code-assistant"
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={isSubmitting}
+            />
           </div>
 
           <div>
