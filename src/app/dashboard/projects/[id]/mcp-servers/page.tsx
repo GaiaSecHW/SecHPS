@@ -213,7 +213,7 @@ export default function McpServersPage() {
           className="inline-flex items-center text-gray-400 hover:text-gray-100"
         >
           <ArrowLeft className="w-4 h-4 mr-1" />
-          返回项目列表
+          返回任务列表
         </Link>
       </div>
 

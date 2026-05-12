@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
-import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
+import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
 import { uploadFileToGitea, isGiteaConfigured, getGiteaRepoUrl, GiteaAuthError } from '@/lib/gitea';
 import AdmZip from 'adm-zip';
@@ -21,9 +21,18 @@ export async function GET(request: NextRequest) {
 
   try {
     let apps;
+    const include = {
+      Tenant: {
+        select: {
+          name: true,
+        },
+      },
+    };
+
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
       console.log('[agent-apps GET] Fetching all apps (admin)');
       apps = await prisma.agentApp.findMany({
+        include,
         orderBy: { createdAt: 'desc' },
       });
     } else {
@@ -36,6 +45,7 @@ export async function GET(request: NextRequest) {
         where: {
           OR: [{ ...filter }, { userId: payload.userId }],
         },
+        include,
         orderBy: { createdAt: 'desc' },
       });
     }
@@ -107,13 +117,13 @@ export async function POST(request: NextRequest) {
     const engine = formData.get('engine') as string;
     const defaultAgentName = formData.get('defaultAgentName') as string;
     const startCommand = formData.get('startCommand') as string | null;
-    const notes = formData.get('notes') as string | null;
     const isPublic = formData.get('isPublic') === 'true';
+    const frontendTenantId = formData.get('tenantId') as string | null;
     const fileType = formData.get('agentHarnessFileType') as string | null;
     const agentHarnessFile = formData.get('agentHarnessFile') as File | null;
     const filesJson = formData.get('filesJson') as string | null;
 
-    console.log('[agent-apps POST] Extracted fields:', { name, engine, defaultAgentName, startCommand, notes, isPublic, fileType });
+    console.log('[agent-apps POST] Extracted fields:', { name, engine, defaultAgentName, startCommand, isPublic, fileType });
 
     if (!name || !engine || !defaultAgentName) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
@@ -125,12 +135,22 @@ export async function POST(request: NextRequest) {
 
     if (isPublic && !tenant.isIcsTenant && !tenant.isPlatformAdmin) {
       return NextResponse.json(
-        { error: '只有 ICSL 租户可以创建公共资源' },
+        { error: '只有 ICSL 租户或管理员可以创建公共资源' },
         { status: 403 }
       );
     }
 
-    const tenantId = getTenantIdForCreate(tenant, isPublic);
+    let tenantId: string | null;
+    if (isPublic) {
+      tenantId = null;
+    } else if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
+      tenantId = frontendTenantId || null;
+      if (!tenantId) {
+        return NextResponse.json({ error: '请选择租户或勾选公开' }, { status: 400 });
+      }
+    } else {
+      tenantId = tenant.tenantId;
+    }
     const appId = crypto.randomUUID();
 
     let agentHarnessPath = `/agent-apps/${appId}/agent-harness`;
@@ -204,7 +224,6 @@ export async function POST(request: NextRequest) {
         agentHarnessPath,
         defaultAgentName,
         startCommand: startCommand || null,
-        notes: notes || null,
         status: 'active',
         tenantId,
         isPublic,

@@ -71,7 +71,6 @@ export async function PUT(
     let engine: string;
     let defaultAgentName: string;
     let startCommand: string | null;
-    let notes: string | null;
     let isPublic: boolean = false;
     let updateFiles = false;
     let fileType: string | null = null;
@@ -87,7 +86,6 @@ export async function PUT(
       engine = body.engine;
       defaultAgentName = body.defaultAgentName;
       startCommand = body.startCommand || null;
-      notes = body.notes || null;
       isPublic = body.isPublic || false;
     } else if (contentType.includes('multipart/form-data')) {
       formData = await request.formData();
@@ -95,7 +93,6 @@ export async function PUT(
       engine = formData.get('engine') as string;
       defaultAgentName = formData.get('defaultAgentName') as string;
       startCommand = formData.get('startCommand') as string | null;
-      notes = formData.get('notes') as string | null;
       isPublic = formData.get('isPublic') === 'true';
       fileType = formData.get('agentHarnessFileType') as string | null;
       agentHarnessFile = formData.get('agentHarnessFile') as File | null;
@@ -105,7 +102,7 @@ export async function PUT(
       return NextResponse.json({ error: '不支持的 Content-Type' }, { status: 400 });
     }
 
-    console.log('[agent-apps PUT] Update request:', { appId, name, engine, defaultAgentName, startCommand, notes, updateFiles, fileType });
+    console.log('[agent-apps PUT] Update request:', { appId, name, engine, defaultAgentName, startCommand, updateFiles, fileType });
 
     if (!name || !engine || !defaultAgentName) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
@@ -190,7 +187,6 @@ export async function PUT(
         engine,
         defaultAgentName,
         startCommand: startCommand || null,
-        notes: notes || null,
         isPublic,
         agentHarnessPath,
         updatedAt: new Date(),

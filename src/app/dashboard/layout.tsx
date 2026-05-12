@@ -35,6 +35,7 @@ import {
   Megaphone,
   ClipboardList,
   Box,
+  Key,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -137,7 +138,7 @@ function DashboardLayoutContent({
             仪表盘
           </NavLink>
           <NavLink href="/dashboard/sessions" icon={<MessageSquare size={18} />} collapsed={collapsed}>
-            我的项目
+            我的任务
           </NavLink>
           <NavLink href="/dashboard/task-builder" icon={<ClipboardList size={18} />} collapsed={collapsed}>
             任务实例
@@ -199,6 +200,9 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/admin/tenants" icon={<Layers size={18} />} collapsed={collapsed}>
                 租户管理
+              </NavLink>
+              <NavLink href="/dashboard/admin/api-keys" icon={<Key size={18} />} collapsed={collapsed}>
+                API Key 管理
               </NavLink>
               {/* <NavLink href="/dashboard/roles" icon={<Settings size={18} />} collapsed={collapsed}>
                 角色权限

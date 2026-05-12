@@ -124,7 +124,7 @@ export default function DashboardPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        setError(extractErrorMessage(data, '获取项目失败'));
+        setError(extractErrorMessage(data, '获取任务失败'));
         setLoading(false);
         return;
       }
@@ -277,7 +277,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-100">数据看板</h1>
           <p className="mt-1 text-sm text-gray-400">
-            实时监控项目状态和任务进度
+            实时监控任务状态和任务进度
           </p>
         </div>
       </div>
@@ -292,10 +292,10 @@ export default function DashboardPage() {
       <div className="mb-6">
         <h2 className="text-base font-semibold text-gray-200 mb-4 flex items-center">
           <MessageSquare size={18} className="mr-2 text-primary-400" />
-          项目统计
+          任务统计
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard title="总项目数" value={stats.total} icon={<MessageSquare size={22} />} color="from-primary-600 to-primary-700" />
+          <StatCard title="总任务数" value={stats.total} icon={<MessageSquare size={22} />} color="from-primary-600 to-primary-700" />
           <StatCard title="评估运行" value={stats.runningEvaluations} icon={<Activity size={22} />} color="from-blue-600 to-blue-700" />
           <StatCard title="队列中" value={stats.queuedEvaluations} icon={<Hourglass size={22} />} color="from-yellow-600 to-yellow-700" />
           <StatCard title="已完成" value={stats.completed} icon={<CheckCircle2 size={22} />} color="from-green-600 to-green-700" />
@@ -511,7 +511,7 @@ function SessionRow({
         <div className="flex-1">
           <div className="flex items-center space-x-3">
             <h3 className="text-base font-semibold text-gray-100">
-              {session.name || session.title || '未命名项目'}
+              {session.name || session.title || '未命名任务'}
             </h3>
             <span
               className={

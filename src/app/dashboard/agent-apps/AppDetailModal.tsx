@@ -10,7 +10,6 @@ interface AgentApp {
   engine: string;
   defaultAgentName: string;
   startCommand?: string | null;
-  notes?: string | null;
   isPublic: boolean;
   createdAt: string;
   updatedAt: string;
@@ -21,7 +20,6 @@ interface FormData {
   engine: 'opencode' | 'claudecode' | '';
   defaultAgentName: string;
   startCommand?: string;
-  notes: string;
 }
 
 interface AgentHarnessFileData {
@@ -45,7 +43,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     engine: '',
     defaultAgentName: '',
     startCommand: '',
-    notes: '',
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -73,7 +70,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
         engine: app.engine as any,
         defaultAgentName: app.defaultAgentName || '',
         startCommand: app.startCommand || '',
-        notes: app.notes || '',
       });
       setIsPublic(app.isPublic || false);
       setAgentHarnessFile(null);
@@ -109,7 +105,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', notes: '' });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '' });
     setAgentHarnessFile(null);
     setIsPublic(false);
     onClose();
@@ -278,17 +274,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               onChange={(e) => setFormData({ ...formData, startCommand: e.target.value })}
               placeholder="例如: opencode run skill.md"
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">备注说明</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
               disabled={isSubmitting}
             />
           </div>

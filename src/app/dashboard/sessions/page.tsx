@@ -291,7 +291,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        setError(data.error || '获取项目列表失败');
+        setError(data.error || '获取任务列表失败');
         setLoading(false);
         return;
       }
@@ -472,10 +472,10 @@ export default function SessionsPage() {
 
       setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'success' as const })));
 
-      // 刷新项目信息
+      // 刷新任务信息
       await fetchProjects();
       
-      // 更新选中的项目
+      // 更新选中的任务
       const updatedProjects = projects.find(p => p.id === selectedProject.id);
       if (updatedProjects) {
         const token = localStorage.getItem('token');
@@ -525,11 +525,7 @@ export default function SessionsPage() {
 
   const createProject = async () => {
     if (!projectName.trim()) {
-      toast.error('请输入项目名称');
-      return;
-    }
-
-    if (uploadedFiles.length === 0) {
+      toast.error('请输入任务名称');
       toast.error('请至少上传一个文件');
       return;
     }
@@ -563,7 +559,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || '创建项目失败');
+        toast.error(data.error || '创建任务失败');
         setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'error' as const, error: data.error })));
         setUploading(false);
         return;
@@ -621,12 +617,12 @@ export default function SessionsPage() {
       if (!response.ok) {
         const data = await response.json();
         alert(`启动评估失败\n\n${data.error || '未知错误'}`);
-        toast.error(data.error || '启动项目失败');
+        toast.error(data.error || '启动任务失败');
         setStartingProject(null); // 失败时清空状态
         return;
       }
 
-      // 刷新项目列表以显示"评估运行中"状态
+      // 刷新任务列表以显示"评估运行中"状态
       await fetchProjects();
 
       // 刷新完成后清空 startingProject（此时 hasRunningEvaluation 已更新）
@@ -706,7 +702,7 @@ export default function SessionsPage() {
   };
 
   const deleteProject = async (projectId: string) => {
-    if (!confirm('确定要删除这个项目吗？删除后将无法恢复。')) {
+    if (!confirm('确定要删除这个任务吗？删除后将无法恢复。')) {
       return;
     }
 
@@ -721,7 +717,7 @@ export default function SessionsPage() {
 
       if (!response.ok) {
         const data = await response.json();
-        toast.error(data.error || '删除项目失败');
+        toast.error(data.error || '删除任务失败');
         return;
       }
 
@@ -735,7 +731,7 @@ export default function SessionsPage() {
     setSelectedProject(project);
     setProjectName(project.name || '');
     setProjectDescription(project.description || '');
-    // 加载项目的技术栈
+    // 加载任务的技术栈
     if (project.techStack) {
       try {
         setProjectTechStack(JSON.parse(project.techStack));
@@ -1003,7 +999,7 @@ setShowEditModal(true);
 | 状态 | ${statusLabels[vuln.status] || vuln.status} |
 | 发现工具 | ${vuln.skill || '未知'} |
 | 发现时间 | ${new Date(vuln.createdAt).toLocaleString('zh-CN')} |
-| 所属项目 | ${vulnerabilityProject?.name || '无'} |
+| 所属任务 | ${vulnerabilityProject?.name || '无'} |
 
 ## 漏洞描述
 
@@ -1079,10 +1075,10 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 
       toast.success('文件已删除');
       
-      // 刷新项目列表
+      // 刷新任务列表
       await fetchProjects();
       
-      // 直接从 API 获取更新后的项目详情
+      // 直接从 API 获取更新后的任务详情
       if (selectedProject) {
         const detailResponse = await fetch(`/api/projects/${projectId}`, {
           headers: {
@@ -1101,7 +1097,7 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
 
   const updateProject = async () => {
     if (!selectedProject || !projectName.trim()) {
-toast.error('请输入项目名称');
+toast.error('请输入任务名称');
       return;
     }
 
@@ -1125,7 +1121,7 @@ toast.error('请输入项目名称');
 
       if (!response.ok) {
         const data = await response.json();
-toast.error(data.error || '更新项目失败');
+toast.error(data.error || '更新任务失败');
         setUploading(false);
         return;
       }
@@ -1203,9 +1199,9 @@ if (loading) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">我的项目</h1>
+          <h1 className="text-2xl font-bold text-gray-100">我的任务</h1>
           <p className="mt-1 text-sm text-gray-400">
-            管理您的 AI 编程评估项目
+            管理您的 AI 编程评估任务
           </p>
         </div>
 
@@ -1214,7 +1210,7 @@ if (loading) {
           className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <Plus size={20} />
-          <span>新建项目</span>
+          <span>新建任务</span>
         </button>
       </div>
 
@@ -1228,10 +1224,10 @@ if (loading) {
         <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
           <MessageSquare className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-4 text-lg font-medium text-gray-100">
-            暂无项目
+            暂无任务
           </h3>
           <p className="mt-2 text-sm text-gray-400">
-            创建您的第一个项目开始 AI 编程
+            创建您的第一个任务开始 AI 编程
           </p>
         </div>
       ) : (
@@ -1244,8 +1240,8 @@ if (loading) {
               <div className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-gray-100 truncate max-w-[300px]" title={project.name || '未命名项目'}>
-                      {project.name || '未命名项目'}
+                    <h3 className="text-lg font-semibold text-gray-100 truncate max-w-[300px]" title={project.name || '未命名任务'}>
+                      {project.name || '未命名任务'}
                     </h3>
                     {/* 共享状态标签 */}
                     {project.isPublic && (
@@ -1254,7 +1250,7 @@ if (loading) {
                         公开
                       </span>
                     )}
-                    {/* 所有者标签（显示别人的项目时） */}
+                    {/* 所有者标签（显示别人的任务时） */}
                     {project.userName && project.userId !== user?.id && (
                       <span className="inline-flex items-center px-2 py-0.5 bg-dark-surface-hover text-gray-400 rounded text-xs">
                         <User size={12} className="mr-1" />
@@ -1454,7 +1450,7 @@ if (loading) {
                 {/* 第二行：启动评估、编辑、文件管理、删除 */}
                 <div className="flex items-center justify-between">
                   <div className="flex space-x-2">
-                    {/* 启动评估按钮 - 只有项目所有者和管理员可见 */}
+                    {/* 启动评估按钮 - 只有任务所有者和管理员可见 */}
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => {
@@ -1469,7 +1465,7 @@ if (loading) {
                         <span>{startingProject === project.id ? '启动中...' : '启动评估'}</span>
                       </button>
                     )}
-                    {/* 编辑按钮 - 只有项目所有者和管理员可见 */}
+                    {/* 编辑按钮 - 只有任务所有者和管理员可见 */}
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => openEditModal(project)}
@@ -1488,7 +1484,7 @@ if (loading) {
                       <History size={14} />
                       <span>历史</span>
                     </button>
-                    {/* 删除按钮 - 只有项目所有者和管理员可见 */}
+                    {/* 删除按钮 - 只有任务所有者和管理员可见 */}
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => deleteProject(project.id)}
@@ -1507,12 +1503,12 @@ if (loading) {
         </div>
       )}
 
-      {/* 新建项目对话框 */}
+      {/* 新建任务对话框 */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-100">新建项目</h3>
+              <h3 className="text-lg font-semibold text-gray-100">新建任务</h3>
               <button
                 onClick={() => {
                   setShowCreateModal(false);
@@ -1531,7 +1527,7 @@ if (loading) {
             <div className="p-6 space-y-4">
               <div>
                 <label htmlFor="projectName" className="block text-sm font-medium text-gray-300">
-                  项目名称 *
+                  任务名称 *
                 </label>
                 <input
                   id="projectName"
@@ -1540,13 +1536,13 @@ if (loading) {
                   value={projectName}
                   onChange={(e) => setProjectName(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="请输入项目名称"
+                  placeholder="请输入任务名称"
                 />
               </div>
 
               <div>
                 <label htmlFor="projectDescription" className="block text-sm font-medium text-gray-300">
-                  项目描述
+                  任务描述
                 </label>
                 <textarea
                   id="projectDescription"
@@ -1554,7 +1550,7 @@ if (loading) {
                   value={projectDescription}
                   onChange={(e) => setProjectDescription(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="请输入项目描述（可选）"
+                  placeholder="请输入任务描述（可选）"
                 />
               </div>
 
@@ -1778,19 +1774,19 @@ if (loading) {
                 disabled={uploading || !projectName.trim() || uploadedFiles.length === 0}
                 className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? '创建中...' : `创建项目${uploadedFiles.length > 0 ? `（${uploadedFiles.length} 个文件）` : ''}`}
+                {uploading ? '创建中...' : `创建任务${uploadedFiles.length > 0 ? `（${uploadedFiles.length} 个文件）` : ''}`}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 编辑项目对话框 */}
+      {/* 编辑任务对话框 */}
       {showEditModal && selectedProject && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-dark-surface rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-100">编辑项目</h3>
+              <h3 className="text-lg font-semibold text-gray-100">编辑任务</h3>
               <button
                 onClick={() => {
                   setShowEditModal(false);
@@ -1810,7 +1806,7 @@ if (loading) {
             <div className="p-6 space-y-4">
               <div>
                 <label htmlFor="editProjectName" className="block text-sm font-medium text-gray-300">
-                  项目名称 *
+                  任务名称 *
                 </label>
                 <input
                   id="editProjectName"
@@ -1824,7 +1820,7 @@ if (loading) {
 
               <div>
                 <label htmlFor="editProjectDescription" className="block text-sm font-medium text-gray-300">
-                  项目描述
+                  任务描述
                 </label>
                 <textarea
                   id="editProjectDescription"
@@ -2144,7 +2140,7 @@ if (loading) {
                                    });
                                    if (res.ok) {
                                      await fetchProjects();
-                                     // 重新获取项目详情以更新评估列表
+                                     // 重新获取任务详情以更新评估列表
                                      const detailResponse = await fetch(`/api/projects/${selectedProject.id}`, {
                                        headers: { Authorization: `Bearer ${token}` },
                                      });
@@ -2346,7 +2342,7 @@ if (loading) {
             <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-gray-100">选择评估工作流</h3>
-                <p className="text-sm text-gray-500 mt-1">项目: {selectedProject.name}</p>
+                <p className="text-sm text-gray-500 mt-1">任务: {selectedProject.name}</p>
               </div>
               <button
                 onClick={() => {
@@ -2503,7 +2499,7 @@ if (loading) {
               <div>
                 <h3 className="text-lg font-semibold text-gray-100">为角色配置模型</h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  项目: {selectedProject.name} | 编排: {workflows.find(w => w.id === selectedWorkflow)?.name}
+                  任务: {selectedProject.name} | 编排: {workflows.find(w => w.id === selectedWorkflow)?.name}
                 </p>
               </div>
               <button onClick={() => {
@@ -2752,7 +2748,7 @@ if (loading) {
                   <Bug className="mx-auto h-12 w-12 text-gray-400" />
                   <h3 className="mt-4 text-lg font-medium text-gray-100">暂无漏洞</h3>
                   <p className="mt-2 text-sm text-gray-400">
-                    该项目尚未发现漏洞，运行评估后会显示检测结果
+                    该任务尚未发现漏洞，运行评估后会显示检测结果
                   </p>
                 </div>
               ) : (

@@ -12,8 +12,10 @@ interface AgentApp {
   engine: string;
   defaultAgentName: string;
   startCommand?: string | null;
-  notes?: string | null;
   isPublic: boolean;
+  Tenant?: {
+    name: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,8 +126,8 @@ export default function AgentAppsPage() {
       if (formData.startCommand) {
         fd.append('startCommand', formData.startCommand);
       }
-      fd.append('notes', formData.notes || '');
       fd.append('isPublic', isPublic ? 'true' : 'false');
+      fd.append('tenantId', formData.tenantId || '');
       fd.append('agentHarnessFileType', agentHarnessFile.type);
       
       if (agentHarnessFile.type === 'archive') {
@@ -174,7 +176,6 @@ export default function AgentAppsPage() {
         if (formData.startCommand) {
           fd.append('startCommand', formData.startCommand);
         }
-        fd.append('notes', formData.notes || '');
         fd.append('isPublic', isPublic ? 'true' : 'false');
         fd.append('agentHarnessFileType', agentHarnessFile.type);
         
@@ -226,7 +227,6 @@ export default function AgentAppsPage() {
             engine: formData.engine,
             defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
-            notes: formData.notes || null,
             isPublic: isPublic,
           }),
         });
@@ -295,7 +295,6 @@ export default function AgentAppsPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">引擎</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">默认智能体</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">启动命令</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">备注</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">共享</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">创建时间</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">更新时间</th>
@@ -311,7 +310,6 @@ export default function AgentAppsPage() {
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-300">{app.defaultAgentName || '-'}</td>
                       <td className="py-3 px-4 text-sm text-gray-300">{app.startCommand || '-'}</td>
-                      <td className="py-3 px-4 text-sm text-gray-400">{app.notes || '-'}</td>
                       <td className="py-3 px-4">
                         {app.isPublic ? (
                           <span className="text-xs bg-green-500/15 text-green-400 px-2 py-1 rounded">已共享</span>
