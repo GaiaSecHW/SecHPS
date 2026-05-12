@@ -9,7 +9,7 @@ import { AuditLogger } from '@/lib/audit/logger';
 function formatWorkflow(workflow: any) {
   return {
     ...workflow,
-    techStack: workflow.techStack ? JSON.parse(workflow.techStack) : null,
+    techStack: workflow.techStack ? (workflow.techStack.trim() ? JSON.parse(workflow.techStack) : null) : null,
     userName: workflow.user?.name || workflow.user?.username || null,
     userUsername: workflow.user?.username || null,
   };

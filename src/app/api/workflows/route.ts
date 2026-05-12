@@ -21,7 +21,7 @@ function formatWorkflow(workflow: any) {
     name: workflow.name,
     description: workflow.description,
     thumbnail: workflow.thumbnail,
-    techStack: workflow.techStack ? JSON.parse(workflow.techStack) : null,
+    techStack: workflow.techStack ? (workflow.techStack.trim() ? JSON.parse(workflow.techStack) : null) : null,
     status: workflow.status,
     version: workflow.version,
     isActive: workflow.isActive,
