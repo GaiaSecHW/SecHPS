@@ -120,7 +120,7 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, agent, startCommand } = payload;
+    const { taskId, agent, defaultAgentName } = payload;
     let workspace: string | null = null;
 
     try {
@@ -130,13 +130,13 @@ export class WorkerDaemon {
 
       // 2. Run agent command in workspace based on agent type
       const agentType = agent || 'opencode';
-      this.server.log.info({ taskId, agent: agentType, startCommand }, 'Starting agent execution');
+      this.server.log.info({ taskId, agent: agentType, defaultAgentName }, 'Starting agent execution');
 
       const result = await this.processMgr.runAgent(
         taskId,
         workspace,
         agentType,
-        startCommand,
+        defaultAgentName,
         payload.apiKey,
         payload.model,
         payload.env
