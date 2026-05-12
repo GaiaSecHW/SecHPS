@@ -11,6 +11,7 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   notes?: string | null;
+  isPublic: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,7 +36,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   app: AgentApp | null;
-  onUpdate: (appId: string, formData: FormData, agentHarnessFile?: AgentHarnessFileData) => Promise<void>;
+  onUpdate: (appId: string, formData: FormData, agentHarnessFile?: AgentHarnessFileData, isPublic?: boolean) => Promise<void>;
 }
 
 export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props) {
@@ -48,7 +49,22 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // 检查用户是否是 ICSL 或管理员
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+      } catch {
+        setIsIcsOrAdmin(false);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     if (app && isOpen) {
@@ -59,6 +75,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
         startCommand: app.startCommand || '',
         notes: app.notes || '',
       });
+      setIsPublic(app.isPublic || false);
       setAgentHarnessFile(null);
     }
   }, [app, isOpen]);
@@ -81,7 +98,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
     setIsSubmitting(true);
     try {
-      await onUpdate(app.id, formData, agentHarnessFile || undefined);
+      await onUpdate(app.id, formData, agentHarnessFile || undefined, isPublic);
       toast.success('应用更新成功');
       handleClose();
     } catch (error: any) {
@@ -94,6 +111,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   const handleClose = () => {
     setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', notes: '' });
     setAgentHarnessFile(null);
+    setIsPublic(false);
     onClose();
   };
 
@@ -274,6 +292,22 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               disabled={isSubmitting}
             />
           </div>
+
+          {isIcsOrAdmin && (
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isPublic"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                className="w-4 h-4 text-primary-600 border-gray-600 rounded focus:ring-primary-500"
+                disabled={isSubmitting}
+              />
+              <label htmlFor="isPublic" className="text-sm font-medium text-gray-300">
+                共享给所有租户（跨租户共享）
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">

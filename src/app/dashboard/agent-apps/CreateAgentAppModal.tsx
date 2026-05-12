@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, Upload, File, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -23,7 +23,7 @@ interface AgentHarnessFileData {
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onSubmit: (formData: FormData, agentHarnessFile: AgentHarnessFileData) => Promise<void>;
+  onSubmit: (formData: FormData, agentHarnessFile: AgentHarnessFileData, isPublic: boolean) => Promise<void>;
 }
 
 export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props) {
@@ -36,7 +36,22 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPublic, setIsPublic] = useState(false);
+  const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // 检查用户是否是 ICSL 或管理员
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+      } catch {
+        setIsIcsOrAdmin(false);
+      }
+    }
+  }, []);
 
   if (!isOpen) return null;
 
@@ -60,7 +75,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
     setIsSubmitting(true);
     try {
-      await onSubmit(formData, agentHarnessFile);
+      await onSubmit(formData, agentHarnessFile, isPublic);
       toast.success('应用创建成功');
       handleClose();
     } catch (error: any) {
@@ -73,6 +88,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   const handleClose = () => {
     setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', notes: '' });
     setAgentHarnessFile(null);
+    setIsPublic(false);
     onClose();
   };
 
@@ -249,6 +265,22 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               disabled={isSubmitting}
             />
           </div>
+
+          {isIcsOrAdmin && (
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="isPublic"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+                className="w-4 h-4 text-primary-600 border-gray-600 rounded focus:ring-primary-500"
+                disabled={isSubmitting}
+              />
+              <label htmlFor="isPublic" className="text-sm font-medium text-gray-300">
+                共享给所有租户（跨租户共享）
+              </label>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">

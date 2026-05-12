@@ -72,6 +72,7 @@ export async function PUT(
     let defaultAgentName: string;
     let startCommand: string | null;
     let notes: string | null;
+    let isPublic: boolean = false;
     let updateFiles = false;
     let fileType: string | null = null;
     let agentHarnessFile: File | null = null;
@@ -87,6 +88,7 @@ export async function PUT(
       defaultAgentName = body.defaultAgentName;
       startCommand = body.startCommand || null;
       notes = body.notes || null;
+      isPublic = body.isPublic || false;
     } else if (contentType.includes('multipart/form-data')) {
       formData = await request.formData();
       name = formData.get('name') as string;
@@ -94,6 +96,7 @@ export async function PUT(
       defaultAgentName = formData.get('defaultAgentName') as string;
       startCommand = formData.get('startCommand') as string | null;
       notes = formData.get('notes') as string | null;
+      isPublic = formData.get('isPublic') === 'true';
       fileType = formData.get('agentHarnessFileType') as string | null;
       agentHarnessFile = formData.get('agentHarnessFile') as File | null;
       filesJson = formData.get('filesJson') as string | null;
@@ -188,6 +191,7 @@ export async function PUT(
         defaultAgentName,
         startCommand: startCommand || null,
         notes: notes || null,
+        isPublic,
         agentHarnessPath,
         updatedAt: new Date(),
       },

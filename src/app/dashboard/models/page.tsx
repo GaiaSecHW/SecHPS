@@ -68,6 +68,7 @@ interface ModelFormData {
 
 export default function ModelsPage() {
   const [user, setUser] = useState<any>(null);
+  const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [models, setModels] = useState<ModelConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -121,6 +122,15 @@ export default function ModelsPage() {
     if (userData) {
       setUser(JSON.parse(userData));
     }
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+      } catch (e) {
+        console.error('解析 token 失败:', e);
+      }
+    }
     fetchModels();
   }, []);
 
@@ -173,7 +183,7 @@ export default function ModelsPage() {
 
   const handleOpenEditModal = (model: ModelConfig) => {
     // 只能编辑自己创建的模型，管理员可编辑所有
-    if (!user?.roles?.includes('admin') && model.userId !== user?.id && model.userId !== null) {
+    if (!isIcsOrAdmin && model.userId !== user?.id && model.userId !== null) {
       setError('只能编辑自己创建的模型');
       setTimeout(() => setError(null), 3000);
       return;
@@ -260,8 +270,8 @@ export default function ModelsPage() {
         isActive: formData.isActive,
         isPublic: formData.isPublic,
         // 管理员专属字段
-        isSystemModel: user?.roles?.includes('admin') ? formData.isSystemModel : undefined,
-        isDefault: user?.roles?.includes('admin') && formData.isSystemModel ? formData.isDefault : undefined,
+        isSystemModel: isIcsOrAdmin ? formData.isSystemModel : undefined,
+        isDefault: isIcsOrAdmin && formData.isSystemModel ? formData.isDefault : undefined,
       };
 
       const response = await fetch(url, {
@@ -292,7 +302,7 @@ export default function ModelsPage() {
 
   const handleDeleteClick = (model: ModelConfig) => {
     // 只能删除自己创建的模型
-    if (!user?.roles?.includes('admin') && model.userId !== user?.id) {
+    if (!isIcsOrAdmin && model.userId !== user?.id) {
       setError('只能删除自己创建的模型');
       setTimeout(() => setError(null), 3000);
       return;
@@ -410,7 +420,7 @@ export default function ModelsPage() {
 
   // 检查是否可以编辑/删除模型
   const canEditModel = (model: ModelConfig) => {
-    return user?.roles?.includes('admin') || model.userId === user?.id;
+    return isIcsOrAdmin || model.userId === user?.id;
   };
 
   // 过滤模型
@@ -481,7 +491,7 @@ export default function ModelsPage() {
       <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-100">
-            {user?.roles?.includes('admin') ? '所有模型配置' : '我的模型配置'}
+            {isIcsOrAdmin ? '所有模型配置' : '我的模型配置'}
           </h2>
           <div className="flex items-center gap-3">
             {/* 过滤器 */}
@@ -513,7 +523,7 @@ export default function ModelsPage() {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   名称
                 </th>
-                {user?.roles?.includes('admin') && (
+                {isIcsOrAdmin && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     创建者
                   </th>
@@ -544,7 +554,7 @@ export default function ModelsPage() {
             <tbody className="bg-dark-surface divide-y divide-gray-700/50">
               {filteredModels.length === 0 ? (
                 <tr>
-                  <td colSpan={user?.roles?.includes('admin') ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isIcsOrAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
                     暨无模型配置，点击"添加模型"创建您的第一个模型
                   </td>
                 </tr>
@@ -568,7 +578,7 @@ export default function ModelsPage() {
                           )}
                         </div>
                       </td>
-                      {user?.roles?.includes('admin') && (
+                      {isIcsOrAdmin && (
                         <td className="px-4 py-4">
                           <div className="flex items-center gap-2">
                             <User size={16} className="text-gray-400" />
@@ -955,19 +965,21 @@ export default function ModelsPage() {
                     <span className="text-sm text-gray-300">启用</span>
                   </label>
 
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.isPublic}
-                      onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
-                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
-                    />
-                    <span className="text-sm text-gray-300">公开（其他用户可使用）</span>
-                  </label>
+                  {isIcsOrAdmin && (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.isPublic}
+                        onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked })}
+                        className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
+                      />
+                      <span className="text-sm text-gray-300">公开（跨租户共享）</span>
+                    </label>
+                  )}
                 </div>
 
                 {/* 管理员专属选项 */}
-                {user?.roles?.includes('admin') && (
+                {isIcsOrAdmin && (
                   <div className="flex items-center gap-6 pt-2 border-t border-gray-700/50">
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input

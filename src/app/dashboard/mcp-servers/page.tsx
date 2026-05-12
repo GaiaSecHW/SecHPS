@@ -76,7 +76,7 @@ function McpServersContent() {
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = 10;
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [filter, setFilter] = useState<'all' | 'mine' | 'shared'>('all');  // 默认显示自己的+共享的
 
@@ -99,7 +99,7 @@ function McpServersContent() {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setIsAdmin(payload.roles?.includes('admin') || false);
+        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
         setCurrentUserId(payload.userId || '');
       } catch (e) {
         console.error('解析 token 失败:', e);
@@ -279,7 +279,7 @@ function McpServersContent() {
 
   // 切换共享状态（仅管理员可用）
   const handleToggleShared = async (server: McpServer) => {
-    if (!isAdmin) {
+    if (!isIcsOrAdmin) {
       setError('只有管理员可以设置共享状态');
       return;
     }
@@ -308,7 +308,7 @@ function McpServersContent() {
 
   // 检查是否可以编辑/删除（管理员可管理所有，普通用户只能管理自己的）
   const canManage = (server: McpServer) => {
-    return isAdmin || server.userId === currentUserId;
+    return isIcsOrAdmin || server.userId === currentUserId;
   };
 
   const handleTest = async (server: McpServer) => {
@@ -583,7 +583,7 @@ function McpServersContent() {
                     {/* 操作按钮 */}
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       {/* 共享按钮 - 仅管理员可操作 */}
-                      {isAdmin && (
+                      {isIcsOrAdmin && (
                         <button
                           onClick={() => handleToggleShared(server)}
                           className={`mr-3 ${

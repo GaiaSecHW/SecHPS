@@ -40,6 +40,7 @@ function WorkflowsContent() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -95,6 +96,15 @@ function WorkflowsContent() {
       const userData = JSON.parse(userStr);
       setUser(userData);
       setIsAdmin(userData.roles?.includes('admin') || false);
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+        } catch (e) {
+          console.error('解析 token 失败:', e);
+        }
+      }
     }
     
     fetchWorkflows();
@@ -717,7 +727,7 @@ function WorkflowsContent() {
                   </div>
 
                   <div className="flex space-x-1">
-                    {/* 编辑/分享/删除按钮 - 仅管理员和作者可见 */}
+                    {/* 编辑/删除按钮 - 仅管理员和作者可见 */}
                     {(isAdmin || workflow.userId === user?.id) && (
                       <>
                         <button
@@ -728,17 +738,6 @@ function WorkflowsContent() {
                           <FileText size={16} />
                         </button>
                         <button
-                          onClick={() => toggleShare(workflow)}
-                          className={`p-1.5 rounded-md transition-colors ${
-                            workflow.isPublic
-                              ? 'text-blue-400 bg-blue-600/10 hover:bg-blue-600/100/15'
-                              : 'text-gray-400 hover:text-blue-400 hover:bg-blue-600/100/10'
-                          }`}
-                          title={workflow.isPublic ? '点击设为私有' : '点击设为公开分享'}
-                        >
-                          {workflow.isPublic ? <Globe size={16} /> : <Lock size={16} />}
-                        </button>
-                        <button
                           onClick={() => deleteWorkflow(workflow.id)}
                           className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-600/100/100/10 rounded-md transition-colors"
                           title="删除"
@@ -746,6 +745,20 @@ function WorkflowsContent() {
                           <Trash2 size={16} />
                         </button>
                       </>
+                    )}
+                    {/* 分享按钮 - 仅 ICSL/管理员可操作 */}
+                    {isIcsOrAdmin && (
+                      <button
+                        onClick={() => toggleShare(workflow)}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          workflow.isPublic
+                            ? 'text-blue-400 bg-blue-600/10 hover:bg-blue-600/100/15'
+                            : 'text-gray-400 hover:text-blue-400 hover:bg-blue-600/100/10'
+                        }`}
+                        title={workflow.isPublic ? '点击设为私有' : '点击设为公开分享'}
+                      >
+                        {workflow.isPublic ? <Globe size={16} /> : <Lock size={16} />}
+                      </button>
                     )}
                   </div>
                 </div>

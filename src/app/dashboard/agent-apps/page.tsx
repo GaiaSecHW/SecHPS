@@ -13,6 +13,7 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   notes?: string | null;
+  isPublic: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -112,10 +113,10 @@ export default function AgentAppsPage() {
     }
   };
 
-  const handleCreateSubmit = async (formData: any, agentHarnessFile: AgentHarnessFileData) => {
+  const handleCreateSubmit = async (formData: any, agentHarnessFile: AgentHarnessFileData, isPublic: boolean) => {
     try {
       const token = localStorage.getItem('token');
-      
+
       const fd = new FormData();
       fd.append('name', formData.name);
       fd.append('engine', formData.engine);
@@ -124,6 +125,7 @@ export default function AgentAppsPage() {
         fd.append('startCommand', formData.startCommand);
       }
       fd.append('notes', formData.notes || '');
+      fd.append('isPublic', isPublic ? 'true' : 'false');
       fd.append('agentHarnessFileType', agentHarnessFile.type);
       
       if (agentHarnessFile.type === 'archive') {
@@ -159,7 +161,7 @@ export default function AgentAppsPage() {
     }
   };
 
-  const handleUpdateSubmit = async (appId: string, formData: any, agentHarnessFile?: AgentHarnessFileData) => {
+  const handleUpdateSubmit = async (appId: string, formData: any, agentHarnessFile?: AgentHarnessFileData, isPublic?: boolean) => {
     try {
       const token = localStorage.getItem('token');
       
@@ -173,6 +175,7 @@ export default function AgentAppsPage() {
           fd.append('startCommand', formData.startCommand);
         }
         fd.append('notes', formData.notes || '');
+        fd.append('isPublic', isPublic ? 'true' : 'false');
         fd.append('agentHarnessFileType', agentHarnessFile.type);
         
         if (agentHarnessFile.type === 'archive') {
@@ -224,6 +227,7 @@ export default function AgentAppsPage() {
             defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
             notes: formData.notes || null,
+            isPublic: isPublic,
           }),
         });
         
@@ -292,6 +296,7 @@ export default function AgentAppsPage() {
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">默认智能体</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">启动命令</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">备注</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">共享</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">创建时间</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">更新时间</th>
                     <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">操作</th>
@@ -307,6 +312,13 @@ export default function AgentAppsPage() {
                       <td className="py-3 px-4 text-sm text-gray-300">{app.defaultAgentName || '-'}</td>
                       <td className="py-3 px-4 text-sm text-gray-300">{app.startCommand || '-'}</td>
                       <td className="py-3 px-4 text-sm text-gray-400">{app.notes || '-'}</td>
+                      <td className="py-3 px-4">
+                        {app.isPublic ? (
+                          <span className="text-xs bg-green-500/15 text-green-400 px-2 py-1 rounded">已共享</span>
+                        ) : (
+                          <span className="text-xs bg-gray-500/15 text-gray-400 px-2 py-1 rounded">私有</span>
+                        )}
+                      </td>
                       <td className="py-3 px-4 text-sm text-gray-500">
                         {new Date(app.createdAt).toLocaleString('zh-CN')}
                       </td>
