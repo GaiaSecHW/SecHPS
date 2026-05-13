@@ -55,7 +55,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        const icsOrAdmin = payload.isIcsTenant === true || payload.isPlatformAdmin === true;
+        const icsOrAdmin = payload.isIcsTenant === true || (Array.isArray(payload.roles) && payload.roles.includes('admin'));
         setIsIcsOrAdmin(icsOrAdmin);
         setUserTenantId(payload.tenantId ?? null);
 
