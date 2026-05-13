@@ -11,15 +11,22 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   isPublic: boolean;
+  tenantId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
+interface Tenant {
+  id: string;
+  name: string;
+}
+
 interface FormData {
   name: string;
-  engine: 'opencode' | 'claudecode' | '';
+  engine: 'opencode' | 'claudecode' | 'agentflow' | '';
   defaultAgentName: string;
   startCommand?: string;
+  tenantId: string;
 }
 
 interface AgentHarnessFileData {
@@ -43,20 +50,34 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     engine: '',
     defaultAgentName: '',
     startCommand: '',
+    tenantId: '',
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // 检查用户是否是 ICSL 或管理员
     const token = localStorage.getItem('token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setIsIcsOrAdmin(payload.isIcsTenant === true || (Array.isArray(payload.roles) && payload.roles.includes('admin')));
+        const roles = Array.isArray(payload.roles) ? payload.roles : [];
+        const admin =
+          payload.isIcsTenant === true ||
+          payload.isPlatformAdmin === true ||
+          (payload.tenantId == null && roles.includes('admin'));
+        setIsIcsOrAdmin(admin);
+
+        if (admin) {
+          fetch('/api/admin/tenants', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+            .then(res => res.json())
+            .then(data => setTenants(data.tenants ?? []))
+            .catch(() => {});
+        }
       } catch {
         setIsIcsOrAdmin(false);
       }
@@ -70,8 +91,8 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
         engine: app.engine as any,
         defaultAgentName: app.defaultAgentName || '',
         startCommand: app.startCommand || '',
+        tenantId: app.isPublic ? '__public__' : (app.tenantId || ''),
       });
-      setIsPublic(app.isPublic || false);
       setAgentHarnessFile(null);
     }
   }, [app, isOpen]);
@@ -94,6 +115,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
     setIsSubmitting(true);
     try {
+      const isPublic = formData.tenantId === '__public__';
       await onUpdate(app.id, formData, agentHarnessFile || undefined, isPublic);
       toast.success('应用更新成功');
       handleClose();
@@ -105,9 +127,8 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '' });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', tenantId: '' });
     setAgentHarnessFile(null);
-    setIsPublic(false);
     onClose();
   };
 
@@ -181,8 +202,29 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               <option value="">请选择引擎</option>
               <option value="opencode">opencode</option>
               <option value="claudecode">claudecode</option>
+              <option value="agentflow">AgentFlow</option>
             </select>
           </div>
+
+          {isIcsOrAdmin && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                租户
+              </label>
+              <select
+                value={formData.tenantId}
+                onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={isSubmitting}
+              >
+                <option value="">请选择租户</option>
+                <option value="__public__">所有租户共享（公开）</option>
+                {tenants.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">AgentHarness 文件更新（可选）</label>
@@ -231,7 +273,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                       {agentHarnessFile.type === 'folder' ? `📁 ${agentHarnessFile.name}` : agentHarnessFile.name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {agentHarnessFile.type === 'folder' 
+                      {agentHarnessFile.type === 'folder'
                         ? `${agentHarnessFile.files?.length || 0} 个文件`
                         : `${((agentHarnessFile.size || 0) / 1024).toFixed(2)} KB`
                       }
@@ -277,22 +319,6 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
               disabled={isSubmitting}
             />
           </div>
-
-          {isIcsOrAdmin && (
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isPublic"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="w-4 h-4 text-primary-600 border-gray-600 rounded focus:ring-primary-500"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="isPublic" className="text-sm font-medium text-gray-300">
-                共享给所有租户（跨租户共享）
-              </label>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">

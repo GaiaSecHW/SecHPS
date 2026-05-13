@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
+import { PipelineViewModal } from '@/components/agent-apps/PipelineViewModal';
 import toast from 'react-hot-toast';
 
 interface AgentApp {
@@ -13,6 +14,7 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   isPublic: boolean;
+  tenantId?: string | null;
   Tenant?: {
     name: string;
   } | null;
@@ -36,6 +38,7 @@ export default function AgentAppsPage() {
   const [selectedApp, setSelectedApp] = useState<AgentApp | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewingApp, setViewingApp] = useState<AgentApp | null>(null);
 
   useEffect(() => {
     fetchApps();
@@ -127,7 +130,9 @@ export default function AgentAppsPage() {
         fd.append('startCommand', formData.startCommand);
       }
       fd.append('isPublic', isPublic ? 'true' : 'false');
-      fd.append('tenantId', formData.tenantId || '');
+      // __public__ 是前端占位值，后端收到 isPublic=true 时不需要 tenantId
+      const tenantId = formData.tenantId === '__public__' ? '' : (formData.tenantId || '');
+      fd.append('tenantId', tenantId);
       fd.append('agentHarnessFileType', agentHarnessFile.type);
       
       if (agentHarnessFile.type === 'archive') {
@@ -325,6 +330,15 @@ export default function AgentAppsPage() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end space-x-2">
+                          {app.engine === 'agentflow' && (
+                            <button
+                              onClick={() => setViewingApp(app)}
+                              className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition-colors"
+                            >
+                              <Eye size={14} className="mr-1" />
+                              查看
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEdit(app)}
                             disabled={deletingId === app.id}
@@ -367,6 +381,12 @@ export default function AgentAppsPage() {
         onClose={() => setIsDetailModalOpen(false)}
         app={selectedApp}
         onUpdate={handleUpdateSubmit}
+      />
+
+      <PipelineViewModal
+        appId={viewingApp?.id}
+        isOpen={!!viewingApp}
+        onClose={() => setViewingApp(null)}
       />
     </div>
   );

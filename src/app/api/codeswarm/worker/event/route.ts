@@ -34,21 +34,20 @@ export async function POST(request: Request) {
       }
 
       if (taskInstance) {
+        const logsToCreate: Array<{ id: string; taskId: string; level: string; message: string; details: string; timestamp: Date }> = [];
+
         for (const event of events) {
           let level = 'info';
           let message = '';
           let details = '';
 
           if (event.type === 'agent_message_chunk') {
-            level = 'info';
             message = 'Agent 输出';
             details = event.content || '';
           } else if (event.type === 'tool_call') {
-            level = 'info';
             message = '工具调用';
             details = event.tool || JSON.stringify(event.input) || '';
           } else if (event.type === 'tool_call_update') {
-            level = 'info';
             message = '工具结果';
             details = event.output || '';
           } else if (event.type === 'error') {
@@ -58,23 +57,26 @@ export async function POST(request: Request) {
           }
 
           if (message) {
-            const logEntry = await prisma.taskExecutionLog.create({
-              data: {
-                id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                taskId: taskInstance.id,
-                level,
-                message,
-                details,
-                timestamp: new Date(),
-              },
+            logsToCreate.push({
+              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              taskId: taskInstance.id,
+              level,
+              message,
+              details,
+              timestamp: new Date(),
             });
+          }
+        }
 
+        if (logsToCreate.length > 0) {
+          await prisma.taskExecutionLog.createMany({ data: logsToCreate });
+          for (const log of logsToCreate) {
             eventBus.emit(`task:${taskInstance.id}`, {
-              id: logEntry.id,
-              level: logEntry.level,
-              message: logEntry.message,
-              details: logEntry.details,
-              timestamp: logEntry.timestamp.toISOString(),
+              id: log.id,
+              level: log.level,
+              message: log.message,
+              details: log.details,
+              timestamp: log.timestamp.toISOString(),
             });
           }
         }

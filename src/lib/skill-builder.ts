@@ -1,14 +1,14 @@
 /**
  * Skill 构建公共模块
- * 
+ *
  * 用于多个 Skill 管理界面：
  * - 快速创建 (create/page.tsx)
  * - 引导式创建 (create-wizard)
  * - 编辑详情 (skills/[id])
  * - 其他 Skill 相关页面
+ *
+ * 注意：此文件不得引入 prisma，会被客户端组件 import。
  */
-
-import { prisma } from '@/lib/prisma';
 
 /**
  * 用户意图数据
@@ -44,22 +44,6 @@ const DEFAULT_OPTIONS: SkillBuildOptions = {
   addOutputFormat: true,
   addTitle: true,
 };
-
-/**
- * 获取系统配置的标准 Skill 输出格式
- */
-export async function getStandardOutputTemplate(): Promise<string | null> {
-  try {
-    const config = await prisma.opencodeConfig.findFirst({
-      where: { isActive: true },
-      select: { skillOutputTemplate: true },
-    });
-    return config?.skillOutputTemplate || null;
-  } catch (error) {
-    console.error('[skill-builder] 获取标准输出格式失败:', error);
-    return null;
-  }
-}
 
 /**
  * 默认输出格式

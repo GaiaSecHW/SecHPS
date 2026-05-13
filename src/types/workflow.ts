@@ -559,3 +559,47 @@ export interface FSMTemplateListResponse {
   templates: FSMTemplateDefinition[];
   total: number;
 }
+
+// ============ AgentFlow 类型 ============
+
+export interface AgentFlowNodeData {
+  nodeType: 'codex' | 'claude' | 'kimi' | 'opencode' | 'pi'
+          | 'python_node' | 'shell' | 'sync' | 'custom'
+          | 'fanout' | 'merge' | 'evolve';
+  taskId: string;
+  prompt?: string;
+  model?: string;
+  tools?: 'read_only' | 'read_write';
+  skills?: string[];
+  mcps?: string[];
+  capture?: 'final' | 'trace';
+  timeoutSeconds?: number;
+  retries?: number;
+  code?: string;
+  script?: string;
+  mode?: 'repo' | 'full';
+  agentName?: string;
+  innerAgentType?: string;
+  fanoutSourceCount?: number;
+  fanoutSourceValues?: string[];
+  fanoutSourceMatrix?: Record<string, string[]>;
+  mergeSourceNodeId?: string;
+  mergeBy?: string[];
+  mergeSize?: number;
+  evolveTarget?: string;
+  evolveOptimizer?: string;
+}
+
+export interface AgentFlowNode {
+  id: string;
+  type: 'agentFlowNode';
+  position: { x: number; y: number };
+  data: AgentFlowNodeData;
+}
+
+export interface AgentFlowEdge {
+  id: string;
+  source: string;
+  target: string;
+  data?: { isFailure: boolean };
+}

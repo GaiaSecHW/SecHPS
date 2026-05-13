@@ -56,11 +56,13 @@ export async function POST(request: Request) {
     if (action === 'dispatch-queued') {
       if (codeswarmDispatcher.isAvailable) {
         // Redis 模式：重新提交所有 queued 任务到 Stream
-        const queuedTasks = await prisma.codeswarmTask.findMany({
-          where: { state: 'queued' },
-          select: { id: true },
-          take: 100,
-        });
+        // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+        const queuedTasks = await prisma.$queryRaw`
+          SELECT id
+          FROM "CodeswarmTask"
+          WHERE state = 'queued'
+          LIMIT 100
+        ` as any[];
         let dispatched = 0;
         for (const t of queuedTasks) {
           if (await codeswarmDispatcher.submitTask(t.id)) dispatched++;
@@ -69,21 +71,31 @@ export async function POST(request: Request) {
       }
 
       // DB fallback
-      const queuedTasks = await prisma.codeswarmTask.findMany({
-        where: { state: 'queued' },
-        orderBy: { createdAt: 'asc' },
-        take: 10,
-      });
+      // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+      const queuedTasks = await prisma.$queryRaw`
+        SELECT id, "taskId", "workerId", state, instruction,
+               "projectPath", "workspacePath", "gitUrl", "gitRef",
+               skills, mcps, model, "apiKey", "timeoutSec", agent,
+               "defaultAgentName", error, "startedAt", "completedAt",
+               "createdAt", "updatedAt"
+        FROM "CodeswarmTask"
+        WHERE state = 'queued'
+        ORDER BY "createdAt" ASC
+        LIMIT 10
+      ` as any[];
 
       if (queuedTasks.length === 0) {
         return NextResponse.json({ message: 'No queued tasks', dispatched: 0 });
       }
 
-      const availableWorkers = await prisma.codeswarmWorker.findMany({
-        where: { status: 'online' },
-        orderBy: { currentTasks: 'asc' },
-        take: 50,
-      });
+      // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+      const availableWorkers = await prisma.$queryRaw`
+        SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks", "createdAt", "updatedAt"
+        FROM "CodeswarmWorker"
+        WHERE status = 'online'
+        ORDER BY "currentTasks" ASC
+        LIMIT 50
+      ` as any[];
 
       const workersWithCapacity = availableWorkers.filter(w => w.currentTasks < w.maxConcurrent);
 
@@ -137,11 +149,14 @@ export async function POST(request: Request) {
 
     // Redis 不可用时，DB fallback：立即尝试同步分发
     if (!redisSubmitted) {
-      const allWorkers = await prisma.codeswarmWorker.findMany({
-        where: { status: 'online' },
-        orderBy: { currentTasks: 'asc' },
-        take: 50,
-      });
+      // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+      const allWorkers = await prisma.$queryRaw`
+        SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks", "createdAt", "updatedAt"
+        FROM "CodeswarmWorker"
+        WHERE status = 'online'
+        ORDER BY "currentTasks" ASC
+        LIMIT 50
+      ` as any[];
 
       const worker = allWorkers.find(w => w.currentTasks < w.maxConcurrent);
 

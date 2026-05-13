@@ -42,6 +42,10 @@ export async function POST(
       return NextResponse.json({ error: '任务不存在' }, { status: 404 });
     }
 
+    if (!auth.payload.roles?.includes('admin') && task.userId !== auth.payload.userId) {
+      return NextResponse.json({ error: '无权执行此任务' }, { status: 403 });
+    }
+
     if (!['pending', 'completed', 'failed'].includes(task.status)) {
       return NextResponse.json({ error: '任务状态不允许执行' }, { status: 400 });
     }
@@ -52,11 +56,25 @@ export async function POST(
         engine: true,
         name: true,
         defaultAgentName: true,
+        startCommand: true,
       },
     });
 
     const mergedSkills = task.mergedSkills || task.skills || undefined;
     const mergedScripts = task.mergedScripts || task.scripts || undefined;
+
+    await prisma.taskInstance.update({
+      where: { id },
+      data: {
+        status: 'running',
+        startedAt: new Date(),
+        completedAt: null,
+        errorMessage: null,
+        mergedSkills,
+        mergedScripts,
+        updatedAt: new Date(),
+      },
+    });
 
     await prisma.taskExecutionLog.deleteMany({
       where: { taskId: id },
@@ -69,14 +87,14 @@ export async function POST(
       timestamp: new Date(),
     });
 
-const workspacePath = task.projectPath || undefined;
+    const workspacePath = task.projectPath || undefined;
     const skills = mergedSkills ? parseJsonArray(mergedSkills) : undefined;
     const scripts = mergedScripts ? parseJsonArray(mergedScripts) : undefined;
 
     let model: string | undefined;
     if (task.ModelConfig?.models) {
       try {
-        const modelsArray = JSON.parse(task.ModelConfig?.models);
+        const modelsArray = JSON.parse(task.ModelConfig.models);
         if (Array.isArray(modelsArray) && modelsArray.length > 0) {
           model = modelsArray[0];
         }
@@ -91,17 +109,14 @@ const workspacePath = task.projectPath || undefined;
     const apiKey = task.ModelConfig?.apiKey || undefined;
     const timeoutSec = 300;
     const agent = agentApp?.engine || 'opencode';
-    const defaultAgentName = agentApp?.defaultAgentName || 'default-agent';
-    const rawParameters = task.parameters || '';
-    const parameters = rawParameters && rawParameters !== '{}' && rawParameters !== 'null' ? rawParameters : '';
-    const instruction = parameters ? `${defaultAgentName} ${parameters}` : defaultAgentName;
+    const defaultAgentName = agentApp?.defaultAgentName || undefined;
+    const startCommand = agentApp?.startCommand || undefined;
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const codeswarmResponse = await fetch(`${baseUrl}/api/codeswarm/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        instruction,
         workspacePath,
         skills,
         scripts,
@@ -109,6 +124,8 @@ const workspacePath = task.projectPath || undefined;
         apiKey,
         timeoutSec,
         agent,
+        defaultAgentName,
+        startCommand,
       }),
     });
 
@@ -119,28 +136,13 @@ const workspacePath = task.projectPath || undefined;
 
     const codeswarmData = await codeswarmResponse.json();
 
-    // CodeswarmTask 创建成功后，更新 TaskInstance 状态
-    await prisma.taskInstance.update({
-      where: { id },
-      data: {
-        status: 'running',
-        startedAt: new Date(),
-        completedAt: null,
-        errorMessage: null,
-        mergedSkills,
-        mergedScripts,
-        codeswarmTaskId: codeswarmData.taskId,
-        updatedAt: new Date(),
-      },
-    });
-
     await prisma.taskExecutionLog.create({
       data: {
         id: `log-${Date.now()}`,
         taskId: id,
         level: 'info',
         message: 'CodeSwarm 任务已分发',
-        details: `taskId: ${codeswarmData.taskId}, worker: ${codeswarmData.workerAddress || 'queued'}, dispatched: ${codeswarmData.dispatched}`,
+        details: `taskId: ${codeswarmData.taskId}, worker: ${codeswarmData.workerAddress || 'queued'}`,
       },
     });
 
@@ -171,6 +173,14 @@ const workspacePath = task.projectPath || undefined;
           updatedAt: new Date(),
         },
       });
+    });
+
+    await prisma.taskInstance.update({
+      where: { id },
+      data: {
+        codeswarmTaskId: codeswarmData.taskId,
+        updatedAt: new Date(),
+      },
     });
 
     return NextResponse.json({

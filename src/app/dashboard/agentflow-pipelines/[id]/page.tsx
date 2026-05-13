@@ -266,13 +266,14 @@ function EditorContent() {
   const handleSaveDraft = async () => {
     setSaveStatus('saving');
     const token = localStorage.getItem('token');
+    const thumbnail = await generateThumbnail();
     const res = await fetch(`/api/agentflow-pipelines/${id}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name, nodes, edges }),
+      body: JSON.stringify({ name, nodes, edges, thumbnail }),
     });
 
     if (res.ok) {

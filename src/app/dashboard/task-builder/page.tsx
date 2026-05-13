@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Plus, ClipboardList, Play, Trash2, Eye, Calendar, User, Shield, Bug, Sword, Network, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square } from 'lucide-react';
+import { Plus, ClipboardList, Play, Trash2, Eye, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, FileText, Clock, AlertCircle } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ConfirmDialog } from '@/components/ui/Modal';
@@ -32,18 +32,17 @@ interface TaskInstance {
 
 interface TaskFormData {
   name: string;
-  agentId: string;
-  agentName: string;
+  agents: { agentId: string; agentName: string }[];
   modelId: string;
   modelName: string;
   description: string;
 }
 
-const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '待执行' },
-  running: { bg: 'bg-blue-900/20', text: 'text-blue-400', label: '执行中' },
-  completed: { bg: 'bg-green-900/20', text: 'text-green-400', label: '已完成' },
-  failed: { bg: 'bg-red-900/20', text: 'text-red-400', label: '执行失败' },
+const statusConfig: Record<string, { border: string; text: string; label: string }> = {
+  pending:   { border: 'border-gray-500',  text: 'text-gray-300',  label: '待执行' },
+  running:   { border: 'border-blue-500',  text: 'text-blue-400',  label: '执行中' },
+  completed: { border: 'border-green-500', text: 'text-green-400', label: '已完成' },
+  failed:    { border: 'border-red-500',   text: 'text-red-400',   label: '执行失败' },
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
@@ -98,42 +97,51 @@ export default function TaskBuilderPage() {
   };
 
   const handleCreateTask = async (formData: TaskFormData, file: File | null) => {
-    try {
-      const token = localStorage.getItem('token');
-      const form = new FormData();
-      form.append('name', formData.name);
-      form.append('agentId', formData.agentId);
-      form.append('agentName', formData.agentName);
-      form.append('modelId', formData.modelId);
-      form.append('modelName', formData.modelName);
-      form.append('notes', formData.description || '');
-      form.append('skills', '');
-      form.append('scripts', '');
-      if (file) {
-        form.append('file', file);
+    const token = localStorage.getItem('token');
+    const isBatch = formData.agents.length > 1;
+    let successCount = 0;
+
+    for (const agent of formData.agents) {
+      try {
+        const taskName = isBatch ? `${formData.name} - ${agent.agentName}` : formData.name;
+        const form = new FormData();
+        form.append('name', taskName);
+        form.append('agentId', agent.agentId);
+        form.append('agentName', agent.agentName);
+        form.append('modelId', formData.modelId);
+        form.append('modelName', formData.modelName);
+        form.append('notes', formData.description || '');
+        form.append('skills', '');
+        form.append('scripts', '');
+        if (file) {
+          form.append('file', file);
+        }
+
+        const response = await fetch('/api/task-builder/tasks', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          const errorMsg = errorData.details
+            ? `${errorData.error}: ${errorData.details}`
+            : errorData.error || '创建失败';
+          throw new Error(errorMsg);
+        }
+        successCount++;
+      } catch (error) {
+        toast.error(`${agent.agentName} 创建失败: ${error instanceof Error ? error.message : '未知错误'}`);
+        if (!isBatch) throw error;
       }
+    }
 
-      const response = await fetch('/api/task-builder/tasks', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: form,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        const errorMsg = errorData.details 
-          ? `${errorData.error}: ${errorData.details}`
-          : errorData.error || '创建失败';
-        throw new Error(errorMsg);
-      }
-
-      toast.success('任务创建成功');
+    if (successCount > 0) {
+      toast.success(isBatch ? `成功创建 ${successCount} 个任务` : '任务创建成功');
       setShowCreateModal(false);
       setCurrentPage(1);
       await fetchTasks(1, pageSize);
-    } catch (error) {
-      toast.error(`创建失败: ${error instanceof Error ? error.message : '未知错误'}`);
-      throw error;
     }
   };
 
@@ -260,7 +268,7 @@ export default function TaskBuilderPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-100">任务实例</h1>
+          <h1 className="text-2xl font-bold text-gray-100">我的任务</h1>
           <p className="mt-1 text-sm text-gray-400">
             管理您的安全审计任务实例
           </p>
@@ -294,109 +302,133 @@ export default function TaskBuilderPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-700/50">
-              <thead className="bg-[#162032]">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    任务名称
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Agent
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    状态
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    创建时间
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-dark-surface divide-y divide-gray-700/50">
-                {tasks.map((task) => {
-                  const config = statusConfig[task.status] || statusConfig.pending;
+        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
+          {tasks.map((task) => {
+            const config = statusConfig[task.status] || statusConfig.pending;
+            const isExecuting = executingIds.has(task.id);
 
-                  return (
-                    <tr key={task.id} className="hover:bg-[#0F172A]">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-gray-100">
-                          {task.name}
+            return (
+              <div
+                key={task.id}
+                className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
+              >
+                <div className="p-5 flex-1">
+                  {/* 标题行 */}
+                  <div className="flex items-start justify-between gap-2">
+                    <h3
+                      className="text-base font-semibold text-gray-100 truncate"
+                      title={task.name}
+                    >
+                      {task.name}
+                    </h3>
+                    <span
+                      className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.border} ${config.text}`}
+                    >
+                      {task.status === 'running' && <Loader2 size={11} className="animate-spin" />}
+                      {config.label}
+                    </span>
+                  </div>
+
+                  {/* Agent */}
+                  <div className="mt-3 flex items-center gap-1.5 text-sm text-gray-400">
+                    <Bot size={14} className="shrink-0 text-gray-500" />
+                    <span className="truncate">{task.agentName}</span>
+                    {task.modelName && (
+                      <>
+                        <span className="text-gray-600">·</span>
+                        <span className="truncate text-gray-500">{task.modelName}</span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* 任务描述 */}
+                  {task.notes && (
+                    <div className="mt-2 flex items-start gap-1.5">
+                      <FileText size={13} className="shrink-0 mt-0.5 text-gray-500" />
+                      <p className="text-xs text-gray-400 line-clamp-2">{task.notes}</p>
+                    </div>
+                  )}
+
+                  {/* 错误信息 */}
+                  {task.status === 'failed' && task.errorMessage && (
+                    <div className="mt-2 flex items-start gap-1.5">
+                      <AlertCircle size={13} className="shrink-0 mt-0.5 text-red-400" />
+                      <p className="text-xs text-red-400 line-clamp-2">{task.errorMessage}</p>
+                    </div>
+                  )}
+
+                  {/* 时间信息 */}
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                      <Calendar size={12} className="shrink-0" />
+                      <span>创建于 {formatDate(task.createdAt)}</span>
+                    </div>
+                    {task.startedAt && (
+                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                        <Clock size={12} className="shrink-0" />
+                        <span>
+                          {task.completedAt
+                            ? `完成于 ${formatDate(task.completedAt)}`
+                            : `启动于 ${formatDate(task.startedAt)}`}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-400">
-                          {task.agentName}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-                          {config.label}
-                          {task.status === 'running' && <Loader2 size={12} className="ml-1 animate-spin" />}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-gray-500 flex items-center gap-1">
-                          <Calendar size={14} className="text-gray-400" />
-                          {formatDate(task.createdAt)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-<div className="flex items-center justify-end gap-2">
-{task.status === 'pending' && (
-                              <button
-                                onClick={() => handleRunTask(task.id)}
-                                disabled={executingIds.has(task.id)}
-                                className="text-green-600 hover:text-green-900 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {executingIds.has(task.id) ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                                执行
-                              </button>
-                            )}
-                           {task.status === 'running' && (
-                             <button
-                               onClick={() => handleStopTask(task.id)}
-                               className="text-red-600 hover:text-red-900 flex items-center gap-1"
-                             >
-                               <Square size={14} />
-                               停止
-                             </button>
-                           )}
-{(task.status === 'completed' || task.status === 'failed') && (
-                              <button
-                                onClick={() => handleRunTask(task.id)}
-                                disabled={executingIds.has(task.id)}
-                                className="text-blue-600 hover:text-blue-900 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {executingIds.has(task.id) ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                                重新执行
-                             </button>
-                           )}
-                           <button
-                             onClick={() => handleViewDetail(task.id)}
-                             className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                           >
-                             <Eye size={14} />
-                             详情
-                           </button>
-                           <button
-                             onClick={() => handleDeleteTask(task.id, task.name)}
-                             className="text-red-600 hover:text-red-900 flex items-center gap-1"
-                           >
-                             <Trash2 size={14} />
-                             删除
-                           </button>
-                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* 操作栏 */}
+                <div className="px-5 py-3 bg-dark-bg border-t border-gray-700/50 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    {task.status === 'pending' && (
+                      <button
+                        onClick={() => handleRunTask(task.id)}
+                        disabled={isExecuting}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isExecuting ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
+                        执行
+                      </button>
+                    )}
+                    {task.status === 'running' && (
+                      <button
+                        onClick={() => handleStopTask(task.id)}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+                      >
+                        <Square size={12} />
+                        停止
+                      </button>
+                    )}
+                    {(task.status === 'completed' || task.status === 'failed') && (
+                      <button
+                        onClick={() => handleRunTask(task.id)}
+                        disabled={isExecuting}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isExecuting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        重新执行
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleViewDetail(task.id)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-300 bg-dark-surface hover:bg-dark-surface-hover border border-gray-600 rounded-md transition-colors"
+                    >
+                      <Eye size={12} />
+                      详情
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTask(task.id, task.name)}
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 border border-red-800/50 rounded-md transition-colors"
+                    >
+                      <Trash2 size={12} />
+                      删除
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

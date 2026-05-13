@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 
 export async function GET(
   request: Request,
@@ -8,52 +8,43 @@ export async function GET(
   try {
     const { taskId } = await params;
 
-    const task = await prisma.codeswarmTask.findUnique({
-      where: { taskId },
-      select: {
-        id: true,
-        taskId: true,
-        workerId: true,
-        state: true,
-        instruction: true,
-        projectPath: true,
-        workspacePath: true,
-        gitUrl: true,
-        gitRef: true,
-        skills: true,
-        mcps: true,
-        model: true,
-        apiKey: true,
-        timeoutSec: true,
-        agent: true,
-        events: true,
-        result: true,
-        error: true,
-        reportContent: true,
-        startedAt: true,
-        completedAt: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    // 使用 $queryRaw 替代 findUnique，避免远程 PostgreSQL 挂起问题
+    const tasks = await prisma.$queryRaw`
+      SELECT id, "taskId", "workerId", state, instruction,
+             "projectPath", "workspacePath", "gitUrl", "gitRef",
+             skills, mcps, model, "apiKey", "timeoutSec", agent,
+             events, result, error, "reportContent",
+             "startedAt", "completedAt", "createdAt", "updatedAt"
+      FROM "CodeswarmTask"
+      WHERE "taskId" = ${taskId}
+      LIMIT 1
+    ` as any[];
+
+    const task = tasks[0];
 
     if (!task) {
       return NextResponse.json({ error: 'Task not found' }, { status: 404 });
     }
 
     // 单独查询 Worker 信息
+    // 使用 $queryRaw 替代 findUnique，避免远程 PostgreSQL 挂起问题
     const worker = task.workerId
-      ? await prisma.codeswarmWorker.findUnique({
-          where: { id: task.workerId },
-          select: { nodeId: true, address: true, status: true, maxConcurrent: true, currentTasks: true },
-        })
+      ? await prisma.$queryRaw`
+          SELECT "nodeId", address, status, "maxConcurrent", "currentTasks"
+          FROM "CodeswarmWorker"
+          WHERE id = ${task.workerId}
+          LIMIT 1
+        ` as any[]
       : null;
 
     // 优先从 CodeswarmEvent 表读取事件，回退到旧 JSON 字段
-    const newEvents = await prisma.codeswarmEvent.findMany({
-      where: { taskId: task.taskId },
-      orderBy: { createdAt: 'asc' },
-    });
+    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+    const newEvents = await prisma.$queryRaw`
+      SELECT id, "taskId", data, "createdAt"
+      FROM "CodeswarmEvent"
+      WHERE "taskId" = ${task.taskId}
+      ORDER BY "createdAt" ASC
+    ` as any[];
 
     const events = newEvents.length > 0
       ? newEvents.map(e => ({ ...JSON.parse(e.data), _id: e.id, _createdAt: e.createdAt }))
@@ -65,7 +56,7 @@ export async function GET(
         skills: task.skills ? JSON.parse(task.skills) : null,
         mcps: task.mcps ? JSON.parse(task.mcps) : null,
         events,
-        CodeswarmWorker: worker,
+        CodeswarmWorker: worker ? worker[0] : null,
       },
     });
   } catch (error) {

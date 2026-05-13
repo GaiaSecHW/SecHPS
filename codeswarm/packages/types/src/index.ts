@@ -102,9 +102,10 @@ export type Task = z.infer<typeof TaskSchema>;
 
 export const TaskPayloadSchema = z.object({
   taskId: z.string(),
-  instruction: z.string(),
+  instruction: z.string().optional(),
   projectPath: z.string().optional().default(''),
   skills: z.array(z.string()).optional().default([]),
+  scripts: z.array(z.string()).optional().default([]),
   mcps: z.array(MCPServiceSchema).optional().default([]),
   model: z.string().optional(),
   timeoutSec: z.number().optional(),
@@ -121,6 +122,10 @@ export const TaskPayloadSchema = z.object({
   gitRef: z.string().optional(),
   // Agent type (opencode, claudecode, etc.)
   agent: z.string().optional(),
+  // Default agent name for command execution
+  defaultAgentName: z.string().optional(),
+  // Custom start command (e.g. "agentflow run pipeline.py")
+  startCommand: z.string().optional(),
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

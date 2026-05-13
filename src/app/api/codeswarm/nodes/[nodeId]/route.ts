@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 
 export async function GET(
   request: Request,
@@ -8,29 +8,66 @@ export async function GET(
   try {
     const { nodeId } = await params;
 
-    const worker = await prisma.codeswarmWorker.findUnique({
-      where: { nodeId },
-      include: {
-        CodeswarmTask: {
-          orderBy: { createdAt: 'desc' },
-          take: 20,
-        },
-      },
-    });
+    // 使用 $queryRaw 替代 findUnique + include，避免远程 PostgreSQL 挂起问题
+    const workers = await prisma.$queryRaw`
+      SELECT w.id, w."nodeId", w.address, w.status, w."maxConcurrent",
+             w."currentTasks", w.token, w."lastHeartbeat", w."createdAt", w."updatedAt",
+             t.id as "taskId", t."taskId" as "taskTaskId", t.state as "taskState",
+             t.instruction, t."projectPath", t."workspacePath", t."gitUrl", t."gitRef",
+             t.skills, t.mcps, t.events, t.error, t."startedAt", t."completedAt",
+             t."createdAt" as "taskCreatedAt", t."updatedAt" as "taskUpdatedAt"
+      FROM "CodeswarmWorker" w
+      LEFT JOIN "CodeswarmTask" t ON w.id = t."workerId"
+      WHERE w."nodeId" = ${nodeId}
+      ORDER BY t."createdAt" DESC
+    ` as any[];
 
-    if (!worker) {
+    if (workers.length === 0) {
       return NextResponse.json({ error: 'Worker not found' }, { status: 404 });
     }
+
+    // 从第一行提取 Worker 信息
+    const first = workers[0];
+    const worker: any = {
+      id: first.id,
+      nodeId: first.nodeId,
+      address: first.address,
+      status: first.status,
+      maxConcurrent: first.maxConcurrent,
+      currentTasks: first.currentTasks,
+      token: first.token,
+      lastHeartbeat: first.lastHeartbeat,
+      createdAt: first.createdAt,
+      updatedAt: first.updatedAt,
+    };
+
+    // 提取关联的任务（去除没有任务的行）
+    const tasks = workers
+      .filter(row => row.taskId)
+      .map(row => ({
+        id: row.taskId,
+        taskId: row.taskTaskId,
+        state: row.taskState,
+        instruction: row.instruction,
+        projectPath: row.projectPath,
+        workspacePath: row.workspacePath,
+        gitUrl: row.gitUrl,
+        gitRef: row.gitRef,
+        skills: row.skills ? JSON.parse(row.skills) : null,
+        mcps: row.mcps ? JSON.parse(row.mcps) : null,
+        events: row.events ? JSON.parse(row.events) : null,
+        error: row.error,
+        startedAt: row.startedAt,
+        completedAt: row.completedAt,
+        createdAt: row.taskCreatedAt,
+        updatedAt: row.taskUpdatedAt,
+      }))
+      .slice(0, 20); // LIMIT 20
 
     return NextResponse.json({
       worker: {
         ...worker,
-        tasks: worker.CodeswarmTask.map(t => ({
-          ...t,
-          skills: t.skills ? JSON.parse(t.skills) : null,
-          mcps: t.mcps ? JSON.parse(t.mcps) : null,
-          events: t.events ? JSON.parse(t.events) : null,
-        })),
+        CodeswarmTask: tasks,
       },
     });
   } catch (error) {

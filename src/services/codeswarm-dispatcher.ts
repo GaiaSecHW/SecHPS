@@ -78,6 +78,8 @@ class CodeswarmDispatcher {
       this.startHealthChecks();
     } catch (e) {
       console.warn('[CodeSwarm] Redis 不可用，降级为 DB 轮询模式');
+      console.warn('[CodeSwarm] 错误详情:', e);
+      console.warn('[CodeSwarm] REDIS_URL:', redisUrl);
       this.teardownRedis();
     }
   }

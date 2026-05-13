@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import { generateWorkerToken, verifyWorkerToken, extractBearerToken } from '@/lib/codeswarm-worker-auth';
 
@@ -85,55 +85,65 @@ async function dispatchQueuedTasks(): Promise<void> {
   try {
     // 1. 检查心跳过期的 Worker，标记为 offline
     const offlineThreshold = new Date(Date.now() - 90_000);
-    const staleWorkers = await prisma.codeswarmWorker.findMany({
-      where: {
-        status: 'online',
-        lastHeartbeat: { lt: offlineThreshold },
-      },
-      select: { id: true, nodeId: true, currentTasks: true },
-    });
+    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+    const staleWorkers = await prisma.$queryRaw`
+      SELECT id, "nodeId", "currentTasks"
+      FROM "CodeswarmWorker"
+      WHERE status = 'online'
+        AND "lastHeartbeat" < ${offlineThreshold}
+    ` as any[];
 
-    for (const w of staleWorkers) {
-      console.warn(`[CodeSwarm] DB fallback: Worker ${w.nodeId} 心跳过期，标记为 offline`);
-      await prisma.codeswarmWorker.update({
-        where: { id: w.id },
+    if (staleWorkers.length > 0) {
+      const staleIds = staleWorkers.map((w: any) => w.id);
+
+      // 批量标记 offline
+      await prisma.codeswarmWorker.updateMany({
+        where: { id: { in: staleIds } },
         data: { status: 'offline', currentTasks: 0 },
       });
 
-      // 重调度该 Worker 的任务
-      if (w.currentTasks > 0) {
-        const stuckTasks = await prisma.codeswarmTask.findMany({
+      for (const w of staleWorkers) {
+        console.warn(`[CodeSwarm] DB fallback: Worker ${w.nodeId} 心跳过期，标记为 offline`);
+      }
+
+      // 批量重调度 stuck 任务
+      const workersWithTasks = staleWorkers.filter((w: any) => w.currentTasks > 0);
+      if (workersWithTasks.length > 0) {
+        const workerIdsWithTasks = workersWithTasks.map((w: any) => w.id);
+        await prisma.codeswarmTask.updateMany({
           where: {
-            workerId: w.id,
+            workerId: { in: workerIdsWithTasks },
             state: { in: ['dispatched', 'running'] },
           },
-          select: { id: true, taskId: true },
+          data: { state: 'queued', workerId: null, updatedAt: new Date() },
         });
-
-        for (const task of stuckTasks) {
-          await prisma.codeswarmTask.update({
-            where: { id: task.id },
-            data: { state: 'queued', workerId: null, updatedAt: new Date() },
-          });
-          console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 重新入队`);
-        }
       }
     }
 
     // 2. 分发排队任务
-    const queuedTasks = await prisma.codeswarmTask.findMany({
-      where: { state: 'queued' },
-      orderBy: { createdAt: 'asc' },
-      take: 5,
-    });
+    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+    const queuedTasks = await prisma.$queryRaw`
+      SELECT id, "taskId", "workerId", state, instruction,
+             "projectPath", "workspacePath", "gitUrl", "gitRef",
+             skills, mcps, model, "apiKey", "timeoutSec", agent,
+             "defaultAgentName", error, "startedAt", "completedAt",
+             "createdAt", "updatedAt"
+      FROM "CodeswarmTask"
+      WHERE state = 'queued'
+      ORDER BY "createdAt" ASC
+      LIMIT 5
+    ` as any[];
 
     if (queuedTasks.length === 0) return;
 
-    const availableWorkers = await prisma.codeswarmWorker.findMany({
-      where: { status: 'online' },
-      orderBy: { currentTasks: 'asc' },
-      take: 50,
-    });
+    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+    const availableWorkers = await prisma.$queryRaw`
+      SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks", "createdAt", "updatedAt"
+      FROM "CodeswarmWorker"
+      WHERE status = 'online'
+      ORDER BY "currentTasks" ASC
+      LIMIT 50
+    ` as any[];
 
     const workersWithCapacity = availableWorkers.filter(w => w.currentTasks < w.maxConcurrent);
     if (workersWithCapacity.length === 0) return;
