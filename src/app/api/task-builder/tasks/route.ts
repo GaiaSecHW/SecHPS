@@ -4,7 +4,7 @@ import type { AuthSuccessResult } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
-import { uploadAndExtractArchive, testSftpConnection, uploadFilesToRemote } from '@/lib/sftp-upload';
+import { uploadAndExtractArchive, testNfsConnection, uploadFilesToRemote } from '@/lib/nfs-upload';
 import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
 import { downloadFilesFromGitea, isGiteaConfigured, GiteaAuthError } from '@/lib/gitea';
 
@@ -186,9 +186,9 @@ export async function GET_CONNECTION_STATUS(request: NextRequest) {
   if (!auth.success) return authErrorResponse(auth);
 
   try {
-    const isConnected = await testSftpConnection();
+    const isConnected = await testNfsConnection();
     return NextResponse.json({ connected: isConnected });
   } catch (error) {
-    return NextResponse.json({ connected: false, error: 'SFTP连接测试失败' });
+    return NextResponse.json({ connected: false, error: 'NFS连接测试失败' });
   }
 }
