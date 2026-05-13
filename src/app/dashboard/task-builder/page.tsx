@@ -64,6 +64,7 @@ export default function TaskBuilderPage() {
     taskName: string;
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [deleting, setDeleting] = useState(false);
+  const [executingIds, setExecutingIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchTasks(currentPage, pageSize);
@@ -141,6 +142,8 @@ export default function TaskBuilderPage() {
   };
 
   const handleRunTask = async (taskId: string) => {
+    if (executingIds.has(taskId)) return;
+    setExecutingIds(prev => new Set(prev).add(taskId));
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/task-builder/tasks/${taskId}/execute`, {
@@ -157,6 +160,12 @@ export default function TaskBuilderPage() {
       await fetchTasks(currentPage, pageSize);
     } catch (error) {
       toast.error(`执行失败: ${error instanceof Error ? error.message : '未知错误'}`);
+    } finally {
+      setExecutingIds(prev => {
+        const next = new Set(prev);
+        next.delete(taskId);
+        return next;
+      });
     }
   };
 
@@ -337,15 +346,16 @@ export default function TaskBuilderPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
 <div className="flex items-center justify-end gap-2">
-                           {task.status === 'pending' && (
-                             <button
-                               onClick={() => handleRunTask(task.id)}
-                               className="text-green-600 hover:text-green-900 flex items-center gap-1"
-                             >
-                               <Play size={14} />
-                               执行
-                             </button>
-                           )}
+{task.status === 'pending' && (
+                              <button
+                                onClick={() => handleRunTask(task.id)}
+                                disabled={executingIds.has(task.id)}
+                                className="text-green-600 hover:text-green-900 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {executingIds.has(task.id) ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                                执行
+                              </button>
+                            )}
                            {task.status === 'running' && (
                              <button
                                onClick={() => handleStopTask(task.id)}
@@ -355,13 +365,14 @@ export default function TaskBuilderPage() {
                                停止
                              </button>
                            )}
-                           {(task.status === 'completed' || task.status === 'failed') && (
-                             <button
-                               onClick={() => handleRunTask(task.id)}
-                               className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
-                             >
-                               <RefreshCw size={14} />
-                               重新执行
+{(task.status === 'completed' || task.status === 'failed') && (
+                              <button
+                                onClick={() => handleRunTask(task.id)}
+                                disabled={executingIds.has(task.id)}
+                                className="text-blue-600 hover:text-blue-900 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {executingIds.has(task.id) ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                                重新执行
                              </button>
                            )}
                            <button

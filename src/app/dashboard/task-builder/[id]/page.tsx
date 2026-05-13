@@ -65,6 +65,7 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [eventSourceRef, setEventSourceRef] = useState<EventSource | null>(null);
+  const [executing, setExecuting] = useState(false);
 
   useEffect(() => {
     fetchTaskDetail(taskId);
@@ -143,6 +144,8 @@ export default function TaskDetailPage() {
   };
 
   const handleExecute = async () => {
+    if (executing) return;
+    setExecuting(true);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/task-builder/tasks/${taskId}/execute`, {
@@ -161,6 +164,8 @@ export default function TaskDetailPage() {
     } catch (error) {
       console.error('执行失败:', error);
       toast.error(error instanceof Error ? error.message : '执行失败');
+    } finally {
+      setExecuting(false);
     }
   };
 
@@ -223,15 +228,16 @@ export default function TaskDetailPage() {
               <StatusIcon size={14} className={`mr-1 ${task.status === 'running' ? 'animate-spin' : ''}`} />
               {config.label}
             </span>
-            {task.status === 'pending' && (
-              <button
-                onClick={handleExecute}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
-              >
-                <Play size={16} />
-                执行任务
-              </button>
-            )}
+{task.status === 'pending' && (
+               <button
+                 onClick={handleExecute}
+                 disabled={executing}
+                 className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                 {executing ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
+                 {executing ? '启动中...' : '执行任务'}
+               </button>
+             )}
             {task.status === 'running' && (
               <span className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md">
                 <Loader2 size={16} className="animate-spin" />
