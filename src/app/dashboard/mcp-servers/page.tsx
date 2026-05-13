@@ -99,7 +99,7 @@ function McpServersContent() {
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+        setIsIcsOrAdmin(payload.isIcsTenant === true || (Array.isArray(payload.roles) && payload.roles.includes('admin')));
         setCurrentUserId(payload.userId || '');
       } catch (e) {
         console.error('解析 token 失败:', e);
