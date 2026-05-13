@@ -15,7 +15,6 @@ interface FormData {
   defaultAgentName: string;
   startCommand?: string;
   tenantId: string;
-  isPublic: boolean;
 }
 
 interface AgentHarnessFileData {
@@ -39,7 +38,6 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     defaultAgentName: '',
     startCommand: '',
     tenantId: '',
-    isPublic: false,
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -107,7 +105,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', tenantId: '', isPublic: false });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', tenantId: '' });
     setAgentHarnessFile(null);
     setIsPublic(false);
     onClose();
@@ -180,21 +178,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
             </select>
           </div>
 
-          <div>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.isPublic}
-                onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked, tenantId: e.target.checked ? '' : formData.tenantId })}
-                className="h-4 w-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
-                disabled={isSubmitting}
-              />
-              <span className="text-sm font-medium text-gray-300">公开应用（所有租户可用）</span>
-            </label>
-            <p className="mt-1 text-xs text-gray-500">勾选后此应用不绑定任何租户，所有用户可见</p>
-          </div>
-
-          {!formData.isPublic && (
+          {!isPublic && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 租户 <span className="text-red-500">*</span>
