@@ -42,7 +42,6 @@ export async function POST(request: Request) {
       projectPath,
       workspacePath,
       skills,
-      scripts,
       mcps,
       model,
       apiKey,
@@ -50,7 +49,6 @@ export async function POST(request: Request) {
       gitUrl,
       gitRef,
       agent,
-      defaultAgentName,
       action,
     } = body;
 
@@ -108,8 +106,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Queued tasks dispatched', dispatched });
     }
 
-    if (!workspacePath) {
-      return NextResponse.json({ error: 'workspacePath is required' }, { status: 400 });
+    if (!instruction) {
+      return NextResponse.json({ error: 'instruction is required' }, { status: 400 });
     }
 
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -121,17 +119,15 @@ export async function POST(request: Request) {
         taskId,
         workerId: null,
         state: 'queued',
-        instruction: instruction || null,
+        instruction,
         projectPath: projectPath || null,
         workspacePath: workspacePath || null,
         skills: skills ? JSON.stringify(skills) : null,
-        scripts: scripts ? JSON.stringify(scripts) : null,
         mcps: mcps ? JSON.stringify(mcps) : null,
         model: model || null,
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
-        defaultAgentName: defaultAgentName || null,
         updatedAt: new Date(),
       },
     }) as any;

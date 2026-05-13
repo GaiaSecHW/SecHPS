@@ -8,6 +8,11 @@ export interface EnvironmentFactoryConfig {
   skillsRegistryPath?: string;
 }
 
+export interface BuildResult {
+  workspacePath: string;
+  agent?: string;
+}
+
 function mapRemotePathToLocal(remotePath: string): string {
   const pathMapping = process.env.PATH_MAPPING;
   if (!pathMapping) {
@@ -32,16 +37,37 @@ export class EnvironmentFactory {
     this.skillsRegistryPath = path.resolve(config.skillsRegistryPath || './shared/skills_registry');
   }
 
-/**
+  /**
    * Build an isolated workspace for a task.
    * Priority: gitUrl > workspacePath (NFS) > projectPath (local copy)
    */
-  async build(payload: TaskPayload): Promise<string> {
+  async build(payload: TaskPayload): Promise<BuildResult> {
     // NFS passthrough mode: use the provided workspace path directly
     // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
+    // Read default_agent from opencode.json if agent not specified in payload
     if (payload.workspacePath) {
       const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
-      return localWorkspacePath;
+      const instructionPath = localWorkspacePath.endsWith('/')
+        ? `${localWorkspacePath}instruction.txt`
+        : `${localWorkspacePath}/instruction.txt`;
+      fs.writeFileSync(instructionPath, '');
+      
+      // Read default_agent from opencode.json (NFS workspace mode)
+      const opencodeJsonPath = localWorkspacePath.endsWith('/')
+        ? `${localWorkspacePath}opencode.json`
+        : `${localWorkspacePath}/opencode.json`;
+      let resolvedAgent: string | undefined;
+      if (fs.existsSync(opencodeJsonPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf-8'));
+          resolvedAgent = config.default_agent || config.defaultAgent;
+          console.log(`[Environment] Found default_agent in opencode.json: ${resolvedAgent}`);
+        } catch {
+          console.warn(`[Environment] Failed to read opencode.json at ${opencodeJsonPath}`);
+        }
+      }
+      
+      return { workspacePath: localWorkspacePath, agent: resolvedAgent };
     }
 
     // Local workspace mode
@@ -85,7 +111,7 @@ export class EnvironmentFactory {
         }
       }
 
-      // Step 5: Generate opencode.json if model or MCP config given
+      // Step 5: Generate opencode.json if model or MCP config or agent provided
       const opencodeConfig: Record<string, any> = {};
       if (payload.model) {
         opencodeConfig.model = payload.model;
@@ -93,72 +119,8 @@ export class EnvironmentFactory {
       if (payload.mcps && payload.mcps.length > 0) {
         opencodeConfig.mcp = this.normalizeMcpServices(payload.mcps);
       }
-      if (Object.keys(opencodeConfig).length > 0) {
-        opencodeConfig["$schema"] = "https://opencode.ai/config.json";
-        fs.writeFileSync(
-          path.join(workspacePath, 'opencode.json'),
-          JSON.stringify(opencodeConfig, null, 2)
-        );
-      }
-
-      return workspacePath;
-    } catch (error) {
-      // Clean up partial workspace on error
-      if (fs.existsSync(workspacePath)) {
-        this.cleanup(workspacePath);
-      }
-      throw error;
-    }
-  }
-
-    // Local workspace mode
-    const workspacePath = path.join(this.workspaceBasePath, payload.taskId);
-
-    try {
-      // Step 1: Create workspace directory
-      fs.mkdirSync(workspacePath, { recursive: true });
-
-      // Step 2: Populate workspace from git or local copy
-      if (payload.gitUrl) {
-        // Git clone mode: clone repo into a 'code' subdirectory
-        const codeDir = path.join(workspacePath, 'code');
-        this.gitClone(payload.gitUrl, codeDir, payload.gitRef);
-      } else {
-        // Local copy mode
-        const projectPath = payload.projectPath;
-        if (!projectPath || !fs.existsSync(projectPath)) {
-          throw new Error(`Project path does not exist: ${projectPath}`);
-        }
-        fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
-      }
-
-      // Step 3: Create .opencode/skills/ subdirectory
-      const skillsDir = path.join(workspacePath, '.opencode', 'skills');
-      fs.mkdirSync(skillsDir, { recursive: true });
-
-      // Step 4: Copy skill files
-      if (payload.skills && payload.skills.length > 0) {
-        for (const skillId of payload.skills) {
-          const sourceSkillPath = path.join(this.skillsRegistryPath, skillId, 'latest', 'SKILL.md');
-          const destSkillPath = path.join(skillsDir, skillId);
-
-          if (!fs.existsSync(sourceSkillPath)) {
-            console.warn(`Skill file not found: ${sourceSkillPath}`);
-            continue;
-          }
-
-          fs.mkdirSync(destSkillPath, { recursive: true });
-          fs.copyFileSync(sourceSkillPath, path.join(destSkillPath, 'SKILL.md'));
-        }
-      }
-
-      // Step 5: Generate opencode.json if model or MCP config provided
-      const opencodeConfig: Record<string, any> = {};
-      if (payload.model) {
-        opencodeConfig.model = payload.model;
-      }
-      if (payload.mcps && payload.mcps.length > 0) {
-        opencodeConfig.mcp = this.normalizeMcpServices(payload.mcps);
+      if (payload.agent) {
+        opencodeConfig.default_agent = payload.agent;
       }
       if (Object.keys(opencodeConfig).length > 0) {
         opencodeConfig["$schema"] = "https://opencode.ai/config.json";
@@ -174,7 +136,7 @@ export class EnvironmentFactory {
         payload.instruction
       );
 
-      return workspacePath;
+      return { workspacePath, agent: payload.agent };
     } catch (error) {
       // Clean up partial workspace on error
       if (fs.existsSync(workspacePath)) {

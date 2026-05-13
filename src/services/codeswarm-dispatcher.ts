@@ -109,11 +109,10 @@ class CodeswarmDispatcher {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           taskId: task.taskId,
-          instruction: task.instruction || undefined,
+          instruction: task.instruction,
           projectPath: task.projectPath || '',
           workspacePath: task.workspacePath || undefined,
           skills: task.skills ? JSON.parse(task.skills) : undefined,
-          scripts: task.scripts ? JSON.parse(task.scripts) : undefined,
           mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
           model: task.model || undefined,
           apiKey: task.apiKey || undefined,
@@ -122,7 +121,6 @@ class CodeswarmDispatcher {
           gitUrl: task.gitUrl || undefined,
           gitRef: task.gitRef || undefined,
           agent: task.agent || undefined,
-          defaultAgentName: task.defaultAgentName || undefined,
         }),
         signal: AbortSignal.timeout(10000),
       });

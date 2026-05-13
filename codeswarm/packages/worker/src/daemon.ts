@@ -6,7 +6,7 @@ import {
   type TaskPayload,
   type TaskResultStatus,
 } from '@codeswarm/types';
-import { EnvironmentFactory } from './environment.js';
+import { EnvironmentFactory, type BuildResult } from './environment.js';
 import { ProcessManager } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 
@@ -120,41 +120,75 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, agent, defaultAgentName } = payload;
-    let workspace: string | null = null;
+    const { taskId } = payload;
+    let buildResult: BuildResult | null = null;
 
     try {
-      // 1. Get workspace path (NFS passthrough or build)
-      workspace = await this.envFactory.build(payload);
-      this.server.log.info({ taskId, workspace }, 'Workspace ready');
+      // 1. Build isolated workspace
+      buildResult = await this.envFactory.build(payload);
+      const { workspacePath, agent } = buildResult;
+      this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
 
-      // 2. Run agent command in workspace based on agent type
-      const agentType = agent || 'opencode';
-      this.server.log.info({ taskId, agent: agentType, defaultAgentName }, 'Starting agent execution');
-
-      const result = await this.processMgr.runAgent(
-        taskId,
-        workspace,
-        agentType,
-        defaultAgentName,
-        payload.apiKey,
+      // 2. Start OpenCode ACP process + create session
+      const client = await this.processMgr.start(
+        taskId, workspacePath,
+        payload.apiKey || '',
         payload.model,
-        payload.env
+        payload.env,
+        agent,
       );
 
-      this.server.log.info({ taskId, exitCode: result.exitCode, stdoutLen: result.stdout.length }, 'Agent execution completed');
+      // 3. Register event handlers to forward to NAZHUA
+      let textOutput = '';
+      client.on({
+        text: (content) => {
+          textOutput += content;
+          this.postEvent(payload, [{ type: 'agent_message_chunk', content, timestamp: new Date().toISOString() }]);
+          process.stdout.write(content);
+        },
+        toolCall: (tool, input) => {
+          this.postEvent(payload, [{ type: 'tool_call', tool, input, timestamp: new Date().toISOString() }]);
+        },
+        toolCallUpdate: (output) => {
+          this.postEvent(payload, [{ type: 'tool_call_update', output, timestamp: new Date().toISOString() }]);
+        },
+        error: (message) => {
+          this.postEvent(payload, [{ type: 'error', message, timestamp: new Date().toISOString() }]);
+        },
+      });
 
-      // 3. Collect security report if present
-      const reportContent = this.collectReport(workspace);
+      // 4. Send instruction as prompt (use payload.instruction or fallback)
+      let instruction = payload.instruction?.trim() || '';
+      
+      // Fallback: read from instruction.txt if payload has no instruction
+      if (!instruction) {
+        const instructionPath = path.join(workspacePath, 'instruction.txt');
+        if (fs.existsSync(instructionPath)) {
+          instruction = fs.readFileSync(instructionPath, 'utf-8').trim();
+        }
+      }
+      
+      // If still no instruction, use trigger prompt
+      if (!instruction) {
+        instruction = 'Start the task according to your agent configuration.';
+        this.server.log.info({ taskId }, 'No instruction, using trigger prompt');
+      } else {
+        this.server.log.info({ taskId, instructionLength: instruction.length }, 'Sending instruction');
+      }
+      
+      const stopReason = await this.processMgr.sendPrompt(taskId, instruction);
+      this.server.log.info({ taskId, stopReason }, 'Agent execution completed');
 
-      // 4. Report result
-      const status: TaskResultStatus = result.exitCode === 0 ? 'completed' : 'failed';
+      // 5. Collect security report if present
+      const reportContent = this.collectReport(workspacePath);
+
+      // 6. Report result
+      this.server.log.info({ taskId, outputLen: textOutput.length }, 'Agent output');
       await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
-        status,
-        result: result.stdout || result.stderr,
-        error: result.exitCode !== 0 ? result.stderr : undefined,
+        status: 'completed',
+        result: textOutput,
         reportContent,
       });
     } catch (error) {
@@ -166,7 +200,7 @@ export class WorkerDaemon {
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      if (workspace) await this.envFactory.cleanup(workspace);
+      if (buildResult) await this.envFactory.cleanup(buildResult.workspacePath);
       await this.processMgr.terminate(taskId);
     }
   }

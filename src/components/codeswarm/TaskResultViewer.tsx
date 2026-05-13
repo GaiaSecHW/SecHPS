@@ -276,7 +276,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         )}
                       </div>
                       <p className="text-xs text-gray-500 truncate mt-0.5">
-                        {task.instruction.slice(0, 80)}{task.instruction.length > 80 ? '...' : ''}
+                        {task.instruction ? `${task.instruction.slice(0, 80)}${task.instruction.length > 80 ? '...' : ''}` : '无指令'}
                       </p>
                     </div>
                   </div>
