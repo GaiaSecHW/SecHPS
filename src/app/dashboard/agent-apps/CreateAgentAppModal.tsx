@@ -45,6 +45,8 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [userTenantId, setUserTenantId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -53,7 +55,19 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+        const icsOrAdmin = payload.isIcsTenant === true || payload.isPlatformAdmin === true;
+        setIsIcsOrAdmin(icsOrAdmin);
+        setUserTenantId(payload.tenantId ?? null);
+
+        // 如果是 ICSL 或管理员，加载租户列表
+        if (icsOrAdmin) {
+          fetch('/api/tenants', {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+            .then(res => res.json())
+            .then(data => setTenants(data.tenants || []))
+            .catch(() => setTenants([]));
+        }
       } catch {
         setIsIcsOrAdmin(false);
       }
