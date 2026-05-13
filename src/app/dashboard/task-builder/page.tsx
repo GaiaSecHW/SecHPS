@@ -120,7 +120,10 @@ export default function TaskBuilderPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || '创建失败');
+        const errorMsg = errorData.details 
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || '创建失败';
+        throw new Error(errorMsg);
       }
 
       toast.success('任务创建成功');

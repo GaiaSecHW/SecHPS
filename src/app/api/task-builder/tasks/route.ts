@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { randomUUID } from 'crypto';
 import { uploadAndExtractArchive, testSftpConnection, uploadFilesToRemote } from '@/lib/sftp-upload';
 import { buildTenantFilter, getTenantIdForCreate } from '@/lib/tenant-filter';
-import { downloadFilesFromGitea, isGiteaConfigured } from '@/lib/gitea';
+import { downloadFilesFromGitea, isGiteaConfigured, GiteaAuthError } from '@/lib/gitea';
 
 export async function POST(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request, { requiredPermission: PERMISSIONS.SESSION_CREATE });
@@ -29,10 +29,6 @@ export async function POST(request: NextRequest) {
 
     if (!name || !agentId) {
       return NextResponse.json({ error: '缺少必填参数：name 和 agentId' }, { status: 400 });
-    }
-
-    if (!notes || notes.trim() === '') {
-      return NextResponse.json({ error: '任务描述（notes）为必填字段，这是 Agent 执行的指令提示词' }, { status: 400 });
     }
 
     const taskId = randomUUID();
@@ -61,6 +57,13 @@ export async function POST(request: NextRequest) {
         }
       } catch (giteaError) {
         console.error('[Task] 下载/上传 AgentApp 文件失败:', giteaError);
+        
+        if (giteaError instanceof GiteaAuthError || (giteaError as any)?.name === 'GiteaAuthError') {
+          return NextResponse.json({ 
+            error: 'Gitea 认证失败', 
+            details: 'GITEA_TOKEN 无效或权限不足，无法下载 AgentApp 文件。请检查 Gitea 配置。'
+          }, { status: 401 });
+        }
       }
     }
 

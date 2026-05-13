@@ -81,9 +81,6 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     }
 
     setIsSubmitting(true);
-    }
-
-    setIsSubmitting(true);
     try {
       await onSubmit(formData, agentHarnessFile, isPublic);
       toast.success('应用创建成功');

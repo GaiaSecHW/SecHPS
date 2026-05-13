@@ -166,7 +166,7 @@ export async function PUT(
       } catch (giteaError) {
         console.error('[agent-apps PUT] Gitea 更新失败:', giteaError);
         
-        if (giteaError instanceof GiteaAuthError) {
+        if (giteaError instanceof GiteaAuthError || (giteaError as any)?.name === 'GiteaAuthError') {
           return NextResponse.json({ 
             error: 'Gitea 认证失败', 
             details: 'GITEA_TOKEN 无效或权限不足，请检查 Gitea 配置。需要具有 repo 写权限的 Access Token。'

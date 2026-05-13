@@ -263,6 +263,9 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
     });
 
     if (!treeResponse.ok) {
+      if (treeResponse.status === 401 || treeResponse.status === 403) {
+        throw new GiteaAuthError(`Gitea 认证失败 (${treeResponse.status})，请检查 GITEA_TOKEN 权限配置`);
+      }
       throw new Error(`获取文件树失败: ${treeResponse.status}`);
     }
 
@@ -290,6 +293,9 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
         });
 
         if (!contentResponse.ok) {
+          if (contentResponse.status === 401 || contentResponse.status === 403) {
+            throw new GiteaAuthError(`Gitea 认证失败 (${contentResponse.status})，请检查 GITEA_TOKEN 权限配置`);
+          }
           console.error(`[Gitea] 下载文件失败: ${filePath}`);
           continue;
         }
@@ -305,6 +311,9 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
         
         console.log(`[Gitea] 下载文件成功: ${relativePath} (${decodedContent.length} bytes)`);
       } catch (downloadError) {
+        if (downloadError instanceof GiteaAuthError) {
+          throw downloadError;
+        }
         console.error(`[Gitea] 下载文件失败: ${filePath}`, downloadError);
       }
     }
