@@ -15,8 +15,8 @@ function formatWorkflow(workflow: any) {
   return {
     id: workflow.id,
     userId: workflow.userId,
-    userName: workflow.user?.name || workflow.user?.username || null,
-    userUsername: workflow.user?.username || null,
+    userName: workflow.User?.name || workflow.User?.username || null,
+    userUsername: workflow.User?.username || null,
     tenantId: workflow.tenantId,
     name: workflow.name,
     description: workflow.description,

@@ -261,7 +261,7 @@ export async function PUT(
       const targetUserId = existingModel.userId;
       logger.updateOther(LOG_MODULES.MODEL, payload, targetUserId, id, existingModel.User?.email, { name: model.name });
     } else {
-      logger.update(LOG_MODULES.MODEL, payload, 'model', id, { name: model.name });
+      logger.update(LOG_MODULES.MODEL, payload, id, { name: model.name });
     }
 
     return NextResponse.json({ model: formatModel(model) });
@@ -304,7 +304,7 @@ export async function DELETE(
       where: { id },
     });
 
-    logger.delete(LOG_MODULES.MODEL, payload, 'model', id, { name: existingModel.name });
+    logger.delete(LOG_MODULES.MODEL, payload, id, { name: existingModel.name });
     return NextResponse.json({ success: true });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.MODEL, '删除模型失败', { details: { error: String(error) } });
