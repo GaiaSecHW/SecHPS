@@ -27,7 +27,7 @@ const DIR_COPY_RULES = {
   },
   'next-files': {
     src: path.join(ROOT_DIR, '.next'),
-    dest: '.next',
+    dest: 'claude-web-platform/.next',
     mode: 'exclude-next',
     exclude: ['cache', 'dev', 'diagnostics', 'standalone', 'types', 'turbopack', 'trace', 'trace-build', 'build', 'export-marker.json', 'fallback-build-manifest.json', 'images-manifest.json', 'next-minimal-server.js.nft.json', 'next-server.js.nft.json', 'standalone.zip', 'required-server-files.js'],
   },
