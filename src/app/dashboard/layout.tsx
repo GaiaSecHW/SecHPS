@@ -166,6 +166,9 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/agent-apps" icon={<Box size={18} />} collapsed={collapsed}>
                 Agent应用开发
               </NavLink>
+              <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={collapsed}>
+                AgentFlow 编排
+              </NavLink>
             </>
           )}
 
@@ -216,13 +219,13 @@ function DashboardLayoutContent({
               {/* <NavLink href="/dashboard/plugins" icon={<Puzzle size={18} />} collapsed={collapsed}>
                 插件管理
               </NavLink> */}
-              <NavLink href="/dashboard/admin/vulnerability-patterns" icon={<Shield size={18} />} collapsed={collapsed}>
+              {/* <NavLink href="/dashboard/admin/vulnerability-patterns" icon={<Shield size={18} />} collapsed={collapsed}>
                 漏洞模式
-              </NavLink>
+              </NavLink> */}
               <NavLink href="/dashboard/admin/vulnerabilities" icon={<Bug size={18} />} collapsed={collapsed}>
                 漏洞管理
               </NavLink>
-              <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={18} />} collapsed={collapsed}>
+              {/* <NavLink href="/dashboard/admin/skills-evolution" icon={<TrendingUp size={18} />} collapsed={collapsed}>
                 Skills 进化
               </NavLink>
               <NavLink href="/dashboard/admin/skills-governance" icon={<Shield size={18} />} collapsed={collapsed}>
@@ -230,25 +233,25 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/admin/autonomous-evolution" icon={<Brain size={18} />} collapsed={collapsed}>
                 执行过程进化
-              </NavLink>
-              <NavLink href="/dashboard/tech-stack" icon={<Layers size={18} />} collapsed={collapsed}>
+              </NavLink> */}
+              {/* <NavLink href="/dashboard/tech-stack" icon={<Layers size={18} />} collapsed={collapsed}>
                 技术栈管理
-              </NavLink>
+              </NavLink> */}
               {/* <NavLink href="/dashboard/admin/tools" icon={<Cog size={18} />} collapsed={collapsed}>
                 工具管理
               </NavLink> */}
-              <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={18} />} collapsed={collapsed}>
+              {/* <NavLink href="/dashboard/admin/default-tool-permissions" icon={<Shield size={18} />} collapsed={collapsed}>
                 默认工具权限
-              </NavLink>
-              <NavLink href="/dashboard/admin/fsm-templates" icon={<Layers size={18} />} collapsed={collapsed}>
+              </NavLink> */}
+              {/* <NavLink href="/dashboard/admin/fsm-templates" icon={<Layers size={18} />} collapsed={collapsed}>
                 威胁建模配置
-              </NavLink>
+              </NavLink> */}
               <NavLink href="/dashboard/codeswarm" icon={<Server size={18} />} collapsed={collapsed}>
-                CodeSwarm
+                智能体集群
               </NavLink>
-              <NavLink href="/dashboard/admin/categories" icon={<Tags size={18} />} collapsed={collapsed}>
+              {/* <NavLink href="/dashboard/admin/categories" icon={<Tags size={18} />} collapsed={collapsed}>
                 漏洞分类管理
-              </NavLink>
+              </NavLink> */}
             </>
           )}
         </nav>

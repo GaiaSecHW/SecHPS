@@ -6,7 +6,6 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User, Layers } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
-import { useTechStackOptionsWithIds } from '@/hooks/useTechStackOptions';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { DeveloperGuard } from '@/components/PermissionGuard';
 
@@ -64,8 +63,24 @@ function WorkflowsContent() {
   const [selectedFsmTemplateId, setSelectedFsmTemplateId] = useState<string>('');
   const [loadingFsmTemplates, setLoadingFsmTemplates] = useState(false);
   
-  // 使用 Hook 获取技术栈选项
-  const { options: techStackOptions, loading: loadingTechStack } = useTechStackOptionsWithIds();
+  // 技术栈选项 - 懒加载，仅在弹窗打开时请求
+  const [techStackOptions, setTechStackOptions] = useState<Array<{ id: string; name: string; category: string; description?: string | null }>>([]);
+  const [loadingTechStack, setLoadingTechStack] = useState(false);
+  const [techStackLoaded, setTechStackLoaded] = useState(false);
+  const loadTechStackOnce = async () => {
+    if (techStackLoaded) return;
+    setTechStackLoaded(true);
+    setLoadingTechStack(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/techstack-options?withIds=true', { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setTechStackOptions(data.options || []);
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingTechStack(false); }
+  };
 
   // 获取 FSM 模板列表
   const fetchFsmTemplates = async () => {
@@ -134,7 +149,7 @@ function WorkflowsContent() {
         userId: w.userId,
         userName: w.userName || w.userUsername,
         userUsername: w.userUsername,
-        nodeCount: w._count?.nodes || 0,
+        nodeCount: w._count?.WorkflowNode || 0,
         edgeCount: 0, // 暂时设置为 0，因为 API 没有返回 edgeCount
         techStack: Array.isArray(w.techStack) ? w.techStack : (w.techStack && w.techStack.trim() ? JSON.parse(w.techStack) : []),
         isPublic: w.isPublic || false,
@@ -309,6 +324,7 @@ function WorkflowsContent() {
   };
 
   const openEditModal = (workflow: Workflow) => {
+    loadTechStackOnce();
     setEditingWorkflow(workflow);
     setWorkflowName(workflow.name);
     setWorkflowDescription(workflow.description || '');
@@ -481,7 +497,7 @@ function WorkflowsContent() {
         </div>
 
         <button
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => { setShowCreateModal(true); loadTechStackOnce(); }}
           className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
         >
           <Plus size={20} />

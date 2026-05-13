@@ -118,7 +118,6 @@ export async function GET(request: Request) {
           _count: {
             select: {
               WorkflowNode: true,
-              WorkflowExecution: true,
             },
           },
         },

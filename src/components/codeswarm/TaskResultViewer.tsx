@@ -78,7 +78,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     if (hasActiveTasks) {
       intervalRef.current = setInterval(() => {
         refetch();
-      }, 5000);
+      }, 30000);
     }
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
@@ -153,7 +153,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     return `${minutes}m ${seconds % 60}s`;
   };
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <div className="flex items-center justify-center h-48">
         <LoadingSpinner size="lg" />

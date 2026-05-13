@@ -79,7 +79,6 @@ export const skillSelectMinimal = {
   parentId: true,
   isLatest: true,
   cwe: true,
-  content: true,
   successRate: true,
   avgDuration: true,
   execCount: true,

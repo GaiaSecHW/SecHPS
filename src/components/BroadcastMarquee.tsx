@@ -81,12 +81,12 @@ export function BroadcastMarquee() {
   const currentMessage = messages[currentMessageIndex] || config.content;
 
   return (
-    <div className={`flex-1 overflow-hidden ${colorStyle.gradient} rounded-md shadow-sm h-10`}>
+    <div className="flex-1 overflow-hidden bg-dark-surface border border-gray-800/60 rounded-md h-10">
       <div className="flex items-center h-full px-4">
-        <Volume2 className="w-5 h-5 text-white mr-3 flex-shrink-0" />
+        <Volume2 className="w-5 h-5 text-primary-400 mr-3 flex-shrink-0" />
         <div className="overflow-hidden whitespace-nowrap flex-1 relative">
           <span
-            className="inline-block animate-marquee text-white font-medium text-base pl-[100%]"
+            className="inline-block animate-marquee text-gray-300 font-medium text-sm pl-[100%]"
             style={{
               animationDuration: '20s',
             }}
