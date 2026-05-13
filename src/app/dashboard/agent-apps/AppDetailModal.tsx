@@ -56,7 +56,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        setIsIcsOrAdmin(payload.isIcsTenant === true || payload.isPlatformAdmin === true);
+        setIsIcsOrAdmin(payload.isIcsTenant === true || (Array.isArray(payload.roles) && payload.roles.includes('admin')));
       } catch {
         setIsIcsOrAdmin(false);
       }
