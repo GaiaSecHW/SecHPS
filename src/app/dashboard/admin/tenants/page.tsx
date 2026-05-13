@@ -519,6 +519,7 @@ export default function TenantsPage() {
           <h1 className="text-2xl font-bold text-gray-100">租户管理</h1>
           <p className="mt-1 text-sm text-gray-400">
             管理平台租户及其用户
+            <span className="ml-2 text-xs text-blue-400">（平台管理员可访问所有数据；ICSL租户可访问所有数据+创建公共资源；普通租户只能访问本租户数据+公共资源）</span>
           </p>
         </div>
         <button

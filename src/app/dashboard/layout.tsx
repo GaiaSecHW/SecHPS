@@ -278,42 +278,61 @@ function DashboardLayoutContent({
             </div>
 
             <div className="flex items-center space-x-4">
-              {user?.avatar && (
-                <img
-                  src={user.avatar}
-                  alt={user.name || user.username}
-                  className="h-8 w-8 rounded-full ring-2 ring-gray-700"
-                />
-              )}
-              <div className="text-sm">
-                <div className="flex items-center gap-2">
-                  <p className="font-medium text-gray-200">
-                    {user?.name || user?.username}
-                  </p>
-                  {user?.tenantId && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary-500/15 text-primary-400 border border-primary-500/20">
-                      {user?.tenantName || '租户'}
-                    </span>
-                  )}
-                  {user?.isIcsTenant && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20">
-                      ICSL
-                    </span>
-                  )}
-                  {user?.roles?.includes('admin') && !user?.tenantId && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/20">
-                      平台管理员
-                    </span>
-                  )}
+              <div className="flex items-center gap-3 bg-dark-bg/50 rounded-lg p-3 border border-gray-700/30">
+                {/* 用户头像 */}
+                {user?.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name || user.username}
+                    className="h-10 w-10 rounded-full ring-2 ring-primary-500/30"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold">
+                    {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
+                  </div>
+                )}
+
+                {/* 用户信息卡片 */}
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-100 text-sm">{user?.name || user?.username}</span>
+                    {user?.roles?.includes('admin') && !user?.tenantId && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+                        平台管理员
+                      </span>
+                    )}
+                    {user?.isIcsTenant && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20">
+                        ICSL
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-gray-500 text-xs">{user?.email}</p>
                 </div>
-                <p className="text-gray-500 text-xs">{user?.email}</p>
+
+                {/* 分隔线 */}
+                {user?.tenantId && (
+                  <>
+                    <div className="w-px h-8 bg-gray-700/50" />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-5 h-5 rounded bg-blue-500/20 flex items-center justify-center">
+                          <span className="text-blue-400 text-xs">🏢</span>
+                        </div>
+                        <span className="text-gray-400 text-xs">租户</span>
+                      </div>
+                      <span className="font-medium text-blue-400 text-sm">{user?.tenantName || user?.tenantId}</span>
+                    </div>
+                  </>
+                )}
               </div>
+
               <button
                 onClick={handleLogout}
-                className="ml-2 p-1.5 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                className="p-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                 title="退出登录"
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-5 w-5" />
               </button>
             </div>
           </div>
