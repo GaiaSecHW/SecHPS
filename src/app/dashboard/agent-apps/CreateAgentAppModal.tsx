@@ -185,7 +185,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 租户 <span className="text-red-500">*</span>
               </label>
-              {isAdmin ? (
+              {isIcsOrAdmin ? (
                 <select
                   value={formData.tenantId}
                   onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
