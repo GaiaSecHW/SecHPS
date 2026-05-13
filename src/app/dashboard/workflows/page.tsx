@@ -498,52 +498,55 @@ function WorkflowsContent() {
 
       {/* 统计信息 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-cyan-500/30 transition-all duration-300 group">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">总编排</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.total}</p>
+              <p className="text-2xl font-bold text-gray-100 mt-1 group-hover:text-cyan-400 transition-colors">{stats.total}</p>
             </div>
-            <div className="p-3 bg-blue-600/10 rounded-lg">
-              <FileText className="h-6 w-6 text-blue-400" />
+            <div className="p-3 bg-gradient-to-br from-cyan-400/20 to-blue-500/20 rounded-lg group-hover:from-cyan-400/30 group-hover:to-blue-500/30 transition-colors">
+              <FileText className="h-6 w-6 text-cyan-400" />
             </div>
           </div>
         </div>
 
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-gray-500/30 transition-all duration-300 group">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">草稿</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.draft}</p>
+              <p className={`text-2xl font-bold mt-1 transition-colors ${stats.draft > 0 ? 'text-gray-200' : 'text-gray-500'}`}>{stats.draft}</p>
             </div>
-            <div className="p-3 bg-[#0F172A] rounded-lg">
-              <FileText className="h-6 w-6 text-gray-400" />
+            <div className={`p-3 rounded-lg transition-colors ${stats.draft > 0 ? 'bg-gray-500/20' : 'bg-gray-700/30'}`}>
+              <Edit2 className={`h-6 w-6 ${stats.draft > 0 ? 'text-gray-300' : 'text-gray-500'}`} />
             </div>
           </div>
+          {stats.draft > 0 && <p className="text-xs text-gray-500 mt-2">待发布</p>}
         </div>
 
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-emerald-500/30 transition-all duration-300 group">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">已发布</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.published}</p>
+              <p className={`text-2xl font-bold mt-1 transition-colors ${stats.published > 0 ? 'text-emerald-400 group-hover:text-emerald-300' : 'text-gray-500'}`}>{stats.published}</p>
             </div>
-            <div className="p-3 bg-green-600/10 rounded-lg">
-              <CheckCircle className="h-6 w-6 text-green-400" />
+            <div className={`p-3 rounded-lg transition-colors ${stats.published > 0 ? 'bg-gradient-to-br from-emerald-400/20 to-green-500/20 group-hover:from-emerald-400/30 group-hover:to-green-500/30' : 'bg-gray-700/30'}`}>
+              <CheckCircle className={`h-6 w-6 ${stats.published > 0 ? 'text-emerald-400' : 'text-gray-500'}`} />
             </div>
           </div>
+          {stats.published > 0 && <p className="text-xs text-emerald-500/70 mt-2">正在运行</p>}
         </div>
 
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-rose-500/30 transition-all duration-300 group">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-400">已下线</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1">{stats.archived}</p>
+              <p className={`text-2xl font-bold mt-1 transition-colors ${stats.archived > 0 ? 'text-rose-400 group-hover:text-rose-300' : 'text-gray-500'}`}>{stats.archived}</p>
             </div>
-            <div className="p-3 bg-red-600/10 rounded-lg">
-              <Archive className="h-6 w-6 text-red-400" />
+            <div className={`p-3 rounded-lg transition-colors ${stats.archived > 0 ? 'bg-gradient-to-br from-rose-400/20 to-red-500/20 group-hover:from-rose-400/30 group-hover:to-red-500/30' : 'bg-gray-700/30'}`}>
+              <Archive className={`h-6 w-6 ${stats.archived > 0 ? 'text-rose-400' : 'text-gray-500'}`} />
             </div>
           </div>
+          {stats.archived > 0 && <p className="text-xs text-rose-500/70 mt-2">已归档</p>}
         </div>
       </div>
 
@@ -565,7 +568,7 @@ function WorkflowsContent() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as WorkflowStatus | 'all')}
-            className="px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="w-[150px] px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           >
             <option value="all">全部状态</option>
             <option value="draft">草稿</option>

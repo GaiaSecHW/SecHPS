@@ -498,7 +498,7 @@ export default function ModelsPage() {
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value as any)}
-              className="px-3 py-2 border border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-[100px] px-3 py-2 border border-gray-600 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
             >
               <option value="all">全部</option>
               <option value="active">启用</option>

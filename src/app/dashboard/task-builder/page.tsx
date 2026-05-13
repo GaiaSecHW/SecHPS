@@ -402,7 +402,7 @@ export default function TaskBuilderPage() {
             <select
               value={pageSize}
               onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-              className="px-2 py-1 border border-gray-600 rounded-md bg-dark-surface focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-[100px] px-2 py-1 border border-gray-600 rounded-md bg-dark-surface focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               {PAGE_SIZE_OPTIONS.map((size) => (
                 <option key={size} value={size}>

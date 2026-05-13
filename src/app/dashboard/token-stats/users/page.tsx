@@ -237,7 +237,7 @@ export default function UserTokenStatsPage() {
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-[100px] px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="day">今日</option>
                 <option value="week">本周</option>

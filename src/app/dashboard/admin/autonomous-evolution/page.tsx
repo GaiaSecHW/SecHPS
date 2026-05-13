@@ -332,13 +332,13 @@ function AutonomousEvolutionContent() {
             onClick={toggleInjection}
             className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors ${
               injectionEnabled
-                ? 'bg-green-900/20 text-green-400 border-green-500/20 hover:bg-green-900/30'
-                : 'bg-[#0F172A] text-gray-500 border-gray-700/50 hover:bg-dark-surface-hover'
+                ? 'bg-emerald-900/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-900/30'
+                : 'bg-gray-800 text-gray-400 border-gray-600/50 hover:bg-gray-700'
             }`}
             title="控制提取时新经验是否默认启用"
           >
-            <span className={`w-7 h-4 rounded-full relative inline-block transition-colors ${injectionEnabled ? 'bg-green-600' : 'bg-gray-300'}`}>
-              <span className={`absolute top-0.5 w-3 h-3 bg-dark-surface rounded-full shadow transition-transform ${injectionEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${injectionEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${injectionEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </span>
             自动启用
           </button>
@@ -473,7 +473,7 @@ function AutonomousEvolutionContent() {
           <select
             value={filterCategory}
             onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-[140px] px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有错误类型</option>
             {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
@@ -483,7 +483,7 @@ function AutonomousEvolutionContent() {
           <select
             value={filterInjected}
             onChange={e => { setFilterInjected(e.target.value); setPage(1); }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+            className="w-[120px] px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有状态</option>
             <option value="true">已注入</option>
