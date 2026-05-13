@@ -1099,7 +1099,7 @@ model VulnerabilityTree {
   id          String            @id
   name        String
   displayName String
-  type        String            // 'language' | 'pattern'
+  type        String            // 'category' | 'subcategory' | 'pattern' (三级层级)
   parentId    String?
   description String?
   sortOrder   Int               @default(0)

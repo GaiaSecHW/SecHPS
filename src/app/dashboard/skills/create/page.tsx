@@ -17,13 +17,11 @@ import {
 import { PERMISSIONS } from '@/types/permissions';
 import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
 import { hasPermission } from '@/lib/permissions';
-import { getSkillDefaultTemplate, getFormatGuideData, cleanSkillContentForOptimization } from '@/lib/skill-builder';
+import { getSkillDefaultTemplate, getFormatGuideData } from '@/lib/skill-builder';
 
-// 使用公共模块的默认模板
 const DEFAULT_TEMPLATE = getSkillDefaultTemplate();
-
-// 使用公共模块的格式建议数据
 const FORMAT_GUIDE = getFormatGuideData();
+const VULNERABILITY_CATEGORY_ID = 'cat-vulnerability-mining';
 
 export default function CreateSkillPage() {
   const router = useRouter();
@@ -33,29 +31,31 @@ export default function CreateSkillPage() {
   const [name, setName] = useState('');
   const [content, setContent] = useState(DEFAULT_TEMPLATE);
   const [isPublic, setIsPublic] = useState(false);
-  
-  // 三维分类
-  const [categoryId, setCategoryId] = useState<string>('');
+
+  const [categoryId, setCategoryId] = useState<string>(VULNERABILITY_CATEGORY_ID);
+  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
+  const [selectedVulnCategoryId, setSelectedVulnCategoryId] = useState<string>('');
+  const [selectedVulnSubcategoryId, setSelectedVulnSubcategoryId] = useState<string>('');
   const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<string | null>(null);
   const [productTagIds, setProductTagIds] = useState<string[]>([]);
 
-  // 分类数据
   const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; description?: string; icon?: string; hasSubDimension: boolean }>>([]);
-  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; type: string; patterns: Array<{ id: string; name: string; displayName: string; skillCount: number }> }>>([]);
-  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
+  const [languages, setLanguages] = useState<Array<{ id: string; name: string; displayName: string }>>([]);
+  const [vulnCategories, setVulnCategories] = useState<Array<{ id: string; name: string; displayName: string }>>([]);
+  const [vulnSubcategories, setVulnSubcategories] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
+  const [vulnPatterns, setVulnPatterns] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
 
-  // AI 生成相关状态
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGenerateError, setAiGenerateError] = useState('');
   const [aiGenerateSuccess, setAiGenerateSuccess] = useState(false);
-  const [aiDiffContent, setAiDiffContent] = useState('');   // AI 生成的内容（待对比）
-  const [showDiffModal, setShowDiffModal] = useState(false); // 对比弹窗
+  const [aiDiffContent, setAiDiffContent] = useState('');
+  const [showDiffModal, setShowDiffModal] = useState(false);
   const [aiCountdown, setAiCountdown] = useState(0);
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [showFormatHint, setShowFormatHint] = useState(true); // 格式建议默认展开
+  const [showFormatHint, setShowFormatHint] = useState(true);
 
   const clearAiTimers = () => {
     if (aiTimeoutRef.current) { clearTimeout(aiTimeoutRef.current); aiTimeoutRef.current = null; }
@@ -71,7 +71,6 @@ export default function CreateSkillPage() {
     }
   };
 
-  // 技术栈选项 - 从数据库动态获取
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -83,7 +82,6 @@ export default function CreateSkillPage() {
       }
     }
 
-    // 获取分类数据
     const fetchCategories = async () => {
       setLoadingCategories(true);
       try {
@@ -100,7 +98,6 @@ export default function CreateSkillPage() {
       }
     };
 
-    // 获取漏洞模式树
     const fetchTree = async () => {
       setLoadingTree(true);
       try {
@@ -108,7 +105,10 @@ export default function CreateSkillPage() {
         const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${t}` } });
         if (res.ok) {
           const data = await res.json();
-          setVulnerabilityTree(data.tree || []);
+          setLanguages(data.tree || []);
+          setVulnCategories(data.categories || []);
+          setVulnSubcategories(data.subcategories || []);
+          setVulnPatterns(data.patterns || []);
         }
       } catch (e) {
         console.error('获取漏洞模式树失败:', e);
@@ -121,30 +121,32 @@ export default function CreateSkillPage() {
     fetchTree();
   }, []);
 
-  // 获取选中的分类对象
   const selectedCategory = categories.find(c => c.id === categoryId);
 
-  // 当分类变化时，重置语言和模式选择
+  const availableSubcategories = vulnSubcategories.filter(
+    s => s.parentId === selectedVulnCategoryId
+  );
+
+  const availablePatterns = vulnPatterns.filter(
+    p => p.parentId === selectedVulnSubcategoryId
+  );
+
   useEffect(() => {
     setSelectedLanguageId('');
+    setSelectedVulnCategoryId('');
+    setSelectedVulnSubcategoryId('');
     setVulnerabilityTreeId(null);
   }, [categoryId]);
 
-  // 当语言变化时，重置模式选择
+  useEffect(() => {
+    setSelectedVulnSubcategoryId('');
+    setVulnerabilityTreeId(null);
+  }, [selectedVulnCategoryId]);
+
   useEffect(() => {
     setVulnerabilityTreeId(null);
-  }, [selectedLanguageId]);
+  }, [selectedVulnSubcategoryId]);
 
-  // 获取当前语言和通用语言下的 patterns
-  const availablePatterns = (() => {
-    if (!selectedLanguageId) return [];
-    const langPatterns = vulnerabilityTree.find(l => l.id === selectedLanguageId)?.patterns || [];
-    const generalNode = vulnerabilityTree.find(l => l.name === '通用');
-    const generalPatterns = generalNode?.id === selectedLanguageId ? [] : (generalNode?.patterns || []);
-    return [...langPatterns, ...generalPatterns];
-  })();
-
-  // AI 生成 Skill 内容
   const handleAiGenerate = async () => {
     if (!name.trim()) {
       setAiGenerateError('请先填写 Skill 名称，AI 将根据名称和漏洞类型生成内容');
@@ -155,12 +157,10 @@ export default function CreateSkillPage() {
     setAiGenerateError('');
     setAiGenerateSuccess(false);
 
-    // 启动 5 分钟超时自动解锁
     const TIMEOUT_MS = 5 * 60 * 1000;
     setAiCountdown(TIMEOUT_MS / 1000);
     clearAiTimers();
 
-    // 每秒倒计时
     aiCountdownRef.current = setInterval(() => {
       setAiCountdown((prev) => {
         if (prev <= 1) { clearAiTimers(); return 0; }
@@ -168,33 +168,31 @@ export default function CreateSkillPage() {
       });
     }, 1000);
 
-    // 5 分钟强制解锁
     aiTimeoutRef.current = setTimeout(() => {
       unlockAi('timeout');
     }, TIMEOUT_MS);
 
-try {
-        const token = localStorage.getItem('token');
-        console.log('[Quick Create] 发送 AI 生成请求');
-        const response = await fetch('/api/skills/generate', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills/generate', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          intent: {
+            name: name.trim(),
+            description: name.trim(),
+            category: selectedCategory?.name || 'code-audit',
+            categoryId: categoryId || undefined,
+            vulnerabilityTreeId: vulnerabilityTreeId || undefined,
+            whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
+            whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
+            expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
           },
-          body: JSON.stringify({
-            intent: {
-              name: name.trim(),
-              description: name.trim(),
-              category: selectedCategory?.name || 'code-audit',
-              categoryId: categoryId || undefined,
-              vulnerabilityTreeId: vulnerabilityTreeId || undefined,
-              whatDoesItDo: `检测 ${name.trim()} 相关的安全漏洞`,
-              whenShouldItTrigger: `当用户要求审计${name.trim()}时触发`,
-              expectedOutput: '详细的漏洞分析报告，包含漏洞位置、成因和修复建议',
-            },
-          }),
-        });
+        }),
+      });
 
       const data = await response.json();
 
@@ -232,7 +230,8 @@ try {
       return;
     }
 
-    if (selectedCategory?.hasSubDimension && !vulnerabilityTreeId) {
+    const cat = categories.find(c => c.id === categoryId);
+    if (cat?.hasSubDimension && !vulnerabilityTreeId) {
       setError('请选择漏洞模式');
       return;
     }
@@ -245,8 +244,7 @@ try {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
-      // 直接保存用户输入的内容
+
       const response = await fetch('/api/skills', {
         method: 'POST',
         headers: {
@@ -280,7 +278,6 @@ try {
 
   return (
     <div className="space-y-6">
-      {/* AI 生成全屏遮罩 */}
       {aiGenerating && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-dark-surface rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
@@ -291,14 +288,12 @@ try {
             <p className="text-sm text-gray-500 text-center">
               大模型内容生成中，请勿关闭页面或进行其他操作...
             </p>
-            {/* 进度条 */}
             <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full"
                 style={{ width: `${Math.max(5, 100 - (aiCountdown / 300) * 100)}%`, transition: 'width 1s linear' }}
               />
             </div>
-            {/* 倒计时 */}
             {aiCountdown > 0 && (
               <p className="text-xs text-gray-400">
                 最长等待 {Math.floor(aiCountdown / 60)}:{String(aiCountdown % 60).padStart(2, '0')}，超时将自动解锁
@@ -307,7 +302,7 @@ try {
           </div>
         </div>
       )}
-      {/* Header */}
+
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <button
@@ -323,7 +318,6 @@ try {
         </div>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {error && (
           <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
@@ -332,9 +326,7 @@ try {
         )}
 
         <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6 space-y-6">
-          {/* 基本信息 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Skill 名称 */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Skill 名称 <span className="text-red-500">*</span>
@@ -349,7 +341,6 @@ try {
               />
             </div>
 
-            {/* 分类（Category） */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 分类 <span className="text-red-500">*</span>
@@ -367,47 +358,84 @@ try {
               </select>
             </div>
 
-            {/* 语言（Language）- 仅当分类 hasSubDimension=true 时显示 */}
             {selectedCategory?.hasSubDimension && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  语言
-                </label>
-                <select
-                  value={selectedLanguageId}
-                  onChange={(e) => setSelectedLanguageId(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  disabled={loadingTree}
-                >
-                  <option value="">{loadingTree ? '加载中...' : '请选择语言'}</option>
-                  {vulnerabilityTree.map(lang => (
-                    <option key={lang.id} value={lang.id}>{lang.displayName}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    语言
+                  </label>
+                  <select
+                    value={selectedLanguageId}
+                    onChange={(e) => setSelectedLanguageId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                    disabled={loadingTree}
+                  >
+                    <option value="">请选择语言</option>
+                    {languages.map(lang => (
+                      <option key={lang.id} value={lang.id}>{lang.displayName}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    选择适用的编程语言
+                  </p>
+                </div>
 
-            {/* 漏洞模式（Pattern）- 仅当选择了语言后显示 */}
-            {selectedCategory?.hasSubDimension && selectedLanguageId && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  漏洞模式 <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={vulnerabilityTreeId || ''}
-                  onChange={(e) => setVulnerabilityTreeId(e.target.value || null)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                >
-                  <option value="">请选择漏洞模式</option>
-                  {availablePatterns.map(p => (
-                    <option key={p.id} value={p.id}>{p.displayName}</option>
-                  ))}
-                </select>
-              </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    漏洞模式 <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <select
+                      value={selectedVulnCategoryId}
+                      onChange={(e) => {
+                        setSelectedVulnCategoryId(e.target.value);
+                        setSelectedVulnSubcategoryId('');
+                        setVulnerabilityTreeId(null);
+                      }}
+                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      disabled={loadingTree || vulnCategories.length === 0}
+                    >
+                      <option value="">请选择类型</option>
+                      {vulnCategories.map(cat => (
+                        <option key={cat.id} value={cat.id}>{cat.displayName}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={selectedVulnSubcategoryId}
+                      onChange={(e) => {
+                        setSelectedVulnSubcategoryId(e.target.value);
+                        setVulnerabilityTreeId(null);
+                      }}
+                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      disabled={loadingTree || !selectedVulnCategoryId || availableSubcategories.length === 0}
+                    >
+                      <option value="">请选择分类</option>
+                      {availableSubcategories.map(sub => (
+                        <option key={sub.id} value={sub.id}>{sub.displayName}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      value={vulnerabilityTreeId || ''}
+                      onChange={(e) => setVulnerabilityTreeId(e.target.value || null)}
+                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      disabled={loadingTree || !selectedVulnSubcategoryId || availablePatterns.length === 0}
+                    >
+                      <option value="">请选择模式</option>
+                      {availablePatterns.map(pat => (
+                        <option key={pat.id} value={pat.id}>{pat.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">
+                    依次选择漏洞类型、分类和具体模式
+                  </p>
+                </div>
+              </>
             )}
           </div>
 
-          {/* 适用产品（维度三） */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
@@ -415,7 +443,6 @@ try {
             <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
           </div>
 
-          {/* 是否公开 */}
           {isAdmin && (
             <div>
               <label className="flex items-center">
@@ -432,7 +459,6 @@ try {
             </div>
           )}
 
-          {/* Markdown 内容 */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-300">
@@ -463,7 +489,6 @@ try {
                     </>
                   )}
                 </button>
-                {/* 有缓存的 AI 结果时，显示重新查看对比按钮 */}
                 {aiDiffContent && !aiGenerating && (
                   <button
                     type="button"
@@ -485,7 +510,6 @@ try {
               </div>
             </div>
 
-            {/* AI 生成错误提示 */}
             {aiGenerateError && (
               <div className="mb-3 flex items-start gap-2 bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg text-sm">
                 <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
@@ -493,7 +517,6 @@ try {
               </div>
             )}
 
-            {/* AI 生成提示 */}
             {aiGenerateSuccess && (
               <div className="mb-3 flex items-center gap-2 bg-green-900/20 border border-green-200 text-green-400 px-4 py-3 rounded-lg text-sm">
                 <CheckCircle size={16} className="flex-shrink-0" />
@@ -512,7 +535,6 @@ try {
               </button>
               {showFormatHint && (
                 <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50 text-sm text-gray-400 space-y-4">
-                  {/* 核心结构 */}
                   <div>
                     <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
                       <span className="w-5 h-5 rounded bg-blue-100 text-blue-400 flex items-center justify-center text-xs font-bold">1</span>
@@ -525,7 +547,6 @@ try {
                     </div>
                   </div>
 
-                  {/* 关键原则 */}
                   <div>
                     <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
                       <span className="w-5 h-5 rounded bg-green-100 text-green-400 flex items-center justify-center text-xs font-bold">2</span>
@@ -541,7 +562,6 @@ try {
                     </div>
                   </div>
 
-                  {/* 常见错误 */}
                   <div>
                     <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
                       <span className="w-5 h-5 rounded bg-red-100 text-red-400 flex items-center justify-center text-xs font-bold">3</span>
@@ -569,7 +589,6 @@ try {
                     </div>
                   </div>
 
-                  {/* 推荐章节 */}
                   <div>
                     <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
                       <span className="w-5 h-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">4</span>
@@ -606,7 +625,6 @@ try {
           </div>
         </div>
 
-        {/* Actions */}
         <div className="flex justify-end space-x-4">
           <button
             type="button"
@@ -635,7 +653,6 @@ try {
         </div>
       </form>
 
-      {/* AI 生成内容对比弹窗 */}
       {showDiffModal && (() => {
         const leftLines = content.split('\n');
         const rightLines = aiDiffContent.split('\n');
@@ -719,7 +736,6 @@ try {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
             <div className="bg-dark-surface rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
 
-              {/* 头部 */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
@@ -740,7 +756,6 @@ try {
                 </button>
               </div>
 
-              {/* 列标题 */}
               <div className="flex divide-x divide-gray-700/50 flex-shrink-0 border-b border-gray-700/50">
                 <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0F172A]">
                   <span className="w-2 h-2 rounded-full bg-red-400"/>
@@ -752,7 +767,6 @@ try {
                 </div>
               </div>
 
-              {/* diff 主体 */}
               <div className="flex-1 flex divide-x divide-gray-700/50 min-h-0 overflow-hidden">
                 <div ref={(el) => { (window as any).__diffLeft = el; }}
                   onScroll={onLeftScroll}
@@ -790,7 +804,6 @@ try {
                 </div>
               </div>
 
-              {/* 底部操作 */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 flex-shrink-0 bg-dark-bg rounded-b-2xl">
                 <button
                   onClick={() => setShowDiffModal(false)}

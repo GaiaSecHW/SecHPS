@@ -31,6 +31,7 @@ import {
   LayoutDashboard,
   TrendingUp,
   User,
+  FileUp,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { DeveloperGuard } from '@/components/PermissionGuard';
@@ -478,7 +479,8 @@ function SkillsPageContent() {
               </button>
             </>
           )}
-          {isAdmin && (
+          {/* 隐藏同步磁盘、导出、导入按钮 */}
+          {/* {isAdmin && (
             <>
               <button onClick={handleSyncToDisk} disabled={syncing} className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm disabled:opacity-50">
                 {syncing ? <RefreshCw size={16} className="mr-1.5 animate-spin" /> : <Save size={16} className="mr-1.5" />}
@@ -494,12 +496,15 @@ function SkillsPageContent() {
                 <input type="file" accept=".json" onChange={handleImportSkills} disabled={importing} className="sr-only" />
               </label>
             </>
-          )}
+          )} */}
           <button onClick={() => router.push('/dashboard/skills/create-wizard')} className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-500 hover:to-purple-400 text-sm transition-all duration-200 shadow-sm hover:shadow-purple-500/25">
             <Plus size={16} className="mr-1.5" />引导创建
           </button>
           <button onClick={() => router.push('/dashboard/skills/create')} className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary-600 to-primary-500 text-white rounded-lg hover:from-primary-500 hover:to-primary-400 text-sm transition-all duration-200 shadow-sm hover:shadow-primary-500/25">
             <Code size={16} className="mr-1.5" />快速创建
+          </button>
+          <button onClick={() => router.push('/dashboard/skills/import-create')} className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-lg hover:from-green-500 hover:to-teal-400 text-sm transition-all duration-200 shadow-sm hover:shadow-green-500/25">
+            <FileUp size={16} className="mr-1.5" />导入创建
           </button>
         </div>
       </div>

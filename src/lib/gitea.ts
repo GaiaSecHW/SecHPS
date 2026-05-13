@@ -39,13 +39,35 @@ function getGiteaConfig(): GiteaConfig | null {
   return { url, token, repoOwner, repoName, branch };
 }
 
+const GITEA_TIMEOUT = 30000;
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeout: number = GITEA_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`请求超时 (${timeout}ms)`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 async function getFileContent(
   config: GiteaConfig,
   filePath: string
 ): Promise<{ content: string; sha: string } | null> {
   const url = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
   
-  const response = await fetch(url, {
+  const response = await fetchWithTimeout(url, {
     headers: {
       Authorization: `token ${config.token}`,
       Accept: 'application/json',
@@ -94,8 +116,14 @@ export async function uploadFileToGitea(
   let existingFile = null;
   try {
     existingFile = await getFileContent(config, filePath);
+    await new Promise(resolve => setTimeout(resolve, 200));
   } catch (getError) {
     if (getError instanceof GiteaAuthError) {
+      if (retries > 1) {
+        console.log(`[Gitea] Rate limited, waiting 2s before retry...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        return uploadFileToGitea(appId, fileName, fileContent, isBase64, retries - 1);
+      }
       throw getError;
     }
     console.log('[Gitea] getFileContent error (will retry):', getError);
@@ -113,39 +141,61 @@ export async function uploadFileToGitea(
   const method = existingFile ? 'PUT' : 'POST';
 
   for (let attempt = 1; attempt <= retries; attempt++) {
-    const response = await fetch(apiUrl, {
-      method,
-      headers: {
-        Authorization: `token ${config.token}`,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
+    try {
+      const response = await fetchWithTimeout(apiUrl, {
+        method,
+        headers: {
+          Authorization: `token ${config.token}`,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`[Gitea] 文件上传成功: ${filePath}`);
-      return {
-        path: filePath,
-        sha: data.content.sha,
-        url: `${config.url}/${config.repoOwner}/${config.repoName}/src/branch/${config.branch}/${filePath}`,
-      };
-    }
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`[Gitea] 文件上传成功: ${filePath}`);
+        return {
+          path: filePath,
+          sha: data.content.sha,
+          url: `${config.url}/${config.repoOwner}/${config.repoName}/src/branch/${config.branch}/${filePath}`,
+        };
+      }
 
-    const errorText = await response.text();
-    
-    if (response.status === 403 && errorText.includes('push is rejected') && attempt < retries) {
-      console.log(`[Gitea] Push rejected (attempt ${attempt}/${retries}), waiting 500ms...`);
-      await new Promise(resolve => setTimeout(resolve, 500));
-      continue;
+      const errorText = await response.text();
+      
+      if (response.status === 403 && errorText.includes('push is rejected') && attempt < retries) {
+        console.log(`[Gitea] Push rejected (attempt ${attempt}/${retries}), waiting 500ms...`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      
+      if (response.status === 401 || response.status === 403) {
+        throw new GiteaAuthError(`Gitea 认证失败 (${response.status})，请检查 GITEA_TOKEN 权限配置`);
+      }
+      
+      throw new Error(`上传文件失败: ${response.status} ${response.statusText} - ${errorText}`);
+    } catch (error) {
+      if (error instanceof GiteaAuthError) {
+        throw error;
+      }
+      
+      const isNetworkError = error instanceof Error && (
+        error.message.includes('ECONNRESET') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('ENOTFOUND') ||
+        error.message.includes('请求超时') ||
+        error.message.includes('network')
+      );
+      
+      if (isNetworkError && attempt < retries) {
+        console.log(`[Gitea] 网络错误 (attempt ${attempt}/${retries}), 等待 2s 后重试...`, error instanceof Error ? error.message : error);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue;
+      }
+      
+      throw error;
     }
-    
-    if (response.status === 401 || response.status === 403) {
-      throw new GiteaAuthError(`Gitea 认证失败 (${response.status})，请检查 GITEA_TOKEN 权限配置`);
-    }
-    
-    throw new Error(`上传文件失败: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
   throw new Error(`上传文件失败: 超过最大重试次数 ${retries}`);
@@ -194,7 +244,7 @@ export async function deleteFileFromGitea(
 
       const apiUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}`;
       
-      const response = await fetch(apiUrl, {
+      const response = await fetchWithTimeout(apiUrl, {
         method: 'DELETE',
         headers: {
           Authorization: `token ${config.token}`,
@@ -255,7 +305,7 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
   try {
     const treeUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/git/trees/${config.branch}?recursive=1`;
     
-    const treeResponse = await fetch(treeUrl, {
+    const treeResponse = await fetchWithTimeout(treeUrl, {
       headers: {
         Authorization: `token ${config.token}`,
         Accept: 'application/json',
@@ -285,7 +335,7 @@ export async function downloadFilesFromGitea(appId: string): Promise<GiteaFile[]
       try {
         const contentUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
         
-        const contentResponse = await fetch(contentUrl, {
+        const contentResponse = await fetchWithTimeout(contentUrl, {
           headers: {
             Authorization: `token ${config.token}`,
             Accept: 'application/json',
@@ -336,7 +386,7 @@ export async function downloadSingleFileFromGitea(appId: string, fileName: strin
     const filePath = `${appId}/${fileName}`;
     const contentUrl = `${config.url}/api/v1/repos/${config.repoOwner}/${config.repoName}/contents/${filePath}?ref=${config.branch}`;
     
-    const response = await fetch(contentUrl, {
+    const response = await fetchWithTimeout(contentUrl, {
       headers: {
         Authorization: `token ${config.token}`,
         Accept: 'application/json',

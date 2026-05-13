@@ -84,7 +84,7 @@ async function extractAndUploadArchive(appId: string, fileBuffer: Buffer, archiv
         await uploadFileToGitea(appId, file.name, file.content);
         console.log(`[agent-apps] 上传成功: ${file.name}`);
         successCount++;
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, 500));
       } catch (uploadError) {
         console.error(`[agent-apps] 上传失败 ${file.name}:`, uploadError);
         throw uploadError;

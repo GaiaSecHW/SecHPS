@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { HelpCircle, Lightbulb, Eye, X, ChevronDown, Loader2 } from 'lucide-react';
+import { HelpCircle, Lightbulb, Eye, X } from 'lucide-react';
 import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
 
 interface CategoryItem {
@@ -12,11 +12,30 @@ interface CategoryItem {
   hasSubDimension: boolean;
 }
 
-interface TreeLanguage {
+interface LanguageItem {
   id: string;
   name: string;
   displayName: string;
-  patterns: Array<{ id: string; name: string; displayName: string }>;
+}
+
+interface VulnerabilityCategory {
+  id: string;
+  name: string;
+  displayName: string;
+}
+
+interface VulnerabilitySubcategory {
+  id: string;
+  name: string;
+  displayName: string;
+  parentId: string | null;
+}
+
+interface VulnerabilityPattern {
+  id: string;
+  name: string;
+  displayName: string;
+  parentId: string | null;
 }
 
 interface IntentData {
@@ -25,6 +44,8 @@ interface IntentData {
   categoryId: string;
   vulnerabilityTreeId?: string;
   selectedLanguageId?: string;
+  selectedVulnCategoryId?: string;
+  selectedVulnSubcategoryId?: string;
   productTagIds?: string[];
   whatDoesItDo: string;
   whenShouldItTrigger: string;
@@ -38,17 +59,21 @@ interface Props {
   onNext: () => void;
 }
 
+const VULNERABILITY_CATEGORY_ID = 'cat-vulnerability-mining';
+
 export default function IntentStep({ data, onChange, onNext }: Props) {
   const [showExamples, setShowExamples] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
   const [showTemplateModal, setShowTemplateModal] = useState(false);
 
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [vulnerabilityTree, setVulnerabilityTree] = useState<TreeLanguage[]>([]);
+  const [languages, setLanguages] = useState<LanguageItem[]>([]);
+  const [vulnCategories, setVulnCategories] = useState<VulnerabilityCategory[]>([]);
+  const [vulnSubcategories, setVulnSubcategories] = useState<VulnerabilitySubcategory[]>([]);
+  const [vulnPatterns, setVulnPatterns] = useState<VulnerabilityPattern[]>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingTree, setLoadingTree] = useState(false);
 
-  // 加载分类数据
   useEffect(() => {
     const fetchCategories = async () => {
       setLoadingCategories(true);
@@ -60,6 +85,12 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         if (res.ok) {
           const d = await res.json();
           setCategories(d.categories || []);
+          if (!data.categoryId) {
+            const vulnCat = (d.categories || []).find((c: CategoryItem) => c.id === VULNERABILITY_CATEGORY_ID);
+            if (vulnCat) {
+              onChange({ ...data, categoryId: VULNERABILITY_CATEGORY_ID });
+            }
+          }
         }
       } catch (e) {
         console.error('加载分类失败:', e);
@@ -70,10 +101,8 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
     fetchCategories();
   }, []);
 
-  // 当分类有子维度时加载漏洞树
   useEffect(() => {
-    const selectedCat = categories.find(c => c.id === data.categoryId);
-    if (selectedCat?.hasSubDimension && vulnerabilityTree.length === 0) {
+    if (vulnCategories.length === 0) {
       const fetchTree = async () => {
         setLoadingTree(true);
         try {
@@ -83,7 +112,10 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           });
           if (res.ok) {
             const d = await res.json();
-            setVulnerabilityTree(d.tree || []);
+            setLanguages(d.tree || []);
+            setVulnCategories(d.categories || []);
+            setVulnSubcategories(d.subcategories || []);
+            setVulnPatterns(d.patterns || []);
           }
         } catch (e) {
           console.error('加载漏洞树失败:', e);
@@ -93,29 +125,18 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
       };
       fetchTree();
     }
-  }, [data.categoryId, categories, vulnerabilityTree.length]);
+  }, [vulnCategories.length]);
 
-  // 获取当前选中分类
   const selectedCategory = categories.find(c => c.id === data.categoryId);
 
-  // 获取可用模式列表（选中语言的模式 + 通用模式）
-  const availablePatterns = (() => {
-    if (!data.selectedLanguageId) return [];
-    const selectedLang = vulnerabilityTree.find(l => l.id === data.selectedLanguageId);
-    const generalLang = vulnerabilityTree.find(l => l.name === '通用');
-    const patterns = [...(selectedLang?.patterns || [])];
-    if (generalLang && generalLang.id !== data.selectedLanguageId) {
-      // 添加通用模式下不重复的模式
-      for (const p of generalLang.patterns) {
-        if (!patterns.find(ep => ep.id === p.id)) {
-          patterns.push(p);
-        }
-      }
-    }
-    return patterns;
-  })();
+  const availableSubcategories = vulnSubcategories.filter(
+    s => s.parentId === data.selectedVulnCategoryId
+  );
 
-  // 加载 Skill 标准输出模板
+  const availablePatterns = vulnPatterns.filter(
+    p => p.parentId === data.selectedVulnSubcategoryId
+  );
+
   useEffect(() => {
     const fetchTemplate = async () => {
       try {
@@ -145,13 +166,13 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
     if (!data.name.trim() || !data.description.trim()) return false;
     if (!data.whatDoesItDo.trim() || !data.whenShouldItTrigger.trim()) return false;
     if (!data.categoryId) return false;
-    if (selectedCategory?.hasSubDimension && !data.vulnerabilityTreeId) return false;
+    const cat = categories.find(c => c.id === data.categoryId);
+    if (cat?.hasSubDimension && !data.vulnerabilityTreeId) return false;
     return true;
   };
 
   return (
     <div className="space-y-6">
-      {/* 说明 */}
       <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start">
           <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
@@ -165,7 +186,6 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         </div>
       </div>
 
-      {/* Skill 基本信息 */}
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -196,7 +216,6 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           />
         </div>
 
-        {/* SKILL类型（分类选择） */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
             SKILL类型 <span className="text-red-500">*</span>
@@ -208,6 +227,8 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                 ...data,
                 categoryId: e.target.value,
                 selectedLanguageId: '',
+                selectedVulnCategoryId: '',
+                selectedVulnSubcategoryId: '',
                 vulnerabilityTreeId: '',
               });
             }}
@@ -226,57 +247,100 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           </p>
         </div>
 
-        {/* 攻击模式（仅漏洞挖掘类显示） */}
         {selectedCategory?.hasSubDimension && (
           <>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                语言 <span className="text-red-500">*</span>
+                语言
               </label>
               <select
                 value={data.selectedLanguageId || ''}
-                onChange={(e) => {
-                  onChange({
-                    ...data,
-                    selectedLanguageId: e.target.value,
-                    vulnerabilityTreeId: '',
-                  });
-                }}
+                onChange={(e) => handleChange('selectedLanguageId', e.target.value)}
                 disabled={loadingTree}
                 className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 <option value="">请选择语言</option>
-                {vulnerabilityTree.map(lang => (
+                {languages.map(lang => (
                   <option key={lang.id} value={lang.id}>{lang.displayName}</option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                选择适用的编程语言
+              </p>
             </div>
 
-            {data.selectedLanguageId && availablePatterns.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  漏洞模式 <span className="text-red-500">*</span>
+                  漏洞类型 <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={data.selectedVulnCategoryId || ''}
+                  onChange={(e) => {
+                    onChange({
+                      ...data,
+                      selectedVulnCategoryId: e.target.value,
+                      selectedVulnSubcategoryId: '',
+                      vulnerabilityTreeId: '',
+                    });
+                  }}
+                  disabled={loadingTree || vulnCategories.length === 0}
+                  className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">请选择类型</option>
+                  {vulnCategories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.displayName}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  漏洞分类
+                </label>
+                <select
+                  value={data.selectedVulnSubcategoryId || ''}
+                  onChange={(e) => {
+                    onChange({
+                      ...data,
+                      selectedVulnSubcategoryId: e.target.value,
+                      vulnerabilityTreeId: '',
+                    });
+                  }}
+                  disabled={loadingTree || !data.selectedVulnCategoryId || availableSubcategories.length === 0}
+                  className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                >
+                  <option value="">请选择分类</option>
+                  {availableSubcategories.map(sub => (
+                    <option key={sub.id} value={sub.id}>{sub.displayName}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  具体模式
                 </label>
                 <select
                   value={data.vulnerabilityTreeId || ''}
                   onChange={(e) => handleChange('vulnerabilityTreeId', e.target.value)}
+                  disabled={loadingTree || !data.selectedVulnSubcategoryId || availablePatterns.length === 0}
                   className="w-full px-4 py-2 border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                 >
-                  <option value="">请选择漏洞模式</option>
-                  {availablePatterns.map(p => (
-                    <option key={p.id} value={p.id}>{p.displayName}</option>
+                  <option value="">请选择模式</option>
+                  {availablePatterns.map(pat => (
+                    <option key={pat.id} value={pat.id}>{pat.displayName}</option>
                   ))}
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  选择此 Skill 要检测的漏洞模式
-                </p>
               </div>
-            )}
+            </div>
+            <p className="text-xs text-gray-500">
+              依次选择漏洞类型、分类和具体模式
+            </p>
           </>
         )}
       </div>
 
-      {/* 适用产品（维度三） */}
       <div>
         <label className="block text-sm font-medium text-gray-300 mb-2">
           适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
@@ -287,7 +351,6 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         />
       </div>
 
-      {/* 详细需求 */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-medium text-gray-100">详细需求</h3>
@@ -401,7 +464,6 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         </div>
       </div>
 
-      {/* 下一步按钮 */}
       <div className="flex justify-end pt-4 border-t">
         <button
           onClick={onNext}
@@ -412,7 +474,6 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
         </button>
       </div>
 
-      {/* 查看完整模板对话框 */}
       {showTemplateModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-dark-surface rounded-lg p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
