@@ -11,6 +11,8 @@ export interface EnvironmentFactoryConfig {
 export interface BuildResult {
   workspacePath: string;
   agent?: string;
+  instruction?: string;
+  commandTemplate?: string;
 }
 
 function mapRemotePathToLocal(remotePath: string): string {
@@ -42,32 +44,136 @@ export class EnvironmentFactory {
    * Priority: gitUrl > workspacePath (NFS) > projectPath (local copy)
    */
   async build(payload: TaskPayload): Promise<BuildResult> {
+    console.log(`[Environment] ========== BUILD BEGIN ==========`);
+    console.log(`[Environment] payload.taskId: ${payload.taskId}`);
+    console.log(`[Environment] payload.workspacePath: ${payload.workspacePath}`);
+    console.log(`[Environment] payload.projectPath: ${payload.projectPath}`);
+    console.log(`[Environment] payload.gitUrl: ${payload.gitUrl}`);
+    console.log(`[Environment] payload.gitRef: ${payload.gitRef}`);
+    console.log(`[Environment] payload.skills: ${payload.skills?.join(', ') || 'none'}`);
+    console.log(`[Environment] payload.agent: ${payload.agent}`);
+    console.log(`[Environment] payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
+    console.log(`[Environment] payload.model: ${payload.model}`);
+    
     // NFS passthrough mode: use the provided workspace path directly
     // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
     // Read default_agent from opencode.json if agent not specified in payload
     if (payload.workspacePath) {
+      console.log(`[Environment] Mode: NFS passthrough (workspacePath provided)`);
       const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
-      const instructionPath = localWorkspacePath.endsWith('/')
-        ? `${localWorkspacePath}instruction.txt`
-        : `${localWorkspacePath}/instruction.txt`;
-      fs.writeFileSync(instructionPath, '');
+      console.log(`[Environment] mapped path: ${payload.workspacePath} -> ${localWorkspacePath}`);
+      console.log(`[Environment] PATH_MAPPING env: ${process.env.PATH_MAPPING || 'not set'}`);
       
-      // Read default_agent from opencode.json (NFS workspace mode)
-      const opencodeJsonPath = localWorkspacePath.endsWith('/')
-        ? `${localWorkspacePath}opencode.json`
-        : `${localWorkspacePath}/opencode.json`;
+      let actualWorkspacePath = localWorkspacePath;
       let resolvedAgent: string | undefined;
-      if (fs.existsSync(opencodeJsonPath)) {
+      let resolvedInstruction: string | undefined;
+      let commandTemplate: string | undefined;
+      
+      // Read instruction.txt from root directory
+      console.log(`[Environment] Step 1: Checking instruction.txt...`);
+      const instructionPath = path.join(localWorkspacePath, 'instruction.txt');
+      console.log(`[Environment] instructionPath: ${instructionPath}`);
+      console.log(`[Environment] instruction.txt exists: ${fs.existsSync(instructionPath)}`);
+      const MIN_INSTRUCTION_LENGTH = 50;
+      let instructionTooShort = false;
+      
+      if (fs.existsSync(instructionPath)) {
         try {
-          const config = JSON.parse(fs.readFileSync(opencodeJsonPath, 'utf-8'));
-          resolvedAgent = config.default_agent || config.defaultAgent;
-          console.log(`[Environment] Found default_agent in opencode.json: ${resolvedAgent}`);
-        } catch {
-          console.warn(`[Environment] Failed to read opencode.json at ${opencodeJsonPath}`);
+          const fileContent = fs.readFileSync(instructionPath, 'utf-8').trim();
+          console.log(`[Environment] Read instruction.txt success, length: ${fileContent.length}`);
+          console.log(`[Environment] instruction content: "${fileContent.substring(0, 100)}..."`);
+          console.log(`[Environment] payload.instruction length: ${payload.instruction?.length || 0}`);
+          if (fileContent.length < MIN_INSTRUCTION_LENGTH && (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH)) {
+            instructionTooShort = true;
+            console.log(`[Environment] instruction too short, will use build agent with root workspace`);
+          }
+          resolvedInstruction = fileContent;
+        } catch (e) {
+          console.log(`[Environment] Failed to read instruction.txt: ${e}`);
+          resolvedInstruction = payload.instruction;
+          if (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH) {
+            instructionTooShort = true;
+          }
+        }
+      } else {
+        console.log(`[Environment] instruction.txt not found, using payload.instruction`);
+        resolvedInstruction = payload.instruction;
+        if (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH) {
+          instructionTooShort = true;
         }
       }
       
-      return { workspacePath: localWorkspacePath, agent: resolvedAgent };
+      // If instruction too short, use root workspace with build agent (skip subdirectory lookup)
+      if (instructionTooShort) {
+        console.log(`[Environment] ========== BUILD COMPLETE (short instruction mode) ==========`);
+        console.log(`[Environment] Using root workspace (no subdirectory lookup)`);
+        console.log(`[Environment] Agent: build`);
+        return { workspacePath: localWorkspacePath, agent: 'build', instruction: resolvedInstruction };
+      }
+      
+      // Check if opencode.json exists directly in workspace
+      console.log(`[Environment] Step 2: Checking opencode.json...`);
+      const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
+      console.log(`[Environment] direct opencode.json path: ${directOpencodeJsonPath}`);
+      console.log(`[Environment] direct opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
+      if (fs.existsSync(directOpencodeJsonPath)) {
+        try {
+          const config = JSON.parse(fs.readFileSync(directOpencodeJsonPath, 'utf-8'));
+          resolvedAgent = config.default_agent || config.defaultAgent;
+          console.log(`[Environment] Found default_agent in direct opencode.json: ${resolvedAgent}`);
+          console.log(`[Environment] opencode.json config keys: ${Object.keys(config).join(', ')}`);
+          // Extract command template for the agent
+          if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
+            commandTemplate = config.command[resolvedAgent].template;
+            console.log(`[Environment] Found command template for ${resolvedAgent}: "${commandTemplate.substring(0, 50)}..."`);
+          }
+        } catch (e) {
+          console.log(`[Environment] Failed to read direct opencode.json: ${e}`);
+        }
+      } else {
+        // Try to find a single subdirectory with opencode.json
+        console.log(`[Environment] Step 2b: Checking subdirectories for opencode.json...`);
+        const subdirs = fs.readdirSync(localWorkspacePath, { withFileTypes: true })
+          .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+          .map(entry => entry.name);
+        
+        console.log(`[Environment] Found subdirs: ${subdirs.join(', ')}`);
+        console.log(`[Environment] Subdirs count: ${subdirs.length}`);
+        
+        if (subdirs.length === 1) {
+          const subdirPath = path.join(localWorkspacePath, subdirs[0]);
+          const subdirOpencodeJsonPath = path.join(subdirPath, 'opencode.json');
+          console.log(`[Environment] Checking subdir: ${subdirs[0]}`);
+          console.log(`[Environment] subdir opencode.json path: ${subdirOpencodeJsonPath}`);
+          console.log(`[Environment] subdir opencode.json exists: ${fs.existsSync(subdirOpencodeJsonPath)}`);
+          if (fs.existsSync(subdirOpencodeJsonPath)) {
+            actualWorkspacePath = subdirPath;
+            console.log(`[Environment] Using subdirectory as workspace: ${subdirs[0]}`);
+            try {
+              const config = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8'));
+              resolvedAgent = config.default_agent || config.defaultAgent;
+              console.log(`[Environment] Found default_agent in subdirectory opencode.json: ${resolvedAgent}`);
+              console.log(`[Environment] opencode.json config keys: ${Object.keys(config).join(', ')}`);
+              // Extract command template for the agent
+              if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
+                commandTemplate = config.command[resolvedAgent].template;
+                console.log(`[Environment] Found command template for ${resolvedAgent}: "${commandTemplate.substring(0, 50)}..."`);
+              }
+            } catch (e) {
+              console.log(`[Environment] Failed to read subdir opencode.json: ${e}`);
+            }
+          }
+        } else if (subdirs.length > 1) {
+          console.log(`[Environment] Multiple subdirs found, not auto-selecting`);
+        }
+      }
+      
+      console.log(`[Environment] ========== BUILD COMPLETE (NFS mode) ==========`);
+      console.log(`[Environment] Result workspacePath: ${actualWorkspacePath}`);
+      console.log(`[Environment] Result agent: ${resolvedAgent}`);
+      console.log(`[Environment] Result instruction length: ${resolvedInstruction?.length}`);
+      console.log(`[Environment] Result commandTemplate: ${commandTemplate ? 'present' : 'none'}`);
+      return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate };
     }
 
     // Local workspace mode
@@ -131,10 +237,12 @@ export class EnvironmentFactory {
       }
 
       // Step 6: Write instruction.txt
-      fs.writeFileSync(
-        path.join(workspacePath, 'instruction.txt'),
-        payload.instruction
-      );
+      if (payload.instruction) {
+        fs.writeFileSync(
+          path.join(workspacePath, 'instruction.txt'),
+          payload.instruction || ''
+        );
+      }
 
       return { workspacePath, agent: payload.agent };
     } catch (error) {

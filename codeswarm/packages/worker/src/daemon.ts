@@ -7,7 +7,7 @@ import {
   type TaskResultStatus,
 } from '@codeswarm/types';
 import { EnvironmentFactory } from './environment.js';
-import { ProcessManager } from './process-manager.js';
+import { ProcessManager, type AgentEvent } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 
 interface WorkerDaemonConfig {
@@ -120,46 +120,94 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, agent, defaultAgentName, startCommand } = payload;
-    let workspace: string | null = null;
+    const { taskId, agent, defaultAgentName, startCommand, apiKey, model, env } = payload;
+    let buildResult = null;
 
     try {
-      // 1. Get workspace path (NFS passthrough or build)
-      workspace = await this.envFactory.build(payload);
-      this.server.log.info({ taskId, workspace }, 'Workspace ready');
+      console.log(`[Daemon] ========== TASK START ==========`);
+      console.log(`[Daemon] taskId: ${taskId}`);
+      console.log(`[Daemon] payload.agent: ${agent}`);
+      console.log(`[Daemon] payload.defaultAgentName: ${defaultAgentName}`);
+      console.log(`[Daemon] payload.startCommand: ${startCommand}`);
+      console.log(`[Daemon] payload.model: ${model}`);
+      console.log(`[Daemon] payload.apiKey present: ${!!apiKey}`);
+      console.log(`[Daemon] payload.env keys: ${env ? Object.keys(env).join(', ') : 'none'}`);
+      console.log(`[Daemon] payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
+      console.log(`[Daemon] payload.workspacePath: ${payload.workspacePath}`);
+      console.log(`[Daemon] payload.projectPath: ${payload.projectPath}`);
 
-      // 2. Run agent command in workspace
+      console.log(`[Daemon] Step 1: Building environment...`);
+      buildResult = await this.envFactory.build(payload);
+      const { workspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate } = buildResult;
+      
+      console.log(`[Daemon] Step 1 DONE: workspacePath=${workspacePath}`);
+      console.log(`[Daemon] Step 1 DONE: resolvedAgent=${resolvedAgent}`);
+      console.log(`[Daemon] Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
+      console.log(`[Daemon] Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
+      this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
+
+      const engine = (agent || 'opencode') as 'opencode' | 'claudecode';
+      const agentName = resolvedAgent || 'build';
+      
+      // Use instruction directly - environment.ts already handled the short instruction case
+      const instruction = resolvedInstruction || payload.instruction || '执行任务';
+      
+      console.log(`[Daemon] Step 2: Preparing agent config...`);
+      console.log(`[Daemon] engine: ${engine}`);
+      console.log(`[Daemon] agentName: ${agentName}`);
+      console.log(`[Daemon] final instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
+      this.server.log.info({ taskId, agentName, engine, instructionLength: instruction?.length }, 'Using agent');
+
+      const onEvent = (event: AgentEvent) => {
+        console.log(`[Daemon] Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
+        this.postEvent(payload, [event]).catch(() => {});
+      };
+
       let result;
       if (startCommand) {
+        console.log(`[Daemon] Step 3: Running custom command: ${startCommand}`);
         this.server.log.info({ taskId, startCommand }, 'Starting custom command execution');
-        result = await this.processMgr.runCommand(taskId, workspace, startCommand, [], payload.env);
+        result = await this.runCustomCommand(taskId, workspacePath, startCommand, env || {}, onEvent);
       } else {
-        const agentType = agent || 'opencode';
-        this.server.log.info({ taskId, agent: agentType, defaultAgentName }, 'Starting agent execution');
+        console.log(`[Daemon] Step 3: Starting agent via ACP...`);
+        console.log(`[Daemon] Calling processMgr.runAgent with:`);
+        console.log(`[Daemon]   - workspacePath: ${workspacePath}`);
+        console.log(`[Daemon]   - engine: ${engine}`);
+        console.log(`[Daemon]   - agentName: ${agentName}`);
+        console.log(`[Daemon]   - model: ${model}`);
+        console.log(`[Daemon]   - instruction: "${instruction}"`);
+        this.server.log.info({ taskId, engine, agentName }, 'Starting agent via ACP');
         result = await this.processMgr.runAgent(
           taskId,
-          workspace,
-          agentType,
-          defaultAgentName,
-          payload.apiKey,
-          payload.model,
-          payload.env
+          workspacePath,
+          engine,
+          agentName,
+          apiKey,
+          model,
+          env,
+          instruction,
+          onEvent
         );
+        console.log(`[Daemon] Step 3 DONE: runAgent returned`);
       }
 
+      console.log(`[Daemon] Step 4: Execution completed`);
+      console.log(`[Daemon] exitCode: ${result.exitCode}`);
+      console.log(`[Daemon] stdout length: ${result.stdout.length}`);
+      console.log(`[Daemon] stderr length: ${result.stderr.length}`);
+      console.log(`[Daemon] stdout preview: "${result.stdout.substring(0, 200)}..."`);
+      console.log(`[Daemon] stderr preview: "${result.stderr.substring(0, 200)}..."`);
       this.server.log.info({ taskId, exitCode: result.exitCode, stdoutLen: result.stdout.length }, 'Agent execution completed');
 
-      // 3. Collect security report if present
-      const reportContent = this.collectReport(workspace);
+      const reportContent = this.collectReport(workspacePath);
 
-      // 4. Report result
       const status: TaskResultStatus = result.exitCode === 0 ? 'completed' : 'failed';
       await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
         status,
-        result: result.stdout || result.stderr,
-        error: result.exitCode !== 0 ? result.stderr : undefined,
+        result: result.stdout || undefined,
+        error: result.exitCode !== 0 ? result.stderr || `Process exited with code ${result.exitCode}` : undefined,
         reportContent,
       });
     } catch (error) {
@@ -171,7 +219,9 @@ export class WorkerDaemon {
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      if (workspace) await this.envFactory.cleanup(workspace);
+      if (buildResult) {
+        await this.envFactory.cleanup(buildResult.workspacePath);
+      }
       await this.processMgr.terminate(taskId);
     }
   }
@@ -228,5 +278,63 @@ export class WorkerDaemon {
     } catch {
       // Callback target not available
     }
+  }
+
+  private async runCustomCommand(
+    taskId: string,
+    workspace: string,
+    startCommand: string,
+    env: Record<string, string>,
+    onEvent: (event: AgentEvent) => void
+  ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const { spawn } = await import('node:child_process');
+    
+    let stdout = '';
+    let stderr = '';
+
+    const mergedEnv: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) mergedEnv[key] = value;
+    }
+    Object.assign(mergedEnv, env);
+
+    const childProcess = spawn(startCommand, [], {
+      cwd: workspace,
+      env: mergedEnv,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true,
+    });
+
+    childProcess.stdout?.on('data', (data: Buffer) => {
+      const content = data.toString();
+      stdout += content;
+      onEvent({
+        type: 'agent_message_chunk',
+        content,
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    childProcess.stderr?.on('data', (data: Buffer) => {
+      const content = data.toString();
+      stderr += content;
+      this.server.log.warn({ taskId, stderr: content }, 'Process stderr');
+    });
+
+    const exitCode = await new Promise<number>((resolve) => {
+      childProcess.on('exit', (code) => resolve(code ?? 1));
+      childProcess.on('error', (err) => {
+        this.server.log.error({ taskId, error: err.message }, 'Process error');
+        stderr += err.message;
+        onEvent({
+          type: 'error',
+          message: err.message,
+          timestamp: new Date().toISOString(),
+        });
+        resolve(1);
+      });
+    });
+
+    return { exitCode, stdout, stderr };
   }
 }

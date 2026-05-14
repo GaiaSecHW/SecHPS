@@ -42,6 +42,7 @@ export async function POST(request: Request) {
       projectPath,
       workspacePath,
       skills,
+      scripts,
       mcps,
       model,
       apiKey,
@@ -49,6 +50,8 @@ export async function POST(request: Request) {
       gitUrl,
       gitRef,
       agent,
+      defaultAgentName,
+      startCommand,
       action,
     } = body;
 
@@ -72,17 +75,17 @@ export async function POST(request: Request) {
 
       // DB fallback
       // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
-      const queuedTasks = await prisma.$queryRaw`
-        SELECT id, "taskId", "workerId", state, instruction,
-               "projectPath", "workspacePath", "gitUrl", "gitRef",
-               skills, mcps, model, "apiKey", "timeoutSec", agent,
-               "defaultAgentName", error, "startedAt", "completedAt",
-               "createdAt", "updatedAt"
-        FROM "CodeswarmTask"
-        WHERE state = 'queued'
-        ORDER BY "createdAt" ASC
-        LIMIT 10
-      ` as any[];
+const queuedTasks = await prisma.$queryRaw`
+          SELECT id, "taskId", "workerId", state, instruction,
+                 "projectPath", "workspacePath", "gitUrl", "gitRef",
+                 skills, scripts, mcps, model, "apiKey", "timeoutSec", agent,
+                 "defaultAgentName", "startCommand", error, "startedAt", "completedAt",
+                 "createdAt", "updatedAt"
+          FROM "CodeswarmTask"
+          WHERE state = 'queued'
+          ORDER BY "createdAt" ASC
+          LIMIT 10
+        ` as any[];
 
       if (queuedTasks.length === 0) {
         return NextResponse.json({ message: 'No queued tasks', dispatched: 0 });
@@ -135,11 +138,14 @@ export async function POST(request: Request) {
         projectPath: projectPath || null,
         workspacePath: workspacePath || null,
         skills: skills ? JSON.stringify(skills) : null,
+        scripts: scripts ? JSON.stringify(scripts) : null,
         mcps: mcps ? JSON.stringify(mcps) : null,
         model: model || null,
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
+        defaultAgentName: defaultAgentName || null,
+        startCommand: startCommand || null,
         updatedAt: new Date(),
       },
     }) as any;
