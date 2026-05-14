@@ -125,7 +125,7 @@ async function dispatchQueuedTasks(): Promise<void> {
     const queuedTasks = await prisma.$queryRaw`
       SELECT id, "taskId", "workerId", state, instruction,
              "projectPath", "workspacePath", "gitUrl", "gitRef",
-skills, scripts, mcps, model, "apiKey", "timeoutSec", agent,
+             skills, scripts, mcps, model, "apiKey", "timeoutSec", agent,
              "defaultAgentName", "startCommand", "preferredWorkerNodeId", error, "startedAt", "completedAt",
              "createdAt", "updatedAt"
       FROM "CodeswarmTask"

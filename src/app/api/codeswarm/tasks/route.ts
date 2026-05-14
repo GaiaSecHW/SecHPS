@@ -145,7 +145,7 @@ const queuedTasks = await prisma.$queryRaw`
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
-defaultAgentName: defaultAgentName || null,
+        defaultAgentName: defaultAgentName || null,
         startCommand: startCommand || null,
         preferredWorkerNodeId: preferredWorkerNodeId || null,
         updatedAt: new Date(),

@@ -105,8 +105,11 @@ class CodeswarmDispatcher {
   async sendTaskToWorker(task: any, worker: { id: string; address: string }): Promise<boolean> {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
+    // address 可能包含多个逗号分隔的地址，取第一个
+    const workerAddress = worker.address.split(',')[0];
+
     try {
-      const resp = await fetch(`http://${worker.address}/task`, {
+      const resp = await fetch(`http://${workerAddress}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
