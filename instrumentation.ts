@@ -132,9 +132,17 @@ export async function register() {
       
       console.log(`${LOG_PREFIX} 评估状态恢复完成，服务继续启动...`);
 
-      // Step 5: 初始化 CodeSwarm 调度器
-      const { codeswarmDispatcher } = await import('./src/services/codeswarm-dispatcher');
-      await codeswarmDispatcher.init();
+      // Step 6: 初始化 Git Skill 同步
+      console.log(`${LOG_PREFIX} 初始化 Git Skill 同步...`);
+      const { initGitSkillSync } = await import('./src/services/git-skill-sync');
+      await initGitSkillSync();
+      console.log(`${LOG_PREFIX} Git Skill 同步初始化完成`);
+      
+      // Step 7: 初始化 Git AgentApp 同步
+      console.log(`${LOG_PREFIX} 初始化 Git AgentApp 同步...`);
+      const { initGitAgentAppSync } = await import('./src/services/git-agent-app-sync');
+      await initGitAgentAppSync();
+      console.log(`${LOG_PREFIX} Git AgentApp 同步初始化完成`);
       
     } catch (error) {
       console.error(`${LOG_PREFIX} 评估状态恢复失败:`, error);

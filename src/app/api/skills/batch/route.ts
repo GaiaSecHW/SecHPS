@@ -1,5 +1,3 @@
-﻿// src/app/api/skills/batch/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequestEnhanced, authErrorResponseNested } from '@/lib/api-auth';
@@ -10,8 +8,8 @@ import { saveSkillToDisk, deleteSkillFromDisk } from '@/services/skill-files';
 import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { buildTenantFilter } from '@/lib/tenant-filter';
+import { gitSkillSync } from '@/services/git-skill-sync';
 
-// POST /api/skills/batch - 批量操作
 export async function POST(request: Request) {
   const auth = authenticateRequestEnhanced(request);
   if (!auth.success) {
@@ -27,13 +25,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '参数错误' } }, { status: 400 });
     }
 
-    // 构建租户过滤条件
     const tenantFilter = buildTenantFilter(tenant, {
       tenantField: 'tenantId',
       isPublicField: 'isPublic',
     });
 
-    // 获取所有指定的 Skills（带租户过滤）
     const skills = await prisma.skill.findMany({
       where: {
         id: { in: skillIds },
@@ -49,11 +45,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ details: { error: '未找到任何 Skill' } }, { status: 404 });
     }
 
-    // 检查权限
     const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
 
     if (!isAdmin) {
-      // 非管理员检查权限
       const publicSkills = skills.filter(s => s.userId === null);
       if (publicSkills.length > 0) {
         return NextResponse.json({ details: { error: '修改公共 Skill 需要管理员权限' } }, { status: 403 });
@@ -64,13 +58,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ details: { error: '只能修改自己的私有 Skill' } }, { status: 403 });
       }
 
-      // 非管理员不能修改内置 Skill
       const builtinSkills = skills.filter(s => s.isBuiltin);
       if (builtinSkills.length > 0) {
         return NextResponse.json({ details: { error: '内置 Skill 只有管理员可以修改' } }, { status: 400 });
       }
 
-      // 非管理员只能修改最新版本
       const notLatestSkills = skills.filter(s => !s.isLatest);
       if (notLatestSkills.length > 0) {
         return NextResponse.json({ details: { error: '只能修改最新版本的 Skill' } }, { status: 400 });
@@ -89,7 +81,6 @@ export async function POST(request: Request) {
             isActive: true,
           },
         });
-        // 启用：同步保存到磁盘（包含标准输出模板）
         const template = await getSkillOutputTemplate();
         for (const skill of skills) {
           saveSkillToDisk(skill, template).catch(err => {
@@ -107,7 +98,6 @@ export async function POST(request: Request) {
             isActive: false,
           },
         });
-        // 禁用：同步从磁盘删除
         for (const skill of skills) {
           deleteSkillFromDisk(skill.name, skill.userId).catch(err => {
             logger.errorWithUser(LOG_MODULES.SKILL, payload, '批量禁用删除磁盘文件失败', skill.id, { details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } });
@@ -117,30 +107,38 @@ export async function POST(request: Request) {
 
       case 'delete':
         await prisma.$transaction(async (tx) => {
-          // 删除所有进化记录
           await tx.skillEvolution.deleteMany({
             where: {
               OR: [
                 { skillId: { in: skillIds } },
-                { skill: { parentId: { in: skillIds } } },
+                { Skill: { parentId: { in: skillIds } } },
               ],
             },
           });
 
-          // 删除所有子版本
           await tx.skill.deleteMany({
             where: { parentId: { in: skillIds } },
           });
 
-          // 删除当前版本
           await tx.skill.deleteMany({
             where: { id: { in: skillIds } },
           });
         });
-        // 删除：同步从磁盘删除
         for (const skill of skills) {
           deleteSkillFromDisk(skill.name, skill.userId).catch(err => {
             logger.errorWithUser(LOG_MODULES.SKILL, payload, '批量删除磁盘文件失败', skill.id, { details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } });
+          });
+          // Git 方式删除
+          gitSkillSync.deleteSkill(skill.name).then(gitResult => {
+            if (!gitResult.success) {
+              logger.errorWithUser(LOG_MODULES.SKILL, payload, '批量删除 Git 文件失败', skill.id, { 
+                details: { skillName: skill.name, error: gitResult.message } 
+              });
+            }
+          }).catch(err => {
+            logger.errorWithUser(LOG_MODULES.SKILL, payload, '批量删除 Git 异常', skill.id, { 
+              details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } 
+            });
           });
         }
         result = { count: skillIds.length };

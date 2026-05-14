@@ -440,6 +440,31 @@ function SkillsPageContent() {
     }
   };
 
+  const handleSyncFromGit = async () => {
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/skills/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || '同步失败');
+      }
+      
+      const result = await response.json();
+      toast.success(`同步成功！${result.message}`);
+      fetchSkills();
+      fetchCategories();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '同步失败');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const isAdmin = user?.roles?.includes('admin');
 
   const getCategoryIcon = (skill: Skill) => {
@@ -497,6 +522,12 @@ function SkillsPageContent() {
               </label>
             </>
           )} */}
+          {isAdmin && (
+            <button onClick={handleSyncFromGit} disabled={syncing} className="inline-flex items-center px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm disabled:opacity-50 transition-all">
+              {syncing ? <RefreshCw size={16} className="mr-1.5 animate-spin" /> : <RefreshCw size={16} className="mr-1.5" />}
+              同步仓库
+            </button>
+          )}
           <button onClick={() => router.push('/dashboard/skills/create-wizard')} className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-500 text-white rounded-lg hover:from-purple-500 hover:to-purple-400 text-sm transition-all duration-200 shadow-sm hover:shadow-purple-500/25">
             <Plus size={16} className="mr-1.5" />引导创建
           </button>

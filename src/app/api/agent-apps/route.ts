@@ -3,21 +3,15 @@ import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
-import { uploadFileToGitea, isGiteaConfigured, getGiteaRepoUrl, GiteaAuthError } from '@/lib/gitea';
+import { gitAgentAppSync } from '@/services/git-agent-app-sync';
 import AdmZip from 'adm-zip';
+import { logger, LOG_MODULES } from '@/lib/logger';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request);
   if (!auth.success) return authErrorResponse(auth);
 
   const { tenant, payload } = auth as AuthSuccessResult;
-
-  console.log('[agent-apps GET] Auth info:', { 
-    userId: payload.userId, 
-    tenantId: payload.tenantId,
-    isPlatformAdmin: tenant?.isPlatformAdmin,
-    isIcsTenant: tenant?.isIcsTenant 
-  });
 
   try {
     let apps;
@@ -30,13 +24,11 @@ export async function GET(request: NextRequest) {
     };
 
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
-      console.log('[agent-apps GET] Fetching all apps (admin)');
       apps = await prisma.agentApp.findMany({
         include,
         orderBy: { createdAt: 'desc' },
       });
     } else {
-      console.log('[agent-apps GET] Fetching filtered apps');
       const filter = buildTenantFilter(tenant, {
         tenantField: 'tenantId',
         isPublicField: 'isPublic',
@@ -50,52 +42,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    console.log('[agent-apps GET] Found apps:', apps?.length);
     return NextResponse.json({ apps });
   } catch (error) {
-    console.error('获取应用列表失败:', error);
-    return NextResponse.json({ error: '获取应用列表失败', details: error instanceof Error ? error.message : 'Unknown' }, { status: 500 });
-  }
-}
-
-async function extractAndUploadArchive(appId: string, fileBuffer: Buffer, archiveName: string): Promise<string | null> {
-  try {
-    const zip = new AdmZip(fileBuffer);
-    const zipEntries = zip.getEntries();
-    
-    console.log(`[agent-apps] 解压 ${archiveName}, 共 ${zipEntries.length} 个文件`);
-    
-    const filesToUpload: Array<{ name: string; content: Buffer }> = [];
-    
-    for (const entry of zipEntries) {
-      if (!entry.isDirectory) {
-        filesToUpload.push({
-          name: entry.entryName,
-          content: entry.getData(),
-        });
-      }
-    }
-    
-    console.log(`[agent-apps] 开始串行上传 ${filesToUpload.length} 个文件 (避免 Gitea push reject)...`);
-    
-    let successCount = 0;
-    for (const file of filesToUpload) {
-      try {
-        await uploadFileToGitea(appId, file.name, file.content);
-        console.log(`[agent-apps] 上传成功: ${file.name}`);
-        successCount++;
-        await new Promise(resolve => setTimeout(resolve, 500));
-      } catch (uploadError) {
-        console.error(`[agent-apps] 上传失败 ${file.name}:`, uploadError);
-        throw uploadError;
-      }
-    }
-    
-    console.log(`[agent-apps] 解压上传完成，成功上传 ${successCount}/${filesToUpload.length} 个文件`);
-    return `${getGiteaRepoUrl()}/src/branch/main/${appId}`;
-  } catch (extractError) {
-    console.error('[agent-apps] 解压失败:', extractError);
-    throw extractError;
+    logger.errorNoUser(LOG_MODULES.SKILL, '获取应用列表失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ error: '获取应用列表失败' }, { status: 500 });
   }
 }
 
@@ -108,11 +58,6 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
 
-    console.log('[agent-apps POST] FormData entries:');
-    for (const [key, value] of formData.entries()) {
-      console.log(`  ${key}:`, value instanceof File ? `File(${value.name}, ${value.size} bytes)` : value);
-    }
-
     const name = formData.get('name') as string;
     const engine = formData.get('engine') as string;
     const defaultAgentName = formData.get('defaultAgentName') as string;
@@ -122,8 +67,6 @@ export async function POST(request: NextRequest) {
     const fileType = formData.get('agentHarnessFileType') as string | null;
     const agentHarnessFile = formData.get('agentHarnessFile') as File | null;
     const filesJson = formData.get('filesJson') as string | null;
-
-    console.log('[agent-apps POST] Extracted fields:', { name, engine, defaultAgentName, startCommand, isPublic, fileType });
 
     if (!name || !engine || !defaultAgentName) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
@@ -151,69 +94,48 @@ export async function POST(request: NextRequest) {
     } else {
       tenantId = tenant.tenantId;
     }
+
     const appId = crypto.randomUUID();
+    const filesMap = new Map<string, Buffer>();
 
-    let agentHarnessPath = `/agent-apps/${appId}/agent-harness`;
-    let giteaUploaded = false;
-
-    if (isGiteaConfigured()) {
-      try {
-        if (fileType === 'archive' && agentHarnessFile && agentHarnessFile.size > 0) {
-          const fileBuffer = Buffer.from(await agentHarnessFile.arrayBuffer());
-          const fileName = agentHarnessFile.name;
-          
-          const result = await extractAndUploadArchive(appId, fileBuffer, fileName);
-          if (result) {
-            agentHarnessPath = result;
-            giteaUploaded = true;
-            console.log('[agent-apps POST] Gitea 解压上传成功:', result);
-          }
-        } else if (fileType === 'folder' && filesJson) {
-          const filesInfo: { key: string; relativePath: string }[] = JSON.parse(filesJson);
-
-          const uploadPromises = filesInfo.map(async (info) => {
-            const file = formData.get(info.key) as File;
-            if (file) {
-              const fileBuffer = Buffer.from(await file.arrayBuffer());
-              const relativePath = info.relativePath.replace(/^[^\/]+\//, '');
-              
-              try {
-                const result = await uploadFileToGitea(appId, relativePath, fileBuffer);
-                if (result) {
-                  console.log(`[agent-apps POST] Gitea 文件上传: ${relativePath}`);
-                  return { success: true, name: relativePath };
-                }
-              } catch (uploadError) {
-                console.error(`[agent-apps POST] Gitea 上传失败 ${relativePath}:`, uploadError);
-                throw uploadError;
-              }
-            }
-            return { success: false };
-          });
-          
-          const results = await Promise.all(uploadPromises);
-          if (results.some(r => r.success)) {
-            giteaUploaded = true;
-          }
-
-          agentHarnessPath = `${getGiteaRepoUrl()}/src/branch/main/${appId}`;
+    // 处理上传的文件
+    if (fileType === 'archive' && agentHarnessFile && agentHarnessFile.size > 0) {
+      const fileBuffer = Buffer.from(await agentHarnessFile.arrayBuffer());
+      const zip = new AdmZip(fileBuffer);
+      const zipEntries = zip.getEntries();
+      
+      for (const entry of zipEntries) {
+        if (!entry.isDirectory) {
+          filesMap.set(entry.entryName, entry.getData());
         }
-      } catch (giteaError) {
-        console.error('[agent-apps POST] Gitea 上传失败:', giteaError);
-        
-        if (giteaError instanceof GiteaAuthError || (giteaError as any)?.name === 'GiteaAuthError') {
-          return NextResponse.json({ 
-            error: 'Gitea 认证失败', 
-            details: 'GITEA_TOKEN 无效或权限不足，请检查 Gitea 配置。需要具有 repo 写权限的 Access Token。'
-          }, { status: 401 });
+      }
+    } else if (fileType === 'folder' && filesJson) {
+      const filesInfo: { key: string; relativePath: string }[] = JSON.parse(filesJson);
+      
+      for (const info of filesInfo) {
+        const file = formData.get(info.key) as File;
+        if (file) {
+          const fileBuffer = Buffer.from(await file.arrayBuffer());
+          const relativePath = info.relativePath.replace(/^[^\/]+\//, '');
+          filesMap.set(relativePath, fileBuffer);
         }
-        
-        return NextResponse.json({ 
-          error: 'Gitea 上传失败', 
-          details: giteaError instanceof Error ? giteaError.message : 'Unknown error'
-        }, { status: 500 });
       }
     }
+
+    // Git 方式上传
+    const gitResult = await gitAgentAppSync.uploadAgentApp(appId, filesMap);
+    
+    if (!gitResult.success) {
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 上传 AgentApp 失败', appId, { 
+        details: { appId, errors: gitResult.errors } 
+      });
+      return NextResponse.json({ 
+        error: 'Git 上传失败', 
+        details: gitResult.message 
+      }, { status: 500 });
+    }
+
+    const agentHarnessPath = `${appId}/`;
 
     const app = await prisma.agentApp.create({
       data: {
@@ -231,10 +153,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log('[agent-apps POST] Created app:', app);
-    return NextResponse.json({ app, giteaUploaded });
+    logger.info(LOG_MODULES.SKILL, 'AgentApp 创建成功', { appId, name, gitUpload: gitResult.success });
+
+    return NextResponse.json({ app, gitUploaded: gitResult.success });
   } catch (error) {
-    console.error('创建应用失败:', error);
-    return NextResponse.json({ error: '创建应用失败', details: error instanceof Error ? error.message : 'Unknown error' }, { status: 500 });
+    logger.errorNoUser(LOG_MODULES.SKILL, '创建应用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
+    return NextResponse.json({ error: '创建应用失败' }, { status: 500 });
   }
 }

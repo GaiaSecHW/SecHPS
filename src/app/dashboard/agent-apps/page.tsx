@@ -32,6 +32,7 @@ export default function AgentAppsPage() {
   const [apps, setApps] = useState<AgentApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AgentApp | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -69,6 +70,30 @@ export default function AgentAppsPage() {
     setRefreshing(true);
     await fetchApps();
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const handleSyncFromGit = async () => {
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/agent-apps/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || '同步失败');
+      }
+      
+      const result = await response.json();
+      toast.success(`同步成功！${result.message}`);
+      await fetchApps();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '同步失败');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleCreateApp = () => {
@@ -257,6 +282,14 @@ export default function AgentAppsPage() {
         <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
           <h2 className="text-lg font-semibold text-gray-100">已创建的应用</h2>
           <div className="flex items-center space-x-2">
+            <button
+              onClick={handleSyncFromGit}
+              disabled={syncing}
+              className="inline-flex items-center px-3 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <RefreshCw size={16} className={`mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              同步仓库
+            </button>
             <button
               onClick={handleRefresh}
               disabled={refreshing}
