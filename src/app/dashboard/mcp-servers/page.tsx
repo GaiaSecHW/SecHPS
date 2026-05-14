@@ -402,53 +402,6 @@ function McpServersContent() {
         </button>
       </div>
 
-      {/* 搜索和筛选 */}
-      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          {/* 搜索框 */}
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input
-              type="text"
-              placeholder="搜索 MCP 服务器..."
-              value={searchQuery}
-              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
-              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
-            />
-          </div>
-          
-          {/* 过滤按钮组 */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => { setFilter('all'); setPage(1); }}
-              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                filter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              全部
-            </button>
-            <button
-              onClick={() => { setFilter('mine'); setPage(1); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                filter === 'mine' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              <User size={16} />
-              我的
-            </button>
-            <button
-              onClick={() => { setFilter('shared'); setPage(1); }}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                filter === 'shared' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
-              }`}
-            >
-              <Share2 size={16} />
-              共享
-            </button>
-          </div>
-        </div>
-      </div>
-
       {/* Error Message */}
       {error && (
         <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
@@ -456,20 +409,71 @@ function McpServersContent() {
         </div>
       )}
 
-        {/* MCP Servers List */}
+      {/* Search + Table combined */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl">
+        {/* Filters section */}
+        <div className="px-5 py-4 border-b border-gray-700/50">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {/* 搜索框 */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="搜索 MCP 服务器..."
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              />
+            </div>
+            
+            {/* 过滤按钮组 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setFilter('all'); setPage(1); }}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                全部
+              </button>
+              <button
+                onClick={() => { setFilter('mine'); setPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filter === 'mine' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <User size={16} />
+                我的
+              </button>
+              <button
+                onClick={() => { setFilter('shared'); setPage(1); }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  filter === 'shared' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <Share2 size={16} />
+                共享
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Table section */}
         {servers.length === 0 ? (
-          <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
-            <Server className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500 mb-4">暂无 MCP 服务器配置</p>
-            <button
-              onClick={() => setShowForm(true)}
-              className="text-purple-600 hover:text-purple-700"
-            >
-              添加第一个 MCP 服务器
-            </button>
+          <div className="p-12">
+            <div className="text-center">
+              <Server className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 mb-4">暂无 MCP 服务器配置</p>
+              <button
+                onClick={() => setShowForm(true)}
+                className="text-purple-600 hover:text-purple-700"
+              >
+                添加第一个 MCP 服务器
+              </button>
+            </div>
           </div>
         ) : (
-          <div className="bg-dark-surface rounded-lg border border-gray-700/50 overflow-hidden">
+          <div className="overflow-hidden">
             <table className="min-w-full divide-y divide-gray-700/50">
               <thead className="bg-[#162032]">
                 <tr>
@@ -633,6 +637,7 @@ function McpServersContent() {
             </table>
           </div>
         )}
+      </div>
 
         {/* 分页 */}
         {totalCount > pageSize && (

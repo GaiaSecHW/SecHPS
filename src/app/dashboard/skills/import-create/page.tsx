@@ -13,7 +13,10 @@ import {
   Eye,
   ChevronDown,
   ChevronUp,
+  Trash2,
+  Plus,
 } from 'lucide-react';
+import JSZip from 'jszip';
 import { PERMISSIONS } from '@/types/permissions';
 import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
 import { hasPermission } from '@/lib/permissions';
@@ -28,6 +31,29 @@ interface ParsedSkill {
   description: string;
   content: string;
   cwe?: string;
+}
+
+interface SkillItem {
+  id: string;
+  file: File;
+  parsed: ParsedSkill | null;
+  error?: string;
+  skillName: string;
+  skillDisplayName: string;
+  skillDescription: string;
+  status: 'pending' | 'uploading' | 'success' | 'failed';
+  governanceWarning?: {
+    isPotentialDuplicate: boolean;
+    duplicates: Array<{
+      skillId: string;
+      skillName: string;
+      displayName: string;
+      confidence: number;
+      overlapType?: string;
+      reason?: string;
+      recommendation?: string;
+    }>;
+  };
 }
 
 function parseSkillMarkdown(content: string): ParsedSkill | null {
@@ -99,6 +125,7 @@ export default function ImportCreateSkillPage() {
   const [error, setError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
+  const [batchMode, setBatchMode] = useState(false);
 
   const [categoryId, setCategoryId] = useState<string>(VULNERABILITY_CATEGORY_ID);
   const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
@@ -114,12 +141,7 @@ export default function ImportCreateSkillPage() {
   const [vulnPatterns, setVulnPatterns] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
   const [loadingData, setLoadingData] = useState(false);
 
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [parsedSkill, setParsedSkill] = useState<ParsedSkill | null>(null);
-  const [skillName, setSkillName] = useState('');
-  const [skillDisplayName, setSkillDisplayName] = useState('');
-  const [skillDescription, setSkillDescription] = useState('');
-  const [skillContent, setSkillContent] = useState('');
+  const [skillItems, setSkillItems] = useState<SkillItem[]>([]);
   const [showPreview, setShowPreview] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -174,41 +196,121 @@ export default function ImportCreateSkillPage() {
   );
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
 
-    if (!file.name.endsWith('.md')) {
-      setError('请上传 Markdown (.md) 格式的 Skill 文件');
-      return;
-    }
-
-    setUploadedFile(file);
     setError('');
 
-    try {
-      const content = await file.text();
-      const parsed = parseSkillMarkdown(content);
+    const newItems: SkillItem[] = [];
 
-      if (!parsed) {
-        setError('无法解析 Skill 文件，请检查文件格式');
-        return;
+    for (const file of Array.from(files)) {
+      const isZip = file.name.toLowerCase().endsWith('.zip');
+      const isMd = file.name.toLowerCase().endsWith('.md');
+
+      if (!isZip && !isMd) {
+        newItems.push({
+          id: `item-${Date.now()}-${Math.random()}`,
+          file,
+          parsed: null,
+          error: '文件格式不支持，请上传 ZIP 或 .md 文件',
+          skillName: '',
+          skillDisplayName: '',
+          skillDescription: '',
+          status: 'pending',
+        });
+        continue;
       }
 
-      setParsedSkill(parsed);
-      setSkillName(parsed.name);
-      setSkillDisplayName(parsed.displayName);
-      setSkillDescription(parsed.description);
-      setSkillContent(parsed.content);
-    } catch (e) {
-      setError('读取文件失败');
+      try {
+        let content: string;
+
+        if (isZip) {
+          const zip = await JSZip.loadAsync(file);
+          const skillFile = zip.file('SKILL.md');
+
+          if (!skillFile) {
+            newItems.push({
+              id: `item-${Date.now()}-${Math.random()}`,
+              file,
+              parsed: null,
+              error: 'ZIP 中未找到 SKILL.md 文件',
+              skillName: '',
+              skillDisplayName: '',
+              skillDescription: '',
+              status: 'pending',
+            });
+            continue;
+          }
+
+          content = await skillFile.async('string');
+        } else {
+          content = await file.text();
+        }
+
+        const parsed = parseSkillMarkdown(content);
+
+        if (!parsed) {
+          newItems.push({
+            id: `item-${Date.now()}-${Math.random()}`,
+            file,
+            parsed: null,
+            error: '无法解析 Skill 文件',
+            skillName: '',
+            skillDisplayName: '',
+            skillDescription: '',
+            status: 'pending',
+          });
+          continue;
+        }
+
+        newItems.push({
+          id: `item-${Date.now()}-${Math.random()}`,
+          file,
+          parsed,
+          skillName: parsed.name,
+          skillDisplayName: parsed.displayName,
+          skillDescription: parsed.description,
+          status: 'pending',
+        });
+      } catch (e) {
+        newItems.push({
+          id: `item-${Date.now()}-${Math.random()}`,
+          file,
+          parsed: null,
+          error: '读取文件失败',
+          skillName: '',
+          skillDisplayName: '',
+          skillDescription: '',
+          status: 'pending',
+        });
+      }
     }
+
+    setSkillItems(prev => [...prev, ...newItems]);
+    
+    if (files.length > 1) {
+      setBatchMode(true);
+    }
+
+    e.target.value = '';
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const removeItem = (id: string) => {
+    setSkillItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const updateItem = (id: string, updates: Partial<SkillItem>) => {
+    setSkillItems(prev => prev.map(item => 
+      item.id === id ? { ...item, ...updates } : item
+    ));
+  };
+
+  const handleSingleSubmit = async (item: SkillItem) => {
+    if (!item.parsed) return;
+
     setError('');
 
-    if (!skillName.trim()) {
+    if (!item.skillName.trim()) {
       setError('请输入 Skill 名称');
       return;
     }
@@ -224,31 +326,28 @@ export default function ImportCreateSkillPage() {
       return;
     }
 
-    if (!skillContent.trim()) {
-      setError('请上传 Skill 文件');
-      return;
-    }
-
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
 
-      const response = await fetch('/api/skills', {
+      const formData = new FormData();
+      formData.append('file', item.file);
+      formData.append('categoryId', categoryId);
+      formData.append('productTagIds', JSON.stringify(productTagIds));
+      formData.append('isPublic', String(isPublic));
+      formData.append('skillName', item.skillName.trim());
+      formData.append('skillDisplayName', item.skillDisplayName.trim());
+      formData.append('skillDescription', item.skillDescription.trim());
+      if (vulnerabilityTreeId) {
+        formData.append('vulnerabilityTreeId', vulnerabilityTreeId);
+      }
+
+      const response = await fetch('/api/skills/upload', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: skillName.trim(),
-          displayName: skillDisplayName.trim() || skillName.trim(),
-          description: skillDescription.trim() || skillName.trim(),
-          categoryId: categoryId,
-          vulnerabilityTreeId: vulnerabilityTreeId || null,
-          productTagIds: productTagIds,
-          content: skillContent,
-          isPublic,
-        }),
+        body: formData,
       });
 
       if (!response.ok) {
@@ -256,13 +355,130 @@ export default function ImportCreateSkillPage() {
         throw new Error(data.error || data.details?.error || '创建失败');
       }
 
-      router.push('/dashboard/skills');
+      const result = await response.json();
+      
+      // 处理治理警告
+      if (result.governanceWarning && result.governanceWarning.isPotentialDuplicate) {
+        updateItem(item.id, { 
+          status: 'success', 
+          governanceWarning: result.governanceWarning 
+        });
+        const dupNames = result.governanceWarning.duplicates.map((d: { displayName: string }) => d.displayName).join(', ');
+        setError(`发现相似 Skill：${dupNames}`);
+      } else {
+        router.push('/dashboard/skills');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '创建失败');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleBatchSubmit = async () => {
+    setError('');
+
+    const validItems = skillItems.filter(item => item.parsed && item.status === 'pending');
+    
+    if (validItems.length === 0) {
+      setError('没有有效的 Skill 文件');
+      return;
+    }
+
+    if (!categoryId) {
+      setError('请选择分类');
+      return;
+    }
+
+    const cat = categories.find(c => c.id === categoryId);
+    if (cat?.hasSubDimension && !vulnerabilityTreeId) {
+      setError('请选择漏洞模式');
+      return;
+    }
+
+    setLoading(true);
+    const token = localStorage.getItem('token');
+
+    for (const item of validItems) {
+      updateItem(item.id, { status: 'uploading' });
+    }
+
+    const results: { success: number; failed: number; errors: string[] } = {
+      success: 0,
+      failed: 0,
+      errors: [],
+    };
+
+    for (const item of validItems) {
+      try {
+        const formData = new FormData();
+        formData.append('file', item.file);
+        formData.append('categoryId', categoryId);
+        formData.append('productTagIds', JSON.stringify(productTagIds));
+        formData.append('isPublic', String(isPublic));
+        formData.append('skillName', item.skillName.trim());
+        formData.append('skillDisplayName', item.skillDisplayName.trim());
+        formData.append('skillDescription', item.skillDescription.trim());
+        if (vulnerabilityTreeId) {
+          formData.append('vulnerabilityTreeId', vulnerabilityTreeId);
+        }
+
+        const response = await fetch('/api/skills/upload', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || data.details?.error || '创建失败');
+        }
+
+        const result = await response.json();
+        
+        // 处理治理警告
+        if (result.governanceWarning && result.governanceWarning.isPotentialDuplicate) {
+          updateItem(item.id, { 
+            status: 'success', 
+            governanceWarning: result.governanceWarning 
+          });
+          const dupNames = result.governanceWarning.duplicates.map((d: { displayName: string }) => d.displayName).join(', ');
+          results.errors.push(`${item.skillDisplayName}: 发现相似 Skill - ${dupNames}`);
+        } else {
+          updateItem(item.id, { status: 'success' });
+        }
+        
+        results.success++;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : '创建失败';
+        updateItem(item.id, { status: 'failed', error: errorMsg });
+        results.failed++;
+        results.errors.push(`${item.skillDisplayName}: ${errorMsg}`);
+      }
+    }
+
+    setLoading(false);
+
+    if (results.success === validItems.length) {
+      setTimeout(() => router.push('/dashboard/skills'), 1500);
+    } else {
+      setError(`批量导入完成：成功 ${results.success}，失败 ${results.failed}`);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (batchMode) {
+      await handleBatchSubmit();
+    } else if (skillItems.length === 1) {
+      await handleSingleSubmit(skillItems[0]);
+    }
+  };
+
+  const validItemsCount = skillItems.filter(item => item.parsed).length;
 
   return (
     <div className="space-y-6">
@@ -276,9 +492,24 @@ export default function ImportCreateSkillPage() {
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-100">导入创建 Skill</h1>
-            <p className="text-sm text-gray-400">上传 Markdown 文件快速创建 Skill</p>
+            <p className="text-sm text-gray-400">
+              {batchMode ? '批量导入多个 Skill 文件' : '上传 ZIP 或 Markdown 文件创建 Skill'}
+            </p>
           </div>
         </div>
+        {skillItems.length > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setSkillItems([]);
+              setBatchMode(false);
+              setError('');
+            }}
+            className="text-sm text-gray-400 hover:text-gray-200"
+          >
+            清空重新选择
+          </button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -297,7 +528,8 @@ export default function ImportCreateSkillPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".md"
+                accept=".zip,.md"
+                multiple
                 onChange={handleFileUpload}
                 className="hidden"
               />
@@ -306,55 +538,128 @@ export default function ImportCreateSkillPage() {
                 onClick={() => fileInputRef.current?.click()}
                 className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-lg hover:from-green-500 hover:to-teal-400 text-sm transition-all"
               >
-                <FileUp size={16} className="mr-1.5" />
-                选择 .md 文件
+                <Plus size={16} className="mr-1.5" />
+                选择文件
               </button>
-              {uploadedFile && (
-                <span className="text-sm text-gray-400">
-                  已选择: {uploadedFile.name}
-                </span>
-              )}
+              <span className="text-xs text-gray-500">
+                支持多选，可同时上传多个 ZIP 或 .md 文件
+              </span>
             </div>
             <p className="mt-2 text-xs text-gray-500">
-              支持 YAML frontmatter 格式的 Markdown 文件，系统会自动解析 name、description 等字段
+              ZIP 压缩包需直接包含 SKILL.md 文件（不要有额外的文件夹包裹）
             </p>
           </div>
 
-          {parsedSkill && (
-            <>
-              <div className="border-t border-gray-700/50 pt-4">
-                <h3 className="text-sm font-medium text-gray-300 mb-3">解析结果（可修改）</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Skill 名称</label>
-                    <input
-                      type="text"
-                      value={skillName}
-                      onChange={(e) => setSkillName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">显示名称</label>
-                    <input
-                      type="text"
-                      value={skillDisplayName}
-                      onChange={(e) => setSkillDisplayName(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-                <div className="mt-3">
-                  <label className="block text-sm text-gray-400 mb-1">描述</label>
-                  <input
-                    type="text"
-                    value={skillDescription}
-                    onChange={(e) => setSkillDescription(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  />
-                </div>
+          {skillItems.length > 0 && (
+            <div className="border-t border-gray-700/50 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-300">
+                  文件列表 ({validItemsCount}/{skillItems.length} 个有效)
+                </h3>
+                {skillItems.length > 1 && (
+                  <span className="text-xs text-blue-400">批量导入模式</span>
+                )}
               </div>
+              
+              <div className="space-y-3 max-h-[400px] overflow-auto">
+                {skillItems.map(item => (
+                  <div
+                    key={item.id}
+                    className={`p-3 rounded-lg border ${
+                      item.status === 'success' 
+                        ? 'border-green-500/50 bg-green-900/20' 
+                        : item.status === 'failed'
+                        ? 'border-red-500/50 bg-red-900/20'
+                        : item.error
+                        ? 'border-yellow-500/50 bg-yellow-900/20'
+                        : 'border-gray-600 bg-dark-bg'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {item.status === 'uploading' && (
+                            <Loader2 size={14} className="animate-spin text-blue-400" />
+                          )}
+                          {item.status === 'success' && (
+                            <CheckCircle size={14} className="text-green-400" />
+                          )}
+                          {item.status === 'failed' && (
+                            <AlertTriangle size={14} className="text-red-400" />
+                          )}
+                          <span className="text-sm text-gray-300 truncate">{item.file.name}</span>
+                        </div>
+                        
+                        {item.error && (
+                          <p className="text-xs text-yellow-400">{item.error}</p>
+                        )}
+                        
+                        {item.governanceWarning && item.governanceWarning.isPotentialDuplicate && (
+                          <div className="mt-2 p-2 bg-yellow-900/30 rounded border border-yellow-600/30">
+                            <p className="text-xs text-yellow-300 font-medium mb-1">
+                              ⚠️ 发现相似 Skill：
+                            </p>
+                            {item.governanceWarning.duplicates.map((dup, idx) => (
+                              <div key={idx} className="text-xs text-yellow-400 ml-2">
+                                • {dup.displayName} ({dup.confidence >= 0.85 ? '高置信度' : '低置信度'})
+                                {dup.recommendation && (
+                                  <span className="text-yellow-300 ml-1">
+                                    - 建议: {dup.recommendation === 'merge' ? '合并' : dup.recommendation === 'keep_separate' ? '保留独立' : '人工审核'}
+                                  </span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {item.parsed && (
+                          <div className="grid grid-cols-3 gap-2 mt-2">
+                            <input
+                              type="text"
+                              value={item.skillName}
+                              onChange={(e) => updateItem(item.id, { skillName: e.target.value })}
+                              placeholder="名称"
+                              className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                              disabled={item.status !== 'pending'}
+                            />
+                            <input
+                              type="text"
+                              value={item.skillDisplayName}
+                              onChange={(e) => updateItem(item.id, { skillDisplayName: e.target.value })}
+                              placeholder="显示名称"
+                              className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                              disabled={item.status !== 'pending'}
+                            />
+                            <input
+                              type="text"
+                              value={item.skillDescription}
+                              onChange={(e) => updateItem(item.id, { skillDescription: e.target.value })}
+                              placeholder="描述"
+                              className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                              disabled={item.status !== 'pending'}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      
+                      {item.status === 'pending' && (
+                        <button
+                          type="button"
+                          onClick={() => removeItem(item.id)}
+                          className="p-1 hover:bg-red-900/30 rounded text-gray-400 hover:text-red-400"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
+          {skillItems.length > 0 && validItemsCount > 0 && (
+            <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -473,87 +778,64 @@ export default function ImportCreateSkillPage() {
                   </label>
                 </div>
               )}
-
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-300">
-                    Skill 内容预览
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowPreview(!showPreview)}
-                    className="text-sm text-gray-400 hover:text-gray-200 flex items-center"
-                  >
-                    {showPreview ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                    {showPreview ? '收起' : '展开'}
-                  </button>
-                </div>
-                {showPreview && (
-                  <div className="bg-[#0F172A] border border-gray-700/50 rounded-lg p-4 max-h-96 overflow-auto">
-                    <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                      {skillContent.substring(0, 2000)}
-                      {skillContent.length > 2000 && '\n\n... (内容已截断，完整内容已保存)'}
-                    </pre>
-                  </div>
-                )}
-              </div>
             </>
           )}
 
-          {parsedSkill && FORMAT_GUIDE && (
-            <div className="border border-gray-700/50 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => {}}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-dark-bg text-sm text-gray-400"
-              >
-                <span>格式参考</span>
-                <ChevronDown size={14} />
-              </button>
-              <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50 text-xs text-gray-500">
-                <p>推荐的 Skill 文件格式包含 YAML frontmatter：</p>
-                <pre className="mt-2 bg-dark-surface p-2 rounded text-gray-400">
-{`---
-name: sql-injection
-description: SQL 注入漏洞检测专家
----
-
-# SQL 注入安全检测 Skill
-
-## 0. 角色定位
-...`}
-                </pre>
+          {skillItems.length === 1 && skillItems[0].parsed && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="block text-sm font-medium text-gray-300">
+                  Skill 内容预览
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPreview(!showPreview)}
+                  className="text-sm text-gray-400 hover:text-gray-200 flex items-center"
+                >
+                  {showPreview ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  {showPreview ? '收起' : '展开'}
+                </button>
               </div>
+              {showPreview && (
+                <div className="bg-[#0F172A] border border-gray-700/50 rounded-lg p-4 max-h-96 overflow-auto">
+                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
+                    {skillItems[0].parsed.content.substring(0, 2000)}
+                    {skillItems[0].parsed.content.length > 2000 && '\n\n... (内容已截断)'}
+                  </pre>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        <div className="flex justify-end space-x-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            disabled={loading || !parsedSkill}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                创建中...
-              </>
-            ) : (
-              <>
-                <Save size={16} className="mr-2" />
-                创建 Skill
-              </>
-            )}
-          </button>
-        </div>
+        {validItemsCount > 0 && (
+          <div className="flex justify-end space-x-4">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              disabled={loading || validItemsCount === 0}
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin mr-2" />
+                  {batchMode ? '批量导入中...' : '创建中...'}
+                </>
+              ) : (
+                <>
+                  <Save size={16} className="mr-2" />
+                  {batchMode ? `批量创建 (${validItemsCount} 个)` : '创建 Skill'}
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );

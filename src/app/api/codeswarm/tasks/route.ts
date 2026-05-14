@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       defaultAgentName,
       startCommand,
       action,
+      preferredWorkerNodeId,
     } = body;
 
     // 手动批量分发（保留兼容）
@@ -144,8 +145,9 @@ const queuedTasks = await prisma.$queryRaw`
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
-        defaultAgentName: defaultAgentName || null,
+defaultAgentName: defaultAgentName || null,
         startCommand: startCommand || null,
+        preferredWorkerNodeId: preferredWorkerNodeId || null,
         updatedAt: new Date(),
       },
     }) as any;

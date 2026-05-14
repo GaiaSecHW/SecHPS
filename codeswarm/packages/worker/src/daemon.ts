@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
@@ -94,8 +95,26 @@ export class WorkerDaemon {
     }, 30_000);
   }
 
+  /** Get all local IPv4 addresses, excluding loopback. */
+  private getLocalAddresses(): string[] {
+    const addresses: string[] = [];
+    const interfaces = os.networkInterfaces();
+    for (const addrs of Object.values(interfaces)) {
+      if (!addrs) continue;
+      for (const addr of addrs) {
+        if (addr.family === 'IPv4' && !addr.internal) {
+          addresses.push(`${addr.address}:${this.config.port}`);
+        }
+      }
+    }
+    // Always include localhost as fallback
+    addresses.push(`localhost:${this.config.port}`);
+    return [...new Set(addresses)];
+  }
+
   private async sendHeartbeat(): Promise<void> {
     try {
+      const addresses = this.getLocalAddresses();
       const resp = await fetch(`${this.config.orchestratorUrl}/api/codeswarm/worker/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -103,7 +122,7 @@ export class WorkerDaemon {
           nodeId: this.config.nodeId,
           maxConcurrent: this.config.maxConcurrent,
           currentTasks: this.config.maxConcurrent - this.semaphore.available,
-          address: `localhost:${this.config.port}`,
+          address: addresses.join(','),
         }),
       });
       if (!resp.ok) {

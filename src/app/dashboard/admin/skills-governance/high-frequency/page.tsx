@@ -336,8 +336,6 @@ function HighFrequencyPageContent() {
       </div>
 
       {/* Search and filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        {/* 搜索和筛选 */}
       <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
           {/* 搜索框 */}

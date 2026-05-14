@@ -1,5 +1,3 @@
-// src/app/api/skills/[id]/route.ts
-
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { hasPermission } from '@/lib/auth';
@@ -11,8 +9,8 @@ import { getSkillOutputTemplate } from '@/lib/skill-template';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { generateId } from '@/lib/id-generator';
 import { buildTenantFilter } from '@/lib/tenant-filter';
+import { gitSkillSync } from '@/services/git-skill-sync';
 
-// GET /api/skills/:id - 获取 Skill 详情
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -48,7 +46,8 @@ export async function GET(
         Skill: true,
         other_Skill: {
           take: 5,
-          orderBy: { version: 'desc' },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, name: true, displayName: true, version: true, createdAt: true },
         },
       },
     });
@@ -57,56 +56,27 @@ export async function GET(
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
     }
 
-    // 租户隔离访问检查（使用 buildTenantFilter）
-    // 系统内置技能（userId=null）所有人可访问
-    // 所有者可以访问自己的技能
-    if (skill.userId && skill.userId !== payload.userId) {
-      // 非所有者：使用标准租户过滤
-      if (!tenant.isPlatformAdmin && !tenant.isIcsTenant) {
-        const tenantFilter = buildTenantFilter(tenant, {
-          tenantField: 'tenantId',
-          isPublicField: 'isPublic',
-        });
-        // 验证是否符合租户过滤条件
-        const matchesFilter = 
-          (tenantFilter as any).OR?.some((cond: any) => {
-            if (cond.isPublic && skill.isPublic) return true;
-            if (cond.tenantId && skill.tenantId === cond.tenantId) return true;
-            return false;
-          }) ?? false;
-        
-        if (!matchesFilter) {
-          return NextResponse.json({ error: '禁止访问' }, { status: 403 });
-        }
-      }
+    const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE);
+    const isOwner = skill.userId === payload.userId;
+    const tenantFilter = buildTenantFilter(tenant, {
+      tenantField: 'tenantId',
+      isPublicField: 'isPublic',
+    });
+    const isTenantSkill = tenantFilter ? 
+      (skill.tenantId === tenant.tenantId || skill.isPublic === true) : 
+      skill.isPublic === true;
+
+    if (!isAdmin && !isOwner && !isTenantSkill && skill.userId !== null) {
+      return NextResponse.json({ error: '禁止访问' }, { status: 403 });
     }
 
-    const { SkillCategory, VulnerabilityTree, SkillProductTag, ...rest } = skill;
-    return NextResponse.json({
-      skill: {
-        ...rest,
-        categoryName: SkillCategory?.displayName || null,
-        categoryIcon: SkillCategory?.icon || null,
-        hasSubDimension: SkillCategory?.hasSubDimension || false,
-        patternName: VulnerabilityTree?.displayName || null,
-        languageName: VulnerabilityTree?.VulnerabilityTree?.displayName || null,
-        productTags: SkillProductTag.map(spt => ({
-          id: spt.ProductTag.id,
-          name: spt.ProductTag.name,
-          displayName: spt.ProductTag.displayName,
-        })),
-      },
-    });
+    return NextResponse.json({ skill });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '获取 Skill 详情错误', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '服务器内部错误' }, { status: 500 });
   }
 }
 
-// PUT /api/skills/:id - 更新 Skill
-// 支持两种模式：
-// 1. 直接更新（默认）：修改当前版本
-// 2. 创建新版本（createVersion=true）：创建新版本并记录进化历史
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -119,165 +89,128 @@ export async function PUT(
     const { payload, tenant } = auth as AuthSuccessResult;
 
     const { id } = await params;
+
     const body = await request.json();
-    const { createVersion, changeType, changeDesc, reason, ...updates } = body;
+    const { 
+      name, displayName, description, content, categoryId, vulnerabilityTreeId, 
+      isActive, severity, cwe, productTagIds, isPublic, 
+    } = body;
 
     const skill = await prisma.skill.findUnique({ where: { id } });
     if (!skill) {
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
     }
 
-    // 检查权限
-    // 管理员可以修改任何 Skill
     const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_UPDATE);
-    
     if (!isAdmin) {
-      // 非管理员只能修改自己的私有 Skill
       if (skill.userId === null) {
         return NextResponse.json({ error: '禁止访问 - 修改公共 Skill 需要管理员权限' }, { status: 403 });
       }
       if (skill.userId !== payload.userId) {
         return NextResponse.json({ error: '禁止访问 - 只能修改自己的私有 Skill' }, { status: 403 });
       }
-    }
-
-    // 管理员可以修改内置 Skill，普通用户不能修改
-    if (skill.isBuiltin && !isAdmin) {
-      return NextResponse.json({ error: '内置 Skill 只有管理员可以修改' }, { status: 400 });
-    }
-
-    // 管理员可以修改任何版本，普通用户只能修改最新版本
-    if (!skill.isLatest && !isAdmin) {
-      return NextResponse.json({ error: '只能修改最新版本的 Skill' }, { status: 400 });
+      if (!skill.isLatest) {
+        return NextResponse.json({ error: '只能修改最新版本的 Skill' }, { status: 400 });
+      }
     }
 
     let updatedSkill: Awaited<ReturnType<typeof prisma.skill.create>> | Awaited<ReturnType<typeof prisma.skill.update>> | undefined;
 
-    if (createVersion) {
-      // 创建新版本模式
-      if (!changeType || !changeDesc || !reason) {
-        return NextResponse.json(
-          { error: '创建新版本需要提供 changeType, changeDesc, reason' },
-          { status: 400 }
-        );
+    if (content && content !== skill.content) {
+      const currentSkill = await prisma.skill.findUnique({ where: { id } });
+      if (!currentSkill) {
+        return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
       }
 
-      // 将当前版本标记为非最新
       await prisma.skill.update({
         where: { id },
         data: { isLatest: false },
       });
 
-      // 构建更新数据
-      const updateData: Record<string, unknown> = {};
-      if (updates.displayName !== undefined) updateData.displayName = updates.displayName;
-      if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
-      if (updates.content !== undefined) updateData.content = updates.content;
-      if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
-      if (updates.techStackId !== undefined) updateData.categoryId = updates.categoryId;
-      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityTreeId = updates.vulnerabilityTreeId;
-
-      // 创建新版本
+      const newVersion = currentSkill.version + 1;
       updatedSkill = await prisma.skill.create({
         data: {
           id: generateId('skill'),
-          name: skill.name,
-          displayName: (updateData.displayName as string) ?? skill.displayName,
-          description: (updateData.description as string) ?? skill.description,
-          categoryId: skill.categoryId,
-          vulnerabilityTreeId: (updateData.vulnerabilityTreeId as string | null) ?? skill.vulnerabilityTreeId,
-          cwe: (updateData.cwe as string | null) ?? skill.cwe,
-          content: (updateData.content as string) ?? skill.content,
-          userId: skill.userId,
-          isBuiltin: skill.isBuiltin,
-          isActive: (updateData.isActive as boolean) ?? skill.isActive,
-          version: skill.version + 1,
-          parentId: skill.id,
+          name: currentSkill.name,
+          displayName: displayName || currentSkill.displayName,
+          description: description || currentSkill.description,
+          categoryId: categoryId || currentSkill.categoryId,
+          vulnerabilityTreeId: vulnerabilityTreeId || currentSkill.vulnerabilityTreeId,
+          cwe: cwe || currentSkill.cwe,
+          content,
+          userId: currentSkill.userId,
+          tenantId: currentSkill.tenantId,
+          isPublic: isPublic !== undefined ? isPublic : currentSkill.isPublic,
+          isBuiltin: currentSkill.isBuiltin,
+          version: newVersion,
+          parentId: id,
           isLatest: true,
-          successRate: skill.successRate,
-          avgDuration: skill.avgDuration,
-          execCount: skill.execCount,
+          severity: severity || currentSkill.severity,
           updatedAt: new Date(),
         },
       });
 
-      // 记录进化历史
-      const beforeData = {
-        displayName: skill.displayName,
-        description: skill.description,
-        content: skill.content,
-      };
-
-      const afterData = {
-        displayName: updatedSkill.displayName,
-        description: updatedSkill.description,
-        content: updatedSkill.content,
-      };
-
       await prisma.skillEvolution.create({
         data: {
-          id: generateId('evol'),
+          id: generateId('skev'),
           skillId: updatedSkill.id,
-          fromVersion: skill.version,
-          toVersion: updatedSkill.version,
-          changeType,
-          changeDesc,
-          beforeData: JSON.stringify(beforeData),
-          afterData: JSON.stringify(afterData),
-          reason,
-          beforeRate: skill.successRate,
-          afterRate: updatedSkill.successRate,
+          toVersion: newVersion,
+          fromVersion: currentSkill.version,
+          changeType: 'content_update',
+          changeDesc: '内容更新',
+          beforeData: currentSkill.content,
+          afterData: content,
+          reason: '内容更新',
+          createdAt: new Date(),
         },
       });
-
-      // 双写：同步保存新版本到磁盘（等待完成）
-      if (updatedSkill) {
-        try {
-          const template = await getSkillOutputTemplate();
-          await saveSkillToDisk(updatedSkill, template);
-        } catch (err) {
-          logger.errorWithUser(LOG_MODULES.SKILL, payload, '保存新版本到磁盘失败', updatedSkill.id, { details: { error: err instanceof Error ? err.message : String(err) } });
-        }
-      }
     } else {
-      // 直接更新模式
-      const updateData: Record<string, unknown> = {};
-      if (updates.displayName !== undefined) updateData.displayName = updates.displayName;
-      if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.cwe !== undefined) updateData.cwe = updates.cwe;
-      if (updates.content !== undefined) updateData.content = updates.content;
-      if (updates.isActive !== undefined) updateData.isActive = updates.isActive;
-      if (updates.techStackId !== undefined) updateData.categoryId = updates.categoryId;
-      if (updates.vulnerabilityPatternId !== undefined) updateData.vulnerabilityTreeId = updates.vulnerabilityTreeId;
-      // 处理 isPublic 分享状态（只有私有 Skill 的所有者可以切换）
-      if (updates.isPublic !== undefined && skill.userId !== null) {
-        updateData.isPublic = updates.isPublic;
-      }
+      const updateData: Record<string, unknown> = { updatedAt: new Date() };
+      if (name) updateData.name = name;
+      if (displayName) updateData.displayName = displayName;
+      if (description) updateData.description = description;
+      if (categoryId) updateData.categoryId = categoryId;
+      if (vulnerabilityTreeId !== undefined) updateData.vulnerabilityTreeId = vulnerabilityTreeId || null;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      if (severity !== undefined) updateData.severity = severity || null;
+      if (cwe !== undefined) updateData.cwe = cwe || null;
+      if (isPublic !== undefined) updateData.isPublic = isPublic;
 
       updatedSkill = await prisma.skill.update({
         where: { id },
         data: updateData,
       });
+    }
 
-      // 双写：根据 isActive 状态同步磁盘文件（等待完成）
+    if (productTagIds !== undefined) {
+      await prisma.skillProductTag.deleteMany({ where: { skillId: id } });
+      if (productTagIds.length > 0) {
+        await prisma.skillProductTag.createMany({
+          data: productTagIds.map((tagId: string) => ({
+            id: generateId('spt'),
+            skillId: updatedSkill!.id,
+            productTagId: tagId,
+          })),
+        });
+      }
+    }
+
+    if (updatedSkill) {
       try {
-        if (updates.isActive !== undefined) {
-          if (updatedSkill!.isActive) {
-            // 启用：保存到磁盘
-            const template = await getSkillOutputTemplate();
-            await saveSkillToDisk(updatedSkill!, template);
-          } else {
-            // 禁用：从磁盘删除
-            await deleteSkillFromDisk(updatedSkill!.name, updatedSkill!.userId);
-          }
+        const template = await getSkillOutputTemplate();
+        
+        if (isActive === false) {
+          await deleteSkillFromDisk(updatedSkill.name, updatedSkill.userId);
         } else {
-          // 其他更新：直接保存
-          const template = await getSkillOutputTemplate();
-          await saveSkillToDisk(updatedSkill!, template);
+          await saveSkillToDisk(updatedSkill, template);
+        }
+        
+        // Git 同步更新
+        if (content && content !== skill.content) {
+          await gitSkillSync.updateSkillFile(updatedSkill.name, 'SKILL.md', content);
         }
       } catch (err) {
-        logger.errorWithUser(LOG_MODULES.SKILL, payload, '同步磁盘文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
+        logger.errorWithUser(LOG_MODULES.SKILL, payload, '同步磁盘/Git文件失败', updatedSkill!.id, { details: { error: err instanceof Error ? err.message : String(err) } });
       }
     }
 
@@ -288,7 +221,6 @@ export async function PUT(
   }
 }
 
-// DELETE /api/skills/:id - 删除 Skill
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -307,12 +239,9 @@ export async function DELETE(
       return NextResponse.json({ error: 'Skill 不存在' }, { status: 404 });
     }
 
-    // 检查权限
-    // 管理员可以删除任何 Skill
     const isAdmin = hasPermission(payload.permissions, PERMISSIONS.CONFIG_DELETE);
     
     if (!isAdmin) {
-      // 非管理员只能删除自己的私有 Skill
       if (skill.userId === null) {
         return NextResponse.json({ error: '禁止访问 - 删除公共 Skill 需要管理员权限' }, { status: 403 });
       }
@@ -321,35 +250,50 @@ export async function DELETE(
       }
     }
 
-    // 管理员可以删除内置 Skill，普通用户不能删除
     if (skill.isBuiltin && !isAdmin) {
       return NextResponse.json({ error: '内置 Skill 只有管理员可以删除' }, { status: 400 });
     }
 
-    // 删除 Skill 及其所有版本
-    await prisma.$transaction(async (tx) => {
-      // 删除所有进化记录
-      await tx.skillEvolution.deleteMany({
-        where: {
-          OR: [
-            { skillId: id },
-            { skill: { parentId: id } },
-          ],
-        },
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.skillEvolution.deleteMany({
+          where: {
+            OR: [
+              { skillId: id },
+              { Skill: { parentId: id } },
+            ],
+          },
+        });
+
+        await tx.skill.deleteMany({
+          where: { parentId: id },
+        });
+
+        await tx.skill.delete({ where: { id } });
       });
+    } catch (txError) {
+      logger.errorNoUser(LOG_MODULES.SKILL, '删除事务失败', { details: { error: txError instanceof Error ? txError.message : String(txError) } });
+      return NextResponse.json({ error: '删除失败: ' + (txError instanceof Error ? txError.message : String(txError)) }, { status: 500 });
+    }
 
-      // 删除所有子版本
-      await tx.skill.deleteMany({
-        where: { parentId: id },
-      });
-
-      // 删除当前版本
-      await tx.skill.delete({ where: { id } });
-    });
-
-    // 双写：同步删除磁盘文件
+    // 删除磁盘文件
     deleteSkillFromDisk(skill.name, skill.userId).catch(err => {
       logger.errorWithUser(LOG_MODULES.SKILL, payload, '删除磁盘文件失败', skill.id, { details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } });
+    });
+
+    // Git 方式删除
+    gitSkillSync.deleteSkill(skill.name).then(result => {
+      if (!result.success) {
+        logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 删除文件失败', skill.id, { 
+          details: { skillName: skill.name, error: result.message } 
+        });
+      } else {
+        logger.info(LOG_MODULES.SKILL, `Git 删除成功: ${skill.name}`, { message: result.message });
+      }
+    }).catch(err => {
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 删除异常', skill.id, { 
+        details: { skillName: skill.name, error: err instanceof Error ? err.message : String(err) } 
+      });
     });
 
     return NextResponse.json({ message: '删除成功' });

@@ -169,7 +169,11 @@ export function WorkerNodesTable() {
                         <div className="text-sm font-medium text-gray-100">
                           {worker.name || worker.nodeId}
                         </div>
-                        <div className="text-xs text-gray-500">{worker.address}</div>
+                        <div className="text-xs text-gray-500 space-y-0.5">
+                          {worker.address.split(',').map((addr, i) => (
+                            <div key={i}>{addr}</div>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   </td>

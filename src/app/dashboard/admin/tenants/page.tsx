@@ -540,27 +540,28 @@ export default function TenantsPage() {
         </Alert>
       )}
 
-      {/* 搜索区域 */}
-      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <form onSubmit={handleSearch} className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="搜索租户..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
-          />
-        </form>
-      </div>
-
-      {/* 租户表格 */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <LoadingSpinner size="lg" />
+      {/* Search + Table combined */}
+      <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-gray-700/50">
+        {/* Filters section */}
+        <div className="px-5 py-4 border-b border-gray-700/50">
+          <form onSubmit={handleSearch} className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="搜索租户..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+            />
+          </form>
         </div>
-      ) : (
-        <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden">
+
+        {/* Table section */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : (
           <table className="min-w-full divide-y divide-gray-700/50">
             <thead className="bg-[#0F172A]">
               <tr>
@@ -623,8 +624,8 @@ export default function TenantsPage() {
               )}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 模态框 */}
       <TenantFormModal

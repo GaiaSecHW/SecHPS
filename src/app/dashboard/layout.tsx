@@ -265,55 +265,55 @@ function DashboardLayoutContent({
               <BroadcastMarquee />
             </div>
 
-            <div className="flex items-center space-x-4">
+            <div className="flex items-center flex-shrink-0">
               <div className="relative">
                 <button
                   onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="flex items-center gap-3 bg-dark-bg/50 rounded-lg p-3 border border-gray-700/30 hover:border-gray-600/50 transition-colors"
+                  className="flex items-center gap-2 bg-dark-bg/50 rounded-lg px-3 py-2 border border-gray-700/30 hover:border-gray-600/50 transition-colors max-w-md"
                 >
                   {/* 用户头像 */}
                   {user?.avatar ? (
                     <img
                       src={user.avatar}
                       alt={user.name || user.username}
-                      className="h-10 w-10 rounded-full ring-2 ring-primary-500/30"
+                      className="h-8 w-8 rounded-full ring-2 ring-primary-500/30 flex-shrink-0"
                     />
                   ) : (
-                    <div className="h-10 w-10 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold">
+                    <div className="h-8 w-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold flex-shrink-0 text-sm">
                       {user?.name?.charAt(0) || user?.username?.charAt(0) || 'U'}
                     </div>
                   )}
 
                   {/* 用户信息卡片 */}
-                  <div className="flex flex-col gap-1 text-left">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-100 text-sm">{user?.name || user?.username}</span>
+                  <div className="flex flex-col gap-0.5 text-left overflow-hidden">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-semibold text-gray-100 text-sm truncate max-w-[100px]">{user?.name || user?.username}</span>
                       {user?.roles?.includes('admin') && !user?.tenantId && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/20">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-500/15 text-red-400 border border-red-500/20">
                           平台管理员
                         </span>
                       )}
                       {user?.isIcsTenant && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20">
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/15 text-purple-400 border border-purple-500/20">
                           ICSL
                         </span>
                       )}
                     </div>
-                    <p className="text-gray-500 text-xs">{user?.email}</p>
+                    <p className="text-gray-500 text-xs truncate max-w-[150px]">{user?.email}</p>
                   </div>
 
                   {/* 租户信息 */}
                   {user?.tenantId && (
                     <>
-                      <div className="w-px h-8 bg-gray-700/50" />
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded bg-blue-500/20 flex items-center justify-center">
-                            <span className="text-blue-400 text-xs">🏢</span>
+                      <div className="w-px h-6 bg-gray-700/50 flex-shrink-0" />
+                      <div className="flex flex-col gap-0.5 flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          <div className="w-4 h-4 rounded bg-blue-500/20 flex items-center justify-center">
+                            <span className="text-blue-400 text-[10px]">🏢</span>
                           </div>
-                          <span className="text-gray-400 text-xs">租户</span>
+                          <span className="text-gray-400 text-[10px]">租户</span>
                         </div>
-                        <span className="font-medium text-blue-400 text-sm">{user?.tenantName || user?.tenantId}</span>
+                        <span className="font-medium text-blue-400 text-xs truncate max-w-[80px]">{user?.tenantName || user?.tenantId}</span>
                       </div>
                     </>
                   )}

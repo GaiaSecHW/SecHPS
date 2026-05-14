@@ -330,6 +330,7 @@ model CodeswarmTask {
   agent             String?
   defaultAgentName  String?
   startCommand      String?
+  preferredWorkerNodeId String?
   events            String?
   result            String?
   error             String?
@@ -1087,6 +1088,63 @@ model Skill {
   @@index([isLatest, tenantId])
 }
 
+model Skill2 {
+  id                                                     String                      @id
+  userId                                                 String?
+  tenantId                                               String?
+  name                                                   String
+  displayName                                            String
+  description                                            String
+  severity                                               String?
+  content                                                String
+  cwe                                                    String?
+  isActive                                               Boolean                     @default(true)
+  isBuiltin                                              Boolean                     @default(false)
+  isPublic                                               Boolean                     @default(false)
+  version                                                Int                         @default(1)
+  parentId                                               String?
+  isLatest                                               Boolean                     @default(true)
+  successRate                                            Float?
+  avgDuration                                            Int?
+  execCount                                              Int                         @default(0)
+  referenceCount                                         Int                         @default(0)
+  vulnerabilityCount                                     Int                         @default(0)
+  successExecCount                                       Int                         @default(0)
+  createdAt                                              DateTime                    @default(now())
+  updatedAt                                              DateTime
+  categoryId                                             String                    @default("cat-vulnerability-mining")
+  vulnerabilityTreeId                                    String?
+  SkillCategory                                          SkillCategory               @relation(fields: [categoryId], references: [id])
+  VulnerabilityTree                                      VulnerabilityTree?          @relation(fields: [vulnerabilityTreeId], references: [id])
+  Tenant                                                 Tenant?                     @relation(fields: [tenantId], references: [id])
+  User                                                   User?                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  Skill2                                                 Skill2?                     @relation("Skill2ToSkill2", fields: [parentId], references: [id])
+  other_Skill2                                           Skill2[]                    @relation("Skill2ToSkill2")
+  SkillProductTag                                        SkillProductTag2[]
+
+  @@unique([userId, name])
+  @@index([categoryId])
+  @@index([vulnerabilityTreeId])
+  @@index([isPublic])
+  @@index([isActive])
+  @@index([version])
+  @@index([isLatest])
+  @@index([name])
+  @@index([userId])
+}
+
+model SkillProductTag2 {
+  id            String    @id
+  skillId       String
+  productTagId  String
+  Skill2        Skill2    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  ProductTag    ProductTag @relation(fields: [productTagId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, productTagId])
+  @@index([skillId])
+  @@index([productTagId])
+}
+
 model SkillCategory {
   id              String   @id
   name            String   @unique
@@ -1099,6 +1157,7 @@ model SkillCategory {
   createdAt       DateTime @default(now())
   updatedAt       DateTime
   Skill           Skill[]
+  Skill2          Skill2[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -1118,6 +1177,7 @@ model VulnerabilityTree {
   VulnerabilityTree VulnerabilityTree?  @relation("VulnerabilityTreeToTree", fields: [parentId], references: [id])
   other_VulnerabilityTree VulnerabilityTree[] @relation("VulnerabilityTreeToTree")
   Skill       Skill[]
+  Skill2      Skill2[]
 
   @@index([type])
   @@index([parentId])
@@ -1134,6 +1194,7 @@ model ProductTag {
   createdAt   DateTime @default(now())
   updatedAt   DateTime
   SkillProductTag SkillProductTag[]
+  SkillProductTag2 SkillProductTag2[]
 
   @@index([isActive])
   @@index([name])
@@ -1637,6 +1698,7 @@ model Tenant {
   ModelConfig     ModelConfig[]
   Project         Project[]
   Skill           Skill[]
+  Skill2          Skill2[]
   TaskInstance    TaskInstance[]
   User            User[]
   Workflow        Workflow[]
@@ -1731,6 +1793,7 @@ model User {
   ModelConfig                                  ModelConfig[]
   Project                                      Project[]
   Skill                                        Skill[]
+  Skill2                                       Skill2[]
   SkillPrediction                              SkillPrediction[]
   SkillPredictionTask                          SkillPredictionTask[]
   TaskInstance                                 TaskInstance[]

@@ -34,6 +34,7 @@ export default function AgentAppsPage() {
   const [apps, setApps] = useState<AgentApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AgentApp | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -72,6 +73,30 @@ export default function AgentAppsPage() {
     setRefreshing(true);
     await fetchApps();
     setTimeout(() => setRefreshing(false), 500);
+  };
+
+  const handleSyncFromGit = async () => {
+    try {
+      setSyncing(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/agent-apps/sync', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.error || '同步失败');
+      }
+      
+      const result = await response.json();
+      toast.success(`同步成功！${result.message}`);
+      await fetchApps();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '同步失败');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleCreateApp = () => {
@@ -262,23 +287,31 @@ export default function AgentAppsPage() {
             <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent 应用</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
-          >
-            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
-            刷新
-          </button>
-          <button
-            onClick={handleCreateApp}
-            className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
-          >
-            <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
-            创建新应用
-          </button>
-        </div>
+<div className="flex items-center gap-3">
+           <button
+             onClick={handleSyncFromGit}
+             disabled={syncing}
+             className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+           >
+             <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+             同步仓库
+           </button>
+           <button
+             onClick={handleRefresh}
+             disabled={refreshing}
+             className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+           >
+             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+             刷新
+           </button>
+           <button
+             onClick={handleCreateApp}
+             className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
+           >
+             <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
+             创建新应用
+           </button>
+         </div>
       </div>
 
       <div className="bg-dark-surface rounded-lg border border-gray-700/50">
