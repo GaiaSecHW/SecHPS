@@ -1225,20 +1225,24 @@ if (loading) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">我的任务</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理您的 AI 编程评估任务
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <MessageSquare size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">我的任务</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理 AI 编程评估任务</p>
+          </div>
         </div>
-
+        
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <Plus size={20} />
-          <span>新建任务</span>
+          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+          新建任务
         </button>
       </div>
 
@@ -1263,9 +1267,9 @@ if (loading) {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow"
+              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
             >
-              <div className="p-6">
+              <div className="p-6 flex-1">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-semibold text-gray-100 truncate max-w-[300px]" title={project.name || '未命名任务'}>
@@ -1408,7 +1412,7 @@ if (loading) {
                 const config = statusConfig[latestEval.status] || statusConfig.completed;
                 
                 return (
-                  <div className={`${config.bg} px-6 py-2 border-t ${config.border}`}>
+                  <div className={`${config.bg} px-6 py-2 border-t ${config.border} mt-auto`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
@@ -1448,7 +1452,7 @@ if (loading) {
                 );
               })()}
 
-              <div className="bg-dark-bg px-6 py-3 border-t border-gray-700/50">
+              <div className="bg-dark-bg px-6 py-3 border-t border-gray-700/50 mt-auto">
                 {/* 第一行：灰盒渗透、漏洞管理 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex space-x-2">
@@ -2648,42 +2652,43 @@ if (loading) {
             </div>
 
             {/* 搜索和过滤 */}
-            <div className="px-6 py-3 border-b border-gray-100 bg-dark-bg flex gap-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="搜索漏洞标题、类型..."
-                  value={vulnSearchTerm}
-                  onChange={(e) => {
-                    setVulnSearchTerm(e.target.value);
-                    setVulnPage(1);
-                  }}
-                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
+            <div className="px-6 py-4 border-b border-gray-700/50 bg-dark-surface">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                {/* 搜索框 */}
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="搜索漏洞..."
+                    value={vulnSearchTerm}
+                    onChange={(e) => { setVulnSearchTerm(e.target.value); setVulnPage(1); }}
+                    className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                  />
+                </div>
+                
+                {/* 筛选控件 */}
+                <div className="flex items-center gap-3">
+                  <select
+                    value={vulnStatusFilter}
+                    onChange={(e) => { setVulnStatusFilter(e.target.value); setVulnPage(1); }}
+                    className="w-[120px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+                  >
+                    <option value="">全部状态</option>
+                    <option value="new">新建</option>
+                    <option value="confirmed">已确认</option>
+                    <option value="fixed">已修复</option>
+                    <option value="verified">已验证</option>
+                    <option value="false-positive">误报</option>
+                  </select>
+                  <button
+                    onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, 1)}
+                    className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all flex items-center gap-2"
+                  >
+                    <RefreshCw size={16} />
+                    查询
+                  </button>
+                </div>
               </div>
-              <select
-                value={vulnStatusFilter}
-                onChange={(e) => {
-                  setVulnStatusFilter(e.target.value);
-                  setVulnPage(1);
-                }}
-                className="px-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">全部状态</option>
-                <option value="new">新建</option>
-                <option value="confirmed">已确认</option>
-                <option value="fixed">已修复</option>
-                <option value="verified">已验证</option>
-                <option value="false-positive">误报</option>
-              </select>
-              <button
-                onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, 1)}
-                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1"
-              >
-                <RefreshCw size={14} />
-                查询
-              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto">

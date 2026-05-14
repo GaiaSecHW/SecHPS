@@ -21,6 +21,7 @@ import {
   BarChart3,
   Play,
   Pause,
+  LayoutDashboard,
 } from 'lucide-react';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { extractErrorMessage } from '@/lib/api-client';
@@ -242,29 +243,28 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <header className="bg-dark-surface border border-gray-700/50 rounded-xl p-5">
+      <header className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-cyan-600 rounded-lg flex items-center justify-center">
-              <BarChart3 size={20} className="text-white" />
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary-400 to-primary-600 rounded-lg flex items-center justify-center">
+              <LayoutDashboard size={18} className="text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white">
+              <h1 className="text-xl font-semibold text-white">
                 安全评估数据看板
               </h1>
-              <p className="text-sm text-gray-400 mt-0.5 flex items-center gap-2">
-                <span className={`w-2 h-2 rounded-full ${stats.runningEvaluations > 0 ? 'bg-cyan-400 animate-pulse' : 'bg-gray-400'}`}></span>
-                {stats.runningEvaluations > 0 ? `${stats.runningEvaluations} 个评估正在运行` : '实时监控任务状态与评估进度'}
+              <p className="text-sm text-gray-400 mt-0.5">
+                实时监控任务状态与评估进度
               </p>
             </div>
           </div>
           <Link
             href="/dashboard/sessions"
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg hover:from-cyan-400 hover:to-blue-400 transition-all shadow-lg shadow-cyan-500/20"
+            className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
           >
-            <Play size={16} />
+            <Play size={16} className="transition-transform group-hover:rotate-90 duration-200" />
             <span>创建评估</span>
           </Link>
         </div>

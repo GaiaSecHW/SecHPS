@@ -459,10 +459,15 @@ function SkillsPageContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100 tracking-tight">Skills 管理</h1>
-          <p className="mt-1 text-sm text-gray-400">共 <span className="text-primary-400 font-medium">{totalSkills}</span> 个 Skills</p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Award size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Skills 管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">共 <span className="text-primary-400 font-medium">{totalSkills}</span> 个 Skills</p>
+          </div>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap justify-end">
           {isAdmin && selectedSkills.size > 0 && (
@@ -510,51 +515,55 @@ function SkillsPageContent() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-        <div className="flex gap-2 flex-1 w-full sm:w-auto">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
-            <input
-              type="text"
-              placeholder="搜索 Skills..."
-              value={searchInput}
-              onChange={(e) => setSearchInput(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              className="w-full pl-10 pr-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-100 placeholder-gray-500 text-base transition-all duration-200"
-            />
-          </div>
-          <button onClick={handleSearch} className="px-4 py-2.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm">
-            搜索
-          </button>
-          {searchTerm && (
-            <button onClick={handleClearSearch} className="px-4 py-2.5 bg-dark-surface border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover text-sm">
-              清除
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 搜索框 */}
+          <div className="flex gap-3 flex-1 w-full sm:max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="搜索 Skills..."
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              />
+            </div>
+            <button onClick={handleSearch} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
+              搜索
             </button>
-          )}
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {isAdmin && skills.length > 0 && (
-            <label className="flex items-center space-x-1.5 cursor-pointer mr-2">
-              <input type="checkbox" checked={selectedSkills.size === skills.length && skills.length > 0} onChange={handleSelectAll} className="w-4 h-4 text-primary-600 border-gray-600 rounded" />
-              <span className="text-sm text-gray-400">全选</span>
-            </label>
-          )}
-          <select
-            value={selectedCategoryId}
-            onChange={(e) => {
-              setSelectedCategoryId(e.target.value);
-              setSelectedLanguageId('');
-              setSelectedPatternId('');
-              setCurrentPage(1);
-              updateUrlParams({ categoryId: e.target.value || null, languageId: null, patternId: null, page: null });
-            }}
-            className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">所有分类</option>
-            {categories.map((cat) => (
-              <option key={cat.id} value={cat.id}>{cat.displayName} ({cat.count})</option>
-            ))}
-          </select>
+            {searchTerm && (
+              <button onClick={handleClearSearch} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
+                清除
+              </button>
+            )}
+          </div>
+          
+          {/* 筛选控件 */}
+          <div className="flex items-center gap-3 flex-wrap">
+            {isAdmin && skills.length > 0 && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={selectedSkills.size === skills.length && skills.length > 0} onChange={handleSelectAll} className="w-4 h-4 text-primary-600 border-gray-600 rounded" />
+                <span className="text-sm text-gray-400">全选</span>
+              </label>
+            )}
+            <select
+              value={selectedCategoryId}
+              onChange={(e) => {
+                setSelectedCategoryId(e.target.value);
+                setSelectedLanguageId('');
+                setSelectedPatternId('');
+                setCurrentPage(1);
+                updateUrlParams({ categoryId: e.target.value || null, languageId: null, patternId: null, page: null });
+              }}
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">所有分类</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.displayName} ({cat.count})</option>
+              ))}
+            </select>
           {(() => {
             const selectedCat = categories.find(c => c.id === selectedCategoryId);
             return selectedCat?.hasSubDimension ? (
@@ -566,7 +575,7 @@ function SkillsPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ languageId: e.target.value || null, patternId: null, page: null });
                 }}
-                className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+                className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">所有语言</option>
                 {vulnerabilityTree.map((lang) => (
@@ -585,7 +594,7 @@ function SkillsPageContent() {
                   setCurrentPage(1);
                   updateUrlParams({ patternId: e.target.value || null, page: null });
                 }}
-                className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+                className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">所有模式</option>
                 {selectedLang.patterns.map((pat) => (
@@ -601,7 +610,7 @@ function SkillsPageContent() {
               setCurrentPage(1);
               updateUrlParams({ isActive: e.target.value || null, page: null });
             }}
-            className="w-40 px-3 py-2.5 bg-[#0F172A] border border-gray-600 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+            className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
           >
             <option value="">所有状态</option>
             {activeStatusOptions.map((opt) => (
@@ -609,6 +618,7 @@ function SkillsPageContent() {
             ))}
           </select>
         </div>
+      </div>
       </div>
 
       {/* Error */}

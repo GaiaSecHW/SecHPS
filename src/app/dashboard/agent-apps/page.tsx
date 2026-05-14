@@ -251,35 +251,37 @@ export default function AgentAppsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">Agent应用开发</h1>
-          <p className="mt-1 text-sm text-gray-400">管理和创建您的Agent应用</p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Box size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Agent应用开发</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent 应用</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+          >
+            <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+            刷新
+          </button>
+          <button
+            onClick={handleCreateApp}
+            className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
+          >
+            <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
+            创建新应用
+          </button>
         </div>
       </div>
 
       <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">已创建的应用</h2>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="inline-flex items-center px-3 py-2 border border-gray-600 rounded-md text-sm font-medium text-gray-300 bg-dark-surface hover:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw size={16} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              刷新
-            </button>
-            <button
-              onClick={handleCreateApp}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
-            >
-              <Plus size={16} className="mr-2" />
-              创建新应用
-            </button>
-          </div>
-        </div>
-
         <div className="p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">

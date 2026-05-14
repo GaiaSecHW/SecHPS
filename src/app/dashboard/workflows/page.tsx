@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User, Layers } from 'lucide-react';
+import { Plus, Search, Filter, Edit2, Trash2, Share2, FileText, CheckCircle, AlertCircle, Send, Archive, RotateCcw, X, Loader2, Globe, Lock, User, Layers, GitBranch } from 'lucide-react';
 import { WorkflowStatus } from '@/types/workflow';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { DeveloperGuard } from '@/components/PermissionGuard';
@@ -485,112 +485,66 @@ function WorkflowsContent() {
     );
   }
 
-  return (
+return (
     <div className="space-y-6">
-      {/* 头部 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">开发者编排</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            创建和管理开发者编排
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <GitBranch size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">开发者编排</h1>
+            <p className="text-sm text-gray-400 mt-0.5">共 <span className="text-primary-400 font-medium">{stats.total}</span> 个编排</p>
+          </div>
         </div>
-
-        <button
-          onClick={() => { setShowCreateModal(true); loadTechStackOnce(); }}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-        >
-          <Plus size={20} />
-          <span>新建编排</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            onClick={() => { setShowCreateModal(true); loadTechStackOnce(); }}
+            className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
+          >
+            <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
+            新建编排
+          </button>
+        </div>
       </div>
 
       {/* 错误提示 */}
       {error && (
-        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
+        <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-lg">
           {error}
         </div>
       )}
 
-      {/* 统计信息 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-cyan-500/30 transition-all duration-300 group">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-400">总编排</p>
-              <p className="text-2xl font-bold text-gray-100 mt-1 group-hover:text-cyan-400 transition-colors">{stats.total}</p>
-            </div>
-            <div className="p-3 bg-gradient-to-br from-cyan-400/20 to-blue-500/20 rounded-lg group-hover:from-cyan-400/30 group-hover:to-blue-500/30 transition-colors">
-              <FileText className="h-6 w-6 text-cyan-400" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-gray-500/30 transition-all duration-300 group">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-400">草稿</p>
-              <p className={`text-2xl font-bold mt-1 transition-colors ${stats.draft > 0 ? 'text-gray-200' : 'text-gray-500'}`}>{stats.draft}</p>
-            </div>
-            <div className={`p-3 rounded-lg transition-colors ${stats.draft > 0 ? 'bg-gray-500/20' : 'bg-gray-700/30'}`}>
-              <Edit2 className={`h-6 w-6 ${stats.draft > 0 ? 'text-gray-300' : 'text-gray-500'}`} />
-            </div>
-          </div>
-          {stats.draft > 0 && <p className="text-xs text-gray-500 mt-2">待发布</p>}
-        </div>
-
-        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-emerald-500/30 transition-all duration-300 group">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-400">已发布</p>
-              <p className={`text-2xl font-bold mt-1 transition-colors ${stats.published > 0 ? 'text-emerald-400 group-hover:text-emerald-300' : 'text-gray-500'}`}>{stats.published}</p>
-            </div>
-            <div className={`p-3 rounded-lg transition-colors ${stats.published > 0 ? 'bg-gradient-to-br from-emerald-400/20 to-green-500/20 group-hover:from-emerald-400/30 group-hover:to-green-500/30' : 'bg-gray-700/30'}`}>
-              <CheckCircle className={`h-6 w-6 ${stats.published > 0 ? 'text-emerald-400' : 'text-gray-500'}`} />
-            </div>
-          </div>
-          {stats.published > 0 && <p className="text-xs text-emerald-500/70 mt-2">正在运行</p>}
-        </div>
-
-        <div className="bg-dark-surface rounded-xl border border-gray-700/50 p-5 hover:border-rose-500/30 transition-all duration-300 group">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium text-gray-400">已下线</p>
-              <p className={`text-2xl font-bold mt-1 transition-colors ${stats.archived > 0 ? 'text-rose-400 group-hover:text-rose-300' : 'text-gray-500'}`}>{stats.archived}</p>
-            </div>
-            <div className={`p-3 rounded-lg transition-colors ${stats.archived > 0 ? 'bg-gradient-to-br from-rose-400/20 to-red-500/20 group-hover:from-rose-400/30 group-hover:to-red-500/30' : 'bg-gray-700/30'}`}>
-              <Archive className={`h-6 w-6 ${stats.archived > 0 ? 'text-rose-400' : 'text-gray-500'}`} />
-            </div>
-          </div>
-          {stats.archived > 0 && <p className="text-xs text-rose-500/70 mt-2">已归档</p>}
-        </div>
-      </div>
-
       {/* 搜索和筛选 */}
-      <div className="flex items-center space-x-4">
-        <div className="flex-1 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="搜索编排..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          />
-        </div>
-
-        <div className="flex items-center space-x-2">
-          <Filter size={20} className="text-gray-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as WorkflowStatus | 'all')}
-            className="w-[150px] px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          >
-            <option value="all">全部状态</option>
-            <option value="draft">草稿</option>
-            <option value="published">已发布</option>
-            <option value="archived">已下线</option>
-          </select>
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 搜索框 */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="搜索编排..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+            />
+          </div>
+          
+          {/* 状态筛选 */}
+          <div className="flex items-center gap-3">
+            <Filter size={18} className="text-gray-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as WorkflowStatus | 'all')}
+              className="w-[150px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+            >
+              <option value="all">全部状态</option>
+              <option value="draft">草稿</option>
+              <option value="published">已发布</option>
+              <option value="archived">已下线</option>
+            </select>
+          </div>
         </div>
       </div>
 

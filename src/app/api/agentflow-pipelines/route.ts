@@ -9,6 +9,8 @@ export async function GET(request: NextRequest) {
   if (!auth.success) return authErrorResponse(auth);
 
   const { tenant, payload } = auth as AuthSuccessResult;
+  const { searchParams } = new URL(request.url);
+  const agentAppId = searchParams.get('agentAppId');
 
   try {
     const include = {
@@ -24,6 +26,7 @@ export async function GET(request: NextRequest) {
     let pipelines;
     if (tenant.isPlatformAdmin || tenant.isIcsTenant) {
       pipelines = await prisma.agentFlowPipeline.findMany({
+        where: agentAppId ? { agentAppId } : undefined,
         include,
         orderBy: { createdAt: 'desc' },
       });
@@ -34,6 +37,7 @@ export async function GET(request: NextRequest) {
       });
       pipelines = await prisma.agentFlowPipeline.findMany({
         where: {
+          ...(agentAppId ? { agentAppId } : {}),
           OR: [{ ...filter }, { userId: payload.userId }],
         },
         include,

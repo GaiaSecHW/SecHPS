@@ -266,29 +266,33 @@ export default function TaskBuilderPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">我的任务</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理您的安全审计任务实例
-          </p>
+{/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <ClipboardList size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">任务实例</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理安全审计任务实例</p>
+          </div>
         </div>
-
+        
         <div className="flex items-center gap-3">
           <button
             onClick={() => fetchTasks(currentPage, pageSize)}
             disabled={loading}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2 text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-dark-surface-hover disabled:opacity-50"
           >
-            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+            <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             <span>刷新</span>
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
           >
-            <Plus size={20} />
-            <span>创建任务</span>
+            <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+            创建任务
           </button>
         </div>
       </div>

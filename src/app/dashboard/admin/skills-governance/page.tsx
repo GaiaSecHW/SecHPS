@@ -18,6 +18,7 @@ import {
   Brain,
   Play,
   Loader2,
+  Shield,
 } from 'lucide-react';
 import { AdminGuard } from '@/components/PermissionGuard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -336,12 +337,15 @@ function SkillsGovernanceContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">Skills 观测治理</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            监控 Skills 重复检测、重叠预警和治理建议
-          </p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Shield size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Skills 观测治理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">监控 Skills 重复检测、重叠预警和治理</p>
+          </div>
         </div>
         <div className="flex items-center space-x-3">
           <button

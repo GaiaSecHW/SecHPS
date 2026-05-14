@@ -19,6 +19,7 @@ import {
   EyeOff,
   User,
   Key,
+  Brain,
 } from 'lucide-react';
 
 // ModelConfig 数据结构
@@ -453,23 +454,32 @@ export default function ModelsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
-            <Cpu className="h-6 w-6" />
-            我的模型
-          </h1>
-          <p className="text-gray-400 mt-1">
-            管理您创建的大模型配置。设置公开后，其他用户在评估时也可使用。
-          </p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Brain size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">我的模型</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理大模型配置，公开后其他用户也可使用</p>
+          </div>
         </div>
-        <button
-          onClick={fetchModels}
-          className="flex items-center gap-2 px-3 py-2 text-sm bg-dark-surface-hover text-gray-300 rounded-md hover:bg-gray-700 transition-colors"
-        >
-          <RefreshCw size={16} />
-          刷新
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={fetchModels}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 transition-colors"
+          >
+            <RefreshCw size={16} />
+            刷新
+          </button>
+          <button
+            onClick={handleOpenAddModal}
+            className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
+          >
+            <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
+            添加模型
+          </button>
+        </div>
       </div>
 
       {/* Success/Error Messages */}
@@ -505,13 +515,6 @@ export default function ModelsPage() {
               <option value="inactive">禁用</option>
               <option value="public">公开</option>
             </select>
-            <button
-              onClick={handleOpenAddModal}
-              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 transition-colors"
-            >
-              <Plus size={18} />
-              添加模型
-            </button>
           </div>
         </div>
 

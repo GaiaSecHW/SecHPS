@@ -379,16 +379,14 @@ function McpServersContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <Server className="h-8 w-8 text-purple-600" />
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Server size={18} className="text-white" />
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">
-              MCP 服务器配置
-            </h1>
-            <p className="text-sm text-gray-500 mt-1">
-              管理 MCP 服务器，普通用户可创建私有 MCP，管理员可创建共享 MCP
-            </p>
+            <h1 className="text-xl font-semibold text-white">MCP 服务器配置</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理 MCP 服务器，支持私有和共享配置</p>
           </div>
         </div>
         <button
@@ -397,56 +395,57 @@ function McpServersContent() {
             setEditingServer(null);
             setShowForm(true);
           }}
-          className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <Plus size={20} />
-          <span>添加 MCP 服务器</span>
+          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+          添加 MCP 服务器
         </button>
       </div>
 
-      {/* Search and Filter */}
-      <div className="mb-4 flex gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-          <input
-            type="text"
-            placeholder="搜索 MCP 服务器名称..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setPage(1);
-            }}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
-        {/* 过滤按钮 */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => { setFilter('all'); setPage(1); }}
-            className={`px-3 py-2 text-sm rounded-md transition-colors ${
-              filter === 'all' ? 'bg-purple-600 text-white' : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
-            }`}
-          >
-            全部
-          </button>
-          <button
-            onClick={() => { setFilter('mine'); setPage(1); }}
-            className={`px-3 py-2 text-sm rounded-md transition-colors ${
-              filter === 'mine' ? 'bg-purple-600 text-white' : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
-            }`}
-          >
-            <User size={14} className="inline mr-1" />
-            我的
-          </button>
-          <button
-            onClick={() => { setFilter('shared'); setPage(1); }}
-            className={`px-3 py-2 text-sm rounded-md transition-colors ${
-              filter === 'shared' ? 'bg-purple-600 text-white' : 'bg-dark-surface-hover text-gray-300 hover:bg-gray-200'
-            }`}
-          >
-            <Share2 size={14} className="inline mr-1" />
-            共享
-          </button>
+      {/* 搜索和筛选 */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 搜索框 */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="搜索 MCP 服务器..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+            />
+          </div>
+          
+          {/* 过滤按钮组 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setFilter('all'); setPage(1); }}
+              className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                filter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              全部
+            </button>
+            <button
+              onClick={() => { setFilter('mine'); setPage(1); }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                filter === 'mine' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              <User size={16} />
+              我的
+            </button>
+            <button
+              onClick={() => { setFilter('shared'); setPage(1); }}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                filter === 'shared' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+              }`}
+            >
+              <Share2 size={16} />
+              共享
+            </button>
+          </div>
         </div>
       </div>
 

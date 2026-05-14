@@ -149,34 +149,39 @@ function UsersPageContent() {
 
   return (
     <div className="space-y-6">
-      {/* 页面标题和操作 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">用户管理</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理平台用户及其权限
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Users size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">用户管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理平台用户及其权限</p>
+          </div>
         </div>
-
+        
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <Plus size={20} />
-          <span>创建用户</span>
+          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+          创建用户
         </button>
       </div>
 
-      {/* 搜索栏 */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="按姓名、邮箱或用户名搜索用户..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-        />
+      {/* 搜索区域 */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            placeholder="按姓名、邮箱或用户名搜索..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+          />
+        </div>
       </div>
 
       {error && (

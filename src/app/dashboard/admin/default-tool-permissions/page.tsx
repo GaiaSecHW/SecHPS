@@ -222,15 +222,15 @@ function DefaultToolPermissionsContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
-            <Shield className="h-6 w-6" />
-            默认工具权限配置
-          </h1>
-          <p className="text-gray-400 mt-1">
-            配置新建项目时继承的工具权限规则
-          </p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Shield size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">默认工具权限配置</h1>
+            <p className="text-sm text-gray-400 mt-0.5">配置新建项目时继承的工具权限规则</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button

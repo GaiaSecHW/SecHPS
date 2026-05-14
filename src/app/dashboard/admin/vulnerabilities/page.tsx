@@ -354,11 +354,16 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-100">漏洞管理</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          查看和管理系统中的安全漏洞
-        </p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Bug size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">漏洞管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">查看和管理系统中的安全漏洞</p>
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -420,42 +425,47 @@ ${vuln.POC ? '```\n' + vuln.POC + '\n```' : '无'}
         </div>
       )}
 
-{/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+{/* 搜索和筛选 */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 搜索框 */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
               placeholder="搜索漏洞..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
             />
           </div>
+          
+          {/* 筛选控件 */}
+          <div className="flex items-center gap-3">
+            <select
+              value={selectedProject}
+              onChange={(e) => { setSelectedProject(e.target.value); setCurrentPage(1); }}
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+            >
+              <option value="">所有项目</option>
+              {projects.map(project => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+            <select
+              value={selectedStatus}
+              onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+            >
+              <option value="">所有状态</option>
+              <option value="new">新建</option>
+              <option value="confirmed">已确认</option>
+              <option value="false-positive">误报</option>
+              <option value="fixed">已修复</option>
+              <option value="verified">已验证</option>
+            </select>
+          </div>
         </div>
-        <select
-          value={selectedProject}
-          onChange={(e) => { setSelectedProject(e.target.value); setCurrentPage(1); }}
-          className="w-40 px-4 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
-        >
-          <option value="">所有项目</option>
-          {projects.map(project => (
-            <option key={project.id} value={project.id}>{project.name}</option>
-          ))}
-        </select>
-        <select
-          value={selectedStatus}
-          onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
-          className="w-40 px-4 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
-        >
-          <option value="">所有状态</option>
-          <option value="new">新建</option>
-          <option value="confirmed">已确认</option>
-          <option value="false-positive">误报</option>
-          <option value="fixed">已修复</option>
-          <option value="verified">已验证</option>
-        </select>
       </div>
 
       {/* Vulnerabilities List */}
