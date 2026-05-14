@@ -144,7 +144,7 @@ export async function PATCH(
       },
     });
 
-    logger.update(LOG_MODULES.MCP, payload, id, { name: updatedServer.name });
+    logger.update(LOG_MODULES.MCP, payload, `mcp/${id}`, { name: updatedServer.name });
 
     return NextResponse.json({
       mcpServer: {
@@ -203,7 +203,7 @@ export async function DELETE(
       where: { id },
     });
 
-    logger.delete(LOG_MODULES.MCP, payload, id, { name: existingServer.name });
+    logger.delete(LOG_MODULES.MCP, payload, `mcp/${id}`, { name: existingServer.name });
 
     return NextResponse.json({ success: true });
   } catch (error) {

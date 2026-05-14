@@ -1,12 +1,16 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    const workers = await prisma.codeswarmWorker.findMany({
-      orderBy: { lastHeartbeat: 'desc' },
-      take: 100,
-    });
+    // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
+    const workers = await prisma.$queryRaw`
+      SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks",
+             token, "lastHeartbeat", "createdAt", "updatedAt"
+      FROM "CodeswarmWorker"
+      ORDER BY "lastHeartbeat" DESC
+      LIMIT 100
+    ` as any[];
 
     return NextResponse.json({ workers });
   } catch (error) {

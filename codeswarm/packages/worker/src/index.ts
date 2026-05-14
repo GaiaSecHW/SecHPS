@@ -6,6 +6,7 @@ const config = {
   port: parseInt(process.env.PORT || '8080'),
   maxConcurrent: parseInt(process.env.MAX_CONCURRENT || '5'),
   orchestratorUrl: process.env.ORCHESTRATOR_URL || 'http://localhost:3000',
+  address: process.env.WORKER_ADDRESS || undefined,  // 可访问的外部地址
 };
 
 const daemon = new WorkerDaemon(config);

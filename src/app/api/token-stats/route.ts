@@ -1,5 +1,5 @@
 ﻿import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma';
+import { prisma, Prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponseNested, isAdmin } from '@/lib/api-auth';
 import { hasPermission } from '@/lib/auth';
 import { PERMISSIONS } from '@/types/permissions';
@@ -316,77 +316,72 @@ export async function GET(request: Request) {
   }
 }
 
-// 获取趋势数据（按日期分组）
+// 获取趋势数据（按日期分组，DB 侧聚合）
 async function getTrendData(tokenWhereClause: any, period: string) {
   const now = new Date();
-  let groupByFormat: string;
+  let truncUnit: string;
   let daysBack: number;
 
   switch (period) {
     case 'day':
-      // 按小时分组，过去24小时
       daysBack = 1;
-      groupByFormat = 'hour';
+      truncUnit = 'hour';
       break;
     case 'week':
-      // 按天分组，过去7天
       daysBack = 7;
-      groupByFormat = 'day';
+      truncUnit = 'day';
       break;
     case 'month':
-      // 按天分组，过去30天
       daysBack = 30;
-      groupByFormat = 'day';
+      truncUnit = 'day';
       break;
     case 'year':
-      // 按月分组，过去12个月
       daysBack = 365;
-      groupByFormat = 'month';
+      truncUnit = 'month';
       break;
     default:
       daysBack = 7;
-      groupByFormat = 'day';
+      truncUnit = 'day';
   }
 
-  // 使用 JS 侧分组
   const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
-  
-  // 调整时间范围（TokenUsage 使用 createdAt）
-  const adjustedWhereClause = {
-    ...tokenWhereClause,
-    createdAt: {
-      gte: startDate,
-    },
-  };
 
-  // 获取所有 token 使用记录
-  const tokenUsages = await prisma.tokenUsage.findMany({
-    where: adjustedWhereClause,
-    select: {
-      createdAt: true,
-      inputTokens: true,
-      outputTokens: true,
-      totalTokens: true,
-      estimatedCost: true,
-    },
-    orderBy: {
-      createdAt: 'asc',
-    },
-  });
+  const conditions: Prisma.Sql[] = [Prisma.sql`"createdAt" >= ${startDate}`];
 
-  // 手动分组
-  const groups = new Map<string, any>();
-  
-  for (const usage of tokenUsages) {
+  if (tokenWhereClause.projectId) {
+    if (typeof tokenWhereClause.projectId === 'string') {
+      conditions.push(Prisma.sql`"projectId" = ${tokenWhereClause.projectId}`);
+    } else if (Array.isArray(tokenWhereClause.projectId?.in)) {
+      conditions.push(Prisma.sql`"projectId" = ANY(${tokenWhereClause.projectId.in})`);
+    }
+  }
+  if (tokenWhereClause.userId) {
+    conditions.push(Prisma.sql`"userId" = ${tokenWhereClause.userId}`);
+  }
+
+  const whereClause = Prisma.join(conditions, ' AND ');
+
+  type TrendRow = { bucket: Date; inputTokens: bigint; outputTokens: bigint; estimatedCost: number; callCount: bigint };
+  // inputTokens 含历史上下文，取 MAX；outputTokens 是新增输出，取 SUM
+  const rows = await prisma.$queryRaw<TrendRow[]>`
+    SELECT
+      date_trunc(${truncUnit}, "createdAt") AS bucket,
+      MAX("inputTokens")::bigint AS "inputTokens",
+      SUM("outputTokens")::bigint AS "outputTokens",
+      SUM("estimatedCost") AS "estimatedCost",
+      COUNT(*)::bigint AS "callCount"
+    FROM "TokenUsage"
+    WHERE ${whereClause}
+    GROUP BY date_trunc(${truncUnit}, "createdAt")
+    ORDER BY date_trunc(${truncUnit}, "createdAt") ASC
+  `;
+
+  return rows.map(row => {
+    const date = new Date(row.bucket);
     let key: string;
-    const date = new Date(usage.createdAt);
-    
-    switch (groupByFormat) {
+    switch (truncUnit) {
       case 'hour':
         key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}-${date.getHours()}`;
-        break;
-      case 'day':
-        key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
         break;
       case 'month':
         key = `${date.getFullYear()}-${date.getMonth() + 1}`;
@@ -394,26 +389,15 @@ async function getTrendData(tokenWhereClause: any, period: string) {
       default:
         key = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
     }
-
-    const existing = groups.get(key) || {
+    const inputTokens = Number(row.inputTokens);
+    const outputTokens = Number(row.outputTokens);
+    return {
       date: key,
-      inputTokens: 0,
-      outputTokens: 0,
-      totalTokens: 0,
-      estimatedCost: 0,
-      callCount: 0,
+      inputTokens,
+      outputTokens,
+      totalTokens: inputTokens + outputTokens,
+      estimatedCost: Number(row.estimatedCost),
+      callCount: Number(row.callCount),
     };
-    
-    // inputTokens 包含历史上下文，不应累加，取最大值代表最终上下文大小
-    // outputTokens 是新增的输出，可以累加
-    existing.inputTokens = Math.max(existing.inputTokens, usage.inputTokens || 0);
-    existing.outputTokens += usage.outputTokens || 0;
-    existing.totalTokens = existing.inputTokens + existing.outputTokens;  // 重新计算，避免重复
-    existing.estimatedCost += usage.estimatedCost || 0;
-    existing.callCount += 1;
-    
-    groups.set(key, existing);
-  }
-
-  return Array.from(groups.values()).sort((a, b) => a.date.localeCompare(b.date));
+  });
 }

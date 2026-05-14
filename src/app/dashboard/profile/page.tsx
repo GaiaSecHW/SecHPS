@@ -146,12 +146,17 @@ export default function ProfilePage() {
 
   return (
     <div className="space-y-6">
-      {/* 页面标题 */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-100">个人中心</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          管理您的个人信息和账户设置
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <User size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">个人中心</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理个人信息和账户设置</p>
+          </div>
+        </div>
       </div>
 
       {error && (

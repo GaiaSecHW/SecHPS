@@ -68,6 +68,7 @@ interface Project {
   description?: string;
   projectPath?: string;
   techStack?: string;  // JSON 字符串
+  agentAppId?: string;  // 关联的智能体ID
   status: 'idle' | 'running' | 'completed' | 'failed';
   files?: ProjectFile[];
   evaluations?: EvaluationRecord[];
@@ -111,7 +112,11 @@ export default function SessionsPage() {
   const [startingProject, setStartingProject] = useState<string | null>(null);
   // 当前用户信息
   const [user, setUser] = useState<{ id?: string; roles?: string[] } | null>(null);
-  // 技术栈选择状态
+  // 智能体选择状态
+  const [agentApps, setAgentApps] = useState<{ id: string; name: string; engine: string }[]>([]);
+  const [selectedAgentAppId, setSelectedAgentAppId] = useState<string>('');
+  const [loadingAgentApps, setLoadingAgentApps] = useState(false);
+  // 技术栈选择状态（仅用于编辑弹窗）
   const [projectTechStack, setProjectTechStack] = useState<string[]>([]);
   const [techStackSearch, setTechStackSearch] = useState('');
   const [showTechStackDropdown, setShowTechStackDropdown] = useState(false);
@@ -194,6 +199,24 @@ export default function SessionsPage() {
     }
   };
 
+  const fetchAgentApps = async () => {
+    try {
+      setLoadingAgentApps(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/agent-apps', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAgentApps(data.apps || []);
+      }
+    } catch (error) {
+      console.error('获取智能体列表失败:', error);
+    } finally {
+      setLoadingAgentApps(false);
+    }
+  };
+
   useEffect(() => {
     // 获取当前用户信息
     const userData = localStorage.getItem('user');
@@ -202,6 +225,7 @@ export default function SessionsPage() {
     }
     fetchProjects();
     fetchWorkflows();
+    fetchAgentApps();
   }, []); // 只在组件挂载时执行一次
 
   // 单独的 effect 处理自动刷新
@@ -526,6 +550,13 @@ export default function SessionsPage() {
   const createProject = async () => {
     if (!projectName.trim()) {
       toast.error('请输入任务名称');
+      return;
+    }
+    if (!selectedAgentAppId) {
+      toast.error('请选择智能体');
+      return;
+    }
+    if (uploadedFiles.length === 0) {
       toast.error('请至少上传一个文件');
       return;
     }
@@ -536,8 +567,7 @@ export default function SessionsPage() {
       const token = localStorage.getItem('token');
       const formData = new FormData();
       formData.append('name', projectName);
-      formData.append('description', projectDescription);
-      formData.append('techStack', JSON.stringify(projectTechStack));
+      formData.append('agentAppId', selectedAgentAppId);
 
       // 从 uploadedFiles 中获取文件对象
       for (const uploadedFile of uploadedFiles) {
@@ -549,7 +579,7 @@ export default function SessionsPage() {
       // 更新文件状态为上传中
       setUploadedFiles(prev => prev.map(f => ({ ...f, status: 'uploading' as const })));
 
-      const response = await fetch('/api/projects', {
+      const response = await fetch('/api/projects/create-and-start', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -572,10 +602,8 @@ export default function SessionsPage() {
       setTimeout(() => {
         setShowCreateModal(false);
         setProjectName('');
-        setProjectDescription('');
         setUploadedFiles([]);
-        setProjectTechStack([]);
-        setTechStackSearch('');
+        setSelectedAgentAppId('');
       }, 1000);
 
       await fetchProjects();
@@ -1197,20 +1225,24 @@ if (loading) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">我的任务</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理您的 AI 编程评估任务
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <MessageSquare size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">我的任务</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理 AI 编程评估任务</p>
+          </div>
         </div>
-
+        
         <button
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <Plus size={20} />
-          <span>新建任务</span>
+          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+          新建任务
         </button>
       </div>
 
@@ -1235,9 +1267,9 @@ if (loading) {
           {projects.map((project) => (
             <div
               key={project.id}
-              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow"
+              className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
             >
-              <div className="p-6">
+              <div className="p-6 flex-1">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
                     <h3 className="text-lg font-semibold text-gray-100 truncate max-w-[300px]" title={project.name || '未命名任务'}>
@@ -1380,7 +1412,7 @@ if (loading) {
                 const config = statusConfig[latestEval.status] || statusConfig.completed;
                 
                 return (
-                  <div className={`${config.bg} px-6 py-2 border-t ${config.border}`}>
+                  <div className={`${config.bg} px-6 py-2 border-t ${config.border} mt-auto`}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center space-x-3">
                         <div className="flex items-center space-x-2">
@@ -1420,7 +1452,7 @@ if (loading) {
                 );
               })()}
 
-              <div className="bg-dark-bg px-6 py-3 border-t border-gray-700/50">
+              <div className="bg-dark-bg px-6 py-3 border-t border-gray-700/50 mt-auto">
                 {/* 第一行：灰盒渗透、漏洞管理 */}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex space-x-2">
@@ -1454,9 +1486,15 @@ if (loading) {
                     {(user?.id === project.userId || user?.roles?.includes('admin')) && (
                       <button
                         onClick={() => {
-                          setSelectedProject(project);
-                          setSelectedWorkflow(null);
-                          setShowWorkflowModal(true);
+                          if (project.agentAppId) {
+                            // 直接模式：不弹对话框，直接启动
+                            startProject(project.id);
+                          } else {
+                            // 兼容旧数据：保留工作流选择流程
+                            setSelectedProject(project);
+                            setSelectedWorkflow(null);
+                            setShowWorkflowModal(true);
+                          }
                         }}
                         disabled={startingProject === project.id || project.hasRunningEvaluation || project.evaluations?.some((e: any) => e.status === 'running' || e.status === 'queued' || e.status === 'preparing')}
                         className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-400 hover:text-green-800 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1513,10 +1551,8 @@ if (loading) {
                 onClick={() => {
                   setShowCreateModal(false);
                   setProjectName('');
-                  setProjectDescription('');
                   setUploadedFiles([]);
-                  setProjectTechStack([]);
-                  setTechStackSearch('');
+                  setSelectedAgentAppId('');
                 }}
                 className="text-gray-400 hover:text-gray-400"
               >
@@ -1541,106 +1577,23 @@ if (loading) {
               </div>
 
               <div>
-                <label htmlFor="projectDescription" className="block text-sm font-medium text-gray-300">
-                  任务描述
+                <label htmlFor="agentApp" className="block text-sm font-medium text-gray-300 mb-2">
+                  选择智能体 *
                 </label>
-                <textarea
-                  id="projectDescription"
-                  rows={3}
-                  value={projectDescription}
-                  onChange={(e) => setProjectDescription(e.target.value)}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                  placeholder="请输入任务描述（可选）"
-                />
-              </div>
-
-              {/* 技术栈选择 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  技术栈
-                </label>
-                <div className="relative">
-                  {/* 已选择的技术栈标签 */}
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {projectTechStack.map((tsId) => {
-                      const opt = techStackOptions.find(o => o.id === tsId);
-                      return (
-                      <span
-                        key={tsId}
-                        className="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm"
-                      >
-                        {opt?.name || tsId}
-                        <button
-                          type="button"
-                          onClick={() => setProjectTechStack(projectTechStack.filter((t) => t !== tsId))}
-                          className="ml-2 text-blue-400 hover:text-blue-800"
-                        >
-                          <X size={14} />
-                        </button>
-                      </span>
-                      );
-                    })}
-                  </div>
-                  {/* 技术栈搜索和选择 */}
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={techStackSearch}
-                      onChange={(e) => {
-                        setTechStackSearch(e.target.value);
-                        setShowTechStackDropdown(true);
-                      }}
-                      onFocus={() => setShowTechStackDropdown(true)}
-                      placeholder={loadingTechStack ? "加载中..." : "搜索并选择技术栈..."}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                      disabled={loadingTechStack}
-                    />
-                    {/* 下拉选项 */}
-                    {showTechStackDropdown && !loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                        {techStackOptions
-                          .filter((option) =>
-                            option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                            !projectTechStack.includes(option.id)
-                          )
-
-                          .map((option) => (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => {
-                                setProjectTechStack([...projectTechStack, option.id]);
-                                setTechStackSearch('');
-                                setShowTechStackDropdown(false);
-                              }}
-                              className="w-full px-4 py-2 text-left hover:bg-dark-surface-hover text-sm"
-                            >
-                              {option.name}
-                            </button>
-                          ))}
-                        {techStackOptions.filter((option) =>
-                          option.name.toLowerCase().includes(techStackSearch.toLowerCase()) &&
-                          !projectTechStack.includes(option.id)
-                        ).length === 0 && (
-                          <div className="px-4 py-2 text-sm text-gray-500">
-                            无匹配选项
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {loadingTechStack && (
-                      <div className="absolute z-10 w-full mt-1 bg-dark-surface border border-gray-600 rounded-md shadow-lg p-4">
-                        <div className="flex items-center justify-center">
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                          <span className="text-sm text-gray-500">加载技术栈选项...</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    可选择多个技术栈，帮助匹配适合的审计工具
-                  </p>
-                </div>
+                <select
+                  id="agentApp"
+                  value={selectedAgentAppId}
+                  onChange={(e) => setSelectedAgentAppId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                  disabled={loadingAgentApps}
+                >
+                  <option value="">{loadingAgentApps ? '加载中...' : '请选择智能体'}</option>
+                  {agentApps.map((app) => (
+                    <option key={app.id} value={app.id}>
+                      {app.name} ({app.engine})
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -2699,42 +2652,43 @@ if (loading) {
             </div>
 
             {/* 搜索和过滤 */}
-            <div className="px-6 py-3 border-b border-gray-100 bg-dark-bg flex gap-3">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                <input
-                  type="text"
-                  placeholder="搜索漏洞标题、类型..."
-                  value={vulnSearchTerm}
-                  onChange={(e) => {
-                    setVulnSearchTerm(e.target.value);
-                    setVulnPage(1);
-                  }}
-                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
+            <div className="px-6 py-4 border-b border-gray-700/50 bg-dark-surface">
+              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                {/* 搜索框 */}
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="搜索漏洞..."
+                    value={vulnSearchTerm}
+                    onChange={(e) => { setVulnSearchTerm(e.target.value); setVulnPage(1); }}
+                    className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                  />
+                </div>
+                
+                {/* 筛选控件 */}
+                <div className="flex items-center gap-3">
+                  <select
+                    value={vulnStatusFilter}
+                    onChange={(e) => { setVulnStatusFilter(e.target.value); setVulnPage(1); }}
+                    className="w-[120px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+                  >
+                    <option value="">全部状态</option>
+                    <option value="new">新建</option>
+                    <option value="confirmed">已确认</option>
+                    <option value="fixed">已修复</option>
+                    <option value="verified">已验证</option>
+                    <option value="false-positive">误报</option>
+                  </select>
+                  <button
+                    onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, 1)}
+                    className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all flex items-center gap-2"
+                  >
+                    <RefreshCw size={16} />
+                    查询
+                  </button>
+                </div>
               </div>
-              <select
-                value={vulnStatusFilter}
-                onChange={(e) => {
-                  setVulnStatusFilter(e.target.value);
-                  setVulnPage(1);
-                }}
-                className="px-3 py-1.5 text-sm border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">全部状态</option>
-                <option value="new">新建</option>
-                <option value="confirmed">已确认</option>
-                <option value="fixed">已修复</option>
-                <option value="verified">已验证</option>
-                <option value="false-positive">误报</option>
-              </select>
-              <button
-                onClick={() => vulnerabilityProject && handleVulnerabilityManagement(vulnerabilityProject, 1)}
-                className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center gap-1"
-              >
-                <RefreshCw size={14} />
-                查询
-              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto">

@@ -218,55 +218,56 @@ export default function NewImpactPage() {
         </p>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+      {/* 搜索和筛选 */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 搜索框 */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
-              placeholder="搜索 Skill ID..."
+              placeholder="搜索 Skill..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
             />
           </div>
+          
+          {/* 筛选控件 */}
+          <div className="flex items-center gap-3">
+            <Filter size={18} className="text-gray-400" />
+            <select
+              value={selectedStatus}
+              onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+            >
+              <option value="">所有状态</option>
+              <option value="pending">待审核</option>
+              <option value="analyzed">已分析</option>
+              <option value="actioned">已处理</option>
+              <option value="dismissed">已忽略</option>
+            </select>
+            <Layers size={18} className="text-gray-400" />
+            <select
+              value={minOverlapScore}
+              onChange={(e) => { setMinOverlapScore(e.target.value); setCurrentPage(1); }}
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+            >
+              <option value="">所有重叠度</option>
+              <option value="0.85">高重叠 (≥85%)</option>
+              <option value="0.75">中重叠 (≥75%)</option>
+              <option value="0.6">低重叠 (≥60%)</option>
+            </select>
+            <button
+              onClick={fetchAnalyses}
+              disabled={loading}
+              className="flex items-center gap-2 px-3 py-2.5 bg-dark-bg text-gray-300 rounded-lg hover:bg-gray-700 disabled:opacity-50 text-sm transition-colors"
+            >
+              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+              刷新
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Filter size={20} className="text-gray-400" />
-          <select
-            value={selectedStatus}
-            onChange={(e) => { setSelectedStatus(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="">所有状态</option>
-            <option value="pending">待审核</option>
-            <option value="analyzed">已分析</option>
-            <option value="actioned">已处理</option>
-            <option value="dismissed">已忽略</option>
-          </select>
-        </div>
-        <div className="flex items-center gap-2">
-          <Layers size={20} className="text-gray-400" />
-          <select
-            value={minOverlapScore}
-            onChange={(e) => { setMinOverlapScore(e.target.value); setCurrentPage(1); }}
-            className="px-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="">所有重叠度</option>
-            <option value="0.85">高重叠 (≥85%)</option>
-            <option value="0.75">中重叠 (≥75%)</option>
-            <option value="0.6">低重叠 (≥60%)</option>
-          </select>
-        </div>
-        <button
-          onClick={fetchAnalyses}
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 bg-dark-surface-hover text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors disabled:opacity-50"
-        >
-          <RefreshCw size={16} className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
-          刷新
-        </button>
       </div>
 
       {/* Error */}

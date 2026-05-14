@@ -208,52 +208,51 @@ export default function UserTokenStatsPage() {
           onClick={() => router.push('/dashboard/token-stats')}
           className="flex items-center text-gray-400 hover:text-gray-100 mb-4"
         >
-          <ArrowLeft size={20} className="mr-2" />
+          <ArrowLeft size={18} className="mr-2" />
           返回 Token 统计
         </button>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-100 flex items-center">
-              <Users className="mr-2" size={28} />
-              用户 Token 统计
-            </h1>
-            <p className="text-gray-400 mt-1">查看所有用户的 Token 使用情况</p>
-          </div>
-          <div className="flex items-center space-x-3">
-            {/* 搜索框 */}
-            <div className="relative">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="搜索用户..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 w-200"
-              />
+        <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+              <Users size={18} className="text-white" />
             </div>
-            {/* 时间选择 */}
-            <div className="flex items-center space-x-2">
-              <Calendar size={20} className="text-gray-400" />
+            <div>
+              <h1 className="text-xl font-semibold text-white">用户 Token 统计</h1>
+              <p className="text-sm text-gray-400 mt-0.5">查看所有用户的 Token 使用情况</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+              {/* 搜索框 */}
+              <div className="relative w-48">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="搜索用户..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                />
+              </div>
+              {/* 时间选择 */}
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-[100px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
               >
                 <option value="day">今日</option>
                 <option value="week">本周</option>
                 <option value="month">本月</option>
                 <option value="year">本年</option>
               </select>
+              {/* 导出按钮 */}
+              <button
+                onClick={exportCSV}
+                className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 hover:bg-emerald-400 transition-all"
+              >
+                <Download size={18} />
+                导出 CSV
+              </button>
             </div>
-            {/* 导出按钮 */}
-            <button
-              onClick={exportCSV}
-              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-600 transition-colors"
-            >
-              <Download size={18} className="mr-2" />
-              导出 CSV
-            </button>
-          </div>
         </div>
       </div>
 

@@ -4,13 +4,25 @@ import {
   buildSystemPrompt,
   buildUserPrompt,
   buildFullSkill,
-  getStandardOutputTemplate,
   extractModelResponse,
   extractCwe,
   type SkillIntent,
 } from '@/lib/skill-builder';
+import { prisma } from '@/lib/prisma';
 import { routeRequestWithDefaultModel, getDefaultModelInfo, RouteError } from '@/lib/model-client';
 import { logger, LOG_MODULES } from '@/lib/logger';
+
+async function getStandardOutputTemplate(): Promise<string | null> {
+  try {
+    const config = await prisma.opencodeConfig.findFirst({
+      where: { isActive: true },
+      select: { skillOutputTemplate: true },
+    });
+    return config?.skillOutputTemplate || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 生成 Skill 定义 API

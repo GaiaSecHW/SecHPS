@@ -11,11 +11,10 @@ interface Tenant {
 
 interface FormData {
   name: string;
-  engine: 'opencode' | 'claudecode' | '';
+  engine: 'opencode' | 'claudecode' | 'agentflow' | '';
   defaultAgentName: string;
   startCommand?: string;
   tenantId: string;
-  isPublic: boolean;
 }
 
 interface AgentHarnessFileData {
@@ -39,34 +38,32 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     defaultAgentName: '',
     startCommand: '',
     tenantId: '',
-    isPublic: false,
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPublic, setIsPublic] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [userTenantId, setUserTenantId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // 检查用户是否是 ICSL 或管理员
     const token = localStorage.getItem('token');
     if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
-        const icsOrAdmin = payload.isIcsTenant === true || (Array.isArray(payload.roles) && payload.roles.includes('admin'));
-        setIsIcsOrAdmin(icsOrAdmin);
-        setUserTenantId(payload.tenantId ?? null);
+        const roles = Array.isArray(payload.roles) ? payload.roles : [];
+        const admin =
+          payload.isIcsTenant === true ||
+          payload.isPlatformAdmin === true ||
+          (payload.tenantId == null && roles.includes('admin'));
+        setIsIcsOrAdmin(admin);
 
-        // 如果是 ICSL 或管理员，加载租户列表
-        if (icsOrAdmin) {
-          fetch('/api/tenants', {
+        if (admin) {
+          fetch('/api/admin/tenants', {
             headers: { Authorization: `Bearer ${token}` },
           })
             .then(res => res.json())
-            .then(data => setTenants(data.tenants || []))
-            .catch(() => setTenants([]));
+            .then(data => setTenants(data.tenants ?? []))
+            .catch(() => {});
         }
       } catch {
         setIsIcsOrAdmin(false);
@@ -93,9 +90,14 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       toast.error('请输入默认智能体名称');
       return;
     }
+    if (isIcsOrAdmin && !formData.tenantId) {
+      toast.error('请选择租户');
+      return;
+    }
 
     setIsSubmitting(true);
     try {
+      const isPublic = formData.tenantId === '__public__';
       await onSubmit(formData, agentHarnessFile, isPublic);
       toast.success('应用创建成功');
       handleClose();
@@ -107,9 +109,8 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', tenantId: '', isPublic: false });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', tenantId: '' });
     setAgentHarnessFile(null);
-    setIsPublic(false);
     onClose();
   };
 
@@ -177,48 +178,28 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               <option value="">请选择引擎</option>
               <option value="opencode">opencode</option>
               <option value="claudecode">claudecode</option>
+              <option value="agentflow">AgentFlow</option>
             </select>
           </div>
 
-          <div>
-            <label className="flex items-center space-x-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.isPublic}
-                onChange={(e) => setFormData({ ...formData, isPublic: e.target.checked, tenantId: e.target.checked ? '' : formData.tenantId })}
-                className="h-4 w-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
-                disabled={isSubmitting}
-              />
-              <span className="text-sm font-medium text-gray-300">公开应用（所有租户可用）</span>
-            </label>
-            <p className="mt-1 text-xs text-gray-500">勾选后此应用不绑定任何租户，所有用户可见</p>
-          </div>
-
-          {!formData.isPublic && (
+          {isIcsOrAdmin && (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 租户 <span className="text-red-500">*</span>
               </label>
-              {isIcsOrAdmin ? (
-                <select
-                  value={formData.tenantId}
-                  onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  disabled={isSubmitting}
-                >
-                  <option value="">请选择租户</option>
-                  {tenants.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  value={userTenantId ? '当前租户' : '无租户'}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-400"
-                />
-              )}
+              <select
+                value={formData.tenantId}
+                onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                disabled={isSubmitting}
+              >
+                <option value="">请选择租户</option>
+                <option value="__public__">所有租户共享（公开）</option>
+                {tenants.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500">选择"所有租户共享"则不绑定任何租户，所有用户可见</p>
             </div>
           )}
 
@@ -317,22 +298,6 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               disabled={isSubmitting}
             />
           </div>
-
-          {isIcsOrAdmin && (
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isPublic"
-                checked={isPublic}
-                onChange={(e) => setIsPublic(e.target.checked)}
-                className="w-4 h-4 text-primary-600 border-gray-600 rounded focus:ring-primary-500"
-                disabled={isSubmitting}
-              />
-              <label htmlFor="isPublic" className="text-sm font-medium text-gray-300">
-                共享给所有租户（跨租户共享）
-              </label>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">

@@ -6,6 +6,7 @@ import {
   Layers,
   Edit,
   FileText,
+  Shield,
 } from 'lucide-react';
 import { AdminGuard } from '@/components/PermissionGuard';
 import { useAuth } from '@/hooks/useAuth';
@@ -98,8 +99,17 @@ function FSMTemplatesPageContent() {
 
   if (error || !template) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold text-gray-100">威胁建模工作流配置</h1>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+              <Shield size={18} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-white">威胁建模工作流配置</h1>
+            </div>
+          </div>
+        </div>
         <ErrorAlert>{error || '未找到威胁建模模板'}</ErrorAlert>
       </div>
     );
@@ -108,11 +118,16 @@ function FSMTemplatesPageContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-100">威胁建模配置</h1>
-        <p className="mt-1 text-sm text-gray-400">
-          编辑各阶段的 Skill 内容，定制威胁建模分析行为
-        </p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Layers size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">威胁建模配置</h1>
+            <p className="text-sm text-gray-400 mt-0.5">编辑各阶段的 Skill 内容，定制威胁建模行为</p>
+          </div>
+        </div>
       </div>
 
       {/* 固定流程 */}

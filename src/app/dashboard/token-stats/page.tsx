@@ -224,16 +224,16 @@ export default function TokenStatsPage() {
 
   return (
     <div className="space-y-6">
-      {/* 头部 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100 flex items-center">
-            <Coins className="mr-2 text-blue-400" size={28} />
-            Token 消耗统计
-          </h1>
-          <p className="mt-1 text-sm text-gray-400">
-            查看大模型 API 调用的 Token 消耗情况
-          </p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Coins size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Token 消耗统计</h1>
+            <p className="text-sm text-gray-400 mt-0.5">查看大模型 API 调用 Token 消耗</p>
+          </div>
         </div>
       </div>
 

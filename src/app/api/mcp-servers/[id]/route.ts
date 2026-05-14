@@ -138,7 +138,7 @@ export async function PATCH(
       },
     });
 
-    logger.update(LOG_MODULES.MCP, payload, id, { name: updated.name });
+    logger.update(LOG_MODULES.MCP, payload, `mcp/${id}`, { name: updated.name });
     return NextResponse.json({ mcpServer: updated });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.MCP, '更新 MCP 服务器配置失败', error instanceof Error ? error.message : error);
@@ -182,7 +182,7 @@ export async function DELETE(
       where: { id },
     });
 
-    logger.delete(LOG_MODULES.MCP, payload, id, { name: existing.name });
+    logger.delete(LOG_MODULES.MCP, payload, `mcp/${id}`, { name: existing.name });
     return NextResponse.json({ success: true });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.MCP, '删除 MCP 服务器配置失败', error instanceof Error ? error.message : error);

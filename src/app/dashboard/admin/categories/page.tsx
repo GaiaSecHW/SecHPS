@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2, GripVertical, Save, Loader2, ArrowLeft, AlertCircle, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Save, Loader2, ArrowLeft, AlertCircle, CheckCircle, Tags } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
 import { AdminGuard } from '@/components/PermissionGuard';
@@ -137,17 +137,20 @@ function CategoriesManagementContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => router.back()}
             className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
           >
-            <ArrowLeft size={20} />
+            <ArrowLeft size={18} className="text-gray-400" />
           </button>
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Tags size={18} className="text-white" />
+          </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-100">漏洞分类管理</h1>
-            <p className="text-sm text-gray-400">管理 Skills 的漏洞分类列表</p>
+            <h1 className="text-xl font-semibold text-white">漏洞分类管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理 Skills 的漏洞分类列表</p>
           </div>
         </div>
         <div className="flex items-center gap-3">

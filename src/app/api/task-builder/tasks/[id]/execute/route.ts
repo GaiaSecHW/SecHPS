@@ -42,6 +42,10 @@ export async function POST(
       return NextResponse.json({ error: '任务不存在' }, { status: 404 });
     }
 
+    if (!auth.payload.roles?.includes('admin') && task.userId !== auth.payload.userId) {
+      return NextResponse.json({ error: '无权执行此任务' }, { status: 403 });
+    }
+
     if (!['pending', 'completed', 'failed'].includes(task.status)) {
       return NextResponse.json({ error: '任务状态不允许执行' }, { status: 400 });
     }
@@ -52,6 +56,7 @@ export async function POST(
         engine: true,
         name: true,
         defaultAgentName: true,
+        startCommand: true,
       },
     });
 
@@ -105,6 +110,7 @@ export async function POST(
     const timeoutSec = 300;
     const agent = agentApp?.engine || 'opencode';
     const defaultAgentName = agentApp?.defaultAgentName || undefined;
+    const startCommand = agentApp?.startCommand || undefined;
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const codeswarmResponse = await fetch(`${baseUrl}/api/codeswarm/tasks`, {
@@ -119,6 +125,7 @@ export async function POST(
         timeoutSec,
         agent,
         defaultAgentName,
+        startCommand,
       }),
     });
 

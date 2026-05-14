@@ -396,35 +396,22 @@ function RoleCard({
 
 function PermissionCard({ permission }: { permission: any }) {
   return (
-    <div className="px-6 py-4 hover:bg-[#0F172A]">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center space-x-2">
-            <h3 className="text-lg font-semibold text-gray-100">
-              {permission.name}
-            </h3>
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-400">
-              {permission.module}
-            </span>
-          </div>
-
-          {permission.description && (
-            <p className="mt-1 text-sm text-gray-400">
-              {permission.description}
-            </p>
-          )}
-
-          <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
-            <div>
-              <span className="font-medium">操作:</span> {permission.action}
-            </div>
-            {permission.resource && (
-              <div>
-                <span className="font-medium">资源:</span> {permission.resource}
-              </div>
-            )}
-          </div>
+    <div>
+      <h3 className="font-medium text-gray-100">{permission.name}</h3>
+      {permission.description && (
+        <p className="mt-1 text-sm text-gray-400">
+          {permission.description}
+        </p>
+      )}
+      <div className="mt-2 flex items-center space-x-4 text-sm text-gray-500">
+        <div>
+          <span className="font-medium">操作:</span> {permission.action}
         </div>
+        {permission.resource && (
+          <div>
+            <span className="font-medium">资源:</span> {permission.resource}
+          </div>
+        )}
       </div>
     </div>
   );

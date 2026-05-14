@@ -12,6 +12,7 @@ import type {
   Client,
   Agent,
   StopReason,
+  SessionMode,
 } from '@agentclientprotocol/sdk';
 
 // ============================================================================
@@ -40,6 +41,8 @@ export interface ACPClientConfig {
   command?: string;
   /** Model to use (e.g. "custom-gpt5/gpt-5-codex") */
   model?: string;
+  /** Agent to use (e.g. "nazhua-audit") */
+  agent?: string;
 }
 
 export { type StopReason };
@@ -58,6 +61,7 @@ export class ACPClient {
   private exitCodePromise: Promise<number | null>;
   private resolveExitCode!: (code: number | null) => void;
   private config!: ACPClientConfig;
+  private _spawnError: Error | null = null;
 
   constructor() {
     this.exitCodePromise = new Promise(resolve => {
@@ -70,19 +74,53 @@ export class ACPClient {
     Object.assign(this.eventHandlers, events);
   }
 
-  /** Start opencode acp process and initialize connection */
+/** Start opencode acp process and initialize connection */
   async start(config: ACPClientConfig): Promise<void> {
     if (this.process) throw new Error('ACPClient already started');
     if (this.destroyed) throw new Error('ACPClient was destroyed');
     this.config = config;
 
-    const cmd = config.command || 'opencode';
-    const env = { ...process.env, ...config.env };
+    // Determine command and args
+    let cmd: string;
+    let args: string[];
+    
+    if (process.platform === 'win32') {
+      // On Windows, use node to run opencode directly
+      const opencodePath = process.env.APPDATA 
+        ? `${process.env.APPDATA}\\npm\\node_modules\\opencode-ai\\bin\\opencode`
+        : null;
+      
+      if (opencodePath) {
+        cmd = process.execPath; // Use current node executable
+        args = [opencodePath, 'acp', '--cwd', config.cwd];
+        console.log(`[ACP] Using node: ${cmd}`);
+        console.log(`[ACP] Opencode path: ${opencodePath}`);
+      } else {
+        cmd = 'opencode';
+        args = ['acp', '--cwd', config.cwd];
+      }
+    } else {
+      cmd = config.command || 'opencode';
+      args = ['acp', '--cwd', config.cwd];
+    }
 
-    this.process = spawn(cmd, ['acp', '--cwd', config.cwd], {
+    // Build environment
+    const env: Record<string, string> = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (value !== undefined) {
+        env[key] = value;
+      }
+    }
+    if (config.env) {
+      Object.assign(env, config.env);
+    }
+
+    console.log(`[ACP] Starting: ${cmd} ${args.join(' ')}`);
+    console.log(`[ACP] cwd: ${config.cwd}`);
+
+    this.process = spawn(cmd, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
-      shell: true,
       cwd: config.cwd,
     });
 
@@ -96,14 +134,15 @@ export class ACPClient {
     });
 
     this.process.on('exit', (code) => {
+      console.log(`[ACP] Process exited with code ${code}`);
       this.resolveExitCode(code);
     });
 
     this.process.on('error', (error) => {
-      if (error.message.includes('ENOENT')) {
-        throw new Error('opencode not found. Install: npm i -g opencode-ai@latest');
-      }
-      throw error;
+      console.error(`[ACP] Process error: ${error.message}`);
+      // Don't throw immediately - let initialization fail naturally
+      // Store the error for later
+      this._spawnError = error;
     });
 
     // Convert Node streams to Web streams for the SDK
@@ -127,6 +166,16 @@ export class ACPClient {
     );
 
     // Initialize ACP connection
+    // Wait a bit for process to start, then check for spawn errors
+    await new Promise(resolve => setTimeout(resolve, 100));
+    if (this._spawnError) {
+      this.destroy();
+      if (this._spawnError.message.includes('ENOENT')) {
+        throw new Error('opencode not found. Install: npm i -g opencode-ai@latest');
+      }
+      throw this._spawnError;
+    }
+
     await this.connection.initialize({
       protocolVersion: PROTOCOL_VERSION,
       clientInfo: { name: 'codeswarm-worker', version: '0.1.0' },
@@ -138,14 +187,39 @@ export class ACPClient {
     this.initialized = true;
   }
 
-  /** Create a new session */
-  async createSession(): Promise<string> {
+  /** Create a new session, optionally switching to specified agent mode */
+  async createSession(agent?: string): Promise<string> {
     if (!this.initialized || !this.connection) throw new Error('ACPClient not initialized');
+    
+    // Pass cwd to newSession so opencode loads opencode.json from workspace
     const result = await this.connection.newSession({
-      cwd: '',
+      cwd: this.config.cwd,
       mcpServers: [],
     });
     this.sessionId = result.sessionId;
+    
+    // Log available modes for debugging
+    if (result.modes?.availableModes) {
+      console.log(`[ACP] Available modes: ${result.modes.availableModes.map((m: SessionMode) => m.id).join(', ')}`);
+      console.log(`[ACP] Current mode: ${result.modes.currentModeId}`);
+    }
+    
+    // If agent specified and modes available, switch to that mode
+    if (agent && result.modes?.availableModes) {
+      const targetMode = result.modes.availableModes.find((m: SessionMode) => m.id === agent);
+      if (targetMode && result.modes.currentModeId !== agent) {
+        console.log(`[ACP] Switching to agent mode: ${agent}`);
+        await this.connection.setSessionMode({
+          sessionId: this.sessionId,
+          modeId: agent,
+        });
+      } else if (!targetMode) {
+        console.warn(`[ACP] Agent mode '${agent}' not found in available modes`);
+      }
+    } else if (result.modes?.currentModeId) {
+      console.log(`[ACP] Using default agent from opencode.json: ${result.modes.currentModeId}`);
+    }
+    
     return this.sessionId!;
   }
 

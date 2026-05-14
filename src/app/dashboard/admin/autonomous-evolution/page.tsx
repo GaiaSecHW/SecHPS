@@ -321,10 +321,15 @@ function AutonomousEvolutionContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">执行进化管理</h1>
-          <p className="mt-1 text-sm text-gray-400">从评估日志中提取失败→成功经验，注入 System Prompt 跳过重复失败</p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Brain size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">执行进化管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">提取失败→成功经验，注入 System Prompt</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {/* Injection on/off toggle */}
@@ -332,13 +337,13 @@ function AutonomousEvolutionContent() {
             onClick={toggleInjection}
             className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded-lg border transition-colors ${
               injectionEnabled
-                ? 'bg-green-900/20 text-green-400 border-green-500/20 hover:bg-green-900/30'
-                : 'bg-[#0F172A] text-gray-500 border-gray-700/50 hover:bg-dark-surface-hover'
+                ? 'bg-emerald-900/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-900/30'
+                : 'bg-gray-800 text-gray-400 border-gray-600/50 hover:bg-gray-700'
             }`}
             title="控制提取时新经验是否默认启用"
           >
-            <span className={`w-7 h-4 rounded-full relative inline-block transition-colors ${injectionEnabled ? 'bg-green-600' : 'bg-gray-300'}`}>
-              <span className={`absolute top-0.5 w-3 h-3 bg-dark-surface rounded-full shadow transition-transform ${injectionEnabled ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            <span className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${injectionEnabled ? 'bg-emerald-500' : 'bg-gray-600'}`}>
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${injectionEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </span>
             自动启用
           </button>
@@ -352,7 +357,7 @@ function AutonomousEvolutionContent() {
           <div className="relative">
             <button
               onClick={() => setShowDropdown(!showDropdown)}
-              className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+              className="flex items-center gap-1 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-400 text-sm font-medium shadow-lg shadow-primary-500/25"
             >
               <Play size={14} />
               立即提取
@@ -459,40 +464,48 @@ function AutonomousEvolutionContent() {
       {/* Experiences Tab */}
       {activeTab === 'experiences' && (
         <>
-        <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1 relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input
-              type="text"
-              placeholder="搜索经验..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
-          <select
-            value={filterCategory}
-            onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">所有错误类型</option>
-            {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
-            ))}
-          </select>
-          <select
-            value={filterInjected}
-            onChange={e => { setFilterInjected(e.target.value); setPage(1); }}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">所有状态</option>
-            <option value="true">已注入</option>
-            <option value="false">未注入</option>
-          </select>
-          <button type="submit" className="px-4 py-2 bg-dark-surface-hover text-gray-300 rounded-lg text-sm hover:bg-dark-surface-hover">
-            搜索
-          </button>
-        </form>
+        {/* 搜索和筛选 */}
+        <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+          <form onSubmit={handleSearch} className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {/* 搜索框 */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="搜索经验..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              />
+            </div>
+            
+            {/* 筛选控件 */}
+            <div className="flex items-center gap-3">
+              <select
+                value={filterCategory}
+                onChange={e => { setFilterCategory(e.target.value); setPage(1); }}
+                className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-gray-100 text-sm focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">所有错误类型</option>
+                {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              <select
+                value={filterInjected}
+                onChange={e => { setFilterInjected(e.target.value); setPage(1); }}
+                className="w-[120px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-gray-100 text-sm focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">所有状态</option>
+                <option value="true">已注入</option>
+                <option value="false">未注入</option>
+              </select>
+              <button type="submit" className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
+                搜索
+              </button>
+            </div>
+          </form>
+        </div>
 
         <div className="space-y-3">
         {loading ? (

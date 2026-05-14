@@ -24,6 +24,9 @@ model AgentApp {
   updatedAt         DateTime
   Tenant            Tenant?  @relation(fields: [tenantId], references: [id])
   User              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ApiKeyAgents      ApiKeyAgent[]
+  Project           Project[]
+  AgentFlowPipeline AgentFlowPipeline[]
 
   @@index([tenantId])
   @@index([userId])
@@ -326,6 +329,7 @@ model CodeswarmTask {
   timeoutSec        Int?
   agent             String?
   defaultAgentName  String?
+  preferredWorkerNodeId String?
   events            String?
   result            String?
   error             String?
@@ -819,6 +823,7 @@ model Project {
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime
   techStack                 String?
+  agentAppId                String?
   AnalysisReport            AnalysisReport[]
   CodeKnowledge             CodeKnowledge[]
   DataFlow                  DataFlow[]
@@ -836,6 +841,7 @@ model Project {
   SkillVulnerabilityMapping SkillVulnerabilityMapping[]
   ToolPermission            ToolPermission[]
   Vulnerability             Vulnerability[]
+  AgentApp                  AgentApp?                   @relation(fields: [agentAppId], references: [id])
 
   @@index([name])
   @@index([status])
@@ -1076,6 +1082,9 @@ model Skill {
   @@index([isLatest])
   @@index([name])
   @@index([userId])
+  @@index([tenantId])
+  @@index([isLatest, isActive])
+  @@index([isLatest, tenantId])
 }
 
 model Skill2 {
@@ -1692,6 +1701,8 @@ model Tenant {
   TaskInstance    TaskInstance[]
   User            User[]
   Workflow        Workflow[]
+  ApiKey            ApiKey[]
+  AgentFlowPipeline AgentFlowPipeline[]
 }
 
 model TokenUsage {
@@ -1792,6 +1803,8 @@ model User {
   WorkflowShare_WorkflowShare_sharedWithToUser WorkflowShare[]       @relation("WorkflowShare_sharedWithToUser")
   WorkflowShare_WorkflowShare_sharedByToUser   WorkflowShare[]       @relation("WorkflowShare_sharedByToUser")
   OpencodeConfig                               OpencodeConfig[]
+  ApiKey                                       ApiKey[]
+  AgentFlowPipeline                            AgentFlowPipeline[]
 
   @@index([email])
   @@index([username])
@@ -2048,4 +2061,58 @@ model WorkflowShare {
   @@index([sharedWith])
   @@index([sharedBy])
   @@index([workflowId])
+}
+
+model ApiKey {
+  id                String        @id @default(uuid())
+  name              String
+  keyHash           String        @unique
+  keyPrefix         String
+  tenantId          String?
+  userId            String
+  rateLimitInterval Int           @default(1)
+  lastUsedAt        DateTime?
+  revokedAt         DateTime?
+  createdAt         DateTime      @default(now())
+
+  allowedAgents     ApiKeyAgent[]
+  tenant            Tenant?       @relation(fields: [tenantId], references: [id])
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model ApiKeyAgent {
+  id         String    @id @default(cuid())
+  apiKeyId   String
+  agentAppId String
+
+  apiKey     ApiKey     @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  agentApp   AgentApp   @relation(fields: [agentAppId], references: [id], onDelete: Cascade)
+
+  @@unique([apiKeyId, agentAppId])
+  @@map("api_key_agents")
+}
+
+model AgentFlowPipeline {
+  id         String    @id @default(cuid())
+  name       String
+  nodes      Json      @default("[]")
+  edges      Json      @default("[]")
+  status     String    @default("draft")
+  thumbnail  String?
+  agentAppId String?
+  tenantId   String?
+  isPublic   Boolean   @default(false)
+  userId     String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  AgentApp   AgentApp? @relation(fields: [agentAppId], references: [id])
+  Tenant     Tenant?   @relation(fields: [tenantId], references: [id])
+  User       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
 }

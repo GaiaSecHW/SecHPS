@@ -298,31 +298,34 @@ function MergeCandidatesPageContent() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          {/* 搜索框 */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
             <input
               type="text"
-              placeholder="搜索 Skill 名称或分类..."
+              placeholder="搜索 Skill..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
             />
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-400">最小重叠度:</label>
-          <select
-            value={minOverlapScore}
-            onChange={(e) => setMinOverlapScore(e.target.value)}
-            className="px-3 py-2 bg-[#0F172A] border border-gray-600 text-gray-100 placeholder-gray-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          >
-            <option value="0.9">90%+</option>
-            <option value="0.85">85%+</option>
-            <option value="0.75">75%+</option>
-            <option value="0.6">60%+</option>
-          </select>
+          
+          {/* 筛选控件 */}
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-400">最小重叠度:</label>
+            <select
+              value={minOverlapScore}
+              onChange={(e) => setMinOverlapScore(e.target.value)}
+              className="w-[100px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+            >
+              <option value="0.9">90%+</option>
+              <option value="0.85">85%+</option>
+              <option value="0.75">75%+</option>
+              <option value="0.6">60%+</option>
+            </select>
+          </div>
         </div>
       </div>
 

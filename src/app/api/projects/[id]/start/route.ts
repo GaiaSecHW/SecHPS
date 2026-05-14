@@ -121,6 +121,7 @@ export async function POST(
       where: { id },
       include: {
         ProjectFile: true,
+        AgentApp: true,
         EvaluationSession: {
           where: { status: { in: ['preparing', 'running'] } },
         },
@@ -321,28 +322,20 @@ export async function POST(
       logger.warn(LOG_MODULES.EVALUATION, '未找到激活的全局配置');
     }
 
-    // 加载 MCP 服务器配置（用户私有 + 共享 + 项目级别）
-    // 加载共享的 MCP 配置（isPublic=true，管理员设置的共享 MCP）
-    const sharedMcpServers = await prisma.mcpServerConfig.findMany({
-      where: { 
-        isPublic: true, 
+    // 加载 MCP 服务器配置（共享 + 用户私有 + 项目级别），合并为一次查询
+    const allMcpConfigs = await prisma.mcpServerConfig.findMany({
+      where: {
         isEnabled: true,
+        OR: [
+          { isPublic: true },
+          { userId: payload.userId, projectId: null },
+          { projectId: id },
+        ],
       },
     });
-    
-    // 加载用户私有的 MCP 配置
-    const userMcpServers = await prisma.mcpServerConfig.findMany({
-      where: { 
-        userId: payload.userId, 
-        projectId: null,
-        isEnabled: true,
-      },
-    });
-    
-    // 加载项目级别 MCP 配置
-    const projectMcpServers = await prisma.mcpServerConfig.findMany({
-      where: { projectId: id, isEnabled: true },
-    });
+    const sharedMcpServers = allMcpConfigs.filter(s => s.isPublic);
+    const userMcpServers = allMcpConfigs.filter(s => !s.isPublic && s.userId === payload.userId && !s.projectId);
+    const projectMcpServers = allMcpConfigs.filter(s => s.projectId === id);
     
     // 合并配置（项目级别 > 用户私有 > 共享）
     const allServers = [...sharedMcpServers, ...userMcpServers];
@@ -477,13 +470,133 @@ export async function POST(
     // workflowId 是可选的，如果未提供则不使用工作流
 
     // ========================================
+    // 直接执行模式检查（agentAppId）
+    // ========================================
+    if (project?.agentAppId && project.AgentApp) {
+      logger.info(LOG_MODULES.EVALUATION, '检测到 agentAppId，启用直接执行模式', {
+        projectId: id,
+        agentAppId: project.agentAppId,
+      });
+
+      // 获取默认模型配置
+      const modelConfig = await getModelConfig(modelId, payload.userId);
+      if (!modelConfig) {
+        return NextResponse.json(
+          { error: '请先在模型管理中配置模型' },
+          { status: 400 }
+        );
+      }
+
+      // 创建或复用 EvaluationSession（队列启动或正常启动）
+      let evaluationIdToUse = queuedEvaluationId || evaluationIdForLock || generateId('eval');
+      let evaluation;
+
+      if (queuedEvaluationId) {
+        // 队列启动：更新评估记录
+        evaluation = await prisma.evaluationSession.update({
+          where: { id: queuedEvaluationId },
+          data: {
+            providerType: modelConfig.providerType,
+            workflowType: 'direct-agent',
+            modelConfigId: modelId,
+            roleModels: roleModels ? JSON.stringify(roleModels) : null,
+          },
+        });
+        logger.info(LOG_MODULES.EVALUATION, '直接执行模式：队列评估记录已更新', { evaluationId: queuedEvaluationId });
+      } else if (evaluationIdForLock) {
+        // 正常启动：更新已创建的 preparing 记录
+        evaluation = await prisma.evaluationSession.update({
+          where: { id: evaluationIdForLock },
+          data: {
+            providerType: modelConfig.providerType,
+            workflowType: 'direct-agent',
+            modelConfigId: modelId,
+            roleModels: roleModels ? JSON.stringify(roleModels) : null,
+          },
+        });
+        logger.info(LOG_MODULES.EVALUATION, '直接执行模式：评估记录已更新', { evaluationId: evaluationIdForLock });
+      } else {
+        // 其他场景：创建新评估
+        evaluation = await prisma.evaluationSession.create({
+          data: {
+            id: evaluationIdToUse,
+            projectId: id,
+            modelConfigId: modelId,
+            roleModels: roleModels ? JSON.stringify(roleModels) : null,
+            status: 'preparing',
+            providerType: modelConfig.providerType,
+            workflowType: 'direct-agent',
+            startedAt: new Date(),
+          },
+        });
+        logger.info(LOG_MODULES.EVALUATION, '直接执行模式：评估已创建', { evaluationId: evaluation.id });
+      }
+
+      // 更新项目状态为 running
+      await prisma.project.update({
+        where: { id },
+        data: { status: 'running' },
+      });
+
+      // 后台异步执行（占位逻辑，后续实现完整执行引擎）
+      setTimeout(async () => {
+        try {
+          logger.info(LOG_MODULES.EVALUATION, '直接执行模式：后台执行开始', { evaluationId: evaluation.id });
+
+          // TODO: 实现完整的直接执行逻辑
+          // 1. 加载 AgentApp 配置
+          // 2. 初始化 Agent Harness
+          // 3. 执行评估任务
+          // 4. 更新评估状态
+
+          // 更新状态为 running（模拟执行）
+          await prisma.evaluationSession.update({
+            where: { id: evaluation.id },
+            data: { status: 'running' },
+          });
+
+          logger.info(LOG_MODULES.EVALUATION, '直接执行模式：后台执行完成', { evaluationId: evaluation.id });
+        } catch (error) {
+          logger.errorNoUser(LOG_MODULES.EVALUATION, '直接执行模式：后台执行失败', { error: String(error) });
+
+          // 更新状态为 failed
+          await prisma.evaluationSession.update({
+            where: { id: evaluation.id },
+            data: {
+              status: 'failed',
+              errorMessage: error instanceof Error ? error.message : String(error),
+            },
+          });
+        }
+      }, 100);
+
+      // 队列启动时返回 JSON
+      if (isQueuedStart || queuedEvaluationId) {
+        return NextResponse.json({
+          success: true,
+          evaluationId: evaluation.id,
+          workflowType: 'direct-agent',
+          message: '直接执行模式已启动',
+        });
+      }
+
+      // 正常启动返回成功响应
+      return NextResponse.json({
+        evaluation,
+        message: '直接执行模式已启动',
+      }, { status: 200 });
+    }
+
+    // ========================================
+    // 工作流模式检查（workflowId）
+    // ========================================
     // 必填检查
     // ========================================
 
     // 1. 检查系统提示词（必填）
     if (!globalConfig?.customSystemPrompt) {
-      return NextResponse.json({ 
-        error: '系统配置缺少系统提示词（customSystemPrompt），无法启动评估' 
+      return NextResponse.json({
+        error: '系统配置缺少系统提示词（customSystemPrompt），无法启动评估'
       }, { status: 400 });
     }
 

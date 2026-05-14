@@ -48,21 +48,16 @@ export async function GET(request: Request) {
     if (categoryId) where.categoryId = categoryId;
     if (patternId) where.vulnerabilityTreeId = patternId;
     if (languageId) {
-      // 查找该语言下的所有 pattern ID
+      // 一次查询获取该语言和通用语言下的所有 pattern ID
+      const generalLanguageIds = (await prisma.vulnerabilityTree.findMany({
+        where: { name: '通用', type: 'language' },
+        select: { id: true },
+      })).map(p => p.id);
       const patterns = await prisma.vulnerabilityTree.findMany({
-        where: { parentId: languageId, type: 'pattern' },
+        where: { parentId: { in: [languageId, ...generalLanguageIds] }, type: 'pattern' },
         select: { id: true },
       });
-      const patternIds = patterns.map(p => p.id);
-      // 包含该语言下的 pattern + 通用语言下的 pattern
-      const generalLanguages = await prisma.vulnerabilityTree.findMany({ where: { name: '通用', type: 'language' }, select: { id: true } });
-      const generalLanguageIds = generalLanguages.map(p => p.id);
-      const generalPatterns = await prisma.vulnerabilityTree.findMany({
-        where: { parentId: { in: generalLanguageIds }, type: 'pattern' },
-        select: { id: true },
-      });
-      const generalIds = generalPatterns.map(p => p.id);
-      where.vulnerabilityTreeId = { in: [...patternIds, ...generalIds] };
+      where.vulnerabilityTreeId = { in: patterns.map(p => p.id) };
     }
     if (productTagId) {
       where.SkillProductTag = { some: { productTagId } };

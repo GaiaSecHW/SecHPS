@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2 } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
+import { PipelineViewModal } from '@/components/agent-apps/PipelineViewModal';
 import toast from 'react-hot-toast';
 
 interface AgentApp {
@@ -13,6 +14,7 @@ interface AgentApp {
   defaultAgentName: string;
   startCommand?: string | null;
   isPublic: boolean;
+  tenantId?: string | null;
   Tenant?: {
     name: string;
   } | null;
@@ -37,6 +39,7 @@ export default function AgentAppsPage() {
   const [selectedApp, setSelectedApp] = useState<AgentApp | null>(null);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [viewingApp, setViewingApp] = useState<AgentApp | null>(null);
 
   useEffect(() => {
     fetchApps();
@@ -152,7 +155,9 @@ export default function AgentAppsPage() {
         fd.append('startCommand', formData.startCommand);
       }
       fd.append('isPublic', isPublic ? 'true' : 'false');
-      fd.append('tenantId', formData.tenantId || '');
+      // __public__ 是前端占位值，后端收到 isPublic=true 时不需要 tenantId
+      const tenantId = formData.tenantId === '__public__' ? '' : (formData.tenantId || '');
+      fd.append('tenantId', tenantId);
       fd.append('agentHarnessFileType', agentHarnessFile.type);
       
       if (agentHarnessFile.type === 'archive') {
@@ -271,43 +276,45 @@ export default function AgentAppsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">Agent应用开发</h1>
-          <p className="mt-1 text-sm text-gray-400">管理和创建您的Agent应用</p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Box size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Agent应用开发</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent 应用</p>
+          </div>
         </div>
+<div className="flex items-center gap-3">
+           <button
+             onClick={handleSyncFromGit}
+             disabled={syncing}
+             className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+           >
+             <RefreshCw size={16} className={syncing ? 'animate-spin' : ''} />
+             同步仓库
+           </button>
+           <button
+             onClick={handleRefresh}
+             disabled={refreshing}
+             className="inline-flex items-center px-3 py-2 text-sm text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50 transition-colors"
+           >
+             <RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} />
+             刷新
+           </button>
+           <button
+             onClick={handleCreateApp}
+             className="group inline-flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
+           >
+             <Plus size={16} className="transition-transform group-hover:rotate-90 duration-200" />
+             创建新应用
+           </button>
+         </div>
       </div>
 
       <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-        <div className="flex items-center justify-between p-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">已创建的应用</h2>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleSyncFromGit}
-              disabled={syncing}
-              className="inline-flex items-center px-3 py-2 bg-teal-600 text-white rounded-md text-sm font-medium hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw size={16} className={`mr-2 ${syncing ? 'animate-spin' : ''}`} />
-              同步仓库
-            </button>
-            <button
-              onClick={handleRefresh}
-              disabled={refreshing}
-              className="inline-flex items-center px-3 py-2 border border-gray-600 rounded-md text-sm font-medium text-gray-300 bg-dark-surface hover:bg-[#0F172A] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              <RefreshCw size={16} className={`mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-              刷新
-            </button>
-            <button
-              onClick={handleCreateApp}
-              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors"
-            >
-              <Plus size={16} className="mr-2" />
-              创建新应用
-            </button>
-          </div>
-        </div>
-
         <div className="p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
@@ -358,6 +365,15 @@ export default function AgentAppsPage() {
                       </td>
                       <td className="py-3 px-4 text-right">
                         <div className="flex items-center justify-end space-x-2">
+                          {app.engine === 'agentflow' && (
+                            <button
+                              onClick={() => setViewingApp(app)}
+                              className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition-colors"
+                            >
+                              <Eye size={14} className="mr-1" />
+                              查看
+                            </button>
+                          )}
                           <button
                             onClick={() => handleEdit(app)}
                             disabled={deletingId === app.id}
@@ -400,6 +416,12 @@ export default function AgentAppsPage() {
         onClose={() => setIsDetailModalOpen(false)}
         app={selectedApp}
         onUpdate={handleUpdateSubmit}
+      />
+
+      <PipelineViewModal
+        appId={viewingApp?.id}
+        isOpen={!!viewingApp}
+        onClose={() => setViewingApp(null)}
       />
     </div>
   );

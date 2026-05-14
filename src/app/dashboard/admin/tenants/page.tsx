@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Users, Edit, Trash2, X } from 'lucide-react';
+import { Plus, Search, Users, Edit, Trash2, X, Layers } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Alert, ErrorAlert, SuccessAlert } from '@/components/ui/Alert';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
@@ -512,22 +512,24 @@ export default function TenantsPage() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      {/* 页面标题和操作 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">租户管理</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理平台租户及其用户
-            <span className="ml-2 text-xs text-blue-400">（平台管理员可访问所有数据；ICSL租户可访问所有数据+创建公共资源；普通租户只能访问本租户数据+公共资源）</span>
-          </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Layers size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">租户管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理平台租户及其用户</p>
+          </div>
         </div>
         <button
           onClick={openCreateModal}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <Plus size={20} />
-          <span>创建租户</span>
+          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+          创建租户
         </button>
       </div>
 
@@ -538,25 +540,28 @@ export default function TenantsPage() {
         </Alert>
       )}
 
-      {/* 搜索栏 */}
-      <form onSubmit={handleSearch} className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-        <input
-          type="text"
-          placeholder="搜索租户..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-        />
-      </form>
-
-      {/* 租户表格 */}
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <LoadingSpinner size="lg" />
+      {/* Search + Table combined */}
+      <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-gray-700/50">
+        {/* Filters section */}
+        <div className="px-5 py-4 border-b border-gray-700/50">
+          <form onSubmit={handleSearch} className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="搜索租户..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+            />
+          </form>
         </div>
-      ) : (
-        <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden">
+
+        {/* Table section */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : (
           <table className="min-w-full divide-y divide-gray-700/50">
             <thead className="bg-[#0F172A]">
               <tr>
@@ -619,8 +624,8 @@ export default function TenantsPage() {
               )}
             </tbody>
           </table>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 模态框 */}
       <TenantFormModal

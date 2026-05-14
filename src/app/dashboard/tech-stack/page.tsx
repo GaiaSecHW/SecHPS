@@ -188,19 +188,22 @@ export default function TechStackPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100 flex items-center gap-2">
-            <Layers className="h-6 w-6" />
-            技术栈管理
-          </h1>
-          <p className="text-gray-400 mt-1">管理可用于 Skill 和 Workflow 的技术栈选项</p>
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Layers size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">技术栈管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理 Skill 和 Workflow 的技术栈选项</p>
+          </div>
         </div>
         <button
           onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <Plus size={18} />
+          <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
           添加技术栈
         </button>
       </div>

@@ -124,6 +124,10 @@ export const TaskPayloadSchema = z.object({
   agent: z.string().optional(),
   // Default agent name for command execution
   defaultAgentName: z.string().optional(),
+  // Custom start command (e.g. "agentflow run pipeline.py")
+  startCommand: z.string().optional(),
+  // Preferred worker nodeId for manual scheduling (空则自动分配)
+  preferredWorkerNodeId: z.string().optional(),
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

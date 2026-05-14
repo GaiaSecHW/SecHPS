@@ -1,27 +1,25 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { ACPClient, type StopReason } from "@codeswarm/acp";
 
 interface ProcessEntry {
-  process: ChildProcess | null;
-  client: ACPClient | null;
+  client: ACPClient;
   workspace: string;
-  sessionId: string | null;
+  sessionId: string;
   createdAt: number;
 }
 
-export interface RunResult {
+export interface CommandResult {
   exitCode: number;
   stdout: string;
   stderr: string;
+  durationMs: number;
 }
-
-export type AgentType = 'opencode' | 'claudecode' | string;
 
 export class ProcessManager {
   private processes = new Map<string, ProcessEntry>();
 
   /** Start opencode acp, initialize connection, create session */
-  async start(taskId: string, workspace: string, apiKey: string, model?: string, env?: Record<string, string>): Promise<ACPClient> {
+  async start(taskId: string, workspace: string, apiKey: string, model?: string, env?: Record<string, string>, agent?: string): Promise<ACPClient> {
     if (this.processes.has(taskId)) {
       throw new Error(`Process for task ${taskId} already exists`);
     }
@@ -36,100 +34,18 @@ export class ProcessManager {
       cwd: workspace,
       env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
       model,
+      agent,
     });
-    const sessionId = await client.createSession();
+    const sessionId = await client.createSession(agent);
 
-    this.processes.set(taskId, { process: null, client, workspace, sessionId, createdAt: Date.now() });
+    this.processes.set(taskId, { client, workspace, sessionId, createdAt: Date.now() });
     return client;
-  }
-
-  /** Run a command directly in the workspace (non-ACP mode) */
-  async runCommand(taskId: string, workspace: string, command: string, args: string[] = [], env?: Record<string, string>): Promise<RunResult> {
-    if (this.processes.has(taskId)) {
-      throw new Error(`Process for task ${taskId} already exists`);
-    }
-
-    const mergedEnv = { ...process.env, ...env };
-
-    const childProcess = spawn(command, args, {
-      cwd: workspace,
-      env: mergedEnv,
-      shell: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    this.processes.set(taskId, { process: childProcess, client: null, workspace, sessionId: null, createdAt: Date.now() });
-
-    return new Promise((resolve, reject) => {
-      let stdout = '';
-      let stderr = '';
-
-      childProcess.stdout?.on('data', (data: Buffer) => {
-        stdout += data.toString();
-      });
-
-      childProcess.stderr?.on('data', (data: Buffer) => {
-        stderr += data.toString();
-      });
-
-      childProcess.on('close', (code) => {
-        resolve({ exitCode: code ?? 0, stdout, stderr });
-      });
-
-      childProcess.on('error', (err) => {
-        reject(err);
-      });
-    });
-  }
-
-  /** 
-   * Run agent command based on agent type
-   * - opencode: `opencode run --command "${defaultAgentName}"`
-   * - claudecode: `claude --prompt "${defaultAgentName}"` (or similar)
-   */
-  async runAgent(taskId: string, workspace: string, agentType: AgentType, defaultAgentName?: string, apiKey?: string, model?: string, env?: Record<string, string>): Promise<RunResult> {
-    const mergedEnv: Record<string, string> = { ...env };
-    if (apiKey) {
-      mergedEnv.ANTHROPIC_API_KEY = apiKey;
-    }
-
-    let command: string;
-    let args: string[] = [];
-
-    if (agentType === 'opencode') {
-      command = 'opencode';
-      args = ['run'];
-      if (defaultAgentName) {
-        args.push('--command', defaultAgentName);
-      }
-      if (model) {
-        mergedEnv.OPENCODE_MODEL = model;
-      }
-    } else if (agentType === 'claudecode' || agentType === 'claude') {
-      command = 'claude';
-      args = [];
-      if (defaultAgentName) {
-        args.push('--prompt', defaultAgentName);
-      }
-    } else {
-      command = agentType;
-      if (defaultAgentName) {
-        args.push(defaultAgentName);
-      }
-    }
-
-    return this.runCommand(taskId, workspace, command, args, mergedEnv);
-  }
-
-  /** Run opencode in the workspace (legacy method) */
-  async runOpenCode(taskId: string, workspace: string, apiKey?: string, model?: string, env?: Record<string, string>): Promise<RunResult> {
-    return this.runAgent(taskId, workspace, 'opencode', undefined, apiKey, model, env);
   }
 
   /** Send prompt to the agent session, returns when agent finishes */
   async sendPrompt(taskId: string, instruction: string): Promise<StopReason> {
     const entry = this.processes.get(taskId);
-    if (!entry || !entry.client) throw new Error(`No ACP client found for task ${taskId}`);
+    if (!entry) throw new Error(`No process found for task ${taskId}`);
     return entry.client.sendPrompt(instruction);
   }
 
@@ -137,13 +53,7 @@ export class ProcessManager {
   async terminate(taskId: string): Promise<void> {
     const entry = this.processes.get(taskId);
     if (!entry) return;
-    
-    if (entry.client) {
-      await entry.client.destroy();
-    }
-    if (entry.process && entry.process.exitCode === null) {
-      entry.process.kill();
-    }
+    await entry.client.destroy();
     this.processes.delete(taskId);
   }
 
@@ -152,8 +62,108 @@ export class ProcessManager {
     return this.processes.get(taskId)?.client;
   }
 
-  /** Get process for a task */
-  getProcess(taskId: string): ChildProcess | undefined {
-    return this.processes.get(taskId)?.process;
+  /**
+   * Run opencode command with full observability logging.
+   * Supports: opencode run --command <command>
+   */
+  async runOpencodeCommand(
+    taskId: string,
+    workspace: string,
+    command: string,
+    env?: Record<string, string>
+  ): Promise<CommandResult> {
+    const startTime = Date.now();
+    const log = (level: 'info' | 'warn' | 'error', msg: string, meta?: object) => {
+      const timestamp = new Date().toISOString();
+      const prefix = `[${timestamp}] [ProcessManager] [task=${taskId}]`;
+      if (level === 'error') {
+        console.error(`${prefix} ${msg}`, meta || {});
+      } else if (level === 'warn') {
+        console.warn(`${prefix} ${msg}`, meta || {});
+      } else {
+        console.log(`${prefix} ${msg}`, meta || {});
+      }
+    };
+
+    log('info', 'Starting opencode command execution', { workspace, command });
+
+    return new Promise((resolve) => {
+      const mergedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
+      if (env) {
+        Object.assign(mergedEnv, env);
+      }
+
+      // Build command: opencode run --command <command>
+      const args = ['run', '--command', command];
+
+      log('info', 'Spawning opencode process', { cmd: 'opencode', args });
+
+      const proc: ChildProcess = spawn('opencode', args, {
+        cwd: workspace,
+        env: mergedEnv,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let hasEnded = false;
+
+      const checkEnd = () => {
+        if (hasEnded) return;
+        hasEnded = true;
+
+        const durationMs = Date.now() - startTime;
+        log('info', 'opencode process exited', {
+          exitCode: proc.exitCode,
+          durationMs,
+          stdoutLen: stdout.length,
+          stderrLen: stderr.length,
+        });
+
+        resolve({
+          exitCode: proc.exitCode ?? -1,
+          stdout,
+          stderr,
+          durationMs,
+        });
+      };
+
+      proc.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        stdout += text;
+        // Stream stdout for real-time observability
+        text.split('\n').filter(Boolean).forEach(line => {
+          log('info', `[stdout] ${line}`);
+        });
+      });
+
+      proc.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        stderr += text;
+        // Stream stderr for real-time observability
+        text.split('\n').filter(Boolean).forEach(line => {
+          log('warn', `[stderr] ${line}`);
+        });
+      });
+
+      proc.on('error', (err) => {
+        log('error', 'opencode process error', { error: err.message });
+        stderr += `\nProcess error: ${err.message}`;
+      });
+
+      proc.on('exit', (code) => {
+        log('info', 'opencode process exit event', { code });
+        // Use setTimeout to ensure stdout/stderr streams have flushed
+        setTimeout(checkEnd, 100);
+      });
+
+      // Safety timeout: 30 minutes
+      setTimeout(() => {
+        if (!hasEnded) {
+          log('warn', 'opencode command timeout, killing process', { timeout: '30m' });
+          proc.kill();
+        }
+      }, 30 * 60 * 1000);
+    });
   }
 }

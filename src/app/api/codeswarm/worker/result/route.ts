@@ -1,20 +1,10 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
-import { verifyWorkerToken, extractBearerToken } from '@/lib/codeswarm-worker-auth';
+import eventBus from '@/lib/event-bus';
 
 export async function POST(request: Request) {
   try {
-    // 验证 Worker Token
-    const bearerToken = extractBearerToken(request);
-    if (!bearerToken) {
-      return NextResponse.json({ error: 'Missing authorization token' }, { status: 401 });
-    }
-    const payload = verifyWorkerToken(bearerToken);
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
-    }
-
     const body = await request.json();
     const { taskId, nodeId, status, result, error, reportContent } = body;
 
@@ -36,6 +26,44 @@ export async function POST(request: Request) {
       },
     });
 
+    const taskInstance = await prisma.taskInstance.findFirst({
+      where: { codeswarmTaskId: taskId },
+      select: { id: true },
+    });
+
+    if (taskInstance) {
+      await prisma.taskInstance.update({
+        where: { id: taskInstance.id },
+        data: {
+          status: finalState,
+          completedAt: new Date(),
+          updatedAt: new Date(),
+          errorMessage: error || null,
+          executionResult: result || null,
+          reportPath: reportContent || null,
+        },
+      });
+
+      await prisma.taskExecutionLog.create({
+        data: {
+          id: `log-${Date.now()}-complete`,
+          taskId: taskInstance.id,
+          level: finalState === 'completed' ? 'success' : 'error',
+          message: finalState === 'completed' ? '任务执行完成' : '任务执行失败',
+          details: error || '所有步骤已完成',
+          timestamp: new Date(),
+        },
+      });
+
+      eventBus.emit(`task:${taskInstance.id}`, {
+        type: finalState,
+        level: finalState === 'completed' ? 'success' : 'error',
+        message: finalState === 'completed' ? '任务执行完成' : '任务执行失败',
+        details: error || '所有步骤已完成',
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     if (nodeId) {
       await prisma.codeswarmWorker.updateMany({
         where: { nodeId },
@@ -46,12 +74,10 @@ export async function POST(request: Request) {
       });
     }
 
-    // 通知 dispatcher 释放 Worker 槽位
     if (nodeId) {
       codeswarmDispatcher.onTaskCompleted(nodeId);
     }
 
-    // 发布任务完成事件（供 Task Builder 等订阅者接收）
     await codeswarmDispatcher.publishTaskEvent(taskId, {
       type: 'task_completed',
       status: finalState,

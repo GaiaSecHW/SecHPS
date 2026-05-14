@@ -466,18 +466,23 @@ function SkillsEvolutionContent() {
   if (error) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">Skills 进化管理</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理 AI 技能的进化和优化
-          </p>
+        <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+              <TrendingUp size={18} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold text-white">Skills 进化管理</h1>
+              <p className="text-sm text-gray-400 mt-0.5">管理 AI 技能的进化和优化</p>
+            </div>
+          </div>
         </div>
         <Alert type="error">{error}</Alert>
         <button
           onClick={fetchAllData}
-          className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
         >
-          <RefreshCw size={20} className="mr-2" />
+          <RefreshCw size={18} className="transition-transform group-hover:rotate-90 duration-200" />
           重新加载
         </button>
       </div>
@@ -487,12 +492,15 @@ function SkillsEvolutionContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">Skills 进化管理</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            监控 Skill 精准率，自动触发进化优化
-          </p>
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <TrendingUp size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">Skills 进化管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">监控 Skill 精准率，自动触发进化优化</p>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <button
