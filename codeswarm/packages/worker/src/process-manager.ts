@@ -251,6 +251,192 @@ export class ProcessManager {
     }
   }
 
+  async runOpencodeCli(
+    taskId: string,
+    workspace: string,
+    agentName: string,
+    apiKey?: string,
+    model?: string,
+    env?: Record<string, string>,
+    onEvent?: AgentEventCallback
+  ): Promise<RunAgentResult> {
+    let stdout = '';
+    let stderr = '';
+    let finalReason = 'stop';
+
+    console.log(`[ProcessMgr] ========== RUN OPENCODE CLI START ==========`);
+    console.log(`[ProcessMgr] taskId: ${taskId}`);
+    console.log(`[ProcessMgr] workspace: ${workspace}`);
+    console.log(`[ProcessMgr] agentName: ${agentName}`);
+    console.log(`[ProcessMgr] model: ${model}`);
+    console.log(`[ProcessMgr] apiKey present: ${!!apiKey}`);
+
+    return new Promise((resolve) => {
+      const mergedEnv: Record<string, string> = { ...process.env } as Record<string, string>;
+      if (env) Object.assign(mergedEnv, env);
+      if (apiKey) {
+        mergedEnv.ANTHROPIC_API_KEY = apiKey;
+        console.log(`[ProcessMgr] Added ANTHROPIC_API_KEY to env`);
+      }
+
+      const args: string[] = ['run', '--format', 'json', '--command', agentName];
+      if (model) args.push('--model', model);
+
+      const cmd = process.platform === 'win32' ? 'cmd.exe' : 'opencode';
+      const cmdArgs = process.platform === 'win32' ? ['/c', 'opencode', ...args] : args;
+
+      console.log(`[ProcessMgr] Spawning: ${cmd} ${cmdArgs.join(' ')}`);
+
+      const proc: ChildProcess = spawn(cmd, cmdArgs, {
+        cwd: workspace,
+        env: mergedEnv,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+
+      console.log(`[ProcessMgr] Process spawned, pid=${proc.pid}`);
+
+      let hasEnded = false;
+      let lastStepFinishReason = 'stop';
+
+      const checkEnd = () => {
+        if (hasEnded) return;
+        hasEnded = true;
+
+        const exitCode = proc.exitCode ?? 0;
+        console.log(`[ProcessMgr] ========== RUN OPENCODE CLI END ==========`);
+        console.log(`[ProcessMgr] exitCode: ${exitCode}`);
+        console.log(`[ProcessMgr] stdout length: ${stdout.length}`);
+        console.log(`[ProcessMgr] stderr length: ${stderr.length}`);
+        console.log(`[ProcessMgr] finalReason: ${lastStepFinishReason}`);
+
+        if (exitCode !== 0 && stderr.length === 0) {
+          stderr = `Process exited with code ${exitCode}`;
+        }
+
+        resolve({
+          exitCode,
+          stdout,
+          stderr,
+        });
+      };
+
+      proc.stdout?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        stdout += text;
+        
+        text.split('\n').filter(Boolean).forEach(line => {
+          try {
+            const event = JSON.parse(line);
+            console.log(`[ProcessMgr] JSON event: ${event.type}`);
+            this.handleOpencodeJsonEvent(event, onEvent);
+            
+            if (event.type === 'step_finish' && event.part?.reason) {
+              lastStepFinishReason = event.part.reason;
+            }
+          } catch {
+            console.log(`[ProcessMgr] Non-JSON stdout: ${line.substring(0, 100)}`);
+          }
+        });
+      });
+
+      proc.stderr?.on('data', (data: Buffer) => {
+        const text = data.toString();
+        stderr += text;
+        text.split('\n').filter(Boolean).forEach(line => {
+          console.log(`[ProcessMgr] stderr: ${line.substring(0, 100)}`);
+          if (onEvent) {
+            onEvent({
+              type: 'error',
+              message: line,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        });
+      });
+
+      proc.on('error', (err) => {
+        console.log(`[ProcessMgr] Process spawn error: ${err.message}`);
+        stderr += err.message;
+        if (onEvent) {
+          onEvent({
+            type: 'error',
+            message: err.message,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      });
+
+      proc.on('exit', (code) => {
+        console.log(`[ProcessMgr] Process exit event: code=${code}`);
+        setTimeout(checkEnd, 100);
+      });
+
+      proc.on('close', (code) => {
+        console.log(`[ProcessMgr] Process close event: code=${code}`);
+      });
+
+      proc.on('spawn', () => {
+        console.log(`[ProcessMgr] Process spawn event: success`);
+      });
+
+      setTimeout(() => {
+        if (!hasEnded) {
+          console.log(`[ProcessMgr] Timeout (30m), killing process`);
+          proc.kill();
+        }
+      }, 30 * 60 * 1000);
+    });
+  }
+
+  private handleOpencodeJsonEvent(event: any, onEvent?: AgentEventCallback): void {
+    if (!onEvent) return;
+
+    switch (event.type) {
+      case 'text':
+        if (event.part?.text) {
+          onEvent({
+            type: 'agent_message_chunk',
+            content: event.part.text,
+            timestamp: new Date(event.timestamp).toISOString(),
+          });
+        }
+        break;
+
+      case 'tool_use':
+        const tool = event.part?.tool || event.part?.state?.tool;
+        const input = event.part?.state?.input;
+        if (tool) {
+          onEvent({
+            type: 'tool_call',
+            tool,
+            input,
+            timestamp: new Date(event.timestamp).toISOString(),
+          });
+          
+          const output = event.part?.state?.output;
+          const status = event.part?.state?.status;
+          if (output && status === 'completed') {
+            onEvent({
+              type: 'tool_call_update',
+              output: typeof output === 'string' ? output : JSON.stringify(output),
+              timestamp: new Date(event.timestamp).toISOString(),
+            });
+          }
+        }
+        break;
+
+      case 'step_finish':
+        if (event.part?.reason === 'error' && event.part?.error) {
+          onEvent({
+            type: 'error',
+            message: event.part.error,
+            timestamp: new Date(event.timestamp).toISOString(),
+          });
+        }
+        break;
+    }
+  }
+
   /**
    * Run opencode command with full observability logging.
    * Supports: opencode run --command <command>
@@ -285,9 +471,12 @@ export class ProcessManager {
       // Build command: opencode run --command <command>
       const args = ['run', '--command', command];
 
-      log('info', 'Spawning opencode process', { cmd: 'opencode', args });
+      const cmd = process.platform === 'win32' ? 'cmd.exe' : 'opencode';
+      const cmdArgs = process.platform === 'win32' ? ['/c', 'opencode', ...args] : args;
 
-      const proc: ChildProcess = spawn('opencode', args, {
+      log('info', 'Spawning opencode process', { cmd, args: cmdArgs });
+
+      const proc: ChildProcess = spawn(cmd, cmdArgs, {
         cwd: workspace,
         env: mergedEnv,
         stdio: ['pipe', 'pipe', 'pipe'],

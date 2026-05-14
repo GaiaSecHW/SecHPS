@@ -160,10 +160,13 @@ export class ACPClient {
     console.log(`[ACP] ANTHROPIC_API_KEY present: ${!!env.ANTHROPIC_API_KEY}`);
 
     console.log(`[ACP] Step 3: Spawning process...`);
-    console.log(`[ACP] Full command: ${cmd} ${args.join(' ')}`);
     console.log(`[ACP] Spawn cwd: ${config.cwd}`);
 
-    this.process = spawn(cmd, args, {
+    const finalCmd = process.platform === 'win32' && cmd === 'opencode' ? 'cmd.exe' : cmd;
+    const finalArgs = process.platform === 'win32' && cmd === 'opencode' ? ['/c', 'opencode', ...args] : args;
+    console.log(`[ACP] Full command: ${finalCmd} ${finalArgs.join(' ')}`);
+
+    this.process = spawn(finalCmd, finalArgs, {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
       cwd: config.cwd,

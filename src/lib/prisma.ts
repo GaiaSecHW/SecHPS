@@ -6,9 +6,8 @@ const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function createPrismaClient(): PrismaClient {
+  return new PrismaClient({
     datasources: {
       db: {
         url: process.env.DATABASE_URL,
@@ -16,28 +15,72 @@ export const prisma =
     },
     log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
     transactionOptions: {
-      maxWait: 5000,   // 等待连接最多 5s
-      timeout: 30000,  // 事务最多执行 30s
+      maxWait: 5000,
+      timeout: 30000,
     },
   });
+}
 
-// 连接断开时自动重连 + 连接池保活
-prisma.$connect().catch(() => {});
+let prismaInstance: PrismaClient | undefined;
+let reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 3;
 
-// 定期 ping 连接池，防止远程服务端回收空闲连接
-const keepAliveInterval = setInterval(async () => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-  } catch {
-    // 连接已断开，下次查询时会自动重连
+function getPrismaClient(): PrismaClient {
+  if (!prismaInstance) {
+    prismaInstance = createPrismaClient();
+    if (process.env.NODE_ENV !== 'production') {
+      globalForPrisma.prisma = prismaInstance;
+    }
   }
-}, 30000); // 每 30 秒保活一次
+  return prismaInstance;
+}
 
-// 进程退出时清理
-process.on('beforeExit', () => {
-  clearInterval(keepAliveInterval);
+export const prisma = new Proxy({} as PrismaClient, {
+  get(target, prop) {
+    const client = getPrismaClient();
+    const value = client[prop as keyof PrismaClient];
+    if (typeof value === 'function') {
+      return async (...args: unknown[]) => {
+        try {
+          reconnectAttempts = 0;
+          return await (value as (...args: unknown[]) => Promise<unknown>).apply(client, args);
+        } catch (error: unknown) {
+          const prismaError = error as { code?: string; message?: string };
+          if (prismaError.code === 'P1017' || prismaError.message?.includes('Server has closed the connection')) {
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+              reconnectAttempts++;
+              console.log(`[Prisma] 连接已断开，尝试重连 (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})...`);
+              await client.$disconnect().catch(() => {});
+              prismaInstance = undefined;
+              const newClient = getPrismaClient();
+              await newClient.$connect();
+              return await (value as (...args: unknown[]) => Promise<unknown>).apply(newClient, args);
+            }
+          }
+          throw error;
+        }
+      };
+    }
+    return value;
+  },
 });
 
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+getPrismaClient()
+  .$connect()
+  .then(() => console.log('[Prisma] 数据库连接成功'))
+  .catch((err) => console.error('[Prisma] 数据库连接失败:', err));
+
+const keepAliveInterval = setInterval(async () => {
+  try {
+    await getPrismaClient().$queryRaw`SELECT 1`;
+  } catch {
+    console.log('[Prisma] Keep-alive 失败，下次查询将触发重连');
+  }
+}, 15000);
+
+process.on('beforeExit', () => {
+  clearInterval(keepAliveInterval);
+  if (prismaInstance) {
+    prismaInstance.$disconnect().catch(() => {});
+  }
+});

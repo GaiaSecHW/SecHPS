@@ -187,8 +187,25 @@ export class WorkerDaemon {
         console.log(`[Daemon] Step 3: Running custom command: ${startCommand}`);
         this.server.log.info({ taskId, startCommand }, 'Starting custom command execution');
         result = await this.runCustomCommand(taskId, workspacePath, startCommand, env || {}, onEvent);
+      } else if (engine === 'opencode') {
+        console.log(`[Daemon] Step 3: Starting opencode via CLI...`);
+        console.log(`[Daemon] Calling processMgr.runOpencodeCli with:`);
+        console.log(`[Daemon]   - workspacePath: ${workspacePath}`);
+        console.log(`[Daemon]   - agentName: ${agentName}`);
+        console.log(`[Daemon]   - model: ${model}`);
+        this.server.log.info({ taskId, engine, agentName }, 'Starting opencode via CLI');
+        result = await this.processMgr.runOpencodeCli(
+          taskId,
+          workspacePath,
+          agentName,
+          apiKey,
+          model,
+          env,
+          onEvent
+        );
+        console.log(`[Daemon] Step 3 DONE: runOpencodeCli returned`);
       } else {
-        console.log(`[Daemon] Step 3: Starting agent via ACP...`);
+        console.log(`[Daemon] Step 3: Starting agent via ACP (claudecode)...`);
         console.log(`[Daemon] Calling processMgr.runAgent with:`);
         console.log(`[Daemon]   - workspacePath: ${workspacePath}`);
         console.log(`[Daemon]   - engine: ${engine}`);
