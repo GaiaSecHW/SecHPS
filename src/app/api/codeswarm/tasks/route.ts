@@ -50,6 +50,7 @@ export async function POST(request: Request) {
       gitRef,
       agent,
       action,
+      preferredWorkerNodeId,
     } = body;
 
     // 手动批量分发（保留兼容）
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
+        preferredWorkerNodeId: preferredWorkerNodeId || null,
         updatedAt: new Date(),
       },
     }) as any;

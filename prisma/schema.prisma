@@ -329,6 +329,7 @@ model CodeswarmTask {
   timeoutSec        Int?
   agent             String?
   defaultAgentName  String?
+  preferredWorkerNodeId String?
   events            String?
   result            String?
   error             String?

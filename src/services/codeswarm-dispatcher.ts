@@ -123,6 +123,7 @@ class CodeswarmDispatcher {
           gitUrl: task.gitUrl || undefined,
           gitRef: task.gitRef || undefined,
           agent: task.agent || undefined,
+          preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
         }),
         signal: AbortSignal.timeout(10000),
       });
@@ -209,7 +210,12 @@ class CodeswarmDispatcher {
       const task = await prisma.codeswarmTask.findUnique({ where: { id: dbTaskId } });
       if (!task || task.state !== 'queued') return true;
 
-      const worker = this.selectWorker();
+      // 优先使用指定的 Worker，否则自动分配
+      let worker = this.selectWorker(task.preferredWorkerNodeId);
+      if (!worker) {
+        console.log('[CodeSwarm] 指定 Worker 不可用，尝试自动分配...');
+        worker = this.selectWorker();
+      }
       if (!worker) {
         console.log('[CodeSwarm] 无可用 Worker，任务保持排队:', task.taskId);
         return false;
@@ -226,7 +232,7 @@ class CodeswarmDispatcher {
       // 更新内存
       worker.currentTasks++;
 
-      console.log(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}`);
+      console.log(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       return true;
     } catch (e) {
       console.error('[CodeSwarm] 分发失败:', dbTaskId, e);
@@ -234,8 +240,25 @@ class CodeswarmDispatcher {
     }
   }
 
-  // 最少负载优先选择 Worker
-  private selectWorker(): WorkerInfo | null {
+  // 最少负载优先选择 Worker，可指定优先节点
+  private selectWorker(preferredNodeId?: string): WorkerInfo | null {
+    // 如果指定了优先节点，且该节点可用，直接使用
+    if (preferredNodeId) {
+      const preferred = this.workers.get(preferredNodeId);
+      if (preferred) {
+        const isHealthy = Date.now() - preferred.lastHeartbeat <= 90000;
+        const hasCapacity = preferred.currentTasks < preferred.maxConcurrent;
+        if (isHealthy && hasCapacity) {
+          console.log(`[CodeSwarm] 使用手动选择的 Worker: ${preferredNodeId}`);
+          return preferred;
+        }
+        console.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 不可用 (健康=${isHealthy}, 容量=${hasCapacity})`);
+      } else {
+        console.warn(`[CodeSwarm] 指定的 Worker ${preferredNodeId} 未注册`);
+      }
+    }
+
+    // 自动分配：最少负载优先
     let best: WorkerInfo | null = null;
     for (const w of this.workers.values()) {
       if (Date.now() - w.lastHeartbeat > 90000) continue; // 90s 无心跳视为离线

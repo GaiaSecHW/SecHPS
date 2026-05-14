@@ -47,6 +47,10 @@ export class EnvironmentFactory {
     // Read default_agent from opencode.json if agent not specified in payload
     if (payload.workspacePath) {
       const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
+
+      // Check workspace permissions for NFS passthrough mode
+      this.checkWorkspacePermissions(localWorkspacePath);
+
       const instructionPath = localWorkspacePath.endsWith('/')
         ? `${localWorkspacePath}instruction.txt`
         : `${localWorkspacePath}/instruction.txt`;
@@ -220,5 +224,31 @@ export class EnvironmentFactory {
   private excludeNodeModulesFilter(src: string, dest: string): boolean {
     const relativePath = path.relative(process.cwd(), src);
     return !relativePath.includes('node_modules');
+  }
+
+  /**
+   * Check workspace permissions and log warnings if access is limited.
+   * This is critical for NFS passthrough mode where the worker needs execute permissions.
+   */
+  private checkWorkspacePermissions(workspacePath: string): void {
+    const checks = [
+      { name: 'read', bit: fs.constants.R_OK },
+      { name: 'write', bit: fs.constants.W_OK },
+      { name: 'execute/search', bit: fs.constants.X_OK },
+    ];
+
+    let allOk = true;
+    for (const check of checks) {
+      try {
+        fs.accessSync(workspacePath, check.bit);
+      } catch {
+        console.warn(`[Environment] ⚠️ 工作区 ${workspacePath} 缺少 ${check.name} 权限 (${check.bit})`);
+        allOk = false;
+      }
+    }
+
+    if (allOk) {
+      console.log(`[Environment] ✓ 工作区权限检查通过: ${workspacePath}`);
+    }
   }
 }

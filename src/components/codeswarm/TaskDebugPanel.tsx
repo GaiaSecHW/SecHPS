@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Play, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -8,9 +8,22 @@ interface TaskDebugPanelProps {
   onTaskCreated: (taskId: string) => void;
 }
 
+interface ModelOption {
+  key: string;
+  modelId: string;
+  modelName: string;
+  label: string;
+  hasApiKey: boolean;
+  apiKey?: string;
+}
+
 export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
+  const [executorMode, setExecutorMode] = useState<'instruction' | 'command'>('instruction');
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
+  const [selectedModelKey, setSelectedModelKey] = useState('');
+  const [workerOptions, setWorkerOptions] = useState<{ nodeId: string; address: string; status: string }[]>([]);
   const [form, setForm] = useState({
     instruction: '',
     agent: 'opencode' as 'opencode' | 'claude',
@@ -18,35 +31,104 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     gitRef: '',
     projectPath: '',
     workspacePath: '',
-    model: 'anthropic/claude-sonnet-4',
     apiKey: '',
     timeoutSec: 300,
     skills: '',
     mcps: '',
+    startCommand: '',
+    preferredWorkerNodeId: '',
   });
+
+  useEffect(() => {
+    fetchModels();
+    fetchWorkers();
+  }, []);
+
+  const fetchWorkers = async () => {
+    try {
+      const response = await fetch('/api/codeswarm/nodes');
+      if (response.ok) {
+        const data = await response.json();
+        setWorkerOptions(data.workers || []);
+      }
+    } catch {
+      // ignore error, keep empty options
+    }
+  };
+
+  const fetchModels = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/models?isActive=true&forEvaluation=true', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const options: ModelOption[] = [];
+        for (const cfg of data.models || []) {
+          for (const modelName of cfg.models || []) {
+            const suffix = cfg.isDefault ? ' [默认]' : '';
+            options.push({
+              key: `${cfg.id}::${modelName}`,
+              modelId: cfg.id,
+              modelName,
+              label: `${cfg.name} - ${modelName}${suffix}`,
+              hasApiKey: cfg.hasApiKey,
+              apiKey: cfg.apiKey,
+            });
+          }
+        }
+        setModelOptions(options);
+        if (options.length > 0) {
+          setSelectedModelKey(options[0].key);
+          if (options[0].hasApiKey && options[0].apiKey) {
+            setForm(prev => ({ ...prev, apiKey: options[0].apiKey || '' }));
+          }
+        }
+      }
+    } catch {
+      // ignore error, keep empty options
+    }
+  };
+
+  const handleModelChange = (key: string) => {
+    setSelectedModelKey(key);
+    const option = modelOptions.find(o => o.key === key);
+    if (option?.hasApiKey && option.apiKey) {
+      setForm(prev => ({ ...prev, apiKey: option.apiKey || '' }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!form.instruction.trim()) {
+    if (executorMode === 'instruction' && !form.instruction.trim()) {
       toast.error('请输入执行指令');
+      return;
+    }
+    if (executorMode === 'command' && !form.startCommand.trim()) {
+      toast.error('请输入执行命令');
       return;
     }
 
     setLoading(true);
     try {
+      const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
       const payload = {
-        instruction: form.instruction,
-        agent: form.agent,
+        instruction: executorMode === 'instruction' ? form.instruction : form.startCommand,
+        agent: executorMode === 'command' ? 'opencode' : form.agent,
         gitUrl: form.gitUrl || undefined,
         gitRef: form.gitRef || undefined,
         projectPath: form.projectPath || undefined,
         workspacePath: form.workspacePath || undefined,
-        model: form.model || undefined,
+        model: selectedModel?.modelName || undefined,
+        modelId: selectedModel?.modelId || undefined,
         apiKey: form.apiKey || undefined,
         timeoutSec: form.timeoutSec || undefined,
         skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : undefined,
         mcps: form.mcps ? JSON.parse(form.mcps) : undefined,
+        startCommand: executorMode === 'command' ? form.startCommand : undefined,
+        preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
       };
 
       const resp = await fetch('/api/codeswarm/tasks', {
@@ -110,52 +192,67 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
       {/* Form */}
       {expanded && (
         <form onSubmit={handleSubmit} className="p-6 border-t border-gray-700/50 space-y-4">
-          {/* Agent Selector */}
+          {/* Executor Mode */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              执行器
+              执行方式
             </label>
             <div className="flex gap-3">
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${executorMode === 'instruction' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
                 <input
                   type="radio"
-                  name="agent"
-                  value="opencode"
-                  checked={form.agent === 'opencode'}
-                  onChange={() => setForm({ ...form, agent: 'opencode' })}
+                  name="executorMode"
+                  value="instruction"
+                  checked={executorMode === 'instruction'}
+                  onChange={() => setExecutorMode('instruction')}
                   className="sr-only"
                 />
-                <span className="font-medium">OpenCode</span>
-                <span className="text-xs opacity-70">opencode run</span>
+                <span className="font-medium">执行指令</span>
+                <span className="text-xs opacity-70">自然语言描述</span>
               </label>
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.agent === 'claude' ? 'border-purple-500 bg-purple-500/20 text-purple-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${executorMode === 'command' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
                 <input
                   type="radio"
-                  name="agent"
-                  value="claude"
-                  checked={form.agent === 'claude'}
-                  onChange={() => setForm({ ...form, agent: 'claude' })}
+                  name="executorMode"
+                  value="command"
+                  checked={executorMode === 'command'}
+                  onChange={() => setExecutorMode('command')}
                   className="sr-only"
                 />
-                <span className="font-medium">Claude Code</span>
-                <span className="text-xs opacity-70">claude -p</span>
+                <span className="font-medium">执行命令</span>
+                <span className="text-xs opacity-70">opencode run --command</span>
               </label>
             </div>
           </div>
 
-          {/* Instruction */}
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              执行指令 <span className="text-red-400">*</span>
-            </label>
-            <textarea
-              value={form.instruction}
-              onChange={(e) => setForm({ ...form, instruction: e.target.value })}
-              placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
-              rows={5}
-              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-            />
-          </div>
+          {/* Instruction or Command */}
+          {executorMode === 'instruction' ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                执行指令 <span className="text-red-400">*</span>
+              </label>
+              <textarea
+                value={form.instruction}
+                onChange={(e) => setForm({ ...form, instruction: e.target.value })}
+                placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
+                rows={5}
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                执行命令 (startCommand) <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                value={form.startCommand}
+                onChange={(e) => setForm({ ...form, startCommand: e.target.value })}
+                placeholder="opencode run --command nazhua-audit"
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+              />
+            </div>
+          )}
 
           {/* Git URL */}
           <div className="grid grid-cols-3 gap-4">
@@ -213,18 +310,40 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             </div>
           </div>
 
+          {/* Worker Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              指定 Worker (空则自动分配)
+            </label>
+            <select
+              value={form.preferredWorkerNodeId}
+              onChange={(e) => setForm({ ...form, preferredWorkerNodeId: e.target.value })}
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
+            >
+              <option value="">自动分配</option>
+              {workerOptions.map((w) => (
+                <option key={w.nodeId} value={w.nodeId}>
+                  {w.nodeId} ({w.address}) - {w.status}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 模型
               </label>
-              <input
-                type="text"
-                value={form.model}
-                onChange={(e) => setForm({ ...form, model: e.target.value })}
-                placeholder="anthropic/claude-sonnet-4"
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
+              <select
+                value={selectedModelKey}
+                onChange={(e) => handleModelChange(e.target.value)}
+                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
+              >
+                <option value="">请选择模型</option>
+                {modelOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>{opt.label}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -234,7 +353,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 type="password"
                 value={form.apiKey}
                 onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-                placeholder="sk-ant-..."
+                placeholder="sk-ant-... (可选，覆盖模型的默认Key)"
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
               />
             </div>
@@ -285,7 +404,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={loading || !form.instruction.trim()}
+              disabled={loading || (executorMode === 'instruction' ? !form.instruction.trim() : !form.startCommand.trim())}
               className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

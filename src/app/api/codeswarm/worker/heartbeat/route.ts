@@ -126,7 +126,7 @@ async function dispatchQueuedTasks(): Promise<void> {
       SELECT id, "taskId", "workerId", state, instruction,
              "projectPath", "workspacePath", "gitUrl", "gitRef",
              skills, mcps, model, "apiKey", "timeoutSec", agent,
-             "defaultAgentName", error, "startedAt", "completedAt",
+             "defaultAgentName", "preferredWorkerNodeId", error, "startedAt", "completedAt",
              "createdAt", "updatedAt"
       FROM "CodeswarmTask"
       WHERE state = 'queued'
@@ -149,13 +149,22 @@ async function dispatchQueuedTasks(): Promise<void> {
     if (workersWithCapacity.length === 0) return;
 
     for (const task of queuedTasks) {
-      const worker = workersWithCapacity.find(w => w.currentTasks < w.maxConcurrent);
+      // 优先使用指定的 Worker，否则用自动分配
+      let worker = task.preferredWorkerNodeId
+        ? workersWithCapacity.find(w => w.nodeId === task.preferredWorkerNodeId && w.currentTasks < w.maxConcurrent)
+        : null;
+
+      // 如果指定的 Worker 不可用，使用自动分配
+      if (!worker) {
+        worker = workersWithCapacity.find(w => w.currentTasks < w.maxConcurrent);
+      }
+
       if (!worker) break;
 
       const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
       if (success) {
         worker.currentTasks++;
-        console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}`);
+        console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       }
     }
   } catch (error) {
