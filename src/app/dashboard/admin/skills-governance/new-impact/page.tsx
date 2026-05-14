@@ -269,7 +269,6 @@ export default function NewImpactPage() {
           </div>
         </div>
       </div>
-      </div>
 
       {/* Error */}
       {error && (

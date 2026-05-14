@@ -170,28 +170,29 @@ function UsersPageContent() {
         </button>
       </div>
 
-      {/* 搜索区域 */}
-      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input
-            type="text"
-            placeholder="按姓名、邮箱或用户名搜索..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
-          />
-        </div>
-      </div>
-
       {error && (
         <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded">
           {error}
         </div>
       )}
 
-      {/* 用户列表 */}
+      {/* Search + Table combined */}
       <div className="bg-dark-surface shadow-sm rounded-lg overflow-hidden border border-gray-700/50">
+        {/* Filters section */}
+        <div className="px-5 py-4 border-b border-gray-700/50">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <input
+              type="text"
+              placeholder="按姓名、邮箱或用户名搜索..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* Table section */}
         <table className="min-w-full divide-y divide-gray-700/50">
           <thead className="bg-[#162032]">
             <tr>

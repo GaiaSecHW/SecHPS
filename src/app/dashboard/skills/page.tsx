@@ -514,131 +514,134 @@ function SkillsPageContent() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          {/* 搜索框 */}
-          <div className="flex gap-3 flex-1 w-full sm:max-w-md">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="搜索 Skills..."
-                value={searchInput}
-                onChange={(e) => setSearchInput(e.target.value)}
-                onKeyDown={handleSearchKeyDown}
-                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
-              />
-            </div>
-            <button onClick={handleSearch} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
-              搜索
-            </button>
-            {searchTerm && (
-              <button onClick={handleClearSearch} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
-                清除
-              </button>
-            )}
-          </div>
-          
-          {/* 筛选控件 */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {isAdmin && skills.length > 0 && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={selectedSkills.size === skills.length && skills.length > 0} onChange={handleSelectAll} className="w-4 h-4 text-primary-600 border-gray-600 rounded" />
-                <span className="text-sm text-gray-400">全选</span>
-              </label>
-            )}
-            <select
-              value={selectedCategoryId}
-              onChange={(e) => {
-                setSelectedCategoryId(e.target.value);
-                setSelectedLanguageId('');
-                setSelectedPatternId('');
-                setCurrentPage(1);
-                updateUrlParams({ categoryId: e.target.value || null, languageId: null, patternId: null, page: null });
-              }}
-              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">所有分类</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.displayName} ({cat.count})</option>
-              ))}
-            </select>
-          {(() => {
-            const selectedCat = categories.find(c => c.id === selectedCategoryId);
-            return selectedCat?.hasSubDimension ? (
-              <select
-                value={selectedLanguageId}
-                onChange={(e) => {
-                  setSelectedLanguageId(e.target.value);
-                  setSelectedPatternId('');
-                  setCurrentPage(1);
-                  updateUrlParams({ languageId: e.target.value || null, patternId: null, page: null });
-                }}
-                className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">所有语言</option>
-                {vulnerabilityTree.map((lang) => (
-                  <option key={lang.id} value={lang.id}>{lang.displayName} ({lang.skillCount})</option>
-                ))}
-              </select>
-            ) : null;
-          })()}
-          {selectedLanguageId && (() => {
-            const selectedLang = vulnerabilityTree.find(l => l.id === selectedLanguageId);
-            return selectedLang && selectedLang.patterns.length > 0 ? (
-              <select
-                value={selectedPatternId}
-                onChange={(e) => {
-                  setSelectedPatternId(e.target.value);
-                  setCurrentPage(1);
-                  updateUrlParams({ patternId: e.target.value || null, page: null });
-                }}
-                className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">所有模式</option>
-                {selectedLang.patterns.map((pat) => (
-                  <option key={pat.id} value={pat.id}>{pat.displayName} ({pat.skillCount})</option>
-                ))}
-              </select>
-            ) : null;
-          })()}
-          <select
-            value={selectedActiveStatus}
-            onChange={(e) => {
-              setSelectedActiveStatus(e.target.value);
-              setCurrentPage(1);
-              updateUrlParams({ isActive: e.target.value || null, page: null });
-            }}
-            className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
-          >
-            <option value="">所有状态</option>
-            {activeStatusOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      </div>
-
       {/* Error */}
       {error && (
         <div className="bg-red-900/20 border border-red-800/40 text-red-300 px-4 py-3 rounded-lg text-sm">{error}</div>
       )}
 
-      {/* Card Grid */}
-      {skills.length === 0 ? (
-        <div className="bg-dark-surface rounded-xl shadow-sm border border-gray-700/50 p-12">
-          <div className="text-center">
-            <Award className="mx-auto h-16 w-16 text-gray-500 opacity-60" />
-            <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Skills</h3>
-            <p className="mt-2 text-sm text-gray-500">
-              {searchTerm || selectedCategoryId ? '没有找到匹配的 Skills，尝试调整筛选条件' : '点击右上角按钮创建新 Skill'}
-            </p>
+      {/* Filters + Card Grid combined */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl">
+        {/* Filters section */}
+        <div className="px-5 py-4 border-b border-gray-700/50">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {/* 搜索框 */}
+            <div className="flex gap-3 flex-1 w-full sm:max-w-md">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="搜索 Skills..."
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                />
+              </div>
+              <button onClick={handleSearch} className="px-4 py-2.5 bg-primary-500 text-white rounded-lg font-medium text-sm shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400 transition-all">
+                搜索
+              </button>
+              {searchTerm && (
+                <button onClick={handleClearSearch} className="px-4 py-2.5 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 text-sm transition-colors">
+                  清除
+                </button>
+              )}
+            </div>
+            
+            {/* 筛选控件 */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {isAdmin && skills.length > 0 && (
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={selectedSkills.size === skills.length && skills.length > 0} onChange={handleSelectAll} className="w-4 h-4 text-primary-600 border-gray-600 rounded" />
+                  <span className="text-sm text-gray-400">全选</span>
+                </label>
+              )}
+              <select
+                value={selectedCategoryId}
+                onChange={(e) => {
+                  setSelectedCategoryId(e.target.value);
+                  setSelectedLanguageId('');
+                  setSelectedPatternId('');
+                  setCurrentPage(1);
+                  updateUrlParams({ categoryId: e.target.value || null, languageId: null, patternId: null, page: null });
+                }}
+                className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">所有分类</option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.displayName} ({cat.count})</option>
+                ))}
+              </select>
+            {(() => {
+              const selectedCat = categories.find(c => c.id === selectedCategoryId);
+              return selectedCat?.hasSubDimension ? (
+                <select
+                  value={selectedLanguageId}
+                  onChange={(e) => {
+                    setSelectedLanguageId(e.target.value);
+                    setSelectedPatternId('');
+                    setCurrentPage(1);
+                    updateUrlParams({ languageId: e.target.value || null, patternId: null, page: null });
+                  }}
+                  className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">所有语言</option>
+                  {vulnerabilityTree.map((lang) => (
+                    <option key={lang.id} value={lang.id}>{lang.displayName} ({lang.skillCount})</option>
+                  ))}
+                </select>
+              ) : null;
+            })()}
+            {selectedLanguageId && (() => {
+              const selectedLang = vulnerabilityTree.find(l => l.id === selectedLanguageId);
+              return selectedLang && selectedLang.patterns.length > 0 ? (
+                <select
+                  value={selectedPatternId}
+                  onChange={(e) => {
+                    setSelectedPatternId(e.target.value);
+                    setCurrentPage(1);
+                    updateUrlParams({ patternId: e.target.value || null, page: null });
+                  }}
+                  className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">所有模式</option>
+                  {selectedLang.patterns.map((pat) => (
+                    <option key={pat.id} value={pat.id}>{pat.displayName} ({pat.skillCount})</option>
+                  ))}
+                </select>
+              ) : null;
+            })()}
+            <select
+              value={selectedActiveStatus}
+              onChange={(e) => {
+                setSelectedActiveStatus(e.target.value);
+                setCurrentPage(1);
+                updateUrlParams({ isActive: e.target.value || null, page: null });
+              }}
+              className="w-[140px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:ring-2 focus:ring-primary-500"
+            >
+              <option value="">所有状态</option>
+              {activeStatusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
           </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+        {/* Card Grid section */}
+        {skills.length === 0 ? (
+          <div className="p-12">
+            <div className="text-center">
+              <Award className="mx-auto h-16 w-16 text-gray-500 opacity-60" />
+              <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Skills</h3>
+              <p className="mt-2 text-sm text-gray-500">
+                {searchTerm || selectedCategoryId ? '没有找到匹配的 Skills，尝试调整筛选条件' : '点击右上角按钮创建新 Skill'}
+              </p>
+            </div>
+          </div>
+        ) : (
+        <div className="p-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {skills.map((skill) => {
             const IconComp = getCategoryIcon(skill);
             const iconColor = CATEGORY_COLORS[skill.categoryId] || 'bg-[#0F172A]0';
@@ -815,8 +818,10 @@ function SkillsPageContent() {
               </div>
             );
           })}
+          </div>
         </div>
-      )}
+        )}
+      </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
