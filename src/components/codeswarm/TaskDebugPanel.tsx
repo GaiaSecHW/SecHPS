@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Play, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, ChevronDown, ChevronRight, Loader2, Terminal, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface TaskDebugPanelProps {
@@ -17,6 +17,14 @@ interface ModelOption {
   apiKey?: string;
 }
 
+interface LogEntry {
+  type: string;
+  message: string;
+  details: string;
+  timestamp: string;
+  stream?: 'stdout' | 'stderr';  // 用于区分输出流
+}
+
 export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
@@ -26,7 +34,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [workerOptions, setWorkerOptions] = useState<{ nodeId: string; address: string; status: string }[]>([]);
   const [form, setForm] = useState({
     instruction: '',
-    agent: 'opencode' as 'opencode' | 'claude',
+    agent: '',
     gitUrl: '',
     gitRef: '',
     projectPath: '',
@@ -35,9 +43,108 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     timeoutSec: 300,
     skills: '',
     mcps: '',
-    startCommand: '',
     preferredWorkerNodeId: '',
   });
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [showLogs, setShowLogs] = useState(false);
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetchModels();
+    fetchWorkers();
+  }, []);
+
+  // SSE connection for real-time logs
+  useEffect(() => {
+    if (!currentTaskId) return;
+
+    const eventSource = new EventSource(`/api/codeswarm/tasks/${currentTaskId}/stream`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        if (data.type === 'connected') {
+          return;
+        }
+
+        if (data.type === 'task_complete') {
+          setLogs(prev => [...prev, {
+            type: 'task_complete',
+            message: data.state === 'completed' ? '任务完成' : '任务失败',
+            details: '',
+            timestamp: new Date().toISOString(),
+          }]);
+          eventSource.close();
+          return;
+        }
+
+        if (data.data) {
+          const eventData = data.data;
+          const eventLevel = eventData.level || 'agent';
+          let message = '';
+          let details = '';
+          let streamType: 'stdout' | 'stderr' | undefined = eventData.stream;
+
+          // Handle new log_chunk and agent_log_chunk events
+          if (data.type === 'log_chunk' || data.type === 'agent_log_chunk') {
+            message = eventLevel === 'worker' ? '[Worker]' : '[Agent]';
+            details = eventData.content || '';
+          } else if (data.type === 'agent_message_chunk') {
+            message = 'Agent 输出';
+            details = eventData.content || '';
+          } else if (data.type === 'task_started' || data.type === 'task_completed') {
+            message = data.type === 'task_started' ? '任务开始' : '任务完成';
+            details = eventData.command || eventData.content || '';
+          } else if (data.type === 'tool_call') {
+            message = '工具调用';
+            details = eventData.tool || JSON.stringify(eventData.input) || '';
+          } else if (data.type === 'tool_result' || data.type === 'tool_call_update') {
+            message = '工具结果';
+            details = eventData.output || '';
+          } else if (data.type === 'command_output') {
+            message = '命令输出';
+            details = eventData.content || '';
+          } else if (data.type === 'error') {
+            message = '错误';
+            details = eventData.message || JSON.stringify(eventData);
+          } else if (data.type === 'progress') {
+            message = '进度';
+            details = eventData.content || '';
+          } else {
+            message = data.type;
+            details = JSON.stringify(eventData);
+          }
+
+          if (message) {
+            setLogs(prev => [...prev, {
+              type: data.type,
+              message,
+              details,
+              timestamp: data.timestamp || new Date().toISOString(),
+              stream: streamType,
+            }]);
+          }
+        }
+      } catch (err) {
+        console.error('[TaskDebugPanel] SSE parse error:', err);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [currentTaskId]);
+
+  // Auto-scroll logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs]);
 
   useEffect(() => {
     fetchModels();
@@ -106,7 +213,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
       toast.error('请输入执行指令');
       return;
     }
-    if (executorMode === 'command' && !form.startCommand.trim()) {
+    if (executorMode === 'command' && !form.instruction.trim()) {
       toast.error('请输入执行命令');
       return;
     }
@@ -115,8 +222,8 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     try {
       const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
       const payload = {
-        instruction: executorMode === 'instruction' ? form.instruction : form.startCommand,
-        agent: executorMode === 'command' ? 'opencode' : form.agent,
+        instruction: form.instruction,
+        agent: form.agent || undefined,
         gitUrl: form.gitUrl || undefined,
         gitRef: form.gitRef || undefined,
         projectPath: form.projectPath || undefined,
@@ -127,7 +234,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         timeoutSec: form.timeoutSec || undefined,
         skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : undefined,
         mcps: form.mcps ? JSON.parse(form.mcps) : undefined,
-        startCommand: executorMode === 'command' ? form.startCommand : undefined,
+        startCommand: executorMode === 'command' ? form.instruction : undefined,
         preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
       };
 
@@ -145,9 +252,13 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         } else {
           toast('当前无可用 Worker，任务已加入队列', { icon: 'ℹ️' });
         }
-        onTaskCreated(data.taskId);
+        const taskId = data.taskId;
+        setCurrentTaskId(taskId);
+        setLogs([]);
+        setShowLogs(true);
+        onTaskCreated(taskId);
 
-        // Reset form
+        // Reset form (keep apiKey)
         setForm(prev => ({
           ...prev,
           instruction: '',
@@ -164,6 +275,12 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const clearLogs = () => {
+    setLogs([]);
+    setShowLogs(false);
+    setCurrentTaskId(null);
   };
 
   return (
@@ -242,12 +359,12 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           ) : (
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                执行命令 (startCommand) <span className="text-red-400">*</span>
+                执行命令 <span className="text-red-400">*</span>
               </label>
               <input
                 type="text"
-                value={form.startCommand}
-                onChange={(e) => setForm({ ...form, startCommand: e.target.value })}
+                value={form.instruction}
+                onChange={(e) => setForm({ ...form, instruction: e.target.value })}
                 placeholder="opencode run --command nazhua-audit"
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
               />
@@ -372,6 +489,20 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             </div>
           </div>
 
+          {/* Agent Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Agent 名称 <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.agent}
+              onChange={(e) => setForm({ ...form, agent: e.target.value })}
+              placeholder="如 nazhua-audit（command 模式下传入的 agent）"
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+            />
+          </div>
+
           {/* Advanced Fields */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -404,7 +535,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={loading || (executorMode === 'instruction' ? !form.instruction.trim() : !form.startCommand.trim())}
+              disabled={loading || !form.instruction.trim() || !form.agent.trim()}
               className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
@@ -421,6 +552,53 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             </button>
           </div>
         </form>
+      )}
+
+      {/* Real-time Logs Panel */}
+      {showLogs && (
+        <div className="border-t border-gray-700/50">
+          <div className="px-6 py-3 flex items-center justify-between bg-[#162032]">
+            <div className="flex items-center space-x-2">
+              <Terminal className="w-4 h-4 text-green-400" />
+              <span className="text-sm font-medium text-gray-100">实时日志</span>
+              {currentTaskId && (
+                <span className="text-xs text-gray-500">({currentTaskId})</span>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={clearLogs}
+                className="p-1 text-gray-400 hover:text-red-400 rounded"
+                title="关闭日志"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="h-64 overflow-y-auto bg-[#0F172A] p-4 font-mono text-xs">
+            {logs.length === 0 ? (
+              <div className="text-gray-500">等待任务开始...</div>
+            ) : (
+              logs.map((log, idx) => {
+                // 日志级别颜色映射
+                let textColor = 'text-gray-300';
+                if (log.type === 'error') textColor = 'text-red-400';
+                else if (log.type === 'task_complete') textColor = 'text-green-400';
+                else if (log.type === 'task_started') textColor = 'text-blue-400';
+                else if (log.type === 'command_output') {
+                  textColor = log.stream === 'stderr' ? 'text-yellow-400' : 'text-green-300';
+                }
+                return (
+                <div key={idx} className={`mb-1 ${textColor}`}>
+                  <span className="text-gray-500">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
+                  <span>[{log.message}]</span>
+                  {log.details && <span className="text-gray-400 ml-2">{log.details}</span>}
+                </div>
+              )})
+            )}
+            <div ref={logsEndRef} />
+          </div>
+        </div>
       )}
     </div>
   );

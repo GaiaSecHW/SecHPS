@@ -102,14 +102,41 @@ class CodeswarmDispatcher {
   }
 
   // 统一的分发方法：向 Worker 发送任务并更新 DB
+  // 使用两阶段提交确保原子性：
+  // 1. 先更新 DB 为 dispatched（Worker 收到任务后不会重复分发）
+  // 2. 再发送 HTTP 请求（如果失败，DB 已是 dispatched 状态，下次调度会跳过）
   async sendTaskToWorker(task: any, worker: { id: string; address: string }): Promise<boolean> {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
-    // address 可能包含多个逗号分隔的地址，取第一个
-    const workerAddress = worker.address.split(',')[0];
+    // 处理逗号分隔的地址列表，只取第一个有效地址
+    const addresses = worker.address.split(',');
+    let targetAddress = addresses[0].trim();
+    if (!targetAddress) {
+      console.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
+      return false;
+    }
 
+    // 阶段 1：先更新 DB 状态（乐观锁，防止重复分发）
     try {
-      const resp = await fetch(`http://${workerAddress}/task`, {
+      const updated = await prisma.codeswarmTask.update({
+        where: { id: task.id, state: 'queued' }, // 只更新 queued 状态，防止重复分发
+        data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
+      });
+      if (!updated) {
+        console.log(`[CodeSwarm] Task ${task.taskId} is no longer queued, skipping`);
+        return true;
+      }
+    } catch (e: any) {
+      if (e.code === 'P2025') {
+        console.log(`[CodeSwarm] Task ${task.taskId} not found or not in queued state`);
+        return true;
+      }
+      throw e;
+    }
+
+    // 阶段 2：发送 HTTP 请求到 Worker
+    try {
+      const resp = await fetch(`http://${targetAddress}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,7 +145,6 @@ class CodeswarmDispatcher {
           projectPath: task.projectPath || '',
           workspacePath: task.workspacePath || undefined,
           skills: task.skills ? JSON.parse(task.skills) : undefined,
-          scripts: task.scripts ? JSON.parse(task.scripts) : undefined,
           mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
           model: task.model || undefined,
           apiKey: task.apiKey || undefined,
@@ -127,19 +153,22 @@ class CodeswarmDispatcher {
           gitUrl: task.gitUrl || undefined,
           gitRef: task.gitRef || undefined,
           agent: task.agent || undefined,
-defaultAgentName: task.defaultAgentName || undefined,
-          startCommand: task.startCommand || undefined,
           preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
+          startCommand: task.startCommand || undefined,
         }),
         signal: AbortSignal.timeout(10000),
       });
 
-      if (!resp.ok) return false;
+      if (!resp.ok) {
+        // HTTP 失败，回滚 DB 状态（关键操作，记录失败）
+        await prisma.codeswarmTask.update({
+          where: { id: task.id },
+          data: { state: 'queued', workerId: null, updatedAt: new Date() },
+        }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
+        return false;
+      }
 
-      await prisma.codeswarmTask.update({
-        where: { id: task.id },
-        data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
-      });
+      // Worker 确认接收，更新 worker currentTasks
       await prisma.codeswarmWorker.update({
         where: { id: worker.id },
         data: { currentTasks: { increment: 1 } },
@@ -149,6 +178,11 @@ defaultAgentName: task.defaultAgentName || undefined,
       return true;
     } catch (error) {
       console.error(`[CodeSwarm] Dispatch error for task ${task.taskId}:`, error);
+      // HTTP 异常，回滚 DB 状态（关键操作，记录失败）
+      await prisma.codeswarmTask.update({
+        where: { id: task.id },
+        data: { state: 'queued', workerId: null, updatedAt: new Date() },
+      }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
       return false;
     }
   }
@@ -167,12 +201,24 @@ defaultAgentName: task.defaultAgentName || undefined,
     });
   }
 
-  // 任务完成：释放 Worker 槽位
-  onTaskCompleted(nodeId: string) {
+  // 任务完成：释放 Worker 槽位（内存 + DB 同步递减，幂等性检查）
+  async onTaskCompleted(nodeId: string) {
     const worker = this.workers.get(nodeId);
-    if (worker && worker.currentTasks > 0) {
+    if (!worker) return;
+
+    // 内存递减：幂等性检查，避免负数
+    if (worker.currentTasks > 0) {
       worker.currentTasks--;
     }
+
+    // DB 递减：使用条件更新避免负数（与超时处理保持一致）
+    await prisma.codeswarmWorker.updateMany({
+      where: {
+        id: worker.id,
+        currentTasks: { gt: 0 },
+      },
+      data: { currentTasks: { decrement: 1 } },
+    }).catch(() => {});
   }
 
   // 消费循环
@@ -217,7 +263,7 @@ defaultAgentName: task.defaultAgentName || undefined,
       if (!task || task.state !== 'queued') return true;
 
       // 优先使用指定的 Worker，否则自动分配
-      let worker = this.selectWorker(task.preferredWorkerNodeId);
+      let worker = this.selectWorker(task.preferredWorkerNodeId ?? undefined);
       if (!worker) {
         console.log('[CodeSwarm] 指定 Worker 不可用，尝试自动分配...');
         worker = this.selectWorker();
@@ -344,7 +390,7 @@ defaultAgentName: task.defaultAgentName || undefined,
           await prisma.codeswarmWorker.update({
             where: { id: worker.id },
             data: { status: 'offline', currentTasks: 0 },
-          }).catch(() => {});
+          }).catch(e => console.error('[CodeSwarm] 标记 Worker offline 失败:', e));
         }
       }
     }
@@ -367,7 +413,9 @@ defaultAgentName: task.defaultAgentName || undefined,
         });
 
         if (w.currentTasks > 0) {
-          this.rescheduleWorkerTasksById(w.id).catch(() => {});
+          this.rescheduleWorkerTasksById(w.id).catch(e =>
+            console.error('[CodeSwarm] rescheduleWorkerTasksById 失败:', e)
+          );
         }
       }
     } catch (e) {
@@ -449,21 +497,13 @@ defaultAgentName: task.defaultAgentName || undefined,
       if (timeouted.length === 0) return;
 
       for (const dbTaskId of timeouted) {
-        const task = await prisma.codeswarmTask.findUnique({
-          where: { id: dbTaskId },
-          select: { taskId: true, state: true, workerId: true },
-        });
-
-        if (!task || ['completed', 'failed'].includes(task.state)) {
-          // 已结束，移除超时记录
-          await this.redis.zrem('codeswarm:task:timeouts', dbTaskId);
-          continue;
-        }
-
-        console.warn(`[CodeSwarm] 任务 ${task.taskId} 超时，标记为 failed`);
-
-        await prisma.codeswarmTask.update({
-          where: { id: dbTaskId },
+        // 使用原子性条件更新：只有 running/dispatched 状态的任务才能被标记为超时
+        // 这避免了与正常完成路径的竞态条件
+        const updateResult = await prisma.codeswarmTask.updateMany({
+          where: {
+            id: dbTaskId,
+            state: { in: ['running', 'dispatched'] },
+          },
           data: {
             state: 'failed',
             error: 'Task timeout',
@@ -472,22 +512,41 @@ defaultAgentName: task.defaultAgentName || undefined,
           },
         });
 
-        // 释放 Worker 槽位
-        if (task.workerId) {
-          const workerEntry = [...this.workers.values()].find(w => w.id === task.workerId);
-          if (workerEntry && workerEntry.currentTasks > 0) {
-            workerEntry.currentTasks--;
+        // 如果更新成功（count > 0），说明任务确实被我们标记为超时
+        // 此时需要释放 Worker 槽位
+        if (updateResult.count > 0) {
+          // 获取 workerId 用于释放槽位
+          const task = await prisma.codeswarmTask.findUnique({
+            where: { id: dbTaskId },
+            select: { taskId: true, workerId: true },
+          });
+
+          if (task) {
+            console.warn(`[CodeSwarm] 任务 ${task.taskId} 超时，标记为 failed`);
+
+            // 释放 Worker 槽位（幂等性检查）
+            if (task.workerId) {
+              const workerEntry = [...this.workers.values()].find(w => w.id === task.workerId);
+              // 内存递减：幂等性检查，避免负数
+              if (workerEntry && workerEntry.currentTasks > 0) {
+                workerEntry.currentTasks--;
+              }
+              // DB 递减：使用条件更新避免负数
+              await prisma.codeswarmWorker.updateMany({
+                where: {
+                  id: task.workerId,
+                  currentTasks: { gt: 0 },
+                },
+                data: { currentTasks: { decrement: 1 } },
+              }).catch(() => {});
+            }
+
+            // 发布超时事件
+            await this.publishTaskEvent(task.taskId, { type: 'task_timeout', status: 'failed' });
           }
-          await prisma.codeswarmWorker.update({
-            where: { id: task.workerId },
-            data: { currentTasks: { decrement: 1 } },
-          }).catch(() => {});
         }
 
-        // 发布超时事件
-        await this.publishTaskEvent(task.taskId, { type: 'task_timeout', status: 'failed' });
-
-        // 移除超时记录
+        // 无论是否成功标记超时，都移除超时记录（已完成的任务也需要清理）
         await this.redis.zrem('codeswarm:task:timeouts', dbTaskId);
       }
     } catch (e) {

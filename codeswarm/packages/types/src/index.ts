@@ -141,6 +141,16 @@ export const WorkerEventTypeEnum = z.enum([
   'tool_call',
   'tool_call_update',
   'error',
+  'log_chunk',           // Worker层日志块
+  'agent_log_chunk',     // Agent层日志块（替代ACP，直接捕获stdout）
+  'agent_output',        // Agent结构化输出
+  'tool_result',         // 工具执行结果
+  'progress',            // 进度节点（如 "正在克隆仓库"）
+  'tool_duration',       // tool 执行耗时
+  'heartbeat',           // Worker 心跳日志
+  'cancel_confirmed',    // 取消确认
+  'task_started',        // 任务开始
+  'task_completed',      // 任务完成
 ]);
 
 export type WorkerEventType = z.infer<typeof WorkerEventTypeEnum>;

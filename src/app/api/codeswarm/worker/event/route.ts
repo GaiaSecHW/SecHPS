@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
-import eventBus from '@/lib/event-bus';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { taskId, nodeId, events } = body;
+    const { taskId, nodeId, events, type, data } = body;
 
     if (!taskId) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
@@ -17,48 +16,78 @@ export async function POST(request: Request) {
       select: { id: true },
     });
 
+    // Support both array format and single event format (from Worker daemon)
+    const eventList: Array<{ type: string; data?: any; content?: string; message?: string; level?: string; stream?: string }> = [];
     if (events?.length) {
-      const eventRows = events.map((event: { type: string; data?: any; content?: string; message?: string; timestamp?: string }) => ({
-        taskId,
-        type: event.type || 'unknown',
-        data: JSON.stringify(event),
-      }));
+      eventList.push(...events);
+    } else if (type && data) {
+      eventList.push({ type, data });
+    }
+
+    if (eventList.length > 0) {
+      // Create event rows with level and stream fields
+      const eventRows = eventList.map((event) => {
+        const eventData = event.data || event;
+        const logLevel = eventData.level || event.level || 'agent';
+        const stream = eventData.stream || event.stream || null;
+        
+        return {
+          taskId,
+          type: event.type || 'unknown',
+          data: JSON.stringify(event),
+          level: logLevel,
+          stream,
+        };
+      });
 
       await prisma.codeswarmEvent.createMany({ data: eventRows });
 
-      for (const event of events) {
+      for (const event of eventList) {
         codeswarmDispatcher.publishTaskEvent(taskId, {
           type: 'task_event',
           data: event,
-        }).catch(() => {});
+        }).catch(e => console.error('[CodeSwarm] 发布事件失败:', e));
       }
 
       if (taskInstance) {
         const logsToCreate: Array<{ id: string; taskId: string; level: string; message: string; details: string; timestamp: Date }> = [];
 
-        for (const event of events) {
+        for (const event of eventList) {
           let level = 'info';
           let message = '';
           let details = '';
 
-          if (event.type === 'agent_message_chunk') {
-            message = 'Agent 输出';
-            details = event.content || '';
-          } else if (event.type === 'tool_call') {
+          const eventData = event.data || event;
+          const eventType = event.type;
+          const content = eventData.content || eventData.message || '';
+          const logLevel = eventData.level || 'agent';
+
+          // Handle log_chunk and agent_log_chunk events
+          if (eventType === 'log_chunk' || eventType === 'agent_log_chunk') {
+            message = logLevel === 'worker' ? '[Worker]' : '[Agent]';
+            details = content;
+            level = eventData.stream === 'stderr' ? 'error' : 'info';
+          } else if (eventType === 'agent_message_chunk' || eventType === 'task_started' || eventType === 'task_completed') {
+            message = eventType === 'task_started' ? '任务开始' : eventType === 'task_completed' ? '任务完成' : 'Agent 输出';
+            details = content;
+          } else if (eventType === 'tool_call') {
             message = '工具调用';
-            details = event.tool || JSON.stringify(event.input) || '';
-          } else if (event.type === 'tool_call_update') {
+            details = eventData.tool || JSON.stringify(eventData.input) || '';
+          } else if (eventType === 'tool_result' || eventType === 'tool_call_update') {
             message = '工具结果';
-            details = event.output || '';
-          } else if (event.type === 'error') {
+            details = eventData.output || content || '';
+          } else if (eventType === 'error') {
+            message = '错误';
+            details = eventData.message || eventData.error || '';
             level = 'error';
-            message = '执行错误';
-            details = event.message || JSON.stringify(event);
+          } else if (eventType === 'progress') {
+            message = '进度';
+            details = content;
           }
 
           if (message) {
             logsToCreate.push({
-              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+              id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               taskId: taskInstance.id,
               level,
               message,
@@ -69,33 +98,16 @@ export async function POST(request: Request) {
         }
 
         if (logsToCreate.length > 0) {
-          await prisma.taskExecutionLog.createMany({ data: logsToCreate });
-          for (const log of logsToCreate) {
-            eventBus.emit(`task:${taskInstance.id}`, {
-              id: log.id,
-              level: log.level,
-              message: log.message,
-              details: log.details,
-              timestamp: log.timestamp.toISOString(),
-            });
-          }
+          await prisma.taskExecutionLog.createMany({ data: logsToCreate }).catch((e: Error) => 
+            console.error('[CodeSwarm] 创建执行日志失败:', e)
+          );
         }
-      }
-
-      if (events.some((e: { type: string }) => e.type === 'error')) {
-        await prisma.codeswarmTask.update({
-          where: { taskId },
-          data: { state: 'running', updatedAt: new Date() },
-        });
       }
     }
 
-    return NextResponse.json({ success: true, eventCount: events?.length || 0 });
+    return NextResponse.json({ success: true, count: eventList.length });
   } catch (error) {
-    console.error('[CodeSwarm] Event callback error:', error);
-    return NextResponse.json(
-      { error: 'Failed to record events' },
-      { status: 500 }
-    );
+    console.error('[CodeSwarm] Event processing error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

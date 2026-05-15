@@ -7,7 +7,7 @@ const WorkerNodesTable = dynamic(() => import('@/components/codeswarm/WorkerNode
 const TaskDebugPanel = dynamic(() => import('@/components/codeswarm/TaskDebugPanel').then(m => ({ default: m.TaskDebugPanel })), { ssr: false });
 const TaskResultViewer = dynamic(() => import('@/components/codeswarm/TaskResultViewer').then(m => ({ default: m.TaskResultViewer })), { ssr: false });
 import { AdminGuard } from '@/components/PermissionGuard';
-import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi } from 'lucide-react';
+import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi, Terminal } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -244,7 +244,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
 function CodeSwarmPageContent() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'api'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'logs' | 'api'>('overview');
   const { data: tasksData, refetch: refetchTasks } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
   const { data: workersData } = useApiFetch<WorkersResponse>('/api/codeswarm/nodes');
 
@@ -466,6 +466,17 @@ function CodeSwarmPageContent() {
           <span>任务列表</span>
         </button>
         <button
+          onClick={() => setActiveTab('logs')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+            activeTab === 'logs'
+              ? 'bg-dark-surface shadow text-blue-400'
+              : 'text-gray-400 hover:text-gray-100'
+          }`}
+        >
+          <Terminal className="w-4 h-4" />
+          <span>日志查看</span>
+        </button>
+        <button
           onClick={() => setActiveTab('api')}
           className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
             activeTab === 'api'
@@ -504,6 +515,25 @@ function CodeSwarmPageContent() {
           onTaskSelect={setSelectedTaskId}
           onRefresh={refetchTasks}
         />
+      )}
+
+      {activeTab === 'logs' && (
+        <div className="bg-white rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-4">Worker 日志查看</h2>
+          <p className="text-gray-600 mb-4">
+            选择任务后可查看实时日志输出，支持按层级（Worker层/Agent层）和输出流过滤。
+          </p>
+          <TaskResultViewer
+            selectedTaskId={selectedTaskId}
+            onTaskSelect={(taskId) => {
+              setSelectedTaskId(taskId);
+              if (taskId) {
+                window.open(`/dashboard/codeswarm/logs?taskId=${taskId}`, '_blank');
+              }
+            }}
+            onRefresh={refetchTasks}
+          />
+        </div>
       )}
 
       {activeTab === 'api' && (

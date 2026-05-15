@@ -125,8 +125,8 @@ async function dispatchQueuedTasks(): Promise<void> {
     const queuedTasks = await prisma.$queryRaw`
       SELECT id, "taskId", "workerId", state, instruction,
              "projectPath", "workspacePath", "gitUrl", "gitRef",
-             skills, scripts, mcps, model, "apiKey", "timeoutSec", agent,
-             "defaultAgentName", "startCommand", "preferredWorkerNodeId", error, "startedAt", "completedAt",
+             skills, mcps, model, "apiKey", "timeoutSec", agent,
+             "defaultAgentName", "preferredWorkerNodeId", error, "startedAt", "completedAt",
              "createdAt", "updatedAt"
       FROM "CodeswarmTask"
       WHERE state = 'queued'
@@ -163,7 +163,7 @@ async function dispatchQueuedTasks(): Promise<void> {
 
       const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
       if (success) {
-        worker.currentTasks++;
+        // sendTaskToWorker 已经会更新 DB 中的 currentTasks，不需要额外处理
         console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       }
     }
