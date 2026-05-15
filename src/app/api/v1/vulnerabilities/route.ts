@@ -14,11 +14,12 @@ export async function POST(request: NextRequest) {
     return badRequest('Invalid JSON body');
   }
 
-  const { projectId, evaluationId, skillExecutionId, vulnerabilities } =
+  const { projectId, evaluationId, skillExecutionId, filePath, vulnerabilities } =
     body as Record<string, unknown>;
 
   // 2. 基本校验
   if (!projectId || typeof projectId !== 'string') return badRequest('projectId is required');
+  if (!filePath || typeof filePath !== 'string') return badRequest('filePath is required');
   if (!Array.isArray(vulnerabilities) || vulnerabilities.length === 0) {
     return badRequest('vulnerabilities must be a non-empty array');
   }
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
       vulnerable: boolean;
       fixSuggestion: string | null;
       rawReport: string | null;
+      filePath: string | null;
       status: string;
       updatedAt: Date;
     }> = [];
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
         vulnerable: (vuln.vulnerable as boolean) ?? true,
         fixSuggestion: (vuln.fixSuggestion as string) || null,
         rawReport: (vuln.rawReport as string) || null,
+        filePath: (filePath as string) || null,
         status: 'new',
         updatedAt: new Date(),
       });

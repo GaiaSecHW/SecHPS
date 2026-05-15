@@ -1843,6 +1843,7 @@ model Vulnerability {
   vulnerable                Boolean?                    @default(true)
   fixSuggestion             String?
   rawReport                 String?
+  filePath                  String?
   status                    String                      @default("new")
   falsePositiveReason       String?
   confirmedBy               String?
@@ -2121,4 +2122,22 @@ model AgentFlowPipeline {
 
   @@index([tenantId])
   @@index([userId])
+}
+
+model LocalTestRecord {
+  id           String    @id @default(cuid())
+  taskId       String    @unique
+  workspace    String
+  instruction  String
+  status       String    @default("queued")
+  result       String?
+  error        String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  durationMs   Int?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([createdAt])
+  @@index([status])
 }

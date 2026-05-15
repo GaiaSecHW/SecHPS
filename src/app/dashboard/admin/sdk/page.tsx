@@ -264,6 +264,7 @@ const apiDocs = [
         desc: '批量创建漏洞记录（上限 100 条/次）',
         requestBody: [
           { name: 'projectId', type: 'string', required: true, desc: '所属项目 ID' },
+          { name: 'filePath', type: 'string', required: true, desc: 'AUDIT_REPORT.md 文件完整路径' },
           { name: 'evaluationId', type: 'string', required: false, desc: '关联评估会话 ID' },
           { name: 'skillExecutionId', type: 'string', required: false, desc: '关联 Skill 执行记录 ID' },
           { name: 'vulnerabilities', type: 'array', required: true, desc: '漏洞数组（1~100 条）' },
