@@ -94,14 +94,14 @@ export class EnvironmentFactory {
           resolvedInstruction = fileContent;
         } catch (e) {
           console.log(`[Environment] Failed to read instruction.txt: ${e}`);
-          resolvedInstruction = payload.instruction;
+          resolvedInstruction = payload.instruction ?? undefined;
           if (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH) {
             instructionTooShort = true;
           }
         }
       } else {
         console.log(`[Environment] instruction.txt not found, using payload.instruction`);
-        resolvedInstruction = payload.instruction;
+        resolvedInstruction = payload.instruction ?? undefined;
         if (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH) {
           instructionTooShort = true;
         }
@@ -215,7 +215,10 @@ export class EnvironmentFactory {
         progress(`配置模型: ${payload.model}`);
       }
       if (payload.mcps && payload.mcps.length > 0) {
-        opencodeConfig.mcp = this.normalizeMcpServices(payload.mcps);
+        const mcpObjects = payload.mcps.filter((m): m is Exclude<typeof m, string> => typeof m !== 'string');
+        if (mcpObjects.length > 0) {
+          opencodeConfig.mcp = this.normalizeMcpServices(mcpObjects);
+        }
         progress(`配置 MCP: ${payload.mcps.length}个`);
       }
       if (payload.agent) {

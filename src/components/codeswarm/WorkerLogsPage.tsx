@@ -56,6 +56,7 @@ interface TaskDetail extends Task {
   result?: string;
   error?: string;
   workspacePath?: string;
+  sessionId?: string;
 }
 
 interface ExecutionPhase {
@@ -425,6 +426,10 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
               <div>
                 <span className="text-slate-500">Agent:</span>
                 <span className="ml-2 text-slate-200">{taskDetail.agent || '-'}</span>
+              </div>
+              <div>
+                <span className="text-slate-500">会话ID:</span>
+                <span className="ml-2 text-slate-200 font-mono text-xs">{taskDetail.sessionId || '-'}</span>
               </div>
               <div>
                 <span className="text-slate-500">指令:</span>

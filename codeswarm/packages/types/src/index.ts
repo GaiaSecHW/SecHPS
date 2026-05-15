@@ -100,11 +100,11 @@ export type Task = z.infer<typeof TaskSchema>;
 
 export const TaskPayloadSchema = z.object({
   taskId: z.string(),
-  instruction: z.string().optional(),
+  instruction: z.string().nullable().optional(),
   projectPath: z.string().optional().default(''),
   skills: z.array(z.string()).optional().default([]),
   scripts: z.array(z.string()).optional().default([]),
-  mcps: z.array(MCPServiceSchema).optional().default([]),
+  mcps: z.array(z.union([MCPServiceSchema, z.string()])).optional().default([]),
   model: z.string().optional(),
   timeoutSec: z.number().optional(),
   apiKey: z.string().optional(),

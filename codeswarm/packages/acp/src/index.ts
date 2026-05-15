@@ -122,6 +122,7 @@ export class ACPClient {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
       cwd: config.cwd,
+      ...(process.platform === 'win32' ? { shell: true } : {}),
     });
 
     if (!this.process.stdin || !this.process.stdout || !this.process.stderr) {

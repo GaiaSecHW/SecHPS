@@ -6,8 +6,10 @@ import dynamic from 'next/dynamic';
 const WorkerNodesTable = dynamic(() => import('@/components/codeswarm/WorkerNodesTable').then(m => ({ default: m.WorkerNodesTable })), { ssr: false });
 const TaskDebugPanel = dynamic(() => import('@/components/codeswarm/TaskDebugPanel').then(m => ({ default: m.TaskDebugPanel })), { ssr: false });
 const TaskResultViewer = dynamic(() => import('@/components/codeswarm/TaskResultViewer').then(m => ({ default: m.TaskResultViewer })), { ssr: false });
+const LocalTestPanel = dynamic(() => import('@/components/codeswarm/LocalTestPanel').then(m => ({ default: m.LocalTestPanel })), { ssr: false });
+const WorkerLogsPage = dynamic(() => import('@/components/codeswarm/WorkerLogsPage'), { ssr: false });
 import { AdminGuard } from '@/components/PermissionGuard';
-import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi, Terminal } from 'lucide-react';
+import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi, Terminal, FlaskConical } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -244,7 +246,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
 function CodeSwarmPageContent() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'logs' | 'api'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'logs' | 'api' | 'local-test'>('overview');
   const { data: tasksData, refetch: refetchTasks } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
   const { data: workersData } = useApiFetch<WorkersResponse>('/api/codeswarm/nodes');
 
@@ -500,6 +502,17 @@ function CodeSwarmPageContent() {
           <BookOpen className="w-4 h-4" />
           <span>接口文档</span>
         </button>
+        <button
+          onClick={() => setActiveTab('local-test')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+            activeTab === 'local-test'
+              ? 'bg-dark-surface shadow text-blue-400'
+              : 'text-gray-400 hover:text-gray-100'
+          }`}
+        >
+          <FlaskConical className="w-4 h-4" />
+          <span>本地测试</span>
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -531,22 +544,7 @@ function CodeSwarmPageContent() {
       )}
 
       {activeTab === 'logs' && (
-        <div className="bg-white rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Worker 日志查看</h2>
-          <p className="text-gray-600 mb-4">
-            选择任务后可查看实时日志输出，支持按层级（Worker层/Agent层）和输出流过滤。
-          </p>
-          <TaskResultViewer
-            selectedTaskId={selectedTaskId}
-            onTaskSelect={(taskId) => {
-              setSelectedTaskId(taskId);
-              if (taskId) {
-                window.open(`/dashboard/codeswarm/logs?taskId=${taskId}`, '_blank');
-              }
-            }}
-            onRefresh={refetchTasks}
-          />
-        </div>
+        <WorkerLogsPage />
       )}
 
       {activeTab === 'api' && (
@@ -589,8 +587,12 @@ npx tsx packages/worker/src/index.ts`}
         </div>
       )}
 
+      {activeTab === 'local-test' && (
+        <LocalTestPanel />
+      )}
+
       {/* Callback URLs Info */}
-      {activeTab !== 'api' && activeTab !== 'overview' && (
+      {activeTab !== 'api' && activeTab !== 'overview' && activeTab !== 'local-test' && (
         <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
           <h3 className="text-sm font-medium text-cyan-400 mb-2">Worker 配置说明</h3>
           <p className="text-sm text-gray-300 mb-2">

@@ -16,7 +16,8 @@ export type AgentEventType =
   | 'phase_start'
   | 'phase_complete'
   | 'phase_error'
-  | 'log_chunk';
+  | 'log_chunk'
+  | 'session_created';
 
 export interface AgentEvent {
   type: AgentEventType;
@@ -31,6 +32,8 @@ export interface AgentEvent {
   success?: boolean;
   // 日志字段
   level?: 'worker' | 'agent';
+  // 输出流字段（用于区分 stdout/stderr）
+  stream?: 'stdout' | 'stderr';
 }
 
 export interface AgentEventCallback {
@@ -199,7 +202,16 @@ export class ProcessManager {
       console.log(`[ProcessMgr]   agentName: ${agentName}`);
       const sessionId = await client.createSession(agentName);
       console.log(`[ProcessMgr] Step E DONE: sessionId = ${sessionId}`);
-      
+
+      // 回传 sessionId 给平台
+      if (onEvent) {
+        onEvent({
+          type: 'session_created',
+          message: sessionId,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
       this.processes.set(taskId, {
         client,
         workspace,
