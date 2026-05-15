@@ -19,6 +19,7 @@ import {
 import JSZip from 'jszip';
 import { PERMISSIONS } from '@/types/permissions';
 import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
+import { VulnerabilityTreeSelector } from '@/components/skills/VulnerabilityTreeSelector';
 import { hasPermission } from '@/lib/permissions';
 import { getFormatGuideData } from '@/lib/skill-builder';
 
@@ -41,6 +42,9 @@ interface SkillItem {
   skillName: string;
   skillDisplayName: string;
   skillDescription: string;
+  categoryId: string;
+  vulnerabilityTreeId: string | null;
+  productTagIds: string[];
   status: 'pending' | 'uploading' | 'success' | 'failed';
   governanceWarning?: {
     isPotentialDuplicate: boolean;
@@ -127,18 +131,7 @@ export default function ImportCreateSkillPage() {
   const [isPublic, setIsPublic] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
 
-  const [categoryId, setCategoryId] = useState<string>(VULNERABILITY_CATEGORY_ID);
-  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
-  const [selectedVulnCategoryId, setSelectedVulnCategoryId] = useState<string>('');
-  const [selectedVulnSubcategoryId, setSelectedVulnSubcategoryId] = useState<string>('');
-  const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<string | null>(null);
-  const [productTagIds, setProductTagIds] = useState<string[]>([]);
-
   const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; description?: string; icon?: string; hasSubDimension: boolean }>>([]);
-  const [languages, setLanguages] = useState<Array<{ id: string; name: string; displayName: string }>>([]);
-  const [vulnCategories, setVulnCategories] = useState<Array<{ id: string; name: string; displayName: string }>>([]);
-  const [vulnSubcategories, setVulnSubcategories] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
-  const [vulnPatterns, setVulnPatterns] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
   const [loadingData, setLoadingData] = useState(false);
 
   const [skillItems, setSkillItems] = useState<SkillItem[]>([]);
@@ -161,21 +154,11 @@ export default function ImportCreateSkillPage() {
       setLoadingData(true);
       try {
         const t = localStorage.getItem('token');
-        const [catRes, treeRes] = await Promise.all([
-          fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${t}` } }),
-          fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${t}` } }),
-        ]);
+        const catRes = await fetch('/api/skills/categories', { headers: { Authorization: `Bearer ${t}` } });
 
         if (catRes.ok) {
           const data = await catRes.json();
           setCategories(data.categories || []);
-        }
-        if (treeRes.ok) {
-          const data = await treeRes.json();
-          setLanguages(data.tree || []);
-          setVulnCategories(data.categories || []);
-          setVulnSubcategories(data.subcategories || []);
-          setVulnPatterns(data.patterns || []);
         }
       } catch (e) {
         console.error('获取数据失败:', e);
@@ -185,15 +168,6 @@ export default function ImportCreateSkillPage() {
     };
     fetchData();
   }, []);
-
-  const selectedCategory = categories.find(c => c.id === categoryId);
-
-  const availableSubcategories = vulnSubcategories.filter(
-    s => s.parentId === selectedVulnCategoryId
-  );
-  const availablePatterns = vulnPatterns.filter(
-    p => p.parentId === selectedVulnSubcategoryId
-  );
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -216,6 +190,9 @@ export default function ImportCreateSkillPage() {
           skillName: '',
           skillDisplayName: '',
           skillDescription: '',
+          categoryId: VULNERABILITY_CATEGORY_ID,
+          vulnerabilityTreeId: null,
+          productTagIds: [],
           status: 'pending',
         });
         continue;
@@ -237,6 +214,9 @@ export default function ImportCreateSkillPage() {
               skillName: '',
               skillDisplayName: '',
               skillDescription: '',
+              categoryId: VULNERABILITY_CATEGORY_ID,
+              vulnerabilityTreeId: null,
+              productTagIds: [],
               status: 'pending',
             });
             continue;
@@ -258,6 +238,9 @@ export default function ImportCreateSkillPage() {
             skillName: '',
             skillDisplayName: '',
             skillDescription: '',
+            categoryId: VULNERABILITY_CATEGORY_ID,
+            vulnerabilityTreeId: null,
+            productTagIds: [],
             status: 'pending',
           });
           continue;
@@ -270,6 +253,9 @@ export default function ImportCreateSkillPage() {
           skillName: parsed.name,
           skillDisplayName: parsed.displayName,
           skillDescription: parsed.description,
+          categoryId: VULNERABILITY_CATEGORY_ID,
+          vulnerabilityTreeId: null,
+          productTagIds: [],
           status: 'pending',
         });
       } catch (e) {
@@ -281,6 +267,9 @@ export default function ImportCreateSkillPage() {
           skillName: '',
           skillDisplayName: '',
           skillDescription: '',
+          categoryId: VULNERABILITY_CATEGORY_ID,
+          vulnerabilityTreeId: null,
+          productTagIds: [],
           status: 'pending',
         });
       }
@@ -315,13 +304,13 @@ export default function ImportCreateSkillPage() {
       return;
     }
 
-    if (!categoryId) {
+    if (!item.categoryId) {
       setError('请选择分类');
       return;
     }
 
-    const cat = categories.find(c => c.id === categoryId);
-    if (cat?.hasSubDimension && !vulnerabilityTreeId) {
+    const cat = categories.find(c => c.id === item.categoryId);
+    if (cat?.hasSubDimension && !item.vulnerabilityTreeId) {
       setError('请选择漏洞模式');
       return;
     }
@@ -332,14 +321,14 @@ export default function ImportCreateSkillPage() {
 
       const formData = new FormData();
       formData.append('file', item.file);
-      formData.append('categoryId', categoryId);
-      formData.append('productTagIds', JSON.stringify(productTagIds));
+      formData.append('categoryId', item.categoryId);
+      formData.append('productTagIds', JSON.stringify(item.productTagIds));
       formData.append('isPublic', String(isPublic));
       formData.append('skillName', item.skillName.trim());
       formData.append('skillDisplayName', item.skillDisplayName.trim());
       formData.append('skillDescription', item.skillDescription.trim());
-      if (vulnerabilityTreeId) {
-        formData.append('vulnerabilityTreeId', vulnerabilityTreeId);
+      if (item.vulnerabilityTreeId) {
+        formData.append('vulnerabilityTreeId', item.vulnerabilityTreeId);
       }
 
       const response = await fetch('/api/skills/upload', {
@@ -357,7 +346,6 @@ export default function ImportCreateSkillPage() {
 
       const result = await response.json();
       
-      // 处理治理警告
       if (result.governanceWarning && result.governanceWarning.isPotentialDuplicate) {
         updateItem(item.id, { 
           status: 'success', 
@@ -385,14 +373,16 @@ export default function ImportCreateSkillPage() {
       return;
     }
 
-    if (!categoryId) {
-      setError('请选择分类');
-      return;
-    }
+    // 验证每个 item 的必填项
+    const invalidItems = validItems.filter(item => {
+      if (!item.categoryId) return true;
+      const cat = categories.find(c => c.id === item.categoryId);
+      if (cat?.hasSubDimension && !item.vulnerabilityTreeId) return true;
+      return false;
+    });
 
-    const cat = categories.find(c => c.id === categoryId);
-    if (cat?.hasSubDimension && !vulnerabilityTreeId) {
-      setError('请选择漏洞模式');
+    if (invalidItems.length > 0) {
+      setError(`${invalidItems.length} 个 Skill 缺少必填信息（分类或漏洞模式）`);
       return;
     }
 
@@ -413,14 +403,14 @@ export default function ImportCreateSkillPage() {
       try {
         const formData = new FormData();
         formData.append('file', item.file);
-        formData.append('categoryId', categoryId);
-        formData.append('productTagIds', JSON.stringify(productTagIds));
+        formData.append('categoryId', item.categoryId);
+        formData.append('productTagIds', JSON.stringify(item.productTagIds));
         formData.append('isPublic', String(isPublic));
         formData.append('skillName', item.skillName.trim());
         formData.append('skillDisplayName', item.skillDisplayName.trim());
         formData.append('skillDescription', item.skillDescription.trim());
-        if (vulnerabilityTreeId) {
-          formData.append('vulnerabilityTreeId', vulnerabilityTreeId);
+        if (item.vulnerabilityTreeId) {
+          formData.append('vulnerabilityTreeId', item.vulnerabilityTreeId);
         }
 
         const response = await fetch('/api/skills/upload', {
@@ -438,7 +428,6 @@ export default function ImportCreateSkillPage() {
 
         const result = await response.json();
         
-        // 处理治理警告
         if (result.governanceWarning && result.governanceWarning.isPotentialDuplicate) {
           updateItem(item.id, { 
             status: 'success', 
@@ -613,31 +602,70 @@ export default function ImportCreateSkillPage() {
                         )}
                         
                         {item.parsed && (
-                          <div className="grid grid-cols-3 gap-2 mt-2">
-                            <input
-                              type="text"
-                              value={item.skillName}
-                              onChange={(e) => updateItem(item.id, { skillName: e.target.value })}
-                              placeholder="名称"
-                              className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                              disabled={item.status !== 'pending'}
-                            />
-                            <input
-                              type="text"
-                              value={item.skillDisplayName}
-                              onChange={(e) => updateItem(item.id, { skillDisplayName: e.target.value })}
-                              placeholder="显示名称"
-                              className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                              disabled={item.status !== 'pending'}
-                            />
-                            <input
-                              type="text"
-                              value={item.skillDescription}
-                              onChange={(e) => updateItem(item.id, { skillDescription: e.target.value })}
-                              placeholder="描述"
-                              className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                              disabled={item.status !== 'pending'}
-                            />
+                          <div className="space-y-2 mt-2">
+                            <div className="grid grid-cols-3 gap-2">
+                              <input
+                                type="text"
+                                value={item.skillName}
+                                onChange={(e) => updateItem(item.id, { skillName: e.target.value })}
+                                placeholder="名称"
+                                className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                                disabled={item.status !== 'pending'}
+                              />
+                              <input
+                                type="text"
+                                value={item.skillDisplayName}
+                                onChange={(e) => updateItem(item.id, { skillDisplayName: e.target.value })}
+                                placeholder="显示名称"
+                                className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                                disabled={item.status !== 'pending'}
+                              />
+                              <input
+                                type="text"
+                                value={item.skillDescription}
+                                onChange={(e) => updateItem(item.id, { skillDescription: e.target.value })}
+                                placeholder="描述"
+                                className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                                disabled={item.status !== 'pending'}
+                              />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-0.5">分类</label>
+                                <select
+                                  value={item.categoryId}
+                                  onChange={(e) => updateItem(item.id, { categoryId: e.target.value, vulnerabilityTreeId: null })}
+                                  className="w-full px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
+                                  disabled={item.status !== 'pending' || loadingData}
+                                >
+                                  <option value="">请选择分类</option>
+                                  {categories.map(c => (
+                                    <option key={c.id} value={c.id}>{c.displayName}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              {(() => {
+                                const selectedCat = categories.find(c => c.id === item.categoryId);
+                                return selectedCat?.hasSubDimension ? (
+                                  <div>
+                                    <label className="block text-xs text-gray-500 mb-0.5">漏洞模式</label>
+                                    <VulnerabilityTreeSelector
+                                      value={item.vulnerabilityTreeId}
+                                      onChange={(patternId) => updateItem(item.id, { vulnerabilityTreeId: patternId })}
+                                      placeholder="选择漏洞模式"
+                                      loading={loadingData}
+                                    />
+                                  </div>
+                                ) : null;
+                              })()}
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-500 mb-0.5">适用产品</label>
+                              <ProductTagSelect 
+                                selectedIds={item.productTagIds} 
+                                onChange={(ids) => updateItem(item.id, { productTagIds: ids })} 
+                              />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -658,127 +686,20 @@ export default function ImportCreateSkillPage() {
             </div>
           )}
 
-          {skillItems.length > 0 && validItemsCount > 0 && (
-            <>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    分类 <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={categoryId}
-                    onChange={(e) => {
-                      setCategoryId(e.target.value);
-                      setSelectedLanguageId('');
-                      setSelectedVulnCategoryId('');
-                      setSelectedVulnSubcategoryId('');
-                      setVulnerabilityTreeId(null);
-                    }}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    disabled={loadingData}
-                  >
-                    <option value="">{loadingData ? '加载中...' : '请选择分类'}</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.displayName}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {selectedCategory?.hasSubDimension && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        语言
-                      </label>
-                      <select
-                        value={selectedLanguageId}
-                        onChange={(e) => setSelectedLanguageId(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                        disabled={loadingData}
-                      >
-                        <option value="">请选择语言</option>
-                        {languages.map(lang => (
-                          <option key={lang.id} value={lang.id}>{lang.displayName}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        漏洞模式 <span className="text-red-500">*</span>
-                      </label>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <select
-                          value={selectedVulnCategoryId}
-                          onChange={(e) => {
-                            setSelectedVulnCategoryId(e.target.value);
-                            setSelectedVulnSubcategoryId('');
-                            setVulnerabilityTreeId(null);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                          disabled={loadingData || vulnCategories.length === 0}
-                        >
-                          <option value="">请选择类型</option>
-                          {vulnCategories.map(cat => (
-                            <option key={cat.id} value={cat.id}>{cat.displayName}</option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={selectedVulnSubcategoryId}
-                          onChange={(e) => {
-                            setSelectedVulnSubcategoryId(e.target.value);
-                            setVulnerabilityTreeId(null);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                          disabled={loadingData || !selectedVulnCategoryId || availableSubcategories.length === 0}
-                        >
-                          <option value="">请选择分类</option>
-                          {availableSubcategories.map(sub => (
-                            <option key={sub.id} value={sub.id}>{sub.displayName}</option>
-                          ))}
-                        </select>
-
-                        <select
-                          value={vulnerabilityTreeId || ''}
-                          onChange={(e) => setVulnerabilityTreeId(e.target.value || null)}
-                          className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                          disabled={loadingData || !selectedVulnSubcategoryId || availablePatterns.length === 0}
-                        >
-                          <option value="">请选择模式</option>
-                          {availablePatterns.map(pat => (
-                            <option key={pat.id} value={pat.id}>{pat.displayName}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
-                </label>
-                <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
-              </div>
-
-              {isAdmin && (
-                <div>
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={isPublic}
-                      onChange={(e) => setIsPublic(e.target.checked)}
-                      className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
-                    />
-                    <span className="ml-2 text-sm text-gray-300">
-                      公开 Skill（所有用户可见）
-                    </span>
-                  </label>
-                </div>
-              )}
-            </>
+          {skillItems.length > 0 && validItemsCount > 0 && isAdmin && (
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={isPublic}
+                  onChange={(e) => setIsPublic(e.target.checked)}
+                  className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
+                />
+                <span className="ml-2 text-sm text-gray-300">
+                  公开 Skill（所有用户可见）
+                </span>
+              </label>
+            </div>
           )}
 
           {skillItems.length === 1 && skillItems[0].parsed && (

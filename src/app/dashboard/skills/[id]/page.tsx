@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
+import JSZip from 'jszip';
 import {
   ArrowLeft,
   Play,
@@ -30,6 +31,7 @@ import {
   Code,
   LayoutDashboard,
   TrendingUp,
+  FileUp,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { hasPermission } from '@/lib/permissions';
@@ -39,7 +41,82 @@ import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
 import { SkillRollbackModal } from '@/components/skills/SkillRollbackModal';
 import { SkillNewVersionModal } from '@/components/skills/SkillNewVersionModal';
+import { VulnerabilityTreeSelector } from '@/components/skills/VulnerabilityTreeSelector';
+import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
 import toast from 'react-hot-toast';
+
+const VULNERABILITY_CATEGORY_ID = 'cat-vulnerability-mining';
+
+interface ParsedSkill {
+  name: string;
+  displayName: string;
+  description: string;
+  content: string;
+  cwe?: string;
+}
+
+function parseSkillMarkdown(content: string): ParsedSkill | null {
+  try {
+    let name = '';
+    let description = '';
+    let bodyContent = content;
+
+    const frontmatterMatch = content.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+    if (frontmatterMatch) {
+      const frontmatter = frontmatterMatch[1];
+      const nameMatch = frontmatter.match(/name:\s*(.+)/);
+      const descMatch = frontmatter.match(/description:\s*(?:\n([\s\S]*?)\n\s*\S|$)|description:\s*(.+)/);
+      
+      if (nameMatch) name = nameMatch[1].trim();
+      if (descMatch) {
+        description = descMatch[1] ? descMatch[1].trim() : (descMatch[2] ? descMatch[2].trim() : '');
+      }
+      
+      bodyContent = content.substring(frontmatterMatch[0].length);
+    }
+
+    const titleMatch = bodyContent.match(/^#\s+(.+)\s*\n/);
+    let displayName = '';
+    if (titleMatch) {
+      displayName = titleMatch[1].trim();
+    }
+
+    if (!name) {
+      const firstLine = bodyContent.split('\n')[0];
+      name = firstLine.replace(/^#\s+/, '').toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]/g, '') || 'imported-skill';
+    }
+
+    if (!displayName) {
+      displayName = name;
+    }
+
+    if (!description) {
+      const lines = bodyContent.split('\n');
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line && !line.startsWith('#') && !line.startsWith('-') && !line.startsWith('>')) {
+          description = line.substring(0, 200);
+          break;
+        }
+      }
+      if (!description) description = displayName;
+    }
+
+    const cweMatch = content.match(/CWE-(\d+)/i);
+    const cwe = cweMatch ? `CWE-${cweMatch[1]}` : undefined;
+
+    return {
+      name,
+      displayName,
+      description,
+      content,
+      cwe,
+    };
+  } catch (e) {
+    console.error('解析 Skill 文件失败:', e);
+    return null;
+  }
+}
 
 interface Skill {
   id: string;
@@ -84,13 +161,17 @@ export default function SkillDetailPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);  // 当前用户ID
   const [isEditing, setIsEditing] = useState(false);
+  const [editMode, setEditMode] = useState<'content' | 'file'>('content');
   const [saving, setSaving] = useState(false);
   const [editName, setEditName] = useState('');
   const [editContent, setEditContent] = useState('');
   const [editIsActive, setEditIsActive] = useState(true);
   const [editCategoryId, setEditCategoryId] = useState<string>('');
   const [editVulnerabilityTreeId, setEditVulnerabilityTreeId] = useState<string>('');
-  const [editSelectedLanguageId, setEditSelectedLanguageId] = useState<string>('');
+  const [editProductTagIds, setEditProductTagIds] = useState<string[]>([]);
+  const [editFile, setEditFile] = useState<File | null>(null);
+  const [editParsed, setEditParsed] = useState<ParsedSkill | null>(null);
+  const [editFileError, setEditFileError] = useState('');
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
@@ -231,9 +312,7 @@ export default function SkillDetailPage() {
 
   // 分类选择相关
   const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; icon: string | null; hasSubDimension: boolean }>>([]);
-  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; patterns: Array<{ id: string; name: string; displayName: string }> }>>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [loadingTree, setLoadingTree] = useState(false);
   
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -349,14 +428,17 @@ export default function SkillDetailPage() {
   const startEditing = async () => {
     if (!skill) return;
     setEditName(skill.displayName);
-    setEditCategoryId(skill.categoryId || '');
+    setEditCategoryId(skill.categoryId || VULNERABILITY_CATEGORY_ID);
     setEditVulnerabilityTreeId(skill.vulnerabilityTreeId || '');
-    setEditSelectedLanguageId('');
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
+    setEditProductTagIds(skill.productTags?.map(t => t.id) || []);
+    setEditMode('content');
+    setEditFile(null);
+    setEditParsed(null);
+    setEditFileError('');
     setIsEditing(true);
 
-    // 加载分类和漏洞树数据
     const token = localStorage.getItem('token');
     setLoadingCategories(true);
     try {
@@ -370,48 +452,86 @@ export default function SkillDetailPage() {
     } finally {
       setLoadingCategories(false);
     }
-
-    // 如果有子维度，加载漏洞树并回显语言
-    if (skill.hasSubDimension) {
-      setLoadingTree(true);
-      try {
-        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          setVulnerabilityTree(data.tree || []);
-          // 回显：根据当前 vulnerabilityTreeId 找到所属语言
-          if (skill.vulnerabilityTreeId) {
-            for (const lang of (data.tree || [])) {
-              const found = lang.patterns.find((p: { id: string }) => p.id === skill.vulnerabilityTreeId);
-              if (found) {
-                setEditSelectedLanguageId(lang.id);
-                break;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('获取漏洞树失败:', e);
-      } finally {
-        setLoadingTree(false);
-      }
-    }
   };
 
   const cancelEditing = () => {
     setIsEditing(false);
+    setEditFile(null);
+    setEditParsed(null);
+    setEditFileError('');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const file = files[0];
+    const isZip = file.name.toLowerCase().endsWith('.zip');
+    const isMd = file.name.toLowerCase().endsWith('.md');
+
+    if (!isZip && !isMd) {
+      setEditFileError('文件格式不支持，请上传 ZIP 或 .md 文件');
+      setEditFile(null);
+      setEditParsed(null);
+      return;
+    }
+
+    try {
+      let content: string;
+
+      if (isZip) {
+        const zip = await JSZip.loadAsync(file);
+        const skillFile = zip.file('SKILL.md');
+        if (!skillFile) {
+          setEditFileError('ZIP 中未找到 SKILL.md 文件');
+          setEditFile(null);
+          setEditParsed(null);
+          return;
+        }
+        content = await skillFile.async('string');
+      } else {
+        content = await file.text();
+      }
+
+      const parsed = parseSkillMarkdown(content);
+      if (!parsed) {
+        setEditFileError('无法解析 Skill 文件');
+        setEditFile(null);
+        setEditParsed(null);
+        return;
+      }
+
+      setEditFile(file);
+      setEditParsed(parsed);
+      setEditContent(parsed.content);
+      setEditName(parsed.displayName);
+      setEditFileError('');
+      setEditMode('file');
+    } catch (e) {
+      setEditFileError('读取文件失败');
+      setEditFile(null);
+      setEditParsed(null);
+    }
+
+    e.target.value = '';
   };
 
   const handleSaveEdit = async () => {
     if (!skill) return;
 
     if (!editName.trim()) {
-      alert('请输入 Skill 名称');
+      toast.error('请输入 Skill 名称');
       return;
     }
 
     if (!editCategoryId) {
-      alert('请选择分类');
+      toast.error('请选择分类');
+      return;
+    }
+
+    const selectedCat = categories.find(c => c.id === editCategoryId);
+    if (selectedCat?.hasSubDimension && !editVulnerabilityTreeId) {
+      toast.error('请选择漏洞类型');
       return;
     }
 
@@ -419,32 +539,62 @@ export default function SkillDetailPage() {
       setSaving(true);
       const token = localStorage.getItem('token');
 
-      // 直接保存用户编辑的内容，不清理输出格式
-      const response = await fetch(`/api/skills/${skillId}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          displayName: editName.trim(),
-          description: editName.trim(),
-          categoryId: editCategoryId,
-          vulnerabilityTreeId: editVulnerabilityTreeId || null,
-          content: editContent,
-          isActive: editIsActive,
-        }),
-      });
+      if (editMode === 'file' && editFile) {
+        const formData = new FormData();
+        formData.append('file', editFile);
+        formData.append('categoryId', editCategoryId);
+        formData.append('vulnerabilityTreeId', editVulnerabilityTreeId || '');
+        formData.append('productTagIds', JSON.stringify(editProductTagIds));
+        formData.append('skillName', skill.name);
+        formData.append('skillDisplayName', editName.trim());
+        formData.append('skillDescription', editParsed?.description || editName.trim());
+        formData.append('isPublic', String(skill.isPublic));
+        formData.append('replaceMode', 'full');
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || '保存失败');
+        const response = await fetch(`/api/skills/${skillId}/replace`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || data.details?.error || '替换失败');
+        }
+
+        toast.success('Skill 已完全替换');
+      } else {
+        const response = await fetch(`/api/skills/${skillId}`, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            displayName: editName.trim(),
+            description: editName.trim(),
+            categoryId: editCategoryId,
+            vulnerabilityTreeId: editVulnerabilityTreeId || null,
+            content: editContent,
+            isActive: editIsActive,
+            productTagIds: editProductTagIds,
+          }),
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || '保存失败');
+        }
+
+        toast.success('Skill 已更新');
       }
 
       setIsEditing(false);
       fetchSkill();
     } catch (err) {
-      alert(err instanceof Error ? err.message : '保存失败');
+      toast.error(err instanceof Error ? err.message : '保存失败');
     } finally {
       setSaving(false);
     }
@@ -827,6 +977,96 @@ export default function SkillDetailPage() {
       <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6">
         {isEditing ? (
           <div className="space-y-6">
+            {/* 编辑模式切换 */}
+            <div className="flex items-center gap-4 mb-4">
+              <div className="flex items-center gap-2 p-1 bg-dark-bg rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setEditMode('content')}
+                  className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                    editMode === 'content'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  编辑内容
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditMode('file')}
+                  className={`px-4 py-2 text-sm rounded-md transition-colors ${
+                    editMode === 'file'
+                      ? 'bg-blue-600 text-white'
+                      : 'text-gray-400 hover:text-gray-300'
+                  }`}
+                >
+                  上传文件替换
+                </button>
+              </div>
+              {editMode === 'file' && (
+                <span className="text-xs text-yellow-400">
+                  ⚠️ 上传新文件将完全替换原有内容
+                </span>
+              )}
+            </div>
+
+            {/* 文件上传模式 */}
+            {editMode === 'file' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    上传 Skill 文件
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 px-4 py-2 bg-dark-bg border border-gray-600 rounded-lg cursor-pointer hover:border-gray-400 transition-colors">
+                      <FileUp size={16} className="text-gray-400" />
+                      <span className="text-sm text-gray-300">选择文件</span>
+                      <input
+                        type="file"
+                        accept=".md,.zip"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                    {editFile && (
+                      <div className="flex items-center gap-2">
+                        <CheckCircle size={14} className="text-green-400" />
+                        <span className="text-sm text-green-400">{editFile.name}</span>
+                      </div>
+                    )}
+                  </div>
+                  {editFileError && (
+                    <p className="mt-2 text-sm text-red-400">{editFileError}</p>
+                  )}
+                  <p className="mt-2 text-xs text-gray-500">
+                    支持 .md 文件或包含 SKILL.md 的 ZIP 文件
+                  </p>
+                </div>
+
+                {editParsed && (
+                  <div className="p-4 bg-dark-bg border border-gray-600 rounded-lg">
+                    <h4 className="text-sm font-medium text-gray-300 mb-2">解析结果</h4>
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">名称:</span>
+                        <span className="text-gray-300">{editParsed.displayName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-500">描述:</span>
+                        <span className="text-gray-300">{editParsed.description.substring(0, 100)}...</span>
+                      </div>
+                      {editParsed.cwe && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500">CWE:</span>
+                          <span className="text-gray-300">{editParsed.cwe}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 基本信息 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -839,6 +1079,7 @@ export default function SkillDetailPage() {
                   onChange={(e) => setEditName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                   required
+                  disabled={editMode === 'file' && !!editParsed}
                 />
               </div>
               
@@ -852,20 +1093,6 @@ export default function SkillDetailPage() {
                   onChange={(e) => {
                     setEditCategoryId(e.target.value);
                     setEditVulnerabilityTreeId('');
-                    setEditSelectedLanguageId('');
-                    // 检查选中的分类是否有子维度
-                    const selected = categories.find(c => c.id === e.target.value);
-                    if (selected?.hasSubDimension) {
-                      setLoadingTree(true);
-                      const token = localStorage.getItem('token');
-                      fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } })
-                        .then(res => res.ok ? res.json() : { tree: [] })
-                        .then(data => setVulnerabilityTree(data.tree || []))
-                        .catch(() => setVulnerabilityTree([]))
-                        .finally(() => setLoadingTree(false));
-                    } else {
-                      setVulnerabilityTree([]);
-                    }
                   }}
                   disabled={loadingCategories}
                   className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -877,207 +1104,181 @@ export default function SkillDetailPage() {
                 </select>
               </div>
 
-              {/* 语言选择（仅当分类有子维度时显示） */}
+              {/* 漏洞类型选择（仅当分类有子维度时显示） */}
               {(() => {
                 const selectedCat = categories.find(c => c.id === editCategoryId);
                 return selectedCat?.hasSubDimension ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      语言
+                      漏洞类型 <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={editSelectedLanguageId}
-                      onChange={(e) => {
-                        setEditSelectedLanguageId(e.target.value);
-                        setEditVulnerabilityTreeId('');
-                      }}
-                      disabled={loadingTree}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="">选择语言</option>
-                      {vulnerabilityTree.map((lang) => (
-                        <option key={lang.id} value={lang.id}>{lang.displayName}</option>
-                      ))}
-                    </select>
+                    <VulnerabilityTreeSelector
+                      value={editVulnerabilityTreeId || null}
+                      onChange={(nodeId) => setEditVulnerabilityTreeId(nodeId)}
+                      placeholder="选择漏洞类型"
+                    />
                   </div>
                 ) : null;
               })()}
 
-              {/* 模式选择（级联，选择语言后显示） */}
-              {editSelectedLanguageId && (() => {
-                const selectedLang = vulnerabilityTree.find(l => l.id === editSelectedLanguageId);
-                return selectedLang && selectedLang.patterns.length > 0 ? (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      模式
-                    </label>
-                    <select
-                      value={editVulnerabilityTreeId}
-                      onChange={(e) => setEditVulnerabilityTreeId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="">选择模式</option>
-                      {selectedLang.patterns.map((p) => (
-                        <option key={p.id} value={p.id}>{p.displayName}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null;
-              })()}
+              {/* 适用产品 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
+                </label>
+                <ProductTagSelect 
+                  selectedIds={editProductTagIds} 
+                  onChange={setEditProductTagIds} 
+                />
+              </div>
             </div>
 
-            {/* Markdown 内容 */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-300">
-                  Skill 内容（Markdown 格式）
-                </label>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleAiOptimize}
-                    disabled={aiOptimizing}
-                    className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                    title="使用大模型 AI 优化当前 Skill 内容，提升触发准确性和功能完整性"
-                  >
-                    {aiOptimizing ? (
-                      <>
-                        <Loader2 size={14} className="mr-1.5 animate-spin" />
-                        AI 优化中...
-                      </>
-                    ) : aiOptimizeSuccess ? (
-                      <>
-                        <CheckCircle size={14} className="mr-1.5" />
-                        优化完成！
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={14} className="mr-1.5" />
-                        AI 优化
-                      </>
-                    )}
-                  </button>
-                  {/* 有缓存的 AI 结果时，显示重新查看对比按钮 */}
-                  {aiDiffContent && !aiOptimizing && (
+{/* 内容编辑模式 */}
+            {editMode === 'content' && (
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    Skill 内容（Markdown 格式）
+                  </label>
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowDiffModal(true)}
-                      className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-900/30 transition-all"
-                      title="重新打开上次 AI 优化结果的对比弹窗"
+                      onClick={handleAiOptimize}
+                      disabled={aiOptimizing}
+                      className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                      title="使用大模型 AI 优化当前 Skill 内容，提升触发准确性和功能完整性"
                     >
-                      <Eye size={14} className="mr-1.5" />
-                      查看上次对比
+                      {aiOptimizing ? (
+                        <>
+                          <Loader2 size={14} className="mr-1.5 animate-spin" />
+                          AI 优化中...
+                        </>
+                      ) : aiOptimizeSuccess ? (
+                        <>
+                          <CheckCircle size={14} className="mr-1.5" />
+                          优化完成！
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={14} className="mr-1.5" />
+                          AI 优化
+                        </>
+                      )}
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (skill) {
-                        setEditContent(skill.content || '');
-                      }
-                    }}
-                    className="text-sm text-blue-400 hover:text-blue-800"
-                  >
-                    重置为原始内容
-                  </button>
+                    {aiDiffContent && !aiOptimizing && (
+                      <button
+                        type="button"
+                        onClick={() => setShowDiffModal(true)}
+                        className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-400 border border-indigo-500/30 rounded-lg hover:bg-indigo-900/30 transition-all"
+                        title="重新打开上次 AI 优化结果的对比弹窗"
+                      >
+                        <Eye size={14} className="mr-1.5" />
+                        查看上次对比
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (skill) {
+                          setEditContent(skill.content || '');
+                        }
+                      }}
+                      className="text-sm text-blue-400 hover:text-blue-800"
+                    >
+                      重置为原始内容
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              {/* AI 优化错误提示 */}
-              {aiOptimizeError && (
-                <div className="mb-3 flex items-start gap-2 bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg text-sm">
-                  <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
-                  <span>{aiOptimizeError}</span>
-                </div>
-              )}
-
-              {/* AI 优化建议 */}
-              {aiSuggestions.length > 0 && (
-                <div className="mb-3 bg-purple-900/20 border border-purple-200 rounded-lg overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setShowAiSuggestions(!showAiSuggestions)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-900/20 transition-colors"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Sparkles size={14} />
-                      AI 优化建议（{aiSuggestions.length} 条）
-                    </span>
-                    {showAiSuggestions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                  {showAiSuggestions && (
-                    <ul className="px-4 pb-3 space-y-1.5">
-                      {aiSuggestions.map((suggestion, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-purple-400">
-                          <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center text-xs font-bold">
-                            {idx + 1}
-                          </span>
-                          {suggestion}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              <div className="mb-3 border border-gray-700/50 rounded-lg overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setShowFormatHint(!showFormatHint)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 bg-dark-bg hover:bg-dark-surface-hover transition-colors text-sm text-gray-400"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <FileText size={14} />
-                    缺陷发现 Skill 格式建议
-                  </span>
-                  {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                </button>
-                {showFormatHint && (
-                  <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50">
-                    {/* 新格式建议 */}
-                    <div className="space-y-4">
-                      {/* 禁止生成提醒 */}
-                      <div className="bg-red-900/20 border border-red-200 rounded-lg p-3">
-                        <p className="text-xs font-semibold text-red-400 mb-2">⛔ 禁止生成（系统会自动添加）</p>
-                        <ul className="text-xs text-red-400 space-y-1">
-                          <li>❌ YAML frontmatter（--- name: xxx ---）</li>
-                          <li>❌ 一级标题（# 漏洞名称）</li>
-                          <li>❌ ## 输出格式 章节</li>
-                        </ul>
-                      </div>
-                      
-                      {/* 推荐章节 */}
-                      <div>
-                        <p className="text-xs font-semibold text-gray-300 mb-2">必须包含的章节：</p>
-                        <div className="text-xs text-gray-400 font-mono space-y-1">
-                          {getFormatGuideData().sections.map((section, idx) => (
-                            <p key={idx} className={section.highlight ? 'text-blue-400 font-medium' : ''}>
-                              {section.name}
-                            </p>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* 关键原则 */}
-                      <div>
-                        <p className="text-xs font-semibold text-gray-300 mb-2">关键原则：</p>
-                        <ul className="text-xs text-gray-400 space-y-1">
-                          {getFormatGuideData().principles.slice(0, 4).map((p, idx) => (
-                            <li key={idx}>{p.title} — {p.description}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
+                {aiOptimizeError && (
+                  <div className="mb-3 flex items-start gap-2 bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg text-sm">
+                    <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
+                    <span>{aiOptimizeError}</span>
                   </div>
                 )}
+
+                {aiSuggestions.length > 0 && (
+                  <div className="mb-3 bg-purple-900/20 border border-purple-200 rounded-lg overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowAiSuggestions(!showAiSuggestions)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-purple-400 hover:bg-purple-900/20 transition-colors"
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <Sparkles size={14} />
+                        AI 优化建议（{aiSuggestions.length} 条）
+                      </span>
+                      {showAiSuggestions ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    {showAiSuggestions && (
+                      <ul className="px-4 pb-3 space-y-1.5">
+                        {aiSuggestions.map((suggestion, idx) => (
+                          <li key={idx} className="flex items-start gap-2 text-sm text-purple-400">
+                            <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-purple-200 text-purple-800 flex items-center justify-center text-xs font-bold">
+                              {idx + 1}
+                            </span>
+                            {suggestion}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+
+                <div className="mb-3 border border-gray-700/50 rounded-lg overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowFormatHint(!showFormatHint)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 bg-dark-bg hover:bg-dark-surface-hover transition-colors text-sm text-gray-400"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <FileText size={14} />
+                      缺陷发现 Skill 格式建议
+                    </span>
+                    {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                  {showFormatHint && (
+                    <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50">
+                      <div className="space-y-4">
+                        <div className="bg-red-900/20 border border-red-200 rounded-lg p-3">
+                          <p className="text-xs font-semibold text-red-400 mb-2">⛔ 禁止生成（系统会自动添加）</p>
+                          <ul className="text-xs text-red-400 space-y-1">
+                            <li>❌ YAML frontmatter（--- name: xxx ---）</li>
+                            <li>❌ 一级标题（# 漏洞名称）</li>
+                            <li>❌ ## 输出格式 章节</li>
+                          </ul>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-300 mb-2">必须包含的章节：</p>
+                          <div className="text-xs text-gray-400 font-mono space-y-1">
+                            {getFormatGuideData().sections.map((section, idx) => (
+                              <p key={idx} className={section.highlight ? 'text-blue-400 font-medium' : ''}>
+                                {section.name}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-300 mb-2">关键原则：</p>
+                          <ul className="text-xs text-gray-400 space-y-1">
+                            {getFormatGuideData().principles.slice(0, 4).map((p, idx) => (
+                              <li key={idx}>{p.title} — {p.description}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full h-[500px] px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
+                  placeholder="输入 Markdown 格式的 Skill 定义..."
+                />
               </div>
-              <textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="w-full h-[500px] px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
-                placeholder="输入 Markdown 格式的 Skill 定义..."
-              />
-            </div>
+            )}
 
             {/* 是否启用 */}
             <div>

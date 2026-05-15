@@ -192,6 +192,9 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/admin/api-keys" icon={<Key size={18} />} collapsed={collapsed}>
                 API Key 管理
               </NavLink>
+              <NavLink href="/dashboard/admin/sdk" icon={<Terminal size={18} />} collapsed={collapsed}>
+                系统SDK
+              </NavLink>
               {/* <NavLink href="/dashboard/roles" icon={<Settings size={18} />} collapsed={collapsed}>
                 角色权限
               </NavLink> */}
