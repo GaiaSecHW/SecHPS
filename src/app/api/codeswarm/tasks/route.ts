@@ -9,7 +9,7 @@ export async function GET() {
       SELECT t.id, t."taskId", t."workerId", t.state, t.instruction,
              t."projectPath", t."workspacePath", t."gitUrl", t."gitRef",
              t.skills, t.mcps, t.model, t."apiKey", t."timeoutSec", t.agent,
-             t.error, t."startedAt", t."completedAt", t."createdAt", t."updatedAt",
+             t."startCommand", t.error, t."startedAt", t."completedAt", t."createdAt", t."updatedAt",
              w."nodeId" as "workerNodeId", w."address" as "workerAddress", w."status" as "workerStatus"
       FROM "CodeswarmTask" t
       LEFT JOIN "CodeswarmWorker" w ON t."workerId" = w.id
@@ -34,6 +34,35 @@ export async function GET() {
   }
 }
 
+export async function DELETE(request: Request) {
+  try {
+    const { taskIds } = await request.json();
+
+    if (!Array.isArray(taskIds) || taskIds.length === 0) {
+      return NextResponse.json({ error: 'taskIds is required and must be non-empty array' }, { status: 400 });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // 删除关联事件
+      await tx.codeswarmEvent.deleteMany({ where: { taskId: { in: taskIds } } });
+
+      // 删除任务
+      await tx.codeswarmTask.deleteMany({ where: { taskId: { in: taskIds } } });
+
+      // 更新关联的 TaskInstance 状态
+      await tx.taskInstance.updateMany({
+        where: { codeswarmTaskId: { in: taskIds }, status: { in: ['pending', 'running'] } },
+        data: { status: 'failed', errorMessage: 'CodeSwarm 任务已被删除', updatedAt: new Date() },
+      });
+    });
+
+    return NextResponse.json({ success: true, deleted: taskIds.length });
+  } catch (error) {
+    console.error('[CodeSwarm] Batch delete tasks error:', error);
+    return NextResponse.json({ error: 'Failed to delete tasks' }, { status: 500 });
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -42,7 +71,6 @@ export async function POST(request: Request) {
       projectPath,
       workspacePath,
       skills,
-      scripts,
       mcps,
       model,
       apiKey,
@@ -50,10 +78,9 @@ export async function POST(request: Request) {
       gitUrl,
       gitRef,
       agent,
-      defaultAgentName,
-      startCommand,
       action,
       preferredWorkerNodeId,
+      startCommand,
     } = body;
 
     // 手动批量分发（保留兼容）
@@ -76,17 +103,17 @@ export async function POST(request: Request) {
 
       // DB fallback
       // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
-const queuedTasks = await prisma.$queryRaw`
-          SELECT id, "taskId", "workerId", state, instruction,
-                 "projectPath", "workspacePath", "gitUrl", "gitRef",
-                 skills, scripts, mcps, model, "apiKey", "timeoutSec", agent,
-                 "defaultAgentName", "startCommand", error, "startedAt", "completedAt",
-                 "createdAt", "updatedAt"
-          FROM "CodeswarmTask"
-          WHERE state = 'queued'
-          ORDER BY "createdAt" ASC
-          LIMIT 10
-        ` as any[];
+      const queuedTasks = await prisma.$queryRaw`
+        SELECT id, "taskId", "workerId", state, instruction,
+               "projectPath", "workspacePath", "gitUrl", "gitRef",
+               skills, mcps, model, "apiKey", "timeoutSec", agent,
+               "defaultAgentName", error, "startedAt", "completedAt",
+               "createdAt", "updatedAt"
+        FROM "CodeswarmTask"
+        WHERE state = 'queued'
+        ORDER BY "createdAt" ASC
+        LIMIT 10
+      ` as any[];
 
       if (queuedTasks.length === 0) {
         return NextResponse.json({ message: 'No queued tasks', dispatched: 0 });
@@ -139,15 +166,13 @@ const queuedTasks = await prisma.$queryRaw`
         projectPath: projectPath || null,
         workspacePath: workspacePath || null,
         skills: skills ? JSON.stringify(skills) : null,
-        scripts: scripts ? JSON.stringify(scripts) : null,
         mcps: mcps ? JSON.stringify(mcps) : null,
         model: model || null,
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
-defaultAgentName: defaultAgentName || null,
-        startCommand: startCommand || null,
         preferredWorkerNodeId: preferredWorkerNodeId || null,
+        startCommand: startCommand || null,
         updatedAt: new Date(),
       },
     }) as any;

@@ -13,6 +13,9 @@ import {
   Download,
   Upload,
   Cog,
+  Clock,
+  Database,
+  Tag,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 
@@ -57,13 +60,44 @@ export default function ConfigPage() {
   // 并发限制设置
   const [maxConcurrentEvaluations, setMaxConcurrentEvaluations] = useState(3);
 
+  // 系统信息
+  const [systemInfo, setSystemInfo] = useState<{
+    version: string;
+    startTimeFormatted: string | null;
+    database: string;
+    uptimeFormatted: string;
+  } | null>(null);
+  const [systemInfoLoading, setSystemInfoLoading] = useState(false);
+
   useEffect(() => {
     const userData = localStorage.getItem('user');
     if (userData) {
       setUser(JSON.parse(userData));
     }
     fetchConfig();
+    fetchSystemInfo();
   }, []);
+
+  const fetchSystemInfo = async () => {
+    try {
+      setSystemInfoLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch('/api/system/info', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSystemInfo(data);
+      }
+    } catch {
+      // 忽略错误，不影响页面显示
+    } finally {
+      setSystemInfoLoading(false);
+    }
+  };
 
   const fetchConfig = async () => {
     try {
@@ -611,6 +645,60 @@ export default function ConfigPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* System Status Card */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-3 mb-4">
+          <Server size={18} className="text-primary-400" />
+          <h3 className="text-lg font-medium text-gray-100">系统状态</h3>
+        </div>
+        
+        {systemInfoLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        ) : systemInfo ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* 版本号 */}
+            <div className="bg-dark-surface-hover rounded-lg px-4 py-3 flex items-center gap-3">
+              <Tag size={16} className="text-blue-400" />
+              <div>
+                <p className="text-xs text-gray-500">版本号</p>
+                <p className="text-sm font-medium text-gray-200">v{systemInfo.version}</p>
+              </div>
+            </div>
+            
+            {/* 启动时间 */}
+            <div className="bg-dark-surface-hover rounded-lg px-4 py-3 flex items-center gap-3">
+              <Clock size={16} className="text-green-400" />
+              <div>
+                <p className="text-xs text-gray-500">启动时间</p>
+                <p className="text-sm font-medium text-gray-200">
+                  {systemInfo.startTimeFormatted || '未知'}
+                </p>
+                {systemInfo.uptimeFormatted && (
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    已运行 {systemInfo.uptimeFormatted}
+                  </p>
+                )}
+              </div>
+            </div>
+            
+            {/* 数据库 */}
+            <div className="bg-dark-surface-hover rounded-lg px-4 py-3 flex items-center gap-3">
+              <Database size={16} className="text-purple-400" />
+              <div>
+                <p className="text-xs text-gray-500">数据库</p>
+                <p className="text-sm font-medium text-gray-200">{systemInfo.database}</p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6 text-gray-400">
+            无法加载系统信息
+          </div>
+        )}
       </div>
 
       {/* Save Button (Bottom) */}

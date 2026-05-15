@@ -71,8 +71,6 @@ export const TaskRequestSchema = z.object({
   model: z.string().optional(),
   timeoutSec: z.number().optional(),
   apiKey: z.string().optional(),
-  gitUrl: z.string().optional(),
-  gitRef: z.string().optional(),
 });
 
 export type TaskRequest = z.infer<typeof TaskRequestSchema>;
@@ -116,10 +114,6 @@ export const TaskPayloadSchema = z.object({
   callbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
   env: z.record(z.string(), z.string()).optional(),
-  // Git repository URL to clone into workspace (takes priority over projectPath)
-  gitUrl: z.string().optional(),
-  // Git branch/commit to checkout after clone
-  gitRef: z.string().optional(),
   // Agent type (opencode, claudecode, etc.)
   agent: z.string().optional(),
   // Default agent name for command execution
@@ -141,6 +135,16 @@ export const WorkerEventTypeEnum = z.enum([
   'tool_call',
   'tool_call_update',
   'error',
+  'log_chunk',           // Worker层日志块
+  'agent_log_chunk',     // Agent层日志块（替代ACP，直接捕获stdout）
+  'agent_output',        // Agent结构化输出
+  'tool_result',         // 工具执行结果
+  'progress',            // 进度节点（如 "正在克隆仓库"）
+  'tool_duration',       // tool 执行耗时
+  'heartbeat',           // Worker 心跳日志
+  'cancel_confirmed',    // 取消确认
+  'task_started',        // 任务开始
+  'task_completed',      // 任务完成
 ]);
 
 export type WorkerEventType = z.infer<typeof WorkerEventTypeEnum>;

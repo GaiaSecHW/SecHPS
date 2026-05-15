@@ -111,14 +111,12 @@ export async function POST(
     const agent = agentApp?.engine || 'opencode';
     const defaultAgentName = agentApp?.defaultAgentName || undefined;
     const startCommand = agentApp?.startCommand || undefined;
-    const instruction = task.notes || defaultAgentName || '执行任务';
 
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
     const codeswarmResponse = await fetch(`${baseUrl}/api/codeswarm/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        instruction,
         workspacePath,
         skills,
         scripts,

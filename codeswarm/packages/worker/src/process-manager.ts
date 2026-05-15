@@ -8,14 +8,29 @@ interface ProcessEntry {
   createdAt: number;
 }
 
+export type AgentEventType =
+  | 'agent_message_chunk'
+  | 'tool_call'
+  | 'tool_call_update'
+  | 'error'
+  | 'phase_start'
+  | 'phase_complete'
+  | 'phase_error'
+  | 'log_chunk';
+
 export interface AgentEvent {
-  type: 'agent_message_chunk' | 'tool_call' | 'tool_call_update' | 'error';
+  type: AgentEventType;
   content?: string;
   tool?: string;
   input?: unknown;
   output?: string;
   message?: string;
   timestamp: string;
+  // 阶段事件字段
+  phase?: string;
+  success?: boolean;
+  // 日志字段
+  level?: 'worker' | 'agent';
 }
 
 export interface AgentEventCallback {
@@ -175,6 +190,7 @@ export class ProcessManager {
         env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
         model,
         agent: agentName,
+        // @ts-expect-error - engine may not be in ACPClientConfig but is used by worker
         engine,
       });
       console.log(`[ProcessMgr] Step D DONE: client.start() completed`);
@@ -346,13 +362,13 @@ export class ProcessManager {
         setTimeout(checkEnd, 100);
       });
 
-      // Safety timeout: 30 minutes
+      // Safety timeout: 60 minutes
       setTimeout(() => {
         if (!hasEnded) {
-          log('warn', 'opencode command timeout, killing process', { timeout: '30m' });
+          log('warn', 'opencode command timeout, killing process', { timeout: '60m' });
           proc.kill();
         }
-      }, 30 * 60 * 1000);
+      }, 60 * 60 * 1000);
     });
   }
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
-import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2 } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Task {
@@ -14,8 +14,6 @@ interface Task {
   instruction: string;
   projectPath: string | null;
   workspacePath: string | null;
-  gitUrl: string | null;
-  gitRef: string | null;
   agent: string | null;
   skills: string[] | null;
   mcps: any[] | null;
@@ -36,6 +34,26 @@ interface Task {
 
 interface TasksResponse {
   tasks: Task[];
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      toast.success('已复制');
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => toast.error('复制失败'));
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center space-x-1 px-2 py-1 text-xs text-gray-400 hover:text-gray-200 bg-gray-700 hover:bg-gray-600 rounded transition-colors"
+    >
+      {copied ? <Check className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+      <span>{copied ? '已复制' : '复制'}</span>
+    </button>
+  );
 }
 
 interface TaskResultViewerProps {
@@ -147,6 +165,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     if (!start) return '-';
     const endTime = end ? new Date(end).getTime() : Date.now();
     const diff = endTime - new Date(start).getTime();
+    if (diff < 0) return '0s';  // 防御：时钟偏移导致负值
     const seconds = Math.floor(diff / 1000);
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
@@ -324,24 +343,12 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       </div>
                     </div>
 
-                    {(task.gitUrl || task.projectPath) && (
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        {task.gitUrl && (
-                          <div>
-                            <span className="text-gray-500">Git:</span>
-                            <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
-                              {task.gitUrl}{task.gitRef ? ` (${task.gitRef})` : ''}
-                            </code>
-                          </div>
-                        )}
-                        {task.projectPath && (
-                          <div>
-                            <span className="text-gray-500">Project:</span>
-                            <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
-                              {task.projectPath}
-                            </code>
-                          </div>
-                        )}
+                    {task.projectPath && (
+                      <div className="text-sm">
+                        <span className="text-gray-500">Project:</span>
+                        <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
+                          {task.projectPath}
+                        </code>
                       </div>
                     )}
 
@@ -367,6 +374,34 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         </div>
                       </div>
                     )}
+
+                    {/* Input Params */}
+                    {(() => {
+                      const params = {
+                        instruction: task.instruction,
+                        agent: task.agent,
+                        projectPath: task.projectPath,
+                        workspacePath: task.workspacePath,
+                        model: task.model,
+                        skills: task.skills,
+                        mcps: task.mcps,
+                      };
+                      const hasParams = Object.values(params).some(v => v !== null && v !== undefined && (Array.isArray(v) ? v.length > 0 : true));
+                      if (!hasParams) return null;
+                      return (
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-sm font-medium text-gray-300">输入参数</h4>
+                            <CopyButton text={JSON.stringify(params, null, 2)} />
+                          </div>
+                          <div className="bg-gray-900 rounded-lg p-3 max-h-48 overflow-auto">
+                            <pre className="text-xs text-cyan-400 font-mono whitespace-pre-wrap">
+                              {JSON.stringify(params, null, 2)}
+                            </pre>
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* Events Stream */}
                     {task.events && task.events.length > 0 && (

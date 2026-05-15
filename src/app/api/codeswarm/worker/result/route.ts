@@ -64,18 +64,10 @@ export async function POST(request: Request) {
       });
     }
 
+    // Worker 槽位释放：内存和 DB 同步递减（幂等性检查）
+    // onTaskCompleted 内部处理内存递减 + DB 条件更新
     if (nodeId) {
-      await prisma.codeswarmWorker.updateMany({
-        where: { nodeId },
-        data: {
-          currentTasks: { decrement: 1 },
-          status: 'online',
-        },
-      });
-    }
-
-    if (nodeId) {
-      codeswarmDispatcher.onTaskCompleted(nodeId);
+      await codeswarmDispatcher.onTaskCompleted(nodeId);
     }
 
     await codeswarmDispatcher.publishTaskEvent(taskId, {

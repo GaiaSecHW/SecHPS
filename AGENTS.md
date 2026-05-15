@@ -14,6 +14,7 @@ npm run db:generate      # 生成 Prisma 客户端 (postinstall 自动执行)
 npm run db:push          # 推送 schema 变更
 npm run db:seed          # 初始化数据库 + 默认管理员
 ```
+**语言规则**: 用中文回答
 
 ## 认证模块导入规则 (关键)
 
