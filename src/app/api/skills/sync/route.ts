@@ -195,20 +195,43 @@ async function importSkillsFromGitRepo(userId: string): Promise<{
 async function syncToLocalDataDir(skillNames: string[]): Promise<{
   success: number;
   failed: number;
+  deleted: number;
   errors: string[];
 }> {
   const result = {
     success: 0,
     failed: 0,
+    deleted: 0,
     errors: [] as string[],
   };
 
-  const template = await getSkillOutputTemplate();
   const repoPath = gitSkillSync.getLocalPath();
   const dataDir = path.join(process.cwd(), 'data', 'skills');
 
   if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
+  }
+
+  const existingLocalSkills = fs.readdirSync(dataDir).filter(item => {
+    const itemPath = path.join(dataDir, item);
+    return fs.statSync(itemPath).isDirectory() && item !== '.git';
+  });
+
+  const skillsToDelete = existingLocalSkills.filter(name => !skillNames.includes(name));
+
+  for (const skillName of skillsToDelete) {
+    try {
+      const dataSkillPath = path.join(dataDir, skillName);
+      if (fs.existsSync(dataSkillPath)) {
+        fs.rmSync(dataSkillPath, { recursive: true, force: true });
+        result.deleted++;
+        logger.info(LOG_MODULES.SKILL, '删除本地 Skill（仓库已不存在）', { skillName });
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      result.errors.push(`删除本地失败: ${skillName} - ${errorMsg}`);
+      result.failed++;
+    }
   }
 
   for (const skillName of skillNames) {
@@ -250,6 +273,74 @@ async function syncToLocalDataDir(skillNames: string[]): Promise<{
   logger.info(LOG_MODULES.SKILL, 'data 目录同步完成', {
     success: result.success,
     failed: result.failed,
+    deleted: result.deleted,
+    errorCount: result.errors.length,
+  });
+
+  return result;
+}
+
+async function syncDatabaseWithRepo(repoSkillNames: string[]): Promise<{
+  deleted: number;
+  errors: string[];
+}> {
+  const result = {
+    deleted: 0,
+    errors: [] as string[],
+  };
+
+  const dbSkills = await prisma.skill.findMany({
+    where: {
+      userId: null,
+      tenantId: null,
+      isPublic: true,
+      isLatest: true,
+    },
+    select: { id: true, name: true, displayName: true },
+  });
+
+  const skillsToDelete = dbSkills.filter(skill => !repoSkillNames.includes(skill.name));
+
+  for (const skill of skillsToDelete) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.skillEvolution.deleteMany({
+          where: {
+            OR: [
+              { skillId: skill.id },
+              { Skill: { parentId: skill.id } },
+            ],
+          },
+        });
+
+        await tx.skill.deleteMany({
+          where: { parentId: skill.id },
+        });
+
+        await tx.skillProductTag.deleteMany({
+          where: { skillId: skill.id },
+        });
+
+        await tx.skill.delete({ where: { id: skill.id } });
+      });
+
+      result.deleted++;
+      logger.info(LOG_MODULES.SKILL, '删除数据库中的 Skill（仓库已不存在）', { 
+        skillName: skill.name, 
+        skillId: skill.id 
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      result.errors.push(`${skill.name}: ${errorMsg}`);
+      logger.errorNoUser(LOG_MODULES.SKILL, '删除数据库 Skill 失败', { 
+        skillName: skill.name, 
+        error: errorMsg 
+      });
+    }
+  }
+
+  logger.info(LOG_MODULES.SKILL, '数据库同步删除完成', {
+    deleted: result.deleted,
     errorCount: result.errors.length,
   });
 
@@ -283,20 +374,25 @@ export async function POST(request: NextRequest) {
         message: result.message 
       });
 
-      const importResult = await importSkillsFromGitRepo(payload.userId);
-
       const localSkills = gitSkillSync.listLocalSkills();
+
+      const dbSyncResult = await syncDatabaseWithRepo(localSkills);
+
+      const importResult = await importSkillsFromGitRepo(payload.userId);
 
       const syncResult = await syncToLocalDataDir(localSkills);
 
       return NextResponse.json({
         success: true,
-        message: `Git 同步成功: ${result.message}。导入DB: ${importResult.imported}, 更新DB: ${importResult.updated}, 跳过: ${importResult.skipped}。同步本地: ${syncResult.success}, 失败: ${syncResult.failed}`,
+        message: `Git 同步成功: ${result.message}。DB删除: ${dbSyncResult.deleted}, 导入DB: ${importResult.imported}, 更新DB: ${importResult.updated}。本地删除: ${syncResult.deleted}, 同步: ${syncResult.success}, 失败: ${syncResult.failed}`,
         gitMessage: result.message,
+        dbDeleted: dbSyncResult.deleted,
+        dbDeleteErrors: dbSyncResult.errors,
         imported: importResult.imported,
         updated: importResult.updated,
         skipped: importResult.skipped,
         importErrors: importResult.errors,
+        localDeleted: syncResult.deleted,
         localSyncSuccess: syncResult.success,
         localSyncFailed: syncResult.failed,
         syncErrors: syncResult.errors,
