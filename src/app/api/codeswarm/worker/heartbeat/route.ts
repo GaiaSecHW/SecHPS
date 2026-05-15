@@ -45,6 +45,14 @@ export async function POST(request: Request) {
       },
     });
 
+    // 异步清理：删除 24 小时前已离线的 Worker 记录（避免数据库残留）
+    prisma.codeswarmWorker.deleteMany({
+      where: {
+        status: 'offline',
+        lastHeartbeat: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+      },
+    }).catch(() => {});
+
     // 首次注册或无 token 时分配新 token
     let workerToken = worker.token;
     if (!workerToken || !authenticatedNodeId) {

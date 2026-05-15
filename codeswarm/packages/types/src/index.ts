@@ -71,8 +71,6 @@ export const TaskRequestSchema = z.object({
   model: z.string().optional(),
   timeoutSec: z.number().optional(),
   apiKey: z.string().optional(),
-  gitUrl: z.string().optional(),
-  gitRef: z.string().optional(),
 });
 
 export type TaskRequest = z.infer<typeof TaskRequestSchema>;
@@ -116,10 +114,6 @@ export const TaskPayloadSchema = z.object({
   callbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
   env: z.record(z.string(), z.string()).optional(),
-  // Git repository URL to clone into workspace (takes priority over projectPath)
-  gitUrl: z.string().optional(),
-  // Git branch/commit to checkout after clone
-  gitRef: z.string().optional(),
   // Agent type (opencode, claudecode, etc.)
   agent: z.string().optional(),
   // Default agent name for command execution

@@ -35,8 +35,6 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [form, setForm] = useState({
     instruction: '',
     agent: '',
-    gitUrl: '',
-    gitRef: '',
     projectPath: '',
     workspacePath: '',
     apiKey: '',
@@ -73,10 +71,11 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
           setLogs(prev => [...prev, {
             type: 'task_complete',
             message: data.state === 'completed' ? '任务完成' : '任务失败',
-            details: '',
+            details: data.result || data.error || '',
             timestamp: new Date().toISOString(),
           }]);
-          eventSource.close();
+          // Keep connection open for a moment to show final state, then close
+          setTimeout(() => eventSource.close(), 1000);
           return;
         }
 
@@ -221,20 +220,17 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     setLoading(true);
     try {
       const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
-      const payload = {
+const payload = {
         instruction: form.instruction,
         agent: form.agent || undefined,
-        gitUrl: form.gitUrl || undefined,
-        gitRef: form.gitRef || undefined,
         projectPath: form.projectPath || undefined,
         workspacePath: form.workspacePath || undefined,
         model: selectedModel?.modelName || undefined,
         modelId: selectedModel?.modelId || undefined,
         apiKey: form.apiKey || undefined,
         timeoutSec: form.timeoutSec || undefined,
-        skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-        mcps: form.mcps ? JSON.parse(form.mcps) : undefined,
-        startCommand: executorMode === 'command' ? form.instruction : undefined,
+        skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
+        mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
         preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
       };
 
@@ -262,8 +258,6 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
         setForm(prev => ({
           ...prev,
           instruction: '',
-          gitUrl: '',
-          gitRef: '',
           projectPath: '',
           workspacePath: '',
         }));
@@ -370,34 +364,6 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               />
             </div>
           )}
-
-          {/* Git URL */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Git 仓库地址
-              </label>
-              <input
-                type="text"
-                value={form.gitUrl}
-                onChange={(e) => setForm({ ...form, gitUrl: e.target.value })}
-                placeholder="https://github.com/username/repo.git"
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Git 分支/Tag
-              </label>
-              <input
-                type="text"
-                value={form.gitRef}
-                onChange={(e) => setForm({ ...form, gitRef: e.target.value })}
-                placeholder="main, v1.0, commit hash"
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
-            </div>
-          </div>
 
           {/* Basic Fields */}
           <div className="grid grid-cols-2 gap-4">

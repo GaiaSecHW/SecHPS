@@ -51,11 +51,11 @@ export async function GET(
           // Check if task is completed
           const task = await prisma.codeswarmTask.findUnique({
             where: { taskId },
-            select: { state: true },
+            select: { state: true, result: true, error: true },
           });
 
           if (task && (task.state === 'completed' || task.state === 'failed')) {
-            sendEvent({ type: 'task_complete', state: task.state });
+            sendEvent({ type: 'task_complete', state: task.state, result: task.result, error: task.error });
             isClosed = true;
             controller.close();
             clearInterval(interval);

@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execSync } from 'node:child_process';
 import type { TaskPayload, MCPService } from '@codeswarm/types';
 
 export interface EnvironmentFactoryConfig {
@@ -41,15 +40,13 @@ export class EnvironmentFactory {
 
   /**
    * Build an isolated workspace for a task.
-   * Priority: gitUrl > workspacePath (NFS) > projectPath (local copy)
+   * Priority: workspacePath (NFS) > projectPath (local copy)
    */
   async build(payload: TaskPayload): Promise<BuildResult> {
     console.log(`[Environment] ========== BUILD BEGIN ==========`);
     console.log(`[Environment] payload.taskId: ${payload.taskId}`);
     console.log(`[Environment] payload.workspacePath: ${payload.workspacePath}`);
     console.log(`[Environment] payload.projectPath: ${payload.projectPath}`);
-    console.log(`[Environment] payload.gitUrl: ${payload.gitUrl}`);
-    console.log(`[Environment] payload.gitRef: ${payload.gitRef}`);
     console.log(`[Environment] payload.skills: ${payload.skills?.join(', ') || 'none'}`);
     console.log(`[Environment] payload.agent: ${payload.agent}`);
     console.log(`[Environment] payload.instruction: "${payload.instruction?.substring(0, 50)}..."`);
@@ -186,19 +183,12 @@ export class EnvironmentFactory {
       // Step 1: Create workspace directory
       fs.mkdirSync(workspacePath, { recursive: true });
 
-      // Step 2: Populate workspace from git or local copy
-      if (payload.gitUrl) {
-        // Git clone mode: clone repo into a 'code' subdirectory
-        const codeDir = path.join(workspacePath, 'code');
-        this.gitClone(payload.gitUrl, codeDir, payload.gitRef);
-      } else {
-        // Local copy mode
-        const projectPath = payload.projectPath;
-        if (!projectPath || !fs.existsSync(projectPath)) {
-          throw new Error(`Project path does not exist: ${projectPath}`);
-        }
-        fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
+      // Step 2: Populate workspace from local copy
+      const projectPath = payload.projectPath;
+      if (!projectPath || !fs.existsSync(projectPath)) {
+        throw new Error(`Project path does not exist: ${projectPath}`);
       }
+      fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
 
       // Step 3: Create .opencode/skills/ subdirectory
       const skillsDir = path.join(workspacePath, '.opencode', 'skills');
@@ -301,33 +291,6 @@ export class EnvironmentFactory {
   }
 
   /** Clone a git repository into the target directory, optionally checking out a specific ref. */
-  private gitClone(gitUrl: string, targetDir: string, gitRef?: string): void {
-    console.log(`[Environment] Cloning ${gitUrl} into ${targetDir}`);
-    fs.mkdirSync(targetDir, { recursive: true });
-
-    // Clone with depth 1 for efficiency, then checkout ref if specified
-    const baseCmd = `git clone --depth 1 ${gitUrl} ${targetDir}`;
-    try {
-      execSync(baseCmd, { stdio: 'pipe', timeout: 120_000 });
-    } catch {
-      // Retry without --depth 1 in case the server doesn't support shallow clones
-      console.warn('[Environment] Shallow clone failed, retrying full clone');
-      execSync(`git clone ${gitUrl} ${targetDir}`, { stdio: 'pipe', timeout: 300_000 });
-    }
-
-    if (gitRef) {
-      try {
-        // Fetch the ref if it's not already available (needed for shallow clones)
-        execSync(`git -C ${targetDir} fetch origin ${gitRef}`, { stdio: 'pipe', timeout: 60_000 });
-      } catch {
-        // ref may already be available locally
-      }
-      execSync(`git -C ${targetDir} checkout ${gitRef}`, { stdio: 'pipe', timeout: 30_000 });
-    }
-
-    console.log(`[Environment] Clone complete`);
-  }
-
   private excludeNodeModulesFilter(src: string, dest: string): boolean {
     const relativePath = path.relative(process.cwd(), src);
     return !relativePath.includes('node_modules');

@@ -325,8 +325,6 @@ function CodeSwarmPageContent() {
           requestBody: [
             { name: 'instruction', type: 'string', required: true, desc: 'AI 执行指令' },
             { name: 'agent', type: 'string', required: false, desc: '执行器类型 (opencode/claude)' },
-            { name: 'gitUrl', type: 'string', required: false, desc: 'Git 仓库地址' },
-            { name: 'gitRef', type: 'string', required: false, desc: 'Git 分支/Tag/Commit' },
             { name: 'projectPath', type: 'string', required: false, desc: '项目路径' },
             { name: 'workspacePath', type: 'string', required: false, desc: '工作空间路径 (NFS)' },
             { name: 'model', type: 'string', required: false, desc: 'AI 模型 (如 anthropic/claude-sonnet-4)' },

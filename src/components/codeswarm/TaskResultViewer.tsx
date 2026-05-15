@@ -14,8 +14,6 @@ interface Task {
   instruction: string;
   projectPath: string | null;
   workspacePath: string | null;
-  gitUrl: string | null;
-  gitRef: string | null;
   agent: string | null;
   skills: string[] | null;
   mcps: any[] | null;
@@ -147,6 +145,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     if (!start) return '-';
     const endTime = end ? new Date(end).getTime() : Date.now();
     const diff = endTime - new Date(start).getTime();
+    if (diff < 0) return '0s';  // 防御：时钟偏移导致负值
     const seconds = Math.floor(diff / 1000);
     if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
@@ -324,24 +323,12 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       </div>
                     </div>
 
-                    {(task.gitUrl || task.projectPath) && (
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        {task.gitUrl && (
-                          <div>
-                            <span className="text-gray-500">Git:</span>
-                            <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
-                              {task.gitUrl}{task.gitRef ? ` (${task.gitRef})` : ''}
-                            </code>
-                          </div>
-                        )}
-                        {task.projectPath && (
-                          <div>
-                            <span className="text-gray-500">Project:</span>
-                            <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
-                              {task.projectPath}
-                            </code>
-                          </div>
-                        )}
+                    {task.projectPath && (
+                      <div className="text-sm">
+                        <span className="text-gray-500">Project:</span>
+                        <code className="ml-2 text-xs bg-gray-700 px-2 py-0.5 rounded">
+                          {task.projectPath}
+                        </code>
                       </div>
                     )}
 

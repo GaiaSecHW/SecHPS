@@ -150,8 +150,6 @@ class CodeswarmDispatcher {
           apiKey: task.apiKey || undefined,
           timeoutSec: task.timeoutSec || undefined,
           callbackUrl: baseUrl,
-          gitUrl: task.gitUrl || undefined,
-          gitRef: task.gitRef || undefined,
           agent: task.agent || undefined,
           preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
           startCommand: task.startCommand || undefined,
