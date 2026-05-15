@@ -39,6 +39,7 @@ import { SkillVersionHistory } from '@/components/skills/SkillVersionHistory';
 import { SkillVersionDiffModal } from '@/components/skills/SkillVersionDiffModal';
 import { SkillRollbackModal } from '@/components/skills/SkillRollbackModal';
 import { SkillNewVersionModal } from '@/components/skills/SkillNewVersionModal';
+import { VulnerabilityTreeSelector } from '@/components/skills/VulnerabilityTreeSelector';
 import toast from 'react-hot-toast';
 
 interface Skill {
@@ -90,7 +91,6 @@ export default function SkillDetailPage() {
   const [editIsActive, setEditIsActive] = useState(true);
   const [editCategoryId, setEditCategoryId] = useState<string>('');
   const [editVulnerabilityTreeId, setEditVulnerabilityTreeId] = useState<string>('');
-  const [editSelectedLanguageId, setEditSelectedLanguageId] = useState<string>('');
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [skillOutputTemplate, setSkillOutputTemplate] = useState<string>('');
@@ -231,9 +231,7 @@ export default function SkillDetailPage() {
 
   // 分类选择相关
   const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; icon: string | null; hasSubDimension: boolean }>>([]);
-  const [vulnerabilityTree, setVulnerabilityTree] = useState<Array<{ id: string; name: string; displayName: string; patterns: Array<{ id: string; name: string; displayName: string }> }>>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [loadingTree, setLoadingTree] = useState(false);
   
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -351,12 +349,10 @@ export default function SkillDetailPage() {
     setEditName(skill.displayName);
     setEditCategoryId(skill.categoryId || '');
     setEditVulnerabilityTreeId(skill.vulnerabilityTreeId || '');
-    setEditSelectedLanguageId('');
     setEditContent(skill.content || '');
     setEditIsActive(skill.isActive);
     setIsEditing(true);
 
-    // 加载分类和漏洞树数据
     const token = localStorage.getItem('token');
     setLoadingCategories(true);
     try {
@@ -369,32 +365,6 @@ export default function SkillDetailPage() {
       console.error('获取分类失败:', e);
     } finally {
       setLoadingCategories(false);
-    }
-
-    // 如果有子维度，加载漏洞树并回显语言
-    if (skill.hasSubDimension) {
-      setLoadingTree(true);
-      try {
-        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } });
-        if (res.ok) {
-          const data = await res.json();
-          setVulnerabilityTree(data.tree || []);
-          // 回显：根据当前 vulnerabilityTreeId 找到所属语言
-          if (skill.vulnerabilityTreeId) {
-            for (const lang of (data.tree || [])) {
-              const found = lang.patterns.find((p: { id: string }) => p.id === skill.vulnerabilityTreeId);
-              if (found) {
-                setEditSelectedLanguageId(lang.id);
-                break;
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error('获取漏洞树失败:', e);
-      } finally {
-        setLoadingTree(false);
-      }
     }
   };
 
@@ -852,20 +822,6 @@ export default function SkillDetailPage() {
                   onChange={(e) => {
                     setEditCategoryId(e.target.value);
                     setEditVulnerabilityTreeId('');
-                    setEditSelectedLanguageId('');
-                    // 检查选中的分类是否有子维度
-                    const selected = categories.find(c => c.id === e.target.value);
-                    if (selected?.hasSubDimension) {
-                      setLoadingTree(true);
-                      const token = localStorage.getItem('token');
-                      fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${token}` } })
-                        .then(res => res.ok ? res.json() : { tree: [] })
-                        .then(data => setVulnerabilityTree(data.tree || []))
-                        .catch(() => setVulnerabilityTree([]))
-                        .finally(() => setLoadingTree(false));
-                    } else {
-                      setVulnerabilityTree([]);
-                    }
                   }}
                   disabled={loadingCategories}
                   className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
@@ -877,50 +833,19 @@ export default function SkillDetailPage() {
                 </select>
               </div>
 
-              {/* 语言选择（仅当分类有子维度时显示） */}
+              {/* 漏洞模式选择（仅当分类有子维度时显示） */}
               {(() => {
                 const selectedCat = categories.find(c => c.id === editCategoryId);
                 return selectedCat?.hasSubDimension ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-2">
-                      语言
+                      漏洞模式
                     </label>
-                    <select
-                      value={editSelectedLanguageId}
-                      onChange={(e) => {
-                        setEditSelectedLanguageId(e.target.value);
-                        setEditVulnerabilityTreeId('');
-                      }}
-                      disabled={loadingTree}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="">选择语言</option>
-                      {vulnerabilityTree.map((lang) => (
-                        <option key={lang.id} value={lang.id}>{lang.displayName}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null;
-              })()}
-
-              {/* 模式选择（级联，选择语言后显示） */}
-              {editSelectedLanguageId && (() => {
-                const selectedLang = vulnerabilityTree.find(l => l.id === editSelectedLanguageId);
-                return selectedLang && selectedLang.patterns.length > 0 ? (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      模式
-                    </label>
-                    <select
-                      value={editVulnerabilityTreeId}
-                      onChange={(e) => setEditVulnerabilityTreeId(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    >
-                      <option value="">选择模式</option>
-                      {selectedLang.patterns.map((p) => (
-                        <option key={p.id} value={p.id}>{p.displayName}</option>
-                      ))}
-                    </select>
+                    <VulnerabilityTreeSelector
+                      value={editVulnerabilityTreeId || null}
+                      onChange={(patternId) => setEditVulnerabilityTreeId(patternId)}
+                      placeholder="选择漏洞模式"
+                    />
                   </div>
                 ) : null;
               })()}

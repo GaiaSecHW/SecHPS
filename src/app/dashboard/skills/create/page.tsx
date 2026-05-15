@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
+import { VulnerabilityTreeSelector } from '@/components/skills/VulnerabilityTreeSelector';
 import { hasPermission } from '@/lib/permissions';
 import { getSkillDefaultTemplate, getFormatGuideData } from '@/lib/skill-builder';
 
@@ -33,19 +34,11 @@ export default function CreateSkillPage() {
   const [isPublic, setIsPublic] = useState(false);
 
   const [categoryId, setCategoryId] = useState<string>(VULNERABILITY_CATEGORY_ID);
-  const [selectedLanguageId, setSelectedLanguageId] = useState<string>('');
-  const [selectedVulnCategoryId, setSelectedVulnCategoryId] = useState<string>('');
-  const [selectedVulnSubcategoryId, setSelectedVulnSubcategoryId] = useState<string>('');
   const [vulnerabilityTreeId, setVulnerabilityTreeId] = useState<string | null>(null);
   const [productTagIds, setProductTagIds] = useState<string[]>([]);
 
   const [categories, setCategories] = useState<Array<{ id: string; name: string; displayName: string; description?: string; icon?: string; hasSubDimension: boolean }>>([]);
-  const [languages, setLanguages] = useState<Array<{ id: string; name: string; displayName: string }>>([]);
-  const [vulnCategories, setVulnCategories] = useState<Array<{ id: string; name: string; displayName: string }>>([]);
-  const [vulnSubcategories, setVulnSubcategories] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
-  const [vulnPatterns, setVulnPatterns] = useState<Array<{ id: string; name: string; displayName: string; parentId: string | null }>>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
-  const [loadingTree, setLoadingTree] = useState(false);
 
   const [aiGenerating, setAiGenerating] = useState(false);
   const [aiGenerateError, setAiGenerateError] = useState('');
@@ -98,54 +91,14 @@ export default function CreateSkillPage() {
       }
     };
 
-    const fetchTree = async () => {
-      setLoadingTree(true);
-      try {
-        const t = localStorage.getItem('token');
-        const res = await fetch('/api/skills/vulnerability-tree', { headers: { Authorization: `Bearer ${t}` } });
-        if (res.ok) {
-          const data = await res.json();
-          setLanguages(data.tree || []);
-          setVulnCategories(data.categories || []);
-          setVulnSubcategories(data.subcategories || []);
-          setVulnPatterns(data.patterns || []);
-        }
-      } catch (e) {
-        console.error('获取漏洞模式树失败:', e);
-      } finally {
-        setLoadingTree(false);
-      }
-    };
-
     fetchCategories();
-    fetchTree();
   }, []);
 
   const selectedCategory = categories.find(c => c.id === categoryId);
 
-  const availableSubcategories = vulnSubcategories.filter(
-    s => s.parentId === selectedVulnCategoryId
-  );
-
-  const availablePatterns = vulnPatterns.filter(
-    p => p.parentId === selectedVulnSubcategoryId
-  );
-
   useEffect(() => {
-    setSelectedLanguageId('');
-    setSelectedVulnCategoryId('');
-    setSelectedVulnSubcategoryId('');
     setVulnerabilityTreeId(null);
   }, [categoryId]);
-
-  useEffect(() => {
-    setSelectedVulnSubcategoryId('');
-    setVulnerabilityTreeId(null);
-  }, [selectedVulnCategoryId]);
-
-  useEffect(() => {
-    setVulnerabilityTreeId(null);
-  }, [selectedVulnSubcategoryId]);
 
   const handleAiGenerate = async () => {
     if (!name.trim()) {
@@ -359,80 +312,19 @@ export default function CreateSkillPage() {
             </div>
 
             {selectedCategory?.hasSubDimension && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    语言
-                  </label>
-                  <select
-                    value={selectedLanguageId}
-                    onChange={(e) => setSelectedLanguageId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                    disabled={loadingTree}
-                  >
-                    <option value="">请选择语言</option>
-                    {languages.map(lang => (
-                      <option key={lang.id} value={lang.id}>{lang.displayName}</option>
-                    ))}
-                  </select>
-                  <p className="mt-1 text-xs text-gray-500">
-                    选择适用的编程语言
-                  </p>
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    漏洞模式 <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <select
-                      value={selectedVulnCategoryId}
-                      onChange={(e) => {
-                        setSelectedVulnCategoryId(e.target.value);
-                        setSelectedVulnSubcategoryId('');
-                        setVulnerabilityTreeId(null);
-                      }}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      disabled={loadingTree || vulnCategories.length === 0}
-                    >
-                      <option value="">请选择类型</option>
-                      {vulnCategories.map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.displayName}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={selectedVulnSubcategoryId}
-                      onChange={(e) => {
-                        setSelectedVulnSubcategoryId(e.target.value);
-                        setVulnerabilityTreeId(null);
-                      }}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      disabled={loadingTree || !selectedVulnCategoryId || availableSubcategories.length === 0}
-                    >
-                      <option value="">请选择分类</option>
-                      {availableSubcategories.map(sub => (
-                        <option key={sub.id} value={sub.id}>{sub.displayName}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      value={vulnerabilityTreeId || ''}
-                      onChange={(e) => setVulnerabilityTreeId(e.target.value || null)}
-                      className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      disabled={loadingTree || !selectedVulnSubcategoryId || availablePatterns.length === 0}
-                    >
-                      <option value="">请选择模式</option>
-                      {availablePatterns.map(pat => (
-                        <option key={pat.id} value={pat.id}>{pat.displayName}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    依次选择漏洞类型、分类和具体模式
-                  </p>
-                </div>
-              </>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  漏洞模式 <span className="text-red-500">*</span>
+                </label>
+                <VulnerabilityTreeSelector
+                  value={vulnerabilityTreeId}
+                  onChange={(patternId) => setVulnerabilityTreeId(patternId)}
+                  placeholder="请选择漏洞模式"
+                />
+                <p className="mt-1 text-xs text-gray-500">
+                  选择漏洞分类和具体模式
+                </p>
+              </div>
             )}
           </div>
 
