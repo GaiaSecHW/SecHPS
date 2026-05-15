@@ -1820,26 +1820,26 @@ export default function SkillDetailPage() {
         const { left: leftDiff, right: rightDiff } = buildDiff(leftLines, rightLines);
 
         const rowBg = (type: DiffRow['type'], side: 'left'|'right') => {
-          if (type === 'removed') return 'bg-red-900/20';
-          if (type === 'added') return 'bg-green-900/20';
-          if (type === 'empty') return side === 'left' ? 'bg-green-900/20/40' : 'bg-red-900/20/40';
+          if (type === 'removed') return 'bg-[rgba(248,81,73,0.15)] border-l-2 border-l-[#f85149]';
+          if (type === 'added') return 'bg-[rgba(63,185,80,0.15)] border-l-2 border-l-[#3fb950]';
+          if (type === 'empty') return side === 'left' ? 'bg-[rgba(63,185,80,0.08)]' : 'bg-[rgba(248,81,73,0.08)]';
           return '';
         };
         const textColor = (type: DiffRow['type']) => {
-          if (type === 'removed') return 'text-red-400';
-          if (type === 'added') return 'text-green-400';
+          if (type === 'removed') return 'text-[#ffa198]';
+          if (type === 'added') return 'text-[#7ee787]';
           if (type === 'empty') return 'text-transparent select-none';
-          return 'text-gray-300';
+          return 'text-[#c9d1d9]';
         };
         const lineNoBg = (type: DiffRow['type']) => {
-          if (type === 'removed') return 'bg-red-100 text-red-400';
-          if (type === 'added') return 'bg-green-100 text-green-500';
-          if (type === 'empty') return 'bg-dark-bg text-transparent';
-          return 'bg-dark-bg text-gray-300';
+          if (type === 'removed') return 'bg-[rgba(248,81,73,0.1)] text-[#ffa198]';
+          if (type === 'added') return 'bg-[rgba(63,185,80,0.1)] text-[#7ee787]';
+          if (type === 'empty') return 'bg-[#161b22] text-transparent';
+          return 'bg-[#161b22] text-[#6e7681]';
         };
         const marker = (type: DiffRow['type']) => {
-          if (type === 'removed') return <span className="text-red-400 select-none mr-1">−</span>;
-          if (type === 'added') return <span className="text-green-500 select-none mr-1">+</span>;
+          if (type === 'removed') return <span className="text-[#f85149] select-none mr-1 font-bold">−</span>;
+          if (type === 'added') return <span className="text-[#3fb950] select-none mr-1 font-bold">+</span>;
           return <span className="select-none mr-1 opacity-0">·</span>;
         };
 
@@ -1859,61 +1859,57 @@ export default function SkillDetailPage() {
         };
 
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-dark-surface rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#010409]/85 backdrop-blur-md p-4">
+            <div className="bg-[#0d1117] rounded-xl shadow-2xl shadow-black/50 w-full max-w-7xl max-h-[92vh] flex flex-col border border-[#30363d]">
 
-              {/* 弹窗头部 */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50 flex-shrink-0">
+              <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#21262d] flex-shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center">
-                    <Sparkles size={16} className="text-white" />
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#8957e5] to-[#a371f7] flex items-center justify-center">
+                    <Sparkles size={15} className="text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-100">AI 优化内容对比</h2>
-                    <p className="text-xs text-gray-500">
-                      共 <span className="font-medium text-orange-500">{changedCount}</span> 处变更 &nbsp;·&nbsp;
-                      <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red-100 border border-red-300 inline-block"/>删除</span> &nbsp;
-                      <span className="inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-green-100 border border-green-300 inline-block"/>新增</span>
+                    <h2 className="text-[15px] font-semibold text-[#e6edf3]">AI 优化内容对比</h2>
+                    <p className="text-xs text-[#7d8590] mt-0.5">
+                      共 <span className="font-medium text-[#f0883e]">{changedCount}</span> 处变更 ·
+                      <span className="ml-1.5 inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#f85149] inline-block"/>删除</span>
+                      <span className="ml-2 inline-flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#3fb950] inline-block"/>新增</span>
                     </p>
                   </div>
                 </div>
                 <button onClick={() => setShowDiffModal(false)}
-                  className="p-2 text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover rounded-lg transition-colors">
-                  <X size={20} />
+                  className="p-2 text-[#7d8590] hover:text-[#e6edf3] hover:bg-[#21262d] rounded-md transition-colors">
+                  <X size={18} />
                 </button>
               </div>
 
-              {/* AI 优化建议 */}
               {aiSuggestions.length > 0 && (
-                <div className="px-6 py-2.5 bg-purple-900/20 border-b border-purple-100 flex-shrink-0">
-                  <span className="text-xs font-medium text-purple-400">AI 优化说明：</span>
-                  <span className="text-xs text-purple-400 ml-2">{aiSuggestions.join('；')}</span>
+                <div className="px-5 py-2.5 bg-[#1c1b29] border-b border-[#21262d] flex-shrink-0">
+                  <span className="text-xs font-medium text-[#a371f7]">AI 优化说明：</span>
+                  <span className="text-xs text-[#bc8cff] ml-2">{aiSuggestions.join('；')}</span>
                 </div>
               )}
 
-              {/* 列标题 */}
-              <div className="flex divide-x divide-gray-700/50 flex-shrink-0 border-b border-gray-700/50">
-                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0F172A]">
-                  <span className="w-2 h-2 rounded-full bg-red-400"/>
-                  <span className="text-sm font-medium text-gray-400">原始内容（你编辑的）</span>
+              <div className="flex divide-x divide-[#21262d] flex-shrink-0 border-b border-[#21262d]">
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0d1117]">
+                  <span className="w-2 h-2 rounded-full bg-[#f85149]"/>
+                  <span className="text-[13px] text-[#7d8590]">原始内容</span>
                 </div>
-                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-purple-900/20">
-                  <span className="w-2 h-2 rounded-full bg-purple-600"/>
-                  <span className="text-sm font-medium text-purple-400">AI 优化后的内容</span>
+                <div className="flex-1 flex items-center gap-2 px-4 py-2 bg-[#0d1117]">
+                  <span className="w-2 h-2 rounded-full bg-[#3fb950]"/>
+                  <span className="text-[13px] text-[#7d8590]">AI 优化后</span>
                 </div>
               </div>
 
               {/* diff 主体 — 同步滚动 */}
-              <div className="flex-1 flex divide-x divide-gray-700/50 min-h-0 overflow-hidden">
-                {/* 左侧 */}
+              <div className="flex-1 flex divide-x divide-[#21262d] min-h-0 overflow-hidden">
                 <div ref={leftRef} onScroll={onLeftScroll}
-                  className="flex-1 overflow-auto font-mono text-xs leading-5">
+                  className="flex-1 overflow-auto font-mono text-[13px] leading-6 bg-[#0d1117]">
                   {leftDiff.map((row, idx) => (
-                    <div key={idx} className={`flex min-w-0 ${rowBg(row.type, 'left')}`}>
-                      <span className={`w-10 shrink-0 text-right pr-2 py-0.5 select-none text-[10px] border-r border-gray-100 ${lineNoBg(row.type)}`}>
+                    <div key={idx} className={`flex min-w-0 hover:bg-[#161b22] transition-colors ${rowBg(row.type, 'left')}`}>
+                      <span className={`w-12 shrink-0 text-right pr-3 py-0.5 select-none text-[11px] border-r border-[#21262d] ${lineNoBg(row.type)}`}>
                         {row.lineNo ?? ''}
                       </span>
-                      <span className={`w-4 shrink-0 flex items-center justify-center py-0.5`}>
+                      <span className={`w-5 shrink-0 flex items-center justify-center py-0.5`}>
                         {marker(row.type)}
                       </span>
                       <span className={`flex-1 py-0.5 pr-4 whitespace-pre ${textColor(row.type)}`}>
@@ -1923,15 +1919,14 @@ export default function SkillDetailPage() {
                   ))}
                 </div>
 
-                {/* 右侧 */}
                 <div ref={rightRef} onScroll={onRightScroll}
-                  className="flex-1 overflow-auto font-mono text-xs leading-5">
+                  className="flex-1 overflow-auto font-mono text-[13px] leading-6 bg-[#0d1117]">
                   {rightDiff.map((row, idx) => (
-                    <div key={idx} className={`flex min-w-0 ${rowBg(row.type, 'right')}`}>
-                      <span className={`w-10 shrink-0 text-right pr-2 py-0.5 select-none text-[10px] border-r border-gray-100 ${lineNoBg(row.type)}`}>
+                    <div key={idx} className={`flex min-w-0 hover:bg-[#161b22] transition-colors ${rowBg(row.type, 'right')}`}>
+                      <span className={`w-12 shrink-0 text-right pr-3 py-0.5 select-none text-[11px] border-r border-[#21262d] ${lineNoBg(row.type)}`}>
                         {row.lineNo ?? ''}
                       </span>
-                      <span className={`w-4 shrink-0 flex items-center justify-center py-0.5`}>
+                      <span className={`w-5 shrink-0 flex items-center justify-center py-0.5`}>
                         {marker(row.type)}
                       </span>
                       <span className={`flex-1 py-0.5 pr-4 whitespace-pre ${textColor(row.type)}`}>
@@ -1942,19 +1937,18 @@ export default function SkillDetailPage() {
                 </div>
               </div>
 
-              {/* 底部操作 */}
-              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 flex-shrink-0 bg-dark-bg rounded-b-2xl">
+              <div className="flex items-center justify-end gap-3 px-5 py-3 border-t border-[#21262d] flex-shrink-0 bg-[#0d1117]">
                 <button
                   onClick={() => { setShowDiffModal(false); }}
-                  className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-lg hover:bg-dark-surface-hover transition-colors"
+                  className="px-4 py-1.5 text-[13px] border border-[#30363d] text-[#c9d1d9] rounded-md hover:bg-[#21262d] hover:border-[#484f58] transition-colors"
                 >
                   放弃，保留原始内容
                 </button>
                 <button
                   onClick={() => { setEditContent(aiDiffContent); setShowDiffModal(false); setAiDiffContent(''); }}
-                  className="inline-flex items-center px-5 py-2 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all shadow-sm"
+                  className="inline-flex items-center px-4 py-1.5 text-[13px] font-medium bg-[#238636] text-white rounded-md hover:bg-[#2ea043] transition-colors"
                 >
-                  <CheckCircle size={15} className="mr-1.5" />
+                  <CheckCircle size={14} className="mr-1.5" />
                   采用 AI 优化内容
                 </button>
               </div>
