@@ -1842,6 +1842,7 @@ model Vulnerability {
   POC                       String?
   vulnerable                Boolean?                    @default(true)
   fixSuggestion             String?
+  rawReport                 String?
   status                    String                      @default("new")
   falsePositiveReason       String?
   confirmedBy               String?
@@ -1867,6 +1868,7 @@ model Vulnerability {
   @@index([createdAt])
   @@index([projectId, status])
   @@index([severity, status])
+  @@unique([projectId, title, type])
 }
 
 model VulnerabilityCategory {
