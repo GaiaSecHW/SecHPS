@@ -296,32 +296,82 @@ async function syncDatabaseWithRepo(repoSkillNames: string[]): Promise<{
       isPublic: true,
       isLatest: true,
     },
-    select: { id: true, name: true, displayName: true },
+    select: { id: true, name: true },
   });
 
   const skillsToDelete = dbSkills.filter(skill => !repoSkillNames.includes(skill.name));
 
   for (const skill of skillsToDelete) {
     try {
+      const skillId = skill.id;
+
+      const oldVersions = await prisma.skill.findMany({
+        where: { parentId: skillId },
+        select: { id: true },
+      });
+      const allSkillIds = [skillId, ...oldVersions.map(v => v.id)];
+
       await prisma.$transaction(async (tx) => {
         await tx.skillEvolution.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillExecution.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillImprovement.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillAnalysis.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillObservationLog.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillVulnerabilityMapping.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillDuplicateGroupMember.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillMergeRecord.deleteMany({
           where: {
             OR: [
-              { skillId: skill.id },
-              { Skill: { parentId: skill.id } },
+              { targetSkillId: { in: allSkillIds } },
+              { sourceSkillId: { in: allSkillIds } },
             ],
           },
         });
 
-        await tx.skill.deleteMany({
-          where: { parentId: skill.id },
+        await tx.skillNewImpactAnalysis.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skillEvolutionTask.deleteMany({
+          where: { skillId: { in: allSkillIds } },
         });
 
         await tx.skillProductTag.deleteMany({
-          where: { skillId: skill.id },
+          where: { skillId: { in: allSkillIds } },
         });
 
-        await tx.skill.delete({ where: { id: skill.id } });
+        await tx.skillObservationStats.deleteMany({
+          where: { skillId: { in: allSkillIds } },
+        });
+
+        await tx.skill.deleteMany({
+          where: { parentId: skillId },
+        });
+
+        await tx.skill.delete({
+          where: { id: skillId },
+        });
       });
 
       result.deleted++;
