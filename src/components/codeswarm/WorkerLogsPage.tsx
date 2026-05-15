@@ -7,7 +7,6 @@ import {
   Terminal,
   RefreshCw,
   ChevronDown,
-  ChevronRight,
   Filter,
   Clock,
   Server,
@@ -19,8 +18,11 @@ import {
   Activity,
   Play,
   Send,
-  ArrowRight,
-  Award
+  Award,
+  MessageSquare,
+  Copy,
+  Wrench,
+  ChevronRight
 } from 'lucide-react';
 
 interface LogEntry {
@@ -186,6 +188,33 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
     });
   };
 
+  // Group consecutive logs of the same type into chunks for better display
+  const groupConsecutiveLogs = (logs: LogEntry[]): LogEntry[][] => {
+    const groups: LogEntry[][] = [];
+    let currentGroup: LogEntry[] = [];
+    let lastTimestamp = 0;
+
+    for (const log of logs) {
+      const timestamp = new Date(log.createdAt).getTime();
+      const timeDiff = timestamp - lastTimestamp;
+
+      // If more than 500ms gap or different type, start new group
+      if (currentGroup.length > 0 && (timeDiff > 500 || currentGroup[0].type !== log.type)) {
+        groups.push(currentGroup);
+        currentGroup = [];
+      }
+
+      currentGroup.push(log);
+      lastTimestamp = timestamp;
+    }
+
+    if (currentGroup.length > 0) {
+      groups.push(currentGroup);
+    }
+
+    return groups;
+  };
+
   const getLogContent = (log: LogEntry): string => {
     const parsed = parseLogData(log.data);
     if (typeof parsed === 'object' && parsed !== null) {
@@ -198,11 +227,36 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
     return log.data;
   };
 
+  // Get tool call info if this is a tool_call log
+  const getToolCallInfo = (log: LogEntry): { name: string; args: object } | null => {
+    if (log.type !== 'tool_call') return null;
+    const parsed = parseLogData(log.data);
+    if (typeof parsed === 'object' && parsed !== null) {
+      const input = (parsed as any).input || (parsed as any).data?.input;
+      if (input && typeof input === 'object') {
+        return { name: (parsed as any).tool || (parsed as any).data?.tool || 'unknown', args: input };
+      }
+    }
+    return null;
+  };
+
+  // Copy text to clipboard
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      // Could add a toast notification here
+    }).catch(console.error);
+  };
+
+  // Get combined content from a group of logs
+  const getGroupContent = (group: LogEntry[]): string => {
+    return group.map(log => getLogContent(log)).join('');
+  };
+
   // Build execution timeline based on task state
   const buildTimeline = (): ExecutionPhase[] => {
-    if (!taskDetail) return EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' }));
+    if (!taskDetail) return EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
 
-    const phases = EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as const }));
+    const phases: ExecutionPhase[] = EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
     const state = taskDetail.state;
 
     // queued -> always completed
@@ -421,6 +475,34 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
                 自动刷新
               </label>
             </div>
+            {/* Active filters display */}
+            {(levelFilter !== 'all' || streamFilter !== 'all') && (
+              <div className="flex items-center gap-1 ml-2">
+                <span className="text-xs text-slate-500">过滤:</span>
+                {levelFilter !== 'all' && (
+                  <span className="px-2 py-0.5 text-xs bg-blue-900/50 text-blue-300 rounded-full border border-blue-700">
+                    {levelFilter === 'worker' ? 'Worker' : 'Agent'}
+                    <button
+                      onClick={() => setLevelFilter('all')}
+                      className="ml-1 hover:text-white"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+                {streamFilter !== 'all' && (
+                  <span className="px-2 py-0.5 text-xs bg-emerald-900/50 text-emerald-300 rounded-full border border-emerald-700">
+                    {streamFilter}
+                    <button
+                      onClick={() => setStreamFilter('all')}
+                      className="ml-1 hover:text-white"
+                    >
+                      ×
+                    </button>
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Process Logs */}
@@ -438,56 +520,107 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
                 <p className="text-slate-500 text-center py-8">暂无执行过程日志</p>
               ) : (
                 <div className="space-y-2">
-                  {processLogs.map(log => {
-                    const content = getLogContent(log);
-                    const isExpanded = expandedLogs.has(log.id);
-                    const parsed = parseLogData(log.data);
+                  {groupConsecutiveLogs(processLogs).map((group, groupIndex) => {
+                    const content = getGroupContent(group);
+                    const firstLog = group[0];
+                    const isMultiLine = content.includes('\n');
+                    const isExpanded = expandedLogs.has(`group-${groupIndex}`);
+                    const isAgent = firstLog.level === 'agent';
+                    const isError = firstLog.stream === 'stderr' || firstLog.type === 'error';
+                    const isToolCall = firstLog.type === 'tool_call';
+                    const toolInfo = getToolCallInfo(firstLog);
 
                     return (
                       <div
-                        key={log.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                          log.stream === 'stderr' || log.type === 'error'
-                            ? 'bg-red-900/10 border-red-200/30'
-                            : log.level === 'worker'
-                              ? 'bg-blue-900/10 border-blue-200/30'
-                              : 'bg-slate-700/50 border-slate-600/50'
-                        }`}
+                        key={`group-${groupIndex}`}
+                        className={`flex ${isAgent ? 'justify-end' : 'justify-start'}`}
                       >
-                        <span className="text-slate-500 text-xs font-mono whitespace-nowrap min-w-[90px]">
-                          {formatTime(log.createdAt)}
-                        </span>
-                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getLevelBadgeColor(log.level)}`}>
-                          {log.level === 'worker' ? 'W' : 'A'}
-                        </span>
-                        {log.stream && (
-                          <span className={`px-2 py-0.5 text-xs font-medium rounded ${
-                            log.stream === 'stderr' ? 'bg-red-900/50 text-red-300' : 'bg-emerald-900/50 text-emerald-300'
-                          }`}>
-                            {log.stream}
-                          </span>
-                        )}
-                        {getLogIcon(log.type, log.stream)}
-                        <div className="flex-1 min-w-0">
-                          <div
-                            className="cursor-pointer text-slate-200 font-medium"
-                            onClick={() => toggleExpand(log.id)}
-                          >
-                            {content.length > 200 && !isExpanded
-                              ? content.substring(0, 200) + '...'
-                              : content}
+                        <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
+                          isError
+                            ? 'bg-red-900/30 border border-red-700/50 text-red-200'
+                            : isToolCall
+                              ? 'bg-amber-900/20 border border-amber-600/40 text-amber-100'
+                              : isAgent
+                                ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100'
+                                : 'bg-slate-700/80 border border-slate-600/50 text-slate-200'
+                        }`}>
+                          {/* Header with icon and timestamp */}
+                          <div className="flex items-center justify-between gap-3 mb-1 text-xs opacity-70">
+                            <div className="flex items-center gap-2">
+                              {isToolCall ? (
+                                <Wrench className="w-3 h-3" />
+                              ) : isAgent ? (
+                                <MessageSquare className="w-3 h-3" />
+                              ) : (
+                                <Cpu className="w-3 h-3" />
+                              )}
+                              <span>{isToolCall ? 'Tool Call' : isAgent ? 'Agent' : 'Worker'}</span>
+                              <span>·</span>
+                              <span className="font-mono">{formatTime(firstLog.createdAt)}</span>
+                              {group.length > 1 && (
+                                <>
+                                  <span>·</span>
+                                  <span className="text-slate-400">+{group.length - 1}条</span>
+                                </>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => copyToClipboard(content)}
+                              className="flex items-center gap-1 text-slate-400 hover:text-slate-200 transition-colors"
+                              title="复制内容"
+                            >
+                              <Copy className="w-3 h-3" />
+                            </button>
                           </div>
-                          {isExpanded && (
-                            <pre className="mt-3 p-3 bg-gray-900 text-green-400 rounded-lg text-xs overflow-x-auto border border-slate-700">
-                              {JSON.stringify(parsed, null, 2)}
-                            </pre>
+
+                          {/* Tool Call Visualization */}
+                          {isToolCall && toolInfo && (
+                            <div className="mb-2 bg-slate-900/50 rounded-lg p-3 border border-amber-700/30">
+                              <div className="flex items-center gap-2 text-amber-300 font-medium mb-2">
+                                <Wrench className="w-4 h-4" />
+                                <span className="font-mono">{toolInfo.name}</span>
+                              </div>
+                              <pre className="text-xs text-slate-300 bg-slate-900 rounded p-2 overflow-x-auto max-h-40 overflow-y-auto">
+                                {JSON.stringify(toolInfo.args, null, 2)}
+                              </pre>
+                            </div>
+                          )}
+
+                          {/* Content */}
+                          {isMultiLine || content.length > 300 ? (
+                            <div className="relative">
+                              <pre className={`text-sm whitespace-pre-wrap break-all font-mono ${!isExpanded ? 'max-h-24 overflow-hidden' : ''}`}>
+                                {content}
+                              </pre>
+                              <button
+                                onClick={() => {
+                                  const key = `group-${groupIndex}`;
+                                  setExpandedLogs(prev => {
+                                    const newSet = new Set(prev);
+                                    if (newSet.has(key)) newSet.delete(key);
+                                    else newSet.add(key);
+                                    return newSet;
+                                  });
+                                }}
+                                className="mt-1 flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 font-medium"
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronDown className="w-3 h-3" /> 收起
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronRight className="w-3 h-3" /> 展开全部
+                                  </>
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-sm">
+                              {content}
+                            </div>
                           )}
                         </div>
-                        {content.length > 200 && (
-                          <button onClick={() => toggleExpand(log.id)} className="text-slate-400 hover:text-slate-300 p-1">
-                            {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                          </button>
-                        )}
                       </div>
                     );
                   })}

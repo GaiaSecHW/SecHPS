@@ -155,10 +155,38 @@ export class WorkerDaemon {
       console.log(`[Daemon] payload.workspacePath: ${payload.workspacePath}`);
       console.log(`[Daemon] payload.projectPath: ${payload.projectPath}`);
 
+      const onEvent = (event: AgentEvent) => {
+        console.log(`[Daemon] Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
+        this.postEvent(payload, [event]).catch(() => {});
+      };
+
+      // ========== PHASE 1: 构建环境 ==========
+      onEvent({
+        type: 'phase_start',
+        phase: 'building',
+        message: '开始构建环境...',
+        timestamp: new Date().toISOString(),
+      });
+
       console.log(`[Daemon] Step 1: Building environment...`);
-      buildResult = await this.envFactory.build(payload);
+      buildResult = await this.envFactory.build(payload, (msg) => {
+        onEvent({
+          type: 'log_chunk',
+          content: msg,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
+      });
       const { workspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate } = buildResult;
-      
+
+      onEvent({
+        type: 'phase_complete',
+        phase: 'building',
+        success: true,
+        message: `环境构建完成: ${workspacePath}`,
+        timestamp: new Date().toISOString(),
+      });
+
       console.log(`[Daemon] Step 1 DONE: workspacePath=${workspacePath}`);
       console.log(`[Daemon] Step 1 DONE: resolvedAgent=${resolvedAgent}`);
       console.log(`[Daemon] Step 1 DONE: resolvedInstruction="${resolvedInstruction?.substring(0, 100)}..." (len=${resolvedInstruction?.length})`);
@@ -177,10 +205,13 @@ export class WorkerDaemon {
       console.log(`[Daemon] final instruction: "${instruction?.substring(0, 100)}..." (len=${instruction?.length})`);
       this.server.log.info({ taskId, agentName, engine, instructionLength: instruction?.length }, 'Using agent');
 
-      const onEvent = (event: AgentEvent) => {
-        console.log(`[Daemon] Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
-        this.postEvent(payload, [event]).catch(() => {});
-      };
+      // ========== PHASE 2: 执行任务 ==========
+      onEvent({
+        type: 'phase_start',
+        phase: 'executing',
+        message: '开始执行任务...',
+        timestamp: new Date().toISOString(),
+      });
 
       let result;
       if (startCommand) {
@@ -221,6 +252,16 @@ export class WorkerDaemon {
       const reportContent = this.collectReport(workspacePath);
 
       const status: TaskResultStatus = result.exitCode === 0 ? 'completed' : 'failed';
+
+      // ========== PHASE COMPLETE: 执行任务 ==========
+      onEvent({
+        type: 'phase_complete',
+        phase: 'executing',
+        success: status === 'completed',
+        message: status === 'completed' ? '任务执行完成' : `任务执行失败: exitCode=${result.exitCode}`,
+        timestamp: new Date().toISOString(),
+      });
+
       await this.postResult(payload, {
         taskId,
         nodeId: this.config.nodeId,
@@ -288,15 +329,33 @@ export class WorkerDaemon {
     reportContent?: string;
   }): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
-    try {
-      await fetch(`${callbackUrl}/api/codeswarm/worker/result`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(result),
-      });
-    } catch {
-      // Callback target not available
+    const maxRetries = 3;
+    const retryDelay = 2000;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const resp = await fetch(`${callbackUrl}/api/codeswarm/worker/result`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(result),
+        });
+
+        if (resp.ok) {
+          this.server.log.info({ taskId: result.taskId, attempt }, 'Result posted successfully');
+          return;
+        }
+
+        this.server.log.warn({ taskId: result.taskId, status: resp.status, attempt }, 'Result post failed');
+      } catch (err) {
+        this.server.log.error({ taskId: result.taskId, error: err, attempt }, 'Result post error');
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+      }
     }
+
+    this.server.log.error({ taskId: result.taskId }, 'Result post failed after all retries');
   }
 
   private async runCustomCommand(

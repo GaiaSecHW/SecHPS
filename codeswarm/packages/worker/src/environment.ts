@@ -14,6 +14,8 @@ export interface BuildResult {
   commandTemplate?: string;
 }
 
+export type BuildProgressCallback = (message: string) => void;
+
 function mapRemotePathToLocal(remotePath: string): string {
   const pathMapping = process.env.PATH_MAPPING;
   if (!pathMapping) {
@@ -42,8 +44,12 @@ export class EnvironmentFactory {
    * Build an isolated workspace for a task.
    * Priority: workspacePath (NFS) > projectPath (local copy)
    */
-  async build(payload: TaskPayload): Promise<BuildResult> {
-    console.log(`[Environment] ========== BUILD BEGIN ==========`);
+  async build(payload: TaskPayload, onProgress?: BuildProgressCallback): Promise<BuildResult> {
+    const progress = (msg: string) => {
+      console.log(`[Environment] ${msg}`);
+      onProgress?.(msg);
+    };
+    progress(`========== BUILD BEGIN ==========`);
     console.log(`[Environment] payload.taskId: ${payload.taskId}`);
     console.log(`[Environment] payload.workspacePath: ${payload.workspacePath}`);
     console.log(`[Environment] payload.projectPath: ${payload.projectPath}`);
@@ -56,24 +62,22 @@ export class EnvironmentFactory {
     // Apply path mapping for Windows local debugging (e.g., /home/icsl/Shared-workspace -> Z:/)
     // Read default_agent from opencode.json if agent not specified in payload
     if (payload.workspacePath) {
-      console.log(`[Environment] Mode: NFS passthrough (workspacePath provided)`);
+      progress(`Mode: NFS passthrough (workspacePath=${payload.workspacePath})`);
       const localWorkspacePath = mapRemotePathToLocal(payload.workspacePath);
-      console.log(`[Environment] mapped path: ${payload.workspacePath} -> ${localWorkspacePath}`);
-      console.log(`[Environment] PATH_MAPPING env: ${process.env.PATH_MAPPING || 'not set'}`);
+      progress(`路径映射: ${payload.workspacePath} -> ${localWorkspacePath}`);
 
       // Check workspace permissions for NFS passthrough mode
       this.checkWorkspacePermissions(localWorkspacePath);
-      
+
       let actualWorkspacePath = localWorkspacePath;
       let resolvedAgent: string | undefined;
       let resolvedInstruction: string | undefined;
       let commandTemplate: string | undefined;
-      
+
       // Read instruction.txt from root directory
-      console.log(`[Environment] Step 1: Checking instruction.txt...`);
+      progress(`Step 1: 检查 instruction.txt...`);
       const instructionPath = path.join(localWorkspacePath, 'instruction.txt');
-      console.log(`[Environment] instructionPath: ${instructionPath}`);
-      console.log(`[Environment] instruction.txt exists: ${fs.existsSync(instructionPath)}`);
+      progress(`instruction.txt exists: ${fs.existsSync(instructionPath)}`);
       const MIN_INSTRUCTION_LENGTH = 50;
       let instructionTooShort = false;
       
@@ -112,75 +116,65 @@ export class EnvironmentFactory {
       }
       
       // Check if opencode.json exists directly in workspace
-      console.log(`[Environment] Step 2: Checking opencode.json...`);
+      progress(`Step 2: 检查 opencode.json...`);
       const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
-      console.log(`[Environment] direct opencode.json path: ${directOpencodeJsonPath}`);
-      console.log(`[Environment] direct opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
+      progress(`opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
       if (fs.existsSync(directOpencodeJsonPath)) {
+        progress(`找到 opencode.json，读取配置...`);
         try {
           const config = JSON.parse(fs.readFileSync(directOpencodeJsonPath, 'utf-8'));
           resolvedAgent = config.default_agent || config.defaultAgent;
-          console.log(`[Environment] Found default_agent in direct opencode.json: ${resolvedAgent}`);
-          console.log(`[Environment] opencode.json config keys: ${Object.keys(config).join(', ')}`);
-          // Extract command template for the agent
+          progress(`default_agent: ${resolvedAgent}`);
           if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
             commandTemplate = config.command[resolvedAgent].template;
-            console.log(`[Environment] Found command template for ${resolvedAgent}: "${commandTemplate.substring(0, 50)}..."`);
+            progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
           }
         } catch (e) {
-          console.log(`[Environment] Failed to read direct opencode.json: ${e}`);
+          progress(`读取 opencode.json 失败: ${e}`);
         }
       } else {
         // Try to find a single subdirectory with opencode.json
-        console.log(`[Environment] Step 2b: Checking subdirectories for opencode.json...`);
+        progress(`Step 2b: 检查子目录...`);
         const subdirs = fs.readdirSync(localWorkspacePath, { withFileTypes: true })
           .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
           .map(entry => entry.name);
-        
-        console.log(`[Environment] Found subdirs: ${subdirs.join(', ')}`);
-        console.log(`[Environment] Subdirs count: ${subdirs.length}`);
-        
+
+        progress(`子目录列表: ${subdirs.join(', ')} (${subdirs.length}个)`);
+
         if (subdirs.length === 1) {
           const subdirPath = path.join(localWorkspacePath, subdirs[0]);
           const subdirOpencodeJsonPath = path.join(subdirPath, 'opencode.json');
-          console.log(`[Environment] Checking subdir: ${subdirs[0]}`);
-          console.log(`[Environment] subdir opencode.json path: ${subdirOpencodeJsonPath}`);
-          console.log(`[Environment] subdir opencode.json exists: ${fs.existsSync(subdirOpencodeJsonPath)}`);
+          progress(`检查子目录: ${subdirs[0]}`);
           if (fs.existsSync(subdirOpencodeJsonPath)) {
             actualWorkspacePath = subdirPath;
-            console.log(`[Environment] Using subdirectory as workspace: ${subdirs[0]}`);
+            progress(`使用子目录作为工作区: ${subdirs[0]}`);
             try {
               const config = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8'));
               resolvedAgent = config.default_agent || config.defaultAgent;
-              console.log(`[Environment] Found default_agent in subdirectory opencode.json: ${resolvedAgent}`);
-              console.log(`[Environment] opencode.json config keys: ${Object.keys(config).join(', ')}`);
-              // Extract command template for the agent
+              progress(`default_agent: ${resolvedAgent}`);
               if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
                 commandTemplate = config.command[resolvedAgent].template;
-                console.log(`[Environment] Found command template for ${resolvedAgent}: "${commandTemplate.substring(0, 50)}..."`);
+                progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
               }
             } catch (e) {
-              console.log(`[Environment] Failed to read subdir opencode.json: ${e}`);
+              progress(`读取子目录 opencode.json 失败: ${e}`);
             }
           }
         } else if (subdirs.length > 1) {
-          console.log(`[Environment] Multiple subdirs found, not auto-selecting`);
+          progress(`多个子目录，不自动选择`);
         }
       }
-      
-      console.log(`[Environment] ========== BUILD COMPLETE (NFS mode) ==========`);
-      console.log(`[Environment] Result workspacePath: ${actualWorkspacePath}`);
-      console.log(`[Environment] Result agent: ${resolvedAgent}`);
-      console.log(`[Environment] Result instruction length: ${resolvedInstruction?.length}`);
-      console.log(`[Environment] Result commandTemplate: ${commandTemplate ? 'present' : 'none'}`);
+
+      progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
       return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate };
     }
 
     // Local workspace mode
+    progress(`Mode: 本地构建 (projectPath=${payload.projectPath})`);
     const workspacePath = path.join(this.workspaceBasePath, payload.taskId);
 
     try {
-      // Step 1: Create workspace directory
+      progress(`Step 1: 创建工作区目录`);
       fs.mkdirSync(workspacePath, { recursive: true });
 
       // Step 2: Populate workspace from local copy
@@ -188,25 +182,29 @@ export class EnvironmentFactory {
       if (!projectPath || !fs.existsSync(projectPath)) {
         throw new Error(`Project path does not exist: ${projectPath}`);
       }
+      progress(`Step 2: 拷贝项目文件...`);
       fs.cpSync(projectPath, workspacePath, { recursive: true, filter: this.excludeNodeModulesFilter });
 
       // Step 3: Create .opencode/skills/ subdirectory
+      progress(`Step 3: 创建技能目录`);
       const skillsDir = path.join(workspacePath, '.opencode', 'skills');
       fs.mkdirSync(skillsDir, { recursive: true });
 
       // Step 4: Copy skill files
       if (payload.skills && payload.skills.length > 0) {
+        progress(`Step 4: 拷贝技能文件 (${payload.skills.length}个)`);
         for (const skillId of payload.skills) {
           const sourceSkillPath = path.join(this.skillsRegistryPath, skillId, 'latest', 'SKILL.md');
           const destSkillPath = path.join(skillsDir, skillId);
 
           if (!fs.existsSync(sourceSkillPath)) {
-            console.warn(`Skill file not found: ${sourceSkillPath}`);
+            progress(`技能文件未找到: ${sourceSkillPath}`);
             continue;
           }
 
           fs.mkdirSync(destSkillPath, { recursive: true });
           fs.copyFileSync(sourceSkillPath, path.join(destSkillPath, 'SKILL.md'));
+          progress(`已拷贝技能: ${skillId}`);
         }
       }
 
@@ -214,12 +212,15 @@ export class EnvironmentFactory {
       const opencodeConfig: Record<string, any> = {};
       if (payload.model) {
         opencodeConfig.model = payload.model;
+        progress(`配置模型: ${payload.model}`);
       }
       if (payload.mcps && payload.mcps.length > 0) {
         opencodeConfig.mcp = this.normalizeMcpServices(payload.mcps);
+        progress(`配置 MCP: ${payload.mcps.length}个`);
       }
       if (payload.agent) {
         opencodeConfig.default_agent = payload.agent;
+        progress(`配置 agent: ${payload.agent}`);
       }
       if (Object.keys(opencodeConfig).length > 0) {
         opencodeConfig["$schema"] = "https://opencode.ai/config.json";
@@ -231,15 +232,18 @@ export class EnvironmentFactory {
 
       // Step 6: Write instruction.txt
       if (payload.instruction) {
+        progress(`写入 instruction.txt`);
         fs.writeFileSync(
           path.join(workspacePath, 'instruction.txt'),
           payload.instruction || ''
         );
       }
 
+      progress(`BUILD COMPLETE (local mode) - workspace: ${workspacePath}`);
       return { workspacePath, agent: payload.agent };
     } catch (error) {
       // Clean up partial workspace on error
+      progress(`BUILD FAILED: ${error}`);
       if (fs.existsSync(workspacePath)) {
         this.cleanup(workspacePath);
       }

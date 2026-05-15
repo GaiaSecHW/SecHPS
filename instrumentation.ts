@@ -3,8 +3,14 @@
 // 使用动态导入避免 Edge Runtime 加载 Node.js 模块
 
 import { PrismaClient } from '@prisma/client';
+import { setSystemStartTime } from './src/lib/system-info';
 
 const LOG_PREFIX = '[Instrumentation]';
+
+// 记录服务启动时间
+const startTime = new Date();
+setSystemStartTime(startTime);
+console.log(`${LOG_PREFIX} 服务启动时间: ${startTime.toISOString()}`);
 
 // 直接创建 Prisma 客户端（避免动态导入返回 undefined）
 const prisma = new PrismaClient({
