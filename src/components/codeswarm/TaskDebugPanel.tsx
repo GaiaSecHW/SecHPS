@@ -220,19 +220,35 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     setLoading(true);
     try {
       const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
-const payload = {
-        instruction: form.instruction,
-        agent: form.agent || undefined,
-        projectPath: form.projectPath || undefined,
-        workspacePath: form.workspacePath || undefined,
-        model: selectedModel?.modelName || undefined,
-        modelId: selectedModel?.modelId || undefined,
-        apiKey: form.apiKey || undefined,
-        timeoutSec: form.timeoutSec || undefined,
-        skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
-        mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
-        preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
-      };
+const payload = executorMode === 'command'
+        ? {
+            // Command mode: 直接传递命令字符串给 Worker spawn，不走 ACP prompt
+            startCommand: `opencode run --command ${form.instruction}`,
+            agent: form.agent || undefined,
+            projectPath: form.projectPath || undefined,
+            workspacePath: form.workspacePath || undefined,
+            model: selectedModel?.modelName || undefined,
+            modelId: selectedModel?.modelId || undefined,
+            apiKey: form.apiKey || undefined,
+            timeoutSec: form.timeoutSec || undefined,
+            skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
+            mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
+            preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
+          }
+        : {
+            // Instruction mode: 自然语言指令，走 ACP sendPrompt
+            instruction: form.instruction,
+            agent: form.agent || undefined,
+            projectPath: form.projectPath || undefined,
+            workspacePath: form.workspacePath || undefined,
+            model: selectedModel?.modelName || undefined,
+            modelId: selectedModel?.modelId || undefined,
+            apiKey: form.apiKey || undefined,
+            timeoutSec: form.timeoutSec || undefined,
+            skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
+            mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
+            preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
+          };
 
       const resp = await fetch('/api/codeswarm/tasks', {
         method: 'POST',
@@ -359,7 +375,7 @@ const payload = {
                 type="text"
                 value={form.instruction}
                 onChange={(e) => setForm({ ...form, instruction: e.target.value })}
-                placeholder="opencode run --command nazhua-audit"
+                placeholder="nazhua-audit"
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
               />
             </div>

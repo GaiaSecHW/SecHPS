@@ -7,6 +7,7 @@ const WorkerNodesTable = dynamic(() => import('@/components/codeswarm/WorkerNode
 const TaskDebugPanel = dynamic(() => import('@/components/codeswarm/TaskDebugPanel').then(m => ({ default: m.TaskDebugPanel })), { ssr: false });
 const TaskResultViewer = dynamic(() => import('@/components/codeswarm/TaskResultViewer').then(m => ({ default: m.TaskResultViewer })), { ssr: false });
 const LocalTestPanel = dynamic(() => import('@/components/codeswarm/LocalTestPanel').then(m => ({ default: m.LocalTestPanel })), { ssr: false });
+const WorkerLogsPage = dynamic(() => import('@/components/codeswarm/WorkerLogsPage'), { ssr: false });
 import { AdminGuard } from '@/components/PermissionGuard';
 import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi, Terminal, FlaskConical } from 'lucide-react';
 
@@ -543,22 +544,7 @@ function CodeSwarmPageContent() {
       )}
 
       {activeTab === 'logs' && (
-        <div className="bg-white rounded-lg border p-6">
-          <h2 className="text-lg font-semibold mb-4">Worker 日志查看</h2>
-          <p className="text-gray-600 mb-4">
-            选择任务后可查看实时日志输出，支持按层级（Worker层/Agent层）和输出流过滤。
-          </p>
-          <TaskResultViewer
-            selectedTaskId={selectedTaskId}
-            onTaskSelect={(taskId) => {
-              setSelectedTaskId(taskId);
-              if (taskId) {
-                window.open(`/dashboard/codeswarm/logs?taskId=${taskId}`, '_blank');
-              }
-            }}
-            onRefresh={refetchTasks}
-          />
-        </div>
+        <WorkerLogsPage />
       )}
 
       {activeTab === 'api' && (

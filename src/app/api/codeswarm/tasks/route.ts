@@ -149,8 +149,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Queued tasks dispatched', dispatched });
     }
 
-    if (!instruction) {
-      return NextResponse.json({ error: 'instruction is required' }, { status: 400 });
+    if (!instruction && !startCommand) {
+      return NextResponse.json({ error: 'instruction or startCommand is required' }, { status: 400 });
     }
 
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;

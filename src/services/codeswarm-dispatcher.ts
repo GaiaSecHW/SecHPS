@@ -108,13 +108,21 @@ class CodeswarmDispatcher {
   async sendTaskToWorker(task: any, worker: { id: string; address: string }): Promise<boolean> {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
-    // 处理逗号分隔的地址列表，只取第一个有效地址
-    const addresses = worker.address.split(',');
-    let targetAddress = addresses[0].trim();
-    if (!targetAddress) {
+    // 处理逗号分隔的地址列表，按可达性优先排序（172.x > localhost > 其他 > 198.18.x）
+    const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+    if (addresses.length === 0) {
       console.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
       return false;
     }
+    const sorted = [...addresses].sort((a, b) => {
+      const score = (addr: string) => {
+        if (addr.startsWith('172.')) return 0;
+        if (addr.startsWith('localhost') || addr.startsWith('127.')) return 1;
+        if (addr.startsWith('198.18.')) return 3;
+        return 2;
+      };
+      return score(a) - score(b);
+    });
 
     // 阶段 1：先更新 DB 状态（乐观锁，防止重复分发）
     try {
@@ -134,67 +142,83 @@ class CodeswarmDispatcher {
       throw e;
     }
 
-    // 阶段 2：发送 HTTP 请求到 Worker
-    try {
-      const resp = await fetch(`http://${targetAddress}/task`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          taskId: task.taskId,
-          instruction: task.instruction,
-          projectPath: task.projectPath || '',
-          workspacePath: task.workspacePath || undefined,
-          skills: task.skills ? JSON.parse(task.skills) : undefined,
-          mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
-          model: task.model || undefined,
-          apiKey: task.apiKey || undefined,
-          timeoutSec: task.timeoutSec || undefined,
-          callbackUrl: baseUrl,
-          agent: task.agent || undefined,
-          preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
-          startCommand: task.startCommand || undefined,
-        }),
-        signal: AbortSignal.timeout(10000),
-      });
+    // 阶段 2：依次尝试多个地址发送 HTTP 请求
+    const taskPayload = JSON.stringify({
+      taskId: task.taskId,
+      instruction: task.instruction || undefined,
+      projectPath: task.projectPath || undefined,
+      workspacePath: task.workspacePath || undefined,
+      skills: task.skills ? JSON.parse(task.skills) : undefined,
+      mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
+      model: task.model || undefined,
+      apiKey: task.apiKey || undefined,
+      timeoutSec: task.timeoutSec || undefined,
+      callbackUrl: baseUrl,
+      agent: task.agent || undefined,
+      preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
+      startCommand: task.startCommand || undefined,
+    });
 
-      if (!resp.ok) {
-        // HTTP 失败，回滚 DB 状态（关键操作，记录失败）
-        await prisma.codeswarmTask.update({
-          where: { id: task.id },
-          data: { state: 'queued', workerId: null, updatedAt: new Date() },
-        }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
-        return false;
+    for (const addr of sorted) {
+      try {
+        const resp = await fetch(`http://${addr}/task`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: taskPayload,
+          signal: AbortSignal.timeout(10000),
+        });
+
+        if (resp.ok) {
+          await prisma.codeswarmWorker.update({
+            where: { id: worker.id },
+            data: { currentTasks: { increment: 1 } },
+          });
+          console.log(`[CodeSwarm] Task ${task.taskId} dispatched to ${worker.id} via ${addr}`);
+          return true;
+        }
+
+        const respBody = await resp.text().catch(() => '');
+        // Worker reports task is already being executed (dedup)
+        if (resp.status === 409) {
+          console.log(`[CodeSwarm] Task ${task.taskId} already executing on worker, skipping duplicate`);
+          return true;
+        }
+        if (resp.status === 400) {
+          console.error(`[CodeSwarm] Task ${task.taskId} payload validation failed (400), marking as failed: ${respBody.substring(0, 200)}`);
+          await prisma.codeswarmTask.update({
+            where: { id: task.id },
+            data: { state: 'failed', workerId: null, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
+          }).catch(e => console.error('[CodeSwarm] 标记任务 failed 失败:', e));
+          return true;
+        }
+
+        console.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} returned ${resp.status}, trying next address`);
+      } catch (err) {
+        console.warn(`[CodeSwarm] Worker ${worker.id} at ${addr} unreachable: ${err}`);
       }
-
-      // Worker 确认接收，更新 worker currentTasks
-      await prisma.codeswarmWorker.update({
-        where: { id: worker.id },
-        data: { currentTasks: { increment: 1 } },
-      });
-
-      console.log(`[CodeSwarm] Task ${task.taskId} dispatched to ${worker.id}`);
-      return true;
-    } catch (error) {
-      console.error(`[CodeSwarm] Dispatch error for task ${task.taskId}:`, error);
-      // HTTP 异常，回滚 DB 状态（关键操作，记录失败）
-      await prisma.codeswarmTask.update({
-        where: { id: task.id },
-        data: { state: 'queued', workerId: null, updatedAt: new Date() },
-      }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
-      return false;
     }
+
+    // 所有地址都失败，回滚 DB 状态
+    console.error(`[CodeSwarm] All addresses failed for worker ${worker.id}: [${sorted.join(', ')}]`);
+    await prisma.codeswarmTask.update({
+      where: { id: task.id },
+      data: { state: 'queued', workerId: null, updatedAt: new Date() },
+    }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
+    return false;
   }
 
   // Worker 心跳：更新内存拓扑
   onHeartbeat(data: { nodeId: string; id: string; address: string; maxConcurrent: number; currentTasks?: number }) {
     const existing = this.workers.get(data.nodeId);
+    // Worker 上报的 currentTasks 用于校准内存（Worker 自身最清楚实际运行数）
+    const reportedTasks = data.currentTasks ?? 0;
+    const currentTasks = existing ? Math.max(existing.currentTasks, reportedTasks) : reportedTasks;
     this.workers.set(data.nodeId, {
       id: data.id,
       nodeId: data.nodeId,
       address: data.address,
       maxConcurrent: data.maxConcurrent,
-      // 编排器追踪的 currentTasks 优先，首次注册时用 Worker 上报的值
-      currentTasks: existing?.currentTasks ?? (data.currentTasks || 0),
+      currentTasks,
       lastHeartbeat: Date.now(),
     });
   }

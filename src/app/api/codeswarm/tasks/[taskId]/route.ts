@@ -13,6 +13,7 @@ export async function GET(
       SELECT id, "taskId", "workerId", state, instruction,
              "projectPath", "workspacePath", "gitUrl", "gitRef",
              skills, mcps, model, "apiKey", "timeoutSec", agent,
+             "startCommand", "preferredWorkerNodeId", "sessionId",
              events, result, error, "reportContent",
              "startedAt", "completedAt", "createdAt", "updatedAt"
       FROM "CodeswarmTask"

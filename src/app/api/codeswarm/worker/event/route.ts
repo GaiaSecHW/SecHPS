@@ -42,6 +42,16 @@ export async function POST(request: Request) {
 
       await prisma.codeswarmEvent.createMany({ data: eventRows });
 
+      // 处理 session_created 事件：更新任务的 sessionId
+      for (const event of eventList) {
+        if (event.type === 'session_created' && event.message) {
+          await prisma.$executeRaw`
+            UPDATE "CodeswarmTask" SET "sessionId" = ${event.message}, "updatedAt" = NOW()
+            WHERE "taskId" = ${taskId}
+          `.catch(e => console.error('[CodeSwarm] 更新 sessionId 失败:', e));
+        }
+      }
+
       for (const event of eventList) {
         codeswarmDispatcher.publishTaskEvent(taskId, {
           type: 'task_event',

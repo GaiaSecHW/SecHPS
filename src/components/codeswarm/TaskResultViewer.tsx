@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApiFetch } from '@/hooks/useApiFetch';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ErrorAlert } from '@/components/ui/Alert';
-import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check } from 'lucide-react';
+import { RefreshCw, ChevronDown, ChevronRight, Clock, CheckCircle, XCircle, Loader2, Filter, Trash2, Copy, Check, Server } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface Task {
@@ -301,7 +301,11 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                   </div>
                   <div className="flex items-center space-x-4 text-xs text-gray-500">
                     {task.CodeswarmWorker && (
-                      <span className="text-blue-600">{task.CodeswarmWorker.address}</span>
+                      <span className="flex items-center space-x-1 text-blue-600 bg-blue-900/20 px-2 py-0.5 rounded">
+                        <Server className="w-3 h-3" />
+                        <span>{task.CodeswarmWorker.nodeId}</span>
+                        <span className="text-gray-400">({task.CodeswarmWorker.address})</span>
+                      </span>
                     )}
                     <span>{formatTime(task.createdAt)}</span>
                     <span className="text-gray-400">{formatDuration(task.startedAt, task.completedAt)}</span>
