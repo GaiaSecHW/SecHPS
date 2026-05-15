@@ -305,6 +305,17 @@ function CodeSwarmPageContent() {
             { name: 'status', type: 'string', desc: '最终状态' },
           ]
         },
+        {
+          method: 'GET',
+          path: '/api/codeswarm/worker/dist',
+          desc: '下载 Worker 部署包 (Linux/macOS)',
+          requestParams: [
+            { name: 'version', type: 'string', required: false, desc: '版本号 (默认 0.2.0)' },
+          ],
+          response: [
+            { name: 'Content-Type', type: 'application/gzip', desc: 'tar.gz 包' },
+          ]
+        },
       ]
     },
     {
