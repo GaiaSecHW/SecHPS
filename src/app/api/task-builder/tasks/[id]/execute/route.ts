@@ -106,15 +106,6 @@ export async function POST(
       model = task.modelName || undefined;
     }
 
-    // 模型名称映射：平台模型名 -> opencode 模型名
-    const modelMapping: Record<string, string> = {
-      'zai-org/GLM-5': 'alibaba-cn/glm-5',
-      'THUDM/GLM-4': 'alibaba-cn/glm-4',
-    };
-    if (model && modelMapping[model]) {
-      model = modelMapping[model];
-    }
-
     const apiKey = task.ModelConfig?.apiKey || undefined;
     const timeoutSec = 300;
     const agent = agentApp?.engine || 'opencode';
