@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, FolderOpen, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, Zap, FolderSearch } from 'lucide-react';
+import { Play, FolderOpen, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, Zap, FolderSearch, HardDrive, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface TestRecord {
@@ -15,12 +15,14 @@ interface TestRecord {
   completedAt?: string | null;
   durationMs?: number | null;
   createdAt?: string;
+  uploadedFilePath?: string | null;
 }
 
 interface DirEntry {
   name: string;
   path: string;
   isDirectory: boolean;
+  label?: string;
 }
 
 const COMMON_WORKSPACES = [
@@ -42,9 +44,11 @@ export function LocalTestPanel() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showWorkspaceList, setShowWorkspaceList] = useState(false);
   const [showDirBrowser, setShowDirBrowser] = useState(false);
-  const [currentBrowsePath, setCurrentBrowsePath] = useState('E:\\');
+  const [currentBrowsePath, setCurrentBrowsePath] = useState('drives://');
   const [dirEntries, setDirEntries] = useState<DirEntry[]>([]);
   const [loadingDirs, setLoadingDirs] = useState(false);
+  const [drives, setDrives] = useState<DirEntry[]>([]);
+  const [isDrivesList, setIsDrivesList] = useState(false);
   
   const logsRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -99,6 +103,18 @@ export function LocalTestPanel() {
     setLogs(prev => [...prev, `${timestamp} ${prefix} ${message}`]);
   };
 
+  const loadDrives = async () => {
+    try {
+      const res = await fetch('/api/codeswarm/browse-dirs?listDrives=true');
+      if (res.ok) {
+        const data = await res.json();
+        setDrives(data.entries || []);
+      }
+    } catch (e) {
+      console.error('Load drives error:', e);
+    }
+  };
+
   const browseDirectory = async (path: string) => {
     setLoadingDirs(true);
     try {
@@ -107,6 +123,7 @@ export function LocalTestPanel() {
         const data = await res.json();
         setDirEntries(data.entries || []);
         setCurrentBrowsePath(data.currentPath || path);
+        setIsDrivesList(data.isDrivesList || false);
       } else {
         toast.error('无法访问该目录');
       }
@@ -116,6 +133,10 @@ export function LocalTestPanel() {
       setLoadingDirs(false);
     }
   };
+
+  useEffect(() => {
+    loadDrives();
+  }, []);
 
   useEffect(() => {
     if (showDirBrowser) {
@@ -138,8 +159,21 @@ export function LocalTestPanel() {
   };
 
   const goUpDir = () => {
-    const parentPath = currentBrowsePath.split(/[\\/]/).slice(0, -1).join('\\') || 'E:\\';
-    browseDirectory(parentPath);
+    if (isDrivesList) return;
+    if (/^[A-Z]:\\?$/i.test(currentBrowsePath)) {
+      browseDirectory('drives://');
+    } else {
+      const parentPath = currentBrowsePath.split(/[\\/]/).slice(0, -1).join('\\');
+      if (parentPath && parentPath.length >= 2) {
+        browseDirectory(parentPath);
+      } else {
+        browseDirectory('drives://');
+      }
+    }
+  };
+
+  const selectDrive = (drivePath: string) => {
+    browseDirectory(drivePath);
   };
 
   const loadHistory = async () => {
@@ -251,17 +285,45 @@ export function LocalTestPanel() {
               </button>
             </div>
 
-            <div className="p-4 border-b border-gray-700">
+            <div className="p-4 border-b border-gray-700 space-y-2">
               <div className="flex gap-2">
+                <div className="relative">
+                  <select
+                    value={isDrivesList ? 'drives://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
+                    onChange={(e) => {
+                      if (e.target.value === 'drives://') {
+                        browseDirectory('drives://');
+                      } else if (e.target.value) {
+                        browseDirectory(e.target.value);
+                      }
+                    }}
+                    className="appearance-none px-3 py-2 pr-8 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100 cursor-pointer"
+                  >
+                    <option value="drives://">我的电脑</option>
+                    {drives.map((drive) => (
+                      <option key={drive.path} value={drive.path}>
+                        {drive.name}
+                      </option>
+                    ))}
+                  </select>
+                  <HardDrive className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
                 <input
                   type="text"
-                  value={currentBrowsePath}
+                  value={isDrivesList ? '我的电脑' : currentBrowsePath}
                   onChange={(e) => setCurrentBrowsePath(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      browseDirectory(currentBrowsePath);
+                    }
+                  }}
                   className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+                  placeholder="输入路径..."
+                  disabled={isDrivesList}
                 />
                 <button
                   onClick={() => browseDirectory(currentBrowsePath)}
-                  disabled={loadingDirs}
+                  disabled={loadingDirs || isDrivesList}
                   className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded text-sm text-white"
                 >
                   {loadingDirs ? <Loader2 className="w-4 h-4 animate-spin" /> : '跳转'}
@@ -270,16 +332,33 @@ export function LocalTestPanel() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 min-h-[300px]">
-              <button
-                onClick={goUpDir}
-                className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm text-blue-400 flex items-center gap-2"
-              >
-                <ChevronRight className="w-4 h-4 rotate-180" />
-                上级目录
-              </button>
+              {!isDrivesList && (
+                <button
+                  onClick={goUpDir}
+                  className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm text-blue-400 flex items-center gap-2"
+                >
+                  <ChevronRight className="w-4 h-4 rotate-180" />
+                  上级目录
+                </button>
+              )}
               {loadingDirs ? (
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                </div>
+              ) : isDrivesList ? (
+                <div className="space-y-1">
+                  <div className="px-3 py-1 text-xs text-gray-500">选择驱动器</div>
+                  {dirEntries.map((entry) => (
+                    <button
+                      key={entry.path}
+                      onClick={() => selectDrive(entry.path)}
+                      className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm flex items-center gap-2 text-gray-300"
+                    >
+                      <HardDrive className="w-4 h-4 text-blue-400" />
+                      <span className="flex-1">{entry.name}</span>
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </button>
+                  ))}
                 </div>
               ) : dirEntries.length === 0 ? (
                 <div className="text-center text-gray-500 py-8">该目录为空</div>
@@ -586,6 +665,24 @@ export function LocalTestPanel() {
                         </div>
                       )}
                     </div>
+
+                    {selectedHistoryRecord.uploadedFilePath && (
+                      <div className="flex items-center justify-between bg-[#0F172A] rounded-lg p-3">
+                        <div className="text-xs">
+                          <span className="text-gray-500">审计报告: </span>
+                          <span className="text-gray-300">{selectedHistoryRecord.uploadedFilePath}</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            window.open(`/api/codeswarm/download-report?taskId=${selectedHistoryRecord.taskId}`, '_blank');
+                          }}
+                          className="flex items-center gap-1 px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded text-xs text-blue-400"
+                        >
+                          <Download className="w-3 h-3" />
+                          下载报告
+                        </button>
+                      </div>
+                    )}
 
                     {selectedHistoryRecord.result && (
                       <div>

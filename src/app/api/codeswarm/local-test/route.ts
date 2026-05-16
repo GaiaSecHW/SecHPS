@@ -9,7 +9,153 @@ interface LocalTestRequest {
   timeoutSec?: number;
 }
 
+interface ParsedVulnerabilityReport {
+  projectId: string;
+  evaluationId?: string;
+  skillExecutionId?: string;
+  vulnerabilities: Array<{
+    title: string;
+    type: string;
+    description?: string;
+    severity?: string;
+    cwe?: string;
+    skill?: string;
+    location?: string;
+    POC?: string;
+    vulnerable?: boolean;
+    fixSuggestion?: string;
+    rawReport?: string;
+  }>;
+}
+
+interface VulnerabilityApiResult {
+  success: boolean;
+  createdCount?: number;
+  skippedCount?: number;
+  error?: string;
+}
+
 const DEFAULT_INSTRUCTION = '执行 audit-report-parser skill，解析审计报告';
+const VULNERABILITY_STORAGE_PATH = process.env.VULNERABILITY_STORAGE_PATH || 'Z:\\Vulnerability';
+
+function uploadAuditReport(taskId: string, workspacePath: string): string | null {
+  try {
+    const auditReportPath = path.join(workspacePath, 'AUDIT_REPORT.md');
+    
+    if (!fs.existsSync(auditReportPath)) {
+      console.log(`[LocalTest:${taskId}] No AUDIT_REPORT.md found in workspace`);
+      return null;
+    }
+    
+    const targetDir = path.join(VULNERABILITY_STORAGE_PATH, taskId);
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+    
+    const targetPath = path.join(targetDir, 'AUDIT_REPORT.md');
+    fs.copyFileSync(auditReportPath, targetPath);
+    
+    console.log(`[LocalTest:${taskId}] Uploaded AUDIT_REPORT.md to ${targetPath}`);
+    return targetPath;
+  } catch (error) {
+    console.error(`[LocalTest:${taskId}] Upload error:`, error);
+    return null;
+  }
+}
+
+function parseVulnerabilityReport(stdout: string): ParsedVulnerabilityReport | null {
+  try {
+    let jsonStr = stdout.trim();
+    
+    if (jsonStr.includes('```json')) {
+      const match = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        jsonStr = match[1].trim();
+      }
+    } else if (jsonStr.includes('```')) {
+      const match = jsonStr.match(/```\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        jsonStr = match[1].trim();
+      }
+    }
+    
+    const parsed = JSON.parse(jsonStr);
+    
+    if (!parsed.projectId || !Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
+      console.log('[LocalTest] Parsed JSON missing required fields');
+      return null;
+    }
+    
+    for (const v of parsed.vulnerabilities) {
+      if (!v.title || !v.type) {
+        console.log('[LocalTest] Vulnerability missing title or type');
+        return null;
+      }
+    }
+    
+    return parsed as ParsedVulnerabilityReport;
+  } catch (error) {
+    console.error('[LocalTest] JSON parse error:', error);
+    return null;
+  }
+}
+
+const TEST_PROJECT_ID = 'cmnyocwar00023p518yye84cp';
+
+async function submitVulnerabilities(
+  report: ParsedVulnerabilityReport,
+  filePath: string
+): Promise<VulnerabilityApiResult> {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    
+    const requestBody = {
+      projectId: TEST_PROJECT_ID,
+      evaluationId: report.evaluationId || undefined,
+      skillExecutionId: report.skillExecutionId || undefined,
+      filePath,
+      vulnerabilities: report.vulnerabilities.map(v => ({
+        title: v.title,
+        type: v.type,
+        description: v.description || '',
+        severity: v.severity || 'medium',
+        cwe: v.cwe || null,
+        skill: v.skill || null,
+        location: v.location || null,
+        POC: v.POC || null,
+        vulnerable: v.vulnerable ?? true,
+        fixSuggestion: v.fixSuggestion || null,
+        rawReport: v.rawReport || null,
+      })),
+    };
+    
+    const response = await fetch(`${baseUrl}/api/v1/vulnerabilities`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      return {
+        success: false,
+        error: errorData.error || `HTTP ${response.status}`,
+      };
+    }
+    
+    const result = await response.json();
+    return {
+      success: true,
+      createdCount: result.summary?.created || 0,
+      skippedCount: result.summary?.skipped || 0,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -159,18 +305,50 @@ function executeTaskAsync(
       const durationMs = Date.now() - startTime;
       const success = exitCode === 0;
 
+      let uploadedFilePath: string | null = null;
+      let vulnSubmitResult: VulnerabilityApiResult | null = null;
+      let finalResult = stdout;
+
+      if (success) {
+        uploadedFilePath = uploadAuditReport(taskId, workspacePath);
+        
+        if (uploadedFilePath) {
+          const report = parseVulnerabilityReport(stdout);
+          
+          if (report) {
+            console.log(`[LocalTest:${taskId}] Parsed report: projectId=${report.projectId}, vulnCount=${report.vulnerabilities.length}`);
+            
+            vulnSubmitResult = await submitVulnerabilities(report, uploadedFilePath);
+            
+            if (vulnSubmitResult.success) {
+              console.log(`[LocalTest:${taskId}] Vulnerabilities submitted: created=${vulnSubmitResult.createdCount}, skipped=${vulnSubmitResult.skippedCount}`);
+              finalResult += `\n\n---\n漏洞提交成功: 创建 ${vulnSubmitResult.createdCount} 条, 跳过 ${vulnSubmitResult.skippedCount} 条`;
+            } else {
+              console.error(`[LocalTest:${taskId}] Vulnerabilities submit failed: ${vulnSubmitResult.error}`);
+              finalResult += `\n\n---\n漏洞提交失败: ${vulnSubmitResult.error}`;
+            }
+          } else {
+            console.log(`[LocalTest:${taskId}] Could not parse stdout as vulnerability report`);
+            finalResult += '\n\n---\n警告: 无法解析漏洞报告JSON';
+          }
+        } else {
+          console.log(`[LocalTest:${taskId}] No file uploaded, skipping vulnerability submit`);
+        }
+      }
+
       await prisma.localTestRecord.update({
         where: { taskId },
         data: {
           status: success ? 'completed' : 'failed',
-          result: stdout,
+          result: finalResult,
           error: exitCode !== 0 ? stderr || `Exit code: ${exitCode}` : null,
           completedAt: new Date(),
           durationMs,
+          uploadedFilePath,
         },
       });
 
-      console.log(`[LocalTest:${taskId}] Completed: exitCode=${exitCode}, stdoutLen=${stdout.length}`);
+      console.log(`[LocalTest:${taskId}] Completed: exitCode=${exitCode}, stdoutLen=${stdout.length}, uploaded=${uploadedFilePath ? 'yes' : 'no'}, vulnSubmit=${vulnSubmitResult ? (vulnSubmitResult.success ? 'success' : 'failed') : 'skipped'}`);
     } catch (error) {
       console.error(`[LocalTest:${taskId}] Error:`, error);
 
