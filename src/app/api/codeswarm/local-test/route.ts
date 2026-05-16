@@ -134,13 +134,14 @@ const TEST_PROJECT_ID = 'cmnyocwar00023p518yye84cp';
 
 async function submitVulnerabilities(
   report: ParsedVulnerabilityReport,
-  filePath: string
+  filePath: string,
+  taskId: string
 ): Promise<VulnerabilityApiResult> {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
+
     const requestBody = {
-      projectId: TEST_PROJECT_ID,
+      taskId,
       evaluationId: report.evaluationId || undefined,
       skillExecutionId: report.skillExecutionId || undefined,
       filePath,
@@ -354,7 +355,7 @@ const args: string[] = ['run', '--agent', 'build', instruction];
             const source = parseVulnerabilityReport(stdout) ? 'stdout' : 'stderr';
             console.log(`[LocalTest:${taskId}] Parsed report from ${source}: vulnCount=${report.vulnerabilities.length}`);
             
-            vulnSubmitResult = await submitVulnerabilities(report, uploadedFilePath);
+            vulnSubmitResult = await submitVulnerabilities(report, uploadedFilePath, taskId);
             
             if (vulnSubmitResult.success) {
               console.log(`[LocalTest:${taskId}] Vulnerabilities submitted: created=${vulnSubmitResult.createdCount}, skipped=${vulnSubmitResult.skippedCount}`);

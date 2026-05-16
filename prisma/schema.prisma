@@ -1664,6 +1664,7 @@ model TaskInstance {
   createdAt        DateTime           @default(now())
   updatedAt        DateTime
   TaskExecutionLog TaskExecutionLog[]
+  Vulnerability    Vulnerability[]
   Tenant           Tenant?            @relation(fields: [tenantId], references: [id])
   ModelConfig      ModelConfig?       @relation(fields: [modelId], references: [id])
   User             User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1834,7 +1835,8 @@ model UserRole {
 
 model Vulnerability {
   id                        String                      @id
-  projectId                 String
+  taskId                    String?
+  projectId                 String?
   evaluationId              String?
   skillExecutionId          String?
   title                     String
@@ -1861,20 +1863,23 @@ model Vulnerability {
   createdAt                 DateTime                    @default(now())
   updatedAt                 DateTime
   SkillVulnerabilityMapping SkillVulnerabilityMapping[]
-  Project                   Project                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  TaskInstance              TaskInstance?               @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  Project                   Project?                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   EvaluationSession         EvaluationSession?          @relation(fields: [evaluationId], references: [id])
   SkillExecution            SkillExecution?             @relation(fields: [skillExecutionId], references: [id])
 
   @@index([vulnerable])
+  @@index([taskId])
   @@index([projectId])
   @@index([evaluationId])
   @@index([status])
   @@index([severity])
   @@index([type])
   @@index([createdAt])
+  @@index([taskId, status])
   @@index([projectId, status])
   @@index([severity, status])
-  @@unique([projectId, title, type])
+  @@unique([taskId, title, type])
 }
 
 model VulnerabilityCategory {

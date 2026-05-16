@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
     return badRequest('Invalid JSON body');
   }
 
-  const { projectId, evaluationId, skillExecutionId, filePath, vulnerabilities } =
+  const { taskId, evaluationId, skillExecutionId, filePath, vulnerabilities } =
     body as Record<string, unknown>;
 
   // 2. 基本校验
-  if (!projectId || typeof projectId !== 'string') return badRequest('projectId is required');
+  if (!taskId || typeof taskId !== 'string') return badRequest('taskId is required');
   if (!filePath || typeof filePath !== 'string') return badRequest('filePath is required');
   if (!Array.isArray(vulnerabilities) || vulnerabilities.length === 0) {
     return badRequest('vulnerabilities must be a non-empty array');
@@ -36,35 +36,29 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 4. 验证项目存在
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
+    // 4. 验证任务存在
+    const task = await prisma.taskInstance.findUnique({
+      where: { id: taskId },
       select: { id: true },
     });
-    if (!project) return notFound('Project not found');
+    if (!task) return notFound('Task not found');
 
-    // 5. 验证 evaluationId 归属（必须属于当前 projectId）
+    // 5. 验证 evaluationId 归属（必须属于当前 taskId 关联的 project）
     if (evaluationId && typeof evaluationId === 'string') {
       const evalSession = await prisma.evaluationSession.findUnique({
         where: { id: evaluationId },
         select: { projectId: true },
       });
       if (!evalSession) return badRequest('evaluationId not found');
-      if (evalSession.projectId !== projectId) {
-        return badRequest('evaluationId does not belong to this project');
-      }
     }
 
-    // 6. 验证 skillExecutionId 归属（必须属于当前 projectId）
+    // 6. 验证 skillExecutionId 存在
     if (skillExecutionId && typeof skillExecutionId === 'string') {
       const skillExec = await prisma.skillExecution.findUnique({
         where: { id: skillExecutionId },
-        select: { projectId: true },
+        select: { id: true },
       });
       if (!skillExec) return badRequest('skillExecutionId not found');
-      if (skillExec.projectId !== projectId) {
-        return badRequest('skillExecutionId does not belong to this project');
-      }
     }
 
     // 7. 请求内自去重，构建 batchData
@@ -72,7 +66,7 @@ export async function POST(request: NextRequest) {
     const skipped: Array<{ title: string; type: string; reason: string }> = [];
     const batchData: Array<{
       id: string;
-      projectId: string;
+      taskId: string;
       evaluationId: string | null;
       skillExecutionId: string | null;
       title: string;
@@ -108,7 +102,7 @@ export async function POST(request: NextRequest) {
       const severity = normalizeSeverity(vuln.severity as string | undefined);
       batchData.push({
         id,
-        projectId,
+        taskId: taskId as string,
         evaluationId: (evaluationId as string) || null,
         skillExecutionId: (skillExecutionId as string) || null,
         title,
