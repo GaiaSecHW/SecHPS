@@ -160,3 +160,17 @@ npm install @anthropic-ai/claude-agent-sdk-linux-x64@0.2.123
 # ARM 服务器用 linux-arm64
 npm install @anthropic-ai/claude-agent-sdk-linux-arm64@0.2.123
 ```
+
+## 本地测试功能 (LocalTest)
+
+位于 `src/app/api/codeswarm/local-test/`，用于在指定工作区执行 opencode skill 并解析结果。
+
+**跨平台执行方式**：
+- Windows: 直接调用 `opencode run --agent build "..."` (shell: true)
+- Linux: 使用 `bash -c` 执行，解决 spawn 输出为空问题
+
+**环境变量**：
+- `TERM=dumb`: 禁用 TUI 界面
+- `NO_COLOR=1`: 禁用颜色输出
+
+**调试模式**: 失败时输出保存到 `/tmp/opencode/debug-{taskId}.log`
