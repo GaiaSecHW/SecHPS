@@ -117,6 +117,7 @@ export async function POST(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        instruction: task.notes || undefined,
         workspacePath,
         skills,
         scripts,
@@ -127,6 +128,7 @@ export async function POST(
         agent,
         defaultAgentName,
         startCommand,
+        platformTaskId: id,
       }),
     });
 

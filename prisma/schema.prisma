@@ -333,6 +333,7 @@ model CodeswarmTask {
   preferredWorkerNodeId String?
   startCommand      String?
   targetProduct     String?
+  platformTaskId    String?
   sessionId         String?
   events            String?
   result            String?

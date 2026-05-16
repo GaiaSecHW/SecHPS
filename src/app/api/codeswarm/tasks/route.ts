@@ -82,6 +82,7 @@ export async function POST(request: Request) {
       preferredWorkerNodeId,
       startCommand,
       targetProduct,
+      platformTaskId,
     } = body;
 
     // 手动批量分发（保留兼容）
@@ -175,6 +176,7 @@ export async function POST(request: Request) {
         preferredWorkerNodeId: preferredWorkerNodeId || null,
         startCommand: startCommand || null,
         targetProduct: targetProduct || null,
+        platformTaskId: platformTaskId || null,
         updatedAt: new Date(),
       },
     })) as any;
