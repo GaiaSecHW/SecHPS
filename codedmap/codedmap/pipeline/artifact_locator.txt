@@ -1,0 +1,102 @@
+
+---
+
+# ArtifactLocator 功能综述与使用指南
+
+## 1. 核心定位 (Core Value)
+
+`ArtifactLocator` 是连接 **源码文件系统** 与 **AST 产物文件系统** 的中间件。它的核心职责是：**在不知道具体 Hash 值的情况下，根据源码路径精确找到对应的 AST JSON 文件**。
+
+它解决了静态分析中的经典难题：*“我知道我要分析 `main.c`，但 Exporter 把它存成了 `main.c_a1b2c3d4.json.gz`，我该去哪里找它？”*
+
+## 2. 关键能力 (Capabilities)
+
+### ✅ 1. 算法级对齐 (Algorithm Alignment)
+
+* **哈希一致性**：内部复刻了 `ast_exporter.py` 的哈希生成算法（基于 `file` + `directory` + `command`）。
+* **路径一致性**：完全理解 Exporter 的路径归一化逻辑（区分 `Project Root` 和 `Build Dir`），能够准确预测产物是生成在 `_generated/` 目录下还是源码镜像目录下。
+
+### ✅ 2. 智能上下文感知 (Context Awareness)
+
+* **编译库解析**：自动加载 `compile_commands.json`，构建“绝对路径 -> 编译指令”的内存索引。这意味着它知道同一个 `main.c` 在不同编译参数下的唯一指纹。
+* **模糊匹配兜底**：如果绝对路径匹配失败（例如存在软链接差异），它具备基于文件名和相对路径后缀的模糊搜索能力。
+
+### ✅ 3. 高性能设计 (High Performance)
+
+* **单例模式 (Singleton)**：确保庞大的 `compile_commands.json` 索引在整个分析生命周期中只加载一次，节省内存。
+* **LRU 缓存**：`find_artifact` 使用 LRU Cache 装饰器，对于热点文件的重复查询几乎零开销。
+
+---
+
+## 3. Parser (Importer) 集成指南
+
+Parser 不需要关心哈希计算或目录结构，只需按照以下模式使用 `ArtifactLocator`。
+
+### 步骤一：初始化 (Global Init)
+
+在 Parser 启动的早期阶段（通常在 Main 函数入口），初始化 Locator 单例。
+
+```python
+from cpg_schema.pipeline.artifact_locator import ArtifactLocator
+
+# 假设你已经从命令行参数拿到了路径
+pkg_root = "/path/to/ast_artifacts_package"  # 包含 ast_artifacts/ 和 compile_commands.json 的目录
+src_root = "/path/to/source_code"
+
+# [Init] 初始化单例，加载编译数据库索引
+# 这一步会消耗一点时间构建内存索引，但后续查询极快
+locator = ArtifactLocator(package_root=pkg_root, project_root=src_root)
+
+```
+
+### 步骤二：遍历与寻址 (Iterate & Locate)
+
+Parser 通常会遍历项目源码目录，或者遍历 `compile_commands.json` 中的文件列表。
+
+```python
+import gzip
+import json
+
+# 假设 file_list 是你要分析的源文件列表
+for source_file_path in file_list:
+
+    # [Core Usage] 询问 Locator：这个源文件的 AST 在哪？
+    # 返回值：绝对路径字符串，如果找不到则返回 None
+    artifact_path = locator.find_artifact(source_file_path)
+
+    if not artifact_path:
+        logger.warning(f"AST not found for {source_file_path}, skipping...")
+        continue
+
+    # [Consume] 加载 Exporter 生成的数据
+    try:
+        with gzip.open(artifact_path, 'rt', encoding='utf-8') as f:
+            ast_data = json.load(f)
+
+        # ... 这里开始你的 AST 构建逻辑 (create_nodes, create_edges) ...
+        # parser.parse_ast(ast_data)
+
+    except Exception as e:
+        logger.error(f"Failed to load artifact {artifact_path}: {e}")
+
+```
+
+### 步骤三：缓存清理 (Optional)
+
+如果你的 Parser 是一个长期运行的服务（Daemon），或者一次运行处理多个不同的项目，记得在切换项目时清理缓存：
+
+```python
+# 当分析任务结束或切换项目时
+locator.clear_cache()
+
+```
+
+---
+
+## 4. 故障排查 (Troubleshooting)
+
+如果 Parser 报告 `AST not found`，请按以下顺序检查：
+
+1. **Compile DB**：检查 `compile_commands.json` 中是否真的包含该文件。如果文件未被编译，Locator 就无法计算 Hash，自然找不到产物。
+2. **Root 路径**：检查初始化 `ArtifactLocator` 时传入的 `project_root` 是否与 Exporter 运行时使用的路径一致（物理路径一致即可，软链接可能导致路径匹配失败）。
+3. **External Code**：如果文件位于项目目录之外（如 `/usr/include`），Exporter 默认会跳过，Locator 返回 None 是符合预期的。

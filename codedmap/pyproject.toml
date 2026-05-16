@@ -1,0 +1,50 @@
+[project]
+name = "codedmap"
+version = "0.1.0"
+description = "A deterministic code atlas that any AI agent can navigate — structured security tags, taint tracing, and 49 tool-callable commands"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "networkx",
+    "psutil",
+    "pydantic",
+    "PyYAML",
+]
+
+[project.optional-dependencies]
+neo4j = [
+    "neo4j",
+]
+ai = [
+    "instructor",
+    "openai",
+]
+rag = [
+    "llama-index",
+    "numpy",
+    "openai",
+    "tqdm",
+]
+parsers = [
+    "tree-sitter",
+    "tree-sitter-c",
+    "tree-sitter-cpp",
+    "tree-sitter-python",
+]
+api = [
+    "fastapi",
+    "uvicorn[standard]",
+    "httpx",
+    "python-multipart",
+]
+dev = [
+    "pytest",
+]
+
+[project.scripts]
+cdm = "codedmap.cli.__main__:main"
+
+[tool.setuptools.package-data]
+"codedmap.rules.common" = ["*.yaml"]
+"codedmap.rules.c" = ["*.yaml", "extensions/*.yaml"]
+"codedmap.rules.python" = ["*.yaml", "extensions/*.yaml"]

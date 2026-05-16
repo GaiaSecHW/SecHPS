@@ -122,6 +122,8 @@ export const TaskPayloadSchema = z.object({
   startCommand: z.string().optional(),
   // Preferred worker nodeId for manual scheduling (空则自动分配)
   preferredWorkerNodeId: z.string().optional(),
+  // Target product name, used as codedmap db filename ({targetProduct}.db)
+  targetProduct: z.string().optional(),
 });
 
 export type TaskPayload = z.infer<typeof TaskPayloadSchema>;

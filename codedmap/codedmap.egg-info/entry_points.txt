@@ -1,0 +1,2 @@
+[console_scripts]
+cdm = codedmap.cli.__main__:main

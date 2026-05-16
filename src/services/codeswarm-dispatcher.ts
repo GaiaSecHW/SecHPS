@@ -22,6 +22,7 @@ class CodeswarmDispatcher {
   private initialized = false;
   private offlineCheckTimer: ReturnType<typeof setInterval> | null = null;
   private timeoutCheckTimer: ReturnType<typeof setInterval> | null = null;
+  private pendingRetryTimer: ReturnType<typeof setInterval> | null = null;
 
   async init() {
     if (this.initialized) return;
@@ -74,6 +75,8 @@ class CodeswarmDispatcher {
 
       // 启动消费循环
       this.dispatchLoop();
+      // 恢复可能卡在 pending 的消息（进程重启等场景）
+      this.recoverPendingMessages();
       // 启动掉线检测 + 超时扫描
       this.startHealthChecks();
     } catch (e) {
@@ -106,10 +109,12 @@ class CodeswarmDispatcher {
   // 1. 先更新 DB 为 dispatched（Worker 收到任务后不会重复分发）
   // 2. 再发送 HTTP 请求（如果失败，DB 已是 dispatched 状态，下次调度会跳过）
   async sendTaskToWorker(task: any, worker: { id: string; address: string }): Promise<boolean> {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-
     // 处理逗号分隔的地址列表，按可达性优先排序（172.x > localhost > 其他 > 198.18.x）
     const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+
+    // 本地 Worker 使用 localhost 回调，避免 NEXT_PUBLIC_BASE_URL 不可达
+    const isLocalWorker = addresses.some(a => a.startsWith('localhost') || a.startsWith('127.'));
+    const callbackUrl = isLocalWorker ? 'http://localhost:3000' : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
     if (addresses.length === 0) {
       console.error(`[CodeSwarm] Worker ${worker.id} has no valid address`);
       return false;
@@ -143,7 +148,7 @@ class CodeswarmDispatcher {
     }
 
     // 阶段 2：依次尝试多个地址发送 HTTP 请求
-    const taskPayload = JSON.stringify({
+const taskPayload = JSON.stringify({
       taskId: task.taskId,
       instruction: task.instruction || undefined,
       projectPath: task.projectPath || undefined,
@@ -153,10 +158,11 @@ class CodeswarmDispatcher {
       model: task.model || undefined,
       apiKey: task.apiKey || undefined,
       timeoutSec: task.timeoutSec || undefined,
-      callbackUrl: baseUrl,
+      callbackUrl,
       agent: task.agent || undefined,
       preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
       startCommand: task.startCommand || undefined,
+      targetProduct: task.targetProduct || undefined,
     });
 
     for (const addr of sorted) {
@@ -187,7 +193,7 @@ class CodeswarmDispatcher {
           console.error(`[CodeSwarm] Task ${task.taskId} payload validation failed (400), marking as failed: ${respBody.substring(0, 200)}`);
           await prisma.codeswarmTask.update({
             where: { id: task.id },
-            data: { state: 'failed', workerId: null, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
+            data: { state: 'failed', CodeswarmWorker: { disconnect: true }, error: `Payload validation failed: ${respBody.substring(0, 500)}`, updatedAt: new Date() },
           }).catch(e => console.error('[CodeSwarm] 标记任务 failed 失败:', e));
           return true;
         }
@@ -202,7 +208,7 @@ class CodeswarmDispatcher {
     console.error(`[CodeSwarm] All addresses failed for worker ${worker.id}: [${sorted.join(', ')}]`);
     await prisma.codeswarmTask.update({
       where: { id: task.id },
-      data: { state: 'queued', workerId: null, updatedAt: new Date() },
+      data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
     }).catch(e => console.error('[CodeSwarm] 回滚任务状态失败:', e));
     return false;
   }
@@ -211,8 +217,9 @@ class CodeswarmDispatcher {
   onHeartbeat(data: { nodeId: string; id: string; address: string; maxConcurrent: number; currentTasks?: number }) {
     const existing = this.workers.get(data.nodeId);
     // Worker 上报的 currentTasks 用于校准内存（Worker 自身最清楚实际运行数）
+    // 直接使用上报值，不取 max（避免超时处理未释放导致的残留计数）
     const reportedTasks = data.currentTasks ?? 0;
-    const currentTasks = existing ? Math.max(existing.currentTasks, reportedTasks) : reportedTasks;
+    const currentTasks = reportedTasks;
     this.workers.set(data.nodeId, {
       id: data.id,
       nodeId: data.nodeId,
@@ -243,6 +250,60 @@ class CodeswarmDispatcher {
     }).catch(() => {});
   }
 
+  /** 同步 Worker 负载到内存（DB fallback 路径使用） */
+  syncWorkerLoad(nodeId: string, currentTasks: number) {
+    const worker = this.workers.get(nodeId);
+    if (worker) {
+      worker.currentTasks = Math.max(worker.currentTasks, currentTasks);
+    }
+  }
+
+  /** 恢复卡在 pending 的消息（进程重启、之前分发失败等场景） */
+  private async recoverPendingMessages() {
+    if (!this.redis) return;
+
+    try {
+      // 读取当前消费者 pending 的消息（'0' 表示读取 pending 而非新消息）
+      const pending = await this.redis.xreadgroup(
+        'GROUP', CONSUMER_GROUP, CONSUMER_NAME,
+        'COUNT', 50,
+        'STREAMS', STREAM_KEY, '0'
+      ) as [string, [string, string[]][]][] | null;
+
+      if (!pending || pending.length === 0) return;
+
+      let recovered = 0;
+      for (const [, msgs] of pending) {
+        for (const [msgId, fields] of msgs) {
+          const dbTaskId = fields[1];
+          if (!dbTaskId) continue;
+
+          const task = await prisma.codeswarmTask.findUnique({ where: { id: dbTaskId } });
+          // 任务已非 queued 状态（已分发/完成），直接 ACK 清理
+          if (!task || task.state !== 'queued') {
+            await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
+            continue;
+          }
+
+          const dispatched = await this.dispatchOne(dbTaskId);
+          await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
+
+          if (!dispatched) {
+            // 分发失败，重新入队
+            await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+          }
+          recovered++;
+        }
+      }
+
+      if (recovered > 0) {
+        console.log(`[CodeSwarm] 恢复了 ${recovered} 条 pending 消息`);
+      }
+    } catch (e) {
+      console.error('[CodeSwarm] 恢复 pending 消息失败:', e);
+    }
+  }
+
   // 消费循环
   private async dispatchLoop() {
     if (!this.redis || !this.running) return;
@@ -259,17 +320,23 @@ class CodeswarmDispatcher {
         if (!messages || messages.length === 0) continue;
 
         for (const [, msgs] of messages) {
-          for (const [msgId, fields] of msgs) {
-            const dbTaskId = fields[1]; // fields = ['dbTaskId', value]
-            if (!dbTaskId) continue;
+          // 并行分发：充分利用多 Worker 并发能力
+          await Promise.allSettled(
+            msgs.map(async ([msgId, fields]) => {
+              const dbTaskId = fields[1]; // fields = ['dbTaskId', value]
+              if (!dbTaskId) return;
 
-            const dispatched = await this.dispatchOne(dbTaskId);
+              const dispatched = await this.dispatchOne(dbTaskId);
 
-            if (dispatched) {
-              await this.redis.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
-            }
-            // 分发失败不 ACK，消息会在一段时间后被重新投递
-          }
+              // 始终 ACK，防止消息卡在 pending 状态
+              await this.redis!.xack(STREAM_KEY, CONSUMER_GROUP, msgId);
+
+              if (!dispatched) {
+                // 分发失败：重新加入 Stream 等待下次调度
+                await this.redis!.xadd(STREAM_KEY, '*', 'dbTaskId', dbTaskId);
+              }
+            })
+          );
         }
       } catch (e) {
         console.error('[CodeSwarm] 消费循环错误:', e);
@@ -295,16 +362,24 @@ class CodeswarmDispatcher {
         return false;
       }
 
-      const success = await this.sendTaskToWorker(task, worker);
-      if (!success) return false;
+      // 乐观递增：防止并行分发时多个任务选中同一 Worker
+      worker.currentTasks++;
+      let success = false;
+      try {
+        success = await this.sendTaskToWorker(task, worker);
+      } catch (e) {
+        worker.currentTasks--;
+        throw e;
+      }
+      if (!success) {
+        worker.currentTasks--;
+        return false;
+      }
 
       // 注册超时
       if (task.timeoutSec) {
         await this.registerTaskTimeout(dbTaskId, task.timeoutSec);
       }
-
-      // 更新内存
-      worker.currentTasks++;
 
       console.log(`[CodeSwarm] 任务 ${task.taskId} 已分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       return true;
@@ -385,6 +460,8 @@ class CodeswarmDispatcher {
     this.offlineCheckTimer = setInterval(() => this.checkOfflineWorkers(), 60_000);
     // 每 30 秒扫描超时任务
     this.timeoutCheckTimer = setInterval(() => this.checkTimeoutTasks(), 30_000);
+    // 每 30 秒恢复可能卡在 pending 的消息
+    this.pendingRetryTimer = setInterval(() => this.recoverPendingMessages(), 30_000);
   }
 
   // 3.1 Worker 掉线检测 + 任务重调度
@@ -458,7 +535,12 @@ class CodeswarmDispatcher {
       for (const task of stuckTasks) {
         await prisma.codeswarmTask.update({
           where: { id: task.id },
-          data: { state: 'queued', workerId: null, updatedAt: new Date() },
+          data: {
+            state: 'queued',
+            CodeswarmWorker: { disconnect: true },
+            preferredWorkerNodeId: null,  // 清理：原 Worker 已掉线
+            updatedAt: new Date()
+          },
         });
 
         if (this.redis) {
@@ -493,7 +575,12 @@ class CodeswarmDispatcher {
         // 改回 queued
         await prisma.codeswarmTask.update({
           where: { id: task.id },
-          data: { state: 'queued', workerId: null, updatedAt: new Date() },
+          data: {
+            state: 'queued',
+            CodeswarmWorker: { disconnect: true },
+            preferredWorkerNodeId: null,  // 清理：原 Worker 已掉线
+            updatedAt: new Date()
+          },
         });
 
         // 重新提交到 Redis Stream
@@ -601,6 +688,7 @@ class CodeswarmDispatcher {
     this.running = false;
     if (this.offlineCheckTimer) clearInterval(this.offlineCheckTimer);
     if (this.timeoutCheckTimer) clearInterval(this.timeoutCheckTimer);
+    if (this.pendingRetryTimer) clearInterval(this.pendingRetryTimer);
     this.teardownRedis();
   }
 }

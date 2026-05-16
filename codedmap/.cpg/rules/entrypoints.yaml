@@ -1,0 +1,8 @@
+version: 1
+rules:
+- id: ep_rest_callback
+  name: rest_callback
+  category: rpc
+  patterns:
+  - type: regex
+    function: rest_.*_cb

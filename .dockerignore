@@ -1,0 +1,47 @@
+# .dockerignore for codeswarm worker
+# Build context: project root (docker build -f codeswarm/Dockerfile .)
+
+# === Exclude main Next.js app (not needed in worker container) ===
+src/
+prisma/
+public/
+.next/
+package.json
+package-lock.json
+
+# === Version control ===
+.git
+.gitignore
+
+# === IDE ===
+.idea
+.vscode
+*.swp
+
+# === Root node_modules (Next.js app) ===
+node_modules
+
+# === Codedmap runtime state ===
+codedmap/.audit_state
+codedmap/audit.db
+codedmap/ignored.db
+codedmap/.claude
+codedmap/codedmap.egg-info
+codedmap/**/__pycache__
+
+# === Codeswarm build artifacts (rebuilt in Docker) ===
+codeswarm/node_modules
+codeswarm/packages/*/dist
+codeswarm/packages/*/data/task_workspaces
+codeswarm/**/.omc
+codeswarm/**/.claude
+
+# === Misc ===
+*.log
+tsconfig.tsbuildinfo
+temp-*
+*.png
+logs-page-verification.png
+.env
+.env.local
+codedmap/uv.lock

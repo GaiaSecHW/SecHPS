@@ -93,6 +93,26 @@ export async function POST(request: Request) {
           } else if (eventType === 'progress') {
             message = '进度';
             details = content;
+          } else if (eventType === 'phase_start') {
+            const phaseName = eventData.phase || '';
+            if (phaseName === 'codedmap') {
+              message = '知识图谱预处理';
+              details = eventData.message || content || `开始处理知识图谱...`;
+            } else {
+              message = '阶段开始';
+              details = eventData.message || content || phaseName;
+            }
+          } else if (eventType === 'phase_complete') {
+            const phaseName = eventData.phase || '';
+            if (phaseName === 'codedmap') {
+              message = '知识图谱就绪';
+              details = eventData.message || content || '知识图谱处理完成';
+              level = eventData.success === false ? 'error' : 'info';
+            } else {
+              message = '阶段完成';
+              details = eventData.message || content || phaseName;
+              level = eventData.success === false ? 'error' : 'info';
+            }
           }
 
           if (message) {

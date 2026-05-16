@@ -1,0 +1,33 @@
+version: "3.8"
+
+services:
+  worker:
+    build:
+      context: ..
+      dockerfile: codeswarm/Dockerfile
+    image: codeswarm-worker:latest
+    container_name: codeswarm-worker
+    restart: unless-stopped
+    ports:
+      - "${WORKER_PORT:-8080}:8080"
+    environment:
+      - NODE_ID=${NODE_ID:-worker-01}
+      - PORT=8080
+      - MAX_CONCURRENT=${MAX_CONCURRENT:-5}
+      - ORCHESTRATOR_URL=${ORCHESTRATOR_URL:-http://host.docker.internal:3000}
+      - WORKER_ADDRESS=${WORKER_ADDRESS:-}
+      - CODEDMAP_HOME=/opt/codedmap
+      - GITEA_CODEDMAP_REPO=${GITEA_CODEDMAP_REPO:-}
+      - GITEA_CODEDMAP_TOKEN=${GITEA_CODEDMAP_TOKEN:-}
+      - PATH_MAPPING=${PATH_MAPPING:-}
+    volumes:
+      # NFS/shared workspace for task execution
+      - ${WORKSPACE_MOUNT:-./data/task_workspaces}:/data/task_workspaces
+      # Docker socket (if worker needs to spawn containers)
+      # - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

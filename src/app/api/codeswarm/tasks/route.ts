@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { prisma, Prisma } from '@/lib/prisma';
+import { prisma, Prisma, withRetry } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
 export async function GET() {
@@ -108,6 +108,7 @@ export async function POST(request: Request) {
         SELECT id, "taskId", "workerId", state, instruction,
                "projectPath", "workspacePath", "gitUrl", "gitRef",
                skills, mcps, model, "apiKey", "timeoutSec", agent,
+               "preferredWorkerNodeId", "startCommand", "targetProduct",
                "defaultAgentName", error, "startedAt", "completedAt",
                "createdAt", "updatedAt"
         FROM "CodeswarmTask"
@@ -157,11 +158,10 @@ export async function POST(request: Request) {
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
     // 创建任务（始终 queued，由 dispatcher 异步分发）
-    const task = await prisma.codeswarmTask.create({
+    const task = await withRetry(() => prisma.codeswarmTask.create({
       data: {
         id: `db-${Date.now()}`,
         taskId,
-        workerId: null,
         state: 'queued',
         instruction,
         projectPath: projectPath || null,
@@ -177,31 +177,46 @@ export async function POST(request: Request) {
         targetProduct: targetProduct || null,
         updatedAt: new Date(),
       },
-    }) as any;
+    })) as any;
 
     // 尝试提交到 Redis Stream（优先）
     const redisSubmitted = await codeswarmDispatcher.submitTask(task.id);
 
     // Redis 不可用时，DB fallback：立即尝试同步分发
     if (!redisSubmitted) {
-      // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
-      const allWorkers = await prisma.$queryRaw`
+      const allWorkers = await withRetry(() => prisma.$queryRaw`
         SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks", "createdAt", "updatedAt"
         FROM "CodeswarmWorker"
         WHERE status = 'online'
         ORDER BY "currentTasks" ASC
         LIMIT 50
-      ` as any[];
+      `) as any[];
 
       const worker = allWorkers.find(w => w.currentTasks < w.maxConcurrent);
 
       if (worker) {
-        const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
-        if (!success) {
-          await prisma.codeswarmTask.update({
+        // 优先使用指定的 Worker（如果在线且有容量）
+        let targetWorker = worker;
+        if (task.preferredWorkerNodeId) {
+          const preferred = allWorkers.find(w =>
+            w.nodeId === task.preferredWorkerNodeId &&
+            w.currentTasks < w.maxConcurrent
+          );
+          if (preferred) {
+            targetWorker = preferred;
+          } else {
+            console.log(`[CodeSwarm] 指定的 Worker ${task.preferredWorkerNodeId} 不在线或满载，fallback 到 ${worker.nodeId}`);
+          }
+        }
+
+        const success = await codeswarmDispatcher.sendTaskToWorker(task, targetWorker);
+        if (success) {
+          codeswarmDispatcher.syncWorkerLoad(targetWorker.nodeId, (targetWorker.currentTasks || 0) + 1);
+        } else {
+          await withRetry(() => prisma.codeswarmTask.update({
             where: { id: task.id },
-            data: { state: 'queued', workerId: null },
-          });
+            data: { state: 'queued', CodeswarmWorker: { disconnect: true } },
+          }));
         }
       }
     }

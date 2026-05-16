@@ -84,25 +84,8 @@ export class ACPClient {
     let cmd: string;
     let args: string[];
     
-    if (process.platform === 'win32') {
-      // On Windows, use node to run opencode directly
-      const opencodePath = process.env.APPDATA 
-        ? `${process.env.APPDATA}\\npm\\node_modules\\opencode-ai\\bin\\opencode`
-        : null;
-      
-      if (opencodePath) {
-        cmd = process.execPath; // Use current node executable
-        args = [opencodePath, 'acp', '--cwd', config.cwd];
-        console.log(`[ACP] Using node: ${cmd}`);
-        console.log(`[ACP] Opencode path: ${opencodePath}`);
-      } else {
-        cmd = 'opencode';
-        args = ['acp', '--cwd', config.cwd];
-      }
-    } else {
-      cmd = config.command || 'opencode';
-      args = ['acp', '--cwd', config.cwd];
-    }
+    cmd = config.command || 'opencode';
+    args = ['acp', '--cwd', config.cwd];
 
     // Build environment
     const env: Record<string, string> = {};

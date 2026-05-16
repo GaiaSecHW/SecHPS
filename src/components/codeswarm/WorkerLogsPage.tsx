@@ -22,7 +22,9 @@ import {
   MessageSquare,
   Copy,
   Wrench,
-  ChevronRight
+  ChevronRight,
+  Database,
+  Brain
 } from 'lucide-react';
 
 interface LogEntry {
@@ -72,6 +74,7 @@ const EXECUTION_PHASES: ExecutionPhase[] = [
   { id: 'queued', name: '任务入队', status: 'pending', icon: <Clock className="w-4 h-4" /> },
   { id: 'dispatched', name: '分发Worker', status: 'pending', icon: <Send className="w-4 h-4" /> },
   { id: 'building', name: '构建环境', status: 'pending', icon: <Activity className="w-4 h-4" /> },
+  { id: 'codedmap', name: '知识图谱', status: 'pending', icon: <Database className="w-4 h-4" /> },
   { id: 'executing', name: '执行命令', status: 'pending', icon: <Play className="w-4 h-4" /> },
   { id: 'completed', name: '执行完成', status: 'pending', icon: <CheckCircle className="w-4 h-4" /> },
 ];
@@ -170,6 +173,7 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
     if (stream === 'stderr' || type === 'error') return <AlertTriangle className="w-4 h-4 text-red-500" />;
     if (type === 'task_completed' || type === 'tool_call') return <Cpu className="w-4 h-4 text-purple-500" />;
     if (type === 'task_started') return <Activity className="w-4 h-4 text-blue-500" />;
+    if (type === 'phase_start' || type === 'phase_complete') return <Database className="w-4 h-4 text-indigo-400" />;
     return <FileText className="w-4 h-4 text-gray-500" />;
   };
 
@@ -253,20 +257,37 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
     return group.map(log => getLogContent(log)).join('');
   };
 
-  // Build execution timeline based on task state
+  // Build execution timeline based on task state and log events
   const buildTimeline = (): ExecutionPhase[] => {
     if (!taskDetail) return EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
 
     const phases: ExecutionPhase[] = EXECUTION_PHASES.map(p => ({ ...p, status: 'pending' as ExecutionPhase['status'] }));
     const state = taskDetail.state;
 
-    // queued -> always completed
+    // Detect codedmap events from logs
+    const hasCodedmapStart = logs.some(log => {
+      try {
+        const d = JSON.parse(log.data);
+        return (log.type === 'phase_start' || d.type === 'phase_start') && d.phase === 'codedmap';
+      } catch { return false; }
+    });
+    const codedmapCompleteEvent = logs.find(log => {
+      try {
+        const d = JSON.parse(log.data);
+        return (log.type === 'phase_complete' || d.type === 'phase_complete') && d.phase === 'codedmap';
+      } catch { return false; }
+    });
+    const codedmapSuccess = codedmapCompleteEvent ? (() => {
+      try { return JSON.parse(codedmapCompleteEvent.data).success !== false; } catch { return true; }
+    })() : false;
+
+    // phases[0] = queued
     phases[0].status = 'completed';
     phases[0].time = taskDetail.createdAt;
 
     if (state === 'queued') return phases;
 
-    // dispatched -> building
+    // phases[1] = dispatched
     phases[1].status = 'completed';
     phases[1].time = taskDetail.startedAt || taskDetail.createdAt;
 
@@ -280,19 +301,34 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
       return phases;
     }
 
-    // executing
+    // phases[2] = building completed
+    phases[2].status = 'completed';
+
+    // phases[3] = codedmap
+    if (hasCodedmapStart) {
+      if (codedmapCompleteEvent) {
+        phases[3].status = codedmapSuccess ? 'completed' : 'failed';
+        phases[3].time = codedmapCompleteEvent.createdAt;
+      } else {
+        phases[3].status = 'running';
+      }
+    } else {
+      // No codedmap events: skip this phase (mark completed to show it wasn't needed)
+      phases[3].status = 'completed';
+    }
+
+    // phases[4] = executing
     if (['running', 'dispatched'].includes(state) || (state === 'failed' && !taskDetail.completedAt)) {
-      phases[2].status = 'completed';
-      phases[3].status = state === 'failed' ? 'failed' : 'running';
+      phases[4].status = state === 'failed' ? 'failed' : 'running';
       return phases;
     }
 
     // completed or failed
-    phases[2].status = 'completed';
-    phases[3].status = state === 'completed' ? 'completed' : 'failed';
     phases[4].status = state === 'completed' ? 'completed' : 'failed';
+    // phases[5] = completed
+    phases[5].status = state === 'completed' ? 'completed' : 'failed';
     if (taskDetail.completedAt) {
-      phases[4].time = taskDetail.completedAt;
+      phases[5].time = taskDetail.completedAt;
     }
 
     return phases;
@@ -533,6 +569,13 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
                     const isAgent = firstLog.level === 'agent';
                     const isError = firstLog.stream === 'stderr' || firstLog.type === 'error';
                     const isToolCall = firstLog.type === 'tool_call';
+                    const isCodedmap = (() => {
+                      if (content.includes('[Codedmap]')) return true;
+                      try {
+                        const d = JSON.parse(firstLog.data);
+                        return (firstLog.type === 'phase_start' || firstLog.type === 'phase_complete') && d.phase === 'codedmap';
+                      } catch { return false; }
+                    })();
                     const toolInfo = getToolCallInfo(firstLog);
 
                     return (
@@ -543,23 +586,27 @@ export function WorkerLogsPage({ nodeId }: WorkerLogsPageProps) {
                         <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${
                           isError
                             ? 'bg-red-900/30 border border-red-700/50 text-red-200'
-                            : isToolCall
-                              ? 'bg-amber-900/20 border border-amber-600/40 text-amber-100'
-                              : isAgent
-                                ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100'
-                                : 'bg-slate-700/80 border border-slate-600/50 text-slate-200'
+                            : isCodedmap
+                              ? 'bg-indigo-900/30 border border-indigo-600/40 text-indigo-100'
+                              : isToolCall
+                                ? 'bg-amber-900/20 border border-amber-600/40 text-amber-100'
+                                : isAgent
+                                  ? 'bg-blue-600/20 border border-blue-500/30 text-blue-100'
+                                  : 'bg-slate-700/80 border border-slate-600/50 text-slate-200'
                         }`}>
                           {/* Header with icon and timestamp */}
                           <div className="flex items-center justify-between gap-3 mb-1 text-xs opacity-70">
                             <div className="flex items-center gap-2">
-                              {isToolCall ? (
+                              {isCodedmap ? (
+                                <Brain className="w-3 h-3" />
+                              ) : isToolCall ? (
                                 <Wrench className="w-3 h-3" />
                               ) : isAgent ? (
                                 <MessageSquare className="w-3 h-3" />
                               ) : (
                                 <Cpu className="w-3 h-3" />
                               )}
-                              <span>{isToolCall ? 'Tool Call' : isAgent ? 'Agent' : 'Worker'}</span>
+                              <span>{isCodedmap ? 'Codedmap' : isToolCall ? 'Tool Call' : isAgent ? 'Agent' : 'Worker'}</span>
                               <span>·</span>
                               <span className="font-mono">{formatTime(firstLog.createdAt)}</span>
                               {group.length > 1 && (

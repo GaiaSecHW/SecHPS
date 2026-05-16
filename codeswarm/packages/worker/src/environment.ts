@@ -78,51 +78,31 @@ export class EnvironmentFactory {
       progress(`Step 1: 检查 instruction.txt...`);
       const instructionPath = path.join(localWorkspacePath, 'instruction.txt');
       progress(`instruction.txt exists: ${fs.existsSync(instructionPath)}`);
-      const MIN_INSTRUCTION_LENGTH = 50;
-      let instructionTooShort = false;
-      
+
       if (fs.existsSync(instructionPath)) {
         try {
           const fileContent = fs.readFileSync(instructionPath, 'utf-8').trim();
           console.log(`[Environment] Read instruction.txt success, length: ${fileContent.length}`);
           console.log(`[Environment] instruction content: "${fileContent.substring(0, 100)}..."`);
-          console.log(`[Environment] payload.instruction length: ${payload.instruction?.length || 0}`);
-          if (fileContent.length < MIN_INSTRUCTION_LENGTH && (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH)) {
-            instructionTooShort = true;
-            console.log(`[Environment] instruction too short, will use build agent with root workspace`);
-          }
           resolvedInstruction = fileContent;
         } catch (e) {
           console.log(`[Environment] Failed to read instruction.txt: ${e}`);
           resolvedInstruction = payload.instruction ?? undefined;
-          if (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH) {
-            instructionTooShort = true;
-          }
         }
       } else {
         console.log(`[Environment] instruction.txt not found, using payload.instruction`);
         resolvedInstruction = payload.instruction ?? undefined;
-        if (!payload.instruction || payload.instruction.length < MIN_INSTRUCTION_LENGTH) {
-          instructionTooShort = true;
-        }
       }
-      
-      // If instruction too short, use root workspace with build agent (skip subdirectory lookup)
-      if (instructionTooShort) {
-        console.log(`[Environment] ========== BUILD COMPLETE (short instruction mode) ==========`);
-        console.log(`[Environment] Using root workspace (no subdirectory lookup)`);
-        console.log(`[Environment] Agent: build`);
-        return { workspacePath: localWorkspacePath, agent: 'build', instruction: resolvedInstruction };
-      }
-      
-      // Check if opencode.json exists directly in workspace
+
+      // Always read opencode.json to resolve agent (regardless of instruction length)
       progress(`Step 2: 检查 opencode.json...`);
       const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
       progress(`opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
       if (fs.existsSync(directOpencodeJsonPath)) {
         progress(`找到 opencode.json，读取配置...`);
         try {
-          const config = JSON.parse(fs.readFileSync(directOpencodeJsonPath, 'utf-8'));
+          const rawConfig = fs.readFileSync(directOpencodeJsonPath, 'utf-8').replace(/^﻿/, '');
+          const config = JSON.parse(rawConfig);
           resolvedAgent = config.default_agent || config.defaultAgent;
           progress(`default_agent: ${resolvedAgent}`);
           if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
@@ -149,7 +129,7 @@ export class EnvironmentFactory {
             actualWorkspacePath = subdirPath;
             progress(`使用子目录作为工作区: ${subdirs[0]}`);
             try {
-              const config = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8'));
+              const config = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8').replace(/^﻿/, ''));
               resolvedAgent = config.default_agent || config.defaultAgent;
               progress(`default_agent: ${resolvedAgent}`);
               if (resolvedAgent && config.command?.[resolvedAgent]?.template) {

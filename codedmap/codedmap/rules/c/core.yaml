@@ -1,0 +1,186 @@
+version: 2
+language: c
+
+# ===========================================================================
+# Entry Points (Strictly Control Flow Starts: OS & Kernel level)
+# ===========================================================================
+entry_points:
+  # 1. 用户态标准入口 (唯一)
+  - id: ep_cli_main_c
+    name: cli_main_c
+    category: CLI_COMMAND
+    languages: [c, cpp]
+    patterns:
+      - type: method
+        name: main
+        is_entry: true
+
+  # 2. 内核系统调用定义 (针对 syscall 层面)
+  - id: ep_kernel_syscall_c
+    name: kernel_syscall_c
+    category: SYSCALL_HANDLER
+    languages: [c, cpp]
+    patterns:
+      - type: identifier
+        name: SYSCALL_DEFINE
+      - type: identifier
+        name: sys_
+
+  # 3. 内核驱动特权操作入口 (针对 fops 层面)
+  - id: ep_kernel_fops_c
+    name: kernel_file_operations_c
+    category: IOCTL_HANDLER 
+    languages: [c, cpp]
+    description: "Critical kernel-user interfaces: ioctl and mmap"
+    patterns:
+      # 控制面：ioctl 是驱动逻辑的核心
+      - type: method
+        name: unlocked_ioctl
+      - type: method
+        name: compat_ioctl
+      - type: method
+        name: ioctl
+        code_pattern: "struct file\\s*\\*"
+
+      # 内存面：mmap
+      - type: method
+        name: mmap
+        code_pattern: "struct vm_area_struct\\s*\\*"
+
+# ===========================================================================
+# Sources (Data Flow Starts: POSIX I/O & Kernel Boundaries)
+# ===========================================================================
+sources:
+  - id: src_getenv_c
+    name: getenv
+    category: ENV_DATA
+    origin: ENV_VAR
+    languages: [c, cpp]
+    patterns:
+      - type: call
+        function: getenv
+        taints: return
+      - type: call
+        function: secure_getenv
+        taints: return
+
+  - id: src_file_read_c
+    name: fread
+    category: FILE_DATA
+    languages: [c, cpp]
+    patterns:
+      - type: call
+        function: fread
+        taints: param[0]
+      - type: call
+        function: read
+        taints: param[1]
+      - type: call
+        function: pread
+        taints: param[1]
+
+  - id: src_network_recv_c
+    name: recv
+    category: NETWORK_DATA
+    origin: SOCKET
+    languages: [c, cpp]
+    patterns:
+      - type: call
+        function: recv
+        taints: param[1]
+      - type: call
+        function: recvfrom
+        taints: param[1]
+      - type: call
+        function: recvmsg
+        taints: param[1]
+
+  - id: src_kernel_uaccess_c
+    name: copy_from_user
+    category: USER_SPACE_DATA
+    origin: KERNEL_UACCESS
+    languages: [c, cpp]
+    patterns:
+      - type: call
+        function: copy_from_user
+        taints: param[0]
+      - type: call
+        function: get_user
+        taints: param[0]
+      - type: call
+        function: memdup_user
+        taints: return
+
+# ===========================================================================
+# Sinks (Objective Sensitive Operations)
+# ===========================================================================
+sinks:
+  # --- MEMORY_WRITE ---
+  - { id: sc_memcpy, name: memcpy, category: MEMORY_WRITE, languages: [c, cpp] }
+  - { id: sc_memmove, name: memmove, category: MEMORY_WRITE, languages: [c, cpp] }
+  - { id: sc_strcpy, name: strcpy, category: MEMORY_WRITE, languages: [c, cpp] }
+  - { id: sc_strcat, name: strcat, category: MEMORY_WRITE, languages: [c, cpp] }
+  - { id: sc_sprintf, name: sprintf, category: MEMORY_WRITE, languages: [c, cpp] }
+
+  # --- FILE_ACCESS ---
+  - { id: sc_fopen, name: fopen, category: FILE_ACCESS, languages: [c, cpp] }
+  - { id: sc_open, name: open, category: FILE_ACCESS, languages: [c, cpp] }
+  - { id: sc_unlink, name: unlink, category: FILE_ACCESS, languages: [c, cpp] }
+
+  # --- OS_COMMAND ---
+  - { id: sc_system, name: system, category: OS_COMMAND, languages: [c, cpp] }
+  - { id: sc_execve, name: execve, category: OS_COMMAND, languages: [c, cpp] }
+  - { id: sc_popen, name: popen, category: OS_COMMAND, languages: [c, cpp] }
+
+  # --- INFO_LEAK (Kernel) ---
+  - { id: sc_copy_to_user, name: copy_to_user, category: INFO_LEAK, languages: [c, cpp] }
+  - { id: sc_put_user, name: put_user, category: INFO_LEAK, languages: [c, cpp] }
+  - { id: sc_seq_printf, name: seq_printf, category: INFO_LEAK, languages: [c, cpp] }
+
+  # --- MEMORY_ALLOC ---
+  - { id: sc_malloc, name: malloc, category: MEMORY_ALLOC, languages: [c, cpp] }
+  - { id: sc_calloc, name: calloc, category: MEMORY_ALLOC, languages: [c, cpp] }
+  - { id: sc_kmalloc, name: kmalloc, category: MEMORY_ALLOC, languages: [c, cpp] }
+  - { id: sc_kzalloc, name: kzalloc, category: MEMORY_ALLOC, languages: [c, cpp] }
+  - { id: sc_vmalloc, name: vmalloc, category: MEMORY_ALLOC, languages: [c, cpp] }
+
+  # --- MEMORY_FREE ---
+  - { id: sc_free, name: free, category: MEMORY_FREE, languages: [c, cpp] }
+  - { id: sc_kfree, name: kfree, category: MEMORY_FREE, languages: [c, cpp] }
+  - { id: sc_vfree, name: vfree, category: MEMORY_FREE, languages: [c, cpp] }
+  - { id: sc_kfree_rcu, name: kfree_rcu, category: MEMORY_FREE, languages: [c, cpp] }
+
+  # --- PRIVILEGE_MUTATION ---
+  - { id: sc_commit_creds, name: commit_creds, category: PRIVILEGE_MUTATION, languages: [c, cpp] }
+  - { id: sc_setuid, name: setuid, category: PRIVILEGE_MUTATION, languages: [c, cpp] }
+  - { id: sc_cap_set_proc, name: cap_set_proc, category: PRIVILEGE_MUTATION, languages: [c, cpp] }
+
+# ===========================================================================
+# Guards & Sanitizers (Keep as is)
+# ===========================================================================
+guards:
+  - id: guard_bounds_c
+    name: check_bounds
+    category: BOUNDS_CHECK
+    languages: [c, cpp]
+    patterns:
+      - type: call
+        function: check_bounds
+
+  - id: guard_null_c
+    name: null_check
+    category: NULL_CHECK
+    languages: [c, cpp]
+    patterns:
+      - type: identifier
+        name: NULL
+        code_pattern: "!=\\s*NULL"
+
+sanitizers:
+  - id: san_snprintf_c
+    name: snprintf
+    category: TRUNCATE
+    languages: [c, cpp]
+    patterns:
+      - type: call
+        function: snprintf

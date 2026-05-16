@@ -1,0 +1,306 @@
+Metadata-Version: 2.4
+Name: codedmap
+Version: 0.1.0
+Summary: A deterministic code atlas that any AI agent can navigate — structured security tags, taint tracing, and 49 tool-callable commands
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: networkx
+Requires-Dist: psutil
+Requires-Dist: pydantic
+Requires-Dist: PyYAML
+Provides-Extra: neo4j
+Requires-Dist: neo4j; extra == "neo4j"
+Provides-Extra: ai
+Requires-Dist: instructor; extra == "ai"
+Requires-Dist: openai; extra == "ai"
+Provides-Extra: rag
+Requires-Dist: llama-index; extra == "rag"
+Requires-Dist: numpy; extra == "rag"
+Requires-Dist: openai; extra == "rag"
+Requires-Dist: tqdm; extra == "rag"
+Provides-Extra: parsers
+Requires-Dist: tree-sitter; extra == "parsers"
+Requires-Dist: tree-sitter-c; extra == "parsers"
+Requires-Dist: tree-sitter-cpp; extra == "parsers"
+Requires-Dist: tree-sitter-python; extra == "parsers"
+Provides-Extra: api
+Requires-Dist: fastapi; extra == "api"
+Requires-Dist: uvicorn[standard]; extra == "api"
+Requires-Dist: httpx; extra == "api"
+Requires-Dist: python-multipart; extra == "api"
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+
+# CodeDMap
+
+***"The Deterministic Code Atlas for Agent-Driven Auditing."***
+
+---
+
+## FOR AI AGENTS & LLMs
+
+CodeDMap exposes its full capability surface as a structured, machine-readable tool catalog. Any agent can self-orient in seconds.
+
+**Self-description:**
+
+```bash
+cdm discover
+```
+
+Returns the full `CommandDefinition` catalog — 49 tool-callable commands across 9 domains — in a versioned JSON envelope:
+
+```json
+{
+  "schema_version": "1.0.0",
+  "command": "discover",
+  "target": null,
+  "result": {
+    "tools": [
+      {
+        "name": "query_search",
+        "domain": "query",
+        "subcommand": "search",
+        "description": "Find CPG nodes by name pattern across all node types.",
+        "input_schema": { ... },
+        "read_write": "read",
+        "requires_agent_id": false
+      },
+      ...
+    ],
+    "total": 49
+  },
+  "success": true
+}
+```
+
+**Programmatic tool catalog (no CLI dependency):**
+
+```bash
+curl http://localhost:8000/api/v1/tools
+```
+
+Returns the identical catalog via REST. For agents operating without the `codedmap` package installed, use the standalone SDK:
+
+```python
+from tools.cdm_client import CPGClient
+
+client = CPGClient("http://localhost:8000")
+catalog = client.discover()  # full CommandDefinition catalog
+```
+
+`tools/cdm_client.py` is a pure `httpx`-based SDK with zero `codedmap` package dependency. Pre-generated tool catalog: `tools/tools.json`.
+
+**All commands return structured JSON:**
+
+```bash
+cdm query search "malloc" --output json
+```
+
+Every `--output json` response follows the v1.0.0 envelope:
+
+```json
+{
+  "schema_version": "1.0.0",
+  "command": "search",
+  "target": null,
+  "result": { "nodes": [...], "total": N },
+  "metadata": { "total": N, "has_more": false, "limit": 50 },
+  "success": true
+}
+```
+
+---
+
+## FOR SECURITY ARCHITECTS
+
+CodeDMap is a deterministic Code Property Graph (CPG) for vulnerability hunting at scale. It builds a persistent, queryable atlas of your codebase that survives across sessions.
+
+**What it gives you:**
+
+- **Taint tracing:** Backward-trace from any sink to controllable inputs. Find SQL injection, buffer overflows, and command injection paths through any call depth.
+- **Three-layer security ontology:**
+  - `L1 ONTOLOGY` — System-detected, read-only. Sources, sinks, entry points, guards, sanitizers, roles. Format: `ONTOLOGY:SINK:SQL_INJECTION`.
+  - `L2 SEMANTIC` — Agent/human writable. Architectural inferences, confidence scores. Format: `SEMANTIC:AUTH:HIGH`.
+  - `L3 STATE` — Audit workflow state. Format: `STATE:AUDITED`, `STATE:REVIEWED`.
+- **Module system:** Define logical code boundaries at file/directory granularity. Scope all queries to a module. Track cross-module dependency graphs.
+- **Multi-backend storage:** `memory` (testing), `sqlite` (default agent backend), `neo4j` (production scale).
+- **Deterministic IDs:** SHA-256 based node IDs for global nodes — same source file rebuilds produce the same graph structure.
+
+---
+
+## Quickstart
+
+```bash
+pip install codedmap
+```
+
+```bash
+cdm build ./my-vulnerable-app
+```
+
+```bash
+cdm query trace -f vulnerable_func --taint --output json
+```
+
+```bash
+cdm serve --db graph.db --port 8000
+```
+
+```bash
+curl http://localhost:8000/api/v1/tools | jq '.result | length'
+```
+
+1. Install the package
+2. Build a CPG from your source tree
+3. Trace taint paths from a sink function to controllable inputs
+4. Start the REST API server
+5. Verify the tool catalog endpoint returns all 49 commands
+
+---
+
+## 9-Domain CLI Reference
+
+| Domain | Subcommands |
+|--------|-------------|
+| `cdm query` | `search`, `inspect`, `trace`, `entrypoints`, `stats`, `tree`, `sources`, `sinks`, `guards`, `sanitizers`, `roles` |
+| `cdm note` | `add`, `list`, `show`, `remove` |
+| `cdm tag` | `add`, `remove`, `list`, `find`, `bulk` |
+| `cdm module` | `create`, `delete`, `rename`, `list`, `show`, `assign`, `remove` |
+| `cdm repair` | `link`, `suggest`, `list`, `undo` |
+| `cdm rules` | `list`, `categories`, `show`, `resolve`, `add-sink`, `add-source`, `add-safe`, `add-entrypoint`, `tombstone`, `validate` |
+| `cdm build` | `<project>` (default build), `enhance` (re-run passes on existing DB) |
+| `cdm serve` | `--db <path> --port <port>` |
+| `cdm assets` | `export`, `import`, `diff`, `anchor`, `merge` |
+
+All commands support `--output json` for structured output. All write commands require `--db`.
+
+**Selected examples:**
+
+```bash
+# Find all entry points with L1 ONTOLOGY tags
+cdm query entrypoints --output json
+
+# Backward taint trace from a sink
+cdm query trace -f memcpy --taint --depth 10
+
+# List all detected sinks
+cdm query sinks --output json
+
+# Add a semantic tag with justification
+cdm tag add -f process_input SEMANTIC:AUTH:HIGH --justification "Handles auth tokens" --confidence 0.9
+
+# Create a module and assign files
+cdm module create auth_module --description "Authentication subsystem"
+cdm module assign auth_module --paths "src/auth/**"
+
+# Suppress a global rule
+cdm rules tombstone EP-001 --reason "False positive in test fixtures"
+```
+
+---
+
+## REST API
+
+`cdm serve --db graph.db --port 8000` starts a FastAPI server. All 9 CLI domains are mirrored as REST endpoints.
+
+**Discovery endpoint (always public):**
+
+```
+GET /api/v1/tools
+```
+
+Returns the full `CommandDefinition` catalog as a structured manifest. No authentication required. Use this as the agent's entry point.
+
+**Domain routers:**
+
+```
+GET  /api/v1/query/search?pattern=malloc&limit=20
+GET  /api/v1/query/entrypoints
+GET  /api/v1/query/trace?function=vulnerable_func&taint=true
+GET  /api/v1/query/sinks
+POST /api/v1/tag/add
+POST /api/v1/note/add
+POST /api/v1/module/create
+POST /api/v1/build
+...
+```
+
+**Authentication:**
+
+```bash
+cdm serve --db graph.db --port 8000 --api-key my-secret
+# Then:
+curl -H "X-API-Key: my-secret" http://localhost:8000/api/v1/query/stats
+```
+
+**Standalone Python SDK (`tools/cdm_client.py`):**
+
+No `codedmap` package required. Pure `httpx` — works in any Python environment.
+
+```python
+from tools.cdm_client import CPGClient
+
+client = CPGClient("http://localhost:8000", api_key="my-secret")
+
+# Full tool catalog
+catalog = client.discover()
+
+# Graph query
+result = client.query("query/search", pattern="malloc", limit=10)
+```
+
+**Pre-generated tool catalog:**
+
+`tools/tools.json` — offline snapshot of the full tool catalog for environments without a running server.
+
+---
+
+## Architecture
+
+CodeDMap uses a two-phase build pipeline:
+
+**Phase 1 — Frontend (Stream):** Parse source files one-by-one. Emit CPG nodes and edges. Per-file passes run immediately: CFG construction, DDG, CDG, local reference resolution, local points-to analysis, macro normalization.
+
+**Phase 2 — Backend (Batch):** After all files are parsed, global passes run: linker (resolves cross-file references), call graph construction, PDG, global reference resolution, global points-to analysis.
+
+**Optional AI passes:** LLM-powered method summarization, type inference, and security tagging (requires `--enable-llm`).
+
+```
+Source Files
+    │
+    ▼  [Phase 1: Stream]
+Frontend Parsers (tree-sitter / libclang JSON IR)
+    │
+    ▼
+Per-file Passes: CFG, DDG, CDG, LocalRef, LocalPTS
+    │
+    ▼  [Phase 2: Batch]
+Global Passes: Linker, CallGraph, PDG, GlobalRef, GlobalPTS
+    │
+    ▼
+Storage Backend (memory / SQLite / Neo4j)
+    │
+    ▼
+CLI / REST API / Python DSL
+```
+
+**Build/Analysis separation (IR mode):** In environments where you can't run `codedmap` at build time, use `tools/ast_exporter.py` to export AST artifacts as gzip JSON, then run `cdm build` in a separate analysis environment pointing at the artifact directory.
+
+---
+
+## Tech Stack
+
+- **Python** 3.12+ (target 3.14)
+- **Pydantic V2** — all schema models, strict validation
+- **tree-sitter** — C/C++/Python AST parsing
+- **libclang** — C/C++ IR-mode parsing (via JSON export)
+- **SQLite** — default storage backend for agent workflows
+- **Neo4j** — production-scale graph database
+- **FastAPI** — REST API server (`cdm serve`)
+- **httpx** — standalone client SDK
+
+---
+
+## License
+
+MIT License. See `LICENSE` for details.

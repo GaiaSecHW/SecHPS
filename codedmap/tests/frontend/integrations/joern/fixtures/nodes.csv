@@ -1,0 +1,22 @@
+:ID,NAME:STRING,FULL_NAME:STRING,CODE:STRING,LINE_NUMBER:INT,COLUMN_NUMBER:INT,ORDER:INT,FILENAME:STRING,SIGNATURE:STRING,TYPE_FULL_NAME:STRING,METHOD_FULL_NAME:STRING,DISPATCH_TYPE:STRING,ARGUMENT_INDEX:INT,CONTROL_STRUCTURE_TYPE:STRING,IS_EXTERNAL:BOOLEAN,MODIFIER_TYPE:STRING,IMPORTED_ENTITY:STRING,CANONICAL_NAME:STRING,PARSER_TYPE_NAME:STRING,INHERITS_FROM_TYPE_FULL_NAME:STRING,:LABEL
+1,main,test.c:main,"int main(int argc) {}",1,1,0,test.c,int(int),,,,,,false,,,,,,METHOD
+2,argc,test.c:main:argc,,2,5,0,test.c,,int,,,,,,,,,,,METHOD_PARAMETER_IN
+3,x,test.c:main:x,,3,5,1,test.c,,int,,,,,,,,,,,LOCAL
+4,,,,,,,test.c,,,,,,,,,,,,,BLOCK
+5,printf,printf,"printf(""hello"")",5,5,0,test.c,,void,printf,STATIC_DISPATCH,,,,,,,,,CALL
+6,msg,msg,,5,12,0,test.c,,char*,,,,,,,,,,,IDENTIFIER
+7,,,"hello",5,19,1,test.c,,char*,,,,,,,,,,,LITERAL
+8,test.c,test.c,,,,,,,,,,,,,,,,,,FILE
+9,<global>,test.c:<global>,,,,,,,,,,,,,,,,,,NAMESPACE_BLOCK
+10,TestStruct,test.c:TestStruct,,10,1,0,test.c,,,,,,,false,,,,,int;float,TYPE_DECL
+11,,,,,,,,,,,,,,,STATIC,,,,,MODIFIER
+12,,,return x;,15,5,0,test.c,,,,,,,,,,,,,RETURN
+13,<operator>.assignment,<operator>.assignment,x = 42,4,5,0,test.c,,int,<operator>.assignment,STATIC_DISPATCH,,,,,,,,,CALL
+14,,,#include <stdio.h>,1,1,0,test.c,,,,,,,,,stdio.h,,,,IMPORT
+15,label1,label1,,20,1,0,test.c,,,,,,,,,,,,,JUMP_TARGET
+16,,test.c:main:return,,,,,test.c,,int,,,,,,,,,,,METHOD_RETURN
+17,int,int,,,,,,,,,,,,,,,,,,TYPE
+18,main_ref,,,,,,,,,,,,,,,,,,,BINDING
+19,,,,7,3,2,test.c,,,,,,IF,,,,,,,CONTROL_STRUCTURE
+20,y,y,,7,8,0,test.c,,int,,,,,,,,,y,,FIELD_IDENTIFIER
+100,TestStruct,TestStruct,,,,,,,,,,,,,,,,,,TYPE

@@ -118,13 +118,14 @@ async function dispatchQueuedTasks(): Promise<void> {
       const workersWithTasks = staleWorkers.filter((w: any) => w.currentTasks > 0);
       if (workersWithTasks.length > 0) {
         const workerIdsWithTasks = workersWithTasks.map((w: any) => w.id);
-        await prisma.codeswarmTask.updateMany({
-          where: {
-            workerId: { in: workerIdsWithTasks },
-            state: { in: ['dispatched', 'running'] },
-          },
-          data: { state: 'queued', workerId: null, updatedAt: new Date() },
-        });
+        for (const wid of workerIdsWithTasks) {
+          await prisma.$executeRaw`
+            UPDATE "CodeswarmTask"
+            SET state = 'queued', "workerId" = NULL, "updatedAt" = NOW()
+            WHERE "workerId" = ${wid}
+              AND (state = 'dispatched' OR state = 'running')
+          `;
+        }
       }
     }
 
@@ -139,7 +140,7 @@ async function dispatchQueuedTasks(): Promise<void> {
       FROM "CodeswarmTask"
       WHERE state = 'queued'
       ORDER BY "createdAt" ASC
-      LIMIT 5
+      LIMIT 50
     ` as any[];
 
     if (queuedTasks.length === 0) return;
@@ -171,7 +172,9 @@ async function dispatchQueuedTasks(): Promise<void> {
 
       const success = await codeswarmDispatcher.sendTaskToWorker(task, worker);
       if (success) {
-        // sendTaskToWorker 已经会更新 DB 中的 currentTasks，不需要额外处理
+        worker.currentTasks++;
+        // 同步 dispatcher 内存负载，避免后续分发超出容量
+        codeswarmDispatcher.syncWorkerLoad(worker.nodeId, worker.currentTasks);
         console.log(`[CodeSwarm] DB fallback: 任务 ${task.taskId} 分发到 ${worker.nodeId}${task.preferredWorkerNodeId ? ' (手动选择)' : ' (自动分配)'}`);
       }
     }

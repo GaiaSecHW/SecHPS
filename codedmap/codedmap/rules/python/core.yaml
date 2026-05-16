@@ -1,0 +1,178 @@
+version: 2
+language: python
+
+# ===========================================================================
+# Entry Points (Strictly Control Flow Starts: Built-ins & Stdlib)
+# ===========================================================================
+entry_points:
+  - id: ep_cli_main_python
+    name: cli_main_python
+    category: CLI_COMMAND
+    languages: [python]
+    patterns:
+      - type: method
+        name: main
+      - type: identifier
+        name: __name__
+        code_pattern: "==\\s*['\\\"]__main__['\\\"]"
+
+  - id: ep_cli_argparse_python
+    name: cli_argparse_python
+    category: CLI_COMMAND
+    languages: [python]
+    patterns:
+      - type: call
+        function: argparse.ArgumentParser
+      - type: call
+        function: argparse.ArgumentParser.parse_args
+
+  - id: ep_rpc_xmlrpc_python
+    name: rpc_xmlrpc_python
+    category: NETWORK_LISTENER
+    protocol: RPC
+    languages: [python]
+    patterns:
+      - type: call
+        function: xmlrpc.server.SimpleXMLRPCServer
+
+# ===========================================================================
+# Sources (Data Flow Starts: Built-ins & Stdlib)
+# ===========================================================================
+sources:
+  - id: src_environ_python
+    name: os.environ
+    category: ENV_DATA
+    origin: ENV_VAR
+    languages: [python]
+    patterns:
+      - type: call
+        function: os.getenv
+        taints: return
+      - type: identifier
+        name: environ
+        taints: return
+
+  - id: src_sys_argv_python
+    name: sys.argv
+    category: ENV_DATA
+    origin: CLI
+    languages: [python]
+    patterns:
+      - type: identifier
+        name: sys.argv
+        taints: return
+
+  - id: src_input_python
+    name: input
+    category: ENV_DATA
+    origin: STDIN
+    languages: [python]
+    patterns:
+      - type: call
+        function: input
+        taints: return
+      - type: call
+        function: sys.stdin.readline
+        taints: return
+
+  - id: src_file_read_python
+    name: open
+    category: FILE_DATA
+    languages: [python]
+    patterns:
+      - type: call
+        function: open
+        taints: return
+      - type: call
+        function: read
+        taints: return
+
+  - id: src_json_python
+    name: json.load
+    category: FILE_DATA
+    languages: [python]
+    patterns:
+      - type: call
+        function: json.load
+        taints: return
+      - type: call
+        function: json.loads
+        taints: return
+
+  - id: src_urllib_python
+    name: urllib.request
+    category: NETWORK_DATA
+    origin: HTTP
+    languages: [python]
+    patterns:
+      - type: call
+        function: urllib.request.urlopen
+        taints: return
+
+  - id: src_socket_python
+    name: socket.recv
+    category: NETWORK_DATA
+    origin: SOCKET
+    languages: [python]
+    patterns:
+      - type: call
+        function: socket.recv
+        taints: return
+      - type: call
+        function: socket.recvfrom
+        taints: return
+
+# ===========================================================================
+# Sinks (Objective Sensitive Operations: Built-ins & Stdlib)
+# ===========================================================================
+sinks:
+  # --- OS_COMMAND ---
+  - { id: sc_subprocess_run_py, name: subprocess.run, category: OS_COMMAND, languages: [python] }
+  - { id: sc_subprocess_popen_py, name: subprocess.Popen, category: OS_COMMAND, languages: [python] }
+  - { id: sc_os_system_py, name: os.system, category: OS_COMMAND, languages: [python] }
+  - { id: sc_os_popen_py, name: os.popen, category: OS_COMMAND, languages: [python] }
+  - { id: sc_os_execve_py, name: os.execve, category: OS_COMMAND, languages: [python] }
+
+  # --- FILE_ACCESS ---
+  - { id: sc_open, name: open, category: FILE_ACCESS, languages: [python] }
+  - { id: sc_os_remove, name: os.remove, category: FILE_ACCESS, languages: [python] }
+
+  # --- CODE_EVAL (Python Core Execution) ---
+  - { id: sc_eval, name: eval, category: CODE_EVAL, languages: [python] }
+  - { id: sc_exec, name: exec, category: CODE_EVAL, languages: [python] }
+  - { id: sc_compile, name: compile, category: CODE_EVAL, languages: [python] }
+  - { id: sc_pickle_load, name: pickle.load, category: CODE_EVAL, languages: [python] }
+  - { id: sc_pickle_loads, name: pickle.loads, category: CODE_EVAL, languages: [python] }
+
+  # --- DB_EXECUTE (Standard Library DP-API) ---
+  - { id: sc_sqlite3_execute_py, name: sqlite3.connect.execute, category: DB_EXECUTE, languages: [python] }
+  - { id: sc_cursor_execute_py, name: cursor.execute, category: DB_EXECUTE, languages: [python] }
+
+# ===========================================================================
+# Guards & Sanitizers
+# ===========================================================================
+guards:
+  - id: guard_isinstance_py
+    name: isinstance
+    category: TYPE_CHECK
+    languages: [python]
+    patterns:
+      - type: call
+        function: isinstance
+
+sanitizers:
+  - id: san_html_escape_py
+    name: html.escape
+    category: ESCAPE
+    languages: [python]
+    patterns:
+      - type: call
+        function: html.escape
+
+  - id: san_shlex_quote_py
+    name: shlex.quote
+    category: ESCAPE
+    languages: [python]
+    patterns:
+      - type: call
+        function: shlex.quote

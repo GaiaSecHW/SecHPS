@@ -6,6 +6,33 @@ const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+// 瞬时连接错误码：服务端关闭连接 / 连接失败 / 超时
+const TRANSIENT_ERROR_CODES = new Set(['P1017', 'P1001', 'P1002', 'P1008']);
+
+/**
+ * 对 Prisma 操作进行自动重试，处理远程数据库瞬时断连
+ */
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 2,
+  delayMs = 1000,
+): Promise<T> {
+  let lastError: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      if (!TRANSIENT_ERROR_CODES.has(error.code) || attempt === maxRetries) {
+        throw error;
+      }
+      console.warn(`[Prisma] 瞬时错误 ${error.code}，正在重试 (${attempt + 1}/${maxRetries})...`);
+      await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+    }
+  }
+  throw lastError;
+}
+
 export const prisma =
   globalForPrisma.prisma ??
   new PrismaClient({
@@ -21,17 +48,18 @@ export const prisma =
     },
   });
 
-// 连接断开时自动重连 + 连接池保活
+// 连接断开时自动重连
 prisma.$connect().catch(() => {});
 
-// 定期 ping 连接池，防止远程服务端回收空闲连接
+// 定期刷新连接池，防止远程 PostgreSQL / 防火墙回收空闲连接
+// 用 $executeRaw 而非 $queryRaw 避免结果解析开销
 const keepAliveInterval = setInterval(async () => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await prisma.$executeRaw`SELECT 1`;
   } catch {
-    // 连接已断开，下次查询时会自动重连
+    // 连接已断开，Prisma 下次查询时自动重建
   }
-}, 30000); // 每 30 秒保活一次
+}, 30000);
 
 // 进程退出时清理
 process.on('beforeExit', () => {

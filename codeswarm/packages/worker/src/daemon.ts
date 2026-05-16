@@ -10,6 +10,7 @@ import {
 import { EnvironmentFactory } from './environment.js';
 import { ProcessManager, type AgentEvent } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
+import { CodedmapManager } from './codedmap-manager.js';
 
 interface WorkerDaemonConfig {
   nodeId: string;
@@ -24,6 +25,7 @@ export class WorkerDaemon {
   private readonly envFactory: EnvironmentFactory;
   private readonly processMgr: ProcessManager;
   private readonly semaphore: Semaphore;
+  private readonly codedmapMgr: CodedmapManager;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   /** Track task IDs currently being executed to prevent duplicate processing. */
   private readonly activeTasks = new Set<string>();
@@ -34,6 +36,7 @@ export class WorkerDaemon {
     this.envFactory = new EnvironmentFactory();
     this.processMgr = new ProcessManager();
     this.semaphore = new Semaphore(config.maxConcurrent);
+    this.codedmapMgr = new CodedmapManager();
   }
 
   async start(): Promise<void> {
@@ -207,8 +210,33 @@ export class WorkerDaemon {
       console.log(`[Daemon] Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
       this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
 
-      const engine = (agent || 'opencode') as 'opencode' | 'claudecode';
-      const agentName = resolvedAgent || 'build';
+      // ========== PHASE 1.5: Codedmap 知识图谱预处理 ==========
+      if (payload.targetProduct) {
+        console.log(`[Daemon] Step 1.5: Codedmap preprocessing for targetProduct=${payload.targetProduct}`);
+        try {
+          await this.codedmapMgr.ensureDbFile(workspacePath, payload.targetProduct, (event) => {
+            onEvent({
+              ...event,
+              type: (event.type as AgentEvent['type']) || 'log_chunk',
+            });
+          });
+        } catch (codedmapErr) {
+          const errMsg = codedmapErr instanceof Error ? codedmapErr.message : String(codedmapErr);
+          console.error(`[Daemon] Codedmap preprocessing failed: ${errMsg}`);
+          onEvent({
+            type: 'log_chunk',
+            content: `[Codedmap] 知识图谱预处理失败（继续执行任务）: ${errMsg}`,
+            timestamp: new Date().toISOString(),
+            level: 'worker',
+          });
+          // 不中断任务，允许 agent 在无 db 的情况下继续执行
+        }
+      }
+
+      // engine: opencode/claudecode (binary to spawn), NOT the agent name
+      const engine: 'opencode' | 'claudecode' = 'opencode';
+      // agentName: resolved from opencode.json > payload.agent > fallback 'build'
+      const agentName = resolvedAgent || agent || 'build';
       
       // Use instruction directly - environment.ts already handled the short instruction case
       const instruction = resolvedInstruction || payload.instruction || '执行任务';

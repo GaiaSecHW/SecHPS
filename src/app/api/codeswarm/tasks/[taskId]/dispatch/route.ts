@@ -91,6 +91,7 @@ export async function POST(
         agent: task.agent || undefined,
         preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
         startCommand: task.startCommand || undefined,
+        targetProduct: task.targetProduct || undefined,
       }),
       signal: AbortSignal.timeout(10000),
     }).catch(e => {
@@ -110,7 +111,7 @@ export async function POST(
       console.error('[Dispatch] Worker error response:', resp.status, respText);
       await prisma.codeswarmTask.update({
         where: { id: task.id },
-        data: { state: 'queued', workerId: null, updatedAt: new Date() },
+        data: { state: 'queued', CodeswarmWorker: { disconnect: true }, updatedAt: new Date() },
       });
       return NextResponse.json({ error: 'Worker 请求失败' }, { status: 500 });
     }

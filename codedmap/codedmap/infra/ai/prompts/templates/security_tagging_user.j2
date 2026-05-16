@@ -1,0 +1,23 @@
+Language: {{ ctx.language }}
+File: {{ ctx.file_path }}
+
+Code Slice:
+```{{ ctx.language }}
+{{ ctx.code }}
+```
+
+{% if ctx.insights %}
+### SECURITY CONTEXT
+The following upstream variables have already been flagged:
+{% for insight in ctx.insights %}
+- {{ insight }}
+{% endfor %}
+{% endif %}
+
+{"q if ctx.similar_vulnerabilities %}
+### REFERENCE CASE
+Similar functions in the codebase were found to have vulnerabilities:
+{% for vuln in ctx.similar_vulnerabilities %}
+- {{ vuln }}
+{% endfor %}
+{% endif %}
