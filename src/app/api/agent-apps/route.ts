@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { gitAgentAppSync } from '@/services/git-agent-app-sync';
 import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request);
@@ -156,6 +157,11 @@ export async function POST(request: NextRequest) {
     });
 
     logger.info(LOG_MODULES.SKILL, 'AgentApp 创建成功', { appId, name, gitUpload: gitResult.success });
+
+    // 异步同步 SKILL，不阻塞响应
+    syncSkillsFromHarness(filesMap, payload.userId, tenantId).catch(err =>
+      console.error('[SkillHarnessSync] 自动同步失败:', err)
+    );
 
     return NextResponse.json({ app, gitUploaded: gitResult.success });
   } catch (error) {

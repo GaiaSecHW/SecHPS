@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { gitAgentAppSync } from '@/services/git-agent-app-sync';
 import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -85,6 +86,7 @@ export async function PUT(
 
     let agentHarnessPath = existing.agentHarnessPath;
     let gitUploaded = false;
+    let syncedFilesMap: Map<string, Buffer> | null = null;
 
     // Git 方式更新文件
     if (updateFiles) {
@@ -116,13 +118,15 @@ export async function PUT(
       if (filesMap.size > 0) {
         const gitResult = await gitAgentAppSync.uploadAgentApp(appId, filesMap);
         gitUploaded = gitResult.success;
-        
+
         if (!gitResult.success) {
-          logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 更新 AgentApp 失败', appId, { 
-            details: { appId, errors: gitResult.errors } 
+          logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 更新 AgentApp 失败', appId, {
+            details: { appId, errors: gitResult.errors }
           });
+        } else {
+          syncedFilesMap = filesMap;
         }
-        
+
         agentHarnessPath = `${appId}/`;
       }
     }
@@ -142,6 +146,13 @@ export async function PUT(
     });
 
     logger.info(LOG_MODULES.SKILL, 'AgentApp 更新成功', { appId, name, gitUploaded });
+
+    // 异步同步 SKILL，不阻塞响应
+    if (syncedFilesMap) {
+      syncSkillsFromHarness(syncedFilesMap, payload.userId, existing.tenantId).catch(err =>
+        console.error('[SkillHarnessSync] 自动同步失败:', err)
+      );
+    }
 
     return NextResponse.json({ app, gitUploaded });
   } catch (error) {
