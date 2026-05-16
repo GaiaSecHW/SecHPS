@@ -11,6 +11,7 @@ import { EnvironmentFactory } from './environment.js';
 import { ProcessManager, type AgentEvent } from './process-manager.js';
 import { Semaphore } from './semaphore.js';
 import { CodedmapManager } from './codedmap-manager.js';
+import { ensureBucket } from './minio-client.js';
 
 interface WorkerDaemonConfig {
   nodeId: string;
@@ -89,6 +90,10 @@ export class WorkerDaemon {
 
     await this.server.listen({ port: this.config.port, host: '0.0.0.0' });
     this.startHeartbeat();
+    // Ensure MinIO bucket exists at startup
+    ensureBucket().catch(err => {
+      this.server.log.warn({ error: err }, 'MinIO bucket check failed (non-fatal)');
+    });
     this.server.log.info({ config: this.config }, 'Worker daemon started');
   }
 
@@ -155,6 +160,7 @@ export class WorkerDaemon {
   private async executeTask(payload: TaskPayload): Promise<void> {
     const { taskId, agent, defaultAgentName, startCommand, apiKey, model, env } = payload;
     let buildResult = null;
+    let codedmapPromise: Promise<void> | null = null;
 
     // Mark task as active (for deduplication)
     this.activeTasks.add(taskId);
@@ -210,27 +216,33 @@ export class WorkerDaemon {
       console.log(`[Daemon] Step 1 DONE: commandTemplate="${commandTemplate?.substring(0, 100)}..."`);
       this.server.log.info({ taskId, workspace: workspacePath, agent }, 'Workspace built');
 
-      // ========== PHASE 1.5: Codedmap 知识图谱预处理 ==========
+      // ========== PHASE 1.5: Codedmap 知识图谱预处理（与 Agent 并行） ==========
       if (payload.targetProduct) {
-        console.log(`[Daemon] Step 1.5: Codedmap preprocessing for targetProduct=${payload.targetProduct}`);
-        try {
-          await this.codedmapMgr.ensureDbFile(workspacePath, payload.targetProduct, (event) => {
-            onEvent({
-              ...event,
-              type: (event.type as AgentEvent['type']) || 'log_chunk',
-            });
+        console.log(`[Daemon] Step 1.5: Codedmap preprocessing (parallel) for targetProduct=${payload.targetProduct}`);
+        onEvent({
+          type: 'phase_start',
+          phase: 'codedmap',
+          message: `知识图谱预处理启动（后台并行）: ${payload.targetProduct}`,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
+        codedmapPromise = this.codedmapMgr.ensureDbFile(workspacePath, payload.targetProduct, (event) => {
+          onEvent({
+            ...event,
+            type: (event.type as AgentEvent['type']) || 'log_chunk',
           });
-        } catch (codedmapErr) {
+        }).then(() => {
+          console.log(`[Daemon] Codedmap preprocessing completed for ${payload.targetProduct}`);
+        }).catch((codedmapErr: unknown) => {
           const errMsg = codedmapErr instanceof Error ? codedmapErr.message : String(codedmapErr);
           console.error(`[Daemon] Codedmap preprocessing failed: ${errMsg}`);
           onEvent({
             type: 'log_chunk',
-            content: `[Codedmap] 知识图谱预处理失败（继续执行任务）: ${errMsg}`,
+            content: `[Codedmap] 知识图谱预处理失败（Agent 可继续执行）: ${errMsg}`,
             timestamp: new Date().toISOString(),
             level: 'worker',
           });
-          // 不中断任务，允许 agent 在无 db 的情况下继续执行
-        }
+        });
       }
 
       // engine: opencode/claudecode (binary to spawn), NOT the agent name
@@ -352,6 +364,14 @@ export class WorkerDaemon {
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
+      // Wait for background codedmap task to complete before cleanup
+      if (codedmapPromise) {
+        try {
+          await codedmapPromise;
+        } catch {
+          // Already handled inside the promise
+        }
+      }
       if (buildResult) {
         await this.envFactory.cleanup(buildResult.workspacePath);
       }
