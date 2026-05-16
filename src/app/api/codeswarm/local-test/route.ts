@@ -67,20 +67,42 @@ function uploadAuditReport(taskId: string, workspacePath: string): string | null
   }
 }
 
-function parseVulnerabilityReport(stdout: string): ParsedVulnerabilityReport | null {
+function parseVulnerabilityReport(output: string): ParsedVulnerabilityReport | null {
   try {
-    let jsonStr = stdout.trim();
+    let jsonStr = '';
     
-    if (jsonStr.includes('```json')) {
-      const match = jsonStr.match(/```json\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        jsonStr = match[1].trim();
+    if (output.includes('```json')) {
+      const matches = output.match(/```json\s*([\s\S]*?)\s*```/g);
+      if (matches) {
+        for (const match of matches) {
+          const inner = match.replace(/```json\s*/, '').replace(/\s*```$/, '').trim();
+          if (inner.includes('vulnerabilities')) {
+            jsonStr = inner;
+            break;
+          }
+        }
       }
-    } else if (jsonStr.includes('```')) {
-      const match = jsonStr.match(/```\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        jsonStr = match[1].trim();
+    }
+    
+    if (!jsonStr && output.includes('"vulnerabilities"')) {
+      const startIdx = output.indexOf('{');
+      if (startIdx !== -1) {
+        let braceCount = 0;
+        let endIdx = startIdx;
+        for (let i = startIdx; i < output.length; i++) {
+          if (output[i] === '{') braceCount++;
+          if (output[i] === '}') braceCount--;
+          if (braceCount === 0) {
+            endIdx = i + 1;
+            break;
+          }
+        }
+        jsonStr = output.slice(startIdx, endIdx);
       }
+    }
+    
+    if (!jsonStr) {
+      jsonStr = output.trim();
     }
     
     const parsed = JSON.parse(jsonStr);
@@ -254,17 +276,21 @@ function executeTaskAsync(
         data: { status: 'running', startedAt: new Date() },
       });
 
-      const args: string[] = ['run', '--agent', 'build', '--print-logs', instruction];
+const args: string[] = ['run', '--agent', 'build', instruction];
 
-      const env: Record<string, string> = {};
+      const env: Record<string, string> = {
+        TERM: 'dumb',
+        NO_COLOR: '1',
+      };
       for (const [key, value] of Object.entries(process.env)) {
         if (value !== undefined) env[key] = value;
       }
 
       let cmd: string;
       let finalArgs: string[];
+      let useShell = false;
 
-      if (process.platform === 'win32') {
+      if (isWindows) {
         const opencodePath = process.env.APPDATA
           ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode')
           : null;
@@ -276,9 +302,10 @@ function executeTaskAsync(
           cmd = 'opencode';
           finalArgs = args;
         }
+        useShell = true;
       } else {
-        cmd = 'opencode';
-        finalArgs = args;
+        cmd = 'bash';
+        finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
       }
 
       console.log(`[LocalTest:${taskId}] Starting: ${cmd} ${finalArgs.join(' ')}`);
@@ -287,8 +314,8 @@ function executeTaskAsync(
         cwd: workspacePath,
         env,
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: process.platform === 'win32',
-      } as any);
+        shell: useShell,
+      });
 
       childProcess.stdout?.on('data', (data: Buffer) => {
         stdout += data.toString();
@@ -321,10 +348,11 @@ function executeTaskAsync(
         uploadedFilePath = uploadAuditReport(taskId, workspacePath);
         
         if (uploadedFilePath) {
-          const report = parseVulnerabilityReport(stdout);
+          const report = parseVulnerabilityReport(stdout) || parseVulnerabilityReport(stderr);
           
           if (report) {
-            console.log(`[LocalTest:${taskId}] Parsed report: vulnCount=${report.vulnerabilities.length}`);
+            const source = parseVulnerabilityReport(stdout) ? 'stdout' : 'stderr';
+            console.log(`[LocalTest:${taskId}] Parsed report from ${source}: vulnCount=${report.vulnerabilities.length}`);
             
             vulnSubmitResult = await submitVulnerabilities(report, uploadedFilePath);
             
@@ -336,8 +364,13 @@ function executeTaskAsync(
               finalResult += `\n\n---\n漏洞提交失败: ${vulnSubmitResult.error}`;
             }
           } else {
-            console.log(`[LocalTest:${taskId}] Could not parse stdout as vulnerability report`);
-            finalResult += '\n\n---\n警告: 无法解析漏洞报告JSON';
+            console.log(`[LocalTest:${taskId}] Could not parse stdout/stderr as vulnerability report`);
+            console.log(`[LocalTest:${taskId}] stdout length: ${stdout.length}, content preview: ${stdout.slice(0, 500)}`);
+            console.log(`[LocalTest:${taskId}] stderr length: ${stderr.length}, content preview: ${stderr.slice(0, 1000)}`);
+            const debugPath = `/tmp/opencode/debug-${taskId}.log`;
+            fs.writeFileSync(debugPath, `=== STDOUT (${stdout.length}) ===\n${stdout}\n\n=== STDERR (${stderr.length}) ===\n${stderr}`);
+            console.log(`[LocalTest:${taskId}] Full output saved to: ${debugPath}`);
+            finalResult += '\n\n---\n警告: 无法解析漏洞报告JSON (stdout/stderr)';
           }
         } else {
           console.log(`[LocalTest:${taskId}] No file uploaded, skipping vulnerability submit`);
