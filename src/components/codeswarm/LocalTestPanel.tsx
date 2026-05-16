@@ -44,11 +44,12 @@ export function LocalTestPanel() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showWorkspaceList, setShowWorkspaceList] = useState(false);
   const [showDirBrowser, setShowDirBrowser] = useState(false);
-  const [currentBrowsePath, setCurrentBrowsePath] = useState('drives://');
+  const [currentBrowsePath, setCurrentBrowsePath] = useState('root://');
   const [dirEntries, setDirEntries] = useState<DirEntry[]>([]);
   const [loadingDirs, setLoadingDirs] = useState(false);
-  const [drives, setDrives] = useState<DirEntry[]>([]);
-  const [isDrivesList, setIsDrivesList] = useState(false);
+  const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
+  const [isRootList, setIsRootList] = useState(false);
+  const [platform, setPlatform] = useState<'windows' | 'linux' | null>(null);
   
   const logsRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -103,15 +104,16 @@ export function LocalTestPanel() {
     setLogs(prev => [...prev, `${timestamp} ${prefix} ${message}`]);
   };
 
-  const loadDrives = async () => {
+  const loadRootEntries = async () => {
     try {
-      const res = await fetch('/api/codeswarm/browse-dirs?listDrives=true');
+      const res = await fetch('/api/codeswarm/browse-dirs?listRoots=true');
       if (res.ok) {
         const data = await res.json();
-        setDrives(data.entries || []);
+        setRootEntries(data.entries || []);
+        setPlatform(data.platform || null);
       }
     } catch (e) {
-      console.error('Load drives error:', e);
+      console.error('Load root entries error:', e);
     }
   };
 
@@ -123,7 +125,10 @@ export function LocalTestPanel() {
         const data = await res.json();
         setDirEntries(data.entries || []);
         setCurrentBrowsePath(data.currentPath || path);
-        setIsDrivesList(data.isDrivesList || false);
+        setIsRootList(data.isRootList || false);
+        if (data.platform && !platform) {
+          setPlatform(data.platform);
+        }
       } else {
         toast.error('无法访问该目录');
       }
@@ -135,12 +140,12 @@ export function LocalTestPanel() {
   };
 
   useEffect(() => {
-    loadDrives();
+    loadRootEntries();
   }, []);
 
   useEffect(() => {
-    if (showDirBrowser) {
-      browseDirectory(currentBrowsePath);
+    if (showDirBrowser && currentBrowsePath === 'root://') {
+      browseDirectory('root://');
     }
   }, [showDirBrowser]);
 
@@ -159,21 +164,37 @@ export function LocalTestPanel() {
   };
 
   const goUpDir = () => {
-    if (isDrivesList) return;
-    if (/^[A-Z]:\\?$/i.test(currentBrowsePath)) {
-      browseDirectory('drives://');
-    } else {
-      const parentPath = currentBrowsePath.split(/[\\/]/).slice(0, -1).join('\\');
-      if (parentPath && parentPath.length >= 2) {
-        browseDirectory(parentPath);
+    if (isRootList) return;
+    
+    if (platform === 'windows') {
+      if (/^[A-Z]:\\?$/i.test(currentBrowsePath)) {
+        browseDirectory('root://');
       } else {
-        browseDirectory('drives://');
+        const parts = currentBrowsePath.split(/[\\/]/).filter(p => p);
+        if (parts.length <= 1) {
+          browseDirectory('root://');
+        } else {
+          const parentPath = parts[0] + '\\' + parts.slice(1, -1).join('\\');
+          browseDirectory(parentPath);
+        }
+      }
+    } else {
+      if (currentBrowsePath === '/') {
+        browseDirectory('root://');
+      } else {
+        const parts = currentBrowsePath.split('/').filter(p => p);
+        if (parts.length === 0) {
+          browseDirectory('root://');
+        } else {
+          const parentPath = '/' + parts.slice(0, -1).join('/');
+          browseDirectory(parentPath || '/');
+        }
       }
     }
   };
 
-  const selectDrive = (drivePath: string) => {
-    browseDirectory(drivePath);
+  const selectRootEntry = (entryPath: string) => {
+    browseDirectory(entryPath);
   };
 
   const loadHistory = async () => {
@@ -287,30 +308,32 @@ export function LocalTestPanel() {
 
             <div className="p-4 border-b border-gray-700 space-y-2">
               <div className="flex gap-2">
-                <div className="relative">
-                  <select
-                    value={isDrivesList ? 'drives://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
-                    onChange={(e) => {
-                      if (e.target.value === 'drives://') {
-                        browseDirectory('drives://');
-                      } else if (e.target.value) {
-                        browseDirectory(e.target.value);
-                      }
-                    }}
-                    className="appearance-none px-3 py-2 pr-8 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100 cursor-pointer"
-                  >
-                    <option value="drives://">我的电脑</option>
-                    {drives.map((drive) => (
-                      <option key={drive.path} value={drive.path}>
-                        {drive.name}
-                      </option>
-                    ))}
-                  </select>
-                  <HardDrive className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
+                {platform === 'windows' && (
+                  <div className="relative">
+                    <select
+                      value={isRootList ? 'root://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
+                      onChange={(e) => {
+                        if (e.target.value === 'root://') {
+                          browseDirectory('root://');
+                        } else if (e.target.value) {
+                          browseDirectory(e.target.value);
+                        }
+                      }}
+                      className="appearance-none px-3 py-2 pr-8 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100 cursor-pointer"
+                    >
+                      <option value="root://">我的电脑</option>
+                      {rootEntries.map((entry) => (
+                        <option key={entry.path} value={entry.path}>
+                          {entry.name}
+                        </option>
+                      ))}
+                    </select>
+                    <HardDrive className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
+                )}
                 <input
                   type="text"
-                  value={isDrivesList ? '我的电脑' : currentBrowsePath}
+                  value={isRootList ? (platform === 'windows' ? '我的电脑' : '根目录') : currentBrowsePath}
                   onChange={(e) => setCurrentBrowsePath(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -318,21 +341,26 @@ export function LocalTestPanel() {
                     }
                   }}
                   className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
-                  placeholder="输入路径..."
-                  disabled={isDrivesList}
+                  placeholder={platform === 'windows' ? '输入路径，如 E:\\work' : '输入路径，如 /home/user'}
+                  disabled={isRootList}
                 />
                 <button
                   onClick={() => browseDirectory(currentBrowsePath)}
-                  disabled={loadingDirs || isDrivesList}
+                  disabled={loadingDirs || isRootList}
                   className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded text-sm text-white"
                 >
                   {loadingDirs ? <Loader2 className="w-4 h-4 animate-spin" /> : '跳转'}
                 </button>
               </div>
+              {platform && (
+                <div className="text-xs text-gray-500">
+                  平台: {platform === 'windows' ? 'Windows' : 'Linux'}
+                </div>
+              )}
             </div>
 
             <div className="flex-1 overflow-y-auto p-2 min-h-[300px]">
-              {!isDrivesList && (
+              {!isRootList && (
                 <button
                   onClick={goUpDir}
                   className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm text-blue-400 flex items-center gap-2"
@@ -345,16 +373,22 @@ export function LocalTestPanel() {
                 <div className="flex items-center justify-center h-32">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
                 </div>
-              ) : isDrivesList ? (
+              ) : isRootList ? (
                 <div className="space-y-1">
-                  <div className="px-3 py-1 text-xs text-gray-500">选择驱动器</div>
+                  <div className="px-3 py-1 text-xs text-gray-500">
+                    {platform === 'windows' ? '选择驱动器' : '选择目录'}
+                  </div>
                   {dirEntries.map((entry) => (
                     <button
                       key={entry.path}
-                      onClick={() => selectDrive(entry.path)}
+                      onClick={() => selectRootEntry(entry.path)}
                       className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm flex items-center gap-2 text-gray-300"
                     >
-                      <HardDrive className="w-4 h-4 text-blue-400" />
+                      {platform === 'windows' ? (
+                        <HardDrive className="w-4 h-4 text-blue-400" />
+                      ) : (
+                        <FolderOpen className="w-4 h-4 text-yellow-500" />
+                      )}
                       <span className="flex-1">{entry.name}</span>
                       <ChevronRight className="w-4 h-4 text-gray-400" />
                     </button>

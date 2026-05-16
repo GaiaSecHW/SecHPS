@@ -16,7 +16,9 @@ interface DriveInfo {
   label?: string;
 }
 
-function getDrives(): DriveInfo[] {
+const isWindows = process.platform === 'win32';
+
+function getWindowsDrives(): DriveInfo[] {
   try {
     const output = execSync('wmic logicaldisk get name,volumename', { encoding: 'utf8' });
     const lines = output.trim().split('\n').slice(1);
@@ -42,35 +44,120 @@ function getDrives(): DriveInfo[] {
   }
 }
 
-function isDriveRoot(p: string): boolean {
+function getLinuxRootDirs(): DriveInfo[] {
+  const commonDirs = ['/home', '/var', '/opt', '/usr', '/tmp', '/etc', '/root', '/data', '/srv'];
+  const existingDirs: DriveInfo[] = [];
+  
+  existingDirs.push({
+    name: '/ (根目录)',
+    path: '/',
+    isDirectory: true,
+  });
+  
+  for (const dir of commonDirs) {
+    if (fs.existsSync(dir)) {
+      existingDirs.push({
+        name: dir,
+        path: dir,
+        isDirectory: true,
+      });
+    }
+  }
+  
+  return existingDirs;
+}
+
+function getRootEntries(): DriveInfo[] {
+  if (isWindows) {
+    return getWindowsDrives();
+  } else {
+    return getLinuxRootDirs();
+  }
+}
+
+function isWindowsDriveRoot(p: string): boolean {
   return /^[A-Z]:\\?$/i.test(p);
+}
+
+function isLinuxRoot(p: string): boolean {
+  return p === '/';
+}
+
+function isRootPath(p: string): boolean {
+  if (isWindows) {
+    return isWindowsDriveRoot(p);
+  } else {
+    return isLinuxRoot(p);
+  }
+}
+
+function normalizePath(inputPath: string): string {
+  if (isWindows) {
+    return inputPath.replace(/\//g, '\\');
+  } else {
+    return inputPath.replace(/\\/g, '/');
+  }
+}
+
+function getParentPath(currentPath: string): string | null {
+  if (isRootPath(currentPath)) {
+    return 'root://';
+  }
+  
+  if (isWindows) {
+    const parts = currentPath.split(/[\\/]/).filter(p => p);
+    if (parts.length === 1 && parts[0].match(/^[A-Z]:$/i)) {
+      return 'root://';
+    }
+    const parent = parts.slice(0, -1).join('\\');
+    return parent ? (parent.match(/^[A-Z]:$/i) ? parent + '\\' : parent) : 'root://';
+  } else {
+    const parts = currentPath.split('/').filter(p => p);
+    if (parts.length === 0) {
+      return null;
+    }
+    const parent = '/' + parts.slice(0, -1).join('/');
+    return parent === '/' ? 'root://' : parent;
+  }
 }
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const inputPath = searchParams.get('path') || '';
-    const listDrives = searchParams.get('listDrives') === 'true';
+    const listRoots = searchParams.get('listRoots') === 'true';
+    const platform = searchParams.get('platform');
     
-    if (listDrives || !inputPath || inputPath === 'drives://') {
-      const drives = getDrives();
+    if (listRoots || !inputPath || inputPath === 'root://' || inputPath === 'drives://') {
+      const rootEntries = getRootEntries();
       return NextResponse.json({
-        entries: drives,
-        currentPath: 'drives://',
+        entries: rootEntries,
+        currentPath: 'root://',
         parentPath: null,
-        isDrivesList: true,
+        isRootList: true,
+        platform: isWindows ? 'windows' : 'linux',
       });
     }
     
-    const normalizedPath = inputPath.replace(/\//g, '\\');
+    const normalizedPath = normalizePath(inputPath);
     
     if (!fs.existsSync(normalizedPath)) {
-      return NextResponse.json({ error: '路径不存在', entries: [], currentPath: normalizedPath }, { status: 400 });
+      return NextResponse.json({ 
+        error: '路径不存在', 
+        entries: [], 
+        currentPath: normalizedPath,
+        platform: isWindows ? 'windows' : 'linux',
+      }, { status: 400 });
     }
 
     const stats = fs.statSync(normalizedPath);
     if (!stats.isDirectory()) {
-      return NextResponse.json({ error: '不是目录', entries: [], currentPath: normalizedPath }, { status: 400 });
+      return NextResponse.json({ 
+        error: '不是目录', 
+        entries: [], 
+        currentPath: normalizedPath,
+        platform: isWindows ? 'windows' : 'linux',
+      }, { status: 400 });
     }
 
     const entries: DirEntry[] = [];
@@ -95,24 +182,27 @@ export async function GET(request: Request) {
       return a.name.localeCompare(b.name);
     });
 
-    const filteredEntries = entries.filter(e => 
-      !e.name.startsWith('.') && 
-      !e.name.startsWith('$') &&
-      e.name !== 'System Volume Information'
-    );
+    const filteredEntries = entries.filter(e => {
+      if (e.name.startsWith('.')) return false;
+      if (isWindows && e.name.startsWith('$')) return false;
+      if (isWindows && e.name === 'System Volume Information') return false;
+      return true;
+    });
 
-    const isRoot = isDriveRoot(normalizedPath);
+    const isRoot = isRootPath(normalizedPath);
+    const parentPath = getParentPath(normalizedPath);
 
     return NextResponse.json({
       entries: filteredEntries,
       currentPath: normalizedPath,
-      parentPath: isRoot ? 'drives://' : (normalizedPath.split(/[\\/]/).slice(0, -1).join('\\') || normalizedPath),
-      isDriveRoot: isRoot,
+      parentPath,
+      isRootPath: isRoot,
+      platform: isWindows ? 'windows' : 'linux',
     });
   } catch (error) {
     console.error('[BrowseDirs] Error:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error', entries: [] },
+      { error: error instanceof Error ? error.message : 'Unknown error', entries: [], platform: isWindows ? 'windows' : 'linux' },
       { status: 500 }
     );
   }

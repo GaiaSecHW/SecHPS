@@ -10,7 +10,6 @@ interface LocalTestRequest {
 }
 
 interface ParsedVulnerabilityReport {
-  projectId: string;
   evaluationId?: string;
   skillExecutionId?: string;
   vulnerabilities: Array<{
@@ -36,7 +35,12 @@ interface VulnerabilityApiResult {
 }
 
 const DEFAULT_INSTRUCTION = '执行 audit-report-parser skill，解析审计报告';
-const VULNERABILITY_STORAGE_PATH = process.env.VULNERABILITY_STORAGE_PATH || 'Z:\\Vulnerability';
+
+const isWindows = process.platform === 'win32';
+
+const VULNERABILITY_STORAGE_PATH = process.env.VULNERABILITY_STORAGE_PATH || (
+  isWindows ? 'Z:\\Vulnerability' : '/home/icsl/hgh/Vulnerability'
+);
 
 function uploadAuditReport(taskId: string, workspacePath: string): string | null {
   try {
@@ -81,8 +85,8 @@ function parseVulnerabilityReport(stdout: string): ParsedVulnerabilityReport | n
     
     const parsed = JSON.parse(jsonStr);
     
-    if (!parsed.projectId || !Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
-      console.log('[LocalTest] Parsed JSON missing required fields');
+    if (!Array.isArray(parsed.vulnerabilities) || parsed.vulnerabilities.length === 0) {
+      console.log('[LocalTest] Parsed JSON missing vulnerabilities array');
       return null;
     }
     
@@ -93,7 +97,11 @@ function parseVulnerabilityReport(stdout: string): ParsedVulnerabilityReport | n
       }
     }
     
-    return parsed as ParsedVulnerabilityReport;
+    return {
+      evaluationId: parsed.evaluationId || undefined,
+      skillExecutionId: parsed.skillExecutionId || undefined,
+      vulnerabilities: parsed.vulnerabilities,
+    };
   } catch (error) {
     console.error('[LocalTest] JSON parse error:', error);
     return null;
@@ -316,7 +324,7 @@ function executeTaskAsync(
           const report = parseVulnerabilityReport(stdout);
           
           if (report) {
-            console.log(`[LocalTest:${taskId}] Parsed report: projectId=${report.projectId}, vulnCount=${report.vulnerabilities.length}`);
+            console.log(`[LocalTest:${taskId}] Parsed report: vulnCount=${report.vulnerabilities.length}`);
             
             vulnSubmitResult = await submitVulnerabilities(report, uploadedFilePath);
             
