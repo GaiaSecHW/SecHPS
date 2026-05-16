@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
     const engine = formData.get('engine') as string;
     const defaultAgentName = formData.get('defaultAgentName') as string;
     const startCommand = formData.get('startCommand') as string | null;
+    const inputRequirements = formData.get('inputRequirements') as string | null;
     const isPublic = formData.get('isPublic') === 'true';
     const frontendTenantId = formData.get('tenantId') as string | null;
     const fileType = formData.get('agentHarnessFileType') as string | null;
@@ -146,6 +147,7 @@ export async function POST(request: NextRequest) {
         agentHarnessPath,
         defaultAgentName,
         startCommand: startCommand || null,
+        inputRequirements: inputRequirements || null,
         status: 'active',
         tenantId,
         isPublic,

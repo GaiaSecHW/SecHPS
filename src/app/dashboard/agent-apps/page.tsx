@@ -154,12 +154,15 @@ export default function AgentAppsPage() {
       if (formData.startCommand) {
         fd.append('startCommand', formData.startCommand);
       }
+      if (formData.inputRequirements) {
+        fd.append('inputRequirements', formData.inputRequirements);
+      }
       fd.append('isPublic', isPublic ? 'true' : 'false');
       // __public__ 是前端占位值，后端收到 isPublic=true 时不需要 tenantId
       const tenantId = formData.tenantId === '__public__' ? '' : (formData.tenantId || '');
       fd.append('tenantId', tenantId);
       fd.append('agentHarnessFileType', agentHarnessFile.type);
-      
+
       if (agentHarnessFile.type === 'archive') {
         fd.append('agentHarnessFile', agentHarnessFile.file!);
       } else if (agentHarnessFile.type === 'folder') {
@@ -171,7 +174,7 @@ export default function AgentAppsPage() {
         agentHarnessFile.files!.forEach((f, i) => {
           fd.append(`file_${i}`, f);
         });
-        
+
         const folderFile = new File([], agentHarnessFile.name, { type: 'application/x-directory' });
         fd.append('agentHarnessFile', folderFile);
       }
@@ -205,6 +208,9 @@ export default function AgentAppsPage() {
         fd.append('defaultAgentName', formData.defaultAgentName);
         if (formData.startCommand) {
           fd.append('startCommand', formData.startCommand);
+        }
+        if (formData.inputRequirements) {
+          fd.append('inputRequirements', formData.inputRequirements);
         }
         fd.append('isPublic', isPublic ? 'true' : 'false');
         fd.append('agentHarnessFileType', agentHarnessFile.type);
@@ -257,6 +263,7 @@ export default function AgentAppsPage() {
             engine: formData.engine,
             defaultAgentName: formData.defaultAgentName,
             startCommand: formData.startCommand || null,
+            inputRequirements: formData.inputRequirements || null,
             isPublic: isPublic,
           }),
         });

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Upload, File, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import ProductTreeSelect from '@/components/ui/ProductTreeSelect';
 
 interface AgentApp {
   id: string;
@@ -38,6 +39,7 @@ interface Props {
     modelId: string;
     modelName: string;
     description: string;
+    targetProduct: string;
   }, file: File | null) => Promise<void>;
 }
 
@@ -51,6 +53,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [loadingAgents, setLoadingAgents] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [targetProduct, setTargetProduct] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -63,6 +66,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       setSelectedAgentIds(new Set());
       setSelectedModelKey('');
       setSelectedFile(null);
+      setTargetProduct('');
     }
   }, [isOpen]);
 
@@ -197,7 +201,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     setIsSubmitting(true);
     try {
       await onSubmit(
-        { name: name.trim(), agents, modelId: option.modelId, modelName: option.modelName, description: description.trim() },
+        { name: name.trim(), agents, modelId: option.modelId, modelName: option.modelName, description: description.trim(), targetProduct },
         selectedFile
       );
       onClose();
@@ -229,6 +233,17 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
         </div>
 
         <div className="p-6 space-y-4">
+          {/* 产品名称 */}
+          <div>
+            <div className="flex items-center gap-2">
+              <label className="block text-sm font-medium text-gray-300">产品名称</label>
+              <span className="text-xs text-red-400">选择产品可以匹配知识图谱，任务扫描更加精准</span>
+            </div>
+            <div className="mt-1">
+              <ProductTreeSelect value={targetProduct} onChange={setTargetProduct} />
+            </div>
+          </div>
+
           {/* 任务名称 */}
           <div>
             <label htmlFor="taskName" className="block text-sm font-medium text-gray-300">任务名称 *</label>

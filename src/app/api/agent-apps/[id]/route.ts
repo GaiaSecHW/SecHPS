@@ -29,6 +29,7 @@ export async function PUT(
     let engine: string;
     let defaultAgentName: string;
     let startCommand: string | null;
+    let inputRequirements: string | null;
     let isPublic: boolean = false;
     let updateFiles = false;
     let fileType: string | null = null;
@@ -44,6 +45,7 @@ export async function PUT(
       engine = body.engine;
       defaultAgentName = body.defaultAgentName;
       startCommand = body.startCommand || null;
+      inputRequirements = body.inputRequirements || null;
       isPublic = body.isPublic || false;
     } else if (contentType.includes('multipart/form-data')) {
       formData = await request.formData();
@@ -51,6 +53,7 @@ export async function PUT(
       engine = formData.get('engine') as string;
       defaultAgentName = formData.get('defaultAgentName') as string;
       startCommand = formData.get('startCommand') as string | null;
+      inputRequirements = formData.get('inputRequirements') as string | null;
       isPublic = formData.get('isPublic') === 'true';
       fileType = formData.get('agentHarnessFileType') as string | null;
       agentHarnessFile = formData.get('agentHarnessFile') as File | null;
@@ -131,6 +134,7 @@ export async function PUT(
         engine,
         defaultAgentName,
         startCommand: startCommand || null,
+        inputRequirements: inputRequirements || null,
         isPublic,
         agentHarnessPath,
         updatedAt: new Date(),

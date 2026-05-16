@@ -18,6 +18,7 @@ model AgentApp {
   defaultAgentName  String   @default("default-agent")
   startCommand      String?
   notes             String?
+  inputRequirements String?
   status            String   @default("active")
   isPublic          Boolean  @default(false)
   createdAt         DateTime @default(now())
@@ -331,6 +332,7 @@ model CodeswarmTask {
   defaultAgentName  String?
   preferredWorkerNodeId String?
   startCommand      String?
+  targetProduct     String?
   sessionId         String?
   events            String?
   result            String?
@@ -737,6 +739,7 @@ model OpencodeConfig {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime
   defaultToolPermissions   String?
+  fileValidationModel      String?
   Project                  Project[]
   User                     User[]
 
@@ -1647,6 +1650,7 @@ model TaskInstance {
   skills           String?
   scripts          String?
   notes            String?
+  targetProduct    String?
   status           String             @default("pending")
   isPublic         Boolean            @default(false)
   startedAt        DateTime?

@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const { payload } = auth;
 
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, keybinds, modelPreferences, progressQuestion, customSystemPrompt, maxConcurrentEvaluations, defaultToolPermissions } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, keybinds, modelPreferences, progressQuestion, customSystemPrompt, maxConcurrentEvaluations, defaultToolPermissions, fileValidationModel } = body;
 
     if (!name) {
       return NextResponse.json({ details: { error: '配置名称是必需的' } }, { status: 400 });
@@ -112,6 +112,7 @@ export async function POST(request: Request) {
         progressQuestion: progressQuestion || null,
         maxConcurrentEvaluations: concurrentLimit,
         defaultToolPermissions: defaultToolPermissions || null,
+        fileValidationModel: fileValidationModel || null,
         updatedAt: new Date(),
       },
     });

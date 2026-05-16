@@ -29,7 +29,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate, maxConcurrentEvaluations, defaultToolPermissions } = body;
+    const { name, baseURL, projectUploadDir, taskDescription, description, isActive, keybinds, modelPreferences, workflowConfig, progressQuestion, customSystemPrompt, skillOutputTemplate, claudemdTemplate, maxConcurrentEvaluations, defaultToolPermissions, fileValidationModel } = body;
 
     // Validate URL format if provided
     if (baseURL) {
@@ -94,6 +94,7 @@ export async function PATCH(
         ...(claudemdTemplate !== undefined && { claudemdTemplate }),
         ...(maxConcurrentEvaluations !== undefined && { maxConcurrentEvaluations: parseInt(maxConcurrentEvaluations) }),
         ...(defaultToolPermissions !== undefined && { defaultToolPermissions }),
+        ...(fileValidationModel !== undefined && { fileValidationModel: fileValidationModel || null }),
       },
     });
 

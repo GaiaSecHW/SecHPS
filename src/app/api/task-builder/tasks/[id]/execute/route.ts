@@ -120,6 +120,7 @@ export async function POST(
         workspacePath,
         skills,
         scripts,
+        targetProduct: task.targetProduct || undefined,
         model,
         apiKey,
         timeoutSec,

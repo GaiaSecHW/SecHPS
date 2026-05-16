@@ -81,6 +81,7 @@ export async function POST(request: Request) {
       action,
       preferredWorkerNodeId,
       startCommand,
+      targetProduct,
     } = body;
 
     // 手动批量分发（保留兼容）
@@ -173,6 +174,7 @@ export async function POST(request: Request) {
         agent: agent || null,
         preferredWorkerNodeId: preferredWorkerNodeId || null,
         startCommand: startCommand || null,
+        targetProduct: targetProduct || null,
         updatedAt: new Date(),
       },
     }) as any;

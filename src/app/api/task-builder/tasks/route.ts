@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     const notes = formData.get('notes') as string | null;
     const skills = formData.get('skills') as string | null;
     const scripts = formData.get('scripts') as string | null;
+    const targetProduct = formData.get('targetProduct') as string | null;
     const file = formData.get('file') as File | null;
 
     if (!name || !agentId) {
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
       parameters: parameters || '{}',
       skills,
       scripts,
+      targetProduct,
       files: files.length > 0 ? files : null,
     });
 

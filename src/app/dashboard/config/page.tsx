@@ -60,6 +60,10 @@ export default function ConfigPage() {
   // 并发限制设置
   const [maxConcurrentEvaluations, setMaxConcurrentEvaluations] = useState(3);
 
+  // 文件校验模型
+  const [fileValidationModel, setFileValidationModel] = useState('');
+  const [modelOptions, setModelOptions] = useState<{ key: string; label: string }[]>([]);
+
   // 系统信息
   const [systemInfo, setSystemInfo] = useState<{
     version: string;
@@ -149,6 +153,7 @@ export default function ConfigPage() {
         setSkillOutputTemplate(activeConfig.skillOutputTemplate || '');
         setClaudemdTemplate(activeConfig.claudemdTemplate || '');
         setMaxConcurrentEvaluations(activeConfig.maxConcurrentEvaluations || 3);
+        setFileValidationModel(activeConfig.fileValidationModel || '');
         
         // 解析工作流配置
         if (activeConfig.workflowConfig) {
@@ -174,6 +179,31 @@ export default function ConfigPage() {
   const hasPermission = (permission: string) => {
     return user?.permissions?.includes(permission) || user?.roles?.includes('admin');
   };
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const resp = await fetch('/api/models?isActive=true&forEvaluation=true', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          const options: { key: string; label: string }[] = [];
+          for (const cfg of data.models || []) {
+            for (const modelName of cfg.models || []) {
+              options.push({
+                key: `${cfg.id}::${modelName}`,
+                label: `${cfg.name} - ${modelName}`,
+              });
+            }
+          }
+          setModelOptions(options);
+        }
+      } catch { /* ignore */ }
+    };
+    fetchModels();
+  }, []);
 
   // 导入/导出状态
   const [importing, setImporting] = useState(false);
@@ -273,6 +303,7 @@ export default function ConfigPage() {
           skillOutputTemplate,
           claudemdTemplate,
           maxConcurrentEvaluations,
+          fileValidationModel,
         }),
       });
 
@@ -548,6 +579,26 @@ export default function ConfigPage() {
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 超出限制的评估请求将加入排队队列，等待当前评估完成后自动启动
+              </p>
+            </div>
+
+            {/* 文件校验模型 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                文件校验模型
+              </label>
+              <select
+                value={fileValidationModel}
+                onChange={(e) => setFileValidationModel(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">不校验</option>
+                {modelOptions.map(opt => (
+                  <option key={opt.key} value={opt.key}>{opt.label}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-1">
+                用于创建任务时判断上传文件的目录结构是否符合 Agent 要求。选择"不校验"则跳过文件结构判断
               </p>
             </div>
           </div>

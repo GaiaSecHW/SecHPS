@@ -36,6 +36,7 @@ interface TaskFormData {
   modelId: string;
   modelName: string;
   description: string;
+  targetProduct: string;
 }
 
 const statusConfig: Record<string, { border: string; text: string; label: string }> = {
@@ -113,6 +114,7 @@ export default function TaskBuilderPage() {
         form.append('notes', formData.description || '');
         form.append('skills', '');
         form.append('scripts', '');
+        form.append('targetProduct', formData.targetProduct || '');
         if (file) {
           form.append('file', file);
         }

@@ -14,6 +14,7 @@ interface FormData {
   engine: 'opencode' | 'claudecode' | 'agentflow' | '';
   defaultAgentName: string;
   startCommand?: string;
+  inputRequirements?: string;
   tenantId: string;
 }
 
@@ -109,7 +110,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   };
 
   const handleClose = () => {
-    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', tenantId: '' });
+    setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', inputRequirements: '', tenantId: '' });
     setAgentHarnessFile(null);
     onClose();
   };
@@ -297,6 +298,21 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              文件结构要求
+            </label>
+            <textarea
+              value={formData.inputRequirements}
+              onChange={(e) => setFormData({ ...formData, inputRequirements: e.target.value })}
+              placeholder="描述上传文件的内容结构要求，如：必须包含 pom.xml 和 src 目录，属于 Java/Maven 项目结构"
+              rows={3}
+              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              disabled={isSubmitting}
+            />
+            <p className="mt-1 text-xs text-gray-500">留空则不校验上传文件的目录结构</p>
           </div>
         </div>
 
