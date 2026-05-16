@@ -1,22 +1,28 @@
-# AI4WEB 测试平台 - 开发指南
+# AGENTS.md
 
-Next.js 16 + React 19 + TypeScript App Router 平台，支持 RBAC 权限、AI 评估、Skill 进化等功能。
+AI4WEB 测试平台 - 开发参考指南。Next.js 16 + React 19 + TypeScript + Prisma 6 + PostgreSQL。
 
 ## 开发命令
 
 ```bash
 npm run dev              # 开发服务器 (localhost:3000)
-npm run build            # 构建 (自动执行 lint + typecheck)
+npm run build            # 生产构建（含 postbuild 复制资源）
+npm start                # 生产运行
 npm run lint             # 代码检查
+npm run test             # vitest
 
 # 数据库
 npm run db:generate      # 生成 Prisma 客户端 (postinstall 自动执行)
 npm run db:push          # 推送 schema 变更
 npm run db:seed          # 初始化数据库 + 默认管理员
+npm run db:seed-techstack # 技术栈种子数据
+npm run db:seed-agents   # Agent 定义种子数据
+npm run db:seed-fsm      # FSM 模板种子数据
 ```
+
 **语言规则**: 用中文回答
 
-## 认证模块导入规则 (关键)
+## 认证模块导入规则（关键）
 
 **服务端 API 路由** 使用 `@/lib/api-auth`:
 ```typescript
@@ -25,152 +31,88 @@ const auth = authenticateRequest(request, { requiredPermission: PERMISSIONS.SESS
 if (!auth.success) return authErrorResponse(auth);
 ```
 
-**客户端组件** 使用 `@/lib/permissions` (避免服务端环境变量检查):
+**客户端组件** 使用 `@/lib/permissions`:
 ```typescript
 import { hasPermission } from '@/lib/permissions';
 ```
 
-**权限常量** 在 `@/types/permissions.ts`，格式 `module:action` (如 `skill-evolution:manage`).
+**权限常量** 在 `@/types/permissions.ts`，格式 `module:action`。
 
 ## Prisma 规范
 
-- **版本**: 必须使用 v5.22.0 (v7 配置方式不同，会出问题)
+- **版本**: v6.19.3
 - **导入**: 从 `@/lib/prisma` 导入单例
-- **数据库**: SQLite `prisma/dev.db`
-- **schema**: `prisma/schema.prisma` 1700+ 行
+- **数据库**: PostgreSQL
+- **schema**: `prisma/schema.prisma`
 
 ```typescript
 import { prisma } from '@/lib/prisma';
 ```
 
+## 核心模块
+
+### API 路由 (`src/app/api/`)
+
+40+ 端点，主要模块：auth、users、roles、permissions、sessions、projects、workflows、agent-apps、agent-definitions、agentflow-pipelines、skills、models、mcp-servers、evaluations、codeswarm、vulnerabilities、config、plugins、tenants
+
+### Dashboard 页面 (`src/app/dashboard/`)
+
+admin、agent-apps、agentflow-pipelines、claude、codeswarm、config、evaluations、mcp-servers、models、plugins、profile、projects、roles、sessions、skills、task-builder、tech-stack、token-stats、users、workflows
+
+### 关键库 (`src/lib/`)
+
+- `auth.ts` — JWT 验证、密码哈希、权限检查
+- `api-auth.ts` — 增强认证中间件（含租户上下文）
+- `prisma.ts` — Prisma 单例
+- `tenant.ts` / `tenant-filter.ts` — 多租户上下文与隔离过滤
+- `claude-router/` — AI 模型路由（排除 TS 编译）
+- `workflow/` — 工作流引擎
+- `fsm/` — 有限状态机
+- `gitea.ts` — Gitea 文件同步
+
 ## 漏洞状态值格式
 
-数据库存储使用 **连字符** 格式:
-- `false-positive` (不是 `false_positive`)
-- `confirmed`
-- `ignored`
+数据库使用 **连字符**: `false-positive`、`confirmed`、`ignored`。前端需兼容下划线历史数据。
 
-前端需兼容两种格式（历史数据可能用下划线）。
+## Skill 系统
 
-## Skill 进化系统
+- Git 同步: Gitea 仓库存储 Skill 文件
+- Skill 构建/导出/模板: `src/lib/skill-*.ts`
+- 分类与去重: `src/lib/categories.ts`
 
-位于 `src/services/skill-evolution/`:
+## CodeSwarm 分布式调度
 
-- **达标标准**: 漏检数 = 0，排除率 ≥ 50%
-- **重试机制**: 最多 10 次，每次记录到 `EvolutionAttempt` 表
-- **失败处理**: 10 次都失败 → 状态设为 `rejected`
-- **反馈驱动**: 失败信息传递给下次尝试的 AI prompt
-
-核心服务:
-- `task-manager.ts`: 任务调度、重试循环
-- `backtest-validator.ts`: 回测验证、JSON 解析(自动修复非标准格式)
-- `improvement-generator.ts`: 生成改进建议
-- `evolution-attempt-manager.ts`: 尝试记录管理
-
-## 项目结构要点
-
-```
-src/
-├── app/api/          # 30+ API 端点 (REST)
-├── services/         # 业务逻辑层
-│   └── skill-evolution/  # Skill 进化核心
-├── lib/
-│   ├── auth.ts       # JWT 验证、权限检查
-│   ├── api-auth.ts   # API 认证中间件
-│   ├── prisma.ts     # Prisma 单例
-│   └── permissions.ts  # 客户端权限检查
-├── types/permissions.ts  # 权限常量定义
-data/skills/          # Skill Markdown 文件 (运行时加载)
-uploads/              # 用户上传文件
-plugins/              # 插件存储
-```
+- Redis 队列驱动的任务调度系统
+- Worker 回调: `NEXT_PUBLIC_BASE_URL`
+- 本地测试: `src/app/api/codeswarm/local-test/`
 
 ## 构建注意事项
 
 - `npm run build` = `next build && node scripts/postbuild.js`
-- postbuild 复制: `.next/`, `prisma/`, `plugins/` → `.next/standalone/`
-- 不复制: `data/`, `uploads/` (运行时动态)
+- postbuild 复制: `.next/`、`prisma/`、`plugins/` → `.next/standalone/`
+- 不复制: `data/`、`uploads/`（运行时动态）
 
 ## 默认账户
 
-- admin@ai4web.com / admin123 (seed 创建)
-- 角色: admin, manager, developer, user, viewer
+- 用户名: `admin` / `admin123`（邮箱 admin@ai4web.com）
+- 角色: admin、manager、developer、user、viewer
 
-## TypeScript 配置
+## 环境变量
 
-- `strict: true`
-- Path alias: `@/*` → `./src/*`
-- 排除: `src/lib/claude-router`, `src/examples`, `tmp`, `scripts`, `uploads`, `data`, `prisma`
+`.env` 必需: `DATABASE_URL`、`JWT_SECRET`、`NODE_ENV`。完整列表见 `.env.example`。
 
-## 客户端组件
+关键可选配置: `REDIS_URL`（CodeSwarm）、`NEXT_PUBLIC_BASE_URL`（Worker 回调）、`GITEA_*`（文件同步）、`SFTP_*`/`NFS_*`（文件存储）。
 
-使用 hooks 或浏览器 API 的组件必须添加 `'use client'`:
-```typescript
-'use client';
-import { useState } from 'react';
-```
+## Linux 部署
+
+`@anthropic-ai/claude-agent-sdk` 依赖平台原生二进制文件，不能用 `--omit=optional` 或 `--production` 安装。
 
 ## 常见错误修复
 
 | 问题 | 解决方案 |
 |------|----------|
-| Prisma 配置报错 | 确保使用 v5，检查 schema.prisma url 配置 |
 | PERMISSIONS.xxx 不存在 | 在 `src/types/permissions.ts` 添加常量 |
 | LOG_MODULES.xxx 不存在 | 在 `src/lib/logger.ts` LOG_MODULES 添加 |
-| 漏洞状态类型不匹配 | 使用 `false-positive` (连字符) |
-| JSON.parse 失败 | backtest-validator 已有自动修复逻辑 |
+| 漏洞状态类型不匹配 | 使用 `false-positive`（连字符） |
 | SkillImprovement taskId 冲突 | 使用 `upsert` 代替 `create` |
-
-## 环境变量
-
-```env
-DATABASE_URL="file:./dev.db"
-JWT_SECRET="your-secret-key"
-NODE_ENV="development"
-```
-
-## 测试
-
-```bash
-npm run test    # vitest
-```
-
-配置: `vitest.config.ts`, 环境: node
-
-## Linux 部署注意事项
-
-**重要**: `@anthropic-ai/claude-agent-sdk` 依赖平台原生二进制文件（可选依赖）。
-
-部署时 **不能使用** `--omit=optional` 或 `--production` 标志，否则会报错：
-```
-Native CLI binary for linux-x64 not found
-```
-
-正确安装方式：
-```bash
-# 生产环境部署
-npm install                    # ✅ 正确
-npm install --omit=optional    # ❌ 错误（会跳过 SDK 二进制）
-npm ci --production            # ❌ 错误（同上）
-```
-
-如果已安装缺依赖，手动补装：
-```bash
-npm install @anthropic-ai/claude-agent-sdk-linux-x64@0.2.123
-# ARM 服务器用 linux-arm64
-npm install @anthropic-ai/claude-agent-sdk-linux-arm64@0.2.123
-```
-
-## 本地测试功能 (LocalTest)
-
-位于 `src/app/api/codeswarm/local-test/`，用于在指定工作区执行 opencode skill 并解析结果。
-
-**跨平台执行方式**：
-- Windows: 直接调用 `opencode run --agent build "..."` (shell: true)
-- Linux: 使用 `bash -c` 执行，解决 spawn 输出为空问题
-
-**环境变量**：
-- `TERM=dumb`: 禁用 TUI 界面
-- `NO_COLOR=1`: 禁用颜色输出
-
-**调试模式**: 失败时输出保存到 `/tmp/opencode/debug-{taskId}.log`
+| Agent SDK 二进制缺失 | 不用 `--production` 安装，手动补装对应平台包 |
