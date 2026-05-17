@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
     const batchData: Array<{
       id: string;
       taskId: string;
+      projectId: string | null;
       evaluationId: string | null;
       skillExecutionId: string | null;
       title: string;
@@ -103,6 +104,7 @@ export async function POST(request: NextRequest) {
       batchData.push({
         id,
         taskId: taskId as string,
+        projectId: (body as Record<string, unknown>).projectId as string || null,
         evaluationId: (evaluationId as string) || null,
         skillExecutionId: (skillExecutionId as string) || null,
         title,

@@ -109,54 +109,72 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
   }
 }
 
-async function submitVulnerabilitiesToApi(
+async function submitVulnerabilitiesDirect(
   report: ParsedVulnerabilityReport,
   filePath: string,
-  taskId: string
+  taskInstanceId: string,
+  codeswarmTaskId: string
 ): Promise<VulnerabilitySubmitResult> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
-    
-    const response = await fetch(`${baseUrl}/api/v1/vulnerabilities`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        taskId,
-        projectId: '',
-        filePath,
-        vulnerabilities: report.vulnerabilities.map(v => ({
-          title: v.title,
-          type: v.type,
-          description: v.description || '',
-          severity: v.severity || 'medium',
-          cwe: v.cwe || null,
-          skill: v.skill || null,
-          location: v.location || null,
-          POC: v.POC || null,
-          vulnerable: v.vulnerable ?? true,
-          fixSuggestion: v.fixSuggestion || null,
-          rawReport: v.rawReport || null,
-        })),
-      }),
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      return { success: false, error: errorData.error || `HTTP ${response.status}` };
+    let createdCount = 0;
+    let skippedCount = 0;
+    const seen = new Set<string>();
+
+    for (const v of report.vulnerabilities) {
+      const key = `${v.title}||${v.type}`;
+      if (seen.has(key)) { skippedCount++; continue; }
+      seen.add(key);
+
+      const id = `vuln_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+      const severity = normalizeSeverity(v.severity);
+
+      try {
+        await prisma.$executeRaw`
+          INSERT INTO "Vulnerability" (
+            id, "taskId", "projectId", title, description, type, cwe, severity,
+            skill, location, "POC", vulnerable, "fixSuggestion", "rawReport",
+            "filePath", status, "updatedAt"
+          ) VALUES (
+            ${id}, ${taskInstanceId}, NULL,
+            ${v.title}, ${v.description || ''}, ${v.type},
+            ${v.cwe || null}, ${severity},
+            ${v.skill || null}, ${v.location || null},
+            ${v.POC || null}, ${v.vulnerable ?? true},
+            ${v.fixSuggestion || null}, ${v.rawReport || null},
+            ${filePath}, 'new', NOW()
+          )
+          ON CONFLICT DO NOTHING
+        `;
+        createdCount++;
+      } catch {
+        skippedCount++;
+      }
     }
-    
-    const result = await response.json();
-    return {
-      success: true,
-      createdCount: result.summary?.created || 0,
-      skippedCount: result.summary?.skipped || 0,
-    };
+
+    return { success: true, createdCount, skippedCount };
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
   }
 }
 
-function executeVulnerabilityParseAsync(taskId: string, projectPath: string): void {
+const SEVERITY_MAP: Record<string, string> = {
+  critical: 'critical', 严重: 'critical', critical_lower: 'critical',
+  high: 'high', 高危: 'high',
+  medium: 'medium', 中危: 'medium', moderate: 'medium',
+  low: 'low', 低危: 'low',
+  info: 'info', 信息: 'info', informational: 'info',
+};
+
+function normalizeSeverity(s?: string): string {
+  if (!s) return 'medium';
+  const lower = s.toLowerCase().trim();
+  for (const [key, val] of Object.entries(SEVERITY_MAP)) {
+    if (lower === key || lower === val) return val;
+  }
+  return 'medium';
+}
+
+function executeVulnerabilityParseAsync(taskId: string, projectPath: string, taskInstanceId?: string): void {
   (async () => {
     let stdout = '';
     let stderr = '';
@@ -164,11 +182,27 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string): vo
     const startTime = Date.now();
     
     try {
-      console.log(`[VulnParse:${taskId}] 开始执行 audit-report-parser skill`);
-      
-      const instruction = '执行 audit-report-parser skill，解析审计报告';
-      const args: string[] = ['run', '--agent', 'build', '--model', 'alibaba-cn/glm-5'];
-      args.push(instruction);
+      console.log(`[VulnParse:${taskId}] 开始执行 audit-report-parser`);
+
+      // 读取 SKILL.md 内容注入到 instruction（opencode run 只支持内置 agent，不支持自定义 agent）
+      let skillContent = '';
+      try {
+        const skillPath = path.join(projectPath, '.opencode', 'skills', 'audit-report-parser', 'SKILL.md');
+        if (fs.existsSync(skillPath)) {
+          const raw = fs.readFileSync(skillPath, 'utf-8');
+          // 去掉 frontmatter
+          const bodyMatch = raw.replace(/^---[\s\S]*?---\s*/, '');
+          skillContent = bodyMatch.trim();
+          console.log(`[VulnParse:${taskId}] 加载 SKILL.md 成功, ${skillContent.length} 字符`);
+        }
+      } catch {}
+
+      const instruction = skillContent
+        ? `${skillContent}\n\n现在请执行上述技能，解析当前工作区的 AUDIT_REPORT.md 文件，输出结构化 JSON。`
+        : '读取 AUDIT_REPORT.md，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。仅输出可解析的 JSON，不要额外说明。';
+
+      // opencode run CLI 只支持内置 agent（build/explore/general/plan），用 build 即可
+      const args: string[] = ['run', '--agent', 'build', '--model', 'alibaba-cn/glm-5', instruction];
       
       const env: Record<string, string> = {
         TERM: 'dumb',
@@ -179,35 +213,23 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string): vo
         if (value !== undefined) env[key] = value;
       }
       
+      // Cross-platform opencode resolution (same approach as ACPClient)
       let cmd: string;
-      let finalArgs: string[];
-      let useShell = false;
-      
       if (isWindows) {
-        const opencodePath = process.env.APPDATA
-          ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode')
-          : null;
-        
-        if (opencodePath && fs.existsSync(opencodePath)) {
-          cmd = process.execPath;
-          finalArgs = [opencodePath, ...args];
-        } else {
-          cmd = 'opencode';
-          finalArgs = args;
-        }
-        useShell = true;
+        const appData = process.env.APPDATA || '';
+        const exePath = path.join(appData, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
+        cmd = fs.existsSync(exePath) ? exePath : 'opencode';
       } else {
-        cmd = 'bash';
-        finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
+        cmd = 'opencode';
       }
-      
-      console.log(`[VulnParse:${taskId}] 执行: ${cmd} ${finalArgs.join(' ')}`);
-      
-      childProcess = spawn(cmd, finalArgs, {
+
+      console.log(`[VulnParse:${taskId}] 执行: ${cmd} ${args.join(' ')}`);
+
+      childProcess = spawn(cmd, args, {
         cwd: projectPath,
         env: env as NodeJS.ProcessEnv,
         stdio: ['ignore', 'pipe', 'pipe'],
-        shell: useShell,
+        windowsHide: true,
       });
       
       childProcess.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
@@ -236,9 +258,9 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string): vo
         return;
       }
       
-      const filePath = uploadAuditReportToStorage(taskId, projectPath);
-      if (!filePath) return;
-      
+      const filePath = uploadAuditReportToStorage(taskId, projectPath) || path.join(projectPath, 'AUDIT_REPORT.md');
+
+
       const report = parseVulnerabilityJson(stdout) || parseVulnerabilityJson(stderr);
       if (!report) {
         console.log(`[VulnParse:${taskId}] 无法解析漏洞 JSON`);
@@ -247,15 +269,16 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string): vo
       
       console.log(`[VulnParse:${taskId}] 解析到 ${report.vulnerabilities.length} 条漏洞`);
       
-      const result = await submitVulnerabilitiesToApi(report, filePath, taskId);
+      const effectiveTaskId = taskInstanceId || taskId;
+      const result = await submitVulnerabilitiesDirect(report, filePath, effectiveTaskId, taskId);
       
       if (result.success) {
-        await prisma.codeswarmTask.update({
-          where: { taskId },
-          data: {
-            reportContent: `漏洞提交成功: 创建 ${result.createdCount} 条, 跳过 ${result.skippedCount} 条`,
-          },
-        });
+        await prisma.$executeRaw`
+          UPDATE "CodeswarmTask"
+          SET "reportContent" = ${`漏洞提交成功: 创建 ${result.createdCount} 条, 跳过 ${result.skippedCount} 条`},
+              "updatedAt" = NOW()
+          WHERE "taskId" = ${taskId}
+        `;
         console.log(`[VulnParse:${taskId}] 漏洞提交成功: created=${result.createdCount}, skipped=${result.skippedCount}`);
       } else {
         console.error(`[VulnParse:${taskId}] 漏洞提交失败: ${result.error}`);
@@ -345,11 +368,11 @@ export async function POST(request: Request) {
     if (finalState === 'completed') {
       const taskInstanceForParse = await prisma.taskInstance.findFirst({
         where: { codeswarmTaskId: taskId },
-        select: { projectPath: true },
+        select: { id: true, projectPath: true },
       });
-      
+
       if (taskInstanceForParse?.projectPath) {
-        executeVulnerabilityParseAsync(taskId, taskInstanceForParse.projectPath);
+        executeVulnerabilityParseAsync(taskId, taskInstanceForParse.projectPath, taskInstanceForParse.id);
       }
     }
 

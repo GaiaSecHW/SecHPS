@@ -96,7 +96,7 @@ const nextConfig = {
   },
 
   // ssh2 使用原生模块，不兼容 ESM 打包
-  serverExternalPackages: ['ssh2'],
+  serverExternalPackages: ['ssh2', 'ssh2-sftp-client', 'minio'],
 };
 
 module.exports = nextConfig;
