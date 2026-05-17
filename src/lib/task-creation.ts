@@ -199,16 +199,12 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   let filePath: string | null = null;
   let projectPath: string | null = null;
 
-  let harnessRootDir: string | null = null;
-
   try {
     console.log(`[TaskCreation] 开始为任务 ${taskId} 从 MinIO 拉取 AgentHarness (${agentId})`);
     const rootDir = await downloadAgentHarness(agentId, taskDir);
 
     if (rootDir) {
       console.log(`[TaskCreation] 从 MinIO 拉取完成，根目录: ${rootDir}`);
-      harnessRootDir = rootDir;
-      projectPath = taskDir;
     } else {
       console.log(`[TaskCreation] MinIO 未找到 AgentHarness 文件，继续处理上传文件`);
     }
@@ -217,8 +213,6 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   }
 
   if (files && files.length > 0) {
-    const uploadBaseDir = harnessRootDir ? join(taskDir, harnessRootDir) : taskDir;
-    
     for (const file of files) {
       const lowerName = file.name.toLowerCase();
 
@@ -229,8 +223,8 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
 
         for (const entry of zipEntries) {
           if (!entry.isDirectory) {
-            const entryPath = join(uploadBaseDir, entry.entryName);
-            const entryDir = join(uploadBaseDir, entry.entryName.split('/').slice(0, -1).join('/'));
+            const entryPath = join(taskDir, entry.entryName);
+            const entryDir = join(taskDir, entry.entryName.split('/').slice(0, -1).join('/'));
             if (entry.entryName.includes('/')) {
               await mkdir(entryDir, { recursive: true });
             }
@@ -240,7 +234,7 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
         }
         console.log(`[TaskCreation] 解压完成，已解压 ${zipEntries.filter(e => !e.isDirectory).length} 个文件`);
       } else {
-        const destPath = join(uploadBaseDir, file.name);
+        const destPath = join(taskDir, file.name);
         await writeFile(destPath, file.buffer);
         filePath = destPath;
         console.log(`[TaskCreation] 写入上传文件: ${destPath}`);

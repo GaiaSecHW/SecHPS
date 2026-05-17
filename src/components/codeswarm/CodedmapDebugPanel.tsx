@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Play, Database, Trash2, RefreshCw, Loader2, ChevronDown, ChevronRight,
-  FolderOpen, Server, CheckCircle, XCircle, HardDrive, FileCode, AlertCircle,
+  CheckCircle, XCircle, HardDrive, FileCode, FolderOpen, Settings, Terminal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-// ====== Cache types ======
+// ====== Types ======
 
 interface CacheFile {
   name: string;
@@ -22,34 +22,6 @@ interface CacheEntry {
   fileCount: number;
 }
 
-// ====== Log entry types ======
-
-interface LogEntry {
-  type: string;
-  message: string;
-  details: string;
-  timestamp: string;
-  phase?: string;
-  level?: string;
-}
-
-// ====== Worker/Model option types ======
-
-interface WorkerOption {
-  nodeId: string;
-  address: string;
-  status: string;
-}
-
-interface ModelOption {
-  key: string;
-  modelId: string;
-  modelName: string;
-  label: string;
-  hasApiKey: boolean;
-  apiKey?: string;
-}
-
 // ====== Helpers ======
 
 function formatSize(bytes: number): string {
@@ -60,35 +32,34 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
 }
 
+const DEFAULT_CODEDMAP_HOME = process.env.NEXT_PUBLIC_CODEDMAP_HOME || '';
+const DEFAULT_JOERN_HOME = process.env.NEXT_PUBLIC_JOERN_HOME || '';
+
 export function CodedmapDebugPanel() {
-  // ====== Build form state ======
-  const [targetProduct, setTargetProduct] = useState('');
-  const [workspacePath, setWorkspacePath] = useState('');
-  const [selectedWorker, setSelectedWorker] = useState('');
-  const [selectedModelKey, setSelectedModelKey] = useState('');
-  const [apiKey, setApiKey] = useState('');
-  const [engine, setEngine] = useState<'opencode' | 'claudecode'>('opencode');
+  // ====== Build form ======
+  const [targetDir, setTargetDir] = useState('');
+  const [workspace, setWorkspace] = useState('');
+  const [codedmapHome, setCodedmapHome] = useState(DEFAULT_CODEDMAP_HOME);
+  const [joernHome, setJoernHome] = useState(DEFAULT_JOERN_HOME);
+  const [projectName, setProjectName] = useState('');
 
-  // ====== Build execution state ======
+  // ====== Build execution ======
   const [isBuilding, setIsBuilding] = useState(false);
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logs, setLogs] = useState<{ type: 'stdout' | 'stderr' | 'info' | 'error' | 'exit'; text: string }[]>([]);
   const [showLogs, setShowLogs] = useState(false);
+  const [exitCode, setExitCode] = useState<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // ====== Cache state ======
+  // ====== Settings ======
+  const [showSettings, setShowSettings] = useState(false);
+
+  // ====== Cache ======
   const [cacheEntries, setCacheEntries] = useState<CacheEntry[]>([]);
   const [loadingCache, setLoadingCache] = useState(false);
   const [expandedCache, setExpandedCache] = useState<string | null>(null);
 
-  // ====== Options ======
-  const [workers, setWorkers] = useState<WorkerOption[]>([]);
-  const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
-
-  const logsEndRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    fetchWorkers();
-    fetchModels();
     fetchCache();
   }, []);
 
@@ -96,79 +67,7 @@ export function CodedmapDebugPanel() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  // ====== SSE connection for build logs ======
-  useEffect(() => {
-    if (!currentTaskId) return;
-
-    const eventSource = new EventSource(`/api/codeswarm/tasks/${currentTaskId}/stream`);
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'connected') return;
-
-        if (data.type === 'task_complete') {
-          const isCompleted = data.state === 'completed';
-          setLogs(prev => [...prev, {
-            type: 'task_complete',
-            message: isCompleted ? '构建完成' : '构建失败',
-            details: data.result || data.error || '',
-            timestamp: new Date().toISOString(),
-          }]);
-          setIsBuilding(false);
-          if (isCompleted) {
-            toast.success('Codedmap 构建完成');
-            fetchCache();
-          } else {
-            toast.error('Codedmap 构建失败');
-          }
-          setTimeout(() => eventSource.close(), 1000);
-          return;
-        }
-
-        if (data.data) {
-          const eventData = data.data;
-          let message = '';
-          let details = '';
-          const phase = eventData.phase;
-          const level = eventData.level;
-
-          if (data.type === 'log_chunk' || data.type === 'agent_log_chunk') {
-            message = level === 'worker' ? '[Worker]' : '[Agent]';
-            details = eventData.content || '';
-          } else if (data.type === 'phase_start') {
-            message = '阶段开始';
-            details = eventData.message || phase || '';
-          } else if (data.type === 'phase_complete') {
-            message = eventData.success ? '阶段完成' : '阶段失败';
-            details = eventData.message || phase || '';
-          } else if (data.type === 'error') {
-            message = '错误';
-            details = eventData.message || '';
-          } else {
-            message = data.type;
-            details = eventData.content || eventData.message || JSON.stringify(eventData);
-          }
-
-          setLogs(prev => [...prev, {
-            type: data.type,
-            message,
-            details,
-            timestamp: data.timestamp || new Date().toISOString(),
-            phase,
-            level,
-          }]);
-        }
-      } catch {
-        // ignore parse errors
-      }
-    };
-
-    eventSource.onerror = () => eventSource.close();
-    return () => eventSource.close();
-  }, [currentTaskId]);
-
-  // ====== Data fetching ======
+  // ====== Cache actions ======
 
   const fetchCache = async () => {
     setLoadingCache(true);
@@ -185,109 +84,10 @@ export function CodedmapDebugPanel() {
     }
   };
 
-  const fetchWorkers = async () => {
-    try {
-      const res = await fetch('/api/codeswarm/nodes');
-      if (res.ok) {
-        const data = await res.json();
-        setWorkers(data.workers || []);
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  const fetchModels = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch('/api/models?isActive=true&forEvaluation=true', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const options: ModelOption[] = [];
-        for (const cfg of data.models || []) {
-          for (const modelName of cfg.models || []) {
-            options.push({
-              key: `${cfg.id}::${modelName}`,
-              modelId: cfg.id,
-              modelName,
-              label: `${cfg.name} - ${modelName}`,
-              hasApiKey: cfg.hasApiKey,
-              apiKey: cfg.apiKey,
-            });
-          }
-        }
-        setModelOptions(options);
-        if (options.length > 0) {
-          setSelectedModelKey(options[0].key);
-          if (options[0].hasApiKey && options[0].apiKey) {
-            setApiKey(options[0].apiKey || '');
-          }
-        }
-      }
-    } catch {
-      // ignore
-    }
-  };
-
-  // ====== Actions ======
-
-  const handleBuild = async () => {
-    if (!targetProduct.trim()) {
-      toast.error('请输入目标产品名');
-      return;
-    }
-    if (!workspacePath.trim()) {
-      toast.error('请输入工作区路径');
-      return;
-    }
-
-    setIsBuilding(true);
-    setLogs([]);
-    setShowLogs(true);
-
-    const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
-
-    try {
-      const res = await fetch('/api/codeswarm/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          instruction: `Codedmap 知识图谱构建: ${targetProduct}`,
-          engine,
-          agent: 'build',
-          workspacePath,
-          targetProduct,
-          model: selectedModel?.modelName || undefined,
-          apiKey: apiKey || undefined,
-          timeoutSec: 3600,
-          preferredWorkerNodeId: selectedWorker || undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        setCurrentTaskId(data.taskId);
-        toast.success(data.dispatched ? '构建任务已分发到 Worker' : '任务已加入队列，等待 Worker');
-      } else {
-        toast.error(data.error || '创建任务失败');
-        setIsBuilding(false);
-      }
-    } catch {
-      toast.error('创建构建任务失败');
-      setIsBuilding(false);
-    }
-  };
-
   const handleDeleteCache = async (product: string) => {
     if (!confirm(`确定删除 ${product} 的所有缓存文件？`)) return;
-
     try {
-      const res = await fetch(`/api/codeswarm/codedmap/cache?targetProduct=${encodeURIComponent(product)}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`/api/codeswarm/codedmap/cache?targetProduct=${encodeURIComponent(product)}`, { method: 'DELETE' });
       const data = await res.json();
       if (res.ok) {
         toast.success(`已删除 ${data.deleted} 个文件`);
@@ -300,122 +100,244 @@ export function CodedmapDebugPanel() {
     }
   };
 
+  // ====== Build action ======
+
+  const handleBuild = useCallback(async () => {
+    if (!targetDir.trim()) {
+      toast.error('请输入目标源码目录');
+      return;
+    }
+    if (!codedmapHome.trim()) {
+      toast.error('请配置 CodeDMap 安装路径');
+      return;
+    }
+
+    setIsBuilding(true);
+    setLogs([]);
+    setExitCode(null);
+    setShowLogs(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const res = await fetch('/api/codeswarm/codedmap/build', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetDir,
+          workspace: workspace || undefined,
+          joernHome: joernHome || undefined,
+          codedmapHome: codedmapHome || undefined,
+          projectName: projectName || undefined,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        setLogs(prev => [...prev, { type: 'error', text: data.error || '构建请求失败' }]);
+        setIsBuilding(false);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) {
+        setLogs(prev => [...prev, { type: 'error', text: '无法读取响应流' }]);
+        setIsBuilding(false);
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            try {
+              const text = JSON.parse(line.slice(6));
+              if (currentEvent === 'exit') {
+                const { code } = JSON.parse(text);
+                setExitCode(code);
+                setIsBuilding(false);
+                if (code === 0) {
+                  toast.success('构建完成');
+                  fetchCache();
+                } else {
+                  toast.error(`构建失败 (exit code: ${code})`);
+                }
+              } else {
+                const type = currentEvent as 'stdout' | 'stderr' | 'info' | 'error';
+                setLogs(prev => [...prev, { type, text }]);
+              }
+            } catch {
+              // ignore parse errors
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setLogs(prev => [...prev, { type: 'error', text: `请求失败: ${(err as Error).message}` }]);
+      }
+      setIsBuilding(false);
+    }
+  }, [targetDir, workspace, codedmapHome, joernHome, projectName]);
+
+  const handleStop = () => {
+    abortRef.current?.abort();
+    setIsBuilding(false);
+    setLogs(prev => [...prev, { type: 'info', text: '用户中断构建' }]);
+  };
+
   // ====== Render ======
 
   return (
     <div className="space-y-6">
       {/* ====== Build Form ====== */}
       <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center gap-3">
-          <div className="p-2 bg-purple-500/20 rounded-lg">
-            <Database className="w-5 h-5 text-purple-400" />
+        <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-500/20 rounded-lg">
+              <Database className="w-5 h-5 text-purple-400" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-100">Codedmap 构建</h2>
+              <p className="text-sm text-gray-400">执行 build_map.py 生成 CPG 知识图谱 (graph.db)</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-100">Codedmap 构建</h2>
-            <p className="text-sm text-gray-400">触发 Worker 构建 CPG 知识图谱 (graph.db)</p>
-          </div>
+          <button
+            onClick={() => setShowSettings(!showSettings)}
+            className={`p-2 rounded-lg transition-colors ${showSettings ? 'bg-purple-500/20 text-purple-400' : 'text-gray-400 hover:text-gray-200'}`}
+            title="路径配置"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
 
         <div className="p-6 space-y-4">
-          {/* Required fields */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                目标产品 <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={targetProduct}
-                onChange={(e) => setTargetProduct(e.target.value)}
-                placeholder="如 my-project-v2"
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">用于 MinIO 缓存 key，如已缓存则直接下载</p>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                工作区路径 <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={workspacePath}
-                onChange={(e) => setWorkspacePath(e.target.value)}
-                placeholder="/shared/workspace/task-xxx"
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">NFS 共享目录，包含源代码</p>
-            </div>
+          {/* Target directory */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              <FolderOpen className="w-4 h-4 inline mr-1" />
+              目标源码目录 <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={targetDir}
+              onChange={(e) => setTargetDir(e.target.value)}
+              placeholder="D:\work\nazhua-agent-opencode-0420\codedmap"
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">要分析的源代码根目录</p>
           </div>
 
-          {/* Optional fields */}
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">Worker 节点</label>
-              <select
-                value={selectedWorker}
-                onChange={(e) => setSelectedWorker(e.target.value)}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg text-gray-200"
-              >
-                <option value="">自动分配</option>
-                {workers.map((w) => (
-                  <option key={w.nodeId} value={w.nodeId}>
-                    {w.nodeId} - {w.status}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">模型</label>
-              <select
-                value={selectedModelKey}
-                onChange={(e) => {
-                  setSelectedModelKey(e.target.value);
-                  const opt = modelOptions.find(o => o.key === e.target.value);
-                  if (opt?.hasApiKey && opt.apiKey) setApiKey(opt.apiKey);
-                }}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg text-gray-200"
-              >
-                <option value="">默认模型</option>
-                {modelOptions.map((opt) => (
-                  <option key={opt.key} value={opt.key}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">引擎</label>
-              <select
-                value={engine}
-                onChange={(e) => setEngine(e.target.value as 'opencode' | 'claudecode')}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg text-gray-200"
-              >
-                <option value="opencode">OpenCode</option>
-                <option value="claudecode">Claude Code</option>
-              </select>
-            </div>
+          {/* Workspace output */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              输出目录 (workspace)
+            </label>
+            <input
+              type="text"
+              value={workspace}
+              onChange={(e) => setWorkspace(e.target.value)}
+              placeholder="D:\custom\workspace（留空则使用默认 {targetDir}/workspace）"
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-gray-200 placeholder-gray-500 font-mono text-sm"
+            />
+            <p className="text-xs text-gray-500 mt-1">graph.db 和分析文件的输出目录</p>
           </div>
 
-          {/* Build button */}
-          <div className="flex items-center gap-3 pt-2">
-            <button
-              onClick={handleBuild}
-              disabled={isBuilding || !targetProduct.trim() || !workspacePath.trim()}
-              className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isBuilding ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>构建中...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  <span>触发构建</span>
-                </>
-              )}
-            </button>
+          {/* Settings panel */}
+          {showSettings && (
+            <div className="bg-[#0a1020] rounded-lg p-4 space-y-4 border border-gray-700/50">
+              <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                路径配置
+              </h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">CODEDMAP_HOME</label>
+                  <input
+                    type="text"
+                    value={codedmapHome}
+                    onChange={(e) => setCodedmapHome(e.target.value)}
+                    placeholder="D:\work\codedmap（codedmap 安装目录）"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">JOERN_HOME</label>
+                  <input
+                    type="text"
+                    value={joernHome}
+                    onChange={(e) => setJoernHome(e.target.value)}
+                    placeholder="D:\work\tools\joern\joern-cli"
+                    className="w-full px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">项目名称 (--name，可选)</label>
+                <input
+                  type="text"
+                  value={projectName}
+                  onChange={(e) => setProjectName(e.target.value)}
+                  placeholder="覆盖自动推断的项目名"
+                  className="w-full px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-gray-200 placeholder-gray-600 font-mono text-xs"
+                />
+              </div>
+            </div>
+          )}
 
-            {currentTaskId && (
-              <span className="text-xs text-gray-500 font-mono">taskId: {currentTaskId}</span>
+          {/* Build command preview */}
+          <div className="bg-[#0a1020] rounded-lg p-3 border border-gray-700/50">
+            <p className="text-xs text-gray-500 mb-1">执行命令:</p>
+            <code className="text-xs text-cyan-400 font-mono break-all">
+              {(process.platform === 'win32' ? 'python' : 'python3')}
+              {' '}{codedmapHome ? `${codedmapHome}/tools/build_map.py` : 'build_map.py'}
+              {' '}{targetDir || '<targetDir>'}
+              {joernHome && ` --joern-home ${joernHome}`}
+              {workspace && ` --workspace ${workspace}`}
+              {projectName && ` --name ${projectName}`}
+            </code>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center gap-3">
+            {!isBuilding ? (
+              <button
+                onClick={handleBuild}
+                disabled={!targetDir.trim() || !codedmapHome.trim()}
+                className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Play className="w-4 h-4" />
+                <span>执行构建</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleStop}
+                className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>构建中... (点击中断)</span>
+              </button>
+            )}
+
+            {exitCode !== null && (
+              <span className={`flex items-center gap-1 text-sm ${exitCode === 0 ? 'text-green-400' : 'text-red-400'}`}>
+                {exitCode === 0 ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                exit code: {exitCode}
+              </span>
             )}
           </div>
         </div>
@@ -426,37 +348,35 @@ export function CodedmapDebugPanel() {
         <div className="bg-dark-surface rounded-lg border border-gray-700/50">
           <div className="px-6 py-3 flex items-center justify-between border-b border-gray-700/50 bg-[#162032] rounded-t-lg">
             <div className="flex items-center gap-2">
-              <FileCode className="w-4 h-4 text-green-400" />
+              <Terminal className="w-4 h-4 text-green-400" />
               <span className="text-sm font-medium text-gray-100">构建日志</span>
-              {currentTaskId && <span className="text-xs text-gray-500">({currentTaskId})</span>}
+              {isBuilding && <Loader2 className="w-3 h-3 animate-spin text-purple-400" />}
             </div>
             <button
-              onClick={() => { setShowLogs(false); setLogs([]); setCurrentTaskId(null); }}
+              onClick={() => { setShowLogs(false); setLogs([]); setExitCode(null); }}
               className="text-gray-400 hover:text-red-400"
               title="关闭日志"
             >
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
-          <div className="h-64 overflow-y-auto bg-[#0F172A] p-4 font-mono text-xs">
-            {logs.length === 0 ? (
-              <div className="text-gray-500">等待 Worker 接收任务...</div>
+          <div className="h-80 overflow-y-auto bg-[#0F172A] p-4 font-mono text-xs">
+            {logs.length === 0 && !isBuilding ? (
+              <div className="text-gray-500">点击"执行构建"开始...</div>
             ) : (
               logs.map((log, idx) => {
                 let color = 'text-gray-300';
-                if (log.type === 'error') color = 'text-red-400';
-                else if (log.type === 'task_complete') color = log.message.includes('完成') ? 'text-green-400' : 'text-red-400';
-                else if (log.type === 'phase_complete') color = 'text-green-400';
-                else if (log.type === 'phase_start') color = 'text-blue-400';
-                else if (log.level === 'worker') color = 'text-cyan-300';
-                else if (log.details?.startsWith('[Codedmap]')) color = 'text-purple-300';
+                if (log.type === 'stderr') color = 'text-yellow-400';
+                else if (log.type === 'error') color = 'text-red-400';
+                else if (log.type === 'info') color = 'text-cyan-400';
+                else if (log.type === 'stdout' && log.text.startsWith('[+]')) color = 'text-green-400';
+                else if (log.type === 'stdout' && log.text.startsWith('[*]')) color = 'text-blue-400';
+                else if (log.type === 'stdout' && log.text.startsWith('[-]')) color = 'text-red-400';
+                else if (log.type === 'stdout' && log.text.startsWith('$')) color = 'text-cyan-300';
 
                 return (
-                  <div key={idx} className={`mb-1 ${color}`}>
-                    <span className="text-gray-600">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
-                    {log.phase && <span className="text-gray-500">[{log.phase}]</span>}{' '}
-                    <span>{log.message}</span>
-                    {log.details && <span className="text-gray-400 ml-2">{log.details}</span>}
+                  <div key={idx} className={`${color} whitespace-pre-wrap break-all`}>
+                    {log.text}
                   </div>
                 );
               })
@@ -482,7 +402,7 @@ export function CodedmapDebugPanel() {
             onClick={fetchCache}
             disabled={loadingCache}
             className="p-2 text-gray-400 hover:text-cyan-400 rounded-lg hover:bg-cyan-500/10 transition-colors"
-            title="刷新缓存列表"
+            title="刷新"
           >
             <RefreshCw className={`w-4 h-4 ${loadingCache ? 'animate-spin' : ''}`} />
           </button>
@@ -497,7 +417,7 @@ export function CodedmapDebugPanel() {
             <div className="text-center py-12">
               <Database className="w-12 h-12 text-gray-600 mx-auto mb-3" />
               <p className="text-gray-500">暂无缓存文件</p>
-              <p className="text-xs text-gray-600 mt-1">触发构建后，生成的 graph.db 会被上传到 MinIO</p>
+              <p className="text-xs text-gray-600 mt-1">构建完成后可手动上传到 MinIO</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -509,11 +429,7 @@ export function CodedmapDebugPanel() {
                         onClick={() => setExpandedCache(expandedCache === entry.targetProduct ? null : entry.targetProduct)}
                         className="text-gray-400 hover:text-gray-200"
                       >
-                        {expandedCache === entry.targetProduct ? (
-                          <ChevronDown className="w-4 h-4" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4" />
-                        )}
+                        {expandedCache === entry.targetProduct ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </button>
                       <Database className="w-4 h-4 text-purple-400 shrink-0" />
                       <span className="text-sm font-medium text-gray-200 truncate">{entry.targetProduct}</span>

@@ -82,15 +82,31 @@ export async function downloadAgentHarness(
   const bucket = MINIO_HARNESS_BUCKET;
   const prefix = `${appId}/`;
 
+  // Quick check: bucket must exist
+  try {
+    const exists = await mc.bucketExists(bucket);
+    if (!exists) {
+      console.log(`[MinIO] Bucket ${bucket} does not exist, skip download`);
+      return null;
+    }
+  } catch (err) {
+    console.error(`[MinIO] bucketExists check failed:`, err);
+    return null;
+  }
+
   const objectNames: string[] = [];
 
   await new Promise<void>((resolve, reject) => {
     const stream = mc.listObjects(bucket, prefix, true);
+    const timeout = setTimeout(() => {
+      stream.destroy();
+      resolve();
+    }, 10 * 60 * 1000);
     stream.on('data', (obj: { name?: string }) => {
       if (obj.name) objectNames.push(obj.name);
     });
-    stream.on('end', resolve);
-    stream.on('error', reject);
+    stream.on('end', () => { clearTimeout(timeout); resolve(); });
+    stream.on('error', (err) => { clearTimeout(timeout); reject(err); });
   });
 
   if (objectNames.length === 0) {
