@@ -229,7 +229,6 @@ export class WorkerDaemon {
         codedmapPromise = this.codedmapMgr.ensureDbFile(workspacePath, payload.targetProduct, (event) => {
           onEvent({
             ...event,
-            type: (event.type as AgentEvent['type']) || 'log_chunk',
           });
         }).then(() => {
           console.log(`[Daemon] Codedmap preprocessing completed for ${payload.targetProduct}`);
@@ -492,21 +491,28 @@ export class WorkerDaemon {
     }
     Object.assign(mergedEnv, env);
 
-    // On Windows, use shell to resolve commands like 'opencode' via PATHEXT
-    // When shell is true, pass the entire command string to avoid DEP0190
-    const isWindows = process.platform === 'win32';
-    const childProcess = isWindows
-      ? spawn(startCommand, [], {
-          cwd: workspace,
-          env: mergedEnv,
-          stdio: ['pipe', 'pipe', 'pipe'],
-          shell: true,
-        })
-      : spawn(startCommand.trim().split(/\s+/)[0], startCommand.trim().split(/\s+/).slice(1), {
-          cwd: workspace,
-          env: mergedEnv,
-          stdio: ['pipe', 'pipe', 'pipe'],
+    // Use shell on all platforms to handle quoted arguments and PATH resolution
+    const timeoutMs = 3600_000; // 60 minutes
+    const childProcess = spawn(startCommand, [], {
+      cwd: workspace,
+      env: mergedEnv,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: true,
+    });
+
+    // Timeout: kill the process if it exceeds the limit
+    const timeoutHandle = setTimeout(() => {
+      if (childProcess.exitCode === null) {
+        console.warn(`[Daemon] Command timed out after ${timeoutMs / 1000}s, killing PID ${childProcess.pid}`);
+        onEvent({
+          type: 'log_chunk',
+          content: `[Worker] 命令超时 (${timeoutMs / 1000}s)，强制终止进程...`,
+          level: 'worker',
+          timestamp: new Date().toISOString(),
         });
+        childProcess.kill('SIGKILL');
+      }
+    }, timeoutMs);
 
     // ========== 进程启动事件 ==========
     const pid = childProcess.pid;
@@ -551,11 +557,13 @@ export class WorkerDaemon {
     // ========== 进程退出事件 ==========
     const exitCode = await new Promise<number>((resolve) => {
       childProcess.on('exit', (code) => {
+        clearTimeout(timeoutHandle);
         const duration = Date.now() - startTime;
         console.log(`[Daemon] Process exited with code: ${code ?? 1}, duration: ${duration}ms`);
         resolve(code ?? 1);
       });
       childProcess.on('error', (err) => {
+        clearTimeout(timeoutHandle);
         console.log(`[Daemon] Process error: ${err.message}`);
         this.server.log.error({ taskId, error: err.message }, 'Process error');
         stderr += err.message;

@@ -98,8 +98,8 @@ export async function downloadFile(objectName: string, destPath: string): Promis
       await new Promise<void>((resolve, reject) => {
         stream.pipe(writeStream);
         writeStream.on('finish', resolve);
-        writeStream.on('error', reject);
-        stream.on('error', reject);
+        writeStream.on('error', (err) => { stream.destroy(); reject(err); });
+        stream.on('error', (err) => { writeStream.destroy(); reject(err); });
       });
     }, `download ${objectName}`);
 
@@ -141,5 +141,118 @@ export async function uploadFile(objectName: string, filePath: string): Promise<
   } catch (err) {
     console.error(`[MinIO] uploadFile failed for ${objectName}: ${err instanceof Error ? err.message : String(err)}`);
     return false;
+  }
+}
+
+/**
+ * Upload multiple db files to MinIO under dbs/{targetProduct}/ prefix.
+ * Returns the number of successfully uploaded files.
+ */
+export async function uploadDbFiles(
+  targetProduct: string,
+  workspaceDir: string,
+  dbFiles: string[],
+): Promise<{ uploaded: number; failed: number; files: { name: string; success: boolean; size: number }[] }> {
+  const results: { name: string; success: boolean; size: number }[] = [];
+  let uploaded = 0;
+  let failed = 0;
+
+  for (const dbFile of dbFiles) {
+    const localPath = path.join(workspaceDir, dbFile);
+    if (!fs.existsSync(localPath)) {
+      console.warn(`[MinIO] Local db file not found: ${localPath}`);
+      continue;
+    }
+
+    const stat = fs.statSync(localPath);
+    const objectName = `dbs/${targetProduct}/${dbFile}`;
+    const success = await uploadFile(objectName, localPath);
+
+    results.push({ name: dbFile, success, size: stat.size });
+    if (success) {
+      uploaded++;
+    } else {
+      failed++;
+    }
+  }
+
+  console.log(`[MinIO] Batch upload complete for ${targetProduct}: ${uploaded} uploaded, ${failed} failed`);
+  return { uploaded, failed, files: results };
+}
+
+/**
+ * Download all db files from MinIO under dbs/{targetProduct}/ prefix.
+ * Returns the number of successfully downloaded files.
+ */
+export async function downloadDbFiles(
+  targetProduct: string,
+  workspaceDir: string,
+  dbFiles: string[],
+): Promise<{ downloaded: number; failed: number; files: { name: string; success: boolean; size: number }[] }> {
+  const client = getClient();
+  const results: { name: string; success: boolean; size: number }[] = [];
+  let downloaded = 0;
+  let failed = 0;
+
+  // Ensure target directory exists
+  if (!fs.existsSync(workspaceDir)) {
+    fs.mkdirSync(workspaceDir, { recursive: true });
+  }
+
+  for (const dbFile of dbFiles) {
+    const objectName = `dbs/${targetProduct}/${dbFile}`;
+    const destPath = path.join(workspaceDir, dbFile);
+
+    // Ensure subdirectory exists (e.g., analysis/)
+    const destDir = path.dirname(destPath);
+    if (!fs.existsSync(destDir)) {
+      fs.mkdirSync(destDir, { recursive: true });
+    }
+
+    const success = await downloadFile(objectName, destPath);
+
+    if (success && fs.existsSync(destPath)) {
+      const stat = fs.statSync(destPath);
+      results.push({ name: dbFile, success: true, size: stat.size });
+      downloaded++;
+    } else {
+      results.push({ name: dbFile, success: false, size: 0 });
+      failed++;
+    }
+  }
+
+  console.log(`[MinIO] Batch download complete for ${targetProduct}: ${downloaded} downloaded, ${failed} not found`);
+  return { downloaded, failed, files: results };
+}
+
+/**
+ * Check if dbs/{targetProduct}/graph.db exists in MinIO.
+ */
+export async function graphDbExists(targetProduct: string): Promise<boolean> {
+  return objectExists(`dbs/${targetProduct}/graph.db`);
+}
+
+/**
+ * List all db files for a targetProduct in MinIO.
+ */
+export async function listDbFiles(targetProduct: string): Promise<string[]> {
+  const client = getClient();
+  const prefix = `dbs/${targetProduct}/`;
+  const files: string[] = [];
+
+  try {
+    const objects = client.listObjectsV2(MINIO_BUCKET, prefix, true);
+    for await (const obj of objects) {
+      // Remove prefix to get relative path
+      const relativePath = obj.name.replace(prefix, '');
+      if (relativePath.endsWith('.db')) {
+        files.push(relativePath);
+      }
+    }
+    console.log(`[MinIO] Found ${files.length} db files for ${targetProduct}`);
+    return files;
+  } catch (err) {
+    console.error(`[MinIO] listDbFiles failed: ${err instanceof Error ? err.message : String(err)}`);
+    return [];
   }
 }

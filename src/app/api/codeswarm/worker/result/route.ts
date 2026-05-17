@@ -343,8 +343,8 @@ export async function POST(request: Request) {
     });
 
     if (finalState === 'completed') {
-      const taskInstanceForParse = await prisma.taskInstance.findUnique({
-        where: { id: taskId },
+      const taskInstanceForParse = await prisma.taskInstance.findFirst({
+        where: { codeswarmTaskId: taskId },
         select: { projectPath: true },
       });
       

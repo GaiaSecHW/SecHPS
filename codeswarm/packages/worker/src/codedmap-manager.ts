@@ -4,9 +4,22 @@ import { execFile } from 'node:child_process';
 import * as minioClient from './minio-client.js';
 
 const CODEDMAP_HOME = process.env.CODEDMAP_HOME || '/opt/codedmap';
+const JOERN_HOME = process.env.JOERN_HOME || '/opt/joern/joern-cli';
+const JAVA_HOME = process.env.JAVA_HOME || '/usr/lib/jvm/java-19-openjdk';
+
+// 所有生成的 db 文件列表
+const DB_FILES = [
+  'graph.db',
+  'analysis/call_graph.db',
+  'analysis/copy.db',
+  'analysis/linker.db',
+  'analysis/load.db',
+  'analysis/pts.db',
+  'analysis/store.db',
+];
 
 export interface CodedmapEventCallback {
-  (event: { type: string; content?: string; message?: string; timestamp: string; level?: 'worker' | 'agent'; phase?: string; success?: boolean }): void;
+  (event: { type: 'phase_start' | 'phase_complete' | 'log_chunk'; content?: string; message?: string; timestamp: string; level?: 'worker' | 'agent'; phase?: string; success?: boolean }): void;
 }
 
 export class CodedmapManager {
@@ -14,124 +27,151 @@ export class CodedmapManager {
   /**
    * 确保工作区中存在 targetProduct 对应的 db 文件。
    * 流程: 本地检查 → MinIO下载 → 本地生成并上传
+   * 
+   * 存储路径: dbs/{targetProduct}/*.db
+   * 
+   * 返回 graph.db 的完整路径。
    */
   async ensureDbFile(
     workspacePath: string,
     targetProduct: string,
     onEvent: CodedmapEventCallback,
   ): Promise<string> {
-    const dbFileName = `${targetProduct}.db`;
-    const dbPath = path.join(workspacePath, dbFileName);
-    const objectName = dbFileName;
+    // 实际输出目录: {workspacePath}/workspace/
+    const workspaceDir = path.join(workspacePath, 'workspace');
+    const graphDbPath = path.join(workspaceDir, 'graph.db');
 
-    // Step 1: 检查本地是否已有 db 文件
-    if (fs.existsSync(dbPath)) {
-      const stat = fs.statSync(dbPath);
+    // Step 1: 检查本地是否已有 graph.db 文件
+    if (fs.existsSync(graphDbPath)) {
+      const stat = fs.statSync(graphDbPath);
+      const analysisFiles = this.listExistingAnalysisDbs(workspaceDir);
       onEvent({
         type: 'phase_complete',
         phase: 'codedmap',
         success: true,
-        message: `工作区已有知识图谱: ${dbFileName} (${(stat.size / 1024 / 1024).toFixed(1)}MB)`,
+        message: `工作区已有知识图谱: graph.db (${(stat.size / 1024 / 1024).toFixed(1)}MB) + ${analysisFiles.length} 分析文件`,
         timestamp: new Date().toISOString(),
         level: 'worker',
       });
-      return dbPath;
+      return graphDbPath;
     }
 
     onEvent({
       type: 'phase_start',
       phase: 'codedmap',
-      message: `工作区无知识图谱 ${dbFileName}，开始获取...`,
+      message: `工作区无知识图谱，开始获取 dbs/${targetProduct}/...`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
 
-    // Step 2: 确保 MinIO bucket 存在，然后尝试下载
+    // Step 2: 确保 MinIO bucket 存在，然后尝试下载所有 db 文件
     await minioClient.ensureBucket();
 
     onEvent({
       type: 'log_chunk',
-      content: `[Codedmap] 尝试从 MinIO 下载 ${dbFileName}...`,
+      content: `[Codedmap] 尝试从 MinIO 下载 dbs/${targetProduct}/...`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
 
-    const downloaded = await minioClient.downloadFile(objectName, dbPath);
-    if (downloaded) {
-      const stat = fs.statSync(dbPath);
+    const downloadResult = await minioClient.downloadDbFiles(targetProduct, workspaceDir, DB_FILES);
+    
+    if (downloadResult.downloaded > 0 && fs.existsSync(graphDbPath)) {
+      const stat = fs.statSync(graphDbPath);
       onEvent({
         type: 'phase_complete',
         phase: 'codedmap',
         success: true,
-        message: `从 MinIO 下载知识图谱成功: ${dbFileName} (${(stat.size / 1024 / 1024).toFixed(1)}MB)`,
+        message: `从 MinIO 下载知识图谱成功: ${downloadResult.downloaded} 个文件，graph.db (${(stat.size / 1024 / 1024).toFixed(1)}MB)`,
         timestamp: new Date().toISOString(),
         level: 'worker',
       });
-      return dbPath;
+      return graphDbPath;
     }
 
     // Step 3: MinIO 无文件，本地生成 db
     onEvent({
       type: 'log_chunk',
-      content: `[Codedmap] MinIO 上不存在 ${dbFileName}，开始构建知识图谱...`,
+      content: `[Codedmap] MinIO 上不存在 dbs/${targetProduct}/，开始构建知识图谱...`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
 
     await this.buildDb(workspacePath, targetProduct, onEvent);
 
-    // Step 4: 上传到 MinIO（异步，不阻塞返回）
+    // Step 4: 上传所有 db 文件到 MinIO（异步，不阻塞返回）
     onEvent({
       type: 'log_chunk',
-      content: `[Codedmap] 构建完成，上传 ${dbFileName} 到 MinIO...`,
+      content: `[Codedmap] 构建完成，上传 ${DB_FILES.length} 个 db 文件到 MinIO dbs/${targetProduct}/...`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
 
-    const uploaded = await minioClient.uploadFile(objectName, dbPath);
-    if (uploaded) {
-      onEvent({
-        type: 'log_chunk',
-        content: `[Codedmap] 上传 ${dbFileName} 到 MinIO 成功`,
-        timestamp: new Date().toISOString(),
-        level: 'worker',
+    // 异步上传，不阻塞
+    minioClient.uploadDbFiles(targetProduct, workspaceDir, DB_FILES)
+      .then(uploadResult => {
+        const uploadedNames = uploadResult.files.filter(f => f.success).map(f => f.name);
+        onEvent({
+          type: 'log_chunk',
+          content: `[Codedmap] 上传 MinIO 成功: ${uploadResult.uploaded}/${DB_FILES.length} 个文件 (${uploadedNames.join(', ')})`,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
+      })
+      .catch(err => {
+        onEvent({
+          type: 'log_chunk',
+          content: `[Codedmap] 上传 MinIO 失败: ${err instanceof Error ? err.message : String(err)}（不影响任务使用）`,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
       });
-    } else {
-      onEvent({
-        type: 'log_chunk',
-        content: `[Codedmap] 上传 MinIO 失败（不影响任务使用）`,
-        timestamp: new Date().toISOString(),
-        level: 'worker',
-      });
-    }
 
-    const dbStat = fs.statSync(dbPath);
+    const dbStat = fs.statSync(graphDbPath);
+    const analysisFiles = this.listExistingAnalysisDbs(workspaceDir);
     onEvent({
       type: 'phase_complete',
       phase: 'codedmap',
       success: true,
-      message: `知识图谱就绪: ${dbFileName} (${(dbStat.size / 1024 / 1024).toFixed(1)}MB)${uploaded ? '' : '（MinIO 上传失败）'}`,
+      message: `知识图谱就绪: graph.db (${(dbStat.size / 1024 / 1024).toFixed(1)}MB) + ${analysisFiles.length} 分析文件`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
 
-    return dbPath;
+    return graphDbPath;
+  }
+
+  /**
+   * 列出已存在的分析 db 文件
+   */
+  private listExistingAnalysisDbs(workspaceDir: string): string[] {
+    const analysisDir = path.join(workspaceDir, 'analysis');
+    if (!fs.existsSync(analysisDir)) return [];
+    
+    return fs.readdirSync(analysisDir)
+      .filter(f => f.endsWith('.db'))
+      .map(f => `analysis/${f}`);
   }
 
   /**
    * 执行 build_map.py 生成 db 文件
+   * 
+   * 输出目录: {workspacePath}/workspace/
+   * 主数据库: workspace/graph.db
+   * 分析文件: workspace/analysis/*.db
    */
   private async buildDb(
     workspacePath: string,
     targetProduct: string,
     onEvent: CodedmapEventCallback,
   ): Promise<void> {
-    const dbPath = path.join(workspacePath, `${targetProduct}.db`);
     const buildScript = path.join(CODEDMAP_HOME, 'tools', 'build_map.py');
+    const workspaceDir = path.join(workspacePath, 'workspace');
+    const graphDbPath = path.join(workspaceDir, 'graph.db');
 
     onEvent({
       type: 'log_chunk',
-      content: `[Codedmap] 开始生成知识图谱: python3 ${buildScript} ${workspacePath} --db ${dbPath}`,
+      content: `[Codedmap] 开始生成知识图谱: python3 ${buildScript} ${workspacePath} --joern-home ${JOERN_HOME} --workspace ${workspaceDir}`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
@@ -140,43 +180,72 @@ export class CodedmapManager {
       throw new Error(`codedmap build script not found: ${buildScript} (CODEDMAP_HOME=${CODEDMAP_HOME})`);
     }
 
+    // 设置 Java 环境变量
+    const buildEnv = {
+      ...process.env,
+      JAVA_HOME,
+      PATH: `${JAVA_HOME}/bin:${process.env.PATH || ''}`,
+      GIT_TERMINAL_PROMPT: '0',
+    };
+
     const { stdout, stderr } = await this.runCommand('python3', [
       buildScript,
       workspacePath,
-      '--db', dbPath,
-    ], workspacePath, 3600_000);
+      '--joern-home', JOERN_HOME,
+      '--workspace', workspaceDir,
+    ], workspacePath, 3600_000, buildEnv);
 
-    if (!fs.existsSync(dbPath)) {
-      throw new Error(`build_map.py completed but db file not found at ${dbPath}\nstderr: ${stderr}`);
+    if (!fs.existsSync(graphDbPath)) {
+      throw new Error(`build_map.py completed but graph.db not found at ${graphDbPath}\nstderr: ${stderr}\nstdout: ${stdout}`);
     }
 
-    const stat = fs.statSync(dbPath);
+    const stat = fs.statSync(graphDbPath);
+    const analysisFiles = this.listExistingAnalysisDbs(workspaceDir);
     onEvent({
       type: 'log_chunk',
-      content: `[Codedmap] 知识图谱生成完成: ${targetProduct}.db (${(stat.size / 1024 / 1024).toFixed(1)}MB)`,
+      content: `[Codedmap] 知识图谱生成完成: graph.db (${(stat.size / 1024 / 1024).toFixed(1)}MB) + ${analysisFiles.length} 分析文件`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
+
+    // 输出所有生成的 db 文件信息
+    for (const dbFile of analysisFiles) {
+      const dbPath = path.join(workspaceDir, dbFile);
+      if (fs.existsSync(dbPath)) {
+        const dbStat = fs.statSync(dbPath);
+        onEvent({
+          type: 'log_chunk',
+          content: `[Codedmap]   - ${dbFile}: ${(dbStat.size / 1024).toFixed(1)}KB`,
+          timestamp: new Date().toISOString(),
+          level: 'worker',
+        });
+      }
+    }
   }
 
   /**
-   * 执行命令，带超时
+   * 执行命令，带超时和自定义环境变量
    */
   private runCommand(
     command: string,
     args: string[],
     cwd: string,
     timeout = 300_000,
+    env?: NodeJS.ProcessEnv,
   ): Promise<{ stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
       const child = execFile(command, args, {
         cwd,
         timeout,
         maxBuffer: 50 * 1024 * 1024,
-        env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+        env: env || { ...process.env, GIT_TERMINAL_PROMPT: '0' },
       }, (error, stdout, stderr) => {
         if (error) {
-          reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${stderr || error.message}`));
+          if ((error as any).killed) {
+            reject(new Error(`Command timed out after ${timeout / 1000}s: ${command} ${args.join(' ')}`));
+          } else {
+            reject(new Error(`Command failed: ${command} ${args.join(' ')}\n${stderr || error.message}`));
+          }
         } else {
           resolve({ stdout: stdout || '', stderr: stderr || '' });
         }

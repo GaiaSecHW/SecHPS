@@ -63,8 +63,9 @@ export async function POST(
     const mergedSkills = task.mergedSkills || task.skills || undefined;
     const mergedScripts = task.mergedScripts || task.scripts || undefined;
 
-    await prisma.taskInstance.update({
-      where: { id },
+    // Optimistic concurrency: only update if status is still in an allowed state
+    const updateResult = await prisma.taskInstance.updateMany({
+      where: { id, status: { in: ['pending', 'completed', 'failed'] } },
       data: {
         status: 'running',
         startedAt: new Date(),
@@ -75,6 +76,10 @@ export async function POST(
         updatedAt: new Date(),
       },
     });
+
+    if (updateResult.count === 0) {
+      return NextResponse.json({ error: '任务状态已变更，无法执行' }, { status: 409 });
+    }
 
     await prisma.taskExecutionLog.deleteMany({
       where: { taskId: id },
@@ -257,6 +262,7 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
             });
             resolve();
           } else {
+            subscriber.disconnect();
             reject(new Error(taskData?.error || 'CodeSwarm 任务执行失败'));
           }
         }
