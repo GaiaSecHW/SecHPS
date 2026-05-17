@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
-import { prisma } from '@/lib/prisma';
+import { prisma, withRetry } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
@@ -63,7 +63,6 @@ export async function POST(
     const mergedSkills = task.mergedSkills || task.skills || undefined;
     const mergedScripts = task.mergedScripts || task.scripts || undefined;
 
-    // Optimistic concurrency: only update if status is still in an allowed state
     const updateResult = await prisma.taskInstance.updateMany({
       where: { id, status: { in: ['pending', 'completed', 'failed'] } },
       data: {
@@ -113,36 +112,75 @@ export async function POST(
 
     const apiKey = task.ModelConfig?.apiKey || undefined;
     const timeoutSec = 300;
-    const agent = agentApp?.engine || 'opencode';
-    const defaultAgentName = agentApp?.defaultAgentName || undefined;
-    const startCommand = agentApp?.startCommand || undefined;
+    const engine = agentApp?.engine || 'opencode';
+    const agentName = agentApp?.defaultAgentName || undefined;
+    const instruction = agentApp?.startCommand || task.notes || null;
 
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-    const codeswarmResponse = await fetch(`${baseUrl}/api/codeswarm/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        instruction: task.notes || undefined,
-        workspacePath,
-        skills,
-        scripts,
-        targetProduct: task.targetProduct || undefined,
-        model,
-        apiKey,
-        timeoutSec,
-        agent,
-        defaultAgentName,
-        startCommand,
-        platformTaskId: id,
-      }),
-    });
+    // 直接在数据库创建 CodeSwarm 任务，使用 $executeRaw 避免 Prisma ORM 连接问题
+    const codeswarmTaskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const codeswarmDbId = `db-${Date.now()}`;
 
-    if (!codeswarmResponse.ok) {
-      const errorData = await codeswarmResponse.json();
-      throw new Error(errorData.error || 'CodeSwarm 任务创建失败');
+    await withRetry(() => prisma.$executeRaw`
+      INSERT INTO "CodeswarmTask" (
+        id, "taskId", state, instruction, "projectPath", "workspacePath",
+        skills, scripts, mcps, model, "apiKey", "timeoutSec",
+        engine, agent, "targetProduct",
+        "platformTaskId", "createdAt", "updatedAt"
+      ) VALUES (
+        ${codeswarmDbId}, ${codeswarmTaskId}, 'queued',
+        ${instruction}, NULL, ${workspacePath || null},
+        ${skills ? JSON.stringify(skills) : null},
+        ${scripts ? JSON.stringify(scripts) : null},
+        NULL, ${model || null}, ${apiKey || null}, ${timeoutSec},
+        ${engine}, ${agentName || null},
+        ${task.targetProduct || null},
+        ${id}, NOW(), NOW()
+      )
+    `);
+
+    // 确保调度器已初始化
+    if (!codeswarmDispatcher.isAvailable) {
+      await codeswarmDispatcher.init();
     }
 
-    const codeswarmData = await codeswarmResponse.json();
+    // 提交到 Redis Stream 或 DB fallback 分发
+    const redisSubmitted = await codeswarmDispatcher.submitTask(codeswarmDbId);
+    if (!redisSubmitted) {
+      // DB fallback：查找可用 Worker 直接分发
+      const allWorkers = await withRetry(() => prisma.$queryRaw`
+        SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks"
+        FROM "CodeswarmWorker"
+        WHERE status = 'online'
+        ORDER BY "currentTasks" ASC
+        LIMIT 50
+      `) as any[];
+
+      const worker = allWorkers.find(w => w.currentTasks < w.maxConcurrent);
+      if (worker) {
+        // 构造 sendTaskToWorker 需要的任务对象
+        const taskRow = {
+          id: codeswarmDbId,
+          taskId: codeswarmTaskId,
+          instruction: instruction,
+          projectPath: null,
+          workspacePath: workspacePath || null,
+          skills: skills ? JSON.stringify(skills) : null,
+          scripts: scripts ? JSON.stringify(scripts) : null,
+          mcps: null,
+          model: model || null,
+          apiKey: apiKey || null,
+          timeoutSec,
+          engine: engine || null,
+          agent: agentName || null,
+          preferredWorkerNodeId: null,
+          targetProduct: task.targetProduct || null,
+        };
+        const success = await codeswarmDispatcher.sendTaskToWorker(taskRow, worker);
+        if (success) {
+          codeswarmDispatcher.syncWorkerLoad(worker.nodeId, (worker.currentTasks || 0) + 1);
+        }
+      }
+    }
 
     await prisma.taskExecutionLog.create({
       data: {
@@ -150,18 +188,27 @@ export async function POST(
         taskId: id,
         level: 'info',
         message: 'CodeSwarm 任务已分发',
-        details: `taskId: ${codeswarmData.taskId}, worker: ${codeswarmData.workerAddress || 'queued'}`,
+        details: `taskId: ${codeswarmTaskId}, redis: ${redisSubmitted}`,
       },
     });
 
     eventBus.emit(`task:${id}`, {
       level: 'info',
       message: 'CodeSwarm 任务已分发',
-      details: `taskId: ${codeswarmData.taskId}`,
+      details: `taskId: ${codeswarmTaskId}`,
       timestamp: new Date(),
     });
 
-    pollCodeswarmTask(id, codeswarmData.taskId).catch(async (error) => {
+    await prisma.taskInstance.update({
+      where: { id },
+      data: {
+        codeswarmTaskId,
+        updatedAt: new Date(),
+      },
+    });
+
+    // 异步轮询任务结果
+    pollCodeswarmTask(id, codeswarmTaskId).catch(async (error) => {
       console.error('CodeSwarm 任务轮询失败:', error);
 
       eventBus.emit(`task:${id}`, {
@@ -183,20 +230,11 @@ export async function POST(
       });
     });
 
-    await prisma.taskInstance.update({
-      where: { id },
-      data: {
-        codeswarmTaskId: codeswarmData.taskId,
-        updatedAt: new Date(),
-      },
-    });
-
     return NextResponse.json({
       message: '任务已开始执行',
       taskId: id,
-      codeswarmTaskId: codeswarmData.taskId,
-      dispatched: codeswarmData.dispatched,
-      workerAddress: codeswarmData.workerAddress,
+      codeswarmTaskId,
+      dispatched: redisSubmitted,
       mergedSkills: parseJsonArray(mergedSkills),
       mergedScripts: parseJsonArray(mergedScripts),
     });
@@ -207,7 +245,6 @@ export async function POST(
 }
 
 async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): Promise<void> {
-  // 优先使用 Redis 订阅
   if (codeswarmDispatcher.isAvailable) {
     await pollViaRedis(localTaskId, codeswarmTaskId);
   } else {
@@ -215,7 +252,6 @@ async function pollCodeswarmTask(localTaskId: string, codeswarmTaskId: string): 
   }
 }
 
-// Redis 订阅模式：实时接收任务状态变更
 async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promise<void> {
   const Redis = (await import('ioredis')).default;
   const redisUrl = process.env.REDIS_URL;
@@ -239,10 +275,10 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
           clearTimeout(timeout);
           subscriber.disconnect();
 
-          // 从 DB 读取最终结果
-          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
-          const resp = await fetch(`${baseUrl}/api/codeswarm/tasks/${codeswarmTaskId}`);
-          const taskData = resp.ok ? (await resp.json()).task : null;
+          const csTask = await prisma.codeswarmTask.findUnique({
+            where: { taskId: codeswarmTaskId },
+            select: { result: true, reportContent: true, error: true },
+          });
 
           if (event.status === 'completed') {
             await prisma.taskInstance.update({
@@ -251,8 +287,8 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
                 status: 'completed',
                 completedAt: new Date(),
                 updatedAt: new Date(),
-                executionResult: taskData?.result || null,
-                reportPath: taskData?.reportContent || null,
+                executionResult: csTask?.result || null,
+                reportPath: csTask?.reportContent || null,
               },
             });
             eventBus.emit(`task:${localTaskId}`, {
@@ -263,7 +299,7 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
             resolve();
           } else {
             subscriber.disconnect();
-            reject(new Error(taskData?.error || 'CodeSwarm 任务执行失败'));
+            reject(new Error(csTask?.error || 'CodeSwarm 任务执行失败'));
           }
         }
 
@@ -296,9 +332,7 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
   });
 }
 
-// DB 轮询 fallback：Redis 不可用时使用
 async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<void> {
-  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
   const maxPolls = 600;
   const logBuffer: { level: string; message: string; details: string | null }[] = [];
   let lastFlush = 0;
@@ -321,7 +355,6 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
 
   for (let i = 0; i < maxPolls; i++) {
     const now = Date.now();
-    // 每 10s 批量写入一次日志
     if (now - lastFlush >= 10000) {
       await flushLogs();
       lastFlush = now;
@@ -330,24 +363,26 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
     await new Promise(resolve => setTimeout(resolve, 2000));
 
     try {
-      const response = await fetch(`${baseUrl}/api/codeswarm/tasks/${codeswarmTaskId}`);
+      const csTask = await prisma.codeswarmTask.findUnique({
+        where: { taskId: codeswarmTaskId },
+        select: {
+          state: true,
+          result: true,
+          reportContent: true,
+          error: true,
+          events: true,
+        },
+      });
 
-      if (!response.ok) {
-        if (response.status === 404) throw new Error('CodeSwarm 任务已被删除');
-        throw new Error(`查询 CodeSwarm 任务失败: ${response.status}`);
-      }
+      if (!csTask) throw new Error('CodeSwarm 任务不存在');
 
-      const data = await response.json();
-      const task = data.task;
-      if (!task) throw new Error('CodeSwarm 任务不存在');
-
-      if (task.state === 'completed') {
+      if (csTask.state === 'completed') {
         await flushLogs();
         await prisma.taskInstance.update({
           where: { id: localTaskId },
           data: {
             status: 'completed', completedAt: new Date(), updatedAt: new Date(),
-            executionResult: task.result || null, reportPath: task.reportContent || null,
+            executionResult: csTask.result || null, reportPath: csTask.reportContent || null,
           },
         });
         eventBus.emit(`task:${localTaskId}`, {
@@ -357,21 +392,25 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
         return;
       }
 
-      if (task.state === 'failed') {
-        throw new Error(task.error || 'CodeSwarm 任务执行失败');
+      if (csTask.state === 'failed') {
+        await flushLogs();
+        throw new Error(csTask.error || 'CodeSwarm 任务执行失败');
       }
 
-      if (task.events && task.events.length > 0) {
-        const recentEvents = task.events.slice(-5);
-        for (const event of recentEvents) {
-          if (event.type === 'agent_message_chunk') {
-            logBuffer.push({ level: 'info', message: 'Agent 输出', details: event.content || null });
-          } else if (event.type === 'tool_call') {
-            logBuffer.push({ level: 'info', message: '工具调用', details: `工具: ${event.tool}` });
-          } else if (event.type === 'error') {
-            logBuffer.push({ level: 'error', message: '执行错误', details: event.message || null });
+      if (csTask.events) {
+        try {
+          const events = typeof csTask.events === 'string' ? JSON.parse(csTask.events) : csTask.events;
+          const recentEvents = Array.isArray(events) ? events.slice(-5) : [];
+          for (const event of recentEvents) {
+            if (event.type === 'agent_message_chunk') {
+              logBuffer.push({ level: 'info', message: 'Agent 输出', details: event.content || null });
+            } else if (event.type === 'tool_call') {
+              logBuffer.push({ level: 'info', message: '工具调用', details: `工具: ${event.tool}` });
+            } else if (event.type === 'error') {
+              logBuffer.push({ level: 'error', message: '执行错误', details: event.message || null });
+            }
           }
-        }
+        } catch { /* ignore parse errors */ }
       }
     } catch (pollError) {
       await flushLogs();

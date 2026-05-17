@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Upload, File, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import JSZip from 'jszip';
 
 interface Tenant {
   id: string;
@@ -115,7 +116,49 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     onClose();
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const extractAgentNameFromZip = async (file: File, engine: string): Promise<string | null> => {
+    try {
+      const zip = await JSZip.loadAsync(file);
+
+      if (engine === 'opencode') {
+        // 从 opencode.json 的 default_agent 字段读取
+        const matched = zip.file(/(?:^|\/)opencode\.json$/i)[0];
+        if (matched) {
+          const content = await matched.async('string');
+          const config = JSON.parse(content);
+          if (config.default_agent) return config.default_agent;
+        }
+      }
+
+      if (engine === 'claudecode') {
+        // 从 .claude/agents/*.md 文件名提取
+        for (const [path, entry] of Object.entries(zip.files)) {
+          if (entry.dir) continue;
+          const normalized = path.replace(/\\/g, '/');
+          const agentMatch = normalized.match(/(?:^|\/)\.claude\/agents\/([^/]+)\.md$/i);
+          if (agentMatch) return agentMatch[1];
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const tryAutoFillAgentName = async (file: File, engine: string) => {
+    if (!engine || !file.name.match(/\.zip$/)) return;
+    const agentName = await extractAgentNameFromZip(file, engine);
+    if (agentName) {
+      setFormData(prev => ({
+        ...prev,
+        defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
+        startCommand: prev.startCommand.trim() ? prev.startCommand : `/${agentName}`,
+      }));
+    }
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const firstFile = files[0];
@@ -136,6 +179,10 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
           file: firstFile,
           size: firstFile.size,
         });
+
+        if (firstFile.name.match(/\.zip$/) && formData.engine) {
+          await tryAutoFillAgentName(firstFile, formData.engine);
+        }
       }
     }
   };
@@ -172,7 +219,13 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
             </label>
             <select
               value={formData.engine}
-              onChange={(e) => setFormData({ ...formData, engine: e.target.value as any })}
+              onChange={(e) => {
+                const newEngine = e.target.value as any;
+                setFormData({ ...formData, engine: newEngine });
+                if (newEngine && agentHarnessFile?.type === 'archive' && agentHarnessFile.file) {
+                  tryAutoFillAgentName(agentHarnessFile.file, newEngine);
+                }
+              }}
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             >
@@ -274,7 +327,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              默认智能体名称 <span className="text-red-500">*</span>
+              默认智能体名称<span className="text-green-500">(会自动识别default_agent)</span> <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
@@ -294,7 +347,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               type="text"
               value={formData.startCommand}
               onChange={(e) => setFormData({ ...formData, startCommand: e.target.value })}
-              placeholder="例如: opencode run skill.md"
+              placeholder="例如: /nazhua-audit"
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />

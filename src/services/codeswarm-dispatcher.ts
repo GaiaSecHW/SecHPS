@@ -160,10 +160,9 @@ const taskPayload = JSON.stringify({
       apiKey: task.apiKey || undefined,
       timeoutSec: task.timeoutSec || undefined,
       callbackUrl,
+      engine: task.engine || undefined,
       agent: task.agent || undefined,
-      defaultAgentName: task.defaultAgentName || undefined,
       preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
-      startCommand: task.startCommand || undefined,
       targetProduct: task.targetProduct || undefined,
     });
 

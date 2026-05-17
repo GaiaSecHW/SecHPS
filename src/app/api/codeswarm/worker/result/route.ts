@@ -281,17 +281,16 @@ export async function POST(request: Request) {
 
     const finalState = status === 'completed' ? 'completed' : 'failed';
 
-    await prisma.codeswarmTask.update({
-      where: { taskId },
-      data: {
-        state: finalState,
-        result: result || null,
-        error: error || null,
-        reportContent: reportContent || null,
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      },
-    });
+    await prisma.$executeRaw`
+      UPDATE "CodeswarmTask"
+      SET state = ${finalState},
+          result = ${result || null},
+          error = ${error || null},
+          "reportContent" = ${reportContent || null},
+          "completedAt" = NOW(),
+          "updatedAt" = NOW()
+      WHERE "taskId" = ${taskId}
+    `;
 
     const taskInstance = await prisma.taskInstance.findFirst({
       where: { codeswarmTaskId: taskId },

@@ -328,10 +328,9 @@ model CodeswarmTask {
   model             String?
   apiKey            String?
   timeoutSec        Int?
+  engine            String?
   agent             String?
-  defaultAgentName  String?
   preferredWorkerNodeId String?
-  startCommand      String?
   targetProduct     String?
   platformTaskId    String?
   sessionId         String?

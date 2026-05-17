@@ -9,7 +9,7 @@ export async function GET() {
       SELECT t.id, t."taskId", t."workerId", t.state, t.instruction,
              t."projectPath", t."workspacePath", t."gitUrl", t."gitRef",
              t.skills, t.mcps, t.model, t."apiKey", t."timeoutSec", t.agent,
-             t."startCommand", t.error, t."startedAt", t."completedAt", t."createdAt", t."updatedAt",
+             t.engine, t.error, t."startedAt", t."completedAt", t."createdAt", t."updatedAt",
              w."nodeId" as "workerNodeId", w."address" as "workerAddress", w."status" as "workerStatus"
       FROM "CodeswarmTask" t
       LEFT JOIN "CodeswarmWorker" w ON t."workerId" = w.id
@@ -79,10 +79,9 @@ export async function POST(request: Request) {
       gitUrl,
       gitRef,
       agent,
-      defaultAgentName,
+      engine,
       action,
       preferredWorkerNodeId,
-      startCommand,
       targetProduct,
       platformTaskId,
     } = body;
@@ -111,8 +110,8 @@ export async function POST(request: Request) {
         SELECT id, "taskId", "workerId", state, instruction,
                "projectPath", "workspacePath", "gitUrl", "gitRef",
                skills, mcps, model, "apiKey", "timeoutSec", agent,
-               "preferredWorkerNodeId", "startCommand", "targetProduct",
-               "defaultAgentName", error, "startedAt", "completedAt",
+               "preferredWorkerNodeId", "targetProduct",
+               engine, error, "startedAt", "completedAt",
                "createdAt", "updatedAt"
         FROM "CodeswarmTask"
         WHERE state = 'queued'
@@ -154,8 +153,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Queued tasks dispatched', dispatched });
     }
 
-    if (!instruction && !startCommand) {
-      return NextResponse.json({ error: 'instruction or startCommand is required' }, { status: 400 });
+    if (!instruction) {
+      return NextResponse.json({ error: 'instruction is required' }, { status: 400 });
     }
 
     const taskId = `task-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -176,9 +175,8 @@ export async function POST(request: Request) {
         apiKey: apiKey || null,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
-        defaultAgentName: defaultAgentName || null,
+        engine: engine || null,
         preferredWorkerNodeId: preferredWorkerNodeId || null,
-        startCommand: startCommand || null,
         targetProduct: targetProduct || null,
         platformTaskId: platformTaskId || null,
         updatedAt: new Date(),

@@ -114,12 +114,10 @@ export const TaskPayloadSchema = z.object({
   callbackUrl: z.string().optional(),
   // Extra environment variables to pass to the OpenCode process
   env: z.record(z.string(), z.string()).optional(),
-  // Agent type (opencode, claudecode, etc.)
+  // Execution engine (opencode, claudecode)
+  engine: z.enum(['opencode', 'claudecode']).optional(),
+  // Agent name (e.g. nazhua-audit)
   agent: z.string().optional(),
-  // Default agent name for command execution
-  defaultAgentName: z.string().optional(),
-  // Custom start command (e.g. "agentflow run pipeline.py")
-  startCommand: z.string().optional(),
   // Preferred worker nodeId for manual scheduling (空则自动分配)
   preferredWorkerNodeId: z.string().optional(),
   // Target product name, used as codedmap db filename ({targetProduct}.db)

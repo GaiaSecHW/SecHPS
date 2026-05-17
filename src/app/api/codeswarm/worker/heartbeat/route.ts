@@ -135,7 +135,7 @@ async function dispatchQueuedTasks(): Promise<void> {
       SELECT id, "taskId", "workerId", state, instruction,
              "projectPath", "workspacePath", "gitUrl", "gitRef",
              skills, mcps, model, "apiKey", "timeoutSec", agent,
-             "defaultAgentName", "preferredWorkerNodeId", error, "startedAt", "completedAt",
+             "preferredWorkerNodeId", error, "startedAt", "completedAt",
              "createdAt", "updatedAt"
       FROM "CodeswarmTask"
       WHERE state = 'queued'
