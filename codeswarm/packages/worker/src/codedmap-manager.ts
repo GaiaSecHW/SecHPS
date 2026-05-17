@@ -1,11 +1,17 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import * as minioClient from './minio-client.js';
 
-const CODEDMAP_HOME = process.env.CODEDMAP_HOME || '/opt/codedmap';
-const JOERN_HOME = process.env.JOERN_HOME || '/opt/joern/joern-cli';
-const JAVA_HOME = process.env.JAVA_HOME || '/usr/lib/jvm/java-19-openjdk';
+const IS_WIN = os.platform() === 'win32';
+
+// Platform-aware defaults: Windows uses local dev paths, Linux uses /opt/ paths
+const CODEDMAP_HOME = process.env.CODEDMAP_HOME || (IS_WIN ? path.resolve(process.cwd(), '..', '..', '..', 'codedmap') : '/opt/codedmap');
+const JOERN_HOME = process.env.JOERN_HOME || (IS_WIN ? 'D:\\work\\tools\\joern\\joern-cli' : '/opt/joern/joern-cli');
+const JAVA_HOME = process.env.JAVA_HOME || (IS_WIN ? '' : '/usr/lib/jvm/java-19-openjdk');
+const PYTHON_CMD = IS_WIN ? 'py' : 'python3';
+const PYTHON_PREFIX_ARGS = IS_WIN ? ['-3'] : [];
 
 // 所有生成的 db 文件列表
 const DB_FILES = [
@@ -171,7 +177,7 @@ export class CodedmapManager {
 
     onEvent({
       type: 'log_chunk',
-      content: `[Codedmap] 开始生成知识图谱: python3 ${buildScript} ${workspacePath} --joern-home ${JOERN_HOME} --workspace ${workspaceDir}`,
+      content: `[Codedmap] 开始生成知识图谱: ${PYTHON_CMD} ${[...PYTHON_PREFIX_ARGS, buildScript, workspacePath, '--joern-home', JOERN_HOME, '--workspace', workspaceDir].join(' ')}`,
       timestamp: new Date().toISOString(),
       level: 'worker',
     });
@@ -180,15 +186,18 @@ export class CodedmapManager {
       throw new Error(`codedmap build script not found: ${buildScript} (CODEDMAP_HOME=${CODEDMAP_HOME})`);
     }
 
-    // 设置 Java 环境变量
-    const buildEnv = {
-      ...process.env,
-      JAVA_HOME,
-      PATH: `${JAVA_HOME}/bin:${process.env.PATH || ''}`,
+    // 设置环境变量
+    const buildEnv: Record<string, string> = {
+      ...process.env as Record<string, string>,
       GIT_TERMINAL_PROMPT: '0',
     };
+    if (JAVA_HOME) {
+      buildEnv.JAVA_HOME = JAVA_HOME;
+      buildEnv.PATH = `${JAVA_HOME}/bin${path.delimiter}${process.env.PATH || ''}`;
+    }
 
-    const { stdout, stderr } = await this.runCommand('python3', [
+    const { stdout, stderr } = await this.runCommand(PYTHON_CMD, [
+      ...PYTHON_PREFIX_ARGS,
       buildScript,
       workspacePath,
       '--joern-home', JOERN_HOME,

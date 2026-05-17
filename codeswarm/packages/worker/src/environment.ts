@@ -12,6 +12,7 @@ export interface BuildResult {
   agent?: string;
   instruction?: string;
   commandTemplate?: string;
+  model?: string;
 }
 
 export type BuildProgressCallback = (message: string) => void;
@@ -102,12 +103,34 @@ export class EnvironmentFactory {
         progress(`找到 opencode.json，读取配置...`);
         try {
           const rawConfig = fs.readFileSync(directOpencodeJsonPath, 'utf-8').replace(/^﻿/, '');
-          const config = JSON.parse(rawConfig);
+          const config: Record<string, any> = JSON.parse(rawConfig);
           resolvedAgent = config.default_agent || config.defaultAgent;
           progress(`default_agent: ${resolvedAgent}`);
           if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
             commandTemplate = config.command[resolvedAgent].template;
             progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
+          }
+
+          // Inject model and provider config from payload
+          if (payload.model || payload.apiKey) {
+            progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}`);
+            if (payload.model) {
+              config.model = payload.model;
+            }
+            if (payload.apiKey && payload.model) {
+              const providerId = payload.model.split('/')[0];
+              if (providerId) {
+                config.provider = {
+                  ...(config.provider || {}),
+                  [providerId]: {
+                    ...(config.provider?.[providerId] || {}),
+                    apiKey: payload.apiKey,
+                  },
+                };
+              }
+            }
+            fs.writeFileSync(directOpencodeJsonPath, JSON.stringify(config, null, 2));
+            progress(`opencode.json 已更新模型配置`);
           }
         } catch (e) {
           progress(`读取 opencode.json 失败: ${e}`);
@@ -129,12 +152,34 @@ export class EnvironmentFactory {
             actualWorkspacePath = subdirPath;
             progress(`使用子目录作为工作区: ${subdirs[0]}`);
             try {
-              const config = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8').replace(/^﻿/, ''));
+              const config: Record<string, any> = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8').replace(/^﻿/, ''));
               resolvedAgent = config.default_agent || config.defaultAgent;
               progress(`default_agent: ${resolvedAgent}`);
               if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
                 commandTemplate = config.command[resolvedAgent].template;
                 progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
+              }
+
+              // Inject model and provider config from payload
+              if (payload.model || payload.apiKey) {
+                progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}`);
+                if (payload.model) {
+                  config.model = payload.model;
+                }
+                if (payload.apiKey && payload.model) {
+                  const providerId = payload.model.split('/')[0];
+                  if (providerId) {
+                    config.provider = {
+                      ...(config.provider || {}),
+                      [providerId]: {
+                        ...(config.provider?.[providerId] || {}),
+                        apiKey: payload.apiKey,
+                      },
+                    };
+                  }
+                }
+                fs.writeFileSync(subdirOpencodeJsonPath, JSON.stringify(config, null, 2));
+                progress(`子目录 opencode.json 已更新模型配置`);
               }
             } catch (e) {
               progress(`读取子目录 opencode.json 失败: ${e}`);
@@ -146,7 +191,7 @@ export class EnvironmentFactory {
       }
 
       progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
-      return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate };
+      return { workspacePath: actualWorkspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate, model: payload.model };
     }
 
     // Local workspace mode

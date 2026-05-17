@@ -125,6 +125,12 @@ export class ProcessManager {
       console.log(`[ProcessMgr] Step A: Merging environment...`);
       const mergedEnv: Record<string, string> = { ...env };
       if (apiKey) {
+        if (model) {
+          const providerId = model.split('/')[0];
+          const envKey = `${providerId.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+          mergedEnv[envKey] = apiKey;
+          console.log(`[ProcessMgr] Added ${envKey} to env`);
+        }
         mergedEnv.ANTHROPIC_API_KEY = apiKey;
         console.log(`[ProcessMgr] Added ANTHROPIC_API_KEY to env`);
       }
