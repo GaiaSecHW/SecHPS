@@ -1,0 +1,285 @@
+{
+  "agent": "audit-spec-client",
+  "files_read_ref": ".opencode/run/artifacts/audit-spec-client.catalog.json#files_read",
+  "checked_endpoints": [
+    { "method": "GET", "path": "GET /api/users" },
+    { "method": "POST", "path": "POST /api/users" },
+    { "method": "GET", "path": "GET /api/users/[id]" },
+    { "method": "PUT", "path": "PUT /api/users/[id]" },
+    { "method": "DELETE", "path": "DELETE /api/users/[id]" },
+    { "method": "PUT", "path": "PUT /api/users/password" },
+    { "method": "GET", "path": "GET /api/roles" },
+    { "method": "POST", "path": "POST /api/roles" },
+    { "method": "GET", "path": "GET /api/permissions" },
+    { "method": "GET", "path": "GET /api/tenants" },
+    { "method": "GET", "path": "GET /api/files/[projectId]/read" },
+    { "method": "POST", "path": "POST /api/files/[projectId]/write" },
+    { "method": "GET", "path": "GET /api/codeswarm/tasks/[taskId]/stream" },
+    { "method": "WS", "path": "WS /ws/terminal" },
+    { "method": "POST", "path": "POST /api/claude/[project]/stream" }
+  ],
+  "checked_patterns": [
+    {
+      "name": "dom_xss",
+      "evidence_refs": ["E:D10-002", "E:D10-003", "E:D10-004"],
+      "result": "PASS",
+      "summary": "仅2处dangerouslySetInnerHTML均用DOMPurify清洗; ReactMarkdown默认转义HTML; 无其余DOM XSS sink"
+    },
+    {
+      "name": "csrf_boundary",
+      "evidence_refs": ["E:D10-004"],
+      "result": "PASS",
+      "summary": "Cookie: SameSite=Strict+HttpOnly; API认证使用Authorization Bearer头, 非Cookie; 传统CSRF无法攻击API"
+    },
+    {
+      "name": "postmessage_boundary",
+      "evidence_refs": ["E:D10-002"],
+      "result": "PASS",
+      "summary": "未发现postMessage调用; onmessage仅用于SSE EventSource和WebSocket(同源), 非跨源message事件"
+    },
+    {
+      "name": "cors_misuse",
+      "evidence_refs": ["E:D10-004"],
+      "result": "PASS",
+      "summary": "无CORS配置; Next.js单源部署无需CORS; 无Access-Control-Allow-Origin头"
+    },
+    {
+      "name": "websocket_boundary",
+      "evidence_refs": ["E:D10-002"],
+      "result": "PASS_WITH_NOTES",
+      "summary": "Token验证正确(verifyToken); 无效Token关闭连接(code 1008); 但Token通过URL查询参数传递(见D10-002)"
+    }
+  ],
+  "completed_steps": [
+    {
+      "name": "find_browser_entry",
+      "evidence_refs": ["E:D10-004", "E:D10-002"],
+      "result": "DONE",
+      "summary": "枚举了所有84个dashboard页面、核心客户端组件、WebSocket终端、文件编辑器、聊天组件、中间件"
+    },
+    {
+      "name": "trace_dom_or_message_flow",
+      "evidence_refs": ["E:D10-001", "E:D10-002"],
+      "result": "DONE",
+      "summary": "追踪了所有DOM操作和消息流; 确认所有message handler为同源SSE/WebSocket; 无跨源消息处理"
+    },
+    {
+      "name": "check_origin_or_sanitization",
+      "evidence_refs": ["E:D10-001", "E:D10-002", "E:D10-004"],
+      "result": "DONE",
+      "summary": "验证了DOMPurify清洗、SameSite Cookie、WebSocket Token验证; 发现SSE stream缺少认证"
+    }
+  ],
+  "findings": [
+    {
+      "id": "D10-001",
+      "title": "CodeSwarm SSE流端点缺少认证",
+      "file": "src/app/api/codeswarm/tasks/[taskId]/stream/route.ts",
+      "line": 1,
+      "severity": "MEDIUM",
+      "cwe": "CWE-306",
+      "confidence": "HIGH",
+      "impact": "知道taskId的攻击者可无认证访问任务事件流，获取执行结果、错误信息等敏感数据",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/app/api/codeswarm/tasks/[taskId]/stream/route.ts",
+        "line": 6,
+        "code": "export async function GET(\n  request: Request,\n  { params }: { params: Promise<{ taskId: string }> }\n) {"
+      },
+      "propagation": [
+        {
+          "file": "src/app/api/codeswarm/tasks/[taskId]/stream/route.ts",
+          "line": 29,
+          "summary": "流端点每500ms轮询任务事件并发送，无任何认证检查"
+        },
+        {
+          "file": "src/app/api/codeswarm/tasks/[taskId]/stream/route.ts",
+          "line": 58,
+          "summary": "任务完成/失败时通过SSE发送result/error数据，包含执行结果"
+        }
+      ],
+      "sink": {
+        "file": "src/app/api/codeswarm/tasks/[taskId]/stream/route.ts",
+        "line": 76,
+        "code": "return new Response(stream, {\n  headers: {\n    'Content-Type': 'text/event-stream',\n  },\n});"
+      },
+      "control_chain": [
+        { "type": "missing_auth", "summary": "SSE端点无认证检查，任意知道taskId者可获取数据" }
+      ],
+      "artifact": {
+        "file": "src/app/dashboard/codeswarm/page.tsx",
+        "line": 0,
+        "summary": "Codeswarm dashboard page uses EventSource to connect to this stream"
+      },
+      "runtime_impact": "未认证用户可监听任意CodeSwarm任务的实时事件流，包含任务的result和error字段",
+      "evidence_ref": "E:D10-001",
+      "poc": [
+        "使用浏览器或curl: EventSource('http://host/api/codeswarm/tasks/<taskId>/stream')"
+      ],
+      "fix": [
+        "在GET处理函数开始时添加 authenticateRequest() 调用验证Bearer Token",
+        "添加权限验证确保当前用户对该taskId有访问权限"
+      ]
+    },
+    {
+      "id": "D10-002",
+      "title": "WebSocket连接中JWT Token通过URL查询参数传递",
+      "file": "src/lib/websocket-server.ts",
+      "line": 19,
+      "severity": "MEDIUM",
+      "cwe": "CWE-200",
+      "confidence": "HIGH",
+      "impact": "JWT Token可能通过服务端访问日志、Referer请求头、浏览器历史记录泄露",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/components/terminal/TerminalComponent.tsx",
+        "line": 129,
+        "code": "const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?token=${encodeURIComponent(token)}&cwd=${encodeURIComponent(cwd)}&sessionId=${encodeURIComponent(sessionId)}`;"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/websocket-server.ts",
+          "line": 19,
+          "summary": "服务端从URL查询参数解析token: urlObj.searchParams.get('token')"
+        },
+        {
+          "file": "src/lib/websocket-server.ts",
+          "line": 43,
+          "summary": "使用verifyToken验证从URL提取的JWT token"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/websocket-server.ts",
+        "line": 43,
+        "code": "const payload = verifyToken(query.token);\nif (!payload) {\n  console.warn('[WebSocket] Invalid or expired token');\n  return false;\n}"
+      },
+      "control_chain": [
+        { "type": "url_leakage", "summary": "客户端从localStorage读取token拼接到WebSocket URL，token出现在access log和Referer头" }
+      ],
+      "artifact": {
+        "file": "src/app/dashboard/claude/[project]/page.tsx",
+        "line": 622,
+        "summary": "Claude页面也从localStorage读取token传递给TerminalComponent"
+      },
+      "runtime_impact": "JWT Token出现在WebSocket URL中，泄露到服务器access log、浏览器历史、Referer请求头",
+      "evidence_ref": "E:D10-002",
+      "poc": [
+        "WebSocket握手URL: ws://host/ws/terminal?token=eyJhbGci...",
+        "浏览器DevTools Network面板中URL可见",
+        "页面导航时Referer头可能包含带token的完整URL"
+      ],
+      "fix": [
+        "使用WebSocket握手阶段的自定义HTTP Header传递Token(ws库在headers选项中支持)",
+        "短期修复: 生产环境确保wss://加密传输 + 日志过滤敏感参数"
+      ]
+    },
+    {
+      "id": "D10-003",
+      "title": "JWT Token存储在localStorage中",
+      "file": "src/hooks/useAuth.ts",
+      "line": 67,
+      "severity": "LOW",
+      "cwe": "CWE-312",
+      "confidence": "MEDIUM",
+      "impact": "Token可被同源任意JavaScript访问，增加XSS漏洞的杀伤半径",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/hooks/useAuth.ts",
+        "line": 67,
+        "code": "const token = localStorage.getItem('token');\nconst userStr = localStorage.getItem('user');"
+      },
+      "propagation": [
+        {
+          "file": "src/app/login/page.tsx",
+          "line": 47,
+          "summary": "登录成功后存储token和user到localStorage: localStorage.setItem('token', data.token)"
+        }
+      ],
+      "sink": {
+        "file": "src/hooks/useAuth.ts",
+        "line": 102,
+        "code": "return localStorage.getItem('token');"
+      },
+      "control_chain": [
+        { "type": "localstorage_token", "summary": "登录响应→localStorage.setItem→各页面getItem→Authorization Bearer头" }
+      ],
+      "artifact": {
+        "file": "src/app/dashboard/layout.tsx",
+        "line": 68,
+        "summary": "Dashboard layout也从localStorage读取token进行会话检查"
+      },
+      "runtime_impact": "任何同源XSS漏洞可导致JWT Token被窃取，导致完整账户接管",
+      "evidence_ref": "E:D10-003",
+      "poc": [],
+      "fix": [
+        "推荐迁移到HttpOnly Cookie认证以减少XSS影响面",
+        "当前已通过SameSite=Strict Cookie + Bearer Token提供部分缓解"
+      ]
+    },
+    {
+      "id": "D10-004",
+      "title": "安全HTTP响应头缺失(CSP/X-Frame-Options/X-Content-Type-Options)",
+      "file": "src/middleware.ts",
+      "line": 1,
+      "severity": "LOW",
+      "cwe": "CWE-693",
+      "confidence": "HIGH",
+      "impact": "缺少XSS纵深防御、点击劫持防护、MIME类型嗅探防护",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/middleware.ts",
+        "line": 5,
+        "code": "export function middleware(request: NextRequest) {\n  const { pathname } = request.nextUrl;\n  if (pathname.startsWith(DASHBOARD_PREFIX)) {\n    const token = request.cookies.get('auth-token')?.value;\n    if (!token) { return NextResponse.redirect(loginUrl); }\n  }\n  return NextResponse.next();\n}"
+      },
+      "propagation": [],
+      "sink": {
+        "file": "src/middleware.ts",
+        "line": 17,
+        "code": "return NextResponse.next();"
+      },
+      "control_chain": [
+        { "type": "missing_security_headers", "summary": "所有/dashboard/*路由→NextResponse.next()无安全头→浏览器收到无防护响应" }
+      ],
+      "artifact": null,
+      "runtime_impact": "页面可在iframe中加载(点击劫持); 无CSP限制脚本执行; 浏览器可能MIME嗅探执行非脚本内容",
+      "evidence_ref": "E:D10-004",
+      "poc": [
+        "HTTP响应中缺失: Content-Security-Policy, X-Frame-Options, X-Content-Type-Options"
+      ],
+      "fix": [
+        "在middleware中添加: response.headers.set('Content-Security-Policy', \"default-src 'self'\")",
+        "添加 X-Frame-Options: DENY",
+        "添加 X-Content-Type-Options: nosniff",
+        "添加 Strict-Transport-Security (生产环境)"
+      ]
+    }
+  ],
+  "unfinished": [
+    {
+      "item": "task-builder SSE端点审计",
+      "reason": "客户端代码连接 /api/task-builder/tasks/${id}/logs/stream 但服务端未实现该端点。需实现后审计认证与输出安全。"
+    },
+    {
+      "item": "外部OAuth/SSO流程审计",
+      "reason": "Gitea集成的OAuth回调URL可能引入token泄露或开放重定向风险。当前OAuth实现不完整，待完成后审计。"
+    }
+  ],
+  "catalog_path": ".opencode/run/artifacts/audit-spec-client.catalog.json",
+  "evidence_path": ".opencode/run/artifacts/audit-spec-client.evidence.json",
+  "narrative_path": ".opencode/run/artifacts/audit-spec-client.md",
+  "self_status": {
+    "status": "PASS",
+    "reasons": [
+      "所有5种required_patterns(dom_xss/csrf_boundary/postmessage_boundary/cors_misuse/websocket_boundary)已覆盖",
+      "所有3个required_steps(find_browser_entry/trace_dom_or_message_flow/check_origin_or_sanitization)已完成",
+      "DOM XSS防护良好: dangerouslySetInnerHTML仅2处且均用DOMPurify清洗",
+      "CSRF防护有效: SameSite=Strict + Bearer Token认证",
+      "无postMessage跨源消息漏洞",
+      "CORS配置无问题(单源部署)",
+      "WebSocket认证正确但Token在URL中传递存在泄露风险(MEDIUM)",
+      "发现CodeSwarm SSE端点缺少认证(MEDIUM)",
+      "无High/Critical级别客户端漏洞",
+      "2个unfinished项: task-builder SSE端点待实现后审计、OAuth流程待实现后审计"
+    ]
+  }
+}

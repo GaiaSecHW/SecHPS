@@ -3,7 +3,7 @@ import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
-import { gitAgentAppSync } from '@/services/git-agent-app-sync';
+import { uploadAgentHarness } from '@/lib/minio-client';
 import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
@@ -124,16 +124,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Git 方式上传
-    const gitResult = await gitAgentAppSync.uploadAgentApp(appId, filesMap);
-    
-    if (!gitResult.success) {
-      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 上传 AgentApp 失败', appId, { 
-        details: { appId, errors: gitResult.errors } 
+    // Upload to MinIO
+    try {
+      await uploadAgentHarness(appId, filesMap);
+    } catch (uploadError) {
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'MinIO 上传 AgentApp 失败', appId, {
+        details: { appId, error: uploadError instanceof Error ? uploadError.message : String(uploadError) }
       });
-      return NextResponse.json({ 
-        error: 'Git 上传失败', 
-        details: gitResult.message 
+      return NextResponse.json({
+        error: 'MinIO 上传失败',
+        details: uploadError instanceof Error ? uploadError.message : String(uploadError)
       }, { status: 500 });
     }
 
@@ -156,14 +156,14 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    logger.info(LOG_MODULES.SKILL, 'AgentApp 创建成功', { appId, name, gitUpload: gitResult.success });
+    logger.info(LOG_MODULES.SKILL, 'AgentApp 创建成功', { appId, name });
 
     // 异步同步 SKILL，不阻塞响应
     syncSkillsFromHarness(filesMap, payload.userId, tenantId).catch(err =>
       console.error('[SkillHarnessSync] 自动同步失败:', err)
     );
 
-    return NextResponse.json({ app, gitUploaded: gitResult.success });
+    return NextResponse.json({ app });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '创建应用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '创建应用失败' }, { status: 500 });

@@ -1,0 +1,174 @@
+{
+  "source": "audit-spec-llm",
+  "generated_at": "2026-05-17T00:00:00Z",
+  "evidence_chain": {
+    "LLM-001": {
+      "title": "用户消息直接注入 LLM Prompt 无任何过滤/消毒",
+      "entrypoint": "POST /api/agent/chat",
+      "control_chain": [
+        {
+          "file": "src/app/api/agent/chat/route.ts",
+          "line": 20,
+          "code": "const body = await request.json(); const { executionId, message } = body;",
+          "summary": "用户 message 直接来自 HTTP 请求体"
+        },
+        {
+          "file": "src/app/api/agent/chat/route.ts",
+          "line": 59,
+          "code": "await caller.continueConversation(executionId, message, {...})",
+          "summary": "message 直接传递给 EvaluationCaller.continueConversation"
+        },
+        {
+          "file": "src/services/evaluation/caller.ts",
+          "line": 143,
+          "code": "await this.history.addUserMessage(evaluationId, userMessage);",
+          "summary": "消息存入数据库 sessionMessage 表"
+        },
+        {
+          "file": "src/services/evaluation/caller.ts",
+          "line": 149,
+          "code": "const messages = this.promptBuilder.buildMessages({ ...context, conversationHistory });",
+          "summary": "构建包含用户消息的消息列表"
+        },
+        {
+          "file": "src/services/evaluation/caller.ts",
+          "line": 155,
+          "code": "const prompt = messages.map(m => `${m.role === 'user' ? 'Human' : 'System'}: ${m.content}`).join('\\n\\n---\\n\\n');",
+          "summary": "用户消息直接嵌入 prompt，无任何转义或过滤"
+        },
+        {
+          "file": "src/services/evaluation/caller.ts",
+          "line": 176,
+          "code": "await this.agentService.sendPrompt(prompt, agentCallbacks);",
+          "summary": "未消毒的 prompt 发送给 ClaudeAgentService"
+        },
+        {
+          "file": "src/services/ai/claude-agent.ts",
+          "line": 429,
+          "code": "const q = query({ prompt, options });",
+          "summary": "最终通过 Claude SDK 发送给 AI 模型"
+        }
+      ],
+      "missing_guard": "整个调用链中没有任何输入验证、内容过滤、注入检测"
+    },
+    "LLM-002": {
+      "title": "Skill Content 作为系统提示词直接注入",
+      "entrypoint": "POST /api/agent/execute",
+      "control_chain": [
+        {
+          "file": "src/app/api/agent/execute/route.ts",
+          "line": 19,
+          "code": "const { skillId, projectId, parameters } = body;",
+          "summary": "skillId 来自请求体"
+        },
+        {
+          "file": "src/app/api/agent/execute/route.ts",
+          "line": 26,
+          "code": "const skill = await prisma.skill.findUnique({ where: { id: skillId } });",
+          "summary": "从 DB 加载 skill 内容"
+        },
+        {
+          "file": "src/lib/agent-executor.ts",
+          "line": 130,
+          "code": "const prompt = this.buildPrompt(skill, project);",
+          "summary": "构建 prompt 时 skill.content 作为系统提示词"
+        },
+        {
+          "file": "src/lib/agent-executor.ts",
+          "line": 283,
+          "code": "const systemMessage = skill.content || skill.description || '';",
+          "summary": "skill.content 直接作为系统提示词原文"
+        },
+        {
+          "file": "src/lib/agent-executor.ts",
+          "line": 286,
+          "code": "return `System: ${systemMessage}\\n\\n---\\n\\nHuman: ${userMessage}`;",
+          "summary": "系统提示词直接拼接，无内容验证"
+        }
+      ],
+      "missing_guard": "无 Skill 内容安全扫描/校验/白名单，恶意 Skill 可注入任意系统指令"
+    },
+    "LLM-003": {
+      "title": "MCP Local Stdio 任意命令执行",
+      "entrypoint": "POST /api/mcp-servers/test / POST /api/mcp",
+      "control_chain": [
+        {
+          "file": "src/app/api/mcp/route.ts",
+          "line": 92,
+          "code": "const mcpServer = await prisma.mcpServerConfig.create({data: { ...command, args, url, env }})",
+          "summary": "用户提交的 command/args/env 存储到数据库"
+        },
+        {
+          "file": "src/lib/mcp-loader.ts",
+          "line": 29,
+          "code": "const projectMcps = await prisma.mcpServerConfig.findMany({ where: { projectId, isEnabled: true } })",
+          "summary": "MCP 配置从 DB 加载"
+        },
+        {
+          "file": "src/services/ai/claude-agent.ts",
+          "line": 248,
+          "code": "mcpServers[server.name] = { type: 'stdio', command: server.command, args: server.args, env: server.env }",
+          "summary": "command 传递给 Claude SDK"
+        },
+        {
+          "file": "src/lib/mcp-client.ts",
+          "line": 99,
+          "code": "this.process = spawn(this.config.command, this.config.args || [], { stdio: ['pipe','pipe','pipe'], env })",
+          "summary": "Claude SDK 内部使用 spawn 执行 command（或直接调用 mcp-client 的 callMcpToolDirect）"
+        }
+      ],
+      "missing_guard": "无命令白名单、无参数验证、无沙箱隔离"
+    },
+    "LLM-004": {
+      "title": "CLAUDE.md 项目文件注入系统提示词",
+      "entrypoint": "POST /api/projects/[id]/start",
+      "control_chain": [
+        {
+          "file": "src/app/api/projects/[id]/start/route.ts",
+          "line": 720,
+          "code": "const claudeMdContent = await readFile(claudeMdPath, 'utf-8');",
+          "summary": "从项目路径读取 CLAUDE.md 文件"
+        },
+        {
+          "file": "src/app/api/projects/[id]/start/route.ts",
+          "line": 728,
+          "code": "sdkOptions.systemPrompt = `# 项目级指令（CLAUDE.md）\\n\\n${claudeMdContent}\\n\\n---\\n\\n${originalPrompt}`;",
+          "summary": "CLAUDE.md 注入到系统提示词最前面（最高优先级）"
+        }
+      ],
+      "missing_guard": "CLAUDE.md 文件可通过 file:write 权限写入，注入内容可覆盖系统指令"
+    },
+    "LLM-005": {
+      "title": "远程 MCP URL 无 SSRF 防护",
+      "entrypoint": "POST /api/mcp / POST /api/mcp-servers/test",
+      "control_chain": [
+        {
+          "file": "src/lib/mcp-client.ts",
+          "line": 334,
+          "code": "this.eventSource = new EventSource(this.sseUrl);",
+          "summary": "RemoteMcpClient 直接连接用户提供的 URL"
+        },
+        {
+          "file": "src/lib/mcp-client.ts",
+          "line": 695,
+          "code": "const response = await fetch(this.endpoint, { method: 'POST', ... });",
+          "summary": "StreamableHttpClient 直接请求用户提供的 URL"
+        }
+      ],
+      "missing_guard": "无 URL 白名单/黑名单检测，可连接内网服务"
+    },
+    "LLM-006": {
+      "title": "Agent 工具权限无粒度限制",
+      "entrypoint": "src/lib/agent-executor.ts",
+      "control_chain": [
+        {
+          "file": "src/lib/agent-executor.ts",
+          "line": 74,
+          "code": "allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'Bash', 'Skill']",
+          "summary": "Agent 拥有 Bash 命令执行、文件读写等高风险工具"
+        }
+      ],
+      "missing_guard": "未按项目/租户/Skill 粒度限制工具使用范围"
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "files_read": [
+    "src/lib/tool-executor.ts",
+    "src/lib/agent-executor.ts",
+    "src/lib/scan-executor.ts",
+    "src/app/api/agent/execute/route.ts",
+    "src/lib/auth.ts",
+    "src/app/api/plugins/upload/route.ts",
+    "src/lib/mcp-client.ts",
+    "src/app/api/codeswarm/local-test/route.ts",
+    "src/app/api/codeswarm/worker/result/route.ts",
+    "src/lib/websocket-server.ts",
+    "src/services/terminal-manager.ts",
+    "src/lib/gitea.ts",
+    "src/lib/path-utils.ts",
+    "src/app/api/files/[projectId]/read/route.ts",
+    "src/app/api/files/[projectId]/write/route.ts",
+    "src/app/api/files/[projectId]/browse/route.ts",
+    "src/lib/mcp-loader.ts",
+    "src/app/api/mcp-servers/test/route.ts",
+    "src/lib/result-parser.ts",
+    "src/lib/skill-template.ts",
+    "src/lib/workflow-actions/transform-executor.ts",
+    "src/lib/workflow-actions/script-executor.ts",
+    "src/app/api/config/export/route.ts",
+    "src/app/api/config/import/route.ts",
+    "src/app/api/skills/import/route.ts",
+    ".opencode/run/artifacts/audit-spec-injection.evidence.json"
+  ],
+  "checked_endpoints": [
+    {
+      "path": "POST /api/agent/execute",
+      "method": "POST",
+      "auth": "agent:execute",
+      "patterns_checked": ["command_exec", "expression_eval"]
+    },
+    {
+      "path": "POST /api/plugins/upload",
+      "method": "POST",
+      "auth": "plugin:create",
+      "patterns_checked": ["command_exec"]
+    },
+    {
+      "path": "POST /api/mcp-servers/test",
+      "method": "POST",
+      "auth": "config:read",
+      "patterns_checked": ["command_exec"]
+    },
+    {
+      "path": "GET /api/files/[projectId]/read",
+      "method": "GET",
+      "auth": "file:read",
+      "patterns_checked": ["command_exec"]
+    },
+    {
+      "path": "POST /api/files/[projectId]/write",
+      "method": "POST",
+      "auth": "file:write",
+      "patterns_checked": ["command_exec"]
+    },
+    {
+      "path": "POST /api/codeswarm/local-test",
+      "method": "POST",
+      "auth": "none (no auth middleware)",
+      "patterns_checked": ["command_exec"]
+    },
+    {
+      "path": "ws://host/ws/terminal",
+      "protocol": "WebSocket",
+      "auth": "token_query_param",
+      "patterns_checked": ["command_exec"]
+    },
+    {
+      "path": "GET /api/config/export",
+      "method": "GET",
+      "auth": "config:read",
+      "patterns_checked": ["sql_query_building"],
+      "note": "纯 DB 读取 + JSON 序列化，无注入风险"
+    },
+    {
+      "path": "POST /api/config/import",
+      "method": "POST",
+      "auth": "config:update",
+      "patterns_checked": ["command_exec", "sql_query_building"],
+      "note": "用户输入经 String()/Boolean()/Number() 类型强制转换后通过 Prisma 写入，无注入"
+    },
+    {
+      "path": "POST /api/skills/import",
+      "method": "POST",
+      "auth": "skill:create",
+      "patterns_checked": ["command_exec"],
+      "note": "Skill 内容通过 Prisma 存入 DB（二阶 prompt injection 属于 LLM 维度），直接命令注入风险低"
+    }
+  ]
+}

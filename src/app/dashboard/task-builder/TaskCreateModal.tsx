@@ -266,7 +266,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="例如：分析项目代码结构、修复 XX bug、生成安全审查报告..."
+              placeholder="对任务的简要描述（可选）..."
             />
           </div>
 

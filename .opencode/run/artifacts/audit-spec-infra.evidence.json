@@ -1,0 +1,125 @@
+{
+  "agent": "audit-spec-infra",
+  "evidence": [
+    {
+      "id": "E:INFRA-001-01",
+      "finding_id": "INFRA-001",
+      "file": "src/app/api/codeswarm/worker/result/route.ts",
+      "lines": "273-363",
+      "code_snippet": "export async function POST(request: Request) {\n  try {\n    const body = await request.json();\n    const { taskId, nodeId, status, result, error, reportContent } = body;\n    if (!taskId) {\n      return NextResponse.json({ error: 'taskId is required' }, { status: 400 });\n    }\n    ...\n    await prisma.$executeRaw`UPDATE \"CodeswarmTask\" SET state = ${finalState} ...`;\n    ...\n    if (finalState === 'completed') {\n      executeVulnerabilityParseAsync(taskId, taskInstanceForParse.projectPath);\n    }\n    return NextResponse.json({ success: true, taskId, status: finalState });\n  }",
+      "summary": "Worker result callback endpoint - no authentication, accepts arbitrary taskId, triggers shell command execution via executeVulnerabilityParseAsync"
+    },
+    {
+      "id": "E:INFRA-001-02",
+      "finding_id": "INFRA-001",
+      "file": "src/app/api/codeswarm/worker/heartbeat/route.ts",
+      "lines": "6-89",
+      "code_snippet": "export async function POST(request: Request) {\n  const body = await request.json();\n  const { nodeId, maxConcurrent, currentTasks, address } = body;\n  if (!nodeId) { return NextResponse.json({ error: 'nodeId is required' }, { status: 400 }); }\n  // Optional token verification - NO hard rejection\n  const bearerToken = extractBearerToken(request);\n  let authenticatedNodeId: string | null = null;\n  if (bearerToken) {\n    const payload = verifyWorkerToken(bearerToken);\n    if (payload && payload.nodeId === nodeId) { authenticatedNodeId = payload.nodeId; }\n  }\n  // Proceeds with upsert regardless of authentication\n  const worker = await prisma.codeswarmWorker.upsert({\n    where: { nodeId },\n    update: { address: address || '', status: 'online', ... },\n    create: { id: `worker-${Date.now()}`, nodeId, ... },\n  });\n  ...\n  return NextResponse.json({ success: true, nodeId, token: workerToken });\n}",
+      "summary": "Heartbeat endpoint has optional token - unauthenticated requests still accepted, auto-registers unknown workers"
+    },
+    {
+      "id": "E:INFRA-001-03",
+      "finding_id": "INFRA-001",
+      "file": "src/app/api/codeswarm/worker/event/route.ts",
+      "lines": "5-143",
+      "code_snippet": "export async function POST(request: Request) {\n  const body = await request.json();\n  const { taskId, nodeId, events, type, data } = body;\n  if (!taskId) {\n    return NextResponse.json({ error: 'taskId is required' }, { status: 400 });\n  }\n  ...\n  await prisma.codeswarmEvent.createMany({ data: eventRows });\n  ...\n  return NextResponse.json({ success: true, count: eventList.length });\n}",
+      "summary": "Worker event endpoint - no authentication at all, accepts arbitrary events"
+    },
+    {
+      "id": "E:INFRA-001-04",
+      "finding_id": "INFRA-001",
+      "file": "codeswarm/ARCHITECTURE.md",
+      "lines": "146",
+      "code_snippet": "回调接口**无认证**，依赖网络隔离保护。",
+      "summary": "Documentation confirms callback endpoints have no authentication"
+    },
+    {
+      "id": "E:INFRA-002-01",
+      "finding_id": "INFRA-002",
+      "file": ".env",
+      "lines": "1-59",
+      "code_snippet": "# .env file with hardcoded credentials:\nDATABASE_URL=\"postgresql://postgres:Huawei12%23%24@172.31.23.182:5432/copy?connection_limit=20&pool_timeout=60...\"\nJWT_SECRET=\"your-secret-key-change-in-production\"\nREDIS_URL=\"redis://172.31.23.181:6379/1\"\nSFTP_PASSWORD=\"Huawei12#$\"\nGITEA_TOKEN=\"2a0eb308a797b6485d76ca35144f16224b2e7fb4\"\nSKILLS_GITEA_TOKEN=\"2a0eb308a797b6485d76ca35144f16224b2e7fb4\"\nMINIO_ACCESS_KEY=\"minioadmin\"\nMINIO_SECRET_KEY=\"minioadmin123\"",
+      "summary": "Full .env file with database password, SFTP credentials, Gitea tokens (×2), MinIO credentials, Redis URL and internal IP topology"
+    },
+    {
+      "id": "E:INFRA-003-01",
+      "finding_id": "INFRA-003",
+      "file": "src/lib/codeswarm-worker-auth.ts",
+      "lines": "3",
+      "code_snippet": "const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';",
+      "summary": "JWT_SECRET falls back to hardcoded default 'dev-secret-change-me' when env var is empty"
+    },
+    {
+      "id": "E:INFRA-003-02",
+      "finding_id": "INFRA-003",
+      "file": "src/lib/codeswarm-worker-auth.ts",
+      "lines": "12-16",
+      "code_snippet": "export function generateWorkerToken(workerId: string, nodeId: string): string {\n  return jwt.sign({ workerId, nodeId, type: 'worker' }, JWT_SECRET, {\n    expiresIn: WORKER_TOKEN_EXPIRES,\n  });\n}",
+      "summary": "Worker tokens use same JWT_SECRET as user auth tokens, no audience/issuer restriction"
+    },
+    {
+      "id": "E:INFRA-004-01",
+      "finding_id": "INFRA-004",
+      "file": "src/app/api/codeswarm/nodes/route.ts",
+      "lines": "7-15",
+      "code_snippet": "const workers = await prisma.$queryRaw`\n  SELECT id, \"nodeId\", address, status, \"maxConcurrent\", \"currentTasks\",\n         token, \"lastHeartbeat\", \"createdAt\", \"updatedAt\"\n  FROM \"CodeswarmWorker\"\n  ORDER BY \"lastHeartbeat\" DESC\n  LIMIT 100\n` as any[];\nreturn NextResponse.json({ workers });",
+      "summary": "GET /api/codeswarm/nodes returns worker JWT tokens (the `token` field is a JWT worker token)"
+    },
+    {
+      "id": "E:INFRA-005-01",
+      "finding_id": "INFRA-005",
+      "file": "codeswarm/packages/worker/src/daemon.ts",
+      "lines": "91",
+      "code_snippet": "await this.server.listen({ port: this.config.port, host: '0.0.0.0' });",
+      "summary": "Worker Fastify server binds to all interfaces (0.0.0.0), accessible from any network segment that can reach the worker"
+    },
+    {
+      "id": "E:INFRA-006-01",
+      "finding_id": "INFRA-006",
+      "file": "codeswarm/packages/worker/src/daemon.ts",
+      "lines": "156-158, 368-418",
+      "code_snippet": "private getCallbackUrl(payload: TaskPayload): string {\n  return payload.callbackUrl || this.config.orchestratorUrl;\n}\n\nprivate async postEvent(payload: TaskPayload, events: unknown[]): Promise<void> {\n  const callbackUrl = this.getCallbackUrl(payload);\n  await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),\n  });\n}\n\nprivate async postResult(payload: TaskPayload, result: {...}) {\n  const callbackUrl = this.getCallbackUrl(payload);\n  // No auth headers sent\n  await fetch(`${callbackUrl}/api/codeswarm/worker/result`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify(result),\n  });\n}",
+      "summary": "Worker callbacks (postEvent, postResult, postHeartbeat) carry no authentication tokens. Callback URL can be overridden by task payload."
+    },
+    {
+      "id": "E:INFRA-007-01",
+      "finding_id": "INFRA-007",
+      "file": "src/app/api/v1/vulnerabilities/route.ts",
+      "lines": "8-15",
+      "code_snippet": "export async function POST(request: NextRequest) {\n  // 1. 解析请求体（认证由外部防火墙处理）\n  let body: unknown;\n  try {\n    body = await request.json();\n  } catch {\n    return badRequest('Invalid JSON body');\n  }\n  // No authentication at all",
+      "summary": "POST /api/v1/vulnerabilities explicitly skips authentication, relies on external firewall"
+    },
+    {
+      "id": "E:INFRA-008-01",
+      "finding_id": "INFRA-008",
+      "file": "src/lib/nfs-upload.ts",
+      "lines": "36-40, 106-143",
+      "code_snippet": "const remoteDirPath = path.join(config.mountPath, taskId);\nconst remoteFilePath = path.join(remoteDirPath, fileName);\nfs.mkdirSync(remoteDirPath, { recursive: true });\nfs.writeFileSync(remoteFilePath, fileBuffer);\n...\nconst remoteFilePath = path.join(remoteDirPath, fileName);\n...\nif (isArchive) {\n  await extractArchive(remoteFilePath, remoteDirPath);  // adm-zip extractAllTo - no path validation\n}",
+      "summary": "NFS upload uses path.join with user-controlled fileName, archive extraction via adm-zip without path traversal checks"
+    },
+    {
+      "id": "E:INFRA-009-01",
+      "finding_id": "INFRA-009",
+      "file": "codeswarm/packages/worker/src/daemon.ts",
+      "lines": "156-158",
+      "code_snippet": "private getCallbackUrl(payload: TaskPayload): string {\n  return payload.callbackUrl || this.config.orchestratorUrl;\n}",
+      "summary": "Worker callback URL accepts arbitrary origin from task payload (payload.callbackUrl), enabling SSRF to redirect events/results to attacker-controlled servers"
+    },
+    {
+      "id": "E:INFRA-010-01",
+      "finding_id": "INFRA-010",
+      "file": ".env",
+      "lines": "6, 9, 12, 15-18, 29, 35-36, 51-53",
+      "code_snippet": "DATABASE_URL=\"postgresql://postgres:***@172.31.23.182:5432/copy\"\nNEXT_PUBLIC_BASE_URL=\"http://172.31.31.203:3000\"\nREDIS_URL=\"redis://172.31.23.181:6379/1\"\nSFTP_HOST=\"172.31.30.81\"\nSFTP_PORT=\"22\"\nSFTP_USER=\"icsl\"\nPATH_MAPPING=\"/home/icsl/Shared-workspace=Z:\"\nGITEA_URL=\"http://172.31.30.81:30030\"\nMINIO_ENDPOINT=\"172.31.23.181\"",
+      "summary": ".env exposes internal network topology: 5 internal IPs, service ports, mount paths, and user names"
+    },
+    {
+      "id": "E:ALL-RESULT-CALL",
+      "finding_id": "INFRA-001",
+      "file": "src/app/api/codeswarm/worker/result/route.ts",
+      "lines": "112-157",
+      "code_snippet": "async function submitVulnerabilitiesToApi(report, filePath, taskId) {\n  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';\n  const response = await fetch(`${baseUrl}/api/v1/vulnerabilities`, {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/json' },\n    body: JSON.stringify({...}),  // No auth token\n  });\n}",
+      "summary": "Internal call from result endpoint to /api/v1/vulnerabilities uses no authentication header"
+    }
+  ]
+}

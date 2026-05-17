@@ -1,0 +1,192 @@
+{
+  "agent": "audit-spec-infra",
+  "files_read": [
+    "codeswarm/Dockerfile",
+    "codeswarm/docker-compose.yml",
+    "codeswarm/ARCHITECTURE.md",
+    "codeswarm/packages/worker/src/daemon.ts",
+    "codeswarm/packages/worker/src/environment.ts",
+    "codeswarm/packages/worker/src/process-manager.ts",
+    "codeswarm/packages/worker/src/index.ts",
+    "codeswarm/packages/worker/src/semaphore.ts",
+    "src/lib/codeswarm-worker-auth.ts",
+    "src/services/codeswarm-dispatcher.ts",
+    "src/lib/nfs-upload.ts",
+    "src/middleware.ts",
+    ".env",
+    ".env.example",
+    "src/app/api/codeswarm/worker/result/route.ts",
+    "src/app/api/codeswarm/worker/heartbeat/route.ts",
+    "src/app/api/codeswarm/worker/event/route.ts",
+    "src/app/api/codeswarm/local-test/route.ts",
+    "src/app/api/codeswarm/tasks/route.ts",
+    "src/app/api/codeswarm/tasks/[taskId]/route.ts",
+    "src/app/api/codeswarm/tasks/[taskId]/dispatch/route.ts",
+    "src/app/api/codeswarm/nodes/route.ts",
+    "src/app/api/v1/vulnerabilities/route.ts",
+    "src/app/api/global/health/route.ts",
+    "src/app/api/admin/health/route.ts",
+    "src/lib/auth.ts"
+  ],
+  "checked_endpoints": [
+    {
+      "path": "POST /api/auth/login",
+      "method": "POST",
+      "auth": "anonymous",
+      "file": "src/app/api/auth/login/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only: JWT token exchange"
+    },
+    {
+      "path": "POST /api/auth/register",
+      "method": "POST",
+      "auth": "anonymous",
+      "file": "src/app/api/auth/register/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only: anonymous registration"
+    },
+    {
+      "path": "POST /api/auth/refresh",
+      "method": "POST",
+      "auth": "refresh_token",
+      "file": "src/app/api/auth/refresh/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only: token refresh"
+    },
+    {
+      "path": "POST /api/auth/logout",
+      "method": "POST",
+      "auth": "optional",
+      "file": "src/app/api/auth/logout/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only: logout"
+    },
+    {
+      "path": "GET /api/users",
+      "method": "GET",
+      "auth": "required",
+      "file": "src/app/api/users/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "POST /api/users",
+      "method": "POST",
+      "auth": "required",
+      "file": "src/app/api/users/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "GET /api/users/[id]",
+      "method": "GET",
+      "auth": "required",
+      "file": "src/app/api/users/[id]/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "PUT /api/users/[id]",
+      "method": "PUT",
+      "auth": "required",
+      "file": "src/app/api/users/[id]/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "DELETE /api/users/[id]",
+      "method": "DELETE",
+      "auth": "required",
+      "file": "src/app/api/users/[id]/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "PUT /api/users/password",
+      "method": "PUT",
+      "auth": "required",
+      "file": "src/app/api/users/password/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "GET /api/roles",
+      "method": "GET",
+      "auth": "required",
+      "file": "src/app/api/roles/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "POST /api/roles",
+      "method": "POST",
+      "auth": "required",
+      "file": "src/app/api/roles/route.ts",
+      "risk": "INFO",
+      "note": "Auth endpoint, checked for infra-trust-boundary-only"
+    },
+    {
+      "path": "POST /api/codeswarm/worker/result",
+      "method": "POST",
+      "auth": "none",
+      "auth_type": "none",
+      "permission": "none",
+      "file": "src/app/api/codeswarm/worker/result/route.ts",
+      "risk": "CRITICAL"
+    },
+    {
+      "path": "POST /api/codeswarm/worker/heartbeat",
+      "method": "POST",
+      "auth": "optional_token",
+      "auth_type": "jwt_optional",
+      "permission": "none",
+      "file": "src/app/api/codeswarm/worker/heartbeat/route.ts",
+      "risk": "HIGH"
+    },
+    {
+      "path": "POST /api/codeswarm/worker/event",
+      "method": "POST",
+      "auth": "none",
+      "auth_type": "none",
+      "permission": "none",
+      "file": "src/app/api/codeswarm/worker/event/route.ts",
+      "risk": "HIGH"
+    },
+    {
+      "path": "GET /api/codeswarm/nodes",
+      "method": "GET",
+      "auth": "none",
+      "auth_type": "none",
+      "permission": "none",
+      "file": "src/app/api/codeswarm/nodes/route.ts",
+      "risk": "HIGH"
+    },
+    {
+      "path": "POST /api/codeswarm/tasks",
+      "method": "POST",
+      "auth": "none",
+      "auth_type": "none",
+      "permission": "none",
+      "file": "src/app/api/codeswarm/tasks/route.ts",
+      "risk": "HIGH"
+    },
+    {
+      "path": "POST /api/v1/vulnerabilities",
+      "method": "POST",
+      "auth": "none",
+      "auth_type": "none",
+      "permission": "none",
+      "file": "src/app/api/v1/vulnerabilities/route.ts",
+      "risk": "HIGH"
+    },
+    {
+      "path": "Worker daemon HTTP (port 8080/8090)",
+      "method": "TCP",
+      "auth": "none",
+      "auth_type": "none",
+      "permission": "none",
+      "file": "codeswarm/packages/worker/src/daemon.ts",
+      "risk": "HIGH"
+    }
+  ]
+}

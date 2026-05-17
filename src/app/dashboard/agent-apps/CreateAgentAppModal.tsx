@@ -116,16 +116,47 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     onClose();
   };
 
+  const extractAgentNameFromFolder = async (files: File[], engine: string): Promise<string | null> => {
+    try {
+      if (engine === 'opencode') {
+        const openCodeFile = files.find(f => /(?:^|\/)opencode\.json$/i.test(f.webkitRelativePath || f.name));
+        if (openCodeFile) {
+          const content = await openCodeFile.text();
+          const config = JSON.parse(content.replace(/^﻿/, ''));
+          if (config.default_agent) return config.default_agent;
+        }
+      }
+
+      if (engine === 'claudecode') {
+        const agentFile = files.find(f => {
+          const normalized = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+          return /(?:^|\/)\.claude\/agents\/([^/]+)\.md$/i.test(normalized);
+        });
+        if (agentFile) {
+          const normalized = (agentFile.webkitRelativePath || agentFile.name).replace(/\\/g, '/');
+          const match = normalized.match(/(?:^|\/)\.claude\/agents\/([^/]+)\.md$/i);
+          if (match) return match[1];
+        }
+      }
+
+      return null;
+    } catch (err) {
+      console.error('[AutoDetect] extractAgentNameFromFolder error:', err);
+      return null;
+    }
+  };
+
   const extractAgentNameFromZip = async (file: File, engine: string): Promise<string | null> => {
     try {
+      console.log('[AutoDetect] extractAgentNameFromZip called:', { fileName: file.name, engine, fileSize: file.size });
       const zip = await JSZip.loadAsync(file);
+      console.log('[AutoDetect] JSZip loaded, files:', Object.keys(zip.files));
 
       if (engine === 'opencode') {
-        // 从 opencode.json 的 default_agent 字段读取
         const matched = zip.file(/(?:^|\/)opencode\.json$/i)[0];
         if (matched) {
           const content = await matched.async('string');
-          const config = JSON.parse(content);
+          const config = JSON.parse(content.replace(/^﻿/, ''));
           if (config.default_agent) return config.default_agent;
         }
       }
@@ -141,14 +172,20 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       }
 
       return null;
-    } catch {
+    } catch (err) {
+      console.error('[AutoDetect] extractAgentNameFromZip error:', err);
       return null;
     }
   };
 
   const tryAutoFillAgentName = async (file: File, engine: string) => {
-    if (!engine || !file.name.match(/\.zip$/)) return;
+    console.log('[AutoDetect] tryAutoFillAgentName called:', { fileName: file.name, engine });
+    if (!engine || !file.name.match(/\.zip$/)) {
+      console.log('[AutoDetect] skipped:', { hasEngine: !!engine, isZip: !!file.name.match(/\.zip$/) });
+      return;
+    }
     const agentName = await extractAgentNameFromZip(file, engine);
+    console.log('[AutoDetect] detected agent name:', agentName);
     if (agentName) {
       setFormData(prev => ({
         ...prev,
@@ -163,11 +200,23 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     if (files && files.length > 0) {
       const firstFile = files[0];
       if (firstFile.webkitRelativePath) {
+        const allFiles = Array.from(files);
         setAgentHarnessFile({
           type: 'folder',
           name: firstFile.webkitRelativePath.split('/')[0],
-          files: Array.from(files),
+          files: allFiles,
         });
+
+        if (formData.engine) {
+          const agentName = await extractAgentNameFromFolder(allFiles, formData.engine);
+          if (agentName) {
+            setFormData(prev => ({
+              ...prev,
+              defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
+              startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
+            }));
+          }
+        }
       } else {
         if (!firstFile.name.match(/\.(zip|rar|7z|tar\.gz)$/)) {
           toast.error('请上传压缩包（zip/rar/7z/tar.gz）或文件夹');
@@ -219,11 +268,21 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
             </label>
             <select
               value={formData.engine}
-              onChange={(e) => {
+              onChange={async (e) => {
                 const newEngine = e.target.value as any;
                 setFormData({ ...formData, engine: newEngine });
-                if (newEngine && agentHarnessFile?.type === 'archive' && agentHarnessFile.file) {
+                if (!newEngine) return;
+                if (agentHarnessFile?.type === 'archive' && agentHarnessFile.file) {
                   tryAutoFillAgentName(agentHarnessFile.file, newEngine);
+                } else if (agentHarnessFile?.type === 'folder' && agentHarnessFile.files) {
+                  const agentName = await extractAgentNameFromFolder(agentHarnessFile.files, newEngine);
+                  if (agentName) {
+                    setFormData(prev => ({
+                      ...prev,
+                      defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
+                      startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
+                    }));
+                  }
                 }
               }}
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"

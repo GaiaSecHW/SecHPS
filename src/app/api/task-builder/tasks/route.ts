@@ -31,9 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: '缺少必填参数：name 和 agentId' }, { status: 400 });
     }
 
-    if (!notes || notes.trim() === '') {
-      return NextResponse.json({ error: '任务描述（notes）为必填字段，这是 Agent 执行的指令提示词' }, { status: 400 });
-    }
+    // notes 为可选字段，无需校验
 
     const taskId = randomUUID();
 

@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { Writable, Readable } from 'node:stream';
+import path from 'node:path';
 import {
   ClientSideConnection,
   ndJsonStream,
@@ -83,9 +84,20 @@ export class ACPClient {
     // Determine command and args
     let cmd: string;
     let args: string[];
-    
-    cmd = config.command || 'opencode';
-    args = ['acp', '--cwd', config.cwd];
+    const isWin32 = process.platform === 'win32';
+
+    if (config.command) {
+      cmd = config.command;
+    } else if (isWin32) {
+      // On Windows, resolve opencode.exe directly to avoid cmd.exe pipe issues.
+      // shell:true spawns via cmd.exe which buffers stdin/stdout and breaks nd-JSON ACP protocol.
+      const appData = process.env.APPDATA || '';
+      const exePath = path.join(appData, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode.exe');
+      cmd = exePath;
+    } else {
+      cmd = 'opencode';
+    }
+    args = ['acp', '--pure', '--print-logs', '--log-level', 'DEBUG', '--cwd', config.cwd];
 
     // Build environment
     const env: Record<string, string> = {};
@@ -105,7 +117,7 @@ export class ACPClient {
       stdio: ['pipe', 'pipe', 'pipe'],
       env,
       cwd: config.cwd,
-      ...(process.platform === 'win32' ? { shell: true } : {}),
+      windowsHide: true,
     });
 
     if (!this.process.stdin || !this.process.stdout || !this.process.stderr) {

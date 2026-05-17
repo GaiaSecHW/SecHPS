@@ -3,7 +3,7 @@ import { writeFile, mkdir, rm } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import AdmZip from 'adm-zip';
-import { downloadFilesFromGitea } from '@/lib/gitea';
+import { downloadAgentHarness } from '@/lib/minio-client';
 
 /**
  * 验证上传文件的目录结构是否符合 Agent 要求
@@ -199,37 +199,25 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   let filePath: string | null = null;
   let projectPath: string | null = null;
 
-  let giteaRootDir: string | null = null;
+  let harnessRootDir: string | null = null;
 
   try {
-    console.log(`[TaskCreation] 开始为任务 ${taskId} 从 Gitea 拉取 AgentHarness (${agentId})`);
-    const giteaFiles = await downloadFilesFromGitea(agentId);
+    console.log(`[TaskCreation] 开始为任务 ${taskId} 从 MinIO 拉取 AgentHarness (${agentId})`);
+    const rootDir = await downloadAgentHarness(agentId, taskDir);
 
-    if (giteaFiles.length > 0) {
-      console.log(`[TaskCreation] 从 Gitea 拉取了 ${giteaFiles.length} 个文件`);
-      for (const giteaFile of giteaFiles) {
-        const destPath = join(taskDir, giteaFile.path);
-        const destDir = join(taskDir, giteaFile.path.split('/').slice(0, -1).join('/'));
-        if (giteaFile.path.includes('/')) {
-          await mkdir(destDir, { recursive: true });
-        }
-        await writeFile(destPath, giteaFile.content);
-        console.log(`[TaskCreation] 写入文件: ${destPath}`);
-        
-        if (!giteaRootDir && giteaFile.path.includes('/')) {
-          giteaRootDir = giteaFile.path.split('/')[0];
-        }
-      }
+    if (rootDir) {
+      console.log(`[TaskCreation] 从 MinIO 拉取完成，根目录: ${rootDir}`);
+      harnessRootDir = rootDir;
       projectPath = taskDir;
     } else {
-      console.log(`[TaskCreation] Gitea 未找到 AgentHarness 文件，继续处理上传文件`);
+      console.log(`[TaskCreation] MinIO 未找到 AgentHarness 文件，继续处理上传文件`);
     }
-  } catch (giteaError) {
-    console.error(`[TaskCreation] 从 Gitea 拉取文件失败:`, giteaError);
+  } catch (downloadError) {
+    console.error(`[TaskCreation] 从 MinIO 拉取文件失败:`, downloadError);
   }
 
   if (files && files.length > 0) {
-    const uploadBaseDir = giteaRootDir ? join(taskDir, giteaRootDir) : taskDir;
+    const uploadBaseDir = harnessRootDir ? join(taskDir, harnessRootDir) : taskDir;
     
     for (const file of files) {
       const lowerName = file.name.toLowerCase();

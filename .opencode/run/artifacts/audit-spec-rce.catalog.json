@@ -1,0 +1,181 @@
+{
+  "agent": "audit-spec-rce",
+  "files_read": [
+    "src/lib/mcp-client.ts",
+    "src/lib/mcp-loader.ts",
+    "src/lib/agent-executor.ts",
+    "src/lib/tool-executor.ts",
+    "src/lib/scan-executor.ts",
+    "src/lib/gitea.ts",
+    "src/lib/websocket-server.ts",
+    "src/lib/workflow-actions/script-executor.ts",
+    "src/lib/workflow-actions/transform-executor.ts",
+    "src/lib/workflow-actions/index.ts",
+    "src/lib/workflow-actions/ai-executor.ts",
+    "src/lib/nfs-upload.ts",
+    "src/services/terminal-manager.ts",
+    "src/services/plugin-manager.ts",
+    "src/services/plugin-runner.ts",
+    "src/types/plugin.ts",
+    "src/app/api/plugins/upload/route.ts",
+    "src/app/api/plugins/install/route.ts",
+    "src/app/api/mcp-servers/test/route.ts",
+    "src/app/api/agent/execute/route.ts",
+    "src/app/api/codeswarm/local-test/route.ts",
+    "src/app/api/codeswarm/worker/result/route.ts",
+    "src/app/api/evaluations/start/route.ts",
+    "src/app/api/skills/evaluation-data/route.ts"
+  ],
+  "checked_endpoints": [
+    {
+      "method": "POST",
+      "path": "POST /api/plugins/upload",
+      "file": "src/app/api/plugins/upload/route.ts",
+      "auth": "required (PLUGIN_CREATE)",
+      "sink": "execAsync(powershell/unzip/tar)",
+      "user_control": "file.name in upload form-data",
+      "guard": "none - filename not sanitized before shell execution",
+      "status": "vulnerable (unix: HIGH, win: MEDIUM)"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/plugins/install",
+      "file": "src/app/api/plugins/install/route.ts",
+      "auth": "required (PLUGIN_CREATE)",
+      "sink": "fetch(url) + fs.writeFileSync",
+      "user_control": "body.url",
+      "guard": "SSRF guard none, but no code exec sink",
+      "status": "SSRF risk only (not RCE)"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/mcp-servers/test",
+      "file": "src/app/api/mcp-servers/test/route.ts",
+      "auth": "required (CONFIG_READ)",
+      "sink": "spawn(command) via LocalMcpClient in mcp-client.ts:99",
+      "user_control": "body.command (from request)",
+      "guard": "permission check only, no command validation",
+      "status": "vulnerable (HIGH - privileged RCE)"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/agent/execute",
+      "file": "src/app/api/agent/execute/route.ts",
+      "auth": "required (AGENT_EXECUTE)",
+      "sink": "ToolExecutor.execute_command → execAsync(command)",
+      "user_control": "via AI agent tool call (prompt injection path)",
+      "guard": "weak blacklist (rm -rf, del /, format, fdisk, shutdown)",
+      "status": "vulnerable (HIGH - prompt injection → RCE)"
+    },
+    {
+      "method": "WS",
+      "path": "ws://host/ws/terminal",
+      "file": "src/services/terminal-manager.ts",
+      "auth": "required (JWT in URL query param)",
+      "sink": "pty.spawn(shell, [], { cwd })",
+      "user_control": "cwd from URL query param; interactive shell via WebSocket",
+      "guard": "JWT only, no command restrictions after connection",
+      "status": "vulnerable (HIGH - authenticated users get shell access)"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/codeswarm/local-test",
+      "file": "src/app/api/codeswarm/local-test/route.ts",
+      "auth": "NONE",
+      "sink": "spawn(opencode, ..., { cwd: workspacePath })",
+      "user_control": "body.workspacePath",
+      "guard": "NONE - no authentication check",
+      "status": "vulnerable (HIGH - unauthenticated spawn)"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/evaluations/start",
+      "file": "src/app/api/evaluations/start/route.ts",
+      "auth": "required (EVALUATION_CREATE)",
+      "sink": "Prisma ORM - safe",
+      "user_control": "various body params",
+      "guard": "JWT + permission + ownership check",
+      "status": "safe - no exec sink"
+    },
+    {
+      "method": "GET",
+      "path": "GET /api/skills/evaluation-data",
+      "file": "src/app/api/skills/evaluation-data/route.ts",
+      "auth": "required",
+      "sink": "N/A - returns empty data",
+      "user_control": "N/A",
+      "guard": "N/A",
+      "status": "safe - stub returning empty data"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/config/import",
+      "file": "src/app/api/config/import/route.ts",
+      "auth": "required (config:update)",
+      "sink": "N/A - endpoint does not exist in codebase",
+      "user_control": "N/A",
+      "guard": "N/A",
+      "status": "safe - endpoint not found in repo, no code exec risk"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/skills/import",
+      "file": "src/app/api/skills/import/route.ts",
+      "auth": "required (skill:create)",
+      "sink": "N/A - endpoint does not exist in codebase",
+      "user_control": "N/A",
+      "guard": "N/A",
+      "status": "safe - endpoint not found in repo, no code exec risk"
+    },
+    {
+      "method": "POST",
+      "path": "POST /api/evaluations",
+      "file": "src/app/api/evaluations/route.ts",
+      "auth": "required (evaluation:create)",
+      "sink": "N/A - endpoint does not exist in codebase",
+      "user_control": "N/A",
+      "guard": "N/A",
+      "status": "safe - endpoint not found in repo, no code exec risk"
+    },
+    {
+      "method": "POST",
+      "path": "* local:stdio (MCP)",
+      "file": "src/lib/mcp-client.ts",
+      "auth": "config in DB (via MCP loader)",
+      "sink": "spawn(command, args) at line 99",
+      "user_control": "MCP config from DB (created with mcp:create permission)",
+      "guard": "permission on config creation only, no command validation",
+      "status": "vulnerable (HIGH - command injection via MCP config)"
+    },
+    {
+      "method": "POST",
+      "path": "* builtin:execute_command tool",
+      "file": "src/lib/tool-executor.ts",
+      "auth": "via AI agent tool call",
+      "sink": "execAsync(command) at line 135",
+      "user_control": "command param from tool call (AI-decided)",
+      "guard": "weak blacklist bypassable",
+      "status": "vulnerable (HIGH - prompt injection → arbitrary command)"
+    },
+    {
+      "method": "POST",
+      "path": "* builtin:script executor (workflow)",
+      "file": "src/lib/workflow-actions/script-executor.ts",
+      "auth": "dead code (no callers found)",
+      "sink": "vm.Script.runInContext() at line 139",
+      "user_control": "config.code from workflow config",
+      "guard": "dangerous pattern blacklist + vm sandbox (both bypassable)",
+      "status": "vulnerable (CRITICAL - dead code - vm sandbox escape)"
+    },
+    {
+      "method": "POST",
+      "path": "* builtin:transform executor (workflow)",
+      "file": "src/lib/workflow-actions/transform-executor.ts",
+      "auth": "dead code (no callers found)",
+      "sink": "vm.createContext() at line 278",
+      "user_control": "config.expression from transform config",
+      "guard": "no blacklist, vm sandbox only",
+      "status": "vulnerable (CRITICAL - dead code - vm sandbox escape)"
+    }
+  ]
+}

@@ -4,6 +4,9 @@ import { PERMISSIONS } from '@/types/permissions';
 import { prisma, withRetry } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
+import { downloadAgentHarness } from '@/lib/minio-client';
+import { existsSync, readdirSync } from 'fs';
+import { join } from 'path';
 
 function parseJsonArray(value: string | null | undefined): string[] {
   if (!value) return [];
@@ -13,6 +16,25 @@ function parseJsonArray(value: string | null | undefined): string[] {
   } catch {
     return value ? [value] : [];
   }
+}
+
+/** Check if workspace contains agent config files (opencode.json etc.) */
+function checkWorkspaceHasHarness(workspacePath: string): boolean {
+  if (!existsSync(workspacePath)) return false;
+  try {
+    const entries = readdirSync(workspacePath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const subDir = join(workspacePath, entry.name);
+        if (existsSync(join(subDir, 'opencode.json'))) return true;
+      } else if (entry.name === 'opencode.json') {
+        return true;
+      }
+    }
+  } catch {
+    // ignore read errors
+  }
+  return false;
 }
 
 export async function POST(
@@ -92,6 +114,20 @@ export async function POST(
     });
 
     const workspacePath = task.projectPath || undefined;
+
+    // On-demand: check if workspace has agent harness files, download from MinIO if missing
+    if (workspacePath && task.agentId) {
+      const hasHarness = checkWorkspaceHasHarness(workspacePath);
+      if (!hasHarness) {
+        console.log(`[Execute] Workspace missing agent harness, downloading from MinIO: ${task.agentId}`);
+        try {
+          await downloadAgentHarness(task.agentId, workspacePath);
+          console.log(`[Execute] Agent harness downloaded to workspace`);
+        } catch (dlError) {
+          console.error(`[Execute] Failed to download agent harness from MinIO:`, dlError);
+        }
+      }
+    }
     const skills = mergedSkills ? parseJsonArray(mergedSkills) : undefined;
     const scripts = mergedScripts ? parseJsonArray(mergedScripts) : undefined;
 
@@ -111,7 +147,7 @@ export async function POST(
     }
 
     const apiKey = task.ModelConfig?.apiKey || undefined;
-    const timeoutSec = 300;
+    const timeoutSec = 3600;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
     const instruction = agentApp?.startCommand || task.notes || null;
@@ -263,8 +299,8 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       subscriber.disconnect();
-      reject(new Error('任务执行超时（超过20分钟）'));
-    }, 20 * 60 * 1000);
+      reject(new Error('任务执行超时（超过1小时）'));
+    }, 60 * 60 * 1000);
 
     subscriber.subscribe(channel);
     subscriber.on('message', async (_ch: string, data: string) => {
@@ -419,5 +455,5 @@ async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<
   }
 
   await flushLogs();
-  throw new Error('任务执行超时（超过20分钟）');
+  throw new Error('任务执行超时（超过1小时）');
 }

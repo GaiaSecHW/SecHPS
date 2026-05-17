@@ -1,0 +1,45 @@
+{
+  "$schema": "./evidence-schema.json",
+  "evidence": [
+    {
+      "id": "E:D10-001",
+      "finding_id": "D10-001",
+      "description": "CodeSwarm SSE stream endpoint lacks authentication",
+      "file": "src/app/api/codeswarm/tasks/[taskId]/stream/route.ts",
+      "lines": "1-83",
+      "code_snippet": "export async function GET(request: Request, { params }: { params: Promise<{ taskId: string }> }) {\n  const { taskId } = await params;\n  ...\n  // No authentication check anywhere in this function\n  const interval = setInterval(async () => {\n    const events = await prisma.codeswarmEvent.findMany({ where: { taskId } });\n    ...\n  }, 500);\n  return new Response(stream, {\n    headers: { 'Content-Type': 'text/event-stream' },\n  });\n}",
+      "impact": "Anyone with a taskId can access task events without authentication",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "E:D10-002",
+      "finding_id": "D10-002",
+      "description": "JWT token passed in WebSocket URL query parameter",
+      "file": "src/components/terminal/TerminalComponent.tsx",
+      "lines": "128-131",
+      "code_snippet": "const wsUrl = `${wsProtocol}//${window.location.host}/ws/terminal?token=${encodeURIComponent(token)}&cwd=${encodeURIComponent(cwd)}&sessionId=${encodeURIComponent(sessionId)}`;\nconst ws = new WebSocket(wsUrl);",
+      "impact": "JWT token appears in URL query string, leaked via server logs, browser history, and Referer headers",
+      "severity": "MEDIUM"
+    },
+    {
+      "id": "E:D10-003",
+      "finding_id": "D10-003",
+      "description": "JWT tokens stored in localStorage across all dashboard pages",
+      "file": "src/hooks/useAuth.ts",
+      "lines": "67-68",
+      "code_snippet": "const token = localStorage.getItem('token');\nconst userStr = localStorage.getItem('user');",
+      "impact": "Token accessible to any JavaScript on the same origin",
+      "severity": "LOW"
+    },
+    {
+      "id": "E:D10-004",
+      "finding_id": "D10-004",
+      "description": "No security headers in middleware",
+      "file": "src/middleware.ts",
+      "lines": "1-22",
+      "code_snippet": "export function middleware(request: NextRequest) {\n  const { pathname } = request.nextUrl;\n  if (pathname.startsWith(DASHBOARD_PREFIX)) {\n    const token = request.cookies.get('auth-token')?.value;\n    if (!token) {\n      const loginUrl = new URL('/login', request.url);\n      return NextResponse.redirect(loginUrl);\n    }\n  }\n  return NextResponse.next(); // No security headers added\n}",
+      "impact": "No CSP, X-Frame-Options, X-Content-Type-Options headers set",
+      "severity": "LOW"
+    }
+  ]
+}

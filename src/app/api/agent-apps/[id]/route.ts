@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { gitAgentAppSync } from '@/services/git-agent-app-sync';
+import { uploadAgentHarness, deleteAgentHarness } from '@/lib/minio-client';
 import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
@@ -85,18 +85,18 @@ export async function PUT(
     }
 
     let agentHarnessPath = existing.agentHarnessPath;
-    let gitUploaded = false;
+    let minioUploaded = false;
     let syncedFilesMap: Map<string, Buffer> | null = null;
 
-    // Git 方式更新文件
+    // MinIO 方式更新文件
     if (updateFiles) {
       const filesMap = new Map<string, Buffer>();
-      
+
       if (fileType === 'archive' && agentHarnessFile) {
         const fileBuffer = Buffer.from(await agentHarnessFile.arrayBuffer());
         const zip = new AdmZip(fileBuffer);
         const zipEntries = zip.getEntries();
-        
+
         for (const entry of zipEntries) {
           if (!entry.isDirectory) {
             filesMap.set(entry.entryName, entry.getData());
@@ -104,7 +104,7 @@ export async function PUT(
         }
       } else if (fileType === 'folder' && filesJson && formData) {
         const filesInfo = JSON.parse(filesJson);
-        
+
         for (const info of filesInfo) {
           const file = formData.get(info.key) as File;
           if (file) {
@@ -116,15 +116,15 @@ export async function PUT(
       }
 
       if (filesMap.size > 0) {
-        const gitResult = await gitAgentAppSync.uploadAgentApp(appId, filesMap);
-        gitUploaded = gitResult.success;
-
-        if (!gitResult.success) {
-          logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 更新 AgentApp 失败', appId, {
-            details: { appId, errors: gitResult.errors }
-          });
-        } else {
+        try {
+          await deleteAgentHarness(appId);
+          await uploadAgentHarness(appId, filesMap);
+          minioUploaded = true;
           syncedFilesMap = filesMap;
+        } catch (uploadError) {
+          logger.errorWithUser(LOG_MODULES.SKILL, payload, 'MinIO 更新 AgentApp 失败', appId, {
+            details: { appId, error: uploadError instanceof Error ? uploadError.message : String(uploadError) }
+          });
         }
 
         agentHarnessPath = `${appId}/`;
@@ -145,7 +145,7 @@ export async function PUT(
       },
     });
 
-    logger.info(LOG_MODULES.SKILL, 'AgentApp 更新成功', { appId, name, gitUploaded });
+    logger.info(LOG_MODULES.SKILL, 'AgentApp 更新成功', { appId, name, minioUploaded });
 
     // 异步同步 SKILL，不阻塞响应
     if (syncedFilesMap) {
@@ -154,7 +154,7 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json({ app, gitUploaded });
+    return NextResponse.json({ app, minioUploaded });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '更新应用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '更新应用失败' }, { status: 500 });
@@ -193,18 +193,12 @@ export async function DELETE(
       return NextResponse.json({ error: '应用不存在或无权限删除公共资源' }, { status: 404 });
     }
 
-    // Git 方式删除文件
-    gitAgentAppSync.deleteAgentApp(appId).then(result => {
-      if (!result.success) {
-        logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 删除 AgentApp 文件失败', appId, { 
-          details: { appId, error: result.message } 
-        });
-      } else {
-        logger.info(LOG_MODULES.SKILL, `Git 删除 AgentApp 成功: ${appId}`, { message: result.message });
-      }
+    // MinIO 方式删除文件（异步，不阻塞响应）
+    deleteAgentHarness(appId).then(() => {
+      logger.info(LOG_MODULES.SKILL, `MinIO 删除 AgentApp 成功: ${appId}`);
     }).catch(err => {
-      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Git 删除 AgentApp 异常', appId, { 
-        details: { appId, error: err instanceof Error ? err.message : String(err) } 
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'MinIO 删除 AgentApp 文件失败', appId, {
+        details: { appId, error: err instanceof Error ? err.message : String(err) }
       });
     });
 

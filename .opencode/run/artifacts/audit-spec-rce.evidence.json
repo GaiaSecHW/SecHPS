@@ -1,0 +1,321 @@
+{
+  "agent": "audit-spec-rce",
+  "evidence_map": {
+    "D4-EVD-001": {
+      "pattern": "unsafe_deserialization",
+      "summary": "全仓搜索JSON.parse/JSON.stringify 345+处, eval/Function 0处, Python pickle 0处, Java readObject 0处, YAML.parse 0处。JavaScript JSON.parse安全。",
+      "files": ["src/**/*.ts"],
+      "risk": "LOW",
+      "conclusion": "no_vulnerability_found"
+    },
+    "D4-EVD-002": {
+      "pattern": "dynamic_exec",
+      "summary": "5处child_process.spawn/execAsync: mcp-client.ts:99, plugins/upload/route.ts:25/28/40/42, tool-executor.ts:135, websocket-server.ts→terminal-manager.ts:21, codeswarm/local-test/route.ts:312",
+      "files": ["src/lib/mcp-client.ts", "src/app/api/plugins/upload/route.ts", "src/lib/tool-executor.ts", "src/services/terminal-manager.ts", "src/app/api/codeswarm/local-test/route.ts"],
+      "risk": "HIGH"
+    },
+    "D4-EVD-003": {
+      "pattern": "script_engine",
+      "summary": "2处vm.Script使用: workflow-actions/script-executor.ts:139, workflow-actions/transform-executor.ts:298。均为dead code但存在vm沙箱逃逸风险。",
+      "files": ["src/lib/workflow-actions/script-executor.ts", "src/lib/workflow-actions/transform-executor.ts"],
+      "risk": "CRITICAL"
+    },
+    "D4-EVD-004": {
+      "pattern": "dangerous_reflection",
+      "summary": "无eval/new Function/Reflect.construct。vm.Script.runInContext本质是动态脚本执行。",
+      "files": ["src/lib/workflow-actions/script-executor.ts", "src/lib/workflow-actions/transform-executor.ts"],
+      "risk": "MEDIUM"
+    }
+  },
+  "findings_evidence": {
+    "D4-001": {
+      "title": "MCP Stdio子进程命令执行（配置可达）",
+      "file": "src/lib/mcp-client.ts",
+      "lines": [99, 802],
+      "severity": "HIGH",
+      "cwe": "CWE-78",
+      "confidence": "HIGH",
+      "evidence_level": "HIGH",
+      "source": {
+        "file": "src/app/api/mcp-servers/test/route.ts",
+        "line": 22,
+        "code": "const { id, type, command, args, url, env, name } = body;"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/mcp-client.ts",
+          "line": 99,
+          "summary": "spawn(command, args) 直接使用用户/管理员配置的command和args"
+        },
+        {
+          "file": "src/lib/mcp-loader.ts",
+          "line": 64,
+          "summary": "从数据库加载MCP配置并传递给LocalMcpClient"
+        },
+        {
+          "file": "src/app/api/mcp-servers/test/route.ts",
+          "line": 43,
+          "summary": "POST请求中的command被直接传入mcpConfig，未做任何校验"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/mcp-client.ts",
+        "line": 99,
+        "code": "this.process = spawn(this.config.command, this.config.args || [], { stdio: ['pipe', 'pipe', 'pipe'], env, windowsHide: true });"
+      },
+      "control_chain": ["test API (CONFIG_READ权限)", "MCP配置创建 (mcp:create权限)", "spawn(command, args)"],
+      "runtime_impact": "拥有mcp:create权限的用户可以配置任意命令执行。攻击者可设置command='malware.sh'获得服务器控制权。",
+      "fix": ["验证MCP command字段只允许可执行文件路径", "对args进行白名单校验", "不允许command包含shell元字符"]
+    },
+    "D4-002": {
+      "title": "插件上传tar/zip解压命令注入",
+      "file": "src/app/api/plugins/upload/route.ts",
+      "lines": [20, 30, 42],
+      "severity": "HIGH",
+      "cwe": "CWE-78",
+      "confidence": "MEDIUM",
+      "evidence_level": "MEDIUM",
+      "source": {
+        "file": "src/app/api/plugins/upload/route.ts",
+        "line": 62,
+        "code": "const file = formData.get('file') as File | null;"
+      },
+      "propagation": [
+        {
+          "file": "src/app/api/plugins/upload/route.ts",
+          "line": 88,
+          "summary": "file.name被直接用于tempFilePath拼接"
+        },
+        {
+          "file": "src/app/api/plugins/upload/route.ts",
+          "line": 99,
+          "summary": "zipPath (含file.name) 通过模板字符串传入execAsync"
+        }
+      ],
+      "sink": {
+        "file": "src/app/api/plugins/upload/route.ts",
+        "line": 25,
+        "code": "await execAsync(`powershell -command \"Expand-Archive -Path '${zipPath}' -DestinationPath '${targetDir}' -Force\"`);"
+      },
+      "control_chain": ["上传文件 (PLUGIN_CREATE权限)", "file.name注入shell命令", "execAsync执行"],
+      "runtime_impact": "Unix: 文件名包含$()或反引号可导致命令注入。Windows: PowerShell单引号提供部分保护但可通过'绕过。",
+      "fix": ["使用adm-zip或tar等纯JS解压库", "对file.name做严格白名单校验", "避免使用execAsync执行系统命令"]
+    },
+    "D4-003": {
+      "title": "ToolExecutor内置execute_command工具可达命令执行",
+      "file": "src/lib/tool-executor.ts",
+      "lines": [120, 135],
+      "severity": "HIGH",
+      "cwe": "CWE-78",
+      "confidence": "MEDIUM",
+      "evidence_level": "MEDIUM",
+      "source": {
+        "file": "src/lib/agent-executor.ts",
+        "line": 326,
+        "code": "const result = await this.toolExecutor.execute(toolCall.tool, toolCall.parameters);"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/tool-executor.ts",
+          "line": 170,
+          "summary": "execute()接受tool name和params，执行内置或外部工具"
+        },
+        {
+          "file": "src/lib/tool-executor.ts",
+          "line": 124,
+          "summary": "execute_command工具直接取command参数传给execAsync"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/tool-executor.ts",
+        "line": 135,
+        "code": "const { stdout, stderr } = await execAsync(command, { timeout: context.timeout || 7200000, cwd: context.workingDirectory });"
+      },
+      "control_chain": ["用户输入(AI prompt) → AI Agent → tool_call(execute_command) → execAsync(command)"],
+      "runtime_impact": "通过AI Agent prompt注入，攻击者可让AI调用execute_command执行任意系统命令。黑名单仅拦截rm -rf等5个模式，可轻松绕过。",
+      "fix": ["移除dangerous blacklist改为allowlist", "限制execute_command只允许特定命令列表", "在Agent工具权限层增加更严格的控制"]
+    },
+    "D4-004": {
+      "title": "Workflow Script-Executor vm沙箱逃逸（Dead Code）",
+      "file": "src/lib/workflow-actions/script-executor.ts",
+      "lines": [116, 139],
+      "severity": "CRITICAL",
+      "cwe": "CWE-265",
+      "confidence": "HIGH",
+      "evidence_level": "HIGH",
+      "source": {
+        "file": "src/lib/workflow-actions/script-executor.ts",
+        "line": 9,
+        "code": "export async function executeScript(config: ScriptExecuteConfig, context: ExecutionContext)"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/workflow-actions/script-executor.ts",
+          "line": 88,
+          "summary": "用户提供的JS代码被包裹在自执行函数中"
+        },
+        {
+          "file": "src/lib/workflow-actions/script-executor.ts",
+          "line": 138,
+          "summary": "new vm.Script创建可执行脚本，timeout暴露执行时间控制"
+        },
+        {
+          "file": "src/lib/workflow-actions/script-executor.ts",
+          "line": 21,
+          "summary": "危险模式黑名单可绕过，vm沙箱非安全隔离"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/workflow-actions/script-executor.ts",
+        "line": 139,
+        "code": "const result = script.runInContext(context, { timeout } as any);"
+      },
+      "control_chain": ["暂无使用者(dead code) → 若被调用则script可逃逸vm沙箱 → 任意代码执行"],
+      "runtime_impact": "vm模块不提供安全隔离。攻击者可通过this.constructor.constructor('return process')()逃离沙箱获取Node.js进程控制权。",
+      "fix": ["使用isolated-vm替代vm模块", "完全移除动态脚本执行功能", "如必须使用，用容器级别隔离"]
+    },
+    "D4-005": {
+      "title": "Transform Executor vm沙箱逃逸（Dead Code）",
+      "file": "src/lib/workflow-actions/transform-executor.ts",
+      "lines": [278, 297],
+      "severity": "CRITICAL",
+      "cwe": "CWE-265",
+      "confidence": "HIGH",
+      "evidence_level": "HIGH",
+      "source": {
+        "file": "src/lib/workflow-actions/transform-executor.ts",
+        "line": 268,
+        "code": "async function executeTransformScript(code, input, variables, logs)"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/workflow-actions/transform-executor.ts",
+          "line": 278,
+          "summary": "vm.createContext创建隔离上下文"
+        },
+        {
+          "file": "src/lib/workflow-actions/transform-executor.ts",
+          "line": 292,
+          "summary": "用户代码被包裹执行，无危险操作黑名单"
+        }
+      ],
+      "sink": {
+        "file": "src/lib/workflow-actions/transform-executor.ts",
+        "line": 298,
+        "code": "return script.runInContext(context, { timeout: 7200000 } as any);"
+      },
+      "control_chain": ["暂无使用者(dead code) → 若transform type=script被调用 → vm逃逸 → RCE"],
+      "runtime_impact": "同script-executor，vm模块沙箱可逃逸。沙箱暴露Object、Array等原型可被利用。",
+      "fix": ["移除script类型的transform", "使用isolated-vm", "限制transform仅支持jsonpath/jq/template"]
+    },
+    "D4-006": {
+      "title": "WebSocket终端Shell访问",
+      "file": "src/services/terminal-manager.ts",
+      "lines": [21, 58],
+      "severity": "HIGH",
+      "cwe": "CWE-78",
+      "confidence": "HIGH",
+      "evidence_level": "HIGH",
+      "source": {
+        "file": "src/lib/websocket-server.ts",
+        "line": 90,
+        "code": "terminalManager.createSession(cwd, ws, sessionId);"
+      },
+      "propagation": [
+        {
+          "file": "src/lib/websocket-server.ts",
+          "line": 21,
+          "summary": "cwd参数直接来自URL query string"
+        },
+        {
+          "file": "src/services/terminal-manager.ts",
+          "line": 19,
+          "summary": "shell自动选择powershell.exe或bash"
+        },
+        {
+          "file": "src/services/terminal-manager.ts",
+          "line": 58,
+          "summary": "WebSocket消息直接写入PTY进程stdin"
+        }
+      ],
+      "sink": {
+        "file": "src/services/terminal-manager.ts",
+        "line": 21,
+        "code": "this.ptyProcess = pty.spawn(shell, [], { name: 'xterm-color', cols: 80, rows: 24, cwd: cwd || process.cwd(), env: process.env as Record<string, string> });"
+      },
+      "control_chain": ["WebSocket URL (/ws/terminal?token=JWT&cwd=/tmp) → node-pty spawn shell → 交互式系统Shell"],
+      "runtime_impact": "JWT认证用户可获得完整的交互式shell访问。cwd参数可被利用指向恶意目录。",
+      "fix": ["限制cwd参数只能在项目目录范围内", "添加基于角色的shell命令限制", "增加操作审计日志"]
+    },
+    "D4-007": {
+      "title": "CodeSwarm Local-Test无认证子进程执行",
+      "file": "src/app/api/codeswarm/local-test/route.ts",
+      "lines": [191, 312],
+      "severity": "HIGH",
+      "cwe": "CWE-306",
+      "confidence": "HIGH",
+      "evidence_level": "HIGH",
+      "source": {
+        "file": "src/app/api/codeswarm/local-test/route.ts",
+        "line": 191,
+        "code": "export async function POST(request: Request) {"
+      },
+      "propagation": [
+        {
+          "file": "src/app/api/codeswarm/local-test/route.ts",
+          "line": 194,
+          "summary": "workspacePath直接从请求体获取，未做认证"
+        },
+        {
+          "file": "src/app/api/codeswarm/local-test/route.ts",
+          "line": 215,
+          "summary": "executeTaskAsync被立即调用，启动子进程"
+        }
+      ],
+      "sink": {
+        "file": "src/app/api/codeswarm/local-test/route.ts",
+        "line": 312,
+        "code": "childProcess = spawn(cmd, finalArgs, { cwd: workspacePath, env, stdio: ['ignore', 'pipe', 'pipe'], shell: useShell });"
+      },
+      "control_chain": ["匿名用户 → POST /api/codeswarm/local-test → spawn(opencode, ..., {cwd: workspacePath})"],
+      "runtime_impact": "未认证端点可触发opencode子进程执行。workspacePath控制工作目录，可导致恶意文件读取。",
+      "fix": ["添加authentication/permission检查", "限制workspacePath在允许的目录范围内"]
+    }
+  },
+  "unfinished_analysis": [
+    {
+      "item": "ToolExecutor.executeScript路径注入",
+      "reason": "executeScript使用JSON.parse(config)获取scriptPath，路径可能来自DB工具配置，需检查工具创建API的输入校验"
+    },
+    {
+      "item": "CodeSwarm worker result spawn认证情况",
+      "reason": "worker/result/route.ts也包含spawn调用，需确认是否有worker token认证"
+    },
+    {
+      "item": "PostgreSQL/Prisma不安全反序列化",
+      "reason": "大量JSON.parse用于数据库JSON字段，虽在JS中相对安全，但需确认是否有JSONB注入风险"
+    }
+  ],
+  "pattern_coverage": {
+    "unsafe_deserialization": {
+      "status": "checked",
+      "summary": "JSON.parse在项目中被广泛使用（345+处），但在JavaScript中JSON.parse是安全的（无任意代码执行）。无pickle/yaml/Java反序列化模式。",
+      "risk": "LOW"
+    },
+    "dynamic_exec": {
+      "status": "checked",
+      "summary": "发现多处child_process.spawn/exec调用: mcp-client.ts, tool-executor.ts, plugin upload route, codeswarm local-test, websocket terminal。多处存在命令注入或未授权执行风险。",
+      "risk": "HIGH"
+    },
+    "script_engine": {
+      "status": "checked",
+      "summary": "发现两处vm.Script使用: workflow-actions/script-executor.ts和workflow-actions/transform-executor.ts。两者均为dead code但存在vm沙箱逃逸风险。",
+      "risk": "CRITICAL (dead code)"
+    },
+    "dangerous_reflection": {
+      "status": "checked",
+      "summary": "未发现直接使用Reflect.apply或eval()等危险反射。vm.Script.runInContext使用vm.Script本质上是一种动态执行。",
+      "risk": "MEDIUM"
+    }
+  }
+}
