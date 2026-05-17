@@ -30,7 +30,25 @@ export async function GET(
       return NextResponse.json({ error: '无权访问此任务' }, { status: 403 });
     }
 
-    return NextResponse.json({ task, logs: task.TaskExecutionLog });
+    // 关联查询 CodeswarmTask 状态和最近事件
+    let codeswarmStatus = null;
+    if (task.codeswarmTaskId) {
+      const csTask = await prisma.codeswarmTask.findUnique({
+        where: { taskId: task.codeswarmTaskId },
+        select: { state: true, sessionId: true, engine: true, agent: true, model: true, createdAt: true, updatedAt: true },
+      });
+      if (csTask) {
+        const recentEvents = await prisma.codeswarmEvent.findMany({
+          where: { taskId: task.codeswarmTaskId },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+          select: { type: true, data: true, createdAt: true },
+        });
+        codeswarmStatus = { ...csTask, recentEvents };
+      }
+    }
+
+    return NextResponse.json({ task, logs: task.TaskExecutionLog, codeswarmStatus });
   } catch (error) {
     console.error('获取任务详情失败:', error);
     return NextResponse.json({ error: '获取任务详情失败' }, { status: 500 });

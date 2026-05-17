@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -41,6 +41,17 @@ interface TaskExecutionLog {
   createdAt: string;
 }
 
+interface CodeswarmStatus {
+  state: string;
+  sessionId: string | null;
+  engine: string | null;
+  agent: string | null;
+  model: string | null;
+  createdAt: string;
+  updatedAt: string;
+  recentEvents: { type: string; data: string; createdAt: string }[];
+}
+
 const statusConfig: Record<string, { bg: string; text: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }> }> = {
   pending: { bg: 'bg-dark-surface-hover', text: 'text-gray-300', label: '待执行', icon: Clock },
   running: { bg: 'bg-blue-100', text: 'text-blue-400', label: '执行中', icon: Loader2 },
@@ -66,13 +77,13 @@ export default function TaskDetailPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [eventSourceRef, setEventSourceRef] = useState<EventSource | null>(null);
   const [executing, setExecuting] = useState(false);
+  const [codeswarmStatus, setCodeswarmStatus] = useState<CodeswarmStatus | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    fetchTaskDetail(taskId);
-  }, [taskId]);
-
-  const fetchTaskDetail = async (id: string) => {
-    setLoading(true);
+  const fetchTaskDetail = useCallback(async (id: string, showLoading = true) => {
+    if (showLoading) setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/task-builder/tasks/${id}`, {
@@ -83,17 +94,50 @@ export default function TaskDetailPage() {
         const data = await response.json();
         setTask(data.task || null);
         setLogs(data.logs || []);
+        setCodeswarmStatus(data.codeswarmStatus || null);
       } else {
         setTask(null);
         setLogs([]);
+        setCodeswarmStatus(null);
       }
     } catch {
       setTask(null);
       setLogs([]);
+      setCodeswarmStatus(null);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchTaskDetail(taskId);
+  }, [taskId, fetchTaskDetail]);
+
+  // 执行时长计时器
+  useEffect(() => {
+    if (task?.status === 'running' && task.startedAt) {
+      const start = new Date(task.startedAt).getTime();
+      setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds(Math.floor((Date.now() - start) / 1000));
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [task?.status, task?.startedAt]);
+
+  // 轮询 CodeswarmTask 状态
+  useEffect(() => {
+    if (task?.status === 'running') {
+      pollingRef.current = setInterval(() => {
+        fetchTaskDetail(taskId, false);
+      }, 5000);
+    }
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [task?.status, taskId, fetchTaskDetail]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('zh-CN', {
@@ -132,7 +176,7 @@ export default function TaskDetailPage() {
         eventSource.close();
         setIsStreaming(false);
         setEventSourceRef(null);
-        fetchTaskDetail(id);
+        fetchTaskDetail(id, false);
       }
     };
 
@@ -171,9 +215,9 @@ export default function TaskDetailPage() {
 
   useEffect(() => {
     return () => {
-      if (eventSourceRef) {
-        eventSourceRef.close();
-      }
+      if (eventSourceRef) eventSourceRef.close();
+      if (pollingRef.current) clearInterval(pollingRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [eventSourceRef]);
 
@@ -201,6 +245,53 @@ export default function TaskDetailPage() {
 
   const config = statusConfig[task.status] || statusConfig.pending;
   const StatusIcon = config.icon;
+
+  // 从事件推断当前 Agent 执行阶段
+  const getAgentPhase = (): { phase: string; color: string; detail: string } => {
+    if (!codeswarmStatus) {
+      if (task.status === 'running') return { phase: '等待调度', color: 'text-yellow-400', detail: '任务已提交，等待 Worker 接收' };
+      return { phase: '未执行', color: 'text-gray-400', detail: '' };
+    }
+    const events = codeswarmStatus.recentEvents || [];
+    let lastPhaseStart = '';
+    let lastPhaseComplete = '';
+    let hasSessionCreated = false;
+    let hasAgentActivity = false;
+
+    for (const e of events) {
+      try {
+        const d = JSON.parse(e.data);
+        if (e.type === 'phase_start' && d.phase) lastPhaseStart = d.phase;
+        if (e.type === 'phase_complete' && d.phase) lastPhaseComplete = d.phase;
+        if (e.type === 'session_created') hasSessionCreated = true;
+        if (['agent_message_chunk', 'tool_call', 'tool_result', 'agent_response'].includes(e.type)) hasAgentActivity = true;
+      } catch {}
+    }
+
+    if (codeswarmStatus.state === 'completed') return { phase: '已完成', color: 'text-green-400', detail: 'Agent 执行完毕' };
+    if (codeswarmStatus.state === 'failed') return { phase: '失败', color: 'text-red-400', detail: '执行过程中出错' };
+
+    if (lastPhaseComplete === 'executing') return { phase: '已完成', color: 'text-green-400', detail: 'Agent 执行完毕' };
+    if (lastPhaseStart === 'executing' || hasAgentActivity) return { phase: 'Agent 执行中', color: 'text-blue-400', detail: `引擎: ${codeswarmStatus.engine || 'opencode'}` };
+    if (lastPhaseComplete === 'building' && !lastPhaseStart) return { phase: '环境构建完成', color: 'text-blue-300', detail: '准备启动 Agent' };
+    if (lastPhaseStart === 'building') return { phase: '环境构建中', color: 'text-yellow-400', detail: '正在准备 Agent 运行环境' };
+    if (lastPhaseStart === 'codedmap') return { phase: 'Codedmap 预处理', color: 'text-purple-400', detail: '知识图谱预处理（后台并行）' };
+
+    if (hasSessionCreated) return { phase: 'Agent 启动中', color: 'text-blue-400', detail: `Session: ${codeswarmStatus.sessionId?.slice(0, 20)}...` };
+    if (codeswarmStatus.state === 'dispatched') return { phase: '已分发', color: 'text-yellow-400', detail: 'Worker 已接收，准备执行' };
+    if (codeswarmStatus.state === 'queued') return { phase: '排队中', color: 'text-gray-400', detail: '等待 Worker 调度' };
+
+    return { phase: '运行中', color: 'text-blue-400', detail: codeswarmStatus.state };
+  };
+
+  const formatElapsed = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const agentPhase = getAgentPhase();
 
   return (
     <div className="space-y-6">
@@ -282,6 +373,54 @@ export default function TaskDetailPage() {
           )}
         </div>
       </div>
+
+      {/* Agent 执行状态卡片 */}
+      {(task.status === 'running' || codeswarmStatus) && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Cpu size={18} className="text-blue-400" />
+              <h3 className="text-sm font-semibold text-gray-200">Agent 执行状态</h3>
+            </div>
+            {task.status === 'running' && (
+              <div className="flex items-center gap-2">
+                <Timer size={14} className="text-blue-400" />
+                <span className="text-sm font-mono text-blue-400">{formatElapsed(elapsedSeconds)}</span>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-[#0F172A] rounded-lg p-3">
+              <p className="text-xs text-gray-500 mb-1">当前阶段</p>
+              <div className="flex items-center gap-2">
+                {task.status === 'running' && <span className={`inline-block w-2 h-2 rounded-full ${agentPhase.color === 'text-blue-400' ? 'bg-blue-400 animate-pulse' : agentPhase.color === 'text-green-400' ? 'bg-green-400' : agentPhase.color === 'text-red-400' ? 'bg-red-400' : 'bg-yellow-400'}`} />}
+                <span className={`text-sm font-medium ${agentPhase.color}`}>{agentPhase.phase}</span>
+              </div>
+            </div>
+            {codeswarmStatus?.engine && (
+              <div className="bg-[#0F172A] rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">引擎</p>
+                <p className="text-sm font-medium text-gray-200">{codeswarmStatus.engine}</p>
+              </div>
+            )}
+            {codeswarmStatus?.agent && (
+              <div className="bg-[#0F172A] rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">Agent</p>
+                <p className="text-sm font-medium text-gray-200">{codeswarmStatus.agent}</p>
+              </div>
+            )}
+            {codeswarmStatus?.sessionId && (
+              <div className="bg-[#0F172A] rounded-lg p-3">
+                <p className="text-xs text-gray-500 mb-1">Session</p>
+                <p className="text-sm font-mono text-gray-300 truncate" title={codeswarmStatus.sessionId}>{codeswarmStatus.sessionId}</p>
+              </div>
+            )}
+          </div>
+          {agentPhase.detail && (
+            <p className="text-xs text-gray-500 mt-2">{agentPhase.detail}</p>
+          )}
+        </div>
+      )}
 
       {task.filePath && (
         <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">

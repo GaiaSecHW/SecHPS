@@ -174,7 +174,15 @@ def build_paths(target_dir: Path, project_name: str, workspace: Path) -> BuildPa
 
 
 def resolve_local_joern_bins(joern_home_arg: str | None) -> tuple[str, str, str]:
+    _IS_WIN = sys.platform == "win32"
+
     def _from_home(home: Path) -> tuple[str, str] | None:
+        # On Windows prefer .bat wrappers; fall back to bare names
+        if _IS_WIN:
+            parse_bin = home / "joern-parse.bat"
+            export_bin = home / "joern-export.bat"
+            if parse_bin.exists() and export_bin.exists():
+                return str(parse_bin), str(export_bin)
         parse_bin = home / "joern-parse"
         export_bin = home / "joern-export"
         if parse_bin.exists() and export_bin.exists():

@@ -329,14 +329,10 @@ export class WorkerDaemon {
         error: error instanceof Error ? error.message : String(error),
       });
     } finally {
-      // Wait for background codedmap task to complete before cleanup
-      if (codedmapPromise) {
-        try {
-          await codedmapPromise;
-        } catch {
-          // Already handled inside the promise
-        }
-      }
+      // Codedmap is fully async — do NOT await it here.
+      // Errors are handled inside the promise chain (lines 232-243).
+      // NFS passthrough mode skips cleanup anyway, so no risk of
+      // deleting files while codedmap is still writing.
       if (buildResult) {
         await this.envFactory.cleanup(buildResult.workspacePath);
       }

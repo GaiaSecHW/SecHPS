@@ -303,7 +303,7 @@ export function CodedmapDebugPanel() {
           <div className="bg-[#0a1020] rounded-lg p-3 border border-gray-700/50">
             <p className="text-xs text-gray-500 mb-1">执行命令:</p>
             <code className="text-xs text-cyan-400 font-mono break-all">
-              {(process.platform === 'win32' ? 'python' : 'python3')}
+              {typeof window !== 'undefined' && navigator.platform.includes('Win') ? 'py -3' : 'python3'}
               {' '}{codedmapHome ? `${codedmapHome}/tools/build_map.py` : 'build_map.py'}
               {' '}{targetDir || '<targetDir>'}
               {joernHome && ` --joern-home ${joernHome}`}
@@ -317,7 +317,7 @@ export function CodedmapDebugPanel() {
             {!isBuilding ? (
               <button
                 onClick={handleBuild}
-                disabled={!targetDir.trim() || !codedmapHome.trim()}
+                disabled={!targetDir.trim()}
                 className="flex items-center gap-2 px-6 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-4 h-4" />
