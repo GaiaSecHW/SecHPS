@@ -153,7 +153,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       setFormData(prev => ({
         ...prev,
         defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
-        startCommand: prev.startCommand.trim() ? prev.startCommand : `/${agentName}`,
+        startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
       }));
     }
   };

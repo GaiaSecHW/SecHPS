@@ -279,13 +279,11 @@ function executeTaskAsync(
 
 const args: string[] = ['run', '--agent', 'build', instruction];
 
-      const env: Record<string, string> = {
+      const env: NodeJS.ProcessEnv = {
+        ...process.env,
         TERM: 'dumb',
         NO_COLOR: '1',
       };
-      for (const [key, value] of Object.entries(process.env)) {
-        if (value !== undefined) env[key] = value;
-      }
 
       let cmd: string;
       let finalArgs: string[];

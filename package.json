@@ -7,7 +7,7 @@
     "dev": "next dev",
     "dev:webpack": "next dev --webpack",
     "build": "next build && node scripts/postbuild.js",
-    "start": "node .next/standalone/server.js",
+    "start": "node .next/standalone/claude-web-platform/server.js",
     "lint": "next lint",
     "test": "vitest run",
     "postinstall": "prisma generate",

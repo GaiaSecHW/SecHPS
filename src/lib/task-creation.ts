@@ -55,7 +55,7 @@ ${fileTree}
 
   try {
     const baseURL = modelConfig.baseURL || 'https://api.anthropic.com/v1';
-    const isAnthropic = baseURL.includes('anthropic') || modelConfig.providerType === 'anthropic';
+    const isAnthropic = (baseURL as string).includes('anthropic') || modelConfig.providerType === 'anthropic';
 
     if (isAnthropic) {
       const resp = await fetch(`${baseURL}/messages`, {
