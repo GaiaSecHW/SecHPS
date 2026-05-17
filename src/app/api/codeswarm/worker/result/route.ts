@@ -167,7 +167,8 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string): vo
       console.log(`[VulnParse:${taskId}] 开始执行 audit-report-parser skill`);
       
       const instruction = '执行 audit-report-parser skill，解析审计报告';
-      const args: string[] = ['run', '--agent', 'build', instruction];
+      const args: string[] = ['run', '--agent', 'build', '--model', 'alibaba-cn/glm-5'];
+      args.push(instruction);
       
       const env: Record<string, string> = {
         TERM: 'dumb',

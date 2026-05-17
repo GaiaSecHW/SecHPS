@@ -29,7 +29,7 @@ export class WorkerDaemon {
   private readonly codedmapMgr: CodedmapManager;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   /** Track task IDs currently being executed to prevent duplicate processing. */
-  private readonly activeTasks = new Set<string>();
+  private readonly activeTasks = new Map<string, TaskPayload>();
 
   constructor(config: WorkerDaemonConfig) {
     this.config = config;
@@ -98,11 +98,36 @@ export class WorkerDaemon {
   }
 
   async stop(): Promise<void> {
+    console.log(`[Daemon] Graceful shutdown initiated, active tasks: ${this.activeTasks.size}`);
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+
+    // Notify platform for all active tasks before terminating
+    for (const [taskId, payload] of this.activeTasks) {
+      console.log(`[Daemon] Notifying platform of interrupted task: ${taskId}`);
+      try {
+        await this.postResult(payload, {
+          taskId,
+          nodeId: this.config.nodeId,
+          status: 'failed',
+          error: 'Worker daemon shutting down, task interrupted',
+        });
+      } catch (e) {
+        console.error(`[Daemon] Failed to notify platform for task ${taskId}:`, e);
+      }
+      try {
+        await this.processMgr.terminate(taskId);
+      } catch {
+        // Process may already be dead
+      }
+      this.activeTasks.delete(taskId);
+      this.semaphore.release();
+    }
+
     await this.server.close();
+    console.log(`[Daemon] Graceful shutdown complete`);
   }
 
   private startHeartbeat(): void {
@@ -163,7 +188,7 @@ export class WorkerDaemon {
     let codedmapPromise: Promise<void> | null = null;
 
     // Mark task as active (for deduplication)
-    this.activeTasks.add(taskId);
+    this.activeTasks.set(taskId, payload);
 
     try {
       console.log(`[Daemon] ========== TASK START ==========`);
