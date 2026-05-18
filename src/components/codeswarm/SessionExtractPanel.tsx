@@ -316,11 +316,11 @@ export function SessionExtractPanel() {
               <div className="divide-y divide-gray-700/30">
                 {extractResult.skills.map((skill, i) => (
                   <div key={i} className="p-3">
-                    <button
-                      onClick={() => setExpandedSkill(expandedSkill === i ? null : i)}
-                      className="w-full flex items-center justify-between text-left"
-                    >
-                      <div className="flex items-center gap-2">
+                    <div className="w-full flex items-center justify-between">
+                      <button
+                        onClick={() => setExpandedSkill(expandedSkill === i ? null : i)}
+                        className="flex items-center gap-2 text-left"
+                      >
                         {expandedSkill === i ? (
                           <ChevronDown className="w-4 h-4 text-cyan-400" />
                         ) : (
@@ -330,17 +330,14 @@ export function SessionExtractPanel() {
                         <span className="text-xs text-gray-500">
                           {new Date(skill.startTime).toLocaleTimeString()}
                         </span>
-                      </div>
+                      </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(formatJson(skill));
-                        }}
+                        onClick={() => copyToClipboard(formatJson(skill))}
                         className="p-1 text-gray-400 hover:text-cyan-400"
                       >
                         <Copy className="w-3 h-3" />
                       </button>
-                    </button>
+                    </div>
                     {expandedSkill === i && (
                       <div className="mt-3 space-y-2">
                         <div>
@@ -374,11 +371,11 @@ export function SessionExtractPanel() {
               <div className="divide-y divide-gray-700/30">
                 {extractResult.tools.map((tool, i) => (
                   <div key={i} className="p-3">
-                    <button
-                      onClick={() => setExpandedTool(expandedTool === i ? null : i)}
-                      className="w-full flex items-center justify-between text-left"
-                    >
-                      <div className="flex items-center gap-2">
+                    <div className="w-full flex items-center justify-between">
+                      <button
+                        onClick={() => setExpandedTool(expandedTool === i ? null : i)}
+                        className="flex items-center gap-2 text-left"
+                      >
                         {expandedTool === i ? (
                           <ChevronDown className="w-4 h-4 text-purple-400" />
                         ) : (
@@ -388,17 +385,14 @@ export function SessionExtractPanel() {
                         <span className="text-xs text-gray-500">
                           {new Date(tool.startTime).toLocaleTimeString()}
                         </span>
-                      </div>
+                      </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(formatJson(tool));
-                        }}
+                        onClick={() => copyToClipboard(formatJson(tool))}
                         className="p-1 text-gray-400 hover:text-purple-400"
                       >
                         <Copy className="w-3 h-3" />
                       </button>
-                    </button>
+                    </div>
                     {expandedTool === i && (
                       <div className="mt-3 space-y-2">
                         <div>

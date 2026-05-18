@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { SessionManager } from '@/services/session-manager';
+import Database from 'better-sqlite3';
+import path from 'path';
+import os from 'os';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
 
@@ -28,9 +30,15 @@ interface SessionExtractResult {
 
 function isSkill(toolName: string): boolean {
   const lower = toolName.toLowerCase();
+  if (lower === 'skill') return true;
   if (lower.includes('skill')) return true;
   if (lower.startsWith('audit-') || lower.startsWith('cdm-') || lower.startsWith('tech-')) return true;
   return false;
+}
+
+function getOpenCodeDbPath(): string {
+  const dataDir = process.env.OPENCODE_DATA_DIR || path.join(os.homedir(), '.local', 'share', 'opencode');
+  return path.join(dataDir, 'opencode.db');
 }
 
 export async function POST(request: Request) {
@@ -47,56 +55,81 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: '缺少 workspacePath 参数' }, { status: 400 });
     }
 
-    const sessionManager = new SessionManager(workspacePath);
+    const dbPath = getOpenCodeDbPath();
+    const db = new Database(dbPath, { readonly: true });
 
-    const { sessions } = await sessionManager.getSessions(1, 0);
-    if (sessions.length === 0) {
-      return NextResponse.json({ error: '没有找到 session' }, { status: 404 });
+    const normalizedPath = workspacePath.replace(/\\/g, '/').replace(/\/$/, '');
+
+    const session = db.prepare(`
+      SELECT id, title, directory, time_updated
+      FROM session
+      WHERE directory = ? OR directory = ? OR path = ? OR path = ?
+      ORDER BY time_updated DESC
+      LIMIT 1
+    `).get(
+      workspacePath,
+      normalizedPath,
+      workspacePath,
+      normalizedPath
+    ) as { id: string; title: string; directory: string; time_updated: number } | undefined;
+
+    if (!session) {
+      db.close();
+      return NextResponse.json({ error: `没有找到 session (path: ${workspacePath})` }, { status: 404 });
     }
 
-    const latestSession = sessions[0];
-    const sessionId = latestSession.id;
+    const sessionId = session.id;
 
-    const { messages } = await sessionManager.getSessionMessages(sessionId, null, 0);
+    const parts = db.prepare(`
+      SELECT id, data, time_created
+      FROM part
+      WHERE session_id = ?
+      ORDER BY time_created
+    `).all(sessionId) as Array<{ id: string; data: string; time_created: number }>;
 
-    const resultMap = new Map<string, { result: unknown; endTime: string }>();
-    for (const msg of messages) {
-      if (msg.type === 'tool_result' && msg.tool_use_id) {
-        resultMap.set(msg.tool_use_id, {
-          result: msg.tool_result,
-          endTime: msg.timestamp,
-        });
-      }
-    }
+    db.close();
 
     const skills: SessionExtractResult['skills'] = [];
     const tools: SessionExtractResult['tools'] = [];
 
-    for (const msg of messages) {
-      if (msg.type === 'tool_use' && msg.tool_name) {
-        const resultInfo = msg.tool_use_id ? resultMap.get(msg.tool_use_id) : undefined;
-        const entry = {
-          toolName: msg.tool_name,
-          toolUseId: msg.tool_use_id || '',
-          input: msg.tool_input || {},
-          result: resultInfo?.result,
-          startTime: msg.timestamp,
-          endTime: resultInfo?.endTime || msg.timestamp,
-        };
+    for (const part of parts) {
+      try {
+        const parsed = JSON.parse(part.data);
+        if (parsed.type === 'tool' && parsed.tool && parsed.state) {
+          const toolName = parsed.tool;
+          const callID = parsed.callID || part.id;
+          const input = parsed.state?.input || {};
+          const output = parsed.state?.output;
+          const status = parsed.state?.status;
+          const startTime = new Date(part.time_created).toISOString();
+          const endTime = parsed.state?.time?.end
+            ? new Date(parsed.state.time.end).toISOString()
+            : startTime;
 
-        if (isSkill(msg.tool_name)) {
-          skills.push(entry);
-        } else {
-          tools.push(entry);
+          const entry = {
+            toolName,
+            toolUseId: callID,
+            input,
+            result: output,
+            startTime,
+            endTime,
+          };
+
+          if (isSkill(toolName)) {
+            skills.push(entry);
+          } else {
+            tools.push(entry);
+          }
         }
+      } catch {
       }
     }
 
     const result: SessionExtractResult = {
       sessionId,
-      summary: latestSession.summary || '',
-      messageCount: messages.length,
-      lastActivity: latestSession.lastActivity,
+      summary: session.title || '',
+      messageCount: parts.length,
+      lastActivity: new Date(session.time_updated).toISOString(),
       skills,
       tools,
     };
@@ -106,6 +139,6 @@ export async function POST(request: Request) {
     return NextResponse.json(result);
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SESSION, 'Session 解析失败', { details: { error: String(error) } });
-    return NextResponse.json({ error: '解析失败' }, { status: 500 });
+    return NextResponse.json({ error: '解析失败: ' + String(error) }, { status: 500 });
   }
 }
