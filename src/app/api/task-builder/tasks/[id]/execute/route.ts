@@ -55,6 +55,7 @@ export async function POST(
             apiKey: true,
             name: true,
             models: true,
+            apiBaseUrl: true,
           },
         },
       },
@@ -147,6 +148,7 @@ export async function POST(
     }
 
     const apiKey = task.ModelConfig?.apiKey || undefined;
+    const apiBaseUrl = task.ModelConfig?.apiBaseUrl || undefined;
     const timeoutSec = 18000;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
@@ -160,7 +162,7 @@ export async function POST(
       INSERT INTO "CodeswarmTask" (
         id, "taskId", state, instruction, "projectPath", "workspacePath",
         skills, scripts, mcps, model, "apiKey", "timeoutSec",
-        engine, agent, "targetProduct",
+        engine, agent, "targetProduct", "apiBaseUrl",
         "platformTaskId", "createdAt", "updatedAt"
       ) VALUES (
         ${codeswarmDbId}, ${codeswarmTaskId}, 'queued',
@@ -169,10 +171,19 @@ export async function POST(
         ${scripts ? JSON.stringify(scripts) : null},
         NULL, ${model || null}, ${apiKey || null}, ${timeoutSec},
         ${engine}, ${agentName || null},
-        ${task.targetProduct || null},
+        ${task.targetProduct || null}, ${apiBaseUrl || null},
         ${id}, NOW(), NOW()
       )
     `);
+
+    // 先绑定 codeswarmTaskId，确保 Worker 事件到达时能找到 taskInstance
+    await prisma.taskInstance.update({
+      where: { id },
+      data: {
+        codeswarmTaskId,
+        updatedAt: new Date(),
+      },
+    });
 
     // 确保调度器已初始化
     if (!codeswarmDispatcher.isAvailable) {
@@ -210,6 +221,7 @@ export async function POST(
           agent: agentName || null,
           preferredWorkerNodeId: null,
           targetProduct: task.targetProduct || null,
+          apiBaseUrl: apiBaseUrl || null,
         };
         const success = await codeswarmDispatcher.sendTaskToWorker(taskRow, worker);
         if (success) {
@@ -233,14 +245,6 @@ export async function POST(
       message: 'CodeSwarm 任务已分发',
       details: `taskId: ${codeswarmTaskId}`,
       timestamp: new Date(),
-    });
-
-    await prisma.taskInstance.update({
-      where: { id },
-      data: {
-        codeswarmTaskId,
-        updatedAt: new Date(),
-      },
     });
 
     // 异步轮询任务结果
@@ -299,7 +303,7 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       subscriber.disconnect();
-      reject(new Error('任务执行超时（超过2小时）'));
+      reject(new Error('任务执行超时（超过5小时）'));
     }, 5 * 60 * 60 * 1000);
 
     subscriber.subscribe(channel);
@@ -354,91 +358,49 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
 }
 
 async function pollViaDB(localTaskId: string, codeswarmTaskId: string): Promise<void> {
-  const maxPolls = 600;
-  const logBuffer: { level: string; message: string; details: string | null }[] = [];
-  let lastFlush = 0;
+  // 总超时 5 小时，与 CodeswarmTask.timeoutSec (18000s) 和 Redis 模式对齐
+  const TIMEOUT_MS = 5 * 60 * 60 * 1000;
+  const startTime = Date.now();
+  // 渐进退避：2s → 4s → 8s → 10s（上限），减少长时间轮询的 DB 压力
+  let interval = 2000;
+  const MAX_INTERVAL = 10_000;
 
-  const flushLogs = async () => {
-    if (logBuffer.length === 0) return;
-    const batch = logBuffer.splice(0);
-    try {
-      await prisma.taskExecutionLog.createMany({
-        data: batch.map(log => ({
-          id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          taskId: localTaskId,
-          level: log.level,
-          message: log.message,
-          details: log.details,
-        })),
-      });
-    } catch { /* non-critical */ }
-  };
+  while (Date.now() - startTime < TIMEOUT_MS) {
+    await new Promise(resolve => setTimeout(resolve, interval));
 
-  for (let i = 0; i < maxPolls; i++) {
-    const now = Date.now();
-    if (now - lastFlush >= 10000) {
-      await flushLogs();
-      lastFlush = now;
-    }
+    const csTask = await prisma.codeswarmTask.findUnique({
+      where: { taskId: codeswarmTaskId },
+      select: {
+        state: true,
+        result: true,
+        reportContent: true,
+        error: true,
+      },
+    });
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    if (!csTask) throw new Error('CodeSwarm 任务不存在');
 
-    try {
-      const csTask = await prisma.codeswarmTask.findUnique({
-        where: { taskId: codeswarmTaskId },
-        select: {
-          state: true,
-          result: true,
-          reportContent: true,
-          error: true,
-          events: true,
+    if (csTask.state === 'completed') {
+      await prisma.taskInstance.update({
+        where: { id: localTaskId },
+        data: {
+          status: 'completed', completedAt: new Date(), updatedAt: new Date(),
+          executionResult: csTask.result || null, reportPath: csTask.reportContent || null,
         },
       });
-
-      if (!csTask) throw new Error('CodeSwarm 任务不存在');
-
-      if (csTask.state === 'completed') {
-        await flushLogs();
-        await prisma.taskInstance.update({
-          where: { id: localTaskId },
-          data: {
-            status: 'completed', completedAt: new Date(), updatedAt: new Date(),
-            executionResult: csTask.result || null, reportPath: csTask.reportContent || null,
-          },
-        });
-        eventBus.emit(`task:${localTaskId}`, {
-          type: 'completed', level: 'success',
-          message: '任务执行完成', details: '所有步骤已完成', timestamp: new Date(),
-        });
-        return;
-      }
-
-      if (csTask.state === 'failed') {
-        await flushLogs();
-        throw new Error(csTask.error || 'CodeSwarm 任务执行失败');
-      }
-
-      if (csTask.events) {
-        try {
-          const events = typeof csTask.events === 'string' ? JSON.parse(csTask.events) : csTask.events;
-          const recentEvents = Array.isArray(events) ? events.slice(-5) : [];
-          for (const event of recentEvents) {
-            if (event.type === 'agent_message_chunk') {
-              logBuffer.push({ level: 'info', message: 'Agent 输出', details: event.content || null });
-            } else if (event.type === 'tool_call') {
-              logBuffer.push({ level: 'info', message: '工具调用', details: `工具: ${event.tool}` });
-            } else if (event.type === 'error') {
-              logBuffer.push({ level: 'error', message: '执行错误', details: event.message || null });
-            }
-          }
-        } catch { /* ignore parse errors */ }
-      }
-    } catch (pollError) {
-      await flushLogs();
-      throw pollError;
+      eventBus.emit(`task:${localTaskId}`, {
+        type: 'completed', level: 'success',
+        message: '任务执行完成', details: '所有步骤已完成', timestamp: new Date(),
+      });
+      return;
     }
+
+    if (csTask.state === 'failed') {
+      throw new Error(csTask.error || 'CodeSwarm 任务执行失败');
+    }
+
+    interval = Math.min(interval * 2, MAX_INTERVAL);
   }
 
-  await flushLogs();
-  throw new Error('任务执行超时（超过1小时）');
+  throw new Error('任务执行超时（超过5小时）');
 }

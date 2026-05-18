@@ -126,7 +126,7 @@ function DashboardLayoutContent({
             </div>
           ) : (
             <>
-              <h1 className="text-base font-bold text-gray-100 tracking-wide">AI4WEB 平台</h1>
+              {/* <h1 className="text-base font-bold text-gray-100 tracking-wide">AI4WEB 平台</h1> */}
               <p className="text-xs text-gray-500 mt-1">
                 {user?.name || user?.username}
               </p>

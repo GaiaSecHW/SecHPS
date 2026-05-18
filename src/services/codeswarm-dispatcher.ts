@@ -130,21 +130,14 @@ class CodeswarmDispatcher {
     });
 
     // 阶段 1：先更新 DB 状态（乐观锁，防止重复分发）
-    try {
-      const updated = await prisma.codeswarmTask.update({
-        where: { id: task.id, state: 'queued' }, // 只更新 queued 状态，防止重复分发
-        data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
-      });
-      if (!updated) {
-        console.log(`[CodeSwarm] Task ${task.taskId} is no longer queued, skipping`);
-        return true;
-      }
-    } catch (e: any) {
-      if (e.code === 'P2025') {
-        console.log(`[CodeSwarm] Task ${task.taskId} not found or not in queued state`);
-        return true;
-      }
-      throw e;
+    // updateMany 支持 where 中带非唯一字段做条件更新
+    const updateResult = await prisma.codeswarmTask.updateMany({
+      where: { id: task.id, state: 'queued' },
+      data: { state: 'dispatched', workerId: worker.id, startedAt: new Date(), updatedAt: new Date() },
+    });
+    if (updateResult.count === 0) {
+      console.log(`[CodeSwarm] Task ${task.taskId} is no longer queued, skipping`);
+      return true;
     }
 
     // 阶段 2：依次尝试多个地址发送 HTTP 请求
@@ -220,7 +213,8 @@ const taskPayload = JSON.stringify({
     // Worker 上报的 currentTasks 用于校准内存（Worker 自身最清楚实际运行数）
     // 直接使用上报值，不取 max（避免超时处理未释放导致的残留计数）
     const reportedTasks = data.currentTasks ?? 0;
-    const currentTasks = reportedTasks;
+    // 使用 max 防止心跳覆盖已分发但 Worker 尚未确认的任务计数
+    const currentTasks = Math.max(existing?.currentTasks || 0, reportedTasks);
     this.workers.set(data.nodeId, {
       id: data.id,
       nodeId: data.nodeId,

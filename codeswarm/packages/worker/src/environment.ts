@@ -13,6 +13,7 @@ export interface BuildResult {
   instruction?: string;
   commandTemplate?: string;
   model?: string;
+  engine?: 'opencode' | 'claudecode';
 }
 
 export type BuildProgressCallback = (message: string) => void;
@@ -45,7 +46,7 @@ export class EnvironmentFactory {
    * Build an isolated workspace for a task.
    * Priority: workspacePath (NFS) > projectPath (local copy)
    */
-  async build(payload: TaskPayload, onProgress?: BuildProgressCallback): Promise<BuildResult> {
+  async build(payload: TaskPayload, onProgress?: BuildProgressCallback, engine?: 'opencode' | 'claudecode'): Promise<BuildResult> {
     const progress = (msg: string) => {
       console.log(`[Environment] ${msg}`);
       onProgress?.(msg);
@@ -95,99 +96,100 @@ export class EnvironmentFactory {
         resolvedInstruction = payload.instruction ?? undefined;
       }
 
-      // Always read opencode.json to resolve agent (regardless of instruction length)
-      progress(`Step 2: 检查 opencode.json...`);
-      const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
-      progress(`opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
-      if (fs.existsSync(directOpencodeJsonPath)) {
-        progress(`找到 opencode.json，读取配置...`);
-        try {
-          const rawConfig = fs.readFileSync(directOpencodeJsonPath, 'utf-8').replace(/^﻿/, '');
-          const config: Record<string, any> = JSON.parse(rawConfig);
-          resolvedAgent = config.default_agent || config.defaultAgent;
-          progress(`default_agent: ${resolvedAgent}`);
-          if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
-            commandTemplate = config.command[resolvedAgent].template;
-            progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
-          }
-
-          // Inject model and provider config from payload
-          if (payload.model || payload.apiKey) {
-            progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}`);
-            if (payload.model) {
-              config.model = payload.model;
+      // opencode.json is opencode-specific config; skip for claudecode engine
+      if (engine !== 'claudecode') {
+        progress(`Step 2: 检查 opencode.json...`);
+        const directOpencodeJsonPath = path.join(localWorkspacePath, 'opencode.json');
+        progress(`opencode.json exists: ${fs.existsSync(directOpencodeJsonPath)}`);
+        if (fs.existsSync(directOpencodeJsonPath)) {
+          progress(`找到 opencode.json，读取配置...`);
+          try {
+            const rawConfig = fs.readFileSync(directOpencodeJsonPath, 'utf-8').replace(/^﻿/, '');
+            const config: Record<string, any> = JSON.parse(rawConfig);
+            resolvedAgent = config.default_agent || config.defaultAgent;
+            progress(`default_agent: ${resolvedAgent}`);
+            if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
+              commandTemplate = config.command[resolvedAgent].template;
+              progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
             }
-            if (payload.apiKey && payload.model) {
-              const providerId = payload.model.split('/')[0];
-              if (providerId) {
-                config.provider = {
-                  ...(config.provider || {}),
-                  [providerId]: {
-                    ...(config.provider?.[providerId] || {}),
-                    apiKey: payload.apiKey,
-                  },
-                };
+
+            if (payload.model || payload.apiKey) {
+              progress(`注入模型配置: model=${payload.model}, apiKey=${!!payload.apiKey}`);
+              if (payload.model) {
+                config.model = payload.model;
+              }
+              if (payload.apiKey && payload.model) {
+                const providerId = payload.model.split('/')[0];
+                if (providerId) {
+                  config.provider = {
+                    ...(config.provider || {}),
+                    [providerId]: {
+                      ...(config.provider?.[providerId] || {}),
+                      apiKey: payload.apiKey,
+                    },
+                  };
+                }
+              }
+              fs.writeFileSync(directOpencodeJsonPath, JSON.stringify(config, null, 2));
+              progress(`opencode.json 已更新模型配置`);
+            }
+          } catch (e) {
+            progress(`读取 opencode.json 失败: ${e}`);
+          }
+        } else {
+          progress(`Step 2b: 检查子目录...`);
+          const subdirs = fs.readdirSync(localWorkspacePath, { withFileTypes: true })
+            .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+            .map(entry => entry.name);
+
+          progress(`子目录列表: ${subdirs.join(', ')} (${subdirs.length}个)`);
+
+          if (subdirs.length === 1) {
+            const subdirPath = path.join(localWorkspacePath, subdirs[0]);
+            const subdirOpencodeJsonPath = path.join(subdirPath, 'opencode.json');
+            progress(`检查子目录: ${subdirs[0]}`);
+            if (fs.existsSync(subdirOpencodeJsonPath)) {
+              actualWorkspacePath = subdirPath;
+              progress(`使用子目录作为工作区: ${subdirs[0]}`);
+              try {
+                const config: Record<string, any> = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8').replace(/^﻿/, ''));
+                resolvedAgent = config.default_agent || config.defaultAgent;
+                progress(`default_agent: ${resolvedAgent}`);
+                if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
+                  commandTemplate = config.command[resolvedAgent].template;
+                  progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
+                }
+
+                if (payload.model || payload.apiKey) {
+                  progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}`);
+                  if (payload.model) {
+                    config.model = payload.model;
+                  }
+                  if (payload.apiKey && payload.model) {
+                    const providerId = payload.model.split('/')[0];
+                    if (providerId) {
+                      config.provider = {
+                        ...(config.provider || {}),
+                        [providerId]: {
+                          ...(config.provider?.[providerId] || {}),
+                          apiKey: payload.apiKey,
+                        },
+                      };
+                    }
+                  }
+                  fs.writeFileSync(subdirOpencodeJsonPath, JSON.stringify(config, null, 2));
+                  progress(`子目录 opencode.json 已更新模型配置`);
+                }
+              } catch (e) {
+                progress(`读取子目录 opencode.json 失败: ${e}`);
               }
             }
-            fs.writeFileSync(directOpencodeJsonPath, JSON.stringify(config, null, 2));
-            progress(`opencode.json 已更新模型配置`);
+          } else if (subdirs.length > 1) {
+            progress(`多个子目录，不自动选择`);
           }
-        } catch (e) {
-          progress(`读取 opencode.json 失败: ${e}`);
         }
       } else {
-        // Try to find a single subdirectory with opencode.json
-        progress(`Step 2b: 检查子目录...`);
-        const subdirs = fs.readdirSync(localWorkspacePath, { withFileTypes: true })
-          .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
-          .map(entry => entry.name);
-
-        progress(`子目录列表: ${subdirs.join(', ')} (${subdirs.length}个)`);
-
-        if (subdirs.length === 1) {
-          const subdirPath = path.join(localWorkspacePath, subdirs[0]);
-          const subdirOpencodeJsonPath = path.join(subdirPath, 'opencode.json');
-          progress(`检查子目录: ${subdirs[0]}`);
-          if (fs.existsSync(subdirOpencodeJsonPath)) {
-            actualWorkspacePath = subdirPath;
-            progress(`使用子目录作为工作区: ${subdirs[0]}`);
-            try {
-              const config: Record<string, any> = JSON.parse(fs.readFileSync(subdirOpencodeJsonPath, 'utf-8').replace(/^﻿/, ''));
-              resolvedAgent = config.default_agent || config.defaultAgent;
-              progress(`default_agent: ${resolvedAgent}`);
-              if (resolvedAgent && config.command?.[resolvedAgent]?.template) {
-                commandTemplate = config.command[resolvedAgent].template;
-                progress(`command template: ${commandTemplate?.substring(0, 50)}...`);
-              }
-
-              // Inject model and provider config from payload
-              if (payload.model || payload.apiKey) {
-                progress(`注入模型配置(subdir): model=${payload.model}, apiKey=${!!payload.apiKey}`);
-                if (payload.model) {
-                  config.model = payload.model;
-                }
-                if (payload.apiKey && payload.model) {
-                  const providerId = payload.model.split('/')[0];
-                  if (providerId) {
-                    config.provider = {
-                      ...(config.provider || {}),
-                      [providerId]: {
-                        ...(config.provider?.[providerId] || {}),
-                        apiKey: payload.apiKey,
-                      },
-                    };
-                  }
-                }
-                fs.writeFileSync(subdirOpencodeJsonPath, JSON.stringify(config, null, 2));
-                progress(`子目录 opencode.json 已更新模型配置`);
-              }
-            } catch (e) {
-              progress(`读取子目录 opencode.json 失败: ${e}`);
-            }
-          }
-        } else if (subdirs.length > 1) {
-          progress(`多个子目录，不自动选择`);
-        }
+        progress(`Step 2: 跳过 opencode.json 检查 (claudecode engine)`);
       }
 
       progress(`BUILD COMPLETE (NFS mode) - workspace: ${actualWorkspacePath}, agent: ${resolvedAgent}`);
@@ -233,29 +235,33 @@ export class EnvironmentFactory {
         }
       }
 
-      // Step 5: Generate opencode.json if model or MCP config or agent provided
-      const opencodeConfig: Record<string, any> = {};
-      if (payload.model) {
-        opencodeConfig.model = payload.model;
-        progress(`配置模型: ${payload.model}`);
-      }
-      if (payload.mcps && payload.mcps.length > 0) {
-        const mcpObjects = payload.mcps.filter((m): m is Exclude<typeof m, string> => typeof m !== 'string');
-        if (mcpObjects.length > 0) {
-          opencodeConfig.mcp = this.normalizeMcpServices(mcpObjects);
+      // Step 5: Generate opencode.json (opencode engine only)
+      if (engine !== 'claudecode') {
+        const opencodeConfig: Record<string, any> = {};
+        if (payload.model) {
+          opencodeConfig.model = payload.model;
+          progress(`配置模型: ${payload.model}`);
         }
-        progress(`配置 MCP: ${payload.mcps.length}个`);
-      }
-      if (payload.agent) {
-        opencodeConfig.default_agent = payload.agent;
-        progress(`配置 agent: ${payload.agent}`);
-      }
-      if (Object.keys(opencodeConfig).length > 0) {
-        opencodeConfig["$schema"] = "https://opencode.ai/config.json";
-        fs.writeFileSync(
-          path.join(workspacePath, 'opencode.json'),
-          JSON.stringify(opencodeConfig, null, 2)
-        );
+        if (payload.mcps && payload.mcps.length > 0) {
+          const mcpObjects = payload.mcps.filter((m): m is Exclude<typeof m, string> => typeof m !== 'string');
+          if (mcpObjects.length > 0) {
+            opencodeConfig.mcp = this.normalizeMcpServices(mcpObjects);
+          }
+          progress(`配置 MCP: ${payload.mcps.length}个`);
+        }
+        if (payload.agent) {
+          opencodeConfig.default_agent = payload.agent;
+          progress(`配置 agent: ${payload.agent}`);
+        }
+        if (Object.keys(opencodeConfig).length > 0) {
+          opencodeConfig["$schema"] = "https://opencode.ai/config.json";
+          fs.writeFileSync(
+            path.join(workspacePath, 'opencode.json'),
+            JSON.stringify(opencodeConfig, null, 2)
+          );
+        }
+      } else {
+        progress(`Step 5: 跳过 opencode.json 生成 (claudecode engine)`);
       }
 
       // Step 6: Write instruction.txt

@@ -28,7 +28,6 @@ interface LogEntry {
 export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const [executorMode, setExecutorMode] = useState<'instruction' | 'command'>('instruction');
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([]);
   const [selectedModelKey, setSelectedModelKey] = useState('');
   const [workerOptions, setWorkerOptions] = useState<{ nodeId: string; address: string; status: string }[]>([]);
@@ -42,6 +41,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     skills: '',
     mcps: '',
     preferredWorkerNodeId: '',
+    engine: 'opencode' as 'opencode' | 'claudecode',
   });
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [showLogs, setShowLogs] = useState(false);
@@ -208,47 +208,30 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (executorMode === 'instruction' && !form.instruction.trim()) {
+    if (!form.instruction.trim()) {
       toast.error('请输入执行指令');
-      return;
-    }
-    if (executorMode === 'command' && !form.instruction.trim()) {
-      toast.error('请输入执行命令');
       return;
     }
 
     setLoading(true);
     try {
-      const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
-const payload = executorMode === 'command'
-        ? {
-            // Command mode: 直接传递命令字符串给 Worker spawn，不走 ACP prompt
-            startCommand: `opencode run --command ${form.instruction}`,
-            agent: form.agent || undefined,
-            projectPath: form.projectPath || undefined,
-            workspacePath: form.workspacePath || undefined,
-            model: selectedModel?.modelName || undefined,
-            modelId: selectedModel?.modelId || undefined,
-            apiKey: form.apiKey || undefined,
-            timeoutSec: form.timeoutSec || undefined,
-            skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
-            mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
-            preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
-          }
-        : {
-            // Instruction mode: 自然语言指令，走 ACP sendPrompt
-            instruction: form.instruction,
-            agent: form.agent || undefined,
-            projectPath: form.projectPath || undefined,
-            workspacePath: form.workspacePath || undefined,
-            model: selectedModel?.modelName || undefined,
-            modelId: selectedModel?.modelId || undefined,
-            apiKey: form.apiKey || undefined,
-            timeoutSec: form.timeoutSec || undefined,
-            skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
-            mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
-            preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
-          };
+      const selectedModel = form.engine === 'opencode' ? modelOptions.find(o => o.key === selectedModelKey) : null;
+      const payload = {
+        instruction: form.instruction,
+        engine: form.engine,
+        agent: form.agent || undefined,
+        projectPath: form.projectPath || undefined,
+        workspacePath: form.workspacePath || undefined,
+        ...(form.engine === 'opencode' ? {
+          model: selectedModel?.modelName || undefined,
+          modelId: selectedModel?.modelId || undefined,
+          apiKey: form.apiKey || undefined,
+        } : {}),
+        timeoutSec: form.timeoutSec || undefined,
+        skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
+        mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
+        preferredWorkerNodeId: form.preferredWorkerNodeId || undefined,
+      };
 
       const resp = await fetch('/api/codeswarm/tasks', {
         method: 'POST',
@@ -319,67 +302,52 @@ const payload = executorMode === 'command'
       {/* Form */}
       {expanded && (
         <form onSubmit={handleSubmit} className="p-6 border-t border-gray-700/50 space-y-4">
-          {/* Executor Mode */}
+          {/* Engine Selector */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              执行方式
+              执行引擎
             </label>
             <div className="flex gap-3">
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${executorMode === 'instruction' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
                 <input
                   type="radio"
-                  name="executorMode"
-                  value="instruction"
-                  checked={executorMode === 'instruction'}
-                  onChange={() => setExecutorMode('instruction')}
+                  name="engine"
+                  value="opencode"
+                  checked={form.engine === 'opencode'}
+                  onChange={() => setForm({ ...form, engine: 'opencode' })}
                   className="sr-only"
                 />
-                <span className="font-medium">执行指令</span>
-                <span className="text-xs opacity-70">自然语言描述</span>
+                <span className="font-medium">OpenCode</span>
+                <span className="text-xs opacity-70">opencode acp</span>
               </label>
-              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${executorMode === 'command' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
+              <label className={`flex items-center space-x-2 px-4 py-2 rounded-lg border cursor-pointer transition-colors ${form.engine === 'claudecode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-600 text-gray-400 hover:bg-dark-surface-hover hover:text-gray-300'}`}>
                 <input
                   type="radio"
-                  name="executorMode"
-                  value="command"
-                  checked={executorMode === 'command'}
-                  onChange={() => setExecutorMode('command')}
+                  name="engine"
+                  value="claudecode"
+                  checked={form.engine === 'claudecode'}
+                  onChange={() => { setForm({ ...form, engine: 'claudecode' }); setSelectedModelKey(''); }}
                   className="sr-only"
                 />
-                <span className="font-medium">执行命令</span>
-                <span className="text-xs opacity-70">opencode run --command</span>
+                <span className="font-medium">Claude Code</span>
+                <span className="text-xs opacity-70">claude-code-acp</span>
               </label>
             </div>
           </div>
 
-          {/* Instruction or Command */}
-          {executorMode === 'instruction' ? (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                执行指令 <span className="text-red-400">*</span>
-              </label>
-              <textarea
-                value={form.instruction}
-                onChange={(e) => setForm({ ...form, instruction: e.target.value })}
-                placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
-                rows={5}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
-            </div>
-          ) : (
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                执行命令 <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.instruction}
-                onChange={(e) => setForm({ ...form, instruction: e.target.value })}
-                placeholder="nazhua-audit"
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
-              />
-            </div>
-          )}
+          {/* Instruction */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              执行指令 <span className="text-red-400">*</span>
+            </label>
+            <textarea
+              value={form.instruction}
+              onChange={(e) => setForm({ ...form, instruction: e.target.value })}
+              placeholder={"分析这个代码库的安全漏洞，重点关注：\n1. SQL注入和XSS等OWASP Top 10漏洞\n2. 敏感信息泄露\n3. 认证和授权问题\n请给出详细的漏洞报告和修复建议。"}
+              rows={5}
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
+            />
+          </div>
 
           {/* Basic Fields */}
           <div className="grid grid-cols-2 gap-4">
@@ -420,15 +388,17 @@ const payload = executorMode === 'command'
               className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
             >
               <option value="">自动分配</option>
-              {workerOptions.map((w) => (
+              {workerOptions.filter(w => w.status === 'online').map((w) => (
                 <option key={w.nodeId} value={w.nodeId}>
-                  {w.nodeId} ({w.address}) - {w.status}
+                  {w.nodeId} ({w.address})
                 </option>
               ))}
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          {/* Model & API Key (OpenCode only) */}
+          {form.engine === 'opencode' && (
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 模型
@@ -456,25 +426,28 @@ const payload = executorMode === 'command'
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                超时 (秒)
-              </label>
-              <input
-                type="number"
-                value={form.timeoutSec}
-                onChange={(e) => setForm({ ...form, timeoutSec: parseInt(e.target.value) || 300 })}
-                min={60}
-                max={3600}
-                className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
-              />
-            </div>
+          </div>
+          )}
+
+          {/* Timeout */}
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              超时 (秒)
+            </label>
+            <input
+              type="number"
+              value={form.timeoutSec}
+              onChange={(e) => setForm({ ...form, timeoutSec: parseInt(e.target.value) || 300 })}
+              min={60}
+              max={3600}
+              className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
+            />
           </div>
 
           {/* Agent Field */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Agent 名称 <span className="text-red-400">*</span>
+              Agent 名称 {form.engine === 'opencode' && <span className="text-red-400">*</span>}
             </label>
             <input
               type="text"
@@ -517,7 +490,7 @@ const payload = executorMode === 'command'
           <div className="flex justify-end">
             <button
               type="submit"
-              disabled={loading || !form.instruction.trim() || !form.agent.trim()}
+              disabled={loading || !form.instruction.trim() || (form.engine === 'opencode' && !form.agent.trim())}
               className="flex items-center space-x-2 px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (

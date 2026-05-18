@@ -17,7 +17,9 @@ export type AgentEventType =
   | 'phase_complete'
   | 'phase_error'
   | 'log_chunk'
-  | 'session_created';
+  | 'session_created'
+  | 'skill_start'
+  | 'skill_complete';
 
 export interface AgentEvent {
   type: AgentEventType;
@@ -34,6 +36,8 @@ export interface AgentEvent {
   level?: 'worker' | 'agent';
   // 输出流字段（用于区分 stdout/stderr）
   stream?: 'stdout' | 'stderr';
+  // skill 事件字段
+  skill?: string;
 }
 
 export interface AgentEventCallback {
@@ -105,11 +109,13 @@ export class ProcessManager {
     model?: string,
     env?: Record<string, string>,
     instruction?: string,
-    onEvent?: AgentEventCallback
+    onEvent?: AgentEventCallback,
+    apiBaseUrl?: string,
   ): Promise<RunAgentResult> {
     let stdout = '';
     let stderr = '';
     let client: ACPClient | null = null;
+    let currentSkill: string | null = null;
 
     console.log(`[ProcessMgr] ========== RUN AGENT START ==========`);
     console.log(`[ProcessMgr] taskId: ${taskId}`);
@@ -134,6 +140,18 @@ export class ProcessManager {
         mergedEnv.ANTHROPIC_API_KEY = apiKey;
         console.log(`[ProcessMgr] Added ANTHROPIC_API_KEY to env`);
       }
+      if (engine !== 'claudecode') {
+        if (model) {
+          mergedEnv.ANTHROPIC_MODEL = model;
+          console.log(`[ProcessMgr] Added ANTHROPIC_MODEL=${model} to env`);
+        }
+        if (apiBaseUrl) {
+          mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
+          console.log(`[ProcessMgr] Added ANTHROPIC_BASE_URL=${apiBaseUrl} to env`);
+        }
+      } else {
+        console.log(`[ProcessMgr] Claude Code engine: skipping model/baseUrl injection (uses .claude/settings.json)`);
+      }
       console.log(`[ProcessMgr] mergedEnv keys: ${Object.keys(mergedEnv).join(', ')}`);
 
       console.log(`[ProcessMgr] Step B: Creating ACPClient...`);
@@ -153,9 +171,35 @@ export class ProcessManager {
             });
           }
         },
-        toolCall: (tool: string, input: unknown) => {
-          console.log(`[ProcessMgr] EVENT toolCall: ${tool}`);
+        toolCall: (tool: string, input: unknown, title?: string) => {
+          console.log(`[ProcessMgr] EVENT toolCall: ${tool} (title=${title})`);
           console.log(`[ProcessMgr] EVENT toolCall input: ${JSON.stringify(input)?.substring(0, 100)}`);
+
+          // 检测 skill 调用
+          const isSkillCall = title === 'skill' || tool === 'skill'
+            || (typeof input === 'object' && input !== null && 'skill' in input);
+
+          if (isSkillCall && onEvent) {
+            const skillName = extractSkillName(input) || 'unknown';
+
+            // 切换 skill 时，先发出上一个 skill 的完成事件
+            if (currentSkill && currentSkill !== skillName) {
+              onEvent({
+                type: 'skill_complete',
+                skill: currentSkill,
+                timestamp: new Date().toISOString(),
+              });
+            }
+
+            currentSkill = skillName;
+            onEvent({
+              type: 'skill_start',
+              skill: skillName,
+              content: `开始执行 Skill: ${skillName}`,
+              timestamp: new Date().toISOString(),
+            });
+          }
+
           if (onEvent) {
             onEvent({
               type: 'tool_call',
@@ -194,14 +238,31 @@ export class ProcessManager {
       console.log(`[ProcessMgr]   model: ${model}`);
       console.log(`[ProcessMgr]   agent: ${agentName}`);
       console.log(`[ProcessMgr]   engine: ${engine}`);
-      await client.start({
+      // Construct ACPClientConfig based on engine
+      const clientConfig: {
+        cwd: string;
+        env?: Record<string, string>;
+        model?: string;
+        agent?: string;
+        command?: string;
+        args?: string[];
+      } = {
         cwd: workspace,
         env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
-        model,
+        ...(engine !== 'claudecode' && model ? { model } : {}),
         agent: agentName,
-        // @ts-expect-error - engine may not be in ACPClientConfig but is used by worker
-        engine,
-      });
+      };
+
+      if (engine === 'claudecode') {
+        clientConfig.command = 'cc-acp';
+        clientConfig.args = [];
+        console.log(`[ProcessMgr]   Using cc-acp (claude-code-acp) engine`);
+      } else {
+        console.log(`[ProcessMgr]   Using opencode engine (default)`);
+      }
+
+      console.log(`[ProcessMgr]   command: ${clientConfig.command || 'opencode (default)'}`);
+      await client.start(clientConfig);
       console.log(`[ProcessMgr] Step D DONE: client.start() completed`);
 
       console.log(`[ProcessMgr] Step E: Calling client.createSession()...`);
@@ -234,6 +295,15 @@ export class ProcessManager {
       console.log(`[ProcessMgr] Step F DONE: stopReason = ${stopReason}`);
       
       let exitCode: number | null = null;
+      // 任务完成前，发出最后一个 skill 的完成事件
+      if (currentSkill && onEvent) {
+        onEvent({
+          type: 'skill_complete',
+          skill: currentSkill,
+          timestamp: new Date().toISOString(),
+        });
+        currentSkill = null;
+      }
       if (stopReason === 'end_turn') {
         console.log(`[ProcessMgr] Step G: end_turn - destroying client`);
         await client.destroy();
@@ -389,4 +459,14 @@ export class ProcessManager {
       }, 60 * 60 * 1000);
     });
   }
+}
+
+function extractSkillName(input: unknown): string | null {
+  if (typeof input === 'object' && input !== null) {
+    if ('name' in input && typeof input.name === 'string') return input.name;
+    if ('skill' in input && typeof input.skill === 'string') return input.skill;
+    if ('id' in input && typeof input.id === 'string') return input.id;
+  }
+  if (typeof input === 'string') return input;
+  return null;
 }

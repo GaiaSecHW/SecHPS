@@ -92,6 +92,7 @@ function TimelineStep({ label, status, detail, icon }: {
 export function LocalTestPanel() {
   const [workspacePath, setWorkspacePath] = useState('');
   const [timeoutSec, setTimeoutSec] = useState(600);
+  const [engine, setEngine] = useState<'opencode' | 'claudecode'>('opencode');
   const [isRunning, setIsRunning] = useState(false);
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
   const [result, setResult] = useState<TestRecord | null>(null);
@@ -215,7 +216,7 @@ export function LocalTestPanel() {
       const response = await fetch('/api/codeswarm/local-test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workspacePath, timeoutSec }),
+        body: JSON.stringify({ workspacePath, timeoutSec, engine }),
       });
 
       const data = await response.json();
@@ -400,13 +401,28 @@ export function LocalTestPanel() {
         <button onClick={() => setShowAdvanced(!showAdvanced)}
           className="mt-3 text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1">
           {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-          超时设置
+          高级设置
         </button>
         {showAdvanced && (
-          <div className="mt-2">
-            <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Math.max(60, parseInt(e.target.value) || 600))}
-              min={60} max={7200} className="w-32 px-3 py-1.5 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100" />
-            <span className="ml-2 text-xs text-gray-500">秒（opencode fallback 超时时间）</span>
+          <div className="mt-2 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-gray-500">AI Fallback 引擎</span>
+              <div className="flex gap-2">
+                <button onClick={() => setEngine('opencode')}
+                  className={`px-3 py-1 rounded text-xs border transition-colors ${engine === 'opencode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                  OpenCode
+                </button>
+                <button onClick={() => setEngine('claudecode')}
+                  className={`px-3 py-1 rounded text-xs border transition-colors ${engine === 'claudecode' ? 'border-blue-500 bg-blue-500/20 text-blue-400' : 'border-gray-700 text-gray-500 hover:text-gray-300'}`}>
+                  Claude Code
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Math.max(60, parseInt(e.target.value) || 600))}
+                min={60} max={7200} className="w-32 px-3 py-1.5 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100" />
+              <span className="text-xs text-gray-500">秒（fallback 超时时间）</span>
+            </div>
           </div>
         )}
       </div>

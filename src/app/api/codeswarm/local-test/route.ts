@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 interface LocalTestRequest {
   workspacePath: string;
   timeoutSec?: number;
+  engine?: 'opencode' | 'claudecode';
 }
 
 interface ParsedVulnerabilityReport {
@@ -250,7 +251,7 @@ async function submitVulnerabilitiesDirect(
 export async function POST(request: Request) {
   try {
     const body: LocalTestRequest = await request.json();
-    const { workspacePath, timeoutSec } = body;
+    const { workspacePath, timeoutSec, engine } = body;
 
     if (!workspacePath) {
       return NextResponse.json({ error: 'workspacePath is required' }, { status: 400 });
@@ -271,7 +272,7 @@ export async function POST(request: Request) {
       },
     });
 
-    executeTaskAsync(taskId, workspacePath, timeoutSec || 600);
+    executeTaskAsync(taskId, workspacePath, timeoutSec || 600, engine || 'opencode');
 
     return NextResponse.json({
       taskId,
@@ -321,7 +322,8 @@ export async function GET(request: Request) {
 function executeTaskAsync(
   taskId: string,
   workspacePath: string,
-  timeoutSec: number
+  timeoutSec: number,
+  engine: 'opencode' | 'claudecode'
 ): void {
   (async () => {
     const startTime = Date.now();

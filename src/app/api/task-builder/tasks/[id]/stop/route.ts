@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
 import { prisma } from '@/lib/prisma';
+import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
 export async function POST(
   request: NextRequest,
@@ -30,6 +31,24 @@ export async function POST(
     }
 
     if (task.codeswarmTaskId) {
+      // 先查询 Worker 信息用于释放负载
+      let workerNodeId: string | null = null;
+      try {
+        const csTask = await prisma.codeswarmTask.findFirst({
+          where: { taskId: task.codeswarmTaskId },
+          select: { workerId: true },
+        });
+        if (csTask?.workerId) {
+          const csWorker = await prisma.codeswarmWorker.findUnique({
+            where: { id: csTask.workerId },
+            select: { nodeId: true },
+          });
+          workerNodeId = csWorker?.nodeId ?? null;
+        }
+      } catch (e) {
+        console.error('[Stop] 查询 Worker 信息失败:', e);
+      }
+
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       try {
         await fetch(`${baseUrl}/api/codeswarm/tasks/${task.codeswarmTaskId}`, {
@@ -37,6 +56,13 @@ export async function POST(
         });
       } catch (deleteError) {
         console.error('删除 CodeSwarm 任务失败:', deleteError);
+      }
+
+      // 释放 Worker 负载（幂等，即使 DELETE 已释放也安全）
+      if (workerNodeId) {
+        codeswarmDispatcher.onTaskCompleted(workerNodeId).catch(e =>
+          console.error('[Stop] 释放 Worker 负载失败:', e)
+        );
       }
     }
 

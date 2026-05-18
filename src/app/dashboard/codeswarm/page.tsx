@@ -341,8 +341,10 @@ function CodeSwarmPageContent() {
             { name: 'agent', type: 'string', required: false, desc: '执行器类型 (opencode/claude/nazhua-audit)' },
             { name: 'projectPath', type: 'string', required: false, desc: '项目路径 (本地)' },
             { name: 'workspacePath', type: 'string', required: false, desc: '工作空间路径 (NFS共享目录)' },
+            { name: 'engine', type: 'string', required: false, desc: '执行引擎 (opencode/claudecode，默认 opencode)' },
             { name: 'model', type: 'string', required: false, desc: 'AI 模型 (如 anthropic/claude-sonnet-4-5)' },
             { name: 'apiKey', type: 'string', required: false, desc: 'API Key (覆盖模型默认Key)' },
+            { name: 'apiBaseUrl', type: 'string', required: false, desc: 'API Base URL (自定义模型端点)' },
             { name: 'timeoutSec', type: 'number', required: false, desc: '超时时间(秒，默认300)' },
             { name: 'skills', type: 'string[]', required: false, desc: '启用的 Skill 列表' },
             { name: 'mcps', type: 'string (JSON)', required: false, desc: 'MCP 服务配置 (JSON数组字符串)' },
@@ -587,6 +589,10 @@ ORCHESTRATOR_URL=http://your-domain.com   # 指向本服务
 NODE_ID=worker-1                           # 唯一节点标识
 PORT=8080                                  # Worker HTTP 端口
 MAX_CONCURRENT=3                           # 最大并发任务数
+
+# 引擎依赖安装
+# OpenCode:     npm i -g opencode-ai@latest
+# Claude Code:  npm i -g @anthropic-ai/claude-code @anthropic-ai/claude-code-acp
 
 # 启动命令 (独立测试 Worker)
 node scripts/test-worker.mjs

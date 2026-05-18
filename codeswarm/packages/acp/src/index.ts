@@ -23,8 +23,8 @@ import type {
 export interface ACPClientEvents {
   /** Agent text output chunk */
   text: (content: string) => void;
-  /** Tool call started */
-  toolCall: (tool: string, input: unknown) => void;
+  /** Tool call started. `tool` = kind || title, `input` = rawInput, `title` = ACP title field */
+  toolCall: (tool: string, input: unknown, title?: string) => void;
   /** Tool call result */
   toolCallUpdate: (output: string) => void;
   /** Error from agent */
@@ -44,6 +44,8 @@ export interface ACPClientConfig {
   model?: string;
   /** Agent to use (e.g. "nazhua-audit") */
   agent?: string;
+  /** Custom args (overrides default opencode args) */
+  args?: string[];
 }
 
 export { type StopReason };
@@ -97,7 +99,12 @@ export class ACPClient {
     } else {
       cmd = 'opencode';
     }
-    args = ['acp', '--pure', '--print-logs', '--log-level', 'DEBUG', '--cwd', config.cwd];
+    // Use custom args if provided, otherwise default to opencode acp args
+    if (config.args) {
+      args = config.args;
+    } else {
+      args = ['acp', '--pure', '--print-logs', '--log-level', 'DEBUG', '--cwd', config.cwd];
+    }
 
     // Build environment
     const env: Record<string, string> = {};
@@ -118,6 +125,7 @@ export class ACPClient {
       env,
       cwd: config.cwd,
       windowsHide: true,
+      shell: process.platform === 'win32',
     });
 
     if (!this.process.stdin || !this.process.stdout || !this.process.stderr) {
@@ -167,7 +175,11 @@ export class ACPClient {
     if (this._spawnError) {
       this.destroy();
       if (this._spawnError.message.includes('ENOENT')) {
-        throw new Error('opencode not found. Install: npm i -g opencode-ai@latest');
+        const cmdName = config.command || 'opencode';
+        const installHint = cmdName === 'opencode'
+          ? 'Install: npm i -g opencode-ai@latest'
+          : `Install: npm i -g ${cmdName}`;
+        throw new Error(`${cmdName} not found. ${installHint}`);
       }
       throw this._spawnError;
     }
@@ -266,7 +278,8 @@ export class ACPClient {
       }
       case 'tool_call': {
         const kind = update.kind || update.title || '';
-        this.eventHandlers.toolCall?.(kind, update.rawInput || {});
+        const title = update.title || '';
+        this.eventHandlers.toolCall?.(kind, update.rawInput || {}, title);
         break;
       }
       case 'tool_call_update': {
@@ -287,6 +300,7 @@ export class ACPClient {
         // Log unknown update types for debugging
         if (updateType) {
           console.log('[ACP] unknown update type:', updateType);
+          this.eventHandlers.raw?.(JSON.stringify(update));
         }
     }
   }

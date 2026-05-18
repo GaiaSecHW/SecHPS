@@ -108,6 +108,8 @@ export const TaskPayloadSchema = z.object({
   model: z.string().optional(),
   timeoutSec: z.number().optional(),
   apiKey: z.string().optional(),
+  // API base URL for custom endpoints (e.g. private model router)
+  apiBaseUrl: z.string().optional(),
   // NFS passthrough: skip copying project files, use this path directly as workspace
   workspacePath: z.string().optional(),
   // Override callback URL (orchestrator backend address)

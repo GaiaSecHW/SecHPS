@@ -90,6 +90,7 @@ export async function POST(
         callbackUrl: baseUrl,
         agent: task.agent || undefined,
         engine: task.engine || undefined,
+        apiBaseUrl: task.apiBaseUrl || undefined,
         preferredWorkerNodeId: task.preferredWorkerNodeId || undefined,
         targetProduct: task.targetProduct || undefined,
       }),

@@ -146,28 +146,32 @@ export default function TaskDetailPage() {
 
   // 轮询 CodeswarmTask 状态（running 时持续轮询，completed 后继续 60 秒以捕获 VulnParse 日志）
   useEffect(() => {
+    const completedAtMs = task?.completedAt ? new Date(task.completedAt).getTime() : 0;
+
     if (task?.status === 'running') {
       pollingRef.current = setInterval(() => {
         fetchTaskDetail(taskId, false);
       }, 5000);
-    } else if (task?.status === 'completed' || task?.status === 'failed') {
-      const recentLog = logs?.[logs.length - 1];
-      const lastLogTime = recentLog ? new Date(recentLog.timestamp).getTime() : (task.completedAt ? new Date(task.completedAt).getTime() : 0);
-      const elapsed = Date.now() - lastLogTime;
+    } else if ((task?.status === 'completed' || task?.status === 'failed') && completedAtMs > 0) {
+      const elapsed = Date.now() - completedAtMs;
       if (elapsed < 60000) {
         pollingRef.current = setInterval(() => {
           fetchTaskDetail(taskId, false);
         }, 5000);
         const remaining = 60000 - elapsed;
-        setTimeout(() => {
+        const timeout = setTimeout(() => {
           if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
         }, remaining);
+        return () => {
+          if (pollingRef.current) clearInterval(pollingRef.current);
+          clearTimeout(timeout);
+        };
       }
     }
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [task?.status, task?.completedAt, taskId, fetchTaskDetail, logs]);
+  }, [task?.status, task?.completedAt, taskId, fetchTaskDetail]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('zh-CN', {
@@ -776,6 +780,8 @@ function renderInlineMarkdown(text: string): React.ReactNode {
   return parts.length === 1 ? parts[0] : <>{parts}</>;
 }
 
+const toolDisplayNameMap: Record<string, string> = { other: '其他工具', unknown: '未知工具' };
+
 function LogsGroupedDisplay({ logs, formatDate }: { logs: TaskExecutionLog[], formatDate: (date: string) => string }) {
   const [agentOutputExpanded, setAgentOutputExpanded] = useState(true);
   const [toolCallsExpanded, setToolCallsExpanded] = useState(true);
@@ -795,7 +801,8 @@ function LogsGroupedDisplay({ logs, formatDate }: { logs: TaskExecutionLog[], fo
     // Tool call summary
     const toolCounts: Record<string, number> = {};
     toolCallLogs.forEach(l => {
-      const toolName = l.details?.replace(/^工具:\s*/, '') || 'unknown';
+      const rawName = l.details?.replace(/^工具:\s*/, '') || 'unknown';
+      const toolName = toolDisplayNameMap[rawName] || rawName;
       toolCounts[toolName] = (toolCounts[toolName] || 0) + 1;
     });
 
@@ -868,7 +875,7 @@ function LogsGroupedDisplay({ logs, formatDate }: { logs: TaskExecutionLog[], fo
                 {groupedLogs.toolCalls.logs.map((log, idx) => (
                   <div key={log.id} className="flex items-center gap-2 text-xs">
                     <span className="text-gray-600 font-mono w-6 text-right">{idx + 1}.</span>
-                    <span className="text-blue-300">{log.details}</span>
+                    <span className="text-blue-300">{toolDisplayNameMap[log.details?.replace(/^工具:\s*/, '') || 'unknown'] || log.details}</span>
                     <span className="text-gray-700 ml-auto">{formatDate(log.timestamp)}</span>
                   </div>
                 ))}

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma, Prisma } from '@/lib/prisma';
+import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 
 export async function GET(
   request: Request,
@@ -72,6 +73,25 @@ export async function DELETE(
 ) {
   try {
     const { taskId } = await params;
+
+    // 释放 Worker 负载
+    try {
+      const task = await prisma.codeswarmTask.findUnique({
+        where: { taskId },
+        select: { workerId: true },
+      });
+      if (task?.workerId) {
+        const worker = await prisma.codeswarmWorker.findUnique({
+          where: { id: task.workerId },
+          select: { nodeId: true },
+        });
+        if (worker) {
+          await codeswarmDispatcher.onTaskCompleted(worker.nodeId);
+        }
+      }
+    } catch (e) {
+      console.error('[CodeSwarm] 释放 Worker 负载失败:', e);
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.codeswarmEvent.deleteMany({ where: { taskId } });

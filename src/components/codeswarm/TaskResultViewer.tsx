@@ -18,6 +18,7 @@ interface Task {
   skills: string[] | null;
   mcps: any[] | null;
   model: string | null;
+  engine: string | null;
   result: string | null;
   reportContent: string | null;
   error: string | null;
@@ -70,6 +71,20 @@ const STATE_FILTERS = [
   { key: 'completed', label: '已完成' },
   { key: 'failed', label: '失败' },
 ] as const;
+
+/** Pick the best address from comma-separated list: prefer 172.x > 10.x/100.x > localhost > others */
+function pickAddress(addresses: string): string {
+  const addrs = addresses.split(',').map(a => a.trim()).filter(Boolean);
+  if (addrs.length === 0) return '';
+  const score = (a: string) => {
+    if (a.startsWith('172.')) return 0;
+    if (a.startsWith('10.') || a.startsWith('100.')) return 1;
+    if (a.startsWith('localhost') || a.startsWith('127.')) return 2;
+    if (a.startsWith('198.18.')) return 4;
+    return 3;
+  };
+  return addrs.sort((a, b) => score(a) - score(b))[0];
+}
 
 export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: TaskResultViewerProps) {
   const { data, loading, error, refetch } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
@@ -286,11 +301,11 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         }`}>
                           {getStateLabel(task.state)}
                         </span>
-                        {task.agent && (
+                        {task.engine && (
                           <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                            task.agent === 'claude' ? 'bg-purple-900/30 text-purple-400' : 'bg-orange-900/20 text-orange-400'
+                            task.engine === 'claudecode' ? 'bg-purple-900/30 text-purple-400' : 'bg-orange-900/20 text-orange-400'
                           }`}>
-                            {task.agent === 'claude' ? 'Claude Code' : 'OpenCode'}
+                            {task.engine === 'claudecode' ? 'Claude Code' : 'OpenCode'}
                           </span>
                         )}
                       </div>
@@ -304,7 +319,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                       <span className="flex items-center space-x-1 text-blue-600 bg-blue-900/20 px-2 py-0.5 rounded">
                         <Server className="w-3 h-3" />
                         <span>{task.CodeswarmWorker.nodeId}</span>
-                        <span className="text-gray-400">({task.CodeswarmWorker.address})</span>
+                        <span className="text-gray-400">({pickAddress(task.CodeswarmWorker.address)})</span>
                       </span>
                     )}
                     <span>{formatTime(task.createdAt)}</span>
@@ -334,8 +349,12 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                         <span className="ml-2 font-mono text-xs">{task.taskId}</span>
                       </div>
                       <div>
+                        <span className="text-gray-500">Engine:</span>
+                        <span className="ml-2">{task.engine === 'claudecode' ? 'Claude Code' : task.engine === 'opencode' ? 'OpenCode' : task.engine || '-'}</span>
+                      </div>
+                      <div>
                         <span className="text-gray-500">Agent:</span>
-                        <span className="ml-2">{task.agent === 'claude' ? 'Claude Code' : task.agent === 'opencode' ? 'OpenCode' : '-'}</span>
+                        <span className="ml-2">{task.agent || '-'}</span>
                       </div>
                       <div>
                         <span className="text-gray-500">Model:</span>
@@ -383,6 +402,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     {(() => {
                       const params = {
                         instruction: task.instruction,
+                        engine: task.engine,
                         agent: task.agent,
                         projectPath: task.projectPath,
                         workspacePath: task.workspacePath,

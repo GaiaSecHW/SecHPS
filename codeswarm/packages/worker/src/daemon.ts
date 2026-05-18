@@ -183,7 +183,8 @@ export class WorkerDaemon {
   }
 
   private async executeTask(payload: TaskPayload): Promise<void> {
-    const { taskId, engine: payloadEngine, agent, apiKey, model, env } = payload;
+    const { taskId, engine: payloadEngine, agent, apiKey, model, apiBaseUrl, env } = payload;
+    const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
     let buildResult = null;
     let codedmapPromise: Promise<void> | null = null;
 
@@ -223,7 +224,7 @@ export class WorkerDaemon {
           timestamp: new Date().toISOString(),
           level: 'worker',
         });
-      });
+      }, engine);
       const { workspacePath, agent: resolvedAgent, instruction: resolvedInstruction, commandTemplate } = buildResult;
 
       onEvent({
@@ -268,7 +269,6 @@ export class WorkerDaemon {
         });
       }
 
-      const engine: 'opencode' | 'claudecode' = payloadEngine || 'opencode';
       // agentName: resolved from opencode.json > payload.agent > fallback 'build'
       const agentName = resolvedAgent || agent || 'build';
 
@@ -312,7 +312,8 @@ export class WorkerDaemon {
         model,
         env,
         instruction,
-        onEvent
+        onEvent,
+        apiBaseUrl
       );
       console.log(`[Daemon] Step 3 DONE: runAgent returned`);
 

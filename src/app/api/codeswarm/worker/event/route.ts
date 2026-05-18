@@ -11,10 +11,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'taskId is required' }, { status: 400 });
     }
 
-    const taskInstance = await prisma.taskInstance.findFirst({
+    let taskInstance = await prisma.taskInstance.findFirst({
       where: { codeswarmTaskId: taskId },
       select: { id: true },
     });
+
+    // Fallback: 通过 CodeswarmTask.platformTaskId 关联（处理绑定竞态）
+    if (!taskInstance) {
+      try {
+        const csTask = await prisma.codeswarmTask.findFirst({
+          where: { taskId },
+          select: { platformTaskId: true },
+        });
+        if (csTask?.platformTaskId) {
+          taskInstance = { id: csTask.platformTaskId };
+        }
+      } catch {
+        // Non-critical fallback
+      }
+    }
 
     // Support both array format and single event format (from Worker daemon)
     const eventList: Array<{ type: string; data?: any; content?: string; message?: string; level?: string; stream?: string }> = [];
@@ -82,7 +97,13 @@ export async function POST(request: Request) {
             details = content;
           } else if (eventType === 'tool_call') {
             message = '工具调用';
-            details = eventData.tool || JSON.stringify(eventData.input) || '';
+            const toolName = eventData.tool || '';
+            if (toolName && toolName !== 'other') {
+              details = toolName;
+            } else {
+              const inputPreview = eventData.input ? JSON.stringify(eventData.input).slice(0, 500) : '';
+              details = [toolName || '未命名工具', inputPreview].filter(Boolean).join(' | ');
+            }
           } else if (eventType === 'tool_result' || eventType === 'tool_call_update') {
             message = '工具结果';
             details = eventData.output || content || '';
@@ -113,6 +134,18 @@ export async function POST(request: Request) {
               details = eventData.message || content || phaseName;
               level = eventData.success === false ? 'error' : 'info';
             }
+          } else if (eventType === 'skill_start') {
+            message = 'Skill 执行';
+            details = eventData.skill
+              ? `开始执行 Skill: ${eventData.skill}`
+              : (eventData.content || '');
+            level = 'info';
+          } else if (eventType === 'skill_complete') {
+            message = 'Skill 完成';
+            details = eventData.skill
+              ? `Skill 执行完成: ${eventData.skill}`
+              : '';
+            level = 'info';
           }
 
           if (message) {

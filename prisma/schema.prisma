@@ -332,6 +332,7 @@ model CodeswarmTask {
   agent             String?
   preferredWorkerNodeId String?
   targetProduct     String?
+  apiBaseUrl       String?
   platformTaskId    String?
   sessionId         String?
   events            String?

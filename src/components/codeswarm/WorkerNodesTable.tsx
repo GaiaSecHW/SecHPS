@@ -143,6 +143,9 @@ export function WorkerNodesTable() {
                   最大并发数
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  支持引擎
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   容量
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -169,10 +172,31 @@ export function WorkerNodesTable() {
                         <div className="text-sm font-medium text-gray-100">
                           {worker.name || worker.nodeId}
                         </div>
-                        <div className="text-xs text-gray-500 space-y-0.5">
-                          {worker.address.split(',').map((addr, i) => (
-                            <div key={i}>{addr}</div>
-                          ))}
+                        <div className="text-xs text-gray-400 group/addr relative cursor-default">
+                          {worker.address.split(',').map(a => a.trim()).filter(Boolean).sort((a, b) => {
+                            const score = (x: string) => {
+                              if (x.startsWith('172.')) return 0;
+                              if (x.startsWith('10.') || x.startsWith('100.')) return 1;
+                              if (x.startsWith('localhost') || x.startsWith('127.')) return 2;
+                              if (x.startsWith('198.18.')) return 4;
+                              return 3;
+                            };
+                            return score(a) - score(b);
+                          })[0]}
+                          <div className="hidden group-hover/addr:flex flex-col absolute left-0 top-full mt-1 bg-[#1e293b] border border-gray-600 rounded-lg px-3 py-2 text-xs text-gray-300 z-50 shadow-xl whitespace-nowrap">
+                            {worker.address.split(',').map(a => a.trim()).filter(Boolean).sort((a, b) => {
+                              const score = (x: string) => {
+                                if (x.startsWith('172.')) return 0;
+                                if (x.startsWith('10.') || x.startsWith('100.')) return 1;
+                                if (x.startsWith('localhost') || x.startsWith('127.')) return 2;
+                                if (x.startsWith('198.18.')) return 4;
+                                return 3;
+                              };
+                              return score(a) - score(b);
+                            }).map((addr, i) => (
+                              <span key={i} className={i === 0 ? 'text-gray-100' : ''}>{addr}</span>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -222,13 +246,19 @@ export function WorkerNodesTable() {
                     ) : (
                       <button
                         onClick={() => startEditing(worker)}
-                        className="flex items-center space-x-1 text-sm text-gray-700 hover:text-blue-400 group"
+                        className="flex items-center space-x-1 text-sm text-gray-300 hover:text-blue-400 group"
                         title="点击编辑并发数"
                       >
                         <span className="font-medium">{worker.maxConcurrent}</span>
                         <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-1.5">
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-orange-900/20 text-orange-400">OpenCode</span>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-purple-900/30 text-purple-400">Claude Code</span>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-2">
