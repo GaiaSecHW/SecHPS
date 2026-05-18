@@ -20,6 +20,7 @@ import {
 
 interface Vulnerability {
   id: string;
+  taskId: string | null;
   title: string;
   description: string;
   type: string;
@@ -28,17 +29,24 @@ interface Vulnerability {
   status: string;
   location: string | null;
   createdAt: string;
+  TaskInstance?: { id: string; name: string } | null;
 }
 
 interface VulnStats {
-  total: number;
   total: number;
   bySeverity: Record<string, number>;
   byStatus: Record<string, number>;
   byType: Record<string, number>;
 }
 
-const severityColors = {
+interface TaskOption {
+  id: string;
+  name: string;
+  agentName: string;
+  count: number;
+}
+
+const severityColors: Record<string, string> = {
   critical: '#EF4444',
   high: '#F97316',
   medium: '#EAB308',
@@ -46,7 +54,7 @@ const severityColors = {
   info: '#6B7280',
 };
 
-const statusColors = {
+const statusColors: Record<string, string> = {
   new: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
   confirmed: 'bg-green-500/20 text-green-400 border-green-500/30',
   'false-positive': 'bg-gray-500/20 text-gray-400 border-gray-500/30',
@@ -79,12 +87,14 @@ function VulnerabilitiesContent() {
 
   const [vulnerabilities, setVulnerabilities] = useState<Vulnerability[]>([]);
   const [stats, setStats] = useState<VulnStats | null>(null);
+  const [tasks, setTasks] = useState<TaskOption[]>([]);
   const [loading, setLoading] = useState(true);
 
   // URL params
   const search = searchParams.get('search') || '';
   const severity = searchParams.get('severity') || '';
   const status = searchParams.get('status') || '';
+  const taskFilter = searchParams.get('task') || '';
   const page = parseInt(searchParams.get('page') || '1', 10);
 
   const [totalCount, setTotalCount] = useState(0);
@@ -93,18 +103,21 @@ function VulnerabilitiesContent() {
   useEffect(() => {
     fetchStats();
     fetchVulnerabilities();
-  }, [search, severity, status, page]);
+  }, [search, severity, status, taskFilter, page]);
 
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/vulnerabilities/stats', {
+      const params = new URLSearchParams();
+      if (taskFilter) params.append('taskId', taskFilter);
+      const response = await fetch(`/api/vulnerabilities/stats?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
       if (response.ok) {
         const data = await response.json();
         setStats(data.stats);
+        setTasks(data.tasks || []);
       }
     } catch (err) {
       console.error('获取统计数据失败:', err);
@@ -120,6 +133,7 @@ function VulnerabilitiesContent() {
       if (search) params.append('search', search);
       if (severity) params.append('severity', severity);
       if (status) params.append('status', status);
+      if (taskFilter) params.append('taskId', taskFilter);
       params.append('page', page.toString());
       params.append('limit', pageSize.toString());
 
@@ -251,7 +265,7 @@ function VulnerabilitiesContent() {
                   cy="50%"
                   labelLine={false}
                   label={({ name, percent }) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
+                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
                   outerRadius={80}
                   fill="#8884d8"
@@ -261,9 +275,8 @@ function VulnerabilitiesContent() {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                {/* @ts-expect-error recharts Tooltip formatter type mismatch */}
                 <Tooltip
-                  formatter={(value: number) => [`${value} 条`, '数量']}
+                  formatter={(value) => [`${value} 条`, '数量']}
                   contentStyle={{
                     background: '#1E293B',
                     border: '1px solid #374151',
@@ -282,9 +295,8 @@ function VulnerabilitiesContent() {
               <BarChart data={barData} layout="vertical">
                 <XAxis type="number" stroke="#6B7280" />
                 <YAxis dataKey="name" type="category" stroke="#6B7280" width={60} />
-                {/* @ts-expect-error recharts Tooltip formatter type mismatch */}
                 <Tooltip
-                  formatter={(value: number) => [`${value} 条`, '数量']}
+                  formatter={(value) => [`${value} 条`, '数量']}
                   contentStyle={{
                     background: '#1E293B',
                     border: '1px solid #374151',
@@ -344,6 +356,19 @@ function VulnerabilitiesContent() {
             <option value="fixed">已修复</option>
             <option value="verified">已验证</option>
           </select>
+
+          {tasks.length > 0 && (
+            <select
+              value={taskFilter}
+              onChange={(e) => updateUrl({ task: e.target.value, page: 1 })}
+              className="px-4 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-white text-sm"
+            >
+              <option value="">所有任务</option>
+              {tasks.map(t => (
+                <option key={t.id} value={t.id}>{t.name} ({t.count})</option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
 
@@ -394,6 +419,18 @@ function VulnerabilitiesContent() {
                       {vuln.location || '无位置信息'}
                     </p>
                   </div>
+
+                  {/* Task name */}
+                  {vuln.TaskInstance && (
+                    <a
+                      href={`/dashboard/task-builder/${vuln.TaskInstance.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs text-blue-400 hover:text-blue-300 flex-shrink-0 max-w-[120px] truncate"
+                      title={vuln.TaskInstance.name}
+                    >
+                      {vuln.TaskInstance.name}
+                    </a>
+                  )}
 
                   {/* Type */}
                   <span className="text-sm text-gray-400 flex-shrink-0">

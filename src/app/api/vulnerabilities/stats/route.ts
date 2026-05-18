@@ -18,6 +18,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId');
+    const taskId = searchParams.get('taskId');
 
     // 检查是否是管理员 - roles 是 string[]
     const userIsAdmin = isAdmin(payload);
@@ -67,6 +68,11 @@ export async function GET(request: Request) {
       }
     }
 
+    // 任务筛选
+    if (taskId) {
+      where.taskId = taskId;
+    }
+
     // 总数和按状态统计
     const [total, byStatus, bySeverity, byType, recentVulnerabilities] = await Promise.all([
       prisma.vulnerability.count({ where }),
@@ -113,7 +119,31 @@ export async function GET(request: Request) {
       trend,
     };
 
-    return NextResponse.json({ stats });
+    // 获取有漏洞的任务列表（供前端下拉框使用）
+    const taskCounts = await prisma.vulnerability.groupBy({
+      by: ['taskId'],
+      where: { ...where, taskId: { not: null } },
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } },
+    });
+
+    const taskIds = taskCounts.map(t => t.taskId).filter(Boolean) as string[];
+    const taskInstances = taskIds.length > 0 ? await prisma.taskInstance.findMany({
+      where: { id: { in: taskIds } },
+      select: { id: true, name: true, agentName: true, createdAt: true },
+    }) : [];
+
+    const tasks = taskCounts.map(tc => {
+      const ti = taskInstances.find(t => t.id === tc.taskId);
+      return {
+        id: tc.taskId,
+        name: ti?.name || '未知任务',
+        agentName: ti?.agentName || '',
+        count: tc._count.id,
+      };
+    });
+
+    return NextResponse.json({ stats, tasks });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.VULNERABILITY, '获取漏洞统计错误', { details: { error: String(error) } });
     return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });

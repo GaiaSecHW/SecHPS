@@ -55,6 +55,10 @@ interface Vulnerability {
     name: string;
     userId?: string;
   };
+  TaskInstance?: {
+    id: string;
+    name: string;
+  } | null;
 }
 
 // Severity color mapping
@@ -512,10 +516,19 @@ function VulnerabilityDetailContent() {
               )}
 
               {/* 关联任务 */}
-              {vulnerability.taskId && (
+              {(vulnerability.taskId || vulnerability.TaskInstance) && (
                 <div>
                   <label className="text-sm text-gray-500">关联任务</label>
-                  <p className="mt-2 text-sm text-gray-100">{vulnerability.taskId}</p>
+                  {vulnerability.TaskInstance ? (
+                    <a
+                      href={`/dashboard/task-builder/${vulnerability.TaskInstance.id}`}
+                      className="mt-2 text-sm text-blue-400 hover:text-blue-300 hover:underline inline-flex items-center gap-1"
+                    >
+                      {vulnerability.TaskInstance.name}
+                    </a>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500">任务已删除</p>
+                  )}
                 </div>
               )}
 

@@ -147,7 +147,7 @@ export async function POST(
     }
 
     const apiKey = task.ModelConfig?.apiKey || undefined;
-    const timeoutSec = 3600;
+    const timeoutSec = 7200;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
     const instruction = agentApp?.startCommand || task.notes || null;
@@ -299,8 +299,8 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
   return new Promise<void>((resolve, reject) => {
     const timeout = setTimeout(() => {
       subscriber.disconnect();
-      reject(new Error('任务执行超时（超过1小时）'));
-    }, 60 * 60 * 1000);
+      reject(new Error('任务执行超时（超过2小时）'));
+    }, 2 * 60 * 60 * 1000);
 
     subscriber.subscribe(channel);
     subscriber.on('message', async (_ch: string, data: string) => {
@@ -339,22 +339,7 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
           }
         }
 
-        if (event.type === 'task_event' && event.data) {
-          const e = event.data;
-          if (e.type === 'agent_message_chunk') {
-            await prisma.taskExecutionLog.create({
-              data: { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, taskId: localTaskId, level: 'info', message: 'Agent 输出', details: e.content || null },
-            });
-          } else if (e.type === 'tool_call') {
-            await prisma.taskExecutionLog.create({
-              data: { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, taskId: localTaskId, level: 'info', message: '工具调用', details: `工具: ${e.tool}` },
-            });
-          } else if (e.type === 'error') {
-            await prisma.taskExecutionLog.create({
-              data: { id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, taskId: localTaskId, level: 'error', message: '执行错误', details: e.message || null },
-            });
-          }
-        }
+        // TaskExecutionLog 由 event route 直接创建，无需在 Redis 订阅中重复创建
       } catch (e) {
         reject(e);
       }

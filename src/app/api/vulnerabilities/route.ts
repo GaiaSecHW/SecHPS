@@ -25,6 +25,7 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const projectId = searchParams.get('projectId') || undefined;
+    const taskId = searchParams.get('taskId') || undefined;
     const skillId = searchParams.get('skillId') || undefined;
     const status = searchParams.get('status')?.split(',') || undefined;
     const severity = searchParams.get('severity')?.split(',') || undefined;
@@ -78,6 +79,7 @@ export async function GET(request: Request) {
     // 构建查询条件
     const where = combineWhereClauses(
       projectFilter,
+      taskId ? { taskId } : undefined,
       skillFilter,
       buildStatusFilter(status),
       severity ? { severity: { in: severity } } : undefined,
@@ -97,6 +99,7 @@ export async function GET(request: Request) {
         where,
         select: {
           id: true,
+          taskId: true,
           projectId: true,
           title: true,
           description: true,
@@ -112,6 +115,9 @@ export async function GET(request: Request) {
           createdAt: true,
           updatedAt: true,
           Project: {
+            select: { id: true, name: true },
+          },
+          TaskInstance: {
             select: { id: true, name: true },
           },
         },

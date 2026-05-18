@@ -23,6 +23,12 @@ export async function GET(
             name: true,
           },
         },
+        TaskInstance: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
