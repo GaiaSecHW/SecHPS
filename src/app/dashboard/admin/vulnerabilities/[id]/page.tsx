@@ -18,6 +18,7 @@ import {
   Shield,
   ClipboardCopy,
   Check,
+  Download,
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 import { AdminGuard } from '@/components/PermissionGuard';
@@ -38,6 +39,8 @@ interface Vulnerability {
   POC: string | null;
   vulnerable: boolean | null;
   fixSuggestion: string | null;
+  rawReport: string | null;
+  filePath: string | null;
   status: string;
   taskId: string | null;
   notes: string | null;
@@ -407,6 +410,29 @@ function VulnerabilityDetailContent() {
 
         {/* Action buttons */}
         <div className="flex items-center gap-2">
+          {vulnerability.rawReport && (() => {
+            const fileName = vulnerability.rawReport.split(/[/\\]/).pop() || `vulnerability-${vulnerability.id}`;
+            return (
+              <button
+                onClick={() => {
+                  const blob = new Blob([vulnerability.rawReport!], { type: 'text/plain;charset=utf-8' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = fileName;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  URL.revokeObjectURL(url);
+                  toast.success('文件已下载');
+                }}
+                className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                <Download size={16} className="mr-2" />
+                下载漏洞文件
+              </button>
+            );
+          })()}
           {getActionButtons()}
         </div>
       </div>
