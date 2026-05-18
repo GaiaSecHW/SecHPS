@@ -257,7 +257,7 @@ function VulnerabilitiesContent() {
         <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
           <h3 className="text-lg font-semibold text-white mb-4">严重程度分布</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={pieData}
@@ -291,7 +291,7 @@ function VulnerabilitiesContent() {
         <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
           <h3 className="text-lg font-semibold text-white mb-4">状态分布</h3>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart data={barData} layout="vertical">
                 <XAxis type="number" stroke="#6B7280" />
                 <YAxis dataKey="name" type="category" stroke="#6B7280" width={60} />
