@@ -11,6 +11,7 @@ interface TestRecord {
   status: string;
   result?: string | null;
   error?: string | null;
+  parsedVulnerabilities?: string | null;
   startedAt?: string | null;
   completedAt?: string | null;
   durationMs?: number | null;
@@ -252,19 +253,19 @@ export function LocalTestPanel() {
     const hasLevel = (level: string) => parseLogs.some(l => l.level === level);
 
     const findReport = has('找到报告') || has('未找到 AUDIT_REPORT');
-    const markdownParsed = has('Markdown') && has('解析成功');
-    const markdownMissed = has('Markdown') && has('未命中');
-    const aiStarted = has('启动') && (has('AI') || has('opencode'));
-    const aiCompleted = has('opencode 执行完成');
+    const skillParsed = has('Skill') && has('解析成功');
+    const skillFailed = has('Skill') && (has('失败') || has('超时'));
+    const fallbackStarted = has('Fallback') || (has('启动') && has('通用'));
+    const fallbackCompleted = has('Fallback') && has('解析成功');
     const submitted = has('入库完成');
     const submitFailed = has('入库失败');
     const allFailed = hasLevel('error');
 
     return {
       findReport: result?.status ? (findReport ? 'done' : 'skipped') : (isRunning ? 'running' : 'pending'),
-      markdownParse: markdownParsed ? 'done' : markdownMissed ? 'error' : (isRunning && findReport ? 'running' : !result?.status ? 'pending' : 'skipped'),
-      aiParse: aiCompleted ? 'done' : aiStarted ? 'running' : (allFailed && !markdownParsed) ? 'error' : (!result?.status && !markdownParsed) ? 'pending' : 'skipped',
-      submit: submitted ? 'done' : submitFailed ? 'error' : (isRunning && (markdownParsed || aiCompleted)) ? 'running' : (!result?.status ? 'pending' : 'skipped'),
+      skillParse: skillParsed ? 'done' : skillFailed ? 'error' : (isRunning && findReport ? 'running' : !result?.status ? 'pending' : 'skipped'),
+      aiParse: fallbackCompleted ? 'done' : fallbackStarted ? 'running' : (allFailed && !skillParsed) ? 'error' : (!result?.status && !skillParsed) ? 'pending' : 'skipped',
+      submit: submitted ? 'done' : submitFailed ? 'error' : (isRunning && (skillParsed || fallbackCompleted)) ? 'running' : (!result?.status ? 'pending' : 'skipped'),
     };
   };
 
@@ -450,15 +451,15 @@ export function LocalTestPanel() {
               icon={<FileText className="w-4 h-4" />}
             />
             <TimelineStep
-              label="Phase 1: Markdown 正则解析"
-              status={timeline.markdownParse}
-              detail={parseLogs.find(l => l.message.includes('Markdown'))?.message}
+              label="Phase 1: audit-report-parser Skill"
+              status={timeline.skillParse}
+              detail={parseLogs.find(l => l.message.includes('Skill'))?.message}
               icon={<Zap className="w-4 h-4" />}
             />
             <TimelineStep
-              label="Phase 2: AI 深度解析 (Fallback)"
+              label="Phase 2: 通用 AI Fallback (opencode)"
               status={timeline.aiParse}
-              detail={parseLogs.find(l => l.message.includes('opencode'))?.message}
+              detail={parseLogs.find(l => l.message.includes('Fallback') || l.message.includes('opencode'))?.message}
               icon={<AlertTriangle className="w-4 h-4" />}
             />
             <TimelineStep
@@ -548,8 +549,8 @@ export function LocalTestPanel() {
         <h4 className="text-sm font-medium text-cyan-400 mb-2">解析流程说明</h4>
         <ul className="text-xs text-gray-300 space-y-1">
           <li>1. 选择包含 <code className="text-cyan-300">AUDIT_REPORT.md</code> 的工作区目录</li>
-          <li>2. Phase 1: 正则直接解析 markdown（秒级完成，命中即结束）</li>
-          <li>3. Phase 2: 若未命中，启动 opencode AI 解析（分钟级 Fallback）</li>
+          <li>2. Phase 1: 使用 <code className="text-cyan-300">audit-report-parser</code> skill 解析报告</li>
+          <li>3. Phase 2: 若 skill 失败，启动通用 AI Fallback (opencode --agent build)</li>
           <li>4. 解析成功后自动去重入库到漏洞管理</li>
         </ul>
       </div>
@@ -664,6 +665,71 @@ export function LocalTestPanel() {
                         <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-[#0F172A] rounded-lg p-3 border border-red-700/50">
                           {selectedHistoryRecord.error}
                         </pre>
+                      </div>
+                    )}
+
+                    {selectedHistoryRecord.parsedVulnerabilities && (
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <h5 className="text-xs font-medium text-cyan-400">Skill 返回的完整数据 (入库前检查)</h5>
+                          <button onClick={() => { navigator.clipboard.writeText(selectedHistoryRecord.parsedVulnerabilities || ''); toast.success('已复制'); }}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-400">
+                            <Copy className="w-3 h-3" />复制JSON
+                          </button>
+                        </div>
+                        <div className="bg-[#0F172A] rounded-lg p-3 max-h-[400px] overflow-y-auto">
+                          <pre className="text-xs text-cyan-300 whitespace-pre-wrap font-mono">
+                            {(() => {
+                              try {
+                                const data = JSON.parse(selectedHistoryRecord.parsedVulnerabilities || '{}');
+                                return JSON.stringify(data, null, 2);
+                              } catch {
+                                return selectedHistoryRecord.parsedVulnerabilities;
+                              }
+                            })()}
+                          </pre>
+                          <div className="mt-2 pt-2 border-t border-gray-700">
+                            <p className="text-xs text-gray-400 mb-1">漏洞数量: {(() => {
+                              try {
+                                const data = JSON.parse(selectedHistoryRecord.parsedVulnerabilities || '{}');
+                                return data.vulnerabilities?.length || 0;
+                              } catch {
+                                return 0;
+                              }
+                            })()}</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs">
+                              <div className="text-gray-500">顶层字段:</div>
+                              <div className="text-gray-300">
+                                {(() => {
+                                  try {
+                                    const data = JSON.parse(selectedHistoryRecord.parsedVulnerabilities || '{}');
+                                    const hasEvalId = 'evaluationId' in data;
+                                    const hasSkillExecId = 'skillExecutionId' in data;
+                                    return `${hasEvalId ? '✅' : '❌'} evaluationId | ${hasSkillExecId ? '✅' : '❌'} skillExecutionId`;
+                                  } catch {
+                                    return '解析失败';
+                                  }
+                                })()}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs mt-1">
+                              <div className="text-gray-500">漏洞字段检查:</div>
+                              <div className="text-gray-300">
+                                {(() => {
+                                  try {
+                                    const data = JSON.parse(selectedHistoryRecord.parsedVulnerabilities || '{}');
+                                    const vulns: Array<{title?: string; type?: string}> = data.vulnerabilities || [];
+                                    const allHaveTitle = vulns.every((v: {title?: string}) => v.title);
+                                    const allHaveType = vulns.every((v: {type?: string}) => v.type);
+                                    return `${allHaveTitle ? '✅' : '❌'} title | ${allHaveType ? '✅' : '❌'} type`;
+                                  } catch {
+                                    return '解析失败';
+                                  }
+                                })()}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

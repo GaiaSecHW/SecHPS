@@ -10,6 +10,8 @@ interface LocalTestRequest {
 }
 
 interface ParsedVulnerabilityReport {
+  evaluationId?: string;
+  skillExecutionId?: string;
   vulnerabilities: Array<{
     title: string;
     type: string;
@@ -24,6 +26,8 @@ interface ParsedVulnerabilityReport {
     rawReport?: string;
   }>;
 }
+
+const LOCAL_TEST_VULN_TASK_ID = '70b14e3f-1614-407d-800b-ca2a485c5016';
 
 const isWindows = process.platform === 'win32';
 
@@ -109,37 +113,94 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
     for (const v of parsed.vulnerabilities) {
       if (!v.title || !v.type) return null;
     }
-    return { vulnerabilities: parsed.vulnerabilities };
+    return {
+      evaluationId: parsed.evaluationId ?? '',
+      skillExecutionId: parsed.skillExecutionId ?? '',
+      vulnerabilities: parsed.vulnerabilities,
+    };
   } catch { return null; }
 }
 
-function parseVulnerabilityFromMarkdown(md: string): ParsedVulnerabilityReport | null {
-  try {
-    const vulnPattern = /^###\s+[^\s]*\s*\[([^\]]+)\]\s*(.+)$/gm;
-    const sections: Array<{ id: string; title: string; start: number }> = [];
-    let match;
-    while ((match = vulnPattern.exec(md)) !== null) {
-      sections.push({ id: match[1], title: match[2].trim(), start: match.index });
-    }
-    if (sections.length === 0) return null;
+const INSTRUCTION_PHASE1 = '执行 audit-report-parser skill 解析漏洞报告';
+const INSTRUCTION_PHASE2 = '读取 AUDIT_REPORT.md，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。仅输出可解析的 JSON，不要额外说明。';
 
-    const vulnerabilities = [];
-    for (let i = 0; i < sections.length; i++) {
-      const sec = sections[i];
-      const body = md.slice(sec.start, i + 1 < sections.length ? sections[i + 1].start : md.length);
-      const severityMatch = body.match(/\*\*严重度\*\*:\s*(CRITICAL|HIGH|MEDIUM|LOW|INFO|严重|高危|中危|低危|信息)/i);
-      const cweMatch = body.match(/\*\*CWE\*\*:\s*(CWE-\d+)/i);
-      const descMatch = body.match(/####\s*漏洞概述\s*\n([\s\S]*?)(?=\n####|\n---|$)/);
-      vulnerabilities.push({
-        title: sec.title,
-        type: cweMatch?.[1] || sec.id,
-        description: descMatch?.[1]?.trim() || sec.title,
-        severity: severityMatch?.[1] || 'medium',
-        cwe: cweMatch?.[1]?.replace('CWE-', '') || undefined,
-      });
+function runOpencodeParse(
+  taskId: string,
+  workspacePath: string,
+  timeoutSec: number,
+  addLog: (level: string, message: string) => void,
+  instruction: string
+): Promise<ParsedVulnerabilityReport | null> {
+  return new Promise((resolve) => {
+    let childProcess: ChildProcess | null = null;
+    const args: string[] = ['run', '--agent', 'build', instruction];
+    const env: NodeJS.ProcessEnv = { ...process.env, TERM: 'dumb', NO_COLOR: '1' };
+
+    let cmd: string;
+    let finalArgs: string[];
+    let useShell = false;
+
+    if (isWindows) {
+      const opencodePath = process.env.APPDATA
+        ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode')
+        : null;
+      if (opencodePath && fs.existsSync(opencodePath)) {
+        cmd = process.execPath;
+        finalArgs = [opencodePath, ...args];
+      } else {
+        cmd = 'opencode';
+        finalArgs = args;
+      }
+      useShell = true;
+    } else {
+      cmd = 'bash';
+      finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
     }
-    return vulnerabilities.length > 0 ? { vulnerabilities } : null;
-  } catch { return null; }
+
+    addLog('info', `执行: opencode run --agent build "${instruction.slice(0, 50)}..."`);
+
+    let stdout = '';
+    let stderr = '';
+    childProcess = spawn(cmd, finalArgs, {
+      cwd: workspacePath,
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: useShell,
+    });
+
+    childProcess.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+    childProcess.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
+
+    const timeoutTimer = setTimeout(() => {
+      if (childProcess && childProcess.exitCode === null) {
+        addLog('warn', 'opencode 执行超时，终止进程');
+        childProcess.kill('SIGTERM');
+        resolve(null);
+      }
+    }, timeoutSec * 1000);
+
+    childProcess.on('exit', (code) => {
+      clearTimeout(timeoutTimer);
+      if (code === 0) {
+        const report = parseVulnerabilityJson(stdout) || parseVulnerabilityJson(stderr);
+        if (report) {
+          addLog('success', `opencode 解析成功: ${report.vulnerabilities.length} 条漏洞`);
+        } else {
+          addLog('warn', 'opencode 输出 JSON 解析失败');
+        }
+        resolve(report);
+      } else {
+        addLog('error', `opencode 执行失败 (exit=${code})`);
+        resolve(null);
+      }
+    });
+
+    childProcess.on('error', (err) => {
+      clearTimeout(timeoutTimer);
+      addLog('error', `opencode 进程错误: ${err.message}`);
+      resolve(null);
+    });
+  });
 }
 
 async function submitVulnerabilitiesDirect(
@@ -263,7 +324,6 @@ function executeTaskAsync(
   timeoutSec: number
 ): void {
   (async () => {
-    let childProcess: ChildProcess | null = null;
     const startTime = Date.now();
     const logs: { timestamp: string; level: string; message: string }[] = [];
 
@@ -284,103 +344,24 @@ function executeTaskAsync(
       addLog('info', '开始执行本地测试');
       await updateRecord({ status: 'running', startedAt: new Date() });
 
-      // Phase 1: 直接解析 AUDIT_REPORT.md（快速路径，秒级完成）
       const reportPath = findAuditReportPath(workspacePath);
       const filePath = uploadAuditReport(taskId, workspacePath) || reportPath || path.join(workspacePath, 'AUDIT_REPORT.md');
       let report: ParsedVulnerabilityReport | null = null;
 
       if (reportPath && fs.existsSync(reportPath)) {
         addLog('info', `找到报告: ${path.relative(workspacePath, reportPath).replace(/\\/g, '/')}`);
-        const mdContent = fs.readFileSync(reportPath, 'utf-8');
-        report = parseVulnerabilityFromMarkdown(mdContent);
-        if (report) {
-          addLog('success', `Markdown 直接解析成功，提取 ${report.vulnerabilities.length} 条漏洞`);
-        } else {
-          addLog('info', 'Markdown 直接解析未命中，启动 AI 解析');
-        }
       } else {
-        addLog('info', '未找到 AUDIT_REPORT.md，启动 opencode 生成报告');
+        addLog('info', '未找到 AUDIT_REPORT.md');
       }
 
-      // Phase 2: Fallback — opencode 子进程
+      // Phase 1: audit-report-parser skill (通过 agent)
+      addLog('info', 'Phase 1: 启动 audit-report-parser skill');
+      report = await runOpencodeParse(taskId, workspacePath, timeoutSec, addLog, INSTRUCTION_PHASE1);
+
+      // Phase 2: 通用 AI Fallback
       if (!report) {
-        const instruction = '执行审计分析，生成 AUDIT_REPORT.md，包含所有发现的漏洞。输出结构化 JSON，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。';
-        const args: string[] = ['run', '--agent', 'build', instruction];
-        const env: NodeJS.ProcessEnv = { ...process.env, TERM: 'dumb', NO_COLOR: '1' };
-
-        let cmd: string;
-        let finalArgs: string[];
-        let useShell = false;
-
-        if (isWindows) {
-          const opencodePath = process.env.APPDATA
-            ? path.join(process.env.APPDATA, 'npm', 'node_modules', 'opencode-ai', 'bin', 'opencode')
-            : null;
-          if (opencodePath && fs.existsSync(opencodePath)) {
-            cmd = process.execPath;
-            finalArgs = [opencodePath, ...args];
-          } else {
-            cmd = 'opencode';
-            finalArgs = args;
-          }
-          useShell = true;
-        } else {
-          cmd = 'bash';
-          finalArgs = ['-c', `opencode run --agent build "${instruction}"`];
-        }
-
-        addLog('info', `执行: opencode run --agent build`);
-
-        let stdout = '';
-        let stderr = '';
-        childProcess = spawn(cmd, finalArgs, {
-          cwd: workspacePath,
-          env,
-          stdio: ['ignore', 'pipe', 'pipe'],
-          shell: useShell,
-        });
-
-        childProcess.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
-        childProcess.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
-
-        const exitCode = await new Promise<number | null>((resolve) => {
-          childProcess?.on('exit', (code) => resolve(code ?? 1));
-          childProcess?.on('error', () => resolve(1));
-          setTimeout(() => {
-            if (childProcess && childProcess.exitCode === null) {
-              childProcess.kill('SIGTERM');
-              resolve(124);
-            }
-          }, timeoutSec * 1000);
-        });
-
-        if (exitCode !== 0) {
-          addLog('error', `opencode 执行失败 (exit=${exitCode}): ${(stderr || '').slice(0, 300)}`);
-          await updateRecord({
-            status: 'failed',
-            result: buildResult(),
-            error: `Exit code: ${exitCode}`,
-            completedAt: new Date(),
-            durationMs: Date.now() - startTime,
-          });
-          return;
-        }
-
-        addLog('success', `opencode 执行完成，耗时 ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-
-        report = parseVulnerabilityJson(stdout) || parseVulnerabilityJson(stderr);
-
-        if (!report) {
-          addLog('info', 'JSON 解析失败，尝试解析 AUDIT_REPORT.md');
-          const freshReportPath = findAuditReportPath(workspacePath);
-          if (freshReportPath && fs.existsSync(freshReportPath)) {
-            const mdContent = fs.readFileSync(freshReportPath, 'utf-8');
-            report = parseVulnerabilityFromMarkdown(mdContent);
-            if (report) {
-              addLog('success', `Markdown 解析成功: ${report.vulnerabilities.length} 条漏洞`);
-            }
-          }
-        }
+        addLog('info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback');
+        report = await runOpencodeParse(taskId, workspacePath, timeoutSec, addLog, INSTRUCTION_PHASE2);
       }
 
       if (!report) {
@@ -395,7 +376,7 @@ function executeTaskAsync(
       }
 
       addLog('info', `开始入库: ${report.vulnerabilities.length} 条漏洞`);
-      const result = await submitVulnerabilitiesDirect(report, filePath, taskId);
+      const result = await submitVulnerabilitiesDirect(report, filePath, LOCAL_TEST_VULN_TASK_ID);
 
       if (result.success) {
         const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join(', ');
@@ -407,6 +388,7 @@ function executeTaskAsync(
       await updateRecord({
         status: 'completed',
         result: buildResult(),
+        parsedVulnerabilities: JSON.stringify(report),
         uploadedFilePath: filePath,
         completedAt: new Date(),
         durationMs: Date.now() - startTime,
@@ -421,10 +403,6 @@ function executeTaskAsync(
         completedAt: new Date(),
         durationMs: Date.now() - startTime,
       });
-    } finally {
-      if (childProcess && childProcess.exitCode === null) {
-        childProcess.kill('SIGTERM');
-      }
     }
   })();
 }
