@@ -9,8 +9,9 @@ const TaskResultViewer = dynamic(() => import('@/components/codeswarm/TaskResult
 const LocalTestPanel = dynamic(() => import('@/components/codeswarm/LocalTestPanel').then(m => ({ default: m.LocalTestPanel })), { ssr: false });
 const CodedmapDebugPanel = dynamic(() => import('@/components/codeswarm/CodedmapDebugPanel').then(m => ({ default: m.CodedmapDebugPanel })), { ssr: false });
 const WorkerLogsPage = dynamic(() => import('@/components/codeswarm/WorkerLogsPage'), { ssr: false });
+const SessionExtractPanel = dynamic(() => import('@/components/codeswarm/SessionExtractPanel').then(m => ({ default: m.SessionExtractPanel })), { ssr: false });
 import { AdminGuard } from '@/components/PermissionGuard';
-import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi, Terminal, FlaskConical, Database } from 'lucide-react';
+import { Server, Play, List, BookOpen, ChevronDown, ChevronRight, Activity, CheckCircle, XCircle, Loader2, Wifi, Terminal, FlaskConical, Database, FileSearch } from 'lucide-react';
 
 interface Task {
   id: string;
@@ -247,7 +248,7 @@ function ApiDocCard({ endpoint }: { endpoint: ApiEndpoint }) {
 
 function CodeSwarmPageContent() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'logs' | 'api' | 'local-test' | 'codedmap'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'debug' | 'workers' | 'tasks' | 'logs' | 'api' | 'local-test' | 'codedmap' | 'session-extract'>('overview');
   const { data: tasksData, refetch: refetchTasks } = useApiFetch<TasksResponse>('/api/codeswarm/tasks');
   const { data: workersData } = useApiFetch<WorkersResponse>('/api/codeswarm/nodes');
 
@@ -527,6 +528,17 @@ function CodeSwarmPageContent() {
           <Database className="w-4 h-4" />
           <span>Codedmap 调试</span>
         </button>
+        <button
+          onClick={() => setActiveTab('session-extract')}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
+            activeTab === 'session-extract'
+              ? 'bg-dark-surface shadow text-emerald-400'
+              : 'text-gray-400 hover:text-gray-100'
+          }`}
+        >
+          <FileSearch className="w-4 h-4" />
+          <span>Session 解析</span>
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -613,8 +625,12 @@ npx tsx packages/worker/src/index.ts`}
         <CodedmapDebugPanel />
       )}
 
+      {activeTab === 'session-extract' && (
+        <SessionExtractPanel />
+      )}
+
       {/* Callback URLs Info */}
-      {activeTab !== 'api' && activeTab !== 'overview' && activeTab !== 'local-test' && activeTab !== 'codedmap' && (
+      {activeTab !== 'api' && activeTab !== 'overview' && activeTab !== 'local-test' && activeTab !== 'codedmap' && activeTab !== 'session-extract' && (
         <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
           <h3 className="text-sm font-medium text-cyan-400 mb-2">Worker 配置说明</h3>
           <p className="text-sm text-gray-300 mb-2">
