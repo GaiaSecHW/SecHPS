@@ -512,7 +512,7 @@ function CodeSwarmPageContent() {
           }`}
         >
           <FlaskConical className="w-4 h-4" />
-          <span>本地测试</span>
+          <span>报告解析测试</span>
         </button>
         <button
           onClick={() => setActiveTab('codedmap')}

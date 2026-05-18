@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, FolderOpen, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, Zap, FolderSearch, HardDrive, Download } from 'lucide-react';
+import { Play, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, FolderSearch, HardDrive, AlertTriangle, FileText, Shield, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface TestRecord {
@@ -18,17 +18,75 @@ interface TestRecord {
   uploadedFilePath?: string | null;
 }
 
+interface ParseLog {
+  timestamp: string;
+  level: 'info' | 'success' | 'error' | 'warn';
+  message: string;
+}
+
 interface DirEntry {
   name: string;
   path: string;
   isDirectory: boolean;
-  label?: string;
 }
 
 const COMMON_WORKSPACES = [
   { path: 'E:\\work\\202605\\claude-web-platform', name: 'claude-web-platform' },
   { path: 'E:\\work\\202605\\claude-web-platform\\AgentHarness_management', name: 'AgentHarness' },
 ];
+
+function parseLogsFromResult(result: string): ParseLog[] {
+  return result.split('\n').filter(l => l.trim()).map(line => {
+    const timeMatch = line.match(/^\[(\d{2}:\d{2}:\d{2})\]/);
+    const levelMatch = line.match(/\[(INFO|SUCCESS|ERROR|WARN)\]/);
+    const timestamp = timeMatch?.[1] || new Date().toISOString().substring(11, 19);
+    const level = levelMatch?.[1]?.toLowerCase() === 'success' ? 'success'
+      : levelMatch?.[1]?.toLowerCase() === 'error' ? 'error'
+      : levelMatch?.[1]?.toLowerCase() === 'warn' ? 'warn'
+      : 'info';
+    const message = line.replace(/^\[.*?\]\s*\[.*?\]\s*/, '').trim();
+    return { timestamp, level, message };
+  });
+}
+
+function TimelineStep({ label, status, detail, icon }: {
+  label: string;
+  status: 'pending' | 'running' | 'done' | 'error' | 'skipped';
+  detail?: string;
+  icon: React.ReactNode;
+}) {
+  const colors = {
+    pending: 'border-gray-600 bg-gray-800/50',
+    running: 'border-blue-500 bg-blue-500/10',
+    done: 'border-green-500 bg-green-500/10',
+    error: 'border-red-500 bg-red-500/10',
+    skipped: 'border-gray-600 bg-gray-800/30 opacity-50',
+  };
+  const iconColors = {
+    pending: 'text-gray-500',
+    running: 'text-blue-400 animate-pulse',
+    done: 'text-green-400',
+    error: 'text-red-400',
+    skipped: 'text-gray-600',
+  };
+
+  return (
+    <div className={`flex items-start gap-3 px-3 py-2.5 rounded-lg border ${colors[status]}`}>
+      <div className={`mt-0.5 ${iconColors[status]}`}>{icon}</div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <span className={`text-sm font-medium ${status === 'pending' ? 'text-gray-500' : status === 'skipped' ? 'text-gray-600' : 'text-gray-200'}`}>
+            {label}
+          </span>
+          {status === 'running' && <Loader2 className="w-3.5 h-3.5 text-blue-400 animate-spin" />}
+          {status === 'done' && <CheckCircle className="w-3.5 h-3.5 text-green-400" />}
+          {status === 'error' && <XCircle className="w-3.5 h-3.5 text-red-400" />}
+        </div>
+        {detail && <p className="text-xs text-gray-400 mt-0.5 truncate">{detail}</p>}
+      </div>
+    </div>
+  );
+}
 
 export function LocalTestPanel() {
   const [workspacePath, setWorkspacePath] = useState('');
@@ -40,7 +98,7 @@ export function LocalTestPanel() {
   const [showHistory, setShowHistory] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [selectedHistoryRecord, setSelectedHistoryRecord] = useState<TestRecord | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
+  const [parseLogs, setParseLogs] = useState<ParseLog[]>([]);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showWorkspaceList, setShowWorkspaceList] = useState(false);
   const [showDirBrowser, setShowDirBrowser] = useState(false);
@@ -50,15 +108,13 @@ export function LocalTestPanel() {
   const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
   const [isRootList, setIsRootList] = useState(false);
   const [platform, setPlatform] = useState<'windows' | 'linux' | null>(null);
-  
+
   const logsRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    if (logsRef.current) {
-      logsRef.current.scrollTop = logsRef.current.scrollHeight;
-    }
-  }, [logs]);
+    if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight;
+  }, [parseLogs]);
 
   useEffect(() => {
     if (currentTaskId && isRunning) {
@@ -76,32 +132,40 @@ export function LocalTestPanel() {
                 pollIntervalRef.current = null;
               }
 
+              if (data.record.result) {
+                setParseLogs(parseLogsFromResult(data.record.result));
+              }
+
               if (data.record.status === 'completed') {
-                addLog('任务执行完成', 'success');
-                toast.success('任务执行成功');
+                toast.success('解析完成');
               } else {
-                addLog('任务执行失败', 'error');
-                toast.error('任务执行失败');
+                toast.error('解析失败');
               }
             }
           }
         } catch (e) {
           console.error('Poll error:', e);
         }
-      }, 3000);
+      }, 2000);
 
       return () => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-        }
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       };
     }
   }, [currentTaskId, isRunning]);
 
-  const addLog = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
-    const timestamp = new Date().toISOString().substring(11, 19);
-    const prefix = type === 'error' ? '[ERROR]' : type === 'success' ? '[OK]' : '[INFO]';
-    setLogs(prev => [...prev, `${timestamp} ${prefix} ${message}`]);
+  useEffect(() => { loadRootEntries(); }, []);
+
+  useEffect(() => {
+    if (showDirBrowser && currentBrowsePath === 'root://') browseDirectory('root://');
+  }, [showDirBrowser]);
+
+  useEffect(() => {
+    if (showHistory) loadHistory();
+  }, [showHistory]);
+
+  const addLog = (level: ParseLog['level'], message: string) => {
+    setParseLogs(prev => [...prev, { timestamp: new Date().toISOString().substring(11, 19), level, message }]);
   };
 
   const loadRootEntries = async () => {
@@ -112,89 +176,59 @@ export function LocalTestPanel() {
         setRootEntries(data.entries || []);
         setPlatform(data.platform || null);
       }
-    } catch (e) {
-      console.error('Load root entries error:', e);
-    }
+    } catch {}
   };
 
-  const browseDirectory = async (path: string) => {
+  const browseDirectory = async (dirPath: string) => {
     setLoadingDirs(true);
     try {
-      const res = await fetch(`/api/codeswarm/browse-dirs?path=${encodeURIComponent(path)}`);
+      const res = await fetch(`/api/codeswarm/browse-dirs?path=${encodeURIComponent(dirPath)}`);
       if (res.ok) {
         const data = await res.json();
         setDirEntries(data.entries || []);
-        setCurrentBrowsePath(data.currentPath || path);
+        setCurrentBrowsePath(data.currentPath || dirPath);
         setIsRootList(data.isRootList || false);
-        if (data.platform && !platform) {
-          setPlatform(data.platform);
-        }
+        if (data.platform && !platform) setPlatform(data.platform);
       } else {
         toast.error('无法访问该目录');
       }
-    } catch (e) {
+    } catch {
       toast.error('浏览目录失败');
     } finally {
       setLoadingDirs(false);
     }
   };
 
-  useEffect(() => {
-    loadRootEntries();
-  }, []);
-
-  useEffect(() => {
-    if (showDirBrowser && currentBrowsePath === 'root://') {
-      browseDirectory('root://');
+  const handleRun = async () => {
+    if (!workspacePath) {
+      toast.error('请选择包含 AUDIT_REPORT.md 的工作区路径');
+      return;
     }
-  }, [showDirBrowser]);
 
-  const selectDir = (entry: DirEntry) => {
-    if (entry.isDirectory) {
-      browseDirectory(entry.path);
-    } else {
-      toast.error('请选择目录而非文件');
-    }
-  };
+    setIsRunning(true);
+    setResult(null);
+    setParseLogs([]);
+    addLog('info', `提交解析任务 — 工作区: ${workspacePath}`);
 
-  const confirmSelection = () => {
-    setWorkspacePath(currentBrowsePath);
-    setShowDirBrowser(false);
-    toast.success(`已选择: ${currentBrowsePath}`);
-  };
+    try {
+      const response = await fetch('/api/codeswarm/local-test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspacePath, timeoutSec }),
+      });
 
-  const goUpDir = () => {
-    if (isRootList) return;
-    
-    if (platform === 'windows') {
-      if (/^[A-Z]:\\?$/i.test(currentBrowsePath)) {
-        browseDirectory('root://');
+      const data = await response.json();
+      if (response.ok) {
+        setCurrentTaskId(data.taskId);
+        addLog('info', `任务已提交: ${data.taskId}`);
       } else {
-        const parts = currentBrowsePath.split(/[\\/]/).filter(p => p);
-        if (parts.length <= 1) {
-          browseDirectory('root://');
-        } else {
-          const parentPath = parts[0] + '\\' + parts.slice(1, -1).join('\\');
-          browseDirectory(parentPath);
-        }
+        addLog('error', `提交失败: ${data.error}`);
+        setIsRunning(false);
       }
-    } else {
-      if (currentBrowsePath === '/') {
-        browseDirectory('root://');
-      } else {
-        const parts = currentBrowsePath.split('/').filter(p => p);
-        if (parts.length === 0) {
-          browseDirectory('root://');
-        } else {
-          const parentPath = '/' + parts.slice(0, -1).join('/');
-          browseDirectory(parentPath || '/');
-        }
-      }
+    } catch (error) {
+      addLog('error', `请求失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setIsRunning(false);
     }
-  };
-
-  const selectRootEntry = (entryPath: string) => {
-    browseDirectory(entryPath);
   };
 
   const loadHistory = async () => {
@@ -205,459 +239,373 @@ export function LocalTestPanel() {
         const data = await res.json();
         setHistory(data.records || []);
       }
-    } catch (e) {
-      console.error('Load history error:', e);
-    } finally {
+    } catch {} finally {
       setLoadingHistory(false);
     }
   };
 
-  useEffect(() => {
-    if (showHistory) {
-      loadHistory();
-    }
-  }, [showHistory]);
+  // 从日志推断时间线各阶段状态
+  type StepStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
 
-  const viewHistoryRecord = (record: TestRecord) => {
-    setSelectedHistoryRecord(record);
+  const getTimelineStatus = (): Record<string, StepStatus> => {
+    const has = (msg: string) => parseLogs.some(l => l.message.includes(msg));
+    const hasLevel = (level: string) => parseLogs.some(l => l.level === level);
+
+    const findReport = has('找到报告') || has('未找到 AUDIT_REPORT');
+    const markdownParsed = has('Markdown') && has('解析成功');
+    const markdownMissed = has('Markdown') && has('未命中');
+    const aiStarted = has('启动') && (has('AI') || has('opencode'));
+    const aiCompleted = has('opencode 执行完成');
+    const submitted = has('入库完成');
+    const submitFailed = has('入库失败');
+    const allFailed = hasLevel('error');
+
+    return {
+      findReport: result?.status ? (findReport ? 'done' : 'skipped') : (isRunning ? 'running' : 'pending'),
+      markdownParse: markdownParsed ? 'done' : markdownMissed ? 'error' : (isRunning && findReport ? 'running' : !result?.status ? 'pending' : 'skipped'),
+      aiParse: aiCompleted ? 'done' : aiStarted ? 'running' : (allFailed && !markdownParsed) ? 'error' : (!result?.status && !markdownParsed) ? 'pending' : 'skipped',
+      submit: submitted ? 'done' : submitFailed ? 'error' : (isRunning && (markdownParsed || aiCompleted)) ? 'running' : (!result?.status ? 'pending' : 'skipped'),
+    };
   };
 
-  const handleRun = async () => {
-    if (!workspacePath) {
-      toast.error('请选择工作区路径');
-      return;
-    }
+  const timeline = getTimelineStatus();
 
-    setIsRunning(true);
-    setResult(null);
-    setLogs([]);
-    addLog('提交任务...');
-    addLog(`工作区: ${workspacePath}`);
-    addLog(`Agent: build`);
-    addLog(`执行 audit-report-parser skill...`);
-
-    try {
-      const response = await fetch('/api/codeswarm/local-test', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workspacePath,
-          timeoutSec,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        setCurrentTaskId(data.taskId);
-        addLog(`任务已提交: ${data.taskId}`);
-        addLog('后台执行中，等待结果...');
-        toast.success('任务已提交');
-      } else {
-        addLog(`提交失败: ${data.error}`, 'error');
-        setIsRunning(false);
-        toast.error('提交失败');
-      }
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : '未知错误';
-      addLog(`请求失败: ${errorMsg}`, 'error');
-      setIsRunning(false);
-      toast.error('请求失败');
-    }
+  const getVulnCounts = () => {
+    if (!result?.result) return null;
+    const match = result.result.match(/创建 (\d+) 条.*?跳过 (\d+) 条/);
+    if (!match) return null;
+    return { created: parseInt(match[1]), skipped: parseInt(match[2]) };
   };
 
-  const handleCopyResult = () => {
-    if (result?.result) {
-      navigator.clipboard.writeText(result.result);
-      toast.success('已复制输出到剪贴板');
-    }
-  };
-
-  const formatDuration = (start?: string | null, end?: string | null) => {
-    if (!start || !end) return '-';
-    const ms = new Date(end).getTime() - new Date(start).getTime();
+  const formatDuration = (ms?: number | null) => {
+    if (!ms) return '-';
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
     return `${(ms / 60000).toFixed(1)}m`;
   };
 
-  const selectWorkspace = (path: string) => {
-    setWorkspacePath(path);
-    setShowWorkspaceList(false);
-    toast.success(`已选择工作区: ${path}`);
+  // 渲染目录浏览器 modal
+  const renderDirBrowser = () => showDirBrowser && (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2"><FolderSearch className="w-5 h-5" />浏览目录</h3>
+          <button onClick={() => setShowDirBrowser(false)} className="text-gray-400 hover:text-gray-200">✕</button>
+        </div>
+        <div className="p-4 border-b border-gray-700 space-y-2">
+          <div className="flex gap-2">
+            {platform === 'windows' && (
+              <select
+                value={isRootList ? 'root://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
+                onChange={(e) => { if (e.target.value === 'root://') browseDirectory('root://'); else if (e.target.value) browseDirectory(e.target.value); }}
+                className="px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+              >
+                <option value="root://">我的电脑</option>
+                {rootEntries.map(e => <option key={e.path} value={e.path}>{e.name}</option>)}
+              </select>
+            )}
+            <input
+              value={isRootList ? (platform === 'windows' ? '我的电脑' : '根目录') : currentBrowsePath}
+              onChange={(e) => setCurrentBrowsePath(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') browseDirectory(currentBrowsePath); }}
+              className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
+              disabled={isRootList}
+            />
+            <button onClick={() => browseDirectory(currentBrowsePath)} disabled={loadingDirs || isRootList}
+              className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded text-sm text-white">
+              {loadingDirs ? <Loader2 className="w-4 h-4 animate-spin" /> : '跳转'}
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2 min-h-[300px]">
+          {!isRootList && (
+            <button onClick={goUpDir} className="w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded text-sm text-blue-400 flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 rotate-180" />上级目录
+            </button>
+          )}
+          {loadingDirs ? (
+            <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+          ) : dirEntries.map(entry => (
+            <button key={entry.path} onClick={() => { if (entry.isDirectory) browseDirectory(entry.path); else toast.error('请选择目录'); }}
+              className={`w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded text-sm flex items-center gap-2 ${entry.isDirectory ? 'text-gray-300' : 'text-gray-600'}`}>
+              {entry.isDirectory ? <FolderSearch className="w-4 h-4 text-yellow-500" /> : <span className="w-4 text-center text-gray-500 text-xs">📄</span>}
+              <span className="flex-1">{entry.name}</span>
+              {entry.isDirectory && <ChevronRight className="w-4 h-4 text-gray-500" />}
+            </button>
+          ))}
+        </div>
+        <div className="p-4 border-t border-gray-700 flex justify-end gap-2">
+          <button onClick={() => setShowDirBrowser(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300">取消</button>
+          <button onClick={() => { setWorkspacePath(currentBrowsePath); setShowDirBrowser(false); toast.success(`已选择: ${currentBrowsePath}`); }}
+            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded text-sm text-white">选择当前目录</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const goUpDir = () => {
+    if (isRootList) return;
+    if (platform === 'windows') {
+      if (/^[A-Z]:\\?$/i.test(currentBrowsePath)) { browseDirectory('root://'); return; }
+      const parts = currentBrowsePath.split(/[\\/]/).filter(p => p);
+      browseDirectory(parts.length <= 1 ? 'root://' : parts[0] + '\\' + parts.slice(1, -1).join('\\'));
+    } else {
+      if (currentBrowsePath === '/') { browseDirectory('root://'); return; }
+      const parts = currentBrowsePath.split('/').filter(p => p);
+      browseDirectory(parts.length === 0 ? 'root://' : '/' + parts.slice(0, -1).join('/'));
+    }
   };
+
+  const vulnCounts = getVulnCounts();
 
   return (
     <div className="space-y-6">
-      {/* Directory Browser Modal */}
-      {showDirBrowser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface border border-gray-700 rounded-lg w-[600px] max-h-[500px] flex flex-col">
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
-                <FolderSearch className="w-5 h-5" />
-                浏览目录
-              </h3>
-              <button
-                onClick={() => setShowDirBrowser(false)}
-                className="text-gray-400 hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
+      {renderDirBrowser()}
 
-            <div className="p-4 border-b border-gray-700 space-y-2">
-              <div className="flex gap-2">
-                {platform === 'windows' && (
-                  <div className="relative">
-                    <select
-                      value={isRootList ? 'root://' : (currentBrowsePath.match(/^[A-Z]:\\/i)?.[0] || '')}
-                      onChange={(e) => {
-                        if (e.target.value === 'root://') {
-                          browseDirectory('root://');
-                        } else if (e.target.value) {
-                          browseDirectory(e.target.value);
-                        }
-                      }}
-                      className="appearance-none px-3 py-2 pr-8 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100 cursor-pointer"
-                    >
-                      <option value="root://">我的电脑</option>
-                      {rootEntries.map((entry) => (
-                        <option key={entry.path} value={entry.path}>
-                          {entry.name}
-                        </option>
-                      ))}
-                    </select>
-                    <HardDrive className="w-4 h-4 absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                )}
-                <input
-                  type="text"
-                  value={isRootList ? (platform === 'windows' ? '我的电脑' : '根目录') : currentBrowsePath}
-                  onChange={(e) => setCurrentBrowsePath(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      browseDirectory(currentBrowsePath);
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100"
-                  placeholder={platform === 'windows' ? '输入路径，如 E:\\work' : '输入路径，如 /home/user'}
-                  disabled={isRootList}
-                />
-                <button
-                  onClick={() => browseDirectory(currentBrowsePath)}
-                  disabled={loadingDirs || isRootList}
-                  className="px-3 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 rounded text-sm text-white"
-                >
-                  {loadingDirs ? <Loader2 className="w-4 h-4 animate-spin" /> : '跳转'}
-                </button>
-              </div>
-              {platform && (
-                <div className="text-xs text-gray-500">
-                  平台: {platform === 'windows' ? 'Windows' : 'Linux'}
-                </div>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-2 min-h-[300px]">
-              {!isRootList && (
-                <button
-                  onClick={goUpDir}
-                  className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm text-blue-400 flex items-center gap-2"
-                >
-                  <ChevronRight className="w-4 h-4 rotate-180" />
-                  上级目录
-                </button>
-              )}
-              {loadingDirs ? (
-                <div className="flex items-center justify-center h-32">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                </div>
-              ) : isRootList ? (
-                <div className="space-y-1">
-                  <div className="px-3 py-1 text-xs text-gray-500">
-                    {platform === 'windows' ? '选择驱动器' : '选择目录'}
-                  </div>
-                  {dirEntries.map((entry) => (
-                    <button
-                      key={entry.path}
-                      onClick={() => selectRootEntry(entry.path)}
-                      className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm flex items-center gap-2 text-gray-300"
-                    >
-                      {platform === 'windows' ? (
-                        <HardDrive className="w-4 h-4 text-blue-400" />
-                      ) : (
-                        <FolderOpen className="w-4 h-4 text-yellow-500" />
-                      )}
-                      <span className="flex-1">{entry.name}</span>
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                    </button>
-                  ))}
-                </div>
-              ) : dirEntries.length === 0 ? (
-                <div className="text-center text-gray-500 py-8">该目录为空</div>
-              ) : (
-                dirEntries.map((entry) => (
-                  <button
-                    key={entry.path}
-                    onClick={() => selectDir(entry)}
-                    className={`w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm flex items-center gap-2 ${
-                      entry.isDirectory ? 'text-gray-300' : 'text-gray-500'
-                    }`}
-                  >
-                    {entry.isDirectory ? (
-                      <FolderOpen className="w-4 h-4 text-yellow-500" />
-                    ) : (
-                      <span className="w-4 text-center text-gray-400">📄</span>
-                    )}
-                    <span className="flex-1">{entry.name}</span>
-                    {entry.isDirectory && (
-                      <ChevronRight className="w-4 h-4 text-gray-400" />
-                    )}
-                  </button>
-                ))
-              )}
-            </div>
-
-            <div className="p-4 border-t border-gray-700 flex justify-end gap-2">
-              <button
-                onClick={() => setShowDirBrowser(false)}
-                className="px-4 py-2 bg-dark-surface-hover hover:bg-gray-700 rounded text-sm text-gray-400"
-              >
-                取消
-              </button>
-              <button
-                onClick={confirmSelection}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded text-sm text-white"
-              >
-                选择当前目录
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Workspace Selection */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
+      {/* 工作区选择 */}
+      <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
         <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-          <FolderOpen className="w-4 h-4" />
-          工作区路径
+          <FileText className="w-4 h-4 text-blue-400" />
+          报告路径
         </h3>
-
         <div className="flex gap-2">
           <input
-            type="text"
-            value={workspacePath}
+            type="text" value={workspacePath}
             onChange={(e) => setWorkspacePath(e.target.value)}
-            placeholder="输入本地目录路径，如 E:\\work\\project"
-            className="flex-1 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
+            placeholder="选择包含 AUDIT_REPORT.md 的工作区目录"
+            className="flex-1 px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
           />
-          <button
-            onClick={() => setShowDirBrowser(true)}
-            className="px-3 py-2 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-sm text-blue-400 flex items-center gap-1"
-          >
-            <FolderSearch className="w-4 h-4" />
-            浏览
+          <button onClick={() => setShowDirBrowser(true)}
+            className="px-3 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-sm text-blue-400 flex items-center gap-1">
+            <FolderSearch className="w-4 h-4" />浏览
           </button>
-          <button
-            onClick={() => setShowWorkspaceList(!showWorkspaceList)}
-            className="px-3 py-2 bg-dark-surface-hover hover:bg-gray-700 rounded-lg text-sm text-gray-400 flex items-center gap-1"
-          >
+          <button onClick={() => setShowWorkspaceList(!showWorkspaceList)}
+            className="px-3 py-2.5 bg-gray-700/50 hover:bg-gray-700 rounded-lg text-sm text-gray-400">
             <ChevronDown className="w-4 h-4" />
-            常用
           </button>
         </div>
-
         {showWorkspaceList && (
-          <div className="mt-2 bg-[#0F172A] border border-gray-700 rounded-lg p-2">
-            {COMMON_WORKSPACES.map((ws) => (
-              <button
-                key={ws.path}
-                onClick={() => selectWorkspace(ws.path)}
-                className="w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded text-sm text-gray-300 flex items-center justify-between"
-              >
-                <span>{ws.name}</span>
-                <span className="text-xs text-gray-500">{ws.path}</span>
+          <div className="mt-2 bg-[#0F172A] border border-gray-700 rounded-lg p-1">
+            {COMMON_WORKSPACES.map(ws => (
+              <button key={ws.path} onClick={() => { setWorkspacePath(ws.path); setShowWorkspaceList(false); }}
+                className="w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded text-sm text-gray-300 flex items-center justify-between">
+                <span>{ws.name}</span><span className="text-xs text-gray-500">{ws.path}</span>
               </button>
             ))}
           </div>
         )}
 
-        <p className="text-xs text-gray-500 mt-2">
-          选择包含代码的目录，opencode 将以 build 模式执行任务
-        </p>
-      </div>
-
-      {/* Agent Info (Fixed to build) */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-4">
-        <h3 className="text-sm font-medium text-gray-300 mb-3 flex items-center gap-2">
-          <Zap className="w-4 h-4" />
-          执行模式
-        </h3>
-
-        <div className="inline-flex px-3 py-2 bg-blue-500/20 border border-blue-500/50 rounded-lg text-sm text-blue-400">
-          build（固定模式）
-        </div>
-
-        <p className="text-xs text-gray-500 mt-2">
-          使用 build 模式执行，加载已配置的 skills（如 audit-report-parser）
-        </p>
-      </div>
-
-      {/* Advanced Settings */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-        <button
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="w-full px-4 py-3 flex items-center justify-between text-sm text-gray-400 hover:text-gray-200"
-        >
-          <span>高级设置</span>
-          {showAdvanced ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        {/* 高级设置 */}
+        <button onClick={() => setShowAdvanced(!showAdvanced)}
+          className="mt-3 text-xs text-gray-500 hover:text-gray-300 flex items-center gap-1">
+          {showAdvanced ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          超时设置
         </button>
-
         {showAdvanced && (
-          <div className="px-4 pb-4 border-t border-gray-700/50 pt-3">
-            <div>
-              <label className="text-xs text-gray-500 mb-1 block">超时时间（秒）</label>
-              <input
-                type="number"
-                value={timeoutSec}
-                onChange={(e) => setTimeoutSec(Math.max(60, parseInt(e.target.value) || 600))}
-                min={60}
-                max={7200}
-                className="w-32 px-3 py-2 bg-[#0F172A] border border-gray-700 rounded-lg text-sm text-gray-100"
-              />
-            </div>
+          <div className="mt-2">
+            <input type="number" value={timeoutSec} onChange={(e) => setTimeoutSec(Math.max(60, parseInt(e.target.value) || 600))}
+              min={60} max={7200} className="w-32 px-3 py-1.5 bg-[#0F172A] border border-gray-700 rounded text-sm text-gray-100" />
+            <span className="ml-2 text-xs text-gray-500">秒（opencode fallback 超时时间）</span>
           </div>
         )}
       </div>
 
-      {/* Execute Button */}
+      {/* 执行按钮 */}
       <div className="flex gap-3">
-        <button
-          onClick={handleRun}
-          disabled={isRunning || !workspacePath}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors"
-        >
+        <button onClick={handleRun} disabled={isRunning || !workspacePath}
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg text-white font-medium transition-colors">
           {isRunning ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              执行中...
-            </>
+            <><Loader2 className="w-5 h-5 animate-spin" />解析中...</>
           ) : (
-            <>
-              <Play className="w-5 h-5" />
-              执行任务（异步）
-            </>
+            <><Shield className="w-5 h-5" />解析漏洞报告</>
           )}
         </button>
-
-        <button
-          onClick={() => setShowHistory(true)}
-          className="px-4 py-3 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-green-400 flex items-center gap-2"
-        >
-          <Clock className="w-5 h-5" />
-          历史
+        <button onClick={() => setShowHistory(true)}
+          className="px-4 py-3 bg-green-500/20 hover:bg-green-500/30 rounded-lg text-green-400 flex items-center gap-2">
+          <Clock className="w-5 h-5" />历史
         </button>
-
-        <button
-          onClick={() => {
-            setLogs([]);
-            setResult(null);
-            setCurrentTaskId(null);
-            setIsRunning(false);
-          }}
+        <button onClick={() => { setParseLogs([]); setResult(null); setCurrentTaskId(null); setIsRunning(false); }}
           disabled={isRunning}
-          className="px-4 py-3 bg-dark-surface-hover hover:bg-gray-700 disabled:opacity-50 rounded-lg text-gray-400 flex items-center gap-2"
-        >
+          className="px-4 py-3 bg-gray-700/50 hover:bg-gray-700 disabled:opacity-50 rounded-lg text-gray-400">
           <RefreshCw className="w-5 h-5" />
-          清空
         </button>
       </div>
 
-      {/* History Modal */}
+      {/* 执行时间线 */}
+      {(isRunning || parseLogs.length > 0) && (
+        <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+          <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
+            <Zap className="w-4 h-4 text-yellow-400" />
+            执行时间线
+            {result?.durationMs != null && (
+              <span className="ml-auto text-xs text-gray-500">总耗时 {formatDuration(result.durationMs)}</span>
+            )}
+          </h3>
+
+          <div className="space-y-2">
+            <TimelineStep
+              label="查找 AUDIT_REPORT.md"
+              status={timeline.findReport}
+              detail={parseLogs.find(l => l.message.includes('找到报告'))?.message}
+              icon={<FileText className="w-4 h-4" />}
+            />
+            <TimelineStep
+              label="Phase 1: Markdown 正则解析"
+              status={timeline.markdownParse}
+              detail={parseLogs.find(l => l.message.includes('Markdown'))?.message}
+              icon={<Zap className="w-4 h-4" />}
+            />
+            <TimelineStep
+              label="Phase 2: AI 深度解析 (Fallback)"
+              status={timeline.aiParse}
+              detail={parseLogs.find(l => l.message.includes('opencode'))?.message}
+              icon={<AlertTriangle className="w-4 h-4" />}
+            />
+            <TimelineStep
+              label="漏洞入库"
+              status={timeline.submit}
+              detail={parseLogs.find(l => l.message.includes('入库'))?.message}
+              icon={<Shield className="w-4 h-4" />}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 执行结果摘要 */}
+      {vulnCounts && (
+        <div className="bg-green-900/20 border border-green-700/40 rounded-xl p-5">
+          <h3 className="text-sm font-medium text-green-400 mb-3 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4" />
+            解析结果
+          </h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-[#0F172A] rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-green-400">{vulnCounts.created}</p>
+              <p className="text-xs text-gray-400 mt-1">新建漏洞</p>
+            </div>
+            <div className="bg-[#0F172A] rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-yellow-400">{vulnCounts.skipped}</p>
+              <p className="text-xs text-gray-400 mt-1">跳过（重复）</p>
+            </div>
+            <div className="bg-[#0F172A] rounded-lg p-3 text-center">
+              <p className="text-2xl font-bold text-blue-400">{vulnCounts.created + vulnCounts.skipped}</p>
+              <p className="text-xs text-gray-400 mt-1">解析总数</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 解析日志 */}
+      {parseLogs.length > 0 && (
+        <div className="bg-[#1E293B] rounded-xl border border-gray-700/50">
+          <div className="px-5 py-3 border-b border-gray-700/50 flex items-center justify-between">
+            <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              解析日志
+            </h3>
+            <button onClick={() => {
+              navigator.clipboard.writeText(parseLogs.map(l => `[${l.timestamp}] [${l.level.toUpperCase()}] ${l.message}`).join('\n'));
+              toast.success('已复制');
+            }} className="text-xs text-gray-500 hover:text-blue-400 flex items-center gap-1">
+              <Copy className="w-3 h-3" />复制
+            </button>
+          </div>
+          <div ref={logsRef} className="p-4 max-h-64 overflow-y-auto bg-[#0F172A] rounded-b-xl">
+            {parseLogs.map((log, i) => (
+              <div key={i} className={`text-xs font-mono flex gap-3 py-0.5 ${
+                log.level === 'error' ? 'text-red-400' :
+                log.level === 'success' ? 'text-green-400' :
+                log.level === 'warn' ? 'text-yellow-400' :
+                'text-gray-300'
+              }`}>
+                <span className="text-gray-600 flex-shrink-0">{log.timestamp}</span>
+                <span className={`flex-shrink-0 w-16 ${
+                  log.level === 'error' ? 'text-red-500' :
+                  log.level === 'success' ? 'text-green-500' :
+                  log.level === 'warn' ? 'text-yellow-500' :
+                  'text-gray-500'
+                }`}>[{log.level.toUpperCase()}]</span>
+                <span>{log.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 错误信息 */}
+      {result?.error && result.status === 'failed' && (
+        <div className="bg-red-900/20 border border-red-700/40 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className="w-4 h-4 text-red-400" />
+            <h3 className="text-sm font-medium text-red-400">错误信息</h3>
+          </div>
+          <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-[#0F172A] rounded-lg p-3">{result.error}</pre>
+        </div>
+      )}
+
+      {/* 使用说明 */}
+      <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-xl p-4">
+        <h4 className="text-sm font-medium text-cyan-400 mb-2">解析流程说明</h4>
+        <ul className="text-xs text-gray-300 space-y-1">
+          <li>1. 选择包含 <code className="text-cyan-300">AUDIT_REPORT.md</code> 的工作区目录</li>
+          <li>2. Phase 1: 正则直接解析 markdown（秒级完成，命中即结束）</li>
+          <li>3. Phase 2: 若未命中，启动 opencode AI 解析（分钟级 Fallback）</li>
+          <li>4. 解析成功后自动去重入库到漏洞管理</li>
+        </ul>
+      </div>
+
+      {/* 历史 Modal */}
       {showHistory && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-dark-surface border border-gray-700 rounded-lg w-[900px] max-h-[700px] flex flex-col">
+          <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[900px] max-h-[700px] flex flex-col">
             <div className="p-4 border-b border-gray-700 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                测试记录历史
+                <Clock className="w-5 h-5" />解析历史
               </h3>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={loadHistory}
-                  disabled={loadingHistory}
-                  className="px-3 py-1 bg-dark-surface-hover hover:bg-gray-700 rounded text-sm text-gray-400"
-                >
+                <button onClick={loadHistory} disabled={loadingHistory}
+                  className="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-400">
                   {loadingHistory ? <Loader2 className="w-4 h-4 animate-spin" /> : '刷新'}
                 </button>
-                <button
-                  onClick={() => {
-                    setShowHistory(false);
-                    setSelectedHistoryRecord(null);
-                  }}
-                  className="text-gray-400 hover:text-gray-200"
-                >
-                  ✕
-                </button>
+                <button onClick={() => { setShowHistory(false); setSelectedHistoryRecord(null); }}
+                  className="text-gray-400 hover:text-gray-200">✕</button>
               </div>
             </div>
 
             <div className="flex-1 flex overflow-hidden">
-              {/* 左侧列表 */}
               <div className="w-[350px] border-r border-gray-700 overflow-y-auto p-2">
                 {loadingHistory ? (
-                  <div className="flex items-center justify-center h-32">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                  </div>
+                  <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
                 ) : history.length === 0 ? (
-                  <div className="text-center text-gray-500 py-8">暂无测试记录</div>
+                  <div className="text-center text-gray-500 py-8">暂无解析记录</div>
                 ) : (
                   <div className="space-y-2">
-                    {history.map((record) => (
-                      <button
-                        key={record.taskId}
-                        onClick={() => viewHistoryRecord(record)}
-                        className={`w-full px-3 py-2 text-left hover:bg-dark-surface-hover rounded-lg border ${
-                          selectedHistoryRecord?.taskId === record.taskId
-                            ? 'border-blue-500 bg-blue-500/10'
-                            : 'border-gray-700/50'
-                        }`}
-                      >
+                    {history.map(record => (
+                      <button key={record.taskId} onClick={() => setSelectedHistoryRecord(record)}
+                        className={`w-full px-3 py-2 text-left hover:bg-gray-700/50 rounded-lg border ${
+                          selectedHistoryRecord?.taskId === record.taskId ? 'border-blue-500 bg-blue-500/10' : 'border-gray-700/50'
+                        }`}>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            {record.status === 'completed' ? (
-                              <CheckCircle className="w-4 h-4 text-green-400" />
-                            ) : record.status === 'failed' ? (
-                              <XCircle className="w-4 h-4 text-red-400" />
-                            ) : record.status === 'running' ? (
-                              <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />
-                            ) : (
-                              <Clock className="w-4 h-4 text-yellow-400" />
-                            )}
-                            <div className="text-xs font-medium text-gray-200 truncate max-w-[180px]">
-                              {record.taskId.slice(0, 20)}...
-                            </div>
+                            {record.status === 'completed' ? <CheckCircle className="w-4 h-4 text-green-400" />
+                              : record.status === 'failed' ? <XCircle className="w-4 h-4 text-red-400" />
+                              : <Clock className="w-4 h-4 text-yellow-400" />}
+                            <span className="text-xs text-gray-200 truncate max-w-[180px]">{record.taskId.slice(0, 24)}</span>
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {record.durationMs ? `${(record.durationMs / 1000).toFixed(1)}s` : '-'}
-                          </div>
+                          <span className="text-xs text-gray-500">{record.durationMs ? `${(record.durationMs / 1000).toFixed(1)}s` : '-'}</span>
                         </div>
-                        <div className="text-xs text-gray-500 truncate mt-1">
-                          {record.workspace}
-                        </div>
+                        <div className="text-xs text-gray-500 truncate mt-1">{record.workspace}</div>
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* 右侧详情 */}
               <div className="flex-1 overflow-y-auto p-4">
                 {selectedHistoryRecord ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="text-sm font-semibold text-gray-200">任务详情</h4>
+                      <h4 className="text-sm font-semibold text-gray-200">解析详情</h4>
                       <span className={`px-2 py-1 rounded text-xs ${
                         selectedHistoryRecord.status === 'completed' ? 'bg-green-500/20 text-green-400' :
                         selectedHistoryRecord.status === 'failed' ? 'bg-red-500/20 text-red-400' :
@@ -676,79 +624,46 @@ export function LocalTestPanel() {
                         <span className="text-gray-500">工作区</span>
                         <span className="text-gray-300 truncate max-w-[300px]">{selectedHistoryRecord.workspace}</span>
                       </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-gray-500">执行指令</span>
-                        <span className="text-gray-300 truncate max-w-[300px]">{selectedHistoryRecord.instruction}</span>
-                      </div>
-                      {selectedHistoryRecord.durationMs && (
+                      {selectedHistoryRecord.durationMs != null && (
                         <div className="flex justify-between text-xs">
-                          <span className="text-gray-500">执行耗时</span>
-                          <span className="text-gray-300">{(selectedHistoryRecord.durationMs / 1000).toFixed(2)} 秒</span>
-                        </div>
-                      )}
-                      {selectedHistoryRecord.startedAt && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500">开始时间</span>
-                          <span className="text-gray-300">{new Date(selectedHistoryRecord.startedAt).toLocaleString('zh-CN')}</span>
-                        </div>
-                      )}
-                      {selectedHistoryRecord.completedAt && (
-                        <div className="flex justify-between text-xs">
-                          <span className="text-gray-500">完成时间</span>
-                          <span className="text-gray-300">{new Date(selectedHistoryRecord.completedAt).toLocaleString('zh-CN')}</span>
+                          <span className="text-gray-500">耗时</span>
+                          <span className="text-gray-300">{formatDuration(selectedHistoryRecord.durationMs)}</span>
                         </div>
                       )}
                     </div>
 
-                    {selectedHistoryRecord.uploadedFilePath && (
-                      <div className="flex items-center justify-between bg-[#0F172A] rounded-lg p-3">
-                        <div className="text-xs">
-                          <span className="text-gray-500">审计报告: </span>
-                          <span className="text-gray-300">{selectedHistoryRecord.uploadedFilePath}</span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            window.open(`/api/codeswarm/download-report?taskId=${selectedHistoryRecord.taskId}`, '_blank');
-                          }}
-                          className="flex items-center gap-1 px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded text-xs text-blue-400"
-                        >
-                          <Download className="w-3 h-3" />
-                          下载报告
-                        </button>
-                      </div>
-                    )}
-
                     {selectedHistoryRecord.result && (
                       <div>
                         <div className="flex items-center justify-between mb-2">
-                          <h5 className="text-xs font-medium text-gray-400">执行输出</h5>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(selectedHistoryRecord.result || '');
-                              toast.success('已复制输出');
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-400"
-                          >
-                            <Copy className="w-3 h-3" />
-                            复制
+                          <h5 className="text-xs font-medium text-gray-400">解析日志</h5>
+                          <button onClick={() => { navigator.clipboard.writeText(selectedHistoryRecord.result || ''); toast.success('已复制'); }}
+                            className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-400">
+                            <Copy className="w-3 h-3" />复制
                           </button>
                         </div>
-                        <div className="bg-[#0F172A] rounded-lg p-3 max-h-[300px] overflow-y-auto">
-                          <pre className="text-xs text-gray-200 whitespace-pre-wrap font-mono">
-                            {selectedHistoryRecord.result}
-                          </pre>
+                        <div className="bg-[#0F172A] rounded-lg p-3 max-h-[350px] overflow-y-auto">
+                          {parseLogsFromResult(selectedHistoryRecord.result).map((log, i) => (
+                            <div key={i} className={`text-xs font-mono flex gap-3 py-0.5 ${
+                              log.level === 'error' ? 'text-red-400' :
+                              log.level === 'success' ? 'text-green-400' :
+                              log.level === 'warn' ? 'text-yellow-400' :
+                              'text-gray-300'
+                            }`}>
+                              <span className="text-gray-600">{log.timestamp}</span>
+                              <span className="w-16">[{log.level.toUpperCase()}]</span>
+                              <span>{log.message}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )}
 
-                    {selectedHistoryRecord.error && selectedHistoryRecord.status === 'failed' && (
+                    {selectedHistoryRecord.error && (
                       <div>
                         <h5 className="text-xs font-medium text-red-400 mb-2">错误信息</h5>
-                        <div className="bg-[#0F172A] rounded-lg p-3 border border-red-700/50">
-                          <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono">
-                            {selectedHistoryRecord.error}
-                          </pre>
-                        </div>
+                        <pre className="text-xs text-red-300 whitespace-pre-wrap font-mono bg-[#0F172A] rounded-lg p-3 border border-red-700/50">
+                          {selectedHistoryRecord.error}
+                        </pre>
                       </div>
                     )}
                   </div>
@@ -762,116 +677,6 @@ export function LocalTestPanel() {
           </div>
         </div>
       )}
-
-      {/* Status Info */}
-      {currentTaskId && (
-        <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-medium text-cyan-400">任务 ID</h4>
-              <code className="text-xs text-gray-300">{currentTaskId}</code>
-            </div>
-            <div className="text-right">
-              <h4 className="text-sm font-medium text-cyan-400">状态</h4>
-              <span className={`text-xs ${
-                result?.status === 'completed' ? 'text-green-400' :
-                result?.status === 'failed' ? 'text-red-400' :
-                'text-yellow-400'
-              }`}>
-                {result?.status || 'queued'}
-              </span>
-            </div>
-          </div>
-          {result?.startedAt && result?.completedAt && (
-            <div className="mt-2 text-xs text-gray-400">
-              执行耗时: {formatDuration(result.startedAt, result.completedAt)}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Logs Output */}
-      {logs.length > 0 && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-          <div className="px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              执行日志
-            </h3>
-          </div>
-
-          <div
-            ref={logsRef}
-            className="p-4 h-48 overflow-y-auto bg-[#0F172A] font-mono text-xs"
-          >
-            {logs.map((log, i) => (
-              <div
-                key={i}
-                className={`${
-                  log.includes('[ERROR]') ? 'text-red-400' :
-                  log.includes('[OK]') ? 'text-green-400' :
-                  'text-gray-300'
-                }`}
-              >
-                {log}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Result Output */}
-      {result?.result && (
-        <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-          <div className="px-4 py-2 border-b border-gray-700/50 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-green-400" />
-              执行结果
-            </h3>
-            <button
-              onClick={handleCopyResult}
-              className="flex items-center gap-1 px-2 py-1 text-xs text-gray-400 hover:text-blue-400"
-            >
-              <Copy className="w-3 h-3" />
-              复制
-            </button>
-          </div>
-
-          <div className="p-4 bg-[#0F172A] max-h-96 overflow-y-auto">
-            <pre className="text-sm text-gray-200 whitespace-pre-wrap font-mono">
-              {result.result}
-            </pre>
-          </div>
-        </div>
-      )}
-
-      {/* Error Output */}
-      {result?.error && result.status === 'failed' && (
-        <div className="bg-dark-surface rounded-lg border border-red-700/50">
-          <div className="px-4 py-2 border-b border-red-700/50 flex items-center gap-2">
-            <XCircle className="w-4 h-4 text-red-400" />
-            <h3 className="text-sm font-medium text-red-400">错误信息</h3>
-          </div>
-
-          <div className="p-4 bg-[#0F172A]">
-            <pre className="text-sm text-red-300 whitespace-pre-wrap font-mono">
-              {result.error}
-            </pre>
-          </div>
-        </div>
-      )}
-
-      {/* Help Tips */}
-      <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-cyan-400 mb-2">使用说明</h4>
-        <ul className="text-xs text-gray-300 space-y-1">
-          <li>• 选择包含审计报告的工作区目录</li>
-          <li>• 点击执行，自动运行 audit-report-parser skill</li>
-          <li>• 任务异步后台执行，不阻塞页面</li>
-          <li>• 执行完成后自动获取解析结果</li>
-          <li>• 结果存储在数据库，可随时查询</li>
-        </ul>
-      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -79,6 +79,7 @@ export default function TaskDetailPage() {
   const [executing, setExecuting] = useState(false);
   const [codeswarmStatus, setCodeswarmStatus] = useState<CodeswarmStatus | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [vulnStats, setVulnStats] = useState<{ total: number; bySeverity: Record<string, number>; byStatus: Record<string, number> } | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -112,6 +113,22 @@ export default function TaskDetailPage() {
   useEffect(() => {
     fetchTaskDetail(taskId);
   }, [taskId, fetchTaskDetail]);
+
+  useEffect(() => {
+    const fetchVulnStats = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/vulnerabilities/stats?taskId=${taskId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setVulnStats(data.stats || null);
+        }
+      } catch {}
+    };
+    fetchVulnStats();
+  }, [taskId]);
 
   // 执行时长计时器
   useEffect(() => {
@@ -486,10 +503,55 @@ export default function TaskDetailPage() {
             <h2 className="text-lg font-semibold text-gray-100">安全报告</h2>
           </div>
           <pre className="bg-gray-900 text-yellow-400 p-4 rounded-lg text-sm overflow-x-auto max-h-96">
-            {task.reportPath.length > 3000 
+            {task.reportPath.length > 3000
               ? task.reportPath.slice(0, 3000) + '\n...(内容过长，已截断)'
               : task.reportPath}
           </pre>
+        </div>
+      )}
+
+      {vulnStats && vulnStats.total > 0 && (
+        <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <ShieldAlert size={20} className="text-red-400" />
+              <h2 className="text-lg font-semibold text-gray-100">漏洞统计</h2>
+              <span className="text-sm text-gray-500">({vulnStats.total} 条)</span>
+            </div>
+            <a
+              href={`/dashboard/admin/vulnerabilities?task=${taskId}`}
+              className="flex items-center gap-1.5 text-sm text-blue-400 hover:text-blue-300"
+            >
+              查看全部漏洞
+              <ExternalLink size={14} />
+            </a>
+          </div>
+          <div className="grid grid-cols-5 gap-3">
+            {([
+              { key: 'critical', label: '严重', color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20' },
+              { key: 'high', label: '高危', color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+              { key: 'medium', label: '中危', color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+              { key: 'low', label: '低危', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+              { key: 'info', label: '信息', color: 'text-gray-400', bg: 'bg-gray-500/10', border: 'border-gray-500/20' },
+            ] as const).map(({ key, label, color, bg, border }) => {
+              const count = vulnStats.bySeverity?.[key] || 0;
+              return (
+                <a
+                  key={key}
+                  href={`/dashboard/admin/vulnerabilities?task=${taskId}&severity=${key}`}
+                  className={`rounded-lg border p-3 text-center ${border} ${bg} hover:opacity-80 transition-opacity`}
+                >
+                  <p className={`text-2xl font-bold ${color}`}>{count}</p>
+                  <p className="text-xs text-gray-400 mt-1">{label}</p>
+                </a>
+              );
+            })}
+          </div>
+          {(vulnStats.byStatus?.new || vulnStats.byStatus?.confirmed) ? (
+            <p className="text-xs text-yellow-500 mt-3">
+              待处理: {(vulnStats.byStatus?.new || 0) + (vulnStats.byStatus?.confirmed || 0)} 条
+            </p>
+          ) : null}
         </div>
       )}
 
