@@ -19,6 +19,7 @@ import {
   ClipboardCopy,
   Check,
   Download,
+  X,
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 import { AdminGuard } from '@/components/PermissionGuard';
@@ -194,6 +195,8 @@ function VulnerabilityDetailContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [showFalsePositiveModal, setShowFalsePositiveModal] = useState(false);
+  const [falsePositiveReasonInput, setFalsePositiveReasonInput] = useState('');
 
   // Extract priority from fix suggestion
   const extractPriority = (fixSuggestion: string | null) => {
@@ -237,15 +240,16 @@ function VulnerabilityDetailContent() {
   const handleAction = async (action: string) => {
     if (!vulnerability) return;
 
+    if (action === 'false-positive') {
+      setShowFalsePositiveModal(true);
+      return;
+    }
+
     setActionLoading(action);
 
     try {
       const token = localStorage.getItem('token');
       const apiPath = `/api/vulnerabilities/${vulnId}/${action}`;
-
-      const body = action === 'false-positive' && vulnerability.falsePositiveReason
-        ? { reason: vulnerability.falsePositiveReason }
-        : {};
 
       const response = await fetch(apiPath, {
         method: 'POST',
@@ -253,7 +257,6 @@ function VulnerabilityDetailContent() {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: action === 'false-positive' ? JSON.stringify(body) : undefined,
       });
 
       if (!response.ok) {
@@ -262,6 +265,41 @@ function VulnerabilityDetailContent() {
       }
 
       toast.success('状态更新成功');
+      fetchVulnerability();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '更新失败');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Handle false positive submission
+  const handleSubmitFalsePositive = async () => {
+    if (!vulnerability) return;
+
+    setActionLoading('false-positive');
+
+    try {
+      const token = localStorage.getItem('token');
+      const apiPath = `/api/vulnerabilities/${vulnId}/false-positive`;
+
+      const response = await fetch(apiPath, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ reason: falsePositiveReasonInput.trim() || null }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || '更新失败');
+      }
+
+      toast.success('已标记为误报');
+      setShowFalsePositiveModal(false);
+      setFalsePositiveReasonInput('');
       fetchVulnerability();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '更新失败');
@@ -633,6 +671,55 @@ function VulnerabilityDetailContent() {
           )}
         </div>
       </div>
+
+      {/* False Positive Modal */}
+      {showFalsePositiveModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-6 max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-100">标记为误报</h3>
+              <button
+                onClick={() => {
+                  setShowFalsePositiveModal(false);
+                  setFalsePositiveReasonInput('');
+                }}
+                className="text-gray-400 hover:text-gray-300"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <p className="text-sm text-gray-400 mb-4">
+              请输入误报原因。
+            </p>
+            <textarea
+              value={falsePositiveReasonInput}
+              onChange={(e) => setFalsePositiveReasonInput(e.target.value)}
+              placeholder="例如：该代码已进行输入验证，不存在漏洞..."
+              className="w-full px-3 py-2 bg-[#0B1120] border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-100 resize-none"
+              rows={4}
+            />
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowFalsePositiveModal(false);
+                  setFalsePositiveReasonInput('');
+                }}
+                className="px-4 py-2 text-gray-300 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSubmitFalsePositive}
+                disabled={actionLoading === 'false-positive'}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {actionLoading === 'false-positive' && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                确认标记
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
