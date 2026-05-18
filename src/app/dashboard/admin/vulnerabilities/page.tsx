@@ -253,66 +253,72 @@ function VulnerabilitiesContent() {
       )}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
-          <h3 className="text-lg font-semibold text-white mb-4">严重程度分布</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) =>
-                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
-                  }
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => [`${value} 条`, '数量']}
-                  contentStyle={{
-                    background: '#1E293B',
-                    border: '1px solid #374151',
-                    borderRadius: 8,
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {stats && (pieData.length > 0 || barData.length > 0) && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {pieData.length > 0 && (
+            <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+              <h3 className="text-lg font-semibold text-white mb-4">严重程度分布</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) =>
+                        `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
+                      }
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [`${value} 条`, '数量']}
+                      contentStyle={{
+                        background: '#1E293B',
+                        border: '1px solid #374151',
+                        borderRadius: 8,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
-        <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
-          <h3 className="text-lg font-semibold text-white mb-4">状态分布</h3>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-              <BarChart data={barData} layout="vertical">
-                <XAxis type="number" stroke="#6B7280" />
-                <YAxis dataKey="name" type="category" stroke="#6B7280" width={60} />
-                <Tooltip
-                  formatter={(value) => [`${value} 条`, '数量']}
-                  contentStyle={{
-                    background: '#1E293B',
-                    border: '1px solid #374151',
-                    borderRadius: 8,
-                  }}
-                />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                  {barData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {barData.length > 0 && (
+            <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
+              <h3 className="text-lg font-semibold text-white mb-4">状态分布</h3>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                  <BarChart data={barData} layout="vertical">
+                    <XAxis type="number" stroke="#6B7280" />
+                    <YAxis dataKey="name" type="category" stroke="#6B7280" width={60} />
+                    <Tooltip
+                      formatter={(value) => [`${value} 条`, '数量']}
+                      contentStyle={{
+                        background: '#1E293B',
+                        border: '1px solid #374151',
+                        borderRadius: 8,
+                      }}
+                    />
+                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                      {barData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Filter Bar */}
       <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-4">

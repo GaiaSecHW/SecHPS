@@ -349,7 +349,7 @@ function DuplicateGroupDetailPageContent() {
             </span>
             {group.vulnerabilityTypeInfo?.cwe && (
               <span className="text-xs text-gray-500">
-                (CWE-{group.vulnerabilityTypeInfo.cwe})
+                ({group.vulnerabilityTypeInfo.cwe})
               </span>
             )}
           </div>

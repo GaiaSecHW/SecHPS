@@ -401,7 +401,7 @@ function VulnerabilityDetailContent() {
               </span>
               {vulnerability.cwe && (
                 <span className="px-2.5 py-1 rounded-full text-sm font-medium bg-gray-500/20 text-gray-400 border border-gray-500/30">
-                  CWE-{vulnerability.cwe}
+                  {vulnerability.cwe}
                 </span>
               )}
             </div>
@@ -518,7 +518,7 @@ function VulnerabilityDetailContent() {
               {vulnerability.cwe && (
                 <div>
                   <label className="text-sm text-gray-500">CWE</label>
-                  <p className="mt-2 text-sm text-gray-100">CWE-{vulnerability.cwe}</p>
+                  <p className="mt-2 text-sm text-gray-100">{vulnerability.cwe}</p>
                 </div>
               )}
 
