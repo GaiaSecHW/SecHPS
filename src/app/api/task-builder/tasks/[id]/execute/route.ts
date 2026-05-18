@@ -147,7 +147,7 @@ export async function POST(
     }
 
     const apiKey = task.ModelConfig?.apiKey || undefined;
-    const timeoutSec = 7200;
+    const timeoutSec = 18000;
     const engine = agentApp?.engine || 'opencode';
     const agentName = agentApp?.defaultAgentName || undefined;
     const instruction = agentApp?.startCommand || task.notes || null;
@@ -300,7 +300,7 @@ async function pollViaRedis(localTaskId: string, codeswarmTaskId: string): Promi
     const timeout = setTimeout(() => {
       subscriber.disconnect();
       reject(new Error('任务执行超时（超过2小时）'));
-    }, 2 * 60 * 60 * 1000);
+    }, 5 * 60 * 60 * 1000);
 
     subscriber.subscribe(channel);
     subscriber.on('message', async (_ch: string, data: string) => {

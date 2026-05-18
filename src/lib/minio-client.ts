@@ -106,7 +106,7 @@ export async function downloadAgentHarness(
       if (obj.name) objectNames.push(obj.name);
     });
     stream.on('end', () => { clearTimeout(timeout); resolve(); });
-    stream.on('error', (err) => { clearTimeout(timeout); reject(err); });
+    stream.on('error', (err: Error) => { clearTimeout(timeout); reject(err); });
   });
 
   if (objectNames.length === 0) {

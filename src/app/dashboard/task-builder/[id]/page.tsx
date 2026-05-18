@@ -127,17 +127,30 @@ export default function TaskDetailPage() {
     };
   }, [task?.status, task?.startedAt]);
 
-  // 轮询 CodeswarmTask 状态
+  // 轮询 CodeswarmTask 状态（running 时持续轮询，completed 后继续 60 秒以捕获 VulnParse 日志）
   useEffect(() => {
     if (task?.status === 'running') {
       pollingRef.current = setInterval(() => {
         fetchTaskDetail(taskId, false);
       }, 5000);
+    } else if (task?.status === 'completed' || task?.status === 'failed') {
+      const recentLog = logs?.[logs.length - 1];
+      const lastLogTime = recentLog ? new Date(recentLog.timestamp).getTime() : (task.completedAt ? new Date(task.completedAt).getTime() : 0);
+      const elapsed = Date.now() - lastLogTime;
+      if (elapsed < 60000) {
+        pollingRef.current = setInterval(() => {
+          fetchTaskDetail(taskId, false);
+        }, 5000);
+        const remaining = 60000 - elapsed;
+        setTimeout(() => {
+          if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+        }, remaining);
+      }
     }
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [task?.status, taskId, fetchTaskDetail]);
+  }, [task?.status, task?.completedAt, taskId, fetchTaskDetail, logs]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleString('zh-CN', {
