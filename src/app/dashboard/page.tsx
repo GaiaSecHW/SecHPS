@@ -22,33 +22,29 @@ import {
   Play,
   Pause,
   LayoutDashboard,
+  ClipboardList,
+  Brain,
+  Layers,
 } from 'lucide-react';
 import { formatBeijingTime } from '@/lib/beijing-time';
 import { extractErrorMessage } from '@/lib/api-client';
 import dynamic from 'next/dynamic';
 const QueueMonitor = dynamic(() => import('@/components/evaluation/QueueMonitor').then(m => ({ default: m.QueueMonitor })), { ssr: false });
 
-interface Session {
+interface TaskInstance {
   id: string;
   name: string;
-  title?: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
-  status?: string;
-  evaluationStatus?: string;
-  hasWaitingEvaluation?: boolean;
-  evaluationCounts?: { running: number; waiting: number; completed: number; failed: number };
-  config?: any;
-  messages?: any[];
-  evaluations?: { id: string; status: string; startedAt: string; completedAt: string | null }[];
 }
 
 interface Stats {
   total: number;
   completed: number;
   failed: number;
-  runningEvaluations: number;
-  queuedEvaluations: number;
+  running: number;
+  pending: number;
 }
 
 interface VulnerabilityStats {
@@ -70,15 +66,15 @@ interface TokenStats {
 }
 
 export default function DashboardPage() {
-  const [sessions, setSessions] = useState<Session[]>([]);
+  const [tasks, setTasks] = useState<TaskInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [stats, setStats] = useState<Stats>({
     total: 0,
     completed: 0,
     failed: 0,
-    runningEvaluations: 0,
-    queuedEvaluations: 0,
+    running: 0,
+    pending: 0,
   });
   const [vulnStats, setVulnStats] = useState<VulnerabilityStats>({
     total: 0,
@@ -97,7 +93,7 @@ export default function DashboardPage() {
     callCount: 0,
   });
   const [isAdmin, setIsAdmin] = useState(false);
-  const [hasRunningEvaluations, setHasRunningEvaluations] = useState(false);
+  const [hasRunningTasks, setHasRunningTasks] = useState(false);
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -112,17 +108,17 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (!hasRunningEvaluations) return;
+    if (!hasRunningTasks) return;
     const pollInterval = setInterval(() => {
       fetchData();
     }, 5000);
     return () => clearInterval(pollInterval);
-  }, [hasRunningEvaluations]);
+  }, [hasRunningTasks]);
 
   const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/projects', {
+      const response = await fetch('/api/task-builder/tasks?limit=1000', {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -136,48 +132,38 @@ export default function DashboardPage() {
       }
 
       const data = await response.json();
-      const projectList = data.projects || [];
-      setSessions(projectList);
+      const taskList = data.tasks || [];
+      setTasks(taskList);
 
-      const hasRunning = projectList.some((p: any) =>
-        p.evaluationStatus === 'running' || p.hasWaitingEvaluation ||
-        p.evaluations?.some((e: any) => e.status === 'running' || e.status === 'preparing' || e.status === 'ready')
+      const hasRunning = taskList.some((t: TaskInstance) =>
+        t.status === 'running' || t.status === 'pending'
       );
-      setHasRunningEvaluations(hasRunning);
+      setHasRunningTasks(hasRunning);
 
       let completed = 0;
       let failed = 0;
-      let runningEvaluations = 0;
-      let queuedEvaluations = 0;
+      let running = 0;
+      let pending = 0;
 
-      for (const project of projectList) {
-        const evaluations = project.evaluations || [];
-        if (evaluations.length === 0) continue;
-
-        const sortedEvaluations = evaluations.sort((a: any, b: any) =>
-          new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
-        );
-        const lastEvaluation = sortedEvaluations[0];
-        if (!lastEvaluation) continue;
-
-        const lastStatus = lastEvaluation.status;
-        if (lastStatus === 'completed') {
+      for (const task of taskList) {
+        const status = task.status;
+        if (status === 'completed') {
           completed++;
-        } else if (lastStatus === 'failed') {
+        } else if (status === 'failed') {
           failed++;
-        } else if (lastStatus === 'queued') {
-          queuedEvaluations++;
-        } else if (['running', 'preparing'].includes(lastStatus)) {
-          runningEvaluations++;
+        } else if (status === 'running') {
+          running++;
+        } else if (status === 'pending') {
+          pending++;
         }
       }
 
       setStats({
-        total: projectList.length,
+        total: taskList.length,
         completed,
         failed,
-        runningEvaluations,
-        queuedEvaluations,
+        running,
+        pending,
       });
       setLoading(false);
     } catch (err) {
@@ -261,11 +247,11 @@ export default function DashboardPage() {
             </div>
           </div>
           <Link
-            href="/dashboard/sessions"
+            href="/dashboard/task-builder"
             className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
           >
             <Play size={16} className="transition-transform group-hover:rotate-90 duration-200" />
-            <span>创建评估</span>
+            <span>创建任务</span>
           </Link>
         </div>
       </header>
@@ -288,7 +274,7 @@ export default function DashboardPage() {
                 <h2 className="text-base font-semibold text-white">任务概览</h2>
               </div>
               <Link
-                href="/dashboard/sessions"
+                href="/dashboard/task-builder"
                 className="flex items-center gap-1.5 px-3 py-1 text-sm text-cyan-400 hover:text-cyan-300 bg-cyan-500/10 rounded-lg transition-colors"
               >
                 <span>查看全部</span>
@@ -305,14 +291,14 @@ export default function DashboardPage() {
               />
               <MetricCard
                 label="运行中"
-                value={stats.runningEvaluations}
+                value={stats.running}
                 icon={<Activity size={20} />}
                 color="cyan"
-                active={stats.runningEvaluations > 0}
+                active={stats.running > 0}
               />
               <MetricCard
-                label="队列中"
-                value={stats.queuedEvaluations}
+                label="待执行"
+                value={stats.pending}
                 icon={<Hourglass size={20} />}
                 color="amber"
               />
@@ -472,10 +458,10 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <QuickLink href="/dashboard/sessions" label="评估任务" icon={<Play size={18} />} color="cyan" />
-              <QuickLink href="/dashboard/skills" label="Skill 库" icon={<Shield size={18} />} color="purple" />
-              <QuickLink href="/dashboard/models" label="模型管理" icon={<Zap size={18} />} color="amber" />
-              <QuickLink href="/dashboard/workflows" label="编排设计" icon={<BarChart3 size={18} />} color="emerald" />
+              <QuickLink href="/dashboard/task-builder" label="我的任务" icon={<ClipboardList size={18} />} color="cyan" />
+              <QuickLink href="/dashboard/skills" label="Skills 库" icon={<Shield size={18} />} color="purple" />
+              <QuickLink href="/dashboard/models" label="我的模型" icon={<Brain size={18} />} color="amber" />
+              <QuickLink href="/dashboard/agentflow-pipelines" label="工作流编排" icon={<Layers size={18} />} color="emerald" />
             </div>
           </section>
 
@@ -495,17 +481,17 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">评估引擎</span>
-                <span className={`flex items-center gap-1.5 text-sm ${stats.runningEvaluations > 0 ? 'text-cyan-400' : 'text-emerald-400'}`}>
-                  <span className={`w-2 h-2 rounded-full ${stats.runningEvaluations > 0 ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`}></span>
-                  {stats.runningEvaluations > 0 ? '运行中' : '就绪'}
+                <span className="text-sm text-gray-400">任务引擎</span>
+                <span className={`flex items-center gap-1.5 text-sm ${stats.running > 0 ? 'text-cyan-400' : 'text-emerald-400'}`}>
+                  <span className={`w-2 h-2 rounded-full ${stats.running > 0 ? 'bg-cyan-400 animate-pulse' : 'bg-emerald-400'}`}></span>
+                  {stats.running > 0 ? '运行中' : '就绪'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-400">队列状态</span>
-                <span className={`flex items-center gap-1.5 text-sm ${stats.queuedEvaluations > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
-                  <span className={`w-2 h-2 rounded-full ${stats.queuedEvaluations > 0 ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
-                  {stats.queuedEvaluations > 0 ? `${stats.queuedEvaluations} 待执行` : '空闲'}
+                <span className="text-sm text-gray-400">待执行任务</span>
+                <span className={`flex items-center gap-1.5 text-sm ${stats.pending > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                  <span className={`w-2 h-2 rounded-full ${stats.pending > 0 ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+                  {stats.pending > 0 ? `${stats.pending} 待执行` : '空闲'}
                 </span>
               </div>
             </div>
