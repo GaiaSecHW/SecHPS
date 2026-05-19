@@ -1,4 +1,4 @@
-﻿# Opencode SDK 功能全集
+# Opencode SDK 功能全集
 
 > 本文档记录 Opencode SDK 的所有 API 功能，用于核对 SecHPS 平台的集成进度。
 >

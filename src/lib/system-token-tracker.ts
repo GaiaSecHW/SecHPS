@@ -1,4 +1,4 @@
-﻿/**
+/**
  * system-token-tracker.ts
  * 系统级 Token 使用统计服务
  * 

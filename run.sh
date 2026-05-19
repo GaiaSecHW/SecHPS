@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 # SecHPS 平台运行脚本 (Linux/Mac)
 # 用法: ./run.sh
 

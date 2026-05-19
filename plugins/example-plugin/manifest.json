@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "example-plugin",
   "displayName": "示例插件",
   "description": "这是一个示例插件，用于演示插件系统的功能",

@@ -1,4 +1,4 @@
-﻿# AGENTS.md
+# AGENTS.md
 
 SecHPS 测试平台 - 开发参考指南。Next.js 16 + React 19 + TypeScript 6 + Prisma 6 + PostgreSQL。
 

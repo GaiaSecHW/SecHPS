@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 chcp 65001 >nul
 REM SecHPS 平台运行脚本 (Windows)
 REM 用法: 双击运行或 .\run.bat

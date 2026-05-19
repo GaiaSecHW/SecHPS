@@ -1,4 +1,4 @@
-﻿import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PERMISSIONS, ROLES, DEFAULT_ROLE_PERMISSIONS } from '../src/types/permissions';
 import { generateId } from '../src/lib/id-generator';

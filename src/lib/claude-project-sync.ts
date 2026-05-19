@@ -1,4 +1,4 @@
-﻿// src/lib/claude-project-sync.ts
+// src/lib/claude-project-sync.ts
 
 import { join } from 'path';
 import { homedir } from 'os';
