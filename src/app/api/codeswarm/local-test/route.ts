@@ -29,26 +29,9 @@ interface ParsedVulnerabilityReport {
   }>;
 }
 
-const LOCAL_TEST_VULN_TASK_ID = '70b14e3f-1614-407d-800b-ca2a485c5016';
+const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
 
 const isWindows = process.platform === 'win32';
-
-const SEVERITY_MAP: Record<string, string> = {
-  critical: 'critical', 严重: 'critical',
-  high: 'high', 高危: 'high',
-  medium: 'medium', 中危: 'medium', moderate: 'medium',
-  low: 'low', 低危: 'low',
-  info: 'info', 信息: 'info', informational: 'info',
-};
-
-function normalizeSeverity(s?: string): string {
-  if (!s) return 'medium';
-  const lower = s.toLowerCase().trim();
-  for (const [key, val] of Object.entries(SEVERITY_MAP)) {
-    if (lower === key || lower === val) return val;
-  }
-  return 'medium';
-}
 
 function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
   try {
@@ -169,51 +152,6 @@ function runOpencodeParse(
       resolve(null);
     });
   });
-}
-
-async function submitVulnerabilitiesDirect(
-  report: ParsedVulnerabilityReport,
-  filePath: string,
-  taskId: string
-): Promise<{ success: boolean; createdCount?: number; skippedCount?: number; error?: string }> {
-  try {
-    let createdCount = 0;
-    let skippedCount = 0;
-    const seen = new Set<string>();
-
-    for (const v of report.vulnerabilities) {
-      const key = `${v.title}||${v.type}`;
-      if (seen.has(key)) { skippedCount++; continue; }
-      seen.add(key);
-
-      const id = `vuln_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      const severity = normalizeSeverity(v.severity);
-      const vulnRawReport = v.rawReport || '';
-
-      try {
-        await prisma.$executeRaw`
-          INSERT INTO "Vulnerability" (
-            id, "taskId", "projectId", title, description, type, cwe, severity,
-            skill, location, "POC", vulnerable, "fixSuggestion", "rawReport",
-            "filePath", status, "updatedAt"
-          ) VALUES (
-            ${id}, ${taskId}, NULL,
-            ${v.title}, ${v.description || ''}, ${v.type},
-            ${v.cwe || null}, ${severity},
-            ${v.skill || null}, ${v.location || null},
-            ${v.POC || null}, ${v.vulnerable ?? true},
-            ${v.fixSuggestion || null}, ${vulnRawReport},
-            ${filePath}, 'new', NOW()
-          )
-          ON CONFLICT DO NOTHING
-        `;
-        createdCount++;
-      } catch { skippedCount++; }
-    }
-    return { success: true, createdCount, skippedCount };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
 }
 
 export async function POST(request: Request) {
@@ -369,14 +307,27 @@ function executeTaskAsync(
         addLog('info', '无漏洞原始文件需要上传');
       }
 
-      addLog('info', `开始入库: ${report.vulnerabilities.length} 条漏洞`);
-      const result = await submitVulnerabilitiesDirect(report, filePath, LOCAL_TEST_VULN_TASK_ID);
+      addLog('info', `调用 /api/v1/vulnerabilities 入库: ${report.vulnerabilities.length} 条漏洞`);
+      
+      const vulnRequestBody = {
+        taskId: LOCAL_TEST_VULN_TASK_ID,
+        filePath,
+        vulnerabilities: report.vulnerabilities,
+      };
 
-      if (result.success) {
+      const vulnRes = await fetch(`http://localhost:${process.env.PORT || 8090}/api/v1/vulnerabilities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vulnRequestBody),
+      });
+
+      const vulnResult = await vulnRes.json();
+
+      if (vulnRes.ok && vulnResult.summary) {
         const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join(', ');
-        addLog('success', `漏洞入库完成: 创建 ${result.createdCount} 条, 跳过 ${result.skippedCount} 条 — ${vulnSummary}`);
+        addLog('success', `漏洞入库完成: 创建 ${vulnResult.summary.created} 条, 跳过 ${vulnResult.summary.skipped} 条 — ${vulnSummary}`);
       } else {
-        addLog('error', `漏洞入库失败: ${result.error}`);
+        addLog('error', `漏洞入库失败: ${vulnResult.error || '未知错误'}`);
       }
 
       await updateRecord({

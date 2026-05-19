@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { listTaskFiles, TaskFileInfo } from '@/lib/minio-vulnerability';
 
-const LOCAL_TEST_VULN_TASK_ID = '70b14e3f-1614-407d-800b-ca2a485c5016';
+const LOCAL_TEST_VULN_TASK_ID = '3fa14423-8485-4596-ab8f-c6bd9875fd77';
 
 export async function GET(request: Request) {
   try {
