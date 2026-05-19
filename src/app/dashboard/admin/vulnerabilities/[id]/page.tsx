@@ -505,18 +505,41 @@ function VulnerabilityDetailContent() {
           <div className="flex items-center gap-3">
             {vulnerability.rawReport && (
               <button
-                onClick={() => {
-                  const fileName = vulnerability.rawReport!.split(/[/\\]/).pop() || `vuln-${vulnerability.id}`;
-                  const blob = new Blob([vulnerability.rawReport!], { type: 'text/plain;charset=utf-8' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = fileName;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  URL.revokeObjectURL(url);
-                  toast.success('文件已下载');
+                onClick={async () => {
+                  const rawReport = vulnerability.rawReport!;
+                  try {
+                    let content: string;
+                    let fileName: string;
+
+                    if (rawReport.startsWith('http://') || rawReport.startsWith('https://')) {
+                      // MinIO URL: fetch 获取内容
+                      toast.loading('正在下载报告...');
+                      const response = await fetch(rawReport);
+                      if (!response.ok) throw new Error('下载失败');
+                      content = await response.text();
+                      // 从 URL path 提取文件名（去掉 query 参数）
+                      const urlPath = rawReport.split('?')[0];
+                      fileName = urlPath.split('/').pop() || `vuln-${vulnerability.id}-raw-report`;
+                      toast.dismiss();
+                    } else {
+                      // 文本内容：直接下载
+                      content = rawReport;
+                      fileName = rawReport.split(/[/\\]/).pop() || `vuln-${vulnerability.id}`;
+                    }
+
+                    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = fileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    toast.success('文件已下载');
+                  } catch (err) {
+                    toast.error(`下载失败: ${err instanceof Error ? err.message : '未知错误'}`);
+                  }
                 }}
                 className="inline-flex items-center px-3 py-2 bg-gray-700 text-gray-300 rounded-lg hover:bg-gray-600 transition-colors"
               >
