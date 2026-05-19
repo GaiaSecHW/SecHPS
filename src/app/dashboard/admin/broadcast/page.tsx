@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -37,7 +37,7 @@ export default function BroadcastManagePage() {
 function BroadcastManageContent() {
   const router = useRouter();
   const [config, setConfig] = useState<BroadcastConfig>({
-    content: '欢迎使用 AI4WEB 测试平台',
+    content: '欢迎使用 SecHPS 测试平台',
     enabled: true,
     color: 'blue',
   });
@@ -178,7 +178,7 @@ function BroadcastManageContent() {
               placeholder="输入广播内容，多条消息用 || 分隔"
             />
             <p className="mt-1 text-xs text-gray-500">
-              示例：欢迎使用 AI4WEB 测试平台 || 系统将于今晚 22:00 进行维护
+              示例：欢迎使用 SecHPS 测试平台 || 系统将于今晚 22:00 进行维护
             </p>
           </div>
 

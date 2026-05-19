@@ -1,4 +1,4 @@
-/**
+﻿/**
  * system-token-tracker.ts
  * 系统级 Token 使用统计服务
  * 
@@ -37,7 +37,7 @@ export async function ensureSystemProject(): Promise<void> {
       await prisma.user.create({
         data: {
           id: SYSTEM_USER_ID,
-          email: 'system@ai4web.internal',
+          email: 'system@SecHPS.internal',
           username: 'system',
           passwordHash: '', // 系统用户不需要密码
           name: '系统',

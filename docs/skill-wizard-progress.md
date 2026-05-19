@@ -1,4 +1,4 @@
-# Skill 创建向导开发进度
+﻿# Skill 创建向导开发进度
 
 ## ✅ 已完成功能（100%）
 
@@ -129,7 +129,7 @@ docs/
 - ✅ 用户文档 (100%)
 
 **待优化项**:
-- 🔄 测试运行 API 需要集成真实的 AI4WEB/Claude API
+- 🔄 测试运行 API 需要集成真实的 SecHPS/Claude API
 - 🔄 Python 脚本集成（可选，用于更强大的评估功能）
 
 ---
@@ -138,7 +138,7 @@ docs/
 
 ### 优先级 1 - 核心功能增强
 1. **真实 API 集成**
-   - 将测试运行 API 连接到真实的 AI4WEB 服务
+   - 将测试运行 API 连接到真实的 SecHPS 服务
    - 实现实际的 Skill 执行和结果收集
    - 添加错误处理和重试机制
 
@@ -197,7 +197,7 @@ docs/
 - ✅ JWT 认证
 
 ### 待集成
-- 🔄 AI4WEB/Claude API
+- 🔄 SecHPS/Claude API
 - 🔄 Python scripts (optional)
 
 ---
@@ -217,7 +217,7 @@ Skill 创建向导的**核心功能已全部完成**！
 8. ✅ 完整的用户文档
 
 **下一步行动**:
-1. 集成真实的 AI4WEB/Claude API（替换模拟实现）
+1. 集成真实的 SecHPS/Claude API（替换模拟实现）
 2. 根据用户反馈优化 UI/UX
 3. 添加更多高级功能（如模板市场）
 

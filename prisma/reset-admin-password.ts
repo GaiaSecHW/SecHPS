@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+﻿import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -6,7 +6,7 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🔑 重置管理员密码...');
 
-  const adminEmail = 'admin@ai4web.com';
+  const adminEmail = 'admin@SecHPS.com';
   const newPassword = 'admin123'; // 可以修改为新密码
 
   // 查找管理员账户

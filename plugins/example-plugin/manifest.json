@@ -1,14 +1,14 @@
-{
+﻿{
   "name": "example-plugin",
   "displayName": "示例插件",
   "description": "这是一个示例插件，用于演示插件系统的功能",
   "version": "1.0.0",
-  "author": "AI4WEB Team",
+  "author": "SecHPS Team",
   "type": "tool",
   "main": "index.js",
   "icon": "extension",
-  "homepage": "https://github.com/ai4web/example-plugin",
-  "repository": "https://github.com/ai4web/example-plugin",
+  "homepage": "https://github.com/SecHPS/example-plugin",
+  "repository": "https://github.com/SecHPS/example-plugin",
   "configSchema": {
     "type": "object",
     "properties": {

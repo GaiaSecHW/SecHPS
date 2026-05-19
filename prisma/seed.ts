@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+﻿import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { PERMISSIONS, ROLES, DEFAULT_ROLE_PERMISSIONS } from '../src/types/permissions';
 import { generateId } from '../src/lib/id-generator';
@@ -91,7 +91,7 @@ async function main() {
 
   // 4. 创建测试管理员账户（如果不存在）
   console.log('👤 创建测试管理员账户...');
-  const adminEmail = 'admin@ai4web.com';
+  const adminEmail = 'admin@SecHPS.com';
   const adminPassword = process.env.ADMIN_SEED_PASSWORD ||
     require('crypto').randomBytes(12).toString('base64').slice(0, 16);
   const passwordHash = await bcrypt.hash(adminPassword, 10);
@@ -129,7 +129,7 @@ async function main() {
     });
   }
 
-  // 创建默认 AI4WEB 配置
+  // 创建默认 SecHPS 配置
   await prisma.opencodeConfig.upsert({
     where: { id: admin.id + '-config' },
     update: {},
@@ -137,7 +137,7 @@ async function main() {
       id: generateId('cfg'),
       name: 'Default',
       baseURL: 'http://localhost:54321',
-      description: 'Default AI4WEB configuration',
+      description: 'Default SecHPS configuration',
       isActive: true,
       updatedAt: new Date(),
       User: {

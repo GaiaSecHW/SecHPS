@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+﻿import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { PERMISSIONS } from '@/types/permissions';
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     if (!body || typeof body !== 'object') {
       return NextResponse.json({ error: '无效的配置文件格式' }, { status: 400 });
     }
-    if (body._source !== 'AI4WEB 平台') {
+    if (body._source !== 'SecHPS 平台') {
       return NextResponse.json(
         { error: '配置文件来源不匹配，请确认文件由本平台导出' },
         { status: 400 }

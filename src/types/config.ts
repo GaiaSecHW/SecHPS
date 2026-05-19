@@ -1,4 +1,4 @@
-// Configuration types for AI4WEB 测试平台
+﻿// Configuration types for SecHPS 测试平台
 
 export interface MCPServer {
   id: string;

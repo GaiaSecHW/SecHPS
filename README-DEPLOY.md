@@ -1,4 +1,4 @@
-# AI4WEB 平台部署指南
+﻿# SecHPS 平台部署指南
 
 ## 快速部署
 
@@ -72,7 +72,7 @@ run.bat
 ## 目录结构
 
 ```
-ai4web-platform/
+SecHPS-platform/
 ├── .next/           # Next.js 构建产物
 ├── prisma/
 │   └── prod.db      # SQLite 数据库文件
@@ -135,7 +135,7 @@ npx prisma db push
 
 ```bash
 # 删除项目目录即可
-rm -rf ai4web-platform/
+rm -rf SecHPS-platform/
 ```
 
 ---

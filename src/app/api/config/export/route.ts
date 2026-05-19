@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     const exportData = {
       _version: '1.1',
       _exportedAt: new Date().toISOString(),
-      _source: 'AI4WEB 平台',
+      _source: 'SecHPS 平台',
       // OpencodeConfig 字段
       name: config.name,
       baseURL: config.baseURL,
@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     };
 
     const json = JSON.stringify(exportData, null, 2);
-    const filename = `ai4web-config-${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `SecHPS-config-${new Date().toISOString().slice(0, 10)}.json`;
 
     return new NextResponse(json, {
       status: 200,

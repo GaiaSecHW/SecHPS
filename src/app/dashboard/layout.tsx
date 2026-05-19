@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
@@ -126,7 +126,7 @@ function DashboardLayoutContent({
             </div>
           ) : (
             <>
-              {/* <h1 className="text-base font-bold text-gray-100 tracking-wide">AI4WEB 平台</h1> */}
+              {/* <h1 className="text-base font-bold text-gray-100 tracking-wide">SecHPS 平台</h1> */}
               <p className="text-xs text-gray-500 mt-1">
                 {user?.name || user?.username}
               </p>
@@ -263,7 +263,7 @@ function DashboardLayoutContent({
           <div className="h-14 flex items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center space-x-4 flex-1 mr-6">
               <h2 className="text-sm font-semibold text-gray-300 whitespace-nowrap">
-                AI4WEB 测试平台
+                SecHPS 测试平台
               </h2>
               <BroadcastMarquee />
             </div>

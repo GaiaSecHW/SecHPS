@@ -1,6 +1,6 @@
-# AGENTS.md
+﻿# AGENTS.md
 
-AI4WEB 测试平台 - 开发参考指南。Next.js 16 + React 19 + TypeScript 6 + Prisma 6 + PostgreSQL。
+SecHPS 测试平台 - 开发参考指南。Next.js 16 + React 19 + TypeScript 6 + Prisma 6 + PostgreSQL。
 
 ## 开发命令
 
@@ -135,7 +135,7 @@ admin（api-keys、sdk、tenants、vulnerabilities）、agent-apps、agentflow-p
 
 ## 默认账户
 
-- 用户名: `admin` / `admin123`（邮箱 admin@ai4web.com）
+- 用户名: `admin` / `admin123`（邮箱 admin@SecHPS.com）
 - 角色: admin、manager、developer、user、viewer
 
 ## 环境变量

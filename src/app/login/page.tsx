@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -76,7 +76,7 @@ export default function LoginPage() {
           </h2>
           <p className="mt-2 text-sm text-gray-400">
             {isRegister
-              ? '加入 AI4WEB 测试平台'
+              ? '加入 SecHPS 测试平台'
               : '登录您的账户'}
           </p>
         </div>

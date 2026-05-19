@@ -1,5 +1,5 @@
-#!/bin/bash
-# AI4WEB 平台运行脚本 (Linux/Mac)
+﻿#!/bin/bash
+# SecHPS 平台运行脚本 (Linux/Mac)
 # 用法: ./run.sh
 
 set -e
@@ -20,7 +20,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 echo "=========================================="
-echo "AI4WEB 平台启动脚本"
+echo "SecHPS 平台启动脚本"
 echo "=========================================="
 echo -e "日志文件: ${GREEN}$LOG_FILE${NC}"
 echo "=========================================="
@@ -75,7 +75,7 @@ echo "=========================================="
 echo ""
 
 # 写入启动日志
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] AI4WEB 平台启动" >> "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] SecHPS 平台启动" >> "$LOG_FILE"
 
 # 启动服务并输出日志到文件（同时显示在终端）
 npm start 2>&1 | tee -a "$LOG_FILE"

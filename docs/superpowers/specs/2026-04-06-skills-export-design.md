@@ -1,4 +1,4 @@
-# Skills 混合方案设计文档
+﻿# Skills 混合方案设计文档
 
 **日期**: 2026-04-06  
 **版本**: 1.0  
@@ -7,7 +7,7 @@
 
 ## 执行摘要
 
-本文档描述了 AI4WEB 测试平台中 Skills 系统的混合方案实现：数据库存储 + Claude 格式导出。该方案保留了现有的数据库存储优势（版本控制、权限管理、详细统计），同时通过自动导出到 `.claude/skills/` 目录，使 Claude 能够自动发现并选择合适的 Skills 进行评估。
+本文档描述了 SecHPS 测试平台中 Skills 系统的混合方案实现：数据库存储 + Claude 格式导出。该方案保留了现有的数据库存储优势（版本控制、权限管理、详细统计），同时通过自动导出到 `.claude/skills/` 目录，使 Claude 能够自动发现并选择合适的 Skills 进行评估。
 
 ## 背景和动机
 
@@ -831,7 +831,7 @@ async function ensureSkillsDirectory(skillsDirectory: string): Promise<void> {
 ## 参考资料
 
 1. [Claude Skills 官方文档](https://docs.anthropic.com/claude/docs/skills)
-2. [AI4WEB 测试平台架构文档](../../../README.md)
+2. [SecHPS 测试平台架构文档](../../../README.md)
 3. [Prisma Schema 文档](../../../prisma/schema.prisma)
 4. [Skills 服务实现](../../../src/services/skills.ts)
 

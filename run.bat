@@ -1,6 +1,6 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
-REM AI4WEB 平台运行脚本 (Windows)
+REM SecHPS 平台运行脚本 (Windows)
 REM 用法: 双击运行或 .\run.bat
 
 setlocal
@@ -22,7 +22,7 @@ set "YELLOW=[93m"
 set "NC=[0m"
 
 echo ==========================================
-echo AI4WEB 平台启动脚本
+echo SecHPS 平台启动脚本
 echo ==========================================
 echo 日志文件: %LOG_FILE%
 echo ==========================================
@@ -85,7 +85,7 @@ echo ==========================================
 echo.
 
 REM 写入启动日志
-echo [%date% %time%] AI4WEB 平台启动 >> "%LOG_FILE%"
+echo [%date% %time%] SecHPS 平台启动 >> "%LOG_FILE%"
 
 REM 使用 PowerShell 实现 tee 功能（同时输出到终端和文件）
 powershell -Command "& { npm start 2>&1 | ForEach-Object { $_ | Out-File -Append -FilePath '%LOG_FILE%'; $_ } }"

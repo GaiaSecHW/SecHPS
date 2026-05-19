@@ -1,4 +1,4 @@
-# Threat Modeling Skill Configuration
+﻿# Threat Modeling Skill Configuration
 # Version: 1.0.0
 
 ---
@@ -13,7 +13,7 @@ skill:
     Comprehensive 8-phase FSM threat modeling workflow for security analysis.
     Follows STRIDE methodology, OWASP guidelines, and formal verification properties.
     
-  author: AI4WEB Team
+  author: SecHPS Team
   license: MIT
   
   tags:

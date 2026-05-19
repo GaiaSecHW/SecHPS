@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MCP Client - 直接调用 MCP 服务器工具
  * 
  * 支持三种 MCP 类型：
@@ -129,7 +129,7 @@ export class LocalMcpClient {
         this.sendRequest('initialize', {
           protocolVersion: '2024-11-05',
           capabilities: { tools: {} },
-          clientInfo: { name: 'ai4web-mcp-client', version: '1.0.0' },
+          clientInfo: { name: 'SecHPS-mcp-client', version: '1.0.0' },
         })
           .then((response) => {
             logger.info(LOG_MODULES.MCP, `[Local] MCP 服务器 ${this.serverName} 初始化成功`);
@@ -362,7 +362,7 @@ export class RemoteMcpClient {
           this.sendRequest('initialize', {
             protocolVersion: '2024-11-05',
             capabilities: { tools: {} },
-            clientInfo: { name: 'ai4web-mcp-client', version: '1.0.0' },
+            clientInfo: { name: 'SecHPS-mcp-client', version: '1.0.0' },
           })
             .then((response) => {
               logger.info(LOG_MODULES.MCP, `[Remote] MCP 服务器 ${this.serverName} 初始化成功`);
@@ -572,7 +572,7 @@ export class StreamableHttpClient {
       params: {
         protocolVersion: '2025-03-26',
         capabilities: { tools: {} },
-        clientInfo: { name: 'ai4web-mcp-client', version: '1.0.0' },
+        clientInfo: { name: 'SecHPS-mcp-client', version: '1.0.0' },
       },
     };
 

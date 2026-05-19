@@ -1,6 +1,6 @@
-# Opencode SDK 功能全集
+﻿# Opencode SDK 功能全集
 
-> 本文档记录 Opencode SDK 的所有 API 功能，用于核对 AI4WEB 平台的集成进度。
+> 本文档记录 Opencode SDK 的所有 API 功能，用于核对 SecHPS 平台的集成进度。
 >
 > **更新时间**: 2025-03-30
 > **SDK 版本**: 0.1.0-alpha.21

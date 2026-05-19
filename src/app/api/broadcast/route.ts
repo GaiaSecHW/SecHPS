@@ -1,4 +1,4 @@
-// src/app/api/broadcast/route.ts
+﻿// src/app/api/broadcast/route.ts
 
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
@@ -13,7 +13,7 @@ interface BroadcastConfig {
 }
 
 const DEFAULT_CONFIG: BroadcastConfig = {
-  content: '欢迎使用 AI4WEB 测试平台',
+  content: '欢迎使用 SecHPS 测试平台',
   enabled: true,
   color: 'blue',
 };

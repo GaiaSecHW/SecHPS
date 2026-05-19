@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import {
@@ -225,7 +225,7 @@ export default function ConfigPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       const filename = response.headers.get('content-disposition')
-        ?.match(/filename="(.+)"/)?.[1] ?? `ai4web-config-${new Date().toISOString().slice(0, 10)}.json`;
+        ?.match(/filename="(.+)"/)?.[1] ?? `SecHPS-config-${new Date().toISOString().slice(0, 10)}.json`;
       a.href = url;
       a.download = filename;
       a.click();

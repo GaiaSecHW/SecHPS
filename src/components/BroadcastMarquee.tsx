@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { Volume2 } from 'lucide-react';
@@ -49,11 +49,11 @@ export function BroadcastMarquee() {
       .catch(() => {
         // 使用默认配置
         setConfig({
-          content: '欢迎使用 AI4WEB 测试平台',
+          content: '欢迎使用 SecHPS 测试平台',
           enabled: true,
           color: 'blue',
         });
-        setMessages(['欢迎使用 AI4WEB 测试平台']);
+        setMessages(['欢迎使用 SecHPS 测试平台']);
       });
   };
 

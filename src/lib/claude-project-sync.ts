@@ -1,4 +1,4 @@
-// src/lib/claude-project-sync.ts
+﻿// src/lib/claude-project-sync.ts
 
 import { join } from 'path';
 import { homedir } from 'os';
@@ -16,7 +16,7 @@ interface ClaudeProjectConfig {
       metadata?: {
         name?: string;
         description?: string;
-        ai4webProjectId?: string;
+        SecHPSProjectId?: string;
       };
     };
   };
@@ -24,7 +24,7 @@ interface ClaudeProjectConfig {
 
 /**
  * Claude 项目管理器
- * 负责同步 AI4WEB 项目到 Claude 本地工作区
+ * 负责同步 SecHPS 项目到 Claude 本地工作区
  */
 export class ClaudeProjectManager {
   private claudeProjectsDir: string;
@@ -86,8 +86,8 @@ export class ClaudeProjectManager {
 
   /**
    * 创建 Claude 项目目录
-   * @param projectName AI4WEB 项目名称
-   * @param projectPath AI4WEB 项目路径
+   * @param projectName SecHPS 项目名称
+   * @param projectPath SecHPS 项目路径
    * @param metadata 项目元数据
    */
   async createClaudeProject(
@@ -95,7 +95,7 @@ export class ClaudeProjectManager {
     projectPath: string,
     metadata?: {
       description?: string;
-      ai4webProjectId?: string;
+      SecHPSProjectId?: string;
     }
   ): Promise<{ claudeProjectDir: string; claudeProjectName: string }> {
     try {
@@ -115,7 +115,7 @@ export class ClaudeProjectManager {
         metadata: {
           name: projectName,
           description: metadata?.description,
-          ai4webProjectId: metadata?.ai4webProjectId,
+          SecHPSProjectId: metadata?.SecHPSProjectId,
         },
       };
 
@@ -144,7 +144,7 @@ export class ClaudeProjectManager {
       metadata?: {
         name?: string;
         description?: string;
-        ai4webProjectId?: string;
+        SecHPSProjectId?: string;
       };
     }
   ): Promise<void> {
@@ -211,12 +211,12 @@ export class ClaudeProjectManager {
   }
 
   /**
-   * 根据 AI4WEB 项目名称查找 Claude 项目
+   * 根据 SecHPS 项目名称查找 Claude 项目
    */
-  async findClaudeProjectByName(ai4webProjectName: string): Promise<string | null> {
+  async findClaudeProjectByName(SecHPSProjectName: string): Promise<string | null> {
     try {
       const config = await this.readConfig();
-      const sanitized = this.sanitizeProjectName(ai4webProjectName);
+      const sanitized = this.sanitizeProjectName(SecHPSProjectName);
 
       if (config.projects[sanitized]) {
         return sanitized;
@@ -224,7 +224,7 @@ export class ClaudeProjectManager {
 
       // 尝试模糊匹配
       for (const [key, value] of Object.entries(config.projects)) {
-        if (value.metadata?.name === ai4webProjectName) {
+        if (value.metadata?.name === SecHPSProjectName) {
           return key;
         }
       }
@@ -237,14 +237,14 @@ export class ClaudeProjectManager {
   }
 
   /**
-   * 根据 AI4WEB 项目 ID 查找 Claude 项目
+   * 根据 SecHPS 项目 ID 查找 Claude 项目
    */
-  async findClaudeProjectById(ai4webProjectId: string): Promise<string | null> {
+  async findClaudeProjectById(SecHPSProjectId: string): Promise<string | null> {
     try {
       const config = await this.readConfig();
 
       for (const [key, value] of Object.entries(config.projects)) {
-        if (value.metadata?.ai4webProjectId === ai4webProjectId) {
+        if (value.metadata?.SecHPSProjectId === SecHPSProjectId) {
           return key;
         }
       }

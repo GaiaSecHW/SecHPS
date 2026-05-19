@@ -1,7 +1,7 @@
-{
-  "name": "ai4web-test-platform",
+﻿{
+  "name": "SecHPS-test-platform",
   "version": "1.0.0",
-  "description": "AI4WEB 测试平台 - AI-powered coding assistant platform with role-based access control",
+  "description": "SecHPS 测试平台 - AI-powered coding assistant platform with role-based access control",
   "private": true,
   "scripts": {
     "dev": "next dev",

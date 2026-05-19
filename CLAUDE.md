@@ -1,8 +1,8 @@
-# CLAUDE.md
+﻿# CLAUDE.md
 
 ## Project Overview
 
-AI4WEB Test Platform - AI 驱动的编码辅助平台。Next.js 16 + React 19 + TypeScript + Prisma 6 + PostgreSQL。
+SecHPS Test Platform - AI 驱动的编码辅助平台。Next.js 16 + React 19 + TypeScript + Prisma 6 + PostgreSQL。
 
 ## Commands
 
@@ -148,7 +148,7 @@ npm run db:seed-fsm         # FSM 模板种子数据
 ## Test Accounts
 
 `npm run db:seed` 后可用：
-- **Platform Admin**: `admin` / `admin123`（admin@ai4web.com）
+- **Platform Admin**: `admin` / `admin123`（admin@SecHPS.com）
 - **ICSL User**: `icsl_user`
 - **Regular Tenant**: `team_a_user`
 
