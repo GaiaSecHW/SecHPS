@@ -5,15 +5,12 @@ import fs from 'node:fs';
 import { prisma } from '@/lib/prisma';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
 import eventBus from '@/lib/event-bus';
+import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
 
 const PARSE_TIMEOUT_SEC = 600;
 
 const INSTRUCTION_PHASE1 = '执行 audit-report-parser skill 解析漏洞报告';
-const INSTRUCTION_PHASE2 = '读取 AUDIT_REPORT.md，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。仅输出可解析的 JSON，不要额外说明。';
-
-const VULNERABILITY_STORAGE_PATH = process.env.VULNERABILITY_STORAGE_PATH || (
-  process.platform === 'win32' ? 'Z:\\Vulnerability' : '/home/icsl/hgh/Vulnerability'
-);
+const INSTRUCTION_PHASE2 = '读取 Report 文件夹内的报告文件，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion, rawReport 字段。仅输出可解析的 JSON，不要额外说明。';
 
 const isWindows = process.platform === 'win32';
 
@@ -33,49 +30,6 @@ interface ParsedVulnerabilityReport {
     fixSuggestion?: string;
     rawReport?: string;
   }>;
-}
-
-interface VulnerabilitySubmitResult {
-  success: boolean;
-  createdCount?: number;
-  skippedCount?: number;
-  error?: string;
-}
-
-function findAuditReportPath(projectPath: string): string | null {
-  const candidates = [
-    path.join(projectPath, 'AUDIT_REPORT.md'),
-    path.join(projectPath, '.opencode', 'run', 'AUDIT_REPORT.md'),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-function uploadAuditReportToStorage(taskId: string, projectPath: string): string | null {
-  try {
-    const auditReportPath = findAuditReportPath(projectPath);
-
-    if (!auditReportPath) {
-      console.log(`[VulnParse:${taskId}] AUDIT_REPORT.md 不存在 (根目录和 .opencode/run/ 均未找到)`);
-      return null;
-    }
-
-    const targetDir = path.join(VULNERABILITY_STORAGE_PATH, taskId);
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-
-    const targetPath = path.join(targetDir, 'AUDIT_REPORT.md');
-    fs.copyFileSync(auditReportPath, targetPath);
-
-    console.log(`[VulnParse:${taskId}] 报告已上传: ${targetPath} (源: ${auditReportPath})`);
-    return targetPath;
-  } catch (e) {
-    console.error(`[VulnParse:${taskId}] 上传失败:`, e);
-    return null;
-  }
 }
 
 function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
@@ -195,71 +149,6 @@ async function runOpencodeParse(taskId: string, projectPath: string, instruction
   }
 }
 
-async function submitVulnerabilitiesDirect(
-  report: ParsedVulnerabilityReport,
-  filePath: string,
-  taskInstanceId: string,
-  codeswarmTaskId: string
-): Promise<VulnerabilitySubmitResult> {
-  try {
-    let createdCount = 0;
-    let skippedCount = 0;
-    const seen = new Set<string>();
-
-    for (const v of report.vulnerabilities) {
-      const key = `${v.title}||${v.type}`;
-      if (seen.has(key)) { skippedCount++; continue; }
-      seen.add(key);
-
-      const id = `vuln_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-      const severity = normalizeSeverity(v.severity);
-
-      try {
-        await prisma.$executeRaw`
-          INSERT INTO "Vulnerability" (
-            id, "taskId", "projectId", title, description, type, cwe, severity,
-            skill, location, "POC", vulnerable, "fixSuggestion", "rawReport",
-            "filePath", status, "updatedAt"
-          ) VALUES (
-            ${id}, ${taskInstanceId}, NULL,
-            ${v.title}, ${v.description || ''}, ${v.type},
-            ${v.cwe || null}, ${severity},
-            ${v.skill || null}, ${v.location || null},
-            ${v.POC || null}, ${v.vulnerable ?? true},
-            ${v.fixSuggestion || null}, ${v.rawReport || null},
-            ${filePath}, 'new', NOW()
-          )
-          ON CONFLICT DO NOTHING
-        `;
-        createdCount++;
-      } catch {
-        skippedCount++;
-      }
-    }
-
-    return { success: true, createdCount, skippedCount };
-  } catch (e) {
-    return { success: false, error: e instanceof Error ? e.message : 'Unknown error' };
-  }
-}
-
-const SEVERITY_MAP: Record<string, string> = {
-  critical: 'critical', 严重: 'critical', critical_lower: 'critical',
-  high: 'high', 高危: 'high',
-  medium: 'medium', 中危: 'medium', moderate: 'medium',
-  low: 'low', 低危: 'low',
-  info: 'info', 信息: 'info', informational: 'info',
-};
-
-function normalizeSeverity(s?: string): string {
-  if (!s) return 'medium';
-  const lower = s.toLowerCase().trim();
-  for (const [key, val] of Object.entries(SEVERITY_MAP)) {
-    if (lower === key || lower === val) return val;
-  }
-  return 'medium';
-}
-
 async function createParseLog(
   taskInstanceId: string,
   level: 'info' | 'success' | 'error' | 'warn',
@@ -297,16 +186,39 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string, tas
         await createParseLog(taskInstanceId, 'info', '开始解析漏洞报告', '使用 audit-report-parser skill 提取结构化漏洞数据');
       }
 
-      const reportPath = findAuditReportPath(projectPath);
-      const filePath = uploadAuditReportToStorage(taskId, projectPath) || reportPath || path.join(projectPath, 'AUDIT_REPORT.md');
+      let filePath: string = projectPath;
 
-      if (reportPath && fs.existsSync(reportPath)) {
-        console.log(`[VulnParse:${taskId}] 找到报告: ${reportPath}`);
+      const reportFolder = findReportFolder(projectPath);
+      if (reportFolder) {
+        console.log(`[VulnParse:${taskId}] 找到 Report 文件夹: ${path.relative(projectPath, reportFolder).replace(/\\/g, '/')}`);
+
+        if (taskInstanceId) {
+          await createParseLog(taskInstanceId, 'info', '找到 Report 文件夹', `上传报告文件到 MinIO`);
+        }
+
+        console.log(`[VulnParse:${taskId}] 上传 Report 文件到 MinIO...`);
+        const uploadResult = await uploadReportFolder(taskId, reportFolder);
+
+        if (uploadResult.success) {
+          filePath = JSON.stringify(uploadResult.urls);
+          console.log(`[VulnParse:${taskId}] MinIO 上传成功: ${uploadResult.files.length} 个文件`);
+          if (taskInstanceId) {
+            await createParseLog(taskInstanceId, 'success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`, uploadResult.files.join('\n'));
+          }
+        } else {
+          console.log(`[VulnParse:${taskId}] MinIO 上传失败: ${uploadResult.error}`);
+          filePath = reportFolder;
+          if (taskInstanceId) {
+            await createParseLog(taskInstanceId, 'warn', `MinIO 上传失败`, uploadResult.error || '未知错误');
+          }
+        }
       } else {
-        console.log(`[VulnParse:${taskId}] 未找到 AUDIT_REPORT.md`);
+        console.log(`[VulnParse:${taskId}] 未找到 Report 文件夹`);
+        if (taskInstanceId) {
+          await createParseLog(taskInstanceId, 'warn', '未找到 Report 文件夹', `工作区路径: ${projectPath}`);
+        }
       }
 
-      // Phase 1: audit-report-parser skill (通过 agent)
       let report: ParsedVulnerabilityReport | null = null;
 
       if (taskInstanceId) {
@@ -322,7 +234,6 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string, tas
         }
       }
 
-      // Phase 2: Fallback — 通用 AI 解析
       if (!report) {
         if (taskInstanceId) {
           await createParseLog(taskInstanceId, 'info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback', '使用 opencode --agent build 直接解析报告');
@@ -341,32 +252,68 @@ function executeVulnerabilityParseAsync(taskId: string, projectPath: string, tas
       if (!report) {
         console.log(`[VulnParse:${taskId}] 无法解析漏洞（Skill 和 AI 均失败）`);
         if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'warn', '漏洞报告解析失败', '无法从 AUDIT_REPORT.md 或 AI 输出中提取漏洞数据');
+          await createParseLog(taskInstanceId, 'warn', '漏洞报告解析失败', '无法从 Report 文件夹或 AI 输出中提取漏洞数据');
         }
         return;
       }
 
       console.log(`[VulnParse:${taskId}] 解析到 ${report.vulnerabilities.length} 条漏洞`);
 
-      const effectiveTaskId = taskInstanceId || taskId;
-      const result = await submitVulnerabilitiesDirect(report, filePath, effectiveTaskId, taskId);
+      console.log(`[VulnParse:${taskId}] 上传漏洞原始文件到 MinIO...`);
+      const vulnsWithRawReports = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.trim());
+      if (vulnsWithRawReports.length > 0) {
+        report.vulnerabilities = await processVulnerabilityRawReports(taskId, report.vulnerabilities);
+        const uploadedCount = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.includes('http')).length;
+        console.log(`[VulnParse:${taskId}] 漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
+        if (taskInstanceId) {
+          await createParseLog(taskInstanceId, 'success', `漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
+        }
+      } else {
+        console.log(`[VulnParse:${taskId}] 无漏洞原始文件需要上传`);
+      }
 
-      if (result.success) {
+      const effectiveTaskId = taskInstanceId || taskId;
+
+      console.log(`[VulnParse:${taskId}] 调用 /api/v1/vulnerabilities 入库: ${report.vulnerabilities.length} 条漏洞`);
+      if (taskInstanceId) {
+        await createParseLog(taskInstanceId, 'info', `调用 /api/v1/vulnerabilities 入库`, `${report.vulnerabilities.length} 条漏洞`);
+      }
+
+      const vulnRequestBody = {
+        taskId: effectiveTaskId,
+        filePath,
+        vulnerabilities: report.vulnerabilities,
+      };
+
+      const vulnRes = await fetch(`http://localhost:${process.env.PORT || 8090}/api/v1/vulnerabilities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(vulnRequestBody),
+      });
+
+      const vulnResult = await vulnRes.json();
+
+      if (vulnRes.ok && vulnResult.summary) {
+        const createdCount = vulnResult.summary.created || 0;
+        const skippedCount = vulnResult.summary.skipped || 0;
+
         await prisma.$executeRaw`
           UPDATE "CodeswarmTask"
-          SET "reportContent" = ${`漏洞提交成功: 创建 ${result.createdCount} 条, 跳过 ${result.skippedCount} 条`},
+          SET "reportContent" = ${`漏洞提交成功: 创建 ${createdCount} 条, 跳过 ${skippedCount} 条`},
               "updatedAt" = NOW()
           WHERE "taskId" = ${taskId}
         `;
-        console.log(`[VulnParse:${taskId}] 漏洞提交成功: created=${result.createdCount}, skipped=${result.skippedCount}`);
+
+        console.log(`[VulnParse:${taskId}] 漏洞提交成功: created=${createdCount}, skipped=${skippedCount}`);
         if (taskInstanceId) {
           const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join('\n');
-          await createParseLog(taskInstanceId, 'success', `漏洞入库完成：创建 ${result.createdCount} 条，跳过 ${result.skippedCount} 条`, vulnSummary);
+          await createParseLog(taskInstanceId, 'success', `漏洞入库完成：创建 ${createdCount} 条，跳过 ${skippedCount} 条`, vulnSummary);
         }
       } else {
-        console.error(`[VulnParse:${taskId}] 漏洞提交失败: ${result.error}`);
+        const errorMsg = vulnResult.error || '未知错误';
+        console.error(`[VulnParse:${taskId}] 漏洞提交失败: ${errorMsg}`);
         if (taskInstanceId) {
-          await createParseLog(taskInstanceId, 'error', '漏洞入库失败', result.error || '未知错误');
+          await createParseLog(taskInstanceId, 'error', '漏洞入库失败', errorMsg);
         }
       }
 
@@ -439,8 +386,6 @@ export async function POST(request: Request) {
       });
     }
 
-    // Worker 槽位释放：内存和 DB 同步递减（幂等性检查）
-    // onTaskCompleted 内部处理内存递减 + DB 条件更新
     if (nodeId) {
       await codeswarmDispatcher.onTaskCompleted(nodeId);
     }
