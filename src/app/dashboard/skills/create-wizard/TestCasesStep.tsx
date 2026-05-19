@@ -176,12 +176,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
           <Play className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-blue-800">
-            <p className="font-medium mb-2">为什么要创建测试用例？</p>
-            <p className="text-blue-400">
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">为什么要创建测试用例？</p>
+            <p className="text-gray-400">
               测试用例可以帮助验证 Skill 的效果。我们会用这些用例测试 Skill，
               对比有 Skill 和无 Skill 两种情况的效果，帮助你改进 Skill 质量。
             </p>
@@ -238,7 +238,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                             e.stopPropagation();
                             handleStartEdit(testCase);
                           }}
-                          className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-900/20 rounded"
+                          className="p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded"
                           title="编辑"
                         >
                           <Edit2 size={16} />
@@ -311,12 +311,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                               {editingTestCase.testFiles.map((file, i) => (
                                 <span
                                   key={i}
-                                  className="inline-flex items-center px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded"
+                                  className="inline-flex items-center px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded"
                                 >
                                   {file}
                                   <button
                                     onClick={() => handleEditTestFileRemove(i)}
-                                    className="ml-1 text-blue-400 hover:text-blue-800"
+                                    className="ml-1 text-blue-400 hover:text-blue-300"
                                   >
                                     ×
                                   </button>
@@ -376,7 +376,7 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                             <label className="block text-xs font-medium text-gray-500 mb-1">测试文件</label>
                             <div className="flex flex-wrap gap-2">
                               {testCase.testFiles.map((file, i) => (
-                                <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded font-mono">
+                                <span key={i} className="px-2 py-1 bg-blue-500/10 text-blue-300 text-xs rounded font-mono">
                                   {file}
                                 </span>
                               ))}
@@ -451,12 +451,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
                   {newTestCase.testFiles.map((file, index) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-2 py-1 bg-blue-900/20 text-blue-400 text-xs rounded"
+                      className="inline-flex items-center px-2 py-1 bg-blue-500/10 text-blue-400 text-xs rounded"
                     >
                       {file}
                       <button
                         onClick={() => handleRemoveTestFile(index)}
-                        className="ml-1 text-blue-400 hover:text-blue-800"
+                        className="ml-1 text-blue-400 hover:text-blue-300"
                       >
                         ×
                       </button>
@@ -497,12 +497,12 @@ export default function TestCasesStep({ testCases, onChange, onNext, onPrevious,
       </div>
 
       {/* 建议 */}
-      <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
-          <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-yellow-800">
-            <p className="font-medium mb-1">建议</p>
-            <ul className="text-yellow-400 space-y-1">
+          <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-1">建议</p>
+            <ul className="text-gray-400 space-y-1">
               <li>• 创建 2-5 个测试用例以获得最佳效果</li>
               <li>• 涵盖不同的场景和边缘情况</li>
               <li>• 期望输出应明确描述，便于评估时对比</li>

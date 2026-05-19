@@ -127,12 +127,12 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-purple-900/20 border border-purple-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
-          <RefreshCw className="w-5 h-5 text-purple-600 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-purple-800">
-            <p className="font-medium mb-2">迭代改进</p>
-            <p className="text-purple-700">
+          <RefreshCw className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">迭代改进</p>
+            <p className="text-gray-400">
               对比有 Skill 和无 Skill 的测试结果，发现改进点。你可以提供反馈，我们会帮助你优化 Skill。
             </p>
           </div>
@@ -175,7 +175,7 @@ export default function IterationStep({ evaluationData, skillData, iterations, o
 
               {/* 对比分析 */}
               {comparison && (comparison.improvements.length > 0 || comparison.regressions.length > 0) && (
-                <div className="px-4 py-3 border-b border-gray-700/50 bg-blue-900/20">
+                <div className="px-4 py-3 border-b border-gray-700/50 bg-blue-500/10">
                   <h5 className="text-sm font-medium text-gray-100 mb-2">分析结果</h5>
                   {comparison.improvements.length > 0 && (
                     <div className="space-y-1">

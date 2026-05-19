@@ -14,7 +14,7 @@ export async function GET(
 
   const stream = new ReadableStream({
     async start(controller) {
-      let lastEventDbId: number | null = null;
+      let lastEventDbId: string | null = null;
 
       const sendEvent = (data: object) => {
         if (isClosed) return;

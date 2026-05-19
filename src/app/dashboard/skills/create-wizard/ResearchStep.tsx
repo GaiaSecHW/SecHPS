@@ -75,12 +75,12 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
           <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-blue-800">
-            <p className="font-medium mb-2">这一步做什么？</p>
-            <p className="text-blue-400">
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">这一步做什么？</p>
+            <p className="text-gray-400">
               深入了解你的需求细节。我们会询问一些关键问题，帮助生成更精准的 Skill 定义。
               信息越详细，生成的 Skill 质量越高。
             </p>
@@ -235,7 +235,7 @@ export default function ResearchStep({ data, onChange, onNext, onPrevious }: Pro
         </p>
         <div className="space-y-2 mb-2">
           {data.dependencies.map((dep, index) => (
-            <div key={index} className="flex items-center justify-between bg-yellow-900/20 border border-yellow-200 rounded-md px-3 py-2">
+            <div key={index} className="flex items-center justify-between bg-yellow-500/10 border border-yellow-500/30 rounded-md px-3 py-2">
               <span className="text-sm text-gray-300">{dep}</span>
               <button
                 type="button"

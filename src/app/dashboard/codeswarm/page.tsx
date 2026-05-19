@@ -424,20 +424,7 @@ function CodeSwarmPageContent() {
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-            <Server size={18} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">智能体 Worker 管理</h1>
-            <p className="text-sm text-gray-400 mt-0.5">分布式 Agent 执行节点管理与任务调试</p>
-          </div>
-        </div>
-      </div>
-
+    <div className="space-y-4">
       {/* Tab Navigation */}
       <div className="flex space-x-1 bg-dark-surface-hover p-1 rounded-lg w-fit">
         <button

@@ -98,12 +98,12 @@ export default function OptimizationStep({
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-indigo-900/20 border border-indigo-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
-          <Sparkles className="w-5 h-5 text-indigo-600 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-indigo-800">
-            <p className="font-medium mb-2">Skill 整体优化</p>
-            <p className="text-indigo-700">
+          <Sparkles className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">Skill 整体优化</p>
+            <p className="text-gray-400">
               AI 会分析你的 Skill 定义和测试用例，优化整个 Skill 包括：描述、系统提示词、用户提示词、工具列表等，提高触发准确性和执行效果。
             </p>
           </div>
@@ -232,14 +232,14 @@ export default function OptimizationStep({
                   <h4 className="text-sm font-medium text-gray-300">触发关键词</h4>
                   <button
                     onClick={() => handleCopy(optimizedSkill.triggerKeywords.join(', '), 'keywords')}
-                    className="text-xs text-blue-400 hover:text-blue-800"
+                    className="text-xs text-blue-400 hover:text-blue-300"
                   >
                     {copied === 'keywords' ? '已复制' : '复制'}
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {optimizedSkill.triggerKeywords.map((keyword: string, index: number) => (
-                    <span key={index} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                    <span key={index} className="px-2 py-1 bg-blue-500/10 text-blue-300 text-xs rounded">
                       {keyword}
                     </span>
                   ))}
@@ -277,12 +277,12 @@ export default function OptimizationStep({
 
           {/* 优化建议 */}
           {optimizationData.suggestions && optimizationData.suggestions.length > 0 && (
-            <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
               <div className="flex items-start">
-                <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
-                <div className="text-sm text-yellow-800">
-                  <p className="font-medium mb-2">优化建议</p>
-                  <ul className="text-yellow-400 space-y-1">
+                <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+                <div className="text-sm">
+                  <p className="font-medium text-blue-300 mb-2">优化建议</p>
+                  <ul className="text-gray-400 space-y-1">
                     {optimizationData.suggestions.map((suggestion, index) => (
                       <li key={index}>• {suggestion}</li>
                     ))}

@@ -107,8 +107,8 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
     if (taskEvents[expandedTask]) return;
     // Skip if the list data already has events
     const taskFromList = data?.tasks?.find(t => t.taskId === expandedTask);
-    if (taskFromList?.events?.length > 0) {
-      setTaskEvents(prev => ({ ...prev, [expandedTask]: taskFromList.events }));
+    if (taskFromList && taskFromList.events && Array.isArray(taskFromList.events) && taskFromList.events.length > 0) {
+      setTaskEvents(prev => ({ ...prev, [expandedTask]: taskFromList.events as any[] }));
       return;
     }
     // Fetch from single task API

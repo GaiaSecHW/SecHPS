@@ -173,12 +173,12 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-blue-900/20 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
           <HelpCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-blue-800">
-            <p className="font-medium mb-2">这一步做什么？</p>
-            <p className="text-blue-400">
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">这一步做什么？</p>
+            <p className="text-gray-400">
               告诉我们你想创建什么样的 Skill。我们会根据你的描述，帮助你生成一个高质量的 Skill 定义。
               请尽量详细地描述你的需求。
             </p>
@@ -357,7 +357,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
           <button
             type="button"
             onClick={() => setShowExamples(!showExamples)}
-            className="text-sm text-blue-400 hover:text-blue-800 flex items-center"
+            className="text-sm text-blue-400 hover:text-blue-300 flex items-center"
           >
             <Lightbulb size={16} className="mr-1" />
             {showExamples ? '隐藏示例' : '显示示例'}
@@ -430,7 +430,7 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
                 <button
                   type="button"
                   onClick={() => setShowTemplateModal(true)}
-                  className="ml-2 p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-900/20 rounded"
+                  className="ml-2 p-1.5 text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 rounded"
                   title="查看完整模板"
                 >
                   <Eye size={16} />
@@ -438,8 +438,8 @@ export default function IntentStep({ data, onChange, onNext }: Props) {
               </div>
             </div>
           ) : (
-            <div className="bg-yellow-900/20 border border-yellow-200 rounded-md p-3">
-              <p className="text-sm text-yellow-800">
+            <div className="bg-blue-500/10 border border-blue-500/30 rounded-md p-3">
+              <p className="text-sm text-blue-300">
                 系统尚未配置标准输出模板，请在"配置管理"中设置
               </p>
             </div>

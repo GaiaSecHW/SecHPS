@@ -69,7 +69,7 @@ interface Vulnerability {
   } | null;
 }
 
-const severityConfig = {
+const severityConfig: Record<string, { color: string; bg: string; text: string; label: string }> = {
   critical: { color: '#DC2626', bg: 'bg-red-500/20', text: 'text-red-400', label: 'CRITICAL' },
   high: { color: '#EA580C', bg: 'bg-orange-500/20', text: 'text-orange-400', label: 'HIGH' },
   medium: { color: '#CA8A04', bg: 'bg-yellow-500/20', text: 'text-yellow-400', label: 'MEDIUM' },
@@ -77,7 +77,7 @@ const severityConfig = {
   info: { color: '#6B728B', bg: 'bg-gray-500/20', text: 'text-gray-400', label: 'INFO' },
 };
 
-const statusConfig = {
+const statusConfig: Record<string, { color: string; bg: string; text: string; label: string }> = {
   new: { color: '#8B5CF6', bg: 'bg-violet-500/15', text: 'text-violet-400', label: '新建' },
   confirmed: { color: '#F59E0B', bg: 'bg-amber-500/15', text: 'text-amber-400', label: '已确认' },
   'false-positive': { color: '#64748B', bg: 'bg-gray-500/15', text: 'text-gray-400', label: '误报' },

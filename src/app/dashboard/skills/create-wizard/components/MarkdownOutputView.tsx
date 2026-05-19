@@ -161,7 +161,7 @@ export default function MarkdownOutputView({
                   );
                 },
                 blockquote: ({ children }) => (
-                  <blockquote className="border-l-4 border-blue-500 pl-4 py-1 my-2 bg-blue-900/20 text-sm text-gray-300">
+                  <blockquote className="border-l-4 border-blue-500 pl-4 py-1 my-2 bg-blue-500/10 text-sm text-gray-300">
                     {children}
                   </blockquote>
                 ),

@@ -124,7 +124,7 @@ export default function EvaluationComparisonCard({ comparison }: EvaluationCompa
       </div>
 
       {/* 差异统计 */}
-      <div className="px-4 py-3 bg-blue-900/20 border-t border-blue-100">
+      <div className="px-4 py-3 bg-blue-500/10 border-t border-blue-500/30">
         <div className="flex items-center justify-between text-sm">
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-1">
@@ -219,7 +219,7 @@ function ExpectationItem({ expectation, index }: { expectation: ExpectationCompa
             <div>{getChangeIndicator()}</div>
             <button
               onClick={() => setShowEvidence(!showEvidence)}
-              className="text-blue-400 hover:text-blue-800"
+              className="text-blue-400 hover:text-blue-300"
             >
               {showEvidence ? '隐藏证据' : '查看证据'}
             </button>

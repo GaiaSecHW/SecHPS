@@ -28,7 +28,7 @@ export async function PUT(
 
     let name: string;
     let engine: string;
-    let defaultAgentName: string;
+    let defaultAgentName: string | undefined;
     let startCommand: string | null;
     let inputRequirements: string | null;
     let isPublic: boolean = false;
@@ -44,7 +44,7 @@ export async function PUT(
       const body = await request.json();
       name = body.name;
       engine = body.engine;
-      defaultAgentName = body.defaultAgentName;
+      defaultAgentName = body.defaultAgentName || undefined;
       startCommand = body.startCommand || null;
       inputRequirements = body.inputRequirements || null;
       isPublic = body.isPublic || false;
@@ -52,7 +52,7 @@ export async function PUT(
       formData = await request.formData();
       name = formData.get('name') as string;
       engine = formData.get('engine') as string;
-      defaultAgentName = formData.get('defaultAgentName') as string;
+      defaultAgentName = (formData.get('defaultAgentName') as string) || undefined;
       startCommand = formData.get('startCommand') as string | null;
       inputRequirements = formData.get('inputRequirements') as string | null;
       isPublic = formData.get('isPublic') === 'true';
@@ -136,7 +136,7 @@ export async function PUT(
       data: {
         name,
         engine,
-        defaultAgentName: defaultAgentName || null,
+        defaultAgentName: defaultAgentName || undefined,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
         isPublic,

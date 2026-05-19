@@ -216,12 +216,12 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-green-900/20 border border-green-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
-          <Play className="w-5 h-5 text-green-400 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-green-800">
-            <p className="font-medium mb-2">评估说明</p>
-            <p className="text-green-400">
+          <Play className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">评估说明</p>
+            <p className="text-gray-400">
               我们会对每个测试用例运行两次：一次使用你的 Skill，一次不使用。
               对比两者的效果，帮助你改进 Skill 质量。
             </p>
@@ -348,12 +348,12 @@ export default function EvaluationStep({ skillData, testCases, evaluationData, o
 
       {/* 提示 */}
       {testCases.length === 0 && (
-        <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
           <div className="flex items-start">
-            <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
-            <div className="text-sm text-yellow-800">
-              <p className="font-medium mb-1">没有测试用例</p>
-              <p className="text-yellow-400">
+            <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-300 mb-1">没有测试用例</p>
+              <p className="text-gray-400">
                 请先在上一步添加测试用例，或者选择跳过评估步骤。
               </p>
             </div>

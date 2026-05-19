@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     const name = formData.get('name') as string;
     const engine = formData.get('engine') as string;
-    const defaultAgentName = formData.get('defaultAgentName') as string;
+    const defaultAgentName = (formData.get('defaultAgentName') as string) || undefined;
     const startCommand = formData.get('startCommand') as string | null;
     const inputRequirements = formData.get('inputRequirements') as string | null;
     const isPublic = formData.get('isPublic') === 'true';
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
         name,
         engine,
         agentHarnessPath,
-        defaultAgentName: defaultAgentName || null,
+        defaultAgentName: defaultAgentName || undefined,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
         status: 'active',

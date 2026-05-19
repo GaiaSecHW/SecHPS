@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Edit2, Trash2, Loader2, GitBranch, FileText, CheckCircle, Send, Box, X, Search, Filter } from 'lucide-react';
+import { Plus, Edit2, Trash2, Loader2, GitBranch, FileText, CheckCircle, Send, Box, X, Search, Layers } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface AgentFlowPipeline {
@@ -16,6 +16,11 @@ interface AgentFlowPipeline {
   updatedAt: string;
   createdAt: string;
 }
+
+const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+  draft:     { bg: 'bg-gray-500/15', text: 'text-gray-400', label: '草稿' },
+  published: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: '已发布' },
+};
 
 export default function AgentFlowPipelinesPage() {
   const router = useRouter();
@@ -134,17 +139,26 @@ export default function AgentFlowPipelinesPage() {
     return matchesSearch && matchesStatus;
   });
 
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500" />
+        <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-500 border-t-transparent" />
       </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* 头部 */}
+      {/* Header */}
       <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
@@ -152,13 +166,7 @@ export default function AgentFlowPipelinesPage() {
           </div>
           <div>
             <h1 className="text-xl font-semibold text-white">AgentFlow 编排</h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              共 <span className="text-primary-400 font-medium">{stats.total}</span> 个 Pipeline
-              <span className="mx-2 text-gray-500">|</span>
-              <span className="text-gray-400">草稿 <span className="text-gray-300">{stats.draft}</span></span>
-              <span className="mx-2 text-gray-500">|</span>
-              <span className="text-green-400/70">已发布 <span className="text-green-400">{stats.published}</span></span>
-            </p>
+            <p className="text-sm text-gray-400 mt-0.5">可视化编排 Agent 执行流程</p>
           </div>
         </div>
         <button
@@ -170,166 +178,179 @@ export default function AgentFlowPipelinesPage() {
         </button>
       </div>
 
-      {/* 搜索筛选 + 卡片列表 */}
+      {/* Search + Cards container */}
       <div className="bg-dark-surface border border-gray-700/50 rounded-xl">
-        {/* 搜索筛选区域 */}
+        {/* Filters section */}
         <div className="px-5 py-4 border-b border-gray-700/50">
           <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {/* 搜索框 */}
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
-                placeholder="搜索 Pipeline 名称或 AgentApp..."
+                placeholder="搜索 Pipeline..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
               />
             </div>
+            
+            {/* 状态筛选按钮组 */}
             <div className="flex items-center gap-2">
-              <Filter size={16} className="text-gray-400" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as 'all' | 'draft' | 'published')}
-                className="w-[170px] px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 text-sm"
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
               >
-                <option value="all">全部状态</option>
-                <option value="draft">草稿</option>
-                <option value="published">已发布</option>
-              </select>
+                全部
+              </button>
+              <button
+                onClick={() => setStatusFilter('draft')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'draft' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <FileText size={16} />
+                草稿
+              </button>
+              <button
+                onClick={() => setStatusFilter('published')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'published' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <CheckCircle size={16} />
+                已发布
+              </button>
             </div>
           </div>
         </div>
 
-        {/* 卡片列表区域 */}
+        {/* Cards section */}
         {filteredPipelines.length === 0 ? (
-          <div className="text-center py-12">
-            <GitBranch className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-medium text-gray-100">
-              {searchQuery || statusFilter !== 'all' ? '未找到匹配的 Pipeline' : '暂无 Pipeline'}
-            </h3>
-            <p className="mt-2 text-sm text-gray-400">
-              {searchQuery || statusFilter !== 'all'
-                ? '尝试调整搜索条件或筛选器'
-                : '点击"新建 Pipeline"开始创建'}
-            </p>
+          <div className="p-12">
+            <div className="text-center">
+              <Layers className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 mb-4">
+                {searchQuery || statusFilter !== 'all' ? '未找到匹配的 Pipeline' : '暂无 Pipeline'}
+              </p>
+              {!searchQuery && statusFilter === 'all' && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="text-purple-600 hover:text-purple-700"
+                >
+                  创建第一个 Pipeline
+                </button>
+              )}
+            </div>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 p-5">
-            {filteredPipelines.map((pipeline) => (
-              <div
-                key={pipeline.id}
-                className="bg-dark-bg rounded-lg border border-gray-700/50 overflow-hidden hover:border-gray-600/50 hover:shadow-md transition-all flex flex-col group"
-              >
-                {/* 缩略图 */}
-                {pipeline.thumbnail && (
-                  <div className="h-24 bg-dark-surface-hover relative overflow-hidden">
-                    <img
-                      src={`data:image/png;base64,${pipeline.thumbnail}`}
-                      alt={pipeline.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  </div>
-                )}
-                {/* 内容区 */}
-                <div className="p-4 flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h3 className="text-base font-medium text-gray-100 truncate">{pipeline.name}</h3>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400 border border-purple-500/30">
-                          Pipeline
+          <div className="p-5">
+            <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+              {filteredPipelines.map((pipeline) => {
+                const config = statusConfig[pipeline.status] || statusConfig.draft;
+                const isPublishing = publishingId === pipeline.id;
+                const isDeleting = deletingId === pipeline.id;
+
+                return (
+                  <div
+                    key={pipeline.id}
+                    className="group relative flex flex-col rounded border border-gray-600/50 bg-gray-700/30 hover:bg-gray-700/50 transition-colors cursor-pointer min-h-[160px]"
+                    onClick={() => router.push(`/dashboard/agentflow-pipelines/${pipeline.id}`)}
+                  >
+                    {pipeline.thumbnail && (
+                      <div className="h-20 bg-gray-800/50 overflow-hidden">
+                        <img
+                          src={`data:image/png;base64,${pipeline.thumbnail}`}
+                          alt={pipeline.name}
+                          className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform duration-200"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1 p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="text-sm font-medium text-gray-100 truncate leading-tight">
+                          {pipeline.name}
+                        </h3>
+                        <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+                          {pipeline.status === 'published' ? <CheckCircle size={10} /> : <FileText size={10} />}
+                          {config.label}
                         </span>
                       </div>
+
                       {pipeline.agentApp && (
-                        <p className="mt-1 text-xs text-gray-500 flex items-center gap-1">
-                          <Box size={10} />
-                          {pipeline.agentApp.name}
-                        </p>
+                        <div className="flex items-center gap-2 text-xs text-gray-400">
+                          <Box size={12} className="text-gray-500" />
+                          <span className="truncate">{pipeline.agentApp.name}</span>
+                        </div>
                       )}
-                    </div>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium flex-shrink-0 ${
-                        pipeline.status === 'published'
-                          ? 'bg-green-500/20 text-green-400'
-                          : 'bg-gray-700/50 text-gray-300'
-                      }`}
-                    >
-                      {pipeline.status === 'published' ? <CheckCircle size={12} /> : <FileText size={12} />}
-                      {pipeline.status === 'published' ? '已发布' : '草稿'}
-                    </span>
-                  </div>
 
-                  <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-                    <div className="flex items-center gap-1">
-                      <FileText size={12} />
-                      <span>{pipeline.nodeCount} 节点</span>
+                      <div className="flex items-center gap-3 text-xs text-gray-500">
+                        <span>{pipeline.nodeCount} 节点</span>
+                        <span className="text-gray-600">·</span>
+                        <span>更新于 {formatTime(pipeline.updatedAt)}</span>
+                      </div>
                     </div>
-                    <span>{new Date(pipeline.updatedAt).toLocaleDateString('zh-CN')}</span>
-                  </div>
-                </div>
 
-                {/* 操作按钮 */}
-                <div className="bg-dark-surface/50 px-4 py-2.5 border-t border-gray-700/50">
-                  <div className="flex items-center justify-between">
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => router.push(`/dashboard/agentflow-pipelines/${pipeline.id}`)}
-                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 rounded-md transition-colors"
-                      >
-                        <Edit2 size={14} />
-                        编辑
-                      </button>
-                      {pipeline.status === 'draft' && (
+                    <div className="mt-auto border-t border-gray-600/30 px-4 py-2.5 flex items-center justify-between bg-gray-700/20">
+                      <div className="flex items-center gap-1.5">
+                        {pipeline.status === 'draft' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handlePublish(pipeline); }}
+                            disabled={isPublishing}
+                            className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-400/15 rounded transition-colors disabled:opacity-50"
+                          >
+                            {isPublishing ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                            <span>发布</span>
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => handlePublish(pipeline)}
-                          disabled={publishingId === pipeline.id}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-green-400 hover:text-green-300 bg-green-500/10 hover:bg-green-500/20 rounded-md transition-colors disabled:opacity-50"
+                          onClick={(e) => { e.stopPropagation(); router.push(`/dashboard/agentflow-pipelines/${pipeline.id}`); }}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs text-gray-400 hover:text-gray-300 hover:bg-gray-600/30 rounded transition-colors"
                         >
-                          {publishingId === pipeline.id
-                            ? <Loader2 size={14} className="animate-spin" />
-                            : <Send size={14} />}
-                          发布
+                          <Edit2 size={12} />
+                          <span>编辑</span>
                         </button>
-                      )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDelete(pipeline); }}
+                          disabled={isDeleting}
+                          className="flex items-center gap-1 px-2.5 py-1 text-xs text-gray-400 hover:text-red-400 hover:bg-red-400/15 rounded transition-colors disabled:opacity-50"
+                        >
+                          {isDeleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          <span>删除</span>
+                        </button>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => handleDelete(pipeline)}
-                      disabled={deletingId === pipeline.id}
-                      className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-md transition-colors disabled:opacity-50"
-                      title="删除"
-                    >
-                      {deletingId === pipeline.id
-                        ? <Loader2 size={14} className="animate-spin" />
-                        : <Trash2 size={14} />}
-                    </button>
                   </div>
-                </div>
-              </div>
-            ))}
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
 
-      {/* 新建弹窗 */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-dark-surface rounded-xl shadow-xl max-w-md w-full mx-4 border border-gray-700/50">
-            <div className="px-5 py-4 border-b border-gray-700/50 flex items-center justify-between">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="w-full max-w-md mx-4 rounded border border-gray-600/50 bg-gray-800 shadow-xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/40">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-                  <Plus size={16} className="text-white" />
+                <div className="flex items-center justify-center rounded border border-gray-600/50 bg-gray-700/30 p-1">
+                  <Plus size={14} className="text-gray-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-100">新建 Pipeline</h3>
+                <h3 className="text-sm font-medium text-gray-100">新建 Pipeline</h3>
               </div>
-              <button 
-                onClick={() => { setShowCreateModal(false); setNewName(''); }} 
-                className="p-1.5 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 rounded-md transition-colors"
+              <button
+                onClick={() => { setShowCreateModal(false); setNewName(''); }}
+                className="flex items-center justify-center size-6 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/30 transition-colors"
               >
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
-            <div className="p-5">
-              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+            <div className="p-4">
+              <label className="block text-xs font-medium text-gray-300 mb-1.5">
                 Pipeline 名称 <span className="text-red-400">*</span>
               </label>
               <input
@@ -338,24 +359,24 @@ export default function AgentFlowPipelinesPage() {
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
                 autoFocus
-                className="w-full px-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                className="w-full h-8 px-3 text-xs bg-gray-700/30 border border-gray-600/50 rounded text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
                 placeholder="输入 Pipeline 名称"
               />
             </div>
-            <div className="px-5 py-4 border-t border-gray-700/50 flex justify-end gap-3">
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700/40">
               <button
                 onClick={() => { setShowCreateModal(false); setNewName(''); }}
                 disabled={creating}
-                className="px-4 py-2 bg-gray-700/50 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors disabled:opacity-50"
+                className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded transition-colors disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={handleCreate}
                 disabled={creating || !newName.trim()}
-                className="px-4 py-2 bg-primary-500 hover:bg-primary-400 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary-600 hover:bg-primary-500 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {creating && <Loader2 size={16} className="animate-spin" />}
+                {creating && <Loader2 size={12} className="animate-spin" />}
                 {creating ? '创建中...' : '创建'}
               </button>
             </div>

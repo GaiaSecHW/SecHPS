@@ -132,12 +132,12 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
   return (
     <div className="space-y-6">
       {/* 说明 */}
-      <div className="bg-purple-900/20 border border-purple-200 rounded-lg p-4">
+      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
         <div className="flex items-start">
-          <Sparkles className="w-5 h-5 text-purple-600 mt-0.5 mr-3 flex-shrink-0" />
-          <div className="text-sm text-purple-800">
-            <p className="font-medium mb-2">AI 自动生成</p>
-            <p className="text-purple-700">
+          <Sparkles className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-300 mb-2">AI 自动生成</p>
+            <p className="text-gray-400">
               我们会根据你提供的信息自动生成 Skill 定义。你可以直接使用，也可以手动编辑优化。
             </p>
           </div>
@@ -184,12 +184,12 @@ export default function DraftStep({ intentData, researchData, skillData, onChang
 
       {/* 错误提示 */}
       {generateError && (
-        <div className="bg-yellow-900/20 border border-yellow-200 rounded-lg p-4">
+        <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
           <div className="flex items-start">
-            <AlertCircle className="w-5 h-5 text-yellow-400 mt-0.5 mr-3 flex-shrink-0" />
-            <div className="text-sm text-yellow-800">
-              <p className="font-medium mb-1">使用了本地模板生成</p>
-              <p className="text-yellow-400">{generateError}</p>
+            <AlertCircle className="w-5 h-5 text-blue-400 mt-0.5 mr-3 flex-shrink-0" />
+            <div className="text-sm">
+              <p className="font-medium text-blue-300 mb-1">使用了本地模板生成</p>
+              <p className="text-gray-400">{generateError}</p>
             </div>
           </div>
         </div>
