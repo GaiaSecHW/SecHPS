@@ -109,7 +109,7 @@ export default function TokenStatsPage() {
 
       if (!dayRes.ok) {
         const data = await dayRes.json();
-        setError(data.error || '获取统计数据失败');
+        setError(data.details?.error || data.error || '获取统计数据失败');
         setLoading(false);
         return;
       }

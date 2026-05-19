@@ -311,8 +311,9 @@ export async function GET(request: Request) {
       userStats, // 仅管理员可见
     });
   } catch (error) {
-    logger.errorNoUser(LOG_MODULES.TOKEN, '获取 Token 统计失败', { details: { error: error instanceof Error ? error.message : String(error) } });
-    return NextResponse.json({ details: { error: '服务器内部错误' } }, { status: 500 });
+    const errMsg = error instanceof Error ? error.message : String(error);
+    logger.errorNoUser(LOG_MODULES.TOKEN, '获取 Token 统计失败', { details: { error: errMsg } });
+    return NextResponse.json({ details: { error: errMsg } }, { status: 500 });
   }
 }
 
@@ -372,8 +373,8 @@ async function getTrendData(tokenWhereClause: any, period: string) {
       COUNT(*)::bigint AS "callCount"
     FROM "TokenUsage"
     WHERE ${whereClause}
-    GROUP BY date_trunc(${truncUnit}, "createdAt")
-    ORDER BY date_trunc(${truncUnit}, "createdAt") ASC
+    GROUP BY 1
+    ORDER BY 1 ASC
   `;
 
   return rows.map(row => {

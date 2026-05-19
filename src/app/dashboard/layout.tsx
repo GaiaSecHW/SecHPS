@@ -21,6 +21,7 @@ import {
   Brain,
   Zap,
   Code,
+  Activity,
   Shield,
   Search,
   Terminal,
@@ -198,6 +199,9 @@ function DashboardLayoutContent({
               {/* <NavLink href="/dashboard/roles" icon={<Settings size={18} />} collapsed={collapsed}>
                 角色权限
               </NavLink> */}
+              <NavLink href="/dashboard/admin/monitoring" icon={<Activity size={18} />} collapsed={collapsed}>
+                系统监控
+              </NavLink>
               <NavLink href="/dashboard/config" icon={<Cog size={18} />} collapsed={collapsed}>
                 系统配置
               </NavLink>

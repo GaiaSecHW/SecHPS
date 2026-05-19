@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from 'react';
 import {
-  Settings,
   Save,
   Server,
   Check,
   AlertCircle,
   Loader2,
   FolderOpen,
-  FileText,
   Download,
   Upload,
   Cog,
   Clock,
   Database,
   Tag,
+  MessageSquare,
+  LayoutTemplate,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 
@@ -439,260 +439,227 @@ export default function ConfigPage() {
       )}
 
       {/* Configuration Form */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
-        {/* Project Upload Directory */}
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <FolderOpen size={20} />
-            项目上传目录
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              目录路径
-            </label>
-            <input
-              type="text"
-              value={projectUploadDir}
-              onChange={(e) => setProjectUploadDir(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="例如 /data/projects 或 D:\projects"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              项目文件将上传到此目录，每个项目会创建一个独立的子目录
-            </p>
-          </div>
-        </div>
+      <div className="space-y-6">
 
-        {/* Workflow Config */}
-        <div className="space-y-4 border-t border-gray-700/50 pt-6">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <Settings size={20} />
-            工作流配置
-          </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Start Node Config */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-200">开始节点</h4>
+        {/* ===== 系统设置 ===== */}
+        <div>
+          <h2 className="text-base font-semibold text-gray-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <Server size={16} className="text-primary-400" />
+            系统设置
+          </h2>
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
+            {/* 并发评估限制 + 文件校验模型 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  节点名称
+                  并发评估限制
                 </label>
-                <input
-                  type="text"
-                  value={startNodeLabel}
-                  onChange={(e) => setStartNodeLabel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="开始"
-                />
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={maxConcurrentEvaluations}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (value >= 1 && value <= 10) {
+                        setMaxConcurrentEvaluations(value);
+                      }
+                    }}
+                    className="w-20 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-center"
+                  />
+                  <span className="text-sm text-gray-400">个评估</span>
+                  <div className="flex gap-1">
+                    {[1, 3, 5, 10].map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setMaxConcurrentEvaluations(n)}
+                        className={`px-3 py-1 text-sm rounded-md border ${
+                          maxConcurrentEvaluations === n
+                            ? 'bg-primary-600 text-white border-blue-600'
+                            : 'bg-dark-surface text-gray-400 border-gray-600 hover:bg-dark-surface-hover'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  超出限制的评估请求将加入排队队列，等待当前评估完成后自动启动
+                </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  节点描述
-                </label>
-                <textarea
-                  value={startNodeDescription}
-                  onChange={(e) => setStartNodeDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-                  placeholder="工作流的起始点"
-                />
-              </div>
-            </div>
-            
-            {/* End Node Config */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-200">结束节点</h4>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  节点名称
-                </label>
-                <input
-                  type="text"
-                  value={endNodeLabel}
-                  onChange={(e) => setEndNodeLabel(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="结束"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  节点描述
-                </label>
-                <textarea
-                  value={endNodeDescription}
-                  onChange={(e) => setEndNodeDescription(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-                  placeholder="工作流的结束点"
-                />
-              </div>
-            </div>
-          </div>
-          
-          <p className="text-xs text-gray-500">
-            这些配置将作为工作流中开始和结束节点的默认名称和描述
-          </p>
-        </div>
 
-        {/* Concurrent Evaluation Limit */}
-        <div className="space-y-4 border-t border-gray-700/50 pt-6">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <Server size={20} />
-            并发评估限制
-          </h3>
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-300 mb-1">
-                最大同时运行评估数量
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={maxConcurrentEvaluations}
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value);
-                    if (value >= 1 && value <= 10) {
-                      setMaxConcurrentEvaluations(value);
-                    }
-                  }}
-                  className="w-20 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-center"
-                />
-                <span className="text-sm text-gray-400">个评估</span>
-                <div className="flex gap-1">
-                  {[1, 3, 5, 10].map((n) => (
-                    <button
-                      key={n}
-                      onClick={() => setMaxConcurrentEvaluations(n)}
-                      className={`px-3 py-1 text-sm rounded-md border ${
-                        maxConcurrentEvaluations === n
-                          ? 'bg-primary-600 text-white border-blue-600'
-                          : 'bg-dark-surface text-gray-400 border-gray-600 hover:bg-dark-surface-hover'
-                      }`}
-                    >
-                      {n}
-                    </button>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  文件校验模型
+                </label>
+                <select
+                  value={fileValidationModel}
+                  onChange={(e) => setFileValidationModel(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">不校验</option>
+                  {modelOptions.map(opt => (
+                    <option key={opt.key} value={opt.key}>{opt.label}</option>
                   ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  创建任务时校验上传文件目录结构，选择"不校验"则跳过
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-700/30 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* 项目上传目录 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-1.5">
+                    <FolderOpen size={14} />
+                    项目上传目录
+                  </label>
+                  <input
+                    type="text"
+                    value={projectUploadDir}
+                    onChange={(e) => setProjectUploadDir(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="例如 /data/projects 或 D:\projects"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    项目文件将上传到此目录，每个项目会创建一个独立的子目录
+                  </p>
+                </div>
+
+                {/* 工作流配置 - 开始节点 */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    工作流节点默认名称
+                  </label>
+                  <div className="flex gap-3">
+                    <input
+                      type="text"
+                      value={startNodeLabel}
+                      onChange={(e) => setStartNodeLabel(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="开始节点名称"
+                    />
+                    <input
+                      type="text"
+                      value={endNodeLabel}
+                      onChange={(e) => setEndNodeLabel(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      placeholder="结束节点名称"
+                    />
+                  </div>
+                  <div className="flex gap-3 mt-2">
+                    <textarea
+                      value={startNodeDescription}
+                      onChange={(e) => setStartNodeDescription(e.target.value)}
+                      rows={2}
+                      className="flex-1 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none text-sm"
+                      placeholder="开始节点描述"
+                    />
+                    <textarea
+                      value={endNodeDescription}
+                      onChange={(e) => setEndNodeDescription(e.target.value)}
+                      rows={2}
+                      className="flex-1 px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none text-sm"
+                      placeholder="结束节点描述"
+                    />
+                  </div>
                 </div>
               </div>
-              <p className="text-xs text-gray-500 mt-2">
-                超出限制的评估请求将加入排队队列，等待当前评估完成后自动启动
-              </p>
             </div>
+          </div>
+        </div>
 
-            {/* 文件校验模型 */}
+        {/* ===== AI 行为配置 ===== */}
+        <div>
+          <h2 className="text-base font-semibold text-gray-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <MessageSquare size={16} className="text-green-400" />
+            AI 行为配置
+          </h2>
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
+            {/* 系统提示词 */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
-                文件校验模型
+                自定义系统提示词 <span className="text-red-400">*</span>
               </label>
-              <select
-                value={fileValidationModel}
-                onChange={(e) => setFileValidationModel(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">不校验</option>
-                {modelOptions.map(opt => (
-                  <option key={opt.key} value={opt.key}>{opt.label}</option>
-                ))}
-              </select>
+              <textarea
+                value={customSystemPrompt}
+                onChange={(e) => setCustomSystemPrompt(e.target.value)}
+                rows={6}
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
+                placeholder="在此输入自定义的系统提示词，用于项目评估时发送给 AI 的第一条系统消息..."
+              />
               <p className="text-xs text-gray-500 mt-1">
-                用于创建任务时判断上传文件的目录结构是否符合 Agent 要求。选择"不校验"则跳过文件结构判断
+                此提示词将在评估开始时作为系统消息发送，用于指导 AI 的评估行为。评估启动必须有此配置。
               </p>
+            </div>
+
+            <div className="border-t border-gray-700/30 pt-4">
+              {/* 进展询问消息 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  进展询问消息
+                </label>
+                <textarea
+                  value={customProgressQuestion}
+                  onChange={(e) => setCustomProgressQuestion(e.target.value)}
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
+                  placeholder="请简要告诉我当前的评估进展如何：&#10;1. 已经完成了哪些检查？&#10;2. 目前发现了什么问题？&#10;3. 接下来计划做什么？"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  点击"询问进展"按钮时发送给 AI。留空则该按钮不可用。
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* System Prompt Config */}
-        <div className="space-y-4 border-t border-gray-700/50 pt-6">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <Settings size={20} />
-            系统提示词
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              自定义系统提示词
-            </label>
-            <textarea
-              value={customSystemPrompt}
-              onChange={(e) => setCustomSystemPrompt(e.target.value)}
-              rows={6}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
-              placeholder="在此输入自定义的系统提示词，用于项目评估时发送给 AI 的第一条系统消息..."
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              此提示词将在评估开始时作为系统消息发送，用于指导 AI 的评估行为
-            </p>
-          </div>
-        </div>
+        {/* ===== 模板管理 ===== */}
+        <div>
+          <h2 className="text-base font-semibold text-gray-300 mb-3 flex items-center gap-2 uppercase tracking-wider">
+            <LayoutTemplate size={16} className="text-purple-400" />
+            模板管理
+          </h2>
+          <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6 space-y-6">
+            {/* Skill 输出模板 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Skill 标准输出模板
+              </label>
+              <textarea
+                value={skillOutputTemplate}
+                onChange={(e) => setSkillOutputTemplate(e.target.value)}
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
+                placeholder={'# 安全审计报告\n\n## 漏洞列表\n\n### 1. [漏洞标题] [严重性]\n\n**位置**: `文件路径:行号`\n\n**问题描述**: ...\n\n**修复建议**: ...\n\n---\n\n## 摘要统计\n\n- 总计: N 个漏洞\n- 高危: N 个\n- 中危: N 个\n- 低危: N 个'}
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                定义 Skill 的标准化输出格式，创建 Skill 时作为参考模板。支持 Markdown、JSON、纯文本等。
+              </p>
+            </div>
 
-        {/* Progress Question Config */}
-        <div className="space-y-4 border-t border-gray-700/50 pt-6">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <Settings size={20} />
-            进展询问消息
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              自定义进展询问消息
-            </label>
-            <textarea
-              value={customProgressQuestion}
-              onChange={(e) => setCustomProgressQuestion(e.target.value)}
-              rows={6}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
-              placeholder="请简要告诉我当前的评估进展如何：&#10;1. 已经完成了哪些检查？&#10;2. 目前发现了什么问题？&#10;3. 接下来计划做什么？&#10;&#10;请简洁回答，让我了解大致进度即可。"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              此消息将在点击"询问进展"按钮时发送给 AI，用于了解当前评估进度。留空则"询问进展"按钮将不可用。
-            </p>
-          </div>
-        </div>
-
-        {/* Skill Output Template */}
-        <div className="space-y-4 border-t border-gray-700/50 pt-6">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <FileText size={20} />
-            Skill标准输出模板
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              模板内容
-            </label>
-            <textarea
-              value={skillOutputTemplate}
-              onChange={(e) => setSkillOutputTemplate(e.target.value)}
-              rows={10}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
-              placeholder={'# 安全审计报告\n\n## 漏洞列表\n\n### 1. [漏洞标题] [严重性]\n\n**位置**: `文件路径:行号`\n\n**问题描述**: ...\n\n**修复建议**: ...\n\n---\n\n## 摘要统计\n\n- 总计: N 个漏洞\n- 高危: N 个\n- 中危: N 个\n- 低危: N 个'}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              定义 Skill 的标准化输出格式模板。创建 Skill 时用户只能查看此模板，不能修改。支持任意文本格式（Markdown、JSON、纯文本等）。
-            </p>
-          </div>
-        </div>
-
-        {/* CLAUDE.md Global Template */}
-        <div className="space-y-4 border-t border-gray-700/50 pt-6">
-          <h3 className="text-lg font-medium text-gray-100 flex items-center gap-2">
-            <FileText size={20} />
-            CLAUDE.md 全局模板
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              模板内容
-            </label>
-            <textarea
-              value={claudemdTemplate}
-              onChange={(e) => setClaudemdTemplate(e.target.value)}
-              rows={12}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
-              placeholder={'# 项目说明\n\n## 项目结构\n\n```\nsrc/\n├── controllers/\n├── models/\n├── routes/\n└── utils/\n```\n\n## 编码规范\n\n- 使用 TypeScript\n- 遵循 ESLint 规则\n- 函数必须有注释\n\n## 安全要求\n\n- 所有用户输入必须验证\n- 使用参数化查询防止 SQL 注入\n- 输出必须转义防止 XSS'}
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              启动评估时，此模板内容将写入项目根目录的 <code className="bg-dark-surface-hover px-1 rounded">.claude/CLAUDE.md</code> 文件。如果文件已存在将被覆盖。
-            </p>
+            <div className="border-t border-gray-700/30 pt-4">
+              {/* CLAUDE.md 模板 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  CLAUDE.md 全局模板
+                </label>
+                <textarea
+                  value={claudemdTemplate}
+                  onChange={(e) => setClaudemdTemplate(e.target.value)}
+                  rows={10}
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono text-sm"
+                  placeholder={'# 项目说明\n\n## 项目结构\n\n```\nsrc/\n├── controllers/\n├── models/\n├── routes/\n└── utils/\n```\n\n## 编码规范\n\n- 使用 TypeScript\n- 遵循 ESLint 规则\n- 函数必须有注释\n\n## 安全要求\n\n- 所有用户输入必须验证\n- 使用参数化查询防止 SQL 注入\n- 输出必须转义防止 XSS'}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  启动评估时写入项目根目录的 <code className="bg-dark-surface-hover px-1 rounded">.claude/CLAUDE.md</code> 文件。已存在则覆盖。
+                </p>
+              </div>
+            </div>
           </div>
         </div>
 
