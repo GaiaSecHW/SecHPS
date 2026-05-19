@@ -9,12 +9,7 @@ export function setSystemStartTime(time: Date) {
 }
 
 export function getSystemStartTime(): Date | null {
-  if (systemStartTime) return systemStartTime;
-  // 后备方案：通过 process.uptime() 推算启动时间
-  if (typeof process !== 'undefined' && process.uptime) {
-    return new Date(Date.now() - Math.floor(process.uptime() * 1000));
-  }
-  return null;
+  return systemStartTime;
 }
 
 // 解析数据库 URL 获取数据库名称
