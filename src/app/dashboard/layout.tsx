@@ -37,6 +37,7 @@ import {
   ClipboardList,
   Box,
   Key,
+  Network,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
@@ -172,6 +173,12 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={collapsed}>
                 工作流编排
               </NavLink>
+              <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={collapsed}>
+                进化
+              </NavLink>
+              <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={collapsed}>
+                知识图谱
+              </NavLink>
             </>
           )}
 
@@ -186,6 +193,9 @@ function DashboardLayoutContent({
               {collapsed && <div className="pt-3 mx-3 border-t border-gray-800/60" />}
               <NavLink href="/dashboard/users" icon={<Users size={18} />} collapsed={collapsed}>
                 用户管理
+              </NavLink>
+              <NavLink href="/dashboard/models" icon={<Zap size={18} />} collapsed={collapsed}>
+                模型管理
               </NavLink>
               <NavLink href="/dashboard/admin/tenants" icon={<Layers size={18} />} collapsed={collapsed}>
                 租户管理
@@ -266,9 +276,6 @@ function DashboardLayoutContent({
         <header className="bg-dark-surface border-b border-gray-800/60 flex-shrink-0">
           <div className="h-14 flex items-center justify-between px-4 sm:px-6 lg:px-8">
             <div className="flex items-center space-x-4 flex-1 mr-6">
-              <h2 className="text-sm font-semibold text-gray-300 whitespace-nowrap">
-                SecHPS 测试平台
-              </h2>
               <BroadcastMarquee />
             </div>
 
