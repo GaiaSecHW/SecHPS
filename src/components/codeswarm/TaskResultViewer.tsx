@@ -91,6 +91,7 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [stateFilter, setStateFilter] = useState<string>('all');
   const [deletingTask, setDeletingTask] = useState<string | null>(null);
+  const [taskEvents, setTaskEvents] = useState<Record<string, any[]>>({});
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -98,6 +99,28 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
       setExpandedTask(selectedTaskId);
     }
   }, [selectedTaskId]);
+
+  // Fetch full task details with events when expanding a task
+  useEffect(() => {
+    if (!expandedTask) return;
+    // Skip if we already have events for this task
+    if (taskEvents[expandedTask]) return;
+    // Skip if the list data already has events
+    const taskFromList = data?.tasks?.find(t => t.taskId === expandedTask);
+    if (taskFromList?.events?.length > 0) {
+      setTaskEvents(prev => ({ ...prev, [expandedTask]: taskFromList.events }));
+      return;
+    }
+    // Fetch from single task API
+    fetch(`/api/codeswarm/tasks/${expandedTask}`)
+      .then(res => res.json())
+      .then(apiData => {
+        if (apiData.task?.events) {
+          setTaskEvents(prev => ({ ...prev, [expandedTask]: apiData.task.events }));
+        }
+      })
+      .catch(err => console.error('[TaskResultViewer] fetch task events error:', err));
+  }, [expandedTask, data, taskEvents]);
 
   const tasks = data?.tasks || [];
   const hasActiveTasks = tasks.some(t => ['queued', 'dispatched', 'building', 'running'].includes(t.state));
@@ -428,30 +451,52 @@ export function TaskResultViewer({ selectedTaskId, onTaskSelect, onRefresh }: Ta
                     })()}
 
                     {/* Events Stream */}
-                    {task.events && task.events.length > 0 && (
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">
-                          事件流 ({task.events.length} 条)
-                        </h4>
-                        <div className="bg-gray-900 rounded-lg p-3 max-h-60 overflow-y-auto">
-                          <div className="space-y-1 font-mono text-xs text-green-400">
-                            {task.events.map((event: any, i: number) => (
-                              <div key={i} className="flex items-start space-x-2">
-                                <span className="text-gray-500">[{new Date(event.timestamp).toLocaleTimeString()}]</span>
-                                <span className={
-                                  event.type === 'error' ? 'text-red-400' :
-                                  event.type === 'tool_call' ? 'text-yellow-400' :
-                                  event.type === 'tool_call_update' ? 'text-blue-400' :
-                                  'text-green-400'
-                                }>
-                                  [{event.type}] {event.content || event.tool || event.message || ''}
-                                </span>
-                              </div>
-                            ))}
+                    {(() => {
+                      const events = taskEvents[task.taskId] || task.events;
+                      if (!events || events.length === 0) return null;
+
+                      const cleanText = (t: string, max = 150): string => {
+                        if (!t) return '';
+                        try { t = JSON.parse(`"${t}"`); } catch {}
+                        t = t.replace(/\\n/g, ' ').replace(/\\t/g, ' ').replace(/\\"/g, '"');
+                        t = t.replace(/  +/g, ' ').trim();
+                        return t.length > max ? t.slice(0, max) + '...' : t;
+                      };
+
+                      const getEventDisplay = (event: any) => {
+                        const t = event.type;
+                        if (t === 'skill_start') return { badge: 'Skill', detail: event.skill || '', color: 'bg-purple-900/50 text-purple-400' };
+                        if (t === 'skill_complete') return { badge: 'Skill Done', detail: event.skill || '', color: 'bg-purple-900/40 text-purple-300' };
+                        if (t === 'tool_call') return { badge: 'Tool', detail: event.tool || '', color: 'bg-yellow-900/50 text-yellow-400' };
+                        if (t === 'tool_call_update') return { badge: 'Result', detail: cleanText(event.output || '', 100), color: 'bg-blue-900/50 text-blue-300' };
+                        if (t === 'error') return { badge: 'Error', detail: event.message || '', color: 'bg-red-900/50 text-red-400' };
+                        if (t === 'phase_start' || t === 'phase_complete') return { badge: 'Phase', detail: event.phase || event.message || '', color: 'bg-cyan-900/50 text-cyan-400' };
+                        if (t === 'log_chunk' || t === 'agent_message_chunk') return { badge: 'Log', detail: cleanText(event.content || '', 120), color: 'bg-gray-700 text-gray-400' };
+                        return { badge: t, detail: event.content || event.message || '', color: 'bg-gray-700 text-gray-300' };
+                      };
+
+                      return (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-400 mb-2">
+                            执行日志 ({events.length} 条)
+                          </h4>
+                          <div className="bg-gray-900 rounded-lg p-3 max-h-72 overflow-y-auto">
+                            <div className="space-y-0.5 font-mono text-xs">
+                              {events.map((event: any, i: number) => {
+                                const { badge, detail, color } = getEventDisplay(event);
+                                return (
+                                  <div key={i} className="flex items-start space-x-1.5">
+                                    <span className="text-gray-600 shrink-0">{new Date(event.timestamp).toLocaleTimeString()}</span>
+                                    <span className={`px-1 rounded text-[10px] shrink-0 ${color}`}>{badge}</span>
+                                    {detail && <span className="text-gray-400 truncate">{detail}</span>}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Result */}
                     {task.result && (

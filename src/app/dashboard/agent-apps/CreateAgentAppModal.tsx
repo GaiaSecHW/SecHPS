@@ -27,6 +27,11 @@ interface AgentHarnessFileData {
   size?: number;
 }
 
+interface ClaudeCodeInfo {
+  agents: string[];
+  commands: string[];
+}
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -42,6 +47,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     tenantId: '',
   });
   const [agentHarnessFile, setAgentHarnessFile] = useState<AgentHarnessFileData | null>(null);
+  const [claudeCodeInfo, setClaudeCodeInfo] = useState<ClaudeCodeInfo | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isIcsOrAdmin, setIsIcsOrAdmin] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -113,6 +119,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   const handleClose = () => {
     setFormData({ name: '', engine: '', defaultAgentName: '', startCommand: '', inputRequirements: '', tenantId: '' });
     setAgentHarnessFile(null);
+    setClaudeCodeInfo(null);
     onClose();
   };
 
@@ -178,10 +185,67 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
     }
   };
 
+  const detectClaudeCodeFromFolder = (files: File[]): ClaudeCodeInfo => {
+    const agents: string[] = [];
+    const commands: string[] = [];
+    for (const f of files) {
+      const normalized = (f.webkitRelativePath || f.name).replace(/\\/g, '/');
+      const agentMatch = normalized.match(/(?:^|\/)\.claude\/agents\/([^/]+)\.md$/i);
+      if (agentMatch && !agents.includes(agentMatch[1])) agents.push(agentMatch[1]);
+      const cmdMatch = normalized.match(/(?:^|\/)\.claude\/commands\/([^/]+)\.md$/i);
+      if (cmdMatch && !commands.includes(cmdMatch[1])) commands.push(cmdMatch[1]);
+    }
+    return { agents, commands };
+  };
+
+  const detectClaudeCodeFromZip = async (file: File): Promise<ClaudeCodeInfo> => {
+    const zip = await JSZip.loadAsync(file);
+    const agents: string[] = [];
+    const commands: string[] = [];
+    for (const [p, entry] of Object.entries(zip.files)) {
+      if (entry.dir) continue;
+      const normalized = p.replace(/\\/g, '/');
+      const agentMatch = normalized.match(/(?:^|\/)\.claude\/agents\/([^/]+)\.md$/i);
+      if (agentMatch && !agents.includes(agentMatch[1])) agents.push(agentMatch[1]);
+      const cmdMatch = normalized.match(/(?:^|\/)\.claude\/commands\/([^/]+)\.md$/i);
+      if (cmdMatch && !commands.includes(cmdMatch[1])) commands.push(cmdMatch[1]);
+    }
+    return { agents, commands };
+  };
+
+  const applyClaudeCodeDetection = (info: ClaudeCodeInfo) => {
+    setClaudeCodeInfo(info);
+    if (info.agents.length > 0 || info.commands.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        defaultAgentName: prev.defaultAgentName.trim()
+          ? prev.defaultAgentName
+          : info.agents[0] || '',
+        startCommand: prev.startCommand?.trim()
+          ? prev.startCommand
+          : info.commands.length > 0
+            ? `/project:${info.commands[0]}`
+            : info.agents.length > 0
+              ? `/project:${info.agents[0]}`
+              : prev.startCommand || '',
+      }));
+      if (info.commands.length > 0) {
+        toast.success(`检测到 ${info.agents.length} 个智能体, ${info.commands.length} 个命令`, { duration: 3000 });
+      } else if (info.agents.length > 0) {
+        toast.success(`检测到 ${info.agents.length} 个智能体`, { duration: 3000 });
+      }
+    }
+  };
+
   const tryAutoFillAgentName = async (file: File, engine: string) => {
     console.log('[AutoDetect] tryAutoFillAgentName called:', { fileName: file.name, engine });
     if (!engine || !file.name.match(/\.zip$/)) {
       console.log('[AutoDetect] skipped:', { hasEngine: !!engine, isZip: !!file.name.match(/\.zip$/) });
+      return;
+    }
+    if (engine === 'claudecode') {
+      const info = await detectClaudeCodeFromZip(file);
+      applyClaudeCodeDetection(info);
       return;
     }
     const agentName = await extractAgentNameFromZip(file, engine);
@@ -208,13 +272,18 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
         });
 
         if (formData.engine) {
-          const agentName = await extractAgentNameFromFolder(allFiles, formData.engine);
-          if (agentName) {
-            setFormData(prev => ({
-              ...prev,
-              defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
-              startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
-            }));
+          if (formData.engine === 'claudecode') {
+            const info = detectClaudeCodeFromFolder(allFiles);
+            applyClaudeCodeDetection(info);
+          } else {
+            const agentName = await extractAgentNameFromFolder(allFiles, formData.engine);
+            if (agentName) {
+              setFormData(prev => ({
+                ...prev,
+                defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
+                startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
+              }));
+            }
           }
         }
       } else {
@@ -271,17 +340,23 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               onChange={async (e) => {
                 const newEngine = e.target.value as any;
                 setFormData({ ...formData, engine: newEngine });
+                setClaudeCodeInfo(null);
                 if (!newEngine) return;
                 if (agentHarnessFile?.type === 'archive' && agentHarnessFile.file) {
                   tryAutoFillAgentName(agentHarnessFile.file, newEngine);
                 } else if (agentHarnessFile?.type === 'folder' && agentHarnessFile.files) {
-                  const agentName = await extractAgentNameFromFolder(agentHarnessFile.files, newEngine);
-                  if (agentName) {
-                    setFormData(prev => ({
-                      ...prev,
-                      defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
-                      startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
-                    }));
+                  if (newEngine === 'claudecode') {
+                    const info = detectClaudeCodeFromFolder(agentHarnessFile.files);
+                    applyClaudeCodeDetection(info);
+                  } else {
+                    const agentName = await extractAgentNameFromFolder(agentHarnessFile.files, newEngine);
+                    if (agentName) {
+                      setFormData(prev => ({
+                        ...prev,
+                        defaultAgentName: prev.defaultAgentName.trim() ? prev.defaultAgentName : agentName,
+                        startCommand: prev.startCommand?.trim() ? prev.startCommand : `/${agentName}`,
+                      }));
+                    }
                   }
                 }
               }}
@@ -386,16 +461,40 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              默认智能体名称<span className="text-green-500">(会自动识别default_agent)</span> <span className="text-red-500">*</span>
+              默认智能体名称
+              <span className="text-green-500">
+                {formData.engine === 'claudecode'
+                  ? '(自动识别 .claude/agents/)'
+                  : '(自动识别 default_agent)'}
+              </span>{' '}
+              <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={formData.defaultAgentName}
               onChange={(e) => setFormData({ ...formData, defaultAgentName: e.target.value })}
-              placeholder="例如: code-assistant"
+              placeholder={formData.engine === 'claudecode' ? '例如: security-scanner' : '例如: code-assistant'}
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
+            {formData.engine === 'claudecode' && claudeCodeInfo && claudeCodeInfo.agents.length > 1 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {claudeCodeInfo.agents.map(a => (
+                  <button
+                    key={a}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, defaultAgentName: a }))}
+                    className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                      formData.defaultAgentName === a
+                        ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                        : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                    }`}
+                  >
+                    {a}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div>
@@ -406,10 +505,35 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
               type="text"
               value={formData.startCommand}
               onChange={(e) => setFormData({ ...formData, startCommand: e.target.value })}
-              placeholder="例如: /nazhua-audit"
+              placeholder={
+                formData.engine === 'claudecode'
+                  ? '例如: /project:security-scan'
+                  : '例如: /nazhua-audit'
+              }
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
+            {formData.engine === 'claudecode' && claudeCodeInfo && claudeCodeInfo.commands.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                <p className="text-xs text-gray-500">检测到命令（点击选择）：</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {claudeCodeInfo.commands.map(cmd => (
+                    <button
+                      key={cmd}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, startCommand: `/project:${cmd}` }))}
+                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                        formData.startCommand === `/project:${cmd}`
+                          ? 'border-primary-500 bg-primary-500/20 text-primary-400'
+                          : 'border-gray-600 text-gray-400 hover:border-primary-500 hover:text-primary-400'
+                      }`}
+                    >
+                      /project:{cmd}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div>

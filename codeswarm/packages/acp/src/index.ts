@@ -23,7 +23,7 @@ import type {
 export interface ACPClientEvents {
   /** Agent text output chunk */
   text: (content: string) => void;
-  /** Tool call started. `tool` = kind || title, `input` = rawInput, `title` = ACP title field */
+  /** Tool call started. `tool` = kind (category: read/edit/execute/other), `input` = rawInput, `title` = actual tool name */
   toolCall: (tool: string, input: unknown, title?: string) => void;
   /** Tool call result */
   toolCallUpdate: (output: string) => void;
@@ -65,6 +65,9 @@ export class ACPClient {
   private resolveExitCode!: (code: number | null) => void;
   private config!: ACPClientConfig;
   private _spawnError: Error | null = null;
+  // Text buffer for skill name inference
+  private _textBuffer: string[] = [];
+  private _maxTextBuffer = 5;
 
   constructor() {
     this.exitCodePromise = new Promise(resolve => {
@@ -251,6 +254,11 @@ export class ACPClient {
     return this.exitCodePromise;
   }
 
+  /** Get recent text buffer for skill name inference */
+  getTextBuffer(): string[] {
+    return [...this._textBuffer];
+  }
+
   /** Destroy the client and kill the process */
   async destroy(): Promise<void> {
     this.destroyed = true;
@@ -273,13 +281,22 @@ export class ACPClient {
       case 'agent_thought_chunk':
       case 'agent_message_chunk': {
         const text = update.content?.text;
-        if (text) this.eventHandlers.text?.(text);
+        if (text) {
+          this._textBuffer.push(text);
+          if (this._textBuffer.length > this._maxTextBuffer) this._textBuffer.shift();
+          this.eventHandlers.text?.(text);
+        }
         break;
       }
       case 'tool_call': {
         const kind = update.kind || update.title || '';
-        const title = update.title || '';
-        this.eventHandlers.toolCall?.(kind, update.rawInput || {}, title);
+        // _meta.claudeCode.toolName has the actual tool name (e.g., "Skill", "Bash", "Write")
+        const toolName = update._meta?.claudeCode?.toolName || update.title || '';
+        const rawInput = update.rawInput || {};
+        console.log(`[ACP] tool_call: kind=${kind}, toolName=${toolName}, title=${update.title}`);
+        console.log(`[ACP] tool_call rawInput: ${JSON.stringify(rawInput)?.slice(0, 300)}`);
+        console.log(`[ACP] tool_call _meta: ${JSON.stringify(update._meta)}`);
+        this.eventHandlers.toolCall?.(kind, rawInput, toolName);
         break;
       }
       case 'tool_call_update': {

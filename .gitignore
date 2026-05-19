@@ -64,6 +64,9 @@ uploads/
 # Development database
 dev.db
 
+# Worktrees
+.worktrees/
+
 # OMC tool state files
 .omc/
 /.sisyphus

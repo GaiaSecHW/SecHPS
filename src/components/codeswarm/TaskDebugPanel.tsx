@@ -88,32 +88,45 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
           // Handle new log_chunk and agent_log_chunk events
           if (data.type === 'log_chunk' || data.type === 'agent_log_chunk') {
-            message = eventLevel === 'worker' ? '[Worker]' : '[Agent]';
+            message = eventLevel === 'worker' ? 'Worker' : 'Agent';
             details = eventData.content || '';
           } else if (data.type === 'agent_message_chunk') {
-            message = 'Agent 输出';
+            message = 'Agent';
             details = eventData.content || '';
           } else if (data.type === 'task_started' || data.type === 'task_completed') {
-            message = data.type === 'task_started' ? '任务开始' : '任务完成';
+            message = data.type === 'task_started' ? 'Start' : 'Done';
             details = eventData.command || eventData.content || '';
           } else if (data.type === 'tool_call') {
-            message = '工具调用';
-            details = eventData.tool || JSON.stringify(eventData.input) || '';
+            message = 'Tool';
+            details = eventData.tool || '';
+            const inputObj = eventData.input;
+            if (inputObj && typeof inputObj === 'object' && Object.keys(inputObj).length > 0) {
+              details += ` ${cleanLogText(JSON.stringify(inputObj), 80)}`;
+            }
           } else if (data.type === 'tool_result' || data.type === 'tool_call_update') {
-            message = '工具结果';
-            details = eventData.output || '';
+            message = 'Result';
+            details = cleanLogText(eventData.output || '', 150);
+          } else if (data.type === 'skill_start') {
+            message = 'Skill';
+            details = eventData.skill || '';
+          } else if (data.type === 'skill_complete') {
+            message = 'Skill Done';
+            details = eventData.skill || '';
+          } else if (data.type === 'phase_start' || data.type === 'phase_complete') {
+            message = 'Phase';
+            details = eventData.phase || eventData.message || '';
           } else if (data.type === 'command_output') {
-            message = '命令输出';
-            details = eventData.content || '';
+            message = 'Shell';
+            details = cleanLogText(eventData.content || '', 150);
           } else if (data.type === 'error') {
-            message = '错误';
-            details = eventData.message || JSON.stringify(eventData);
+            message = 'Error';
+            details = eventData.message || '';
           } else if (data.type === 'progress') {
-            message = '进度';
+            message = 'Progress';
             details = eventData.content || '';
           } else {
             message = data.type;
-            details = JSON.stringify(eventData);
+            details = '';
           }
 
           if (message) {
@@ -276,6 +289,20 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
     setCurrentTaskId(null);
   };
 
+  /** Clean escaped characters from log text for display */
+  const cleanLogText = (text: string, maxLen = 200): string => {
+    if (!text) return '';
+    let clean = text;
+    // Unescape JSON string escapes
+    try { clean = JSON.parse(`"${clean}"`); } catch {}
+    // Normalize whitespace
+    clean = clean.replace(/\\n/g, '\n').replace(/\\t/g, '  ').replace(/\\"/g, '"');
+    // Collapse multiple spaces/newlines
+    clean = clean.replace(/\n{3,}/g, '\n\n').replace(/  +/g, ' ');
+    if (clean.length > maxLen) clean = clean.slice(0, maxLen) + '...';
+    return clean.trim();
+  };
+
   return (
     <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50">
       {/* Header */}
@@ -396,8 +423,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
             </select>
           </div>
 
-          {/* Model & API Key (OpenCode only) */}
-          {form.engine === 'opencode' && (
+          {/* Model & API Key */}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -408,7 +434,11 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 onChange={(e) => handleModelChange(e.target.value)}
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
               >
-                <option value="">请选择模型</option>
+                {form.engine === 'claudecode' ? (
+                  <option value="">Worker 端默认配置</option>
+                ) : (
+                  <option value="">请选择模型</option>
+                )}
                 {modelOptions.map((opt) => (
                   <option key={opt.key} value={opt.key}>{opt.label}</option>
                 ))}
@@ -422,12 +452,11 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 type="password"
                 value={form.apiKey}
                 onChange={(e) => setForm({ ...form, apiKey: e.target.value })}
-                placeholder="sk-ant-... (可选，覆盖模型的默认Key)"
+                placeholder={form.engine === 'claudecode' ? '不传则使用 Worker 端默认' : 'sk-ant-... (可选，覆盖模型的默认Key)'}
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200 placeholder-gray-500"
               />
             </div>
           </div>
-          )}
 
           {/* Timeout */}
           <div>
@@ -535,19 +564,26 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
               <div className="text-gray-500">等待任务开始...</div>
             ) : (
               logs.map((log, idx) => {
-                // 日志级别颜色映射
+                // Log type color + badge style
                 let textColor = 'text-gray-300';
-                if (log.type === 'error') textColor = 'text-red-400';
-                else if (log.type === 'task_complete') textColor = 'text-green-400';
-                else if (log.type === 'task_started') textColor = 'text-blue-400';
+                let badgeColor = 'bg-gray-700 text-gray-300';
+                if (log.type === 'error') { textColor = 'text-red-400'; badgeColor = 'bg-red-900/50 text-red-400'; }
+                else if (log.type === 'task_complete') { textColor = 'text-green-400'; badgeColor = 'bg-green-900/50 text-green-400'; }
+                else if (log.type === 'skill_start') { textColor = 'text-purple-400'; badgeColor = 'bg-purple-900/50 text-purple-400'; }
+                else if (log.type === 'skill_complete') { textColor = 'text-purple-300'; badgeColor = 'bg-purple-900/40 text-purple-300'; }
+                else if (log.type === 'tool_call') { textColor = 'text-yellow-400'; badgeColor = 'bg-yellow-900/50 text-yellow-400'; }
+                else if (log.type === 'tool_call_update' || log.type === 'tool_result') { textColor = 'text-blue-300'; badgeColor = 'bg-blue-900/50 text-blue-300'; }
                 else if (log.type === 'command_output') {
                   textColor = log.stream === 'stderr' ? 'text-yellow-400' : 'text-green-300';
+                  badgeColor = log.stream === 'stderr' ? 'bg-yellow-900/50 text-yellow-400' : 'bg-green-900/50 text-green-300';
                 }
+                else if (log.type === 'phase_start' || log.type === 'phase_complete') { textColor = 'text-cyan-400'; badgeColor = 'bg-cyan-900/50 text-cyan-400'; }
+                const cleanDetails = cleanLogText(log.details, 200);
                 return (
                 <div key={idx} className={`mb-1 ${textColor}`}>
-                  <span className="text-gray-500">[{new Date(log.timestamp).toLocaleTimeString()}]</span>{' '}
-                  <span>[{log.message}]</span>
-                  {log.details && <span className="text-gray-400 ml-2">{log.details}</span>}
+                  <span className="text-gray-600">{new Date(log.timestamp).toLocaleTimeString()}</span>{' '}
+                  <span className={`px-1 rounded text-[10px] ${badgeColor}`}>{log.message}</span>
+                  {cleanDetails && <span className="text-gray-400 ml-2">{cleanDetails}</span>}
                 </div>
               )})
             )}
