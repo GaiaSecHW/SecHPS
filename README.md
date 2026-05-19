@@ -1,5 +1,4 @@
-# AI4WEB Test Platform
-
+# SecHPS
 AI 驱动的编码辅助测试平台，支持多租户、RBAC 权限、工作流编排、AI 模型路由、分布式任务调度等功能。
 
 ## 技术栈
