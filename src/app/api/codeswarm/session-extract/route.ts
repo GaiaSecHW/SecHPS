@@ -4,6 +4,7 @@ import path from 'path';
 import os from 'os';
 import { authenticateRequest, authErrorResponse } from '@/lib/api-auth';
 import { logger, LOG_MODULES } from '@/lib/logger';
+import { prisma } from '@/lib/prisma';
 
 interface SessionExtractResult {
   sessionId: string;
@@ -134,9 +135,22 @@ export async function POST(request: Request) {
       tools,
     };
 
-    logger.access(LOG_MODULES.SESSION, auth.payload, sessionId, { action: 'session_extract', workspacePath });
+    const historyRecord = await prisma.sessionExtractHistory.create({
+      data: {
+        sessionId,
+        workspacePath,
+        summary: result.summary,
+        skillsCount: skills.length,
+        toolsCount: tools.length,
+        messageCount: parts.length,
+        lastActivity: new Date(session.time_updated),
+        rawData: JSON.stringify(result),
+      },
+    });
 
-    return NextResponse.json(result);
+    logger.access(LOG_MODULES.SESSION, auth.payload, sessionId, { action: 'session_extract', workspacePath, historyId: historyRecord.id });
+
+    return NextResponse.json({ ...result, historyId: historyRecord.id });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SESSION, 'Session 解析失败', { details: { error: String(error) } });
     return NextResponse.json({ error: '解析失败: ' + String(error) }, { status: 500 });

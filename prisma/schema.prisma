@@ -2154,3 +2154,21 @@ model LocalTestRecord {
   @@index([createdAt])
   @@index([status])
 }
+
+model SessionExtractHistory {
+  id              String   @id @default(uuid())
+  sessionId       String
+  workspacePath   String
+  summary         String?
+  skillsCount     Int      @default(0)
+  toolsCount      Int      @default(0)
+  messageCount    Int      @default(0)
+  lastActivity    DateTime
+  extractedAt     DateTime  @default(now())
+  rawData         String?   @db.Text
+  
+  @@index([sessionId])
+  @@index([workspacePath])
+  @@index([extractedAt])
+  @@map("session_extract_history")
+}

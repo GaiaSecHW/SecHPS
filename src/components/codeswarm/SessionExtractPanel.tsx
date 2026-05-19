@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, Loader2, FolderSearch, Copy, ChevronDown, ChevronRight, HardDrive } from 'lucide-react';
+import { Play, Loader2, FolderSearch, Copy, ChevronDown, ChevronRight, HardDrive, History, Trash2, Clock, RefreshCw } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface ToolCall {
@@ -20,6 +20,19 @@ interface SessionExtractResult {
   lastActivity: string;
   skills: ToolCall[];
   tools: ToolCall[];
+  historyId?: string;
+}
+
+interface HistoryItem {
+  id: string;
+  sessionId: string;
+  workspacePath: string;
+  summary: string | null;
+  skillsCount: number;
+  toolsCount: number;
+  messageCount: number;
+  lastActivity: string;
+  extractedAt: string;
 }
 
 interface DirEntry {
@@ -29,11 +42,16 @@ interface DirEntry {
 }
 
 export function SessionExtractPanel() {
+  const [activeTab, setActiveTab] = useState<'history' | 'new'>('history');
   const [workspacePath, setWorkspacePath] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractResult, setExtractResult] = useState<SessionExtractResult | null>(null);
   const [expandedSkill, setExpandedSkill] = useState<number | null>(null);
   const [expandedTool, setExpandedTool] = useState<number | null>(null);
+
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
 
   const [showDirBrowser, setShowDirBrowser] = useState(false);
   const [currentBrowsePath, setCurrentBrowsePath] = useState('');
@@ -45,7 +63,72 @@ export function SessionExtractPanel() {
 
   useEffect(() => {
     loadRootEntries();
+    loadHistory();
   }, []);
+
+  const loadHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch('/api/codeswarm/session-extract/history?limit=50');
+      if (res.ok) {
+        const data = await res.json();
+        setHistory(data.history || []);
+      }
+    } catch {
+      toast.error('加载历史失败');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const loadHistoryDetail = async (id: string) => {
+    try {
+      const res = await fetch(`/api/codeswarm/session-extract/history/${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.rawData) {
+          const parsed = JSON.parse(data.rawData) as SessionExtractResult;
+          setExtractResult(parsed);
+          setSelectedHistoryId(id);
+          setExpandedSkill(null);
+          setExpandedTool(null);
+        }
+      }
+    } catch {
+      toast.error('加载历史详情失败');
+    }
+  };
+
+  const deleteHistoryItem = async (id: string) => {
+    try {
+      const res = await fetch(`/api/codeswarm/session-extract/history/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setHistory(history.filter(h => h.id !== id));
+        if (selectedHistoryId === id) {
+          setExtractResult(null);
+          setSelectedHistoryId(null);
+        }
+        toast.success('已删除');
+      }
+    } catch {
+      toast.error('删除失败');
+    }
+  };
+
+  const clearAllHistory = async () => {
+    if (!confirm('确定清空所有历史记录？')) return;
+    try {
+      const res = await fetch('/api/codeswarm/session-extract/history', { method: 'DELETE' });
+      if (res.ok) {
+        setHistory([]);
+        setExtractResult(null);
+        setSelectedHistoryId(null);
+        toast.success('已清空');
+      }
+    } catch {
+      toast.error('清空失败');
+    }
+  };
 
   const loadRootEntries = async () => {
     try {
@@ -118,6 +201,11 @@ export function SessionExtractPanel() {
 
       const data = await response.json();
       setExtractResult(data);
+      setSelectedHistoryId(data.historyId);
+      setExpandedSkill(null);
+      setExpandedTool(null);
+      setActiveTab('history');
+      loadHistory();
       toast.success(`解析完成: ${data.skills?.length || 0} Skills, ${data.tools?.length || 0} Tools`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '解析失败');
@@ -142,6 +230,13 @@ export function SessionExtractPanel() {
   const truncateJson = (obj: unknown, maxLength = 300) => {
     const str = formatJson(obj);
     return str.length > maxLength ? str.slice(0, maxLength) + '...' : str;
+  };
+
+  const truncatePath = (path: string, maxLen = 35) => {
+    if (path.length <= maxLen) return path;
+    const parts = path.split(/[\\/]/);
+    if (parts.length <= 2) return path.slice(-maxLen);
+    return '...' + parts.slice(-2).join('/');
   };
 
   const renderDirBrowser = () => showDirBrowser && (
@@ -226,64 +321,80 @@ export function SessionExtractPanel() {
     </div>
   );
 
-  return (
-    <div className="space-y-4">
-      <div className="bg-[#1E293B] rounded-lg p-4 border border-gray-700/50">
-        <h3 className="text-lg font-semibold text-gray-100 mb-4">Session 解析调试</h3>
-        <p className="text-sm text-gray-400 mb-4">
-          输入工作区路径，获取最新的 opencode session 并解析其中的 tools 和 skills 调用及结果
-        </p>
-
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={workspacePath}
-            onChange={(e) => setWorkspacePath(e.target.value)}
-            placeholder={platform === 'windows' ? 'E:/work/202605/project' : '/home/user/project'}
-            className="flex-1 px-3 py-2 bg-[#0B1120] border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm text-gray-100"
-          />
-          <button
-            onClick={() => {
-              if (platform === 'windows') {
-                browseDirectory('root://');
-              } else {
-                browseDirectory('/');
-              }
-              setShowDirBrowser(true);
-            }}
-            className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm text-gray-300 flex items-center gap-1"
-          >
-            {platform === 'windows' ? <HardDrive className="w-4 h-4" /> : <FolderSearch className="w-4 h-4" />}
-            {platform === 'windows' ? '磁盘' : '目录'}
-          </button>
-          <button
-            onClick={() => setWorkspacePath('')}
-            className="px-2 py-2 text-sm text-gray-400 hover:text-gray-200"
-          >
-            清空
-          </button>
-        </div>
-
-        <div className="mt-4">
-          <button
-            onClick={handleSessionExtract}
-            disabled={isExtracting || !workspacePath}
-            className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {isExtracting ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Play className="w-4 h-4" />
-            )}
-            执行解析
-          </button>
-        </div>
+  const renderHistoryPanel = () => (
+    <div className="w-64 bg-[#1E293B] rounded-lg border border-gray-700/50 flex flex-col">
+      <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
+        <h4 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+          <History className="w-4 h-4" />
+          解析历史 ({history.length})
+        </h4>
+        <button
+          onClick={loadHistory}
+          disabled={loadingHistory}
+          className="p-1 text-gray-400 hover:text-gray-200"
+        >
+          <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
+        </button>
       </div>
+      <div className="flex-1 overflow-y-auto max-h-[400px]">
+        {loadingHistory ? (
+          <div className="flex items-center justify-center h-32">
+            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+          </div>
+        ) : history.length === 0 ? (
+          <div className="p-4 text-center text-sm text-gray-500">
+            暂无历史记录
+          </div>
+        ) : history.map(item => (
+          <div
+            key={item.id}
+            className={`p-3 border-b border-gray-700/30 cursor-pointer hover:bg-gray-700/30 ${selectedHistoryId === item.id ? 'bg-cyan-900/20 border-l-2 border-l-cyan-500' : ''}`}
+            onClick={() => loadHistoryDetail(item.id)}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-400 flex items-center gap-1">
+                <Clock className="w-3 h-3" />
+                {new Date(item.extractedAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </span>
+              <button
+                onClick={(e) => { e.stopPropagation(); deleteHistoryItem(item.id); }}
+                className="p-1 text-gray-500 hover:text-red-400"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-200 truncate mb-1">{item.summary || item.sessionId}</p>
+            <p className="text-xs text-gray-500 truncate">{truncatePath(item.workspacePath)}</p>
+            <div className="flex gap-2 mt-1 text-xs">
+              <span className="text-cyan-400">{item.skillsCount}s</span>
+              <span className="text-purple-400">{item.toolsCount}t</span>
+              <span className="text-gray-500">{item.messageCount}m</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      {history.length > 0 && (
+        <div className="p-3 border-t border-gray-700/50">
+          <button
+            onClick={clearAllHistory}
+            className="w-full px-3 py-2 bg-red-900/30 hover:bg-red-900/50 rounded text-sm text-red-400 flex items-center justify-center gap-2"
+          >
+            <Trash2 className="w-4 h-4" />
+            清空历史
+          </button>
+        </div>
+      )}
+    </div>
+  );
 
-      {renderDirBrowser()}
-
-      {extractResult && (
-        <div className="space-y-4">
+  const renderResultPanel = () => (
+    <div className="flex-1 space-y-4">
+      {!extractResult ? (
+        <div className="bg-[#1E293B] rounded-lg p-8 border border-gray-700/50 text-center">
+          <p className="text-gray-500">选择历史记录或执行新解析查看结果</p>
+        </div>
+      ) : (
+        <>
           <div className="grid grid-cols-4 gap-4 text-sm">
             <div className="bg-blue-900/20 rounded p-3 border border-blue-700/30">
               <p className="text-blue-300 text-xs">Session ID</p>
@@ -313,7 +424,7 @@ export function SessionExtractPanel() {
               <div className="p-3 border-b border-gray-700/50">
                 <h4 className="text-sm font-medium text-cyan-400">Skills 调用 ({extractResult.skills.length})</h4>
               </div>
-              <div className="divide-y divide-gray-700/30">
+              <div className="divide-y divide-gray-700/30 max-h-[300px] overflow-y-auto">
                 {extractResult.skills.map((skill, i) => (
                   <div key={i} className="p-3">
                     <div className="w-full flex items-center justify-between">
@@ -348,7 +459,7 @@ export function SessionExtractPanel() {
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Result</p>
-                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[300px] overflow-y-auto">
+                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                             {skill.result ? truncateJson(skill.result, 1000) : '无结果'}
                           </pre>
                         </div>
@@ -368,7 +479,7 @@ export function SessionExtractPanel() {
               <div className="p-3 border-b border-gray-700/50">
                 <h4 className="text-sm font-medium text-purple-400">Tools 调用 ({extractResult.tools.length})</h4>
               </div>
-              <div className="divide-y divide-gray-700/30">
+              <div className="divide-y divide-gray-700/30 max-h-[300px] overflow-y-auto">
                 {extractResult.tools.map((tool, i) => (
                   <div key={i} className="p-3">
                     <div className="w-full flex items-center justify-between">
@@ -403,7 +514,7 @@ export function SessionExtractPanel() {
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Result</p>
-                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[300px] overflow-y-auto">
+                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
                             {tool.result ? truncateJson(tool.result, 1000) : '无结果'}
                           </pre>
                         </div>
@@ -433,8 +544,80 @@ export function SessionExtractPanel() {
               {truncateJson(extractResult, 5000)}
             </pre>
           </div>
-        </div>
+        </>
       )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-4">
+        {renderHistoryPanel()}
+        
+        <div className="flex-1 flex flex-col gap-4">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('history')}
+              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 ${activeTab === 'history' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+            >
+              <History className="w-4 h-4" />
+              查看历史
+            </button>
+            <button
+              onClick={() => setActiveTab('new')}
+              className={`px-4 py-2 rounded-md text-sm flex items-center gap-2 ${activeTab === 'new' ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+            >
+              <Play className="w-4 h-4" />
+              新解析
+            </button>
+          </div>
+
+          {activeTab === 'new' && (
+            <div className="bg-[#1E293B] rounded-lg p-4 border border-gray-700/50">
+              <h3 className="text-sm font-semibold text-gray-100 mb-3">执行新解析</h3>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={workspacePath}
+                  onChange={(e) => setWorkspacePath(e.target.value)}
+                  placeholder={platform === 'windows' ? 'E:/work/202605/project' : '/home/user/project'}
+                  className="flex-1 px-3 py-2 bg-[#0B1120] border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-cyan-500 text-sm text-gray-100"
+                />
+                <button
+                  onClick={() => {
+                    if (platform === 'windows') {
+                      browseDirectory('root://');
+                    } else {
+                      browseDirectory('/');
+                    }
+                    setShowDirBrowser(true);
+                  }}
+                  className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-md text-sm text-gray-300 flex items-center gap-1"
+                >
+                  {platform === 'windows' ? <HardDrive className="w-4 h-4" /> : <FolderSearch className="w-4 h-4" />}
+                  {platform === 'windows' ? '磁盘' : '目录'}
+                </button>
+                <button
+                  onClick={handleSessionExtract}
+                  disabled={isExtracting || !workspacePath}
+                  className="px-4 py-2 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isExtracting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4" />
+                  )}
+                  解析
+                </button>
+              </div>
+            </div>
+          )}
+
+          {renderResultPanel()}
+        </div>
+      </div>
+
+      {renderDirBrowser()}
     </div>
   );
 }
