@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { ReactFlow, ReactFlowProvider, Background, Controls, useNodesState, useEdgesState, addEdge, type Connection, type Edge, type Node, useReactFlow } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { toPng } from 'html-to-image';
+import { ArrowLeft } from 'lucide-react';
 import NodePalette from '@/components/agentflow-editor/NodePalette';
 import NodeConfigPanel from '@/components/agentflow-editor/NodeConfigPanel';
 import AgentFlowNodeComponent from '@/components/agentflow-editor/AgentFlowNode';
@@ -16,6 +17,7 @@ const nodeTypes = {
 
 function EditorContent() {
   const params = useParams();
+  const router = useRouter();
   const id = params.id as string;
   const { screenToFlowPosition, fitView } = useReactFlow();
 
@@ -293,6 +295,15 @@ function EditorContent() {
     setIsDirty(true);
   };
 
+  const handleGoBack = () => {
+    if (isDirty || saveStatus === 'unsaved') {
+      if (!window.confirm('有未保存的修改，确认离开？')) {
+        return;
+      }
+    }
+    router.push('/dashboard/agentflow-pipelines');
+  };
+
   const getEdgeStyle = (edge: Edge) => {
     const edgeData = edge.data as { isFailure?: boolean } | undefined;
     if (edgeData?.isFailure) {
@@ -312,13 +323,23 @@ function EditorContent() {
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-white">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => { setName(e.target.value); setIsDirty(true); }}
-          className="bg-transparent text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
-          placeholder="Pipeline 名称"
-        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleGoBack}
+            className="flex items-center gap-1 px-2 py-1.5 text-gray-400 hover:text-gray-200 hover:bg-gray-700/50 rounded-md transition-colors"
+          >
+            <ArrowLeft size={18} />
+            <span className="text-sm">返回</span>
+          </button>
+          <div className="h-5 w-px bg-gray-700" />
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setIsDirty(true); }}
+            className="bg-transparent text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+            placeholder="Pipeline 名称"
+          />
+        </div>
         <div className="flex items-center gap-4">
           <span className={`text-sm ${saveStatus === 'unsaved' ? 'text-yellow-500' : 'text-gray-400'}`}>
             {saveStatusText[saveStatus]}
