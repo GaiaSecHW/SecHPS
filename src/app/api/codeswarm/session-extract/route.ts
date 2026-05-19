@@ -18,6 +18,8 @@ interface SessionExtractResult {
     result: unknown;
     startTime: string;
     endTime: string;
+    reasoning: string[];
+    textOutputs: string[];
   }>;
   tools: Array<{
     toolName: string;
@@ -26,6 +28,14 @@ interface SessionExtractResult {
     result: unknown;
     startTime: string;
     endTime: string;
+  }>;
+  reasoning: Array<{
+    content: string;
+    startTime: string;
+  }>;
+  textOutputs: Array<{
+    content: string;
+    startTime: string;
   }>;
 }
 
@@ -92,37 +102,102 @@ export async function POST(request: Request) {
 
     const skills: SessionExtractResult['skills'] = [];
     const tools: SessionExtractResult['tools'] = [];
+    const reasoning: SessionExtractResult['reasoning'] = [];
+    const textOutputs: SessionExtractResult['textOutputs'] = [];
+
+    type PartEntry = {
+      type: 'tool' | 'reasoning' | 'text';
+      time: number;
+      data: any;
+    };
+
+    const allParts: PartEntry[] = [];
 
     for (const part of parts) {
       try {
         const parsed = JSON.parse(part.data);
-        if (parsed.type === 'tool' && parsed.tool && parsed.state) {
-          const toolName = parsed.tool;
-          const callID = parsed.callID || part.id;
-          const input = parsed.state?.input || {};
-          const output = parsed.state?.output;
-          const status = parsed.state?.status;
-          const startTime = new Date(part.time_created).toISOString();
-          const endTime = parsed.state?.time?.end
-            ? new Date(parsed.state.time.end).toISOString()
-            : startTime;
+        const time = part.time_created;
 
-          const entry = {
+        if (parsed.type === 'tool' && parsed.tool && parsed.state) {
+          allParts.push({ type: 'tool', time, data: parsed });
+        } else if (parsed.type === 'reasoning' && parsed.text) {
+          allParts.push({ type: 'reasoning', time, data: parsed });
+        } else if (parsed.type === 'text' && parsed.text) {
+          allParts.push({ type: 'text', time, data: parsed });
+        }
+      } catch {}
+    }
+
+    const skillTimeRanges: Array<{ startTime: number; endTime: number; skillIndex: number }> = [];
+
+    for (const entry of allParts) {
+      if (entry.type === 'tool') {
+        const parsed = entry.data;
+        const toolName = parsed.tool;
+        const callID = parsed.callID || '';
+        const input = parsed.state?.input || {};
+        const output = parsed.state?.output;
+        const startTime = new Date(entry.time).toISOString();
+        const endTime = parsed.state?.time?.end
+          ? new Date(parsed.state.time.end).toISOString()
+          : startTime;
+
+        if (isSkill(toolName)) {
+          skillTimeRanges.push({
+            startTime: entry.time,
+            endTime: parsed.state?.time?.end || entry.time,
+            skillIndex: skills.length,
+          });
+          skills.push({
             toolName,
             toolUseId: callID,
             input,
             result: output,
             startTime,
             endTime,
-          };
+            reasoning: [],
+            textOutputs: [],
+          });
+        } else {
+          tools.push({
+            toolName,
+            toolUseId: callID,
+            input,
+            result: output,
+            startTime,
+            endTime,
+          });
+        }
+      } else if (entry.type === 'reasoning') {
+        reasoning.push({
+          content: entry.data.text,
+          startTime: new Date(entry.time).toISOString(),
+        });
+      } else if (entry.type === 'text') {
+        const text = entry.data.text;
+        if (text && text.trim()) {
+          textOutputs.push({
+            content: text,
+            startTime: new Date(entry.time).toISOString(),
+          });
+        }
+      }
+    }
 
-          if (isSkill(toolName)) {
-            skills.push(entry);
-          } else {
-            tools.push(entry);
+    for (let i = 0; i < skillTimeRanges.length; i++) {
+      const range = skillTimeRanges[i];
+      const nextSkillStart = i < skillTimeRanges.length - 1
+        ? skillTimeRanges[i + 1].startTime
+        : Infinity;
+
+      for (const entry of allParts) {
+        if (entry.time > range.endTime && entry.time < nextSkillStart) {
+          if (entry.type === 'reasoning') {
+            skills[range.skillIndex].reasoning.push(entry.data.text);
+          } else if (entry.type === 'text' && entry.data.text?.trim()) {
+            skills[range.skillIndex].textOutputs.push(entry.data.text);
           }
         }
-      } catch {
       }
     }
 
@@ -133,6 +208,8 @@ export async function POST(request: Request) {
       lastActivity: new Date(session.time_updated).toISOString(),
       skills,
       tools,
+      reasoning,
+      textOutputs,
     };
 
     const historyRecord = await prisma.sessionExtractHistory.create({

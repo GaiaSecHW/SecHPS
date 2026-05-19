@@ -1,8 +1,19 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Play, Loader2, FolderSearch, Copy, ChevronDown, ChevronRight, HardDrive, History, Trash2, Clock, RefreshCw } from 'lucide-react';
+import { Play, Loader2, FolderSearch, Copy, ChevronDown, ChevronRight, HardDrive, History, Trash2, Clock, RefreshCw, Brain, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+interface SkillCall {
+  toolName: string;
+  toolUseId: string;
+  input: Record<string, unknown>;
+  result: unknown;
+  startTime: string;
+  endTime: string;
+  reasoning: string[];
+  textOutputs: string[];
+}
 
 interface ToolCall {
   toolName: string;
@@ -18,8 +29,10 @@ interface SessionExtractResult {
   summary: string;
   messageCount: number;
   lastActivity: string;
-  skills: ToolCall[];
+  skills: SkillCall[];
   tools: ToolCall[];
+  reasoning: Array<{ content: string; startTime: string }>;
+  textOutputs: Array<{ content: string; startTime: string }>;
   historyId?: string;
 }
 
@@ -449,30 +462,60 @@ export function SessionExtractPanel() {
                         <Copy className="w-3 h-3" />
                       </button>
                     </div>
-                    {expandedSkill === i && (
-                      <div className="mt-3 space-y-2">
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Input</p>
-                          <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto">
-                            {truncateJson(skill.input, 500)}
-                          </pre>
-                        </div>
-                        <div>
-                          <p className="text-xs text-gray-500 mb-1">Result</p>
-                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
-                            {skill.result ? truncateJson(skill.result, 1000) : '无结果'}
-                          </pre>
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          耗时: {new Date(skill.endTime).getTime() - new Date(skill.startTime).getTime()}ms
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+{expandedSkill === i && (
+                       <div className="mt-3 space-y-3">
+                         <div>
+                           <p className="text-xs text-gray-500 mb-1">Input</p>
+                           <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto">
+                             {truncateJson(skill.input, 300)}
+                           </pre>
+                         </div>
+                         <div>
+                           <p className="text-xs text-gray-500 mb-1">Skill 定义</p>
+                           <pre className="text-xs text-cyan-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[150px] overflow-y-auto">
+                             {skill.result ? truncateJson(skill.result, 500) : '无'}
+                           </pre>
+                         </div>
+                         {skill.reasoning?.length > 0 && (
+                           <div>
+                             <p className="text-xs text-yellow-500 mb-1 flex items-center gap-1">
+                               <Brain className="w-3 h-3" />
+                               Reasoning ({skill.reasoning.length})
+                             </p>
+                             <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
+                               {skill.reasoning.map((r, ri) => (
+                                 <p key={ri} className="text-xs text-yellow-200 mb-1 last:mb-0 whitespace-pre-wrap">
+                                   {r.length > 200 ? r.slice(0, 200) + '...' : r}
+                                 </p>
+                               ))}
+                             </div>
+                           </div>
+                         )}
+                         {skill.textOutputs?.length > 0 && (
+                           <div>
+                             <p className="text-xs text-green-500 mb-1 flex items-center gap-1">
+                               <MessageSquare className="w-3 h-3" />
+                               Output ({skill.textOutputs.length})
+                             </p>
+                             <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
+                               {skill.textOutputs.map((t, ti) => (
+                                 <p key={ti} className="text-xs text-green-200 mb-2 last:mb-0 whitespace-pre-wrap">
+                                   {t.length > 300 ? t.slice(0, 300) + '...' : t}
+                                 </p>
+                               ))}
+                             </div>
+                           </div>
+                         )}
+                         <div className="text-xs text-gray-400">
+                           耗时: {new Date(skill.endTime).getTime() - new Date(skill.startTime).getTime()}ms
+                         </div>
+                       </div>
+                     )}
+                   </div>
+                 ))}
+               </div>
+             </div>
+           )}
 
           {extractResult.tools?.length > 0 && (
             <div className="bg-[#1E293B] rounded-lg border border-purple-700/30">
@@ -523,6 +566,52 @@ export function SessionExtractPanel() {
                         </div>
                       </div>
                     )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {extractResult.reasoning?.length > 0 && (
+            <div className="bg-[#1E293B] rounded-lg border border-yellow-700/30">
+              <div className="p-3 border-b border-gray-700/50">
+                <h4 className="text-sm font-medium text-yellow-400 flex items-center gap-2">
+                  <Brain className="w-4 h-4" />
+                  全局 Reasoning ({extractResult.reasoning.length})
+                </h4>
+              </div>
+              <div className="p-3 max-h-[200px] overflow-y-auto">
+                {extractResult.reasoning.map((r, i) => (
+                  <div key={i} className="mb-2 last:mb-0">
+                    <p className="text-xs text-gray-500 mb-1">
+                      {new Date(r.startTime).toLocaleTimeString()}
+                    </p>
+                    <p className="text-xs text-yellow-200 whitespace-pre-wrap bg-[#0B1120] p-2 rounded">
+                      {r.content.length > 300 ? r.content.slice(0, 300) + '...' : r.content}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {extractResult.textOutputs?.length > 0 && (
+            <div className="bg-[#1E293B] rounded-lg border border-green-700/30">
+              <div className="p-3 border-b border-gray-700/50">
+                <h4 className="text-sm font-medium text-green-400 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  全局 Output ({extractResult.textOutputs.length})
+                </h4>
+              </div>
+              <div className="p-3 max-h-[200px] overflow-y-auto">
+                {extractResult.textOutputs.map((t, i) => (
+                  <div key={i} className="mb-2 last:mb-0">
+                    <p className="text-xs text-gray-500 mb-1">
+                      {new Date(t.startTime).toLocaleTimeString()}
+                    </p>
+                    <p className="text-xs text-green-200 whitespace-pre-wrap bg-[#0B1120] p-2 rounded">
+                      {t.content.length > 400 ? t.content.slice(0, 400) + '...' : t.content}
+                    </p>
                   </div>
                 ))}
               </div>
