@@ -112,7 +112,6 @@ export function LocalTestPanel() {
   const [showFilesModal, setShowFilesModal] = useState(false);
   const [filesData, setFilesData] = useState<{
     reportFiles: Array<{ name: string; url: string; size?: number }>;
-    parsedResult: { name: string; url: string; size?: number } | null;
     rawReportFiles: Array<{ name: string; url: string; size?: number }>;
   } | null>(null);
   const [loadingFiles, setLoadingFiles] = useState(false);
@@ -261,7 +260,6 @@ export function LocalTestPanel() {
         const data = await res.json();
         setFilesData({
           reportFiles: data.reportFiles || [],
-          parsedResult: data.parsedResult || null,
           rawReportFiles: data.rawReportFiles || [],
         });
       } else {
@@ -271,6 +269,26 @@ export function LocalTestPanel() {
       toast.error('加载文件列表失败');
     } finally {
       setLoadingFiles(false);
+    }
+  };
+
+  const downloadFile = async (url: string, filename: string) => {
+    try {
+      toast.loading(`下载 ${filename}...`);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('下载失败');
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+      toast.success(`已下载 ${filename}`);
+    } catch (e) {
+      toast.error(`下载失败: ${e instanceof Error ? e.message : '未知错误'}`);
     }
   };
 
@@ -387,7 +405,7 @@ export function LocalTestPanel() {
   };
 
   const renderFilesModal = () => showFilesModal && (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60]">
       <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[700px] max-h-[600px] flex flex-col">
         <div className="p-4 border-b border-gray-700 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
@@ -414,29 +432,11 @@ export function LocalTestPanel() {
                       <div key={i} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
                         <span className="text-xs text-gray-300 truncate flex-1">{file.name}</span>
                         <span className="text-xs text-gray-500 mr-2">{file.size ? `${(file.size / 1024).toFixed(1)}KB` : '-'}</span>
-                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                        <button onClick={() => downloadFile(file.url, file.name)} className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
                           <Download className="w-3 h-3" />下载
-                        </a>
+                        </button>
                       </div>
                     ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 解析结果 */}
-              {filesData.parsedResult && (
-                <div>
-                  <h4 className="text-sm font-medium text-green-400 mb-2 flex items-center gap-2">
-                    <CheckCircle className="w-4 h-4" />解析结果 JSON
-                  </h4>
-                  <div className="bg-[#0F172A] rounded-lg p-2">
-                    <div className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
-                      <span className="text-xs text-gray-300 truncate flex-1">{filesData.parsedResult.name}</span>
-                      <span className="text-xs text-gray-500 mr-2">{filesData.parsedResult.size ? `${(filesData.parsedResult.size / 1024).toFixed(1)}KB` : '-'}</span>
-                      <a href={filesData.parsedResult.url} target="_blank" rel="noopener noreferrer" className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
-                        <Download className="w-3 h-3" />下载
-                      </a>
-                    </div>
                   </div>
                 </div>
               )}
@@ -452,16 +452,16 @@ export function LocalTestPanel() {
                       <div key={i} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
                         <span className="text-xs text-gray-300 truncate flex-1">{file.name.replace('raw/', '')}</span>
                         <span className="text-xs text-gray-500 mr-2">{file.size ? `${(file.size / 1024).toFixed(1)}KB` : '-'}</span>
-                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                        <button onClick={() => downloadFile(file.url, file.name.replace('raw/', ''))} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
                           <Download className="w-3 h-3" />下载
-                        </a>
+                        </button>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {filesData.reportFiles.length === 0 && !filesData.parsedResult && filesData.rawReportFiles.length === 0 && (
+              {filesData.reportFiles.length === 0 && filesData.rawReportFiles.length === 0 && (
                 <div className="text-center text-gray-500 py-8">暂无上传文件</div>
               )}
             </div>

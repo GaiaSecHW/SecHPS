@@ -3,7 +3,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { prisma } from '@/lib/prisma';
-import { findReportFolder, uploadReportFolder, uploadParsedResult, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
+import { findReportFolder, uploadReportFolder, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
 
 interface LocalTestRequest {
   workspacePath: string;
@@ -174,7 +174,6 @@ function runOpencodeParse(
 async function submitVulnerabilitiesDirect(
   report: ParsedVulnerabilityReport,
   filePath: string,
-  parsedResultUrl: string,
   taskId: string
 ): Promise<{ success: boolean; createdCount?: number; skippedCount?: number; error?: string }> {
   try {
@@ -189,7 +188,7 @@ async function submitVulnerabilitiesDirect(
 
       const id = `vuln_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const severity = normalizeSeverity(v.severity);
-      const vulnRawReport = v.rawReport || parsedResultUrl;
+      const vulnRawReport = v.rawReport || '';
 
       try {
         await prisma.$executeRaw`
@@ -360,19 +359,6 @@ function executeTaskAsync(
         return;
       }
 
-      const reportJsonStr = JSON.stringify(report);
-      addLog('info', '上传解析结果到 MinIO...');
-      const parsedUploadResult = await uploadParsedResult(LOCAL_TEST_VULN_TASK_ID, reportJsonStr);
-      const parsedResultUrl = parsedUploadResult.success && parsedUploadResult.url 
-        ? parsedUploadResult.url 
-        : reportJsonStr;
-
-      if (parsedUploadResult.success) {
-        addLog('success', `解析结果上传成功: MinIO URL 已生成`);
-      } else {
-        addLog('warn', `解析结果上传失败: ${parsedUploadResult.error}`);
-      }
-
       addLog('info', '上传漏洞原始文件到 MinIO...');
       const vulnsWithRawReports = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.trim());
       if (vulnsWithRawReports.length > 0) {
@@ -384,7 +370,7 @@ function executeTaskAsync(
       }
 
       addLog('info', `开始入库: ${report.vulnerabilities.length} 条漏洞`);
-      const result = await submitVulnerabilitiesDirect(report, filePath, parsedResultUrl, LOCAL_TEST_VULN_TASK_ID);
+      const result = await submitVulnerabilitiesDirect(report, filePath, LOCAL_TEST_VULN_TASK_ID);
 
       if (result.success) {
         const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join(', ');
@@ -396,7 +382,7 @@ function executeTaskAsync(
       await updateRecord({
         status: 'completed',
         result: buildResult(),
-        parsedVulnerabilities: reportJsonStr,
+        parsedVulnerabilities: JSON.stringify(report),
         uploadedFilePath: filePath,
         completedAt: new Date(),
         durationMs: Date.now() - startTime,

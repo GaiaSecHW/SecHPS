@@ -22,23 +22,14 @@ export async function GET(request: Request) {
     for (const file of files) {
       if (file.category === 'report') {
         reportFiles.push(file);
-      } else if (file.name === 'parsed-vulnerabilities.json') {
-        reportFiles.push({ ...file, category: 'parsed' });
       } else if (file.category === 'raw') {
         rawReportFiles.push(file);
       }
     }
 
-    const parsedFile = files.find(f => f.name === 'parsed-vulnerabilities.json');
-
     return NextResponse.json({
       taskId: effectiveTaskId,
       reportFiles,
-      parsedResult: parsedFile ? {
-        name: parsedFile.name,
-        url: parsedFile.url,
-        size: parsedFile.size,
-      } : null,
       rawReportFiles,
       totalFiles: files.length,
     });
