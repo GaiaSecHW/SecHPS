@@ -335,7 +335,7 @@ export function SessionExtractPanel() {
   );
 
   const renderHistoryPanel = () => (
-    <div className="w-64 bg-[#1E293B] rounded-lg border border-gray-700/50 flex flex-col">
+    <div className="w-64 bg-[#1E293B] rounded-lg border border-gray-700/50 flex flex-col shrink-0">
       <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
         <h4 className="text-sm font-medium text-gray-200 flex items-center gap-2">
           <History className="w-4 h-4" />
@@ -349,7 +349,7 @@ export function SessionExtractPanel() {
           <RefreshCw className={`w-4 h-4 ${loadingHistory ? 'animate-spin' : ''}`} />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto max-h-[400px]">
+      <div className="flex-1 overflow-y-auto" style={{ minHeight: '100px', maxHeight: '400px' }}>
         {loadingHistory ? (
           <div className="flex items-center justify-center h-32">
             <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
@@ -387,7 +387,7 @@ export function SessionExtractPanel() {
         ))}
       </div>
       {history.length > 0 && (
-        <div className="p-3 border-t border-gray-700/50">
+        <div className="p-3 border-t border-gray-700/50 shrink-0">
           <button
             onClick={clearAllHistory}
             className="w-full px-3 py-2 bg-red-900/30 hover:bg-red-900/50 rounded text-sm text-red-400 flex items-center justify-center gap-2"
