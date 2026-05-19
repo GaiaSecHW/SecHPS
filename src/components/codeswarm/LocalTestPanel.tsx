@@ -33,7 +33,6 @@ interface DirEntry {
 
 const COMMON_WORKSPACES = [
   { path: 'E:\\work\\202605\\claude-web-platform', name: 'claude-web-platform' },
-  { path: 'E:\\work\\202605\\claude-web-platform\\AgentHarness_management', name: 'AgentHarness' },
 ];
 
 function parseLogsFromResult(result: string): ParseLog[] {

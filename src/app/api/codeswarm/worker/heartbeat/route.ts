@@ -53,6 +53,18 @@ export async function POST(request: Request) {
       },
     }).catch(() => {});
 
+    // 同地址冲突清理：标记同地址的其他 online worker 为 offline（防止重启产生重复节点）
+    if (address) {
+      prisma.codeswarmWorker.updateMany({
+        where: {
+          address,
+          status: 'online',
+          nodeId: { not: nodeId },
+        },
+        data: { status: 'offline', currentTasks: 0 },
+      }).catch(() => {});
+    }
+
     // 首次注册或无 token 时分配新 token
     let workerToken = worker.token;
     if (!workerToken || !authenticatedNodeId) {

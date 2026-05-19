@@ -143,13 +143,7 @@ export async function register() {
       const { initGitSkillSync } = await import('./src/services/git-skill-sync');
       await initGitSkillSync();
       console.log(`${LOG_PREFIX} Git Skill 同步初始化完成`);
-      
-      // Step 7: 初始化 Git AgentApp 同步
-      console.log(`${LOG_PREFIX} 初始化 Git AgentApp 同步...`);
-      const { initGitAgentAppSync } = await import('./src/services/git-agent-app-sync');
-      await initGitAgentAppSync();
-      console.log(`${LOG_PREFIX} Git AgentApp 同步初始化完成`);
-      
+
     } catch (error) {
       console.error(`${LOG_PREFIX} 评估状态恢复失败:`, error);
     }

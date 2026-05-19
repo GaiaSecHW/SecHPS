@@ -1,0 +1,16 @@
+{
+  "name": "@codeswarm/sdk-adapter",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "file:C:/Users/Will/AppData/Roaming/npm/node_modules/@agentclientprotocol/claude-agent-acp/node_modules/@anthropic-ai/claude-agent-sdk"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.0"
+  }
+}

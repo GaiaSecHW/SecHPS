@@ -77,3 +77,6 @@ dev.db
 /scripts
 *.bak
 *.tsbuildinfo
+
+# Python cache
+__pycache__/
