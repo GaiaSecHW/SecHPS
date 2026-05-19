@@ -347,24 +347,29 @@ export default function ApiKeysPage() {
   );
 
   return (
-    <div className="p-6 space-y-6">
-      {/* 页面标题 */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">API Key 管理</h1>
-          <p className="mt-1 text-sm text-gray-400">
-            管理外部调用 API 的访问密钥与接口文档
-          </p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <Key size={18} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-white">API Key 管理</h1>
+            <p className="text-sm text-gray-400 mt-0.5">管理外部调用 API 的访问密钥与接口文档</p>
+          </div>
         </div>
-        {activeTab === 'keys' && (
-          <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            <Plus size={20} />
-            <span>创建 API Key</span>
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {activeTab === 'keys' && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="group flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 bg-primary-500 text-white shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:bg-primary-400"
+            >
+              <Plus size={18} className="transition-transform group-hover:rotate-90 duration-200" />
+              创建 API Key
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tab 导航 */}
@@ -440,25 +445,28 @@ export default function ApiKeysPage() {
             </div>
           )}
 
-          {/* 搜索栏 */}
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="搜索 API Key 名称..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
-            />
-          </form>
-
-          {/* API Key 表格 */}
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <LoadingSpinner size="lg" />
+          {/* 搜索 + 表格 */}
+          <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-gray-700/50">
+            {/* 搜索栏 */}
+            <div className="px-5 py-4 border-b border-gray-700/50">
+              <form onSubmit={handleSearch} className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="搜索 API Key 名称..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+                />
+              </form>
             </div>
-          ) : (
-            <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden">
+
+            {/* API Key 表格 */}
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <LoadingSpinner size="lg" />
+              </div>
+            ) : (
               <table className="min-w-full divide-y divide-gray-700/50">
                 <thead className="bg-[#0F172A]">
                   <tr>
@@ -513,18 +521,18 @@ export default function ApiKeysPage() {
                         </td>
                       </tr>
                     ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
+)}
+                 </tbody>
+               </table>
+            )}
+          </div>
         </>
       )}
 
       {/* 接口文档 Tab */}
       {activeTab === 'docs' && (
-        <div className="bg-dark-surface rounded-lg">
-          <div className="p-4 border-b">
+        <div className="bg-dark-surface rounded-lg shadow-sm overflow-hidden border border-gray-700/50">
+          <div className="px-5 py-4 border-b border-gray-700/50">
             <h2 className="text-lg font-semibold text-gray-100">开放 API 接口文档</h2>
             <p className="text-sm text-gray-500 mt-1">通过 API Key 调用的外部接口，点击查看详细参数说明</p>
           </div>

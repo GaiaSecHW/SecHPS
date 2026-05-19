@@ -401,7 +401,7 @@ export function SessionExtractPanel() {
   );
 
   const renderResultPanel = () => (
-    <div className="flex-1 space-y-4">
+    <div className="flex-1 min-w-0 space-y-4">
       {!extractResult ? (
         <div className="bg-[#1E293B] rounded-lg p-8 border border-gray-700/50 text-center">
           <p className="text-gray-500">选择历史记录或执行新解析查看结果</p>
@@ -447,10 +447,10 @@ export function SessionExtractPanel() {
                   );
                   return (
                     <div key={i} className="p-3">
-                      <div className="w-full flex items-center justify-between">
+                      <div className="w-full flex items-center justify-between min-w-0">
                         <button
                           onClick={() => setExpandedSkill(expandedSkill === i ? null : i)}
-                          className="flex items-center gap-2 text-left"
+                          className="flex items-center gap-2 text-left min-w-0"
                         >
                           {expandedSkill === i ? (
                             <ChevronDown className="w-4 h-4 text-cyan-400" />
@@ -475,16 +475,16 @@ export function SessionExtractPanel() {
                         </button>
                       </div>
                       {expandedSkill === i && (
-                        <div className="mt-3 space-y-3">
+                        <div className="mt-3 space-y-3 min-w-0">
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Input (skill 名称)</p>
-                            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto">
+                            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-w-full">
                               {truncateJson(skill.input, 300)}
                             </pre>
                           </div>
                           <div>
                             <p className="text-xs text-gray-500 mb-1">Skill 定义内容</p>
-                            <pre className="text-xs text-cyan-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[150px] overflow-y-auto">
+                            <pre className="text-xs text-cyan-300 bg-[#0B1120] p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '150px' }}>
                               {skill.result ? truncateJson(skill.result, 500) : '无'}
                             </pre>
                           </div>
@@ -545,10 +545,10 @@ export function SessionExtractPanel() {
               <div className="divide-y divide-gray-700/30 max-h-[300px] overflow-y-auto">
                 {extractResult.tools.map((tool, i) => (
                   <div key={i} className="p-3">
-                    <div className="w-full flex items-center justify-between">
+                    <div className="w-full flex items-center justify-between min-w-0">
                       <button
                         onClick={() => setExpandedTool(expandedTool === i ? null : i)}
-                        className="flex items-center gap-2 text-left"
+                        className="flex items-center gap-2 text-left min-w-0"
                       >
                         {expandedTool === i ? (
                           <ChevronDown className="w-4 h-4 text-purple-400" />
@@ -568,16 +568,16 @@ export function SessionExtractPanel() {
                       </button>
                     </div>
                     {expandedTool === i && (
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 space-y-2 min-w-0">
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Input</p>
-                          <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto">
+                          <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-w-full">
                             {truncateJson(tool.input, 500)}
                           </pre>
                         </div>
                         <div>
                           <p className="text-xs text-gray-500 mb-1">Result</p>
-                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+                          <pre className="text-xs text-green-300 bg-[#0B1120] p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
                             {tool.result ? truncateJson(tool.result, 1000) : '无结果'}
                           </pre>
                         </div>
@@ -649,7 +649,7 @@ export function SessionExtractPanel() {
                 复制
               </button>
             </div>
-            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[200px] overflow-y-auto">
+            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto overflow-y-auto max-w-full" style={{ maxHeight: '200px' }}>
               {truncateJson(extractResult, 5000)}
             </pre>
           </div>
@@ -659,11 +659,11 @@ export function SessionExtractPanel() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex gap-4">
+    <div className="space-y-4 max-w-full">
+      <div className="flex gap-4 min-w-0">
         {renderHistoryPanel()}
         
-        <div className="flex-1 flex flex-col gap-4">
+        <div className="flex-1 flex flex-col gap-4 min-w-0">
           <div className="flex gap-2">
             <button
               onClick={() => setActiveTab('history')}

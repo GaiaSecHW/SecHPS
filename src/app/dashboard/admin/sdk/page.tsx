@@ -292,13 +292,7 @@ const apiDocs = [
 
 export default function SdkPage() {
   return (
-    <div className="p-6 space-y-6">
-      {/* 页面标题 */}
-      <div className="bg-dark-surface rounded-lg p-6 border border-gray-700/50">
-        <h1 className="text-2xl font-bold text-gray-100">系统 SDK</h1>
-        <p className="text-gray-400 mt-1">面向外部系统的 API 接口文档，所有接口使用 API Key 认证（<code className="text-cyan-400">icsl-*</code> 前缀密钥）。</p>
-      </div>
-
+    <div className="space-y-6">
       {/* 接口文档 */}
       {apiDocs.map((section) => (
         <div key={section.category}>
