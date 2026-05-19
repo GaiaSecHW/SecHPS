@@ -486,10 +486,12 @@ export class ProcessManager {
       await client.start(clientConfig);
       console.log(`[ProcessMgr] Step D DONE: client.start() completed`);
 
-      // Create session
+      // Create session — for claudecode engine, don't pass agent name as ACP mode
+      // (ACP modes like bypassPermissions are opencode-specific, not agent names)
+      const sessionAgent = engine === 'claudecode' ? undefined : agentName;
       console.log(`[ProcessMgr] Step E: Calling client.createSession()...`);
-      console.log(`[ProcessMgr]   agentName: ${agentName}`);
-      const sessionId = await client.createSession(agentName);
+      console.log(`[ProcessMgr]   sessionAgent: ${sessionAgent} (engine=${engine})`);
+      const sessionId = await client.createSession(sessionAgent);
       console.log(`[ProcessMgr] Step E DONE: sessionId = ${sessionId}`);
 
       if (onEvent) {
