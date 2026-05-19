@@ -434,88 +434,108 @@ export function SessionExtractPanel() {
 
           {extractResult.skills?.length > 0 && (
             <div className="bg-[#1E293B] rounded-lg border border-cyan-700/30">
-              <div className="p-3 border-b border-gray-700/50">
+              <div className="p-3 border-b border-gray-700/50 flex items-center justify-between">
                 <h4 className="text-sm font-medium text-cyan-400">Skills 调用 ({extractResult.skills.length})</h4>
+                <p className="text-xs text-gray-500">连续加载的 skills 共享 reasoning/output</p>
               </div>
               <div className="divide-y divide-gray-700/30 max-h-[300px] overflow-y-auto">
-                {extractResult.skills.map((skill, i) => (
-                  <div key={i} className="p-3">
-                    <div className="w-full flex items-center justify-between">
-                      <button
-                        onClick={() => setExpandedSkill(expandedSkill === i ? null : i)}
-                        className="flex items-center gap-2 text-left"
-                      >
-                        {expandedSkill === i ? (
-                          <ChevronDown className="w-4 h-4 text-cyan-400" />
-                        ) : (
-                          <ChevronRight className="w-4 h-4 text-gray-400" />
-                        )}
-                        <span className="text-sm font-medium text-cyan-300">{skill.toolName}</span>
-                        <span className="text-xs text-gray-500">
-                          {new Date(skill.startTime).toLocaleTimeString()}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => copyToClipboard(formatJson(skill))}
-                        className="p-1 text-gray-400 hover:text-cyan-400"
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
+                {extractResult.skills.map((skill, i) => {
+                  const hasSharedOutput = skill.reasoning?.length > 0 || skill.textOutputs?.length > 0;
+                  const sameOutputSkills = extractResult.skills.filter(s => 
+                    s.reasoning?.length > 0 && skill.reasoning?.length > 0 &&
+                    s.reasoning[0] === skill.reasoning[0]
+                  );
+                  return (
+                    <div key={i} className="p-3">
+                      <div className="w-full flex items-center justify-between">
+                        <button
+                          onClick={() => setExpandedSkill(expandedSkill === i ? null : i)}
+                          className="flex items-center gap-2 text-left"
+                        >
+                          {expandedSkill === i ? (
+                            <ChevronDown className="w-4 h-4 text-cyan-400" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-gray-400" />
+                          )}
+                          <span className="text-sm font-medium text-cyan-300">{skill.toolName}</span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(skill.startTime).toLocaleTimeString()}
+                          </span>
+                          {sameOutputSkills.length > 1 && (
+                            <span className="text-xs text-blue-400 bg-blue-900/30 px-1 rounded">
+                              +{sameOutputSkills.length - 1}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => copyToClipboard(formatJson(skill))}
+                          className="p-1 text-gray-400 hover:text-cyan-400"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {expandedSkill === i && (
+                        <div className="mt-3 space-y-3">
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Input (skill 名称)</p>
+                            <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto">
+                              {truncateJson(skill.input, 300)}
+                            </pre>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 mb-1">Skill 定义内容</p>
+                            <pre className="text-xs text-cyan-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[150px] overflow-y-auto">
+                              {skill.result ? truncateJson(skill.result, 500) : '无'}
+                            </pre>
+                          </div>
+                          {sameOutputSkills.length > 1 && (
+                            <div className="text-xs text-blue-400 bg-blue-900/20 p-2 rounded">
+                              此 skill 与 {sameOutputSkills.length - 1} 个其他 skills 连续加载，共享后续输出
+                            </div>
+                          )}
+                          {skill.reasoning?.length > 0 && (
+                            <div>
+                              <p className="text-xs text-yellow-500 mb-1 flex items-center gap-1">
+                                <Brain className="w-3 h-3" />
+                                Reasoning ({skill.reasoning.length})
+                                {sameOutputSkills.length > 1 && <span className="text-blue-400 ml-2">共享</span>}
+                              </p>
+                              <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
+                                {skill.reasoning.map((r, ri) => (
+                                  <p key={ri} className="text-xs text-yellow-200 mb-1 last:mb-0 whitespace-pre-wrap">
+                                    {r.length > 200 ? r.slice(0, 200) + '...' : r}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {skill.textOutputs?.length > 0 && (
+                            <div>
+                              <p className="text-xs text-green-500 mb-1 flex items-center gap-1">
+                                <MessageSquare className="w-3 h-3" />
+                                Output ({skill.textOutputs.length})
+                                {sameOutputSkills.length > 1 && <span className="text-blue-400 ml-2">共享</span>}
+                              </p>
+                              <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
+                                {skill.textOutputs.map((t, ti) => (
+                                  <p key={ti} className="text-xs text-green-200 mb-2 last:mb-0 whitespace-pre-wrap">
+                                    {t.length > 300 ? t.slice(0, 300) + '...' : t}
+                                  </p>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <div className="text-xs text-gray-400">
+                            耗时: {new Date(skill.endTime).getTime() - new Date(skill.startTime).getTime()}ms
+                          </div>
+                        </div>
+                      )}
                     </div>
-{expandedSkill === i && (
-                       <div className="mt-3 space-y-3">
-                         <div>
-                           <p className="text-xs text-gray-500 mb-1">Input</p>
-                           <pre className="text-xs text-gray-300 bg-[#0B1120] p-2 rounded overflow-x-auto">
-                             {truncateJson(skill.input, 300)}
-                           </pre>
-                         </div>
-                         <div>
-                           <p className="text-xs text-gray-500 mb-1">Skill 定义</p>
-                           <pre className="text-xs text-cyan-300 bg-[#0B1120] p-2 rounded overflow-x-auto max-h-[150px] overflow-y-auto">
-                             {skill.result ? truncateJson(skill.result, 500) : '无'}
-                           </pre>
-                         </div>
-                         {skill.reasoning?.length > 0 && (
-                           <div>
-                             <p className="text-xs text-yellow-500 mb-1 flex items-center gap-1">
-                               <Brain className="w-3 h-3" />
-                               Reasoning ({skill.reasoning.length})
-                             </p>
-                             <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
-                               {skill.reasoning.map((r, ri) => (
-                                 <p key={ri} className="text-xs text-yellow-200 mb-1 last:mb-0 whitespace-pre-wrap">
-                                   {r.length > 200 ? r.slice(0, 200) + '...' : r}
-                                 </p>
-                               ))}
-                             </div>
-                           </div>
-                         )}
-                         {skill.textOutputs?.length > 0 && (
-                           <div>
-                             <p className="text-xs text-green-500 mb-1 flex items-center gap-1">
-                               <MessageSquare className="w-3 h-3" />
-                               Output ({skill.textOutputs.length})
-                             </p>
-                             <div className="bg-[#0B1120] p-2 rounded max-h-[200px] overflow-y-auto">
-                               {skill.textOutputs.map((t, ti) => (
-                                 <p key={ti} className="text-xs text-green-200 mb-2 last:mb-0 whitespace-pre-wrap">
-                                   {t.length > 300 ? t.slice(0, 300) + '...' : t}
-                                 </p>
-                               ))}
-                             </div>
-                           </div>
-                         )}
-                         <div className="text-xs text-gray-400">
-                           耗时: {new Date(skill.endTime).getTime() - new Date(skill.startTime).getTime()}ms
-                         </div>
-                       </div>
-                     )}
-                   </div>
-                 ))}
-               </div>
-             </div>
-           )}
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {extractResult.tools?.length > 0 && (
             <div className="bg-[#1E293B] rounded-lg border border-purple-700/30">

@@ -128,7 +128,15 @@ export async function POST(request: Request) {
       } catch {}
     }
 
-    const skillTimeRanges: Array<{ startTime: number; endTime: number; skillIndex: number }> = [];
+    const skillGroups: Array<{
+      startIndex: number;
+      endIndex: number;
+      lastEndTime: number;
+      skillIndices: number[];
+    }> = [];
+
+    let currentGroup: Array<{ time: number; skillIndex: number }> = [];
+    const SKILL_GROUP_THRESHOLD = 2000;
 
     for (const entry of allParts) {
       if (entry.type === 'tool') {
@@ -137,24 +145,39 @@ export async function POST(request: Request) {
         const callID = parsed.callID || '';
         const input = parsed.state?.input || {};
         const output = parsed.state?.output;
-        const startTime = new Date(entry.time).toISOString();
-        const endTime = parsed.state?.time?.end
-          ? new Date(parsed.state.time.end).toISOString()
-          : startTime;
+        const startTimeIso = new Date(entry.time).toISOString();
+        const endTimeNum = parsed.state?.time?.end || entry.time;
+        const endTimeIso = new Date(endTimeNum).toISOString();
 
         if (isSkill(toolName)) {
-          skillTimeRanges.push({
-            startTime: entry.time,
-            endTime: parsed.state?.time?.end || entry.time,
-            skillIndex: skills.length,
-          });
+          const skillIndex = skills.length;
+          
+          if (currentGroup.length === 0) {
+            currentGroup.push({ time: endTimeNum, skillIndex });
+          } else {
+            const lastSkill = currentGroup[currentGroup.length - 1];
+            const gap = entry.time - lastSkill.time;
+            
+            if (gap < SKILL_GROUP_THRESHOLD) {
+              currentGroup.push({ time: endTimeNum, skillIndex });
+            } else {
+              skillGroups.push({
+                startIndex: currentGroup[0].skillIndex,
+                endIndex: currentGroup[currentGroup.length - 1].skillIndex,
+                lastEndTime: currentGroup[currentGroup.length - 1].time,
+                skillIndices: currentGroup.map(s => s.skillIndex),
+              });
+              currentGroup = [{ time: endTimeNum, skillIndex }];
+            }
+          }
+
           skills.push({
             toolName,
             toolUseId: callID,
             input,
             result: output,
-            startTime,
-            endTime,
+            startTime: startTimeIso,
+            endTime: endTimeIso,
             reasoning: [],
             textOutputs: [],
           });
@@ -164,15 +187,39 @@ export async function POST(request: Request) {
             toolUseId: callID,
             input,
             result: output,
-            startTime,
-            endTime,
+            startTime: startTimeIso,
+            endTime: endTimeIso,
           });
         }
-      } else if (entry.type === 'reasoning') {
+      }
+    }
+
+    if (currentGroup.length > 0) {
+      skillGroups.push({
+        startIndex: currentGroup[0].skillIndex,
+        endIndex: currentGroup[currentGroup.length - 1].skillIndex,
+        lastEndTime: currentGroup[currentGroup.length - 1].time,
+        skillIndices: currentGroup.map(s => s.skillIndex),
+      });
+    }
+
+    for (const entry of allParts) {
+      if (entry.type === 'reasoning') {
         reasoning.push({
           content: entry.data.text,
           startTime: new Date(entry.time).toISOString(),
         });
+
+        for (const group of skillGroups) {
+          if (entry.time > group.lastEndTime) {
+            const nextGroup = skillGroups.find(g => g.lastEndTime > group.lastEndTime && entry.time < g.lastEndTime);
+            if (!nextGroup) {
+              for (const idx of group.skillIndices) {
+                skills[idx].reasoning.push(entry.data.text);
+              }
+            }
+          }
+        }
       } else if (entry.type === 'text') {
         const text = entry.data.text;
         if (text && text.trim()) {
@@ -180,22 +227,16 @@ export async function POST(request: Request) {
             content: text,
             startTime: new Date(entry.time).toISOString(),
           });
-        }
-      }
-    }
 
-    for (let i = 0; i < skillTimeRanges.length; i++) {
-      const range = skillTimeRanges[i];
-      const nextSkillStart = i < skillTimeRanges.length - 1
-        ? skillTimeRanges[i + 1].startTime
-        : Infinity;
-
-      for (const entry of allParts) {
-        if (entry.time > range.endTime && entry.time < nextSkillStart) {
-          if (entry.type === 'reasoning') {
-            skills[range.skillIndex].reasoning.push(entry.data.text);
-          } else if (entry.type === 'text' && entry.data.text?.trim()) {
-            skills[range.skillIndex].textOutputs.push(entry.data.text);
+          for (const group of skillGroups) {
+            if (entry.time > group.lastEndTime) {
+              const nextGroup = skillGroups.find(g => g.lastEndTime > group.lastEndTime && entry.time < g.lastEndTime);
+              if (!nextGroup) {
+                for (const idx of group.skillIndices) {
+                  skills[idx].textOutputs.push(text);
+                }
+              }
+            }
           }
         }
       }
