@@ -65,6 +65,11 @@ export default function TaskBuilderPage() {
   }>({ isOpen: false, taskId: null, taskName: '' });
   const [deleting, setDeleting] = useState(false);
   const [executingIds, setExecutingIds] = useState<Set<string>>(new Set());
+  const [stopConfirm, setStopConfirm] = useState<{
+    isOpen: boolean;
+    taskId: string | null;
+    taskName: string;
+  }>({ isOpen: false, taskId: null, taskName: '' });
 
   useEffect(() => {
     fetchTasks(currentPage, pageSize);
@@ -179,12 +184,16 @@ export default function TaskBuilderPage() {
     }
   };
 
-  const handleStopTask = async (taskId: string) => {
-    if (!confirm('确定要停止正在执行的任务吗？')) return;
-    
+  const handleStopTask = (taskId: string, taskName: string) => {
+    setStopConfirm({ isOpen: true, taskId, taskName });
+  };
+
+  const confirmStopTask = async () => {
+    if (!stopConfirm.taskId) return;
+
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/task-builder/tasks/${taskId}/stop`, {
+      const response = await fetch(`/api/task-builder/tasks/${stopConfirm.taskId}/stop`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -195,6 +204,7 @@ export default function TaskBuilderPage() {
       }
 
       toast.success('任务已停止');
+      setStopConfirm({ isOpen: false, taskId: null, taskName: '' });
       await fetchTasks(currentPage, pageSize);
     } catch (error) {
       toast.error(`停止失败: ${error instanceof Error ? error.message : '未知错误'}`);
@@ -397,7 +407,7 @@ export default function TaskBuilderPage() {
                     )}
                     {task.status === 'running' && (
                       <button
-                        onClick={() => handleStopTask(task.id)}
+                        onClick={() => handleStopTask(task.id, task.name)}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
                       >
                         <Square size={12} />
@@ -499,6 +509,18 @@ export default function TaskBuilderPage() {
         cancelText="取消"
         variant="danger"
         loading={deleting}
+      />
+
+      <ConfirmDialog
+        isOpen={stopConfirm.isOpen}
+        onClose={() => setStopConfirm({ isOpen: false, taskId: null, taskName: '' })}
+        onConfirm={confirmStopTask}
+        title="停止任务"
+        message={`确定要停止任务「${stopConfirm.taskName}」吗？任务将标记为失败。`}
+        confirmText="停止"
+        cancelText="取消"
+        variant="danger"
+        loading={false}
       />
     </div>
   );

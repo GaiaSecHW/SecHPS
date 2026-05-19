@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
     const agentHarnessFile = formData.get('agentHarnessFile') as File | null;
     const filesJson = formData.get('filesJson') as string | null;
 
-    if (!name || !engine || !defaultAgentName) {
+    if (!name || !engine) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
     }
 
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
         name,
         engine,
         agentHarnessPath,
-        defaultAgentName,
+        defaultAgentName: defaultAgentName || null,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
         status: 'active',

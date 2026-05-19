@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { X, Upload, File, Loader2 } from 'lucide-react';
+import { X, Upload, File, Loader2, ChevronDown, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ProductTreeSelect from '@/components/ui/ProductTreeSelect';
 
@@ -28,6 +28,7 @@ interface ModelOption {
   modelId: string;
   modelName: string;
   label: string;     // "配置名 - 模型名"
+  providerType: string; // 提供商类型，用于颜色标记
 }
 
 interface Props {
@@ -55,7 +56,9 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [targetProduct, setTargetProduct] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -67,8 +70,29 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
       setSelectedModelKey('');
       setSelectedFile(null);
       setTargetProduct('');
+      setModelDropdownOpen(false);
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const getProviderColor = (providerType: string) => {
+    const type = providerType.toLowerCase();
+    if (type === 'anthropic') return 'text-orange-400 bg-orange-500/20 border-orange-500/50';
+    if (type === 'openai') return 'text-green-400 bg-green-500/20 border-green-500/50';
+    if (type === 'deepseek') return 'text-blue-400 bg-blue-500/20 border-blue-500/50';
+    if (type === 'google') return 'text-purple-400 bg-purple-500/20 border-purple-500/50';
+    if (type === 'azure') return 'text-cyan-400 bg-cyan-500/20 border-cyan-500/50';
+    return 'text-gray-400 bg-gray-500/20 border-gray-500/50';
+  };
 
   const fetchAgentApps = async () => {
     setLoadingAgents(true);
@@ -111,6 +135,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
               modelId: cfg.id,
               modelName,
               label: `${cfg.name} - ${modelName}${suffix}`,
+              providerType: cfg.providerType || '',
             });
           }
         }
@@ -190,6 +215,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
     if (!name.trim()) { toast.error('请输入任务名称'); return; }
     if (selectedAgentIds.size === 0) { toast.error('请至少选择一个 Agent'); return; }
     if (!selectedModelKey) { toast.error('请选择模型'); return; }
+    if (!selectedFile) { toast.error('请上传文件'); return; }
 
     const option = modelOptions.find(o => o.key === selectedModelKey);
     if (!option) { toast.error('请选择模型'); return; }
@@ -308,7 +334,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 选择模型（合并为一个下拉） */}
           <div>
-            <label htmlFor="modelSelect" className="block text-sm font-medium text-gray-300">选择模型 *</label>
+            <label className="block text-sm font-medium text-gray-300">选择模型 *</label>
             {loadingModels ? (
               <div className="mt-1 flex items-center justify-center py-8">
                 <Loader2 size={20} className="animate-spin text-blue-400" />
@@ -318,23 +344,65 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
                 暂无可用模型，请在 我的模型页面创建
               </div>
             ) : (
-              <select
-                id="modelSelect"
-                value={selectedModelKey}
-                onChange={(e) => setSelectedModelKey(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="">请选择模型</option>
-                {modelOptions.map((opt) => (
-                  <option key={opt.key} value={opt.key}>{opt.label}</option>
-                ))}
-              </select>
+              <div className="mt-1 relative" ref={modelDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setModelDropdownOpen(!modelDropdownOpen)}
+                  className={`w-full px-3 py-2 border rounded-md text-left flex items-center justify-between transition-colors ${
+                    modelDropdownOpen ? 'border-blue-500 ring-1 ring-blue-500' : 'border-gray-600'
+                  }`}
+                >
+                  {selectedModelKey ? (
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const opt = modelOptions.find(o => o.key === selectedModelKey);
+                        if (!opt) return <span className="text-gray-200">请选择模型</span>;
+                        return (
+                          <>
+                            <span className={`px-1.5 py-0.5 text-xs font-medium rounded border ${getProviderColor(opt.providerType)}`}>
+                              {opt.providerType || 'unknown'}
+                            </span>
+                            <span className="text-gray-200 truncate">{opt.label}</span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <span className="text-gray-500">请选择模型</span>
+                  )}
+                  <ChevronDown size={16} className={`text-gray-400 transition-transform ${modelDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {modelDropdownOpen && (
+                  <div className="absolute z-50 mt-1 w-full bg-[#0F172A] border border-gray-600 rounded-md shadow-xl max-h-60 overflow-y-auto">
+                    {modelOptions.map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => { setSelectedModelKey(opt.key); setModelDropdownOpen(false); }}
+                        className={`w-full px-3 py-2 text-left flex items-center justify-between hover:bg-blue-900/30 transition-colors ${
+                          selectedModelKey === opt.key ? 'bg-blue-900/40' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`px-1.5 py-0.5 text-xs font-medium rounded border ${getProviderColor(opt.providerType)}`}>
+                            {opt.providerType || 'unknown'}
+                          </span>
+                          <span className={`text-sm truncate ${selectedModelKey === opt.key ? 'text-blue-300' : 'text-gray-200'}`}>
+                            {opt.label}
+                          </span>
+                        </div>
+                        {selectedModelKey === opt.key && <Check size={14} className="text-blue-400" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
           {/* 上传文件 */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">上传文件</label>
+            <label className="block text-sm font-medium text-gray-300 mb-2">上传文件 *</label>
             {selectedFile ? (
               <div className="flex items-center justify-between p-3 bg-[#0F172A] border border-gray-700/50 rounded-md">
                 <div className="flex items-center space-x-2">
@@ -388,7 +456,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || !name.trim() || selectedAgentIds.size === 0 || !selectedModelKey}
+            disabled={isSubmitting || !name.trim() || selectedAgentIds.size === 0 || !selectedModelKey || !selectedFile}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isSubmitting && <Loader2 size={14} className="animate-spin" />}

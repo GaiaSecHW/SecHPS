@@ -132,8 +132,9 @@ export async function POST(
     const skills = mergedSkills ? parseJsonArray(mergedSkills) : undefined;
     const scripts = mergedScripts ? parseJsonArray(mergedScripts) : undefined;
 
-    let model: string | undefined;
-    if (task.ModelConfig?.models) {
+    // Prefer user-selected model name, fall back to first model in config
+    let model: string | undefined = task.modelName || undefined;
+    if (!model && task.ModelConfig?.models) {
       try {
         const modelsArray = JSON.parse(task.ModelConfig.models);
         if (Array.isArray(modelsArray) && modelsArray.length > 0) {
@@ -142,9 +143,6 @@ export async function POST(
       } catch {
         console.warn('解析 ModelConfig.models 失败');
       }
-    }
-    if (!model) {
-      model = task.modelName || undefined;
     }
 
     const apiKey = task.ModelConfig?.apiKey || undefined;

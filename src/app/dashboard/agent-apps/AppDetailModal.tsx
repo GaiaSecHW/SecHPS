@@ -112,10 +112,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
       toast.error('请选择使用引擎');
       return;
     }
-    if (!formData.defaultAgentName.trim()) {
-      toast.error('请输入默认智能体名称');
-      return;
-    }
+    
 
     setIsSubmitting(true);
     try {
@@ -298,7 +295,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              默认智能体名称 <span className="text-red-500">*</span>
+              默认智能体名称
             </label>
             <input
               type="text"

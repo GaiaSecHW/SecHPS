@@ -178,22 +178,21 @@ export class ProcessManager {
         mergedEnv.ANTHROPIC_API_KEY = apiKey;
         console.log(`[ProcessMgr] Added ANTHROPIC_API_KEY to env`);
       }
-      if (engine !== 'claudecode') {
-        if (model) {
-          mergedEnv.ANTHROPIC_MODEL = model;
-          console.log(`[ProcessMgr] Added ANTHROPIC_MODEL=${model} to env`);
-        }
-        if (apiBaseUrl) {
-          mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
-          console.log(`[ProcessMgr] Added ANTHROPIC_BASE_URL=${apiBaseUrl} to env`);
-        }
-      } else {
-        // claudecode engine: load from settings.json (supports ANTHROPIC_BASE_URL, ANTHROPIC_MODEL, CLAUDE_API_KEY)
+      // Set model and apiBaseUrl for both engines (task payload overrides settings.json)
+      if (model) {
+        mergedEnv.ANTHROPIC_MODEL = model;
+        console.log(`[ProcessMgr] Added ANTHROPIC_MODEL=${model} to env`);
+      }
+      if (apiBaseUrl) {
+        mergedEnv.ANTHROPIC_BASE_URL = apiBaseUrl;
+        console.log(`[ProcessMgr] Added ANTHROPIC_BASE_URL=${apiBaseUrl} to env`);
+      }
+      if (engine === 'claudecode') {
+        // claudecode engine: sync CLAUDE_API_KEY for claude-agent-acp
         if (mergedEnv.ANTHROPIC_API_KEY && !mergedEnv.CLAUDE_API_KEY) {
           mergedEnv.CLAUDE_API_KEY = mergedEnv.ANTHROPIC_API_KEY;
           console.log(`[ProcessMgr] Synced CLAUDE_API_KEY from ANTHROPIC_API_KEY`);
         }
-        console.log(`[ProcessMgr] Claude Code engine: uses ANTHROPIC_BASE_URL and ANTHROPIC_MODEL from settings.json`);
       }
       console.log(`[ProcessMgr] mergedEnv keys: ${Object.keys(mergedEnv).join(', ')}`);
 
@@ -341,7 +340,7 @@ export class ProcessManager {
       } = {
         cwd: workspace,
         env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
-        ...(engine !== 'claudecode' && model ? { model } : {}),
+        ...(model ? { model } : {}),
         agent: agentName,
       };
 
