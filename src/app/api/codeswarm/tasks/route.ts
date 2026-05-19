@@ -74,6 +74,7 @@ export async function POST(request: Request) {
       scripts,
       mcps,
       model,
+      modelId,
       apiKey,
       timeoutSec,
       gitUrl,
@@ -85,6 +86,24 @@ export async function POST(request: Request) {
       targetProduct,
       platformTaskId,
     } = body;
+
+    // 如果传入 modelId 但没有 apiKey，从 ModelConfig 解析
+    let resolvedApiKey = apiKey || null;
+    let resolvedApiBaseUrl: string | null = null;
+    if (modelId && !apiKey) {
+      try {
+        const modelConfig = await prisma.modelConfig.findUnique({
+          where: { id: modelId },
+          select: { apiKey: true, apiBaseUrl: true },
+        });
+        if (modelConfig?.apiKey) {
+          resolvedApiKey = modelConfig.apiKey;
+          resolvedApiBaseUrl = modelConfig.apiBaseUrl || null;
+        }
+      } catch {
+        console.warn('[CodeSwarm] Failed to resolve apiKey from modelId:', modelId);
+      }
+    }
 
     // 手动批量分发（保留兼容）
     if (action === 'dispatch-queued') {
@@ -172,12 +191,13 @@ export async function POST(request: Request) {
         scripts: scripts ? JSON.stringify(scripts) : null,
         mcps: mcps ? JSON.stringify(mcps) : null,
         model: model || null,
-        apiKey: apiKey || null,
+        apiKey: resolvedApiKey,
         timeoutSec: timeoutSec || null,
         agent: agent || null,
         engine: engine || null,
         preferredWorkerNodeId: preferredWorkerNodeId || null,
         targetProduct: targetProduct || null,
+        apiBaseUrl: resolvedApiBaseUrl,
         platformTaskId: platformTaskId || null,
         updatedAt: new Date(),
       },

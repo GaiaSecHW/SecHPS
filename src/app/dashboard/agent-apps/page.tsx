@@ -47,21 +47,24 @@ export default function AgentAppsPage() {
   const fetchApps = async () => {
     try {
       setLoading(true);
-      
+
       const token = localStorage.getItem('token');
       const response = await fetch('/api/agent-apps', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (response.ok) {
         const data = await response.json();
         setApps(data.apps || []);
       } else {
-        console.error('获取应用列表失败');
+        const errorData = await response.json().catch(() => ({ error: '未知错误' }));
+        console.error('获取应用列表失败:', errorData);
+        toast.error(errorData.error || '获取应用列表失败');
         setApps([]);
       }
     } catch (error) {
       console.error('获取应用列表失败:', error);
+      toast.error('获取应用列表失败');
       setApps([]);
     } finally {
       setLoading(false);

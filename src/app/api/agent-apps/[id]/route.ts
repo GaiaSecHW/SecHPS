@@ -64,7 +64,7 @@ export async function PUT(
       return NextResponse.json({ error: '不支持的 Content-Type' }, { status: 400 });
     }
 
-    if (!name || !engine || !defaultAgentName) {
+    if (!name || !engine) {
       return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
     }
 
@@ -136,7 +136,7 @@ export async function PUT(
       data: {
         name,
         engine,
-        defaultAgentName,
+        defaultAgentName: defaultAgentName || null,
         startCommand: startCommand || null,
         inputRequirements: inputRequirements || null,
         isPublic,

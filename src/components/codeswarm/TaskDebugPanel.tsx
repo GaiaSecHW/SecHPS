@@ -228,18 +228,16 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
 
     setLoading(true);
     try {
-      const selectedModel = form.engine === 'opencode' ? modelOptions.find(o => o.key === selectedModelKey) : null;
+      const selectedModel = modelOptions.find(o => o.key === selectedModelKey);
       const payload = {
         instruction: form.instruction,
         engine: form.engine,
         agent: form.agent || undefined,
         projectPath: form.projectPath || undefined,
         workspacePath: form.workspacePath || undefined,
-        ...(form.engine === 'opencode' ? {
-          model: selectedModel?.modelName || undefined,
-          modelId: selectedModel?.modelId || undefined,
-          apiKey: form.apiKey || undefined,
-        } : {}),
+        model: selectedModel?.modelName || undefined,
+        modelId: selectedModel?.modelId || undefined,
+        apiKey: form.apiKey || undefined,
         timeoutSec: form.timeoutSec || undefined,
         skills: form.skills ? form.skills.split(',').map(s => s.trim()) : undefined,
         mcps: form.mcps ? form.mcps.split(',').map(s => s.trim()) : undefined,
@@ -353,7 +351,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                   name="engine"
                   value="claudecode"
                   checked={form.engine === 'claudecode'}
-                  onChange={() => { setForm({ ...form, engine: 'claudecode' }); setSelectedModelKey(''); }}
+                  onChange={() => { setForm({ ...form, engine: 'claudecode' }); }}
                   className="sr-only"
                 />
                 <span className="font-medium">Claude Code</span>
@@ -434,11 +432,7 @@ export function TaskDebugPanel({ onTaskCreated }: TaskDebugPanelProps) {
                 onChange={(e) => handleModelChange(e.target.value)}
                 className="w-full px-3 py-2 bg-[#0F172A] border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-200"
               >
-                {form.engine === 'claudecode' ? (
-                  <option value="">Worker 端默认配置</option>
-                ) : (
-                  <option value="">请选择模型</option>
-                )}
+                <option value="">不指定（使用 Worker 端默认）</option>
                 {modelOptions.map((opt) => (
                   <option key={opt.key} value={opt.key}>{opt.label}</option>
                 ))}

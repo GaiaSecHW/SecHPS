@@ -14,7 +14,7 @@ export async function GET(
 
   const stream = new ReadableStream({
     async start(controller) {
-      let lastEventId = 0;
+      let lastEventDbId: number | null = null;
 
       const sendEvent = (data: object) => {
         if (isClosed) return;
@@ -28,24 +28,25 @@ export async function GET(
 
       const interval = setInterval(async () => {
         try {
-          // Fetch new events since last check
+          // Fetch new events since last check (using DB id as cursor)
+          const where: any = { taskId };
+          if (lastEventDbId !== null) {
+            where.id = { gt: lastEventDbId };
+          }
+          
           const events = await prisma.codeswarmEvent.findMany({
-            where: { taskId },
+            where,
             orderBy: { createdAt: 'asc' },
-            take: 100,
           });
 
-          if (events.length > lastEventId) {
-            const newEvents = events.slice(lastEventId);
-            for (const event of newEvents) {
-              const eventData = JSON.parse(event.data);
-              sendEvent({
-                type: event.type,
-                data: eventData,
-                timestamp: event.createdAt.toISOString(),
-              });
-            }
-            lastEventId = events.length;
+          for (const event of events) {
+            const eventData = JSON.parse(event.data);
+            sendEvent({
+              type: event.type,
+              data: eventData,
+              timestamp: event.createdAt.toISOString(),
+            });
+            lastEventDbId = event.id;
           }
 
           // Check if task is completed

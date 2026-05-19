@@ -2,7 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'SecHPS 测试平台',
+  title: '',
   description: '基于角色权限控制的 AI 编程助手平台',
 };
 

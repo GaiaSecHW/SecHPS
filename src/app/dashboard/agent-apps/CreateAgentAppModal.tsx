@@ -94,10 +94,6 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
       toast.error('请上传 AgentHarness 文件');
       return;
     }
-    if (!formData.defaultAgentName.trim()) {
-      toast.error('请输入默认智能体名称');
-      return;
-    }
     if (isIcsOrAdmin && !formData.tenantId) {
       toast.error('请选择租户');
       return;
@@ -466,8 +462,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                 {formData.engine === 'claudecode'
                   ? '(自动识别 .claude/agents/)'
                   : '(自动识别 default_agent)'}
-              </span>{' '}
-              <span className="text-red-500">*</span>
+              </span>
             </label>
             <input
               type="text"

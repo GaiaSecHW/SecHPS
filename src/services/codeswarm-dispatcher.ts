@@ -151,6 +151,7 @@ const taskPayload = JSON.stringify({
       mcps: task.mcps ? JSON.parse(task.mcps) : undefined,
       model: task.model || undefined,
       apiKey: task.apiKey || undefined,
+      apiBaseUrl: task.apiBaseUrl || undefined,
       timeoutSec: task.timeoutSec || undefined,
       callbackUrl,
       engine: task.engine || undefined,
