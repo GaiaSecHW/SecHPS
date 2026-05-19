@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Play, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, FolderSearch, HardDrive, AlertTriangle, FileText, Shield, Zap } from 'lucide-react';
+import { Play, Loader2, CheckCircle, XCircle, Clock, Copy, RefreshCw, ChevronDown, ChevronRight, FolderSearch, HardDrive, AlertTriangle, FileText, Shield, Zap, Download } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 interface TestRecord {
@@ -109,6 +109,13 @@ export function LocalTestPanel() {
   const [rootEntries, setRootEntries] = useState<DirEntry[]>([]);
   const [isRootList, setIsRootList] = useState(false);
   const [platform, setPlatform] = useState<'windows' | 'linux' | null>(null);
+  const [showFilesModal, setShowFilesModal] = useState(false);
+  const [filesData, setFilesData] = useState<{
+    reportFiles: Array<{ name: string; url: string; size?: number }>;
+    parsedResult: { name: string; url: string; size?: number } | null;
+    rawReportFiles: Array<{ name: string; url: string; size?: number }>;
+  } | null>(null);
+  const [loadingFiles, setLoadingFiles] = useState(false);
 
   const logsRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -202,7 +209,7 @@ export function LocalTestPanel() {
 
   const handleRun = async () => {
     if (!workspacePath) {
-      toast.error('请选择包含 AUDIT_REPORT.md 的工作区路径');
+      toast.error('请选择包含 Report 文件夹的工作区路径');
       return;
     }
 
@@ -245,6 +252,28 @@ export function LocalTestPanel() {
     }
   };
 
+  const loadTaskFiles = async (taskId: string) => {
+    setLoadingFiles(true);
+    setFilesData(null);
+    try {
+      const res = await fetch(`/api/codeswarm/local-test/files?taskId=${taskId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setFilesData({
+          reportFiles: data.reportFiles || [],
+          parsedResult: data.parsedResult || null,
+          rawReportFiles: data.rawReportFiles || [],
+        });
+      } else {
+        toast.error('获取文件列表失败');
+      }
+    } catch {
+      toast.error('加载文件列表失败');
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
   // 从日志推断时间线各阶段状态
   type StepStatus = 'pending' | 'running' | 'done' | 'error' | 'skipped';
 
@@ -252,7 +281,7 @@ export function LocalTestPanel() {
     const has = (msg: string) => parseLogs.some(l => l.message.includes(msg));
     const hasLevel = (level: string) => parseLogs.some(l => l.level === level);
 
-    const findReport = has('找到报告') || has('未找到 AUDIT_REPORT');
+    const findReport = has('找到 Report') || has('未找到 Report');
     const skillParsed = has('Skill') && has('解析成功');
     const skillFailed = has('Skill') && (has('失败') || has('超时'));
     const fallbackStarted = has('Fallback') || (has('启动') && has('通用'));
@@ -357,11 +386,101 @@ export function LocalTestPanel() {
     }
   };
 
+  const renderFilesModal = () => showFilesModal && (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+      <div className="bg-[#1E293B] border border-gray-700 rounded-lg w-[700px] max-h-[600px] flex flex-col">
+        <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+            <Download className="w-5 h-5" />任务文件下载
+          </h3>
+          <button onClick={() => setShowFilesModal(false)} className="text-gray-400 hover:text-gray-200">✕</button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {loadingFiles ? (
+            <div className="flex items-center justify-center h-32"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+          ) : !filesData ? (
+            <div className="text-center text-gray-500 py-8">无文件数据</div>
+          ) : (
+            <div className="space-y-4">
+              {/* Report 文件 */}
+              {filesData.reportFiles.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-blue-400 mb-2 flex items-center gap-2">
+                    <FolderSearch className="w-4 h-4" />Report 文件夹文件
+                  </h4>
+                  <div className="bg-[#0F172A] rounded-lg p-2 space-y-1">
+                    {filesData.reportFiles.map((file, i) => (
+                      <div key={i} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
+                        <span className="text-xs text-gray-300 truncate flex-1">{file.name}</span>
+                        <span className="text-xs text-gray-500 mr-2">{file.size ? `${(file.size / 1024).toFixed(1)}KB` : '-'}</span>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+                          <Download className="w-3 h-3" />下载
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 解析结果 */}
+              {filesData.parsedResult && (
+                <div>
+                  <h4 className="text-sm font-medium text-green-400 mb-2 flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4" />解析结果 JSON
+                  </h4>
+                  <div className="bg-[#0F172A] rounded-lg p-2">
+                    <div className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
+                      <span className="text-xs text-gray-300 truncate flex-1">{filesData.parsedResult.name}</span>
+                      <span className="text-xs text-gray-500 mr-2">{filesData.parsedResult.size ? `${(filesData.parsedResult.size / 1024).toFixed(1)}KB` : '-'}</span>
+                      <a href={filesData.parsedResult.url} target="_blank" rel="noopener noreferrer" className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1">
+                        <Download className="w-3 h-3" />下载
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 漏洞原始文件 */}
+              {filesData.rawReportFiles.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium text-purple-400 mb-2 flex items-center gap-2">
+                    <FileText className="w-4 h-4" />漏洞原始文件
+                  </h4>
+                  <div className="bg-[#0F172A] rounded-lg p-2 space-y-1 max-h-[200px] overflow-y-auto">
+                    {filesData.rawReportFiles.map((file, i) => (
+                      <div key={i} className="flex items-center justify-between px-2 py-1.5 hover:bg-gray-700/30 rounded">
+                        <span className="text-xs text-gray-300 truncate flex-1">{file.name.replace('raw/', '')}</span>
+                        <span className="text-xs text-gray-500 mr-2">{file.size ? `${(file.size / 1024).toFixed(1)}KB` : '-'}</span>
+                        <a href={file.url} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                          <Download className="w-3 h-3" />下载
+                        </a>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {filesData.reportFiles.length === 0 && !filesData.parsedResult && filesData.rawReportFiles.length === 0 && (
+                <div className="text-center text-gray-500 py-8">暂无上传文件</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4 border-t border-gray-700 flex justify-end gap-2">
+          <button onClick={() => setShowFilesModal(false)} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-gray-300">关闭</button>
+        </div>
+      </div>
+    </div>
+  );
+
   const vulnCounts = getVulnCounts();
 
   return (
     <div className="space-y-6">
       {renderDirBrowser()}
+      {renderFilesModal()}
 
       {/* 工作区选择 */}
       <div className="bg-[#1E293B] rounded-xl border border-gray-700/50 p-5">
@@ -373,7 +492,7 @@ export function LocalTestPanel() {
           <input
             type="text" value={workspacePath}
             onChange={(e) => setWorkspacePath(e.target.value)}
-            placeholder="选择包含 AUDIT_REPORT.md 的工作区目录"
+            placeholder="选择包含 Report 文件夹的工作区目录"
             className="flex-1 px-3 py-2.5 bg-[#0F172A] border border-gray-700/50 rounded-lg text-sm text-gray-100 focus:border-blue-500 focus:outline-none"
           />
           <button onClick={() => setShowDirBrowser(true)}
@@ -460,7 +579,7 @@ export function LocalTestPanel() {
 
           <div className="space-y-2">
             <TimelineStep
-              label="查找 AUDIT_REPORT.md"
+              label="查找 Report 文件夹"
               status={timeline.findReport}
               detail={parseLogs.find(l => l.message.includes('找到报告'))?.message}
               icon={<FileText className="w-4 h-4" />}
@@ -563,7 +682,7 @@ export function LocalTestPanel() {
       <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-xl p-4">
         <h4 className="text-sm font-medium text-cyan-400 mb-2">解析流程说明</h4>
         <ul className="text-xs text-gray-300 space-y-1">
-          <li>1. 选择包含 <code className="text-cyan-300">AUDIT_REPORT.md</code> 的工作区目录</li>
+          <li>1. 选择包含 <code className="text-cyan-300">Report</code> 文件夹的工作区目录</li>
           <li>2. Phase 1: 使用 <code className="text-cyan-300">audit-report-parser</code> skill 解析报告</li>
           <li>3. Phase 2: 若 skill 失败，启动通用 AI Fallback (opencode --agent build)</li>
           <li>4. 解析成功后自动去重入库到漏洞管理</li>
@@ -646,6 +765,17 @@ export function LocalTestPanel() {
                           <span className="text-gray-300">{formatDuration(selectedHistoryRecord.durationMs)}</span>
                         </div>
                       )}
+                      <div className="pt-2 border-t border-gray-700">
+                        <button
+                          onClick={() => {
+                            setShowFilesModal(true);
+                            loadTaskFiles('default');
+                          }}
+                          className="w-full px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 rounded-lg text-sm text-purple-400 flex items-center justify-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />查看下载文件
+                        </button>
+                      </div>
                     </div>
 
                     {selectedHistoryRecord.result && (

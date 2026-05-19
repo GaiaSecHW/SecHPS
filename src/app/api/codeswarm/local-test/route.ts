@@ -3,6 +3,7 @@ import { spawn, ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { prisma } from '@/lib/prisma';
+import { findReportFolder, uploadReportFolder, uploadParsedResult, processVulnerabilityRawReports } from '@/lib/minio-vulnerability';
 
 interface LocalTestRequest {
   workspacePath: string;
@@ -32,10 +33,6 @@ const LOCAL_TEST_VULN_TASK_ID = '70b14e3f-1614-407d-800b-ca2a485c5016';
 
 const isWindows = process.platform === 'win32';
 
-const VULNERABILITY_STORAGE_PATH = process.env.VULNERABILITY_STORAGE_PATH || (
-  isWindows ? 'Z:\\Vulnerability' : '/home/icsl/hgh/Vulnerability'
-);
-
 const SEVERITY_MAP: Record<string, string> = {
   critical: 'critical', 严重: 'critical',
   high: 'high', 高危: 'high',
@@ -51,36 +48,6 @@ function normalizeSeverity(s?: string): string {
     if (lower === key || lower === val) return val;
   }
   return 'medium';
-}
-
-function findAuditReportPath(projectPath: string): string | null {
-  const candidates = [
-    path.join(projectPath, 'AUDIT_REPORT.md'),
-    path.join(projectPath, '.opencode', 'run', 'AUDIT_REPORT.md'),
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-function uploadAuditReport(taskId: string, workspacePath: string): string | null {
-  try {
-    const auditReportPath = findAuditReportPath(workspacePath);
-    if (!auditReportPath) return null;
-
-    const targetDir = path.join(VULNERABILITY_STORAGE_PATH, taskId);
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true });
-    }
-
-    const targetPath = path.join(targetDir, 'AUDIT_REPORT.md');
-    fs.copyFileSync(auditReportPath, targetPath);
-    return targetPath;
-  } catch (e) {
-    console.error(`[LocalTest:${taskId}] 上传失败:`, e);
-    return null;
-  }
 }
 
 function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | null {
@@ -123,7 +90,7 @@ function parseVulnerabilityJson(output: string): ParsedVulnerabilityReport | nul
 }
 
 const INSTRUCTION_PHASE1 = '执行 audit-report-parser skill 解析漏洞报告';
-const INSTRUCTION_PHASE2 = '读取 AUDIT_REPORT.md，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。仅输出可解析的 JSON，不要额外说明。';
+const INSTRUCTION_PHASE2 = '读取 Report 文件夹内的报告文件，提取所有漏洞信息为 JSON 格式，包含 title, type, description, severity, cwe, location, POC, fixSuggestion 字段。仅输出可解析的 JSON，不要额外说明。';
 
 function runOpencodeParse(
   taskId: string,
@@ -207,6 +174,7 @@ function runOpencodeParse(
 async function submitVulnerabilitiesDirect(
   report: ParsedVulnerabilityReport,
   filePath: string,
+  parsedResultUrl: string,
   taskId: string
 ): Promise<{ success: boolean; createdCount?: number; skippedCount?: number; error?: string }> {
   try {
@@ -221,6 +189,7 @@ async function submitVulnerabilitiesDirect(
 
       const id = `vuln_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
       const severity = normalizeSeverity(v.severity);
+      const vulnRawReport = v.rawReport || parsedResultUrl;
 
       try {
         await prisma.$executeRaw`
@@ -234,7 +203,7 @@ async function submitVulnerabilitiesDirect(
             ${v.cwe || null}, ${severity},
             ${v.skill || null}, ${v.location || null},
             ${v.POC || null}, ${v.vulnerable ?? true},
-            ${v.fixSuggestion || null}, ${v.rawReport || null},
+            ${v.fixSuggestion || null}, ${vulnRawReport},
             ${filePath}, 'new', NOW()
           )
           ON CONFLICT DO NOTHING
@@ -346,21 +315,34 @@ function executeTaskAsync(
       addLog('info', '开始执行本地测试');
       await updateRecord({ status: 'running', startedAt: new Date() });
 
-      const reportPath = findAuditReportPath(workspacePath);
-      const filePath = uploadAuditReport(taskId, workspacePath) || reportPath || path.join(workspacePath, 'AUDIT_REPORT.md');
+      const reportFolder = findReportFolder(workspacePath);
+      let filePath: string = '';
       let report: ParsedVulnerabilityReport | null = null;
 
-      if (reportPath && fs.existsSync(reportPath)) {
-        addLog('info', `找到报告: ${path.relative(workspacePath, reportPath).replace(/\\/g, '/')}`);
+      if (reportFolder) {
+        addLog('info', `找到 Report 文件夹: ${path.relative(workspacePath, reportFolder).replace(/\\/g, '/')}`);
+        
+        addLog('info', '上传 Report 文件到 MinIO...');
+        const uploadResult = await uploadReportFolder(LOCAL_TEST_VULN_TASK_ID, reportFolder);
+        
+        if (uploadResult.success) {
+          filePath = JSON.stringify(uploadResult.urls);
+          addLog('success', `MinIO 上传成功: ${uploadResult.files.length} 个文件`);
+          for (const file of uploadResult.files) {
+            addLog('info', `  - ${file}`);
+          }
+        } else {
+          addLog('error', `MinIO 上传失败: ${uploadResult.error}`);
+          filePath = reportFolder;
+        }
       } else {
-        addLog('info', '未找到 AUDIT_REPORT.md');
+        addLog('warn', '未找到 Report 文件夹');
+        filePath = workspacePath;
       }
 
-      // Phase 1: audit-report-parser skill (通过 agent)
       addLog('info', 'Phase 1: 启动 audit-report-parser skill');
       report = await runOpencodeParse(taskId, workspacePath, timeoutSec, addLog, INSTRUCTION_PHASE1);
 
-      // Phase 2: 通用 AI Fallback
       if (!report) {
         addLog('info', 'Phase 2: Skill 解析失败，启动通用 AI Fallback');
         report = await runOpencodeParse(taskId, workspacePath, timeoutSec, addLog, INSTRUCTION_PHASE2);
@@ -371,14 +353,38 @@ function executeTaskAsync(
         await updateRecord({
           status: 'completed',
           result: buildResult(),
+          uploadedFilePath: filePath,
           completedAt: new Date(),
           durationMs: Date.now() - startTime,
         });
         return;
       }
 
+      const reportJsonStr = JSON.stringify(report);
+      addLog('info', '上传解析结果到 MinIO...');
+      const parsedUploadResult = await uploadParsedResult(LOCAL_TEST_VULN_TASK_ID, reportJsonStr);
+      const parsedResultUrl = parsedUploadResult.success && parsedUploadResult.url 
+        ? parsedUploadResult.url 
+        : reportJsonStr;
+
+      if (parsedUploadResult.success) {
+        addLog('success', `解析结果上传成功: MinIO URL 已生成`);
+      } else {
+        addLog('warn', `解析结果上传失败: ${parsedUploadResult.error}`);
+      }
+
+      addLog('info', '上传漏洞原始文件到 MinIO...');
+      const vulnsWithRawReports = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.trim());
+      if (vulnsWithRawReports.length > 0) {
+        report.vulnerabilities = await processVulnerabilityRawReports(LOCAL_TEST_VULN_TASK_ID, report.vulnerabilities);
+        const uploadedCount = report.vulnerabilities.filter(v => v.rawReport && v.rawReport.includes('http')).length;
+        addLog('success', `漏洞原始文件上传完成: ${uploadedCount} 个文件已上传`);
+      } else {
+        addLog('info', '无漏洞原始文件需要上传');
+      }
+
       addLog('info', `开始入库: ${report.vulnerabilities.length} 条漏洞`);
-      const result = await submitVulnerabilitiesDirect(report, filePath, LOCAL_TEST_VULN_TASK_ID);
+      const result = await submitVulnerabilitiesDirect(report, filePath, parsedResultUrl, LOCAL_TEST_VULN_TASK_ID);
 
       if (result.success) {
         const vulnSummary = report.vulnerabilities.slice(0, 5).map(v => `[${v.severity || 'medium'}] ${v.title}`).join(', ');
@@ -390,7 +396,7 @@ function executeTaskAsync(
       await updateRecord({
         status: 'completed',
         result: buildResult(),
-        parsedVulnerabilities: JSON.stringify(report),
+        parsedVulnerabilities: reportJsonStr,
         uploadedFilePath: filePath,
         completedAt: new Date(),
         durationMs: Date.now() - startTime,
