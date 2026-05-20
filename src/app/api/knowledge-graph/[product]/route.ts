@@ -57,6 +57,8 @@ function nodeToInfo(id: string, props: any) {
     id,
     name: props.name,
     fullName: props.fullName,
+    signature: props.signature || null,
+    lineNumber: props.lineNumber || null,
     tags,
     isExternal: !!props.isExternal,
     isSource: tags.some((t: string) => t.startsWith('ONTOLOGY:SOURCE')),

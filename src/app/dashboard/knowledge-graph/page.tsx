@@ -9,6 +9,8 @@ interface MethodInfo {
   id: string;
   name: string;
   fullName: string;
+  signature: string | null;
+  lineNumber: number | null;
   tags: string[];
   isSource: boolean;
   isSink: boolean;
@@ -183,10 +185,12 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
   const [edges, setEdges] = useState<Edge[]>([]);
   const [loading, setLoading] = useState(false);
   const [depth, setDepth] = useState(2);
+  const [selected, setSelected] = useState<any>(null);
 
   useEffect(() => {
     if (!method || !product) { setNodes([]); setEdges([]); return; }
     setLoading(true);
+    setSelected(null);
     setNodes([]);
     setEdges([]);
     const controller = new AbortController();
@@ -201,8 +205,8 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
         setNodes(data.nodes.map((n: any) => ({
           id: n.id,
           position: n.position,
-          data: { label: n.name, fullName: n.fullName, ...n },
-          style: { ...nodeStyle(n), borderRadius: 6, padding: '6px 10px', fontSize: 11, maxWidth: 200 },
+          data: { label: n.name, fullName: n.fullName, signature: n.signature, lineNumber: n.lineNumber, ...n },
+          style: { ...nodeStyle(n), borderRadius: 6, padding: '6px 10px', fontSize: 11, maxWidth: 200, cursor: 'pointer' },
         })));
         setEdges(data.edges.map((e: any) => ({
           id: e.id,
@@ -245,10 +249,56 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
           </button>
         ))}
       </div>
-      <ReactFlow nodes={nodes} edges={edges} fitView>
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        fitView
+        onNodeClick={(_evt, node) => setSelected(node.data)}
+        onPaneClick={() => setSelected(null)}
+      >
         <Background color="#374151" gap={20} />
         <Controls />
       </ReactFlow>
+      {selected && (
+        <div className="absolute bottom-3 left-3 right-3 z-10 bg-dark-bg/95 border border-gray-700/60 rounded-xl p-3 shadow-xl backdrop-blur-sm">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm font-semibold text-white truncate">{selected.name}</span>
+                {selected.isSource && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30 flex-shrink-0">SOURCE</span>}
+                {selected.isSink && <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex-shrink-0">SINK</span>}
+                {selected.isEntryPoint && <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex-shrink-0">ENTRY</span>}
+                {selected.isExternal && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400 border border-gray-600/30 flex-shrink-0">EXTERNAL</span>}
+              </div>
+              {selected.signature && (
+                <div className="font-mono text-xs text-cyan-300 bg-dark-surface/80 rounded px-2 py-1 break-all">
+                  {(() => {
+                    // signature format: "returnType(paramType1,paramType2,...)"
+                    const sig = selected.signature as string;
+                    const parenIdx = sig.indexOf('(');
+                    const returnType = parenIdx > 0 ? sig.slice(0, parenIdx) : '';
+                    const params = parenIdx >= 0 ? sig.slice(parenIdx + 1, -1) : '';
+                    return (
+                      <>
+                        <span className="text-gray-400">{returnType} </span>
+                        <span className="text-cyan-300">{selected.name}</span>
+                        <span className="text-gray-300">({params})</span>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+              <div className="text-[10px] text-gray-500 break-all" title={selected.fullName}>{selected.fullName}</div>
+              {selected.lineNumber && (
+                <div className="text-[10px] text-gray-600">Line {selected.lineNumber}</div>
+              )}
+            </div>
+            <button onClick={() => setSelected(null)} className="text-gray-600 hover:text-gray-300 flex-shrink-0 mt-0.5">
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
