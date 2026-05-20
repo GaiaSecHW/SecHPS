@@ -730,7 +730,7 @@ function McpServersContent() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
-                      服务器名称 *
+                      服务器名称 <span className="text-red-400">*</span>
                     </label>
                     <input
                       type="text"
@@ -746,7 +746,7 @@ function McpServersContent() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-300 mb-1">
-                      类型 *
+                      类型 <span className="text-red-400">*</span>
                     </label>
                     <select
                       value={formData.type}
@@ -769,7 +769,7 @@ function McpServersContent() {
                     <>
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-1">
-                          命令 *
+                          命令 <span className="text-red-400">*</span>
                         </label>
                         <input
                           type="text"
@@ -806,7 +806,7 @@ function McpServersContent() {
                   {(formData.type === 'sse' || formData.type === 'http') && (
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-1">
-                        URL {formData.type === 'sse' ? '(SSE 端点)' : '(MCP 端点)'} *
+                        URL {formData.type === 'sse' ? '(SSE 端点)' : '(MCP 端点)'} <span className="text-red-400">*</span>
                       </label>
                       <input
                         type="url"

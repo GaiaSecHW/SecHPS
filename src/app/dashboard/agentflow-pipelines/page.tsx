@@ -333,50 +333,47 @@ export default function AgentFlowPipelinesPage() {
       </div>
 
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-          <div className="w-full max-w-md mx-4 rounded border border-gray-600/50 bg-gray-800 shadow-xl">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/40">
-              <div className="flex items-center gap-2">
-                <div className="flex items-center justify-center rounded border border-gray-600/50 bg-gray-700/30 p-1">
-                  <Plus size={14} className="text-gray-400" />
-                </div>
-                <h3 className="text-sm font-medium text-gray-100">新建 Pipeline</h3>
-              </div>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-dark-surface rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-700/50 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-100">新建 Pipeline</h3>
               <button
                 onClick={() => { setShowCreateModal(false); setNewName(''); }}
-                className="flex items-center justify-center size-6 rounded text-gray-500 hover:text-gray-300 hover:bg-gray-700/30 transition-colors"
+                className="text-gray-400 hover:text-gray-300 disabled:opacity-50"
               >
-                <X size={16} />
+                <X size={20} />
               </button>
             </div>
-            <div className="p-4">
-              <label className="block text-xs font-medium text-gray-300 mb-1.5">
-                Pipeline 名称 <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
-                autoFocus
-                className="w-full h-8 px-3 text-xs bg-gray-700/30 border border-gray-600/50 rounded text-gray-200 placeholder:text-gray-500 focus:ring-1 focus:ring-primary-500 focus:outline-none"
-                placeholder="输入 Pipeline 名称"
-              />
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Pipeline 名称 <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                  autoFocus
+                  className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="请输入 Pipeline 名称"
+                />
+              </div>
             </div>
-            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700/40">
+            <div className="px-6 py-4 border-t border-gray-700/50 flex justify-end gap-3">
               <button
                 onClick={() => { setShowCreateModal(false); setNewName(''); }}
                 disabled={creating}
-                className="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded transition-colors disabled:opacity-50"
+                className="px-4 py-2 border border-gray-600 rounded-md text-gray-300 hover:bg-dark-bg disabled:opacity-50"
               >
                 取消
               </button>
               <button
                 onClick={handleCreate}
                 disabled={creating || !newName.trim()}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-primary-600 hover:bg-primary-500 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {creating && <Loader2 size={12} className="animate-spin" />}
+                {creating && <Loader2 size={14} className="animate-spin" />}
                 {creating ? '创建中...' : '创建'}
               </button>
             </div>

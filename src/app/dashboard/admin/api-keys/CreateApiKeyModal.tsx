@@ -249,7 +249,7 @@ export default function CreateApiKeyModal({
             <form id="create-api-key-form" onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  名称 *
+                  名称 <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -263,7 +263,7 @@ export default function CreateApiKeyModal({
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
-                  租户
+                  租户 <span className="text-red-400">*</span>
                 </label>
                 {loadingTenants ? (
                   <div className="flex items-center gap-2 text-gray-400">
@@ -293,7 +293,7 @@ export default function CreateApiKeyModal({
               {tenantId && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Agent
+                    Agent <span className="text-red-400">*</span>
                   </label>
                   {loadingAgents ? (
                     <div className="flex items-center gap-2 text-gray-400">

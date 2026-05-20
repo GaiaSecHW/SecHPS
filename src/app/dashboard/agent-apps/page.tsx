@@ -306,28 +306,39 @@ export default function AgentAppsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[900px]">
                 <thead>
                   <tr className="border-b border-gray-700/50">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">名称</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">引擎</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">默认智能体</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 min-w-[200px]">名称</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400  w-[120px] min-w-[120px]">引擎</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400  w-[150px] min-w-[150px]">默认智能体</th>
                     <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">启动命令</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">共享</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">创建时间</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">更新时间</th>
-                    <th className="text-right py-3 px-4 text-sm font-medium text-gray-400">操作</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 w-[100px] min-w-[100px]">共享</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 w-[180px] min-w-[180px]">创建时间</th>
+                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 w-[180px] min-w-[180px]">更新时间</th>
+                    <th className="text-center py-3 px-4 text-sm font-medium text-gray-400 w-[180px] min-w-[180px]">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {apps.map((app) => (
                     <tr key={app.id} className="border-b border-gray-700/30 hover:bg-gray-800/30">
-                      <td className="py-3 px-4 text-sm text-gray-100 font-medium">{app.name}</td>
+                      <td className="py-3 px-4 text-sm text-gray-100 font-medium">
+                        <span className="block truncate max-w-[200px]" title={app.name}>
+                          {app.name}
+                        </span>
+                      </td>
                       <td className="py-3 px-4">
                         <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-1 rounded">{app.engine}</span>
                       </td>
-                      <td className="py-3 px-4 text-sm text-gray-300">{app.defaultAgentName || '-'}</td>
-                      <td className="py-3 px-4 text-sm text-gray-300">{app.startCommand || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-300 min-w-[140px]">{app.defaultAgentName || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-300">
+                        <span 
+                          className="block truncate max-w-[200px]" 
+                          title={app.startCommand || ''}
+                        >
+                          {app.startCommand || '-'}
+                        </span>
+                      </td>
                       <td className="py-3 px-4">
                         {app.isPublic ? (
                           <span className="text-xs bg-green-500/15 text-green-400 px-2 py-1 rounded">已共享</span>
@@ -341,8 +352,8 @@ export default function AgentAppsPage() {
                       <td className="py-3 px-4 text-sm text-gray-500">
                         {new Date(app.updatedAt).toLocaleString('zh-CN')}
                       </td>
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1">
                           {app.engine === 'agentflow' && (
                             <button
                               onClick={() => setViewingApp(app)}

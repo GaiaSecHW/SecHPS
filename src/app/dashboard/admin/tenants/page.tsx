@@ -109,7 +109,7 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
         {error && <ErrorAlert>{error}</ErrorAlert>}
 
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-1">租户名称 *</label>
+          <label className="block text-sm font-medium text-gray-300 mb-1">租户名称 <span className="text-red-400">*</span></label>
           <input
             type="text"
             value={name}
@@ -122,7 +122,7 @@ function TenantFormModal({ tenant, isOpen, onClose, onSuccess }: TenantModalProp
 
         {!tenant && (
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">Slug *</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1">Slug <span className="text-red-400">*</span></label>
             <input
               type="text"
               value={slug}

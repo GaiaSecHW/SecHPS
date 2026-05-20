@@ -406,15 +406,15 @@ function VulnerabilitiesContent() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed">
               <thead>
                 <tr className="border-b border-gray-700/50 bg-[#0F172A]/50">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider w-[100px]">严重程度</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider">标题</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider w-[262px]">类型</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider w-24">状态</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider w-32">任务</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider w-28">发现时间</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px] whitespace-nowrap">严重程度</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider overflow-hidden">标题</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider overflow-hidden min-w-[200px] w-[200px]">类型</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px]">状态</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[120px] w-[120px]">任务</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-400 uppercase tracking-wider min-w-[100px] w-[100px]">发现时间</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700/50">
@@ -436,7 +436,7 @@ function VulnerabilitiesContent() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="min-w-0">
+                      <div className="overflow-hidden">
                         <p className="text-white font-medium truncate">{vuln.title}</p>
                         <p className="text-xs text-gray-500 truncate mt-0.5">{vuln.location || '无位置信息'}</p>
                       </div>

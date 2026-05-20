@@ -524,7 +524,7 @@ function CreateUserModal({
               htmlFor="email"
               className="block text-sm font-medium text-gray-300"
             >
-              邮箱 *
+              邮箱 <span className="text-red-400">*</span>
             </label>
             <input
               id="email"
@@ -542,7 +542,7 @@ function CreateUserModal({
               htmlFor="username"
               className="block text-sm font-medium text-gray-300"
             >
-              用户名 *
+              用户名 <span className="text-red-400">*</span>
             </label>
             <input
               id="username"
@@ -577,7 +577,7 @@ function CreateUserModal({
               htmlFor="password"
               className="block text-sm font-medium text-gray-300"
             >
-              密码 *
+              密码 <span className="text-red-400">*</span>
             </label>
             <input
               id="password"
@@ -715,7 +715,7 @@ function ResetPasswordModal({
 
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              新密码 *
+              新密码 <span className="text-red-400">*</span>
             </label>
             <input
               type="password"

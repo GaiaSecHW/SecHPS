@@ -321,7 +321,7 @@ function EditorContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 text-white">
+    <div className="flex flex-col h-full bg-gray-900 text-white">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
         <div className="flex items-center gap-3">
           <button

@@ -272,7 +272,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 任务名称 */}
           <div>
-            <label htmlFor="taskName" className="block text-sm font-medium text-gray-300">任务名称 *</label>
+            <label htmlFor="taskName" className="block text-sm font-medium text-gray-300">任务名称 <span className="text-red-400">*</span></label>
             <input
               id="taskName"
               type="text"
@@ -288,7 +288,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
             <label htmlFor="taskDescription" className="block text-sm font-medium text-gray-300">任务描述</label>
             <textarea
               id="taskDescription"
-              rows={5}
+              rows={2}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
@@ -299,7 +299,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
           {/* 选择 Agent */}
           <div>
             <label className="block text-sm font-medium text-gray-300">
-              选择 Agent *
+              选择 Agent <span className="text-red-400">*</span>
               {selectedAgentIds.size > 0 && (
                 <span className="ml-2 text-xs text-blue-400 font-normal">
                   已选 {selectedAgentIds.size} 个，将创建 {selectedAgentIds.size} 个任务
@@ -334,7 +334,7 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 选择模型（合并为一个下拉） */}
           <div>
-            <label className="block text-sm font-medium text-gray-300">选择模型 *</label>
+            <label className="block text-sm font-medium text-gray-300">选择模型 <span className="text-red-400">*</span></label>
             {loadingModels ? (
               <div className="mt-1 flex items-center justify-center py-8">
                 <Loader2 size={20} className="animate-spin text-blue-400" />
@@ -402,49 +402,44 @@ export default function TaskCreateModal({ isOpen, onClose, onSubmit }: Props) {
 
           {/* 上传文件 */}
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">上传文件 *</label>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">上传文件 <span className="text-red-400">*</span></label>
             {selectedFile ? (
-              <div className="flex items-center justify-between p-3 bg-[#0F172A] border border-gray-700/50 rounded-md">
-                <div className="flex items-center space-x-2">
-                  <File size={16} className="text-gray-400" />
-                  <span className="text-sm text-gray-100 truncate max-w-[300px]">{selectedFile.name}</span>
+              <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
+                <div className="flex items-center gap-2">
+                  <File size={16} className="text-primary-400" />
+                  <span className="text-sm text-gray-200 truncate max-w-[280px]">{selectedFile.name}</span>
                   <span className="text-xs text-gray-500">
                     {selectedFile.size > 1024 * 1024
-                      ? `${(selectedFile.size / 1024 / 1024).toFixed(2)} MB`
-                      : `${(selectedFile.size / 1024).toFixed(2)} KB`}
+                      ? `${(selectedFile.size / 1024 / 1024).toFixed(1)} MB`
+                      : `${(selectedFile.size / 1024).toFixed(1)} KB`}
                   </span>
                 </div>
-                <button onClick={handleRemoveFile} className="p-1 text-red-400 hover:text-red-300">
-                  <X size={16} />
+                <button onClick={handleRemoveFile} className="h-7 px-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/15">
+                  <X size={14} />
                 </button>
               </div>
             ) : (
               <div
-                className="border-2 border-dashed border-gray-600 rounded-md p-6 hover:border-blue-400 transition-colors"
-                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-blue-400', 'bg-blue-900/20'); }}
-                onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-blue-400', 'bg-blue-900/20'); }}
-                onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-blue-400', 'bg-blue-900/20'); if (e.dataTransfer.files.length > 0) handleFileDrop(e.dataTransfer.files); }}
+                className="border border-gray-700/50 rounded-md p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-primary-500', 'bg-primary-500/10'); }}
+                onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-primary-500', 'bg-primary-500/10'); }}
+                onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-primary-500', 'bg-primary-500/10'); if (e.dataTransfer.files.length > 0) handleFileDrop(e.dataTransfer.files); }}
               >
-                <div className="text-center">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400" />
-                  <div className="mt-4">
-                    <label htmlFor="file-upload-task" className="cursor-pointer font-medium text-blue-400 hover:text-blue-500">
-                      <span>点击上传文件</span>
-                      <input
-                        id="file-upload-task"
-                        type="file"
-                        ref={fileInputRef}
-                        onChange={handleFileSelect}
-                        accept=".zip,.jar,.war,.ear,.tar,.gz,.rar,.7z,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
-                        className="sr-only"
-                      />
-                    </label>
-                    <p className="pl-1">或拖拽文件到此处</p>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    支持 ZIP、JAR、WAR、PDF、DOC、TXT、JSON 等格式，单个文件最大 5GB
-                  </p>
+                <div className="flex items-center justify-center gap-2 text-gray-500">
+                  <Upload size={16} />
+                  <span className="text-sm">点击或拖拽上传文件</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={handleFileSelect}
+                    accept=".zip,.jar,.war,.ear,.tar,.gz,.rar,.7z,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md,.csv,.json,.xml,.yaml,.yml"
+                    className="hidden"
+                  />
                 </div>
+                <p className="text-xs text-gray-500 text-center mt-1">
+                  支持 ZIP、JAR、PDF、DOC 等，最大 5GB
+                </p>
               </div>
             )}
           </div>

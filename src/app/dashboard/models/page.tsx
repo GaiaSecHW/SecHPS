@@ -832,41 +832,41 @@ export default function ModelsPage() {
                 ) : (
                   <>
                     {/* 编辑时需要确认才能修改 */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <Key size={16} className="text-gray-400" />
-                      <span className="text-sm text-gray-300">
-                        API Key: {editingModel.hasApiKey ? (
-                          <span className="text-green-400 font-medium">已设置</span>
-                        ) : (
-                          <span className="text-red-400 font-medium">未设置</span>
-                        )}
-                      </span>
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Key size={16} className="text-gray-400" />
+                        <span className="text-sm text-gray-300">
+                          API Key: {editingModel.hasApiKey ? (
+                            <span className="text-green-400 font-medium">已设置</span>
+                          ) : (
+                            <span className="text-red-400 font-medium">未设置</span>
+                          )}
+                        </span>
+                      </div>
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.changeApiKey}
+                          onChange={(e) => setFormData({ ...formData, changeApiKey: e.target.checked })}
+                          className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
+                        />
+                        <span className="text-sm text-orange-400 font-medium">修改</span>
+                      </label>
                     </div>
-                    
-                    <label className="flex items-center gap-2 cursor-pointer mb-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.changeApiKey}
-                        onChange={(e) => setFormData({ ...formData, changeApiKey: e.target.checked })}
-                        className="w-4 h-4 text-orange-600 border-gray-600 rounded focus:ring-orange-500"
-                      />
-                      <span className="text-sm text-orange-400 font-medium">修改 API Key</span>
-                    </label>
 
                     {formData.changeApiKey && (
-                      <input
-                        type="password"
-                        value={formData.apiKey}
-                        onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
-                        className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-sm"
-                        placeholder="输入新的 API Key"
-                      />
-                    )}
-                    
-                    {formData.changeApiKey && (
-                      <p className="text-xs text-orange-400 mt-1">
-                        请输入新的 API Key，原有 Key 将被替换
-                      </p>
+                      <div className="mt-2">
+                        <input
+                          type="password"
+                          value={formData.apiKey}
+                          onChange={(e) => setFormData({ ...formData, apiKey: e.target.value })}
+                          className="w-full px-3 py-2 border border-orange-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 font-mono text-sm"
+                          placeholder="输入新的 API Key"
+                        />
+                        <p className="text-xs text-orange-400 mt-1">
+                          请输入新的 API Key，原有 Key 将被替换
+                        </p>
+                      </div>
                     )}
                   </>
                 )}
@@ -932,26 +932,23 @@ export default function ModelsPage() {
 
               {/* Context Window - 只读显示（仅编辑模式） */}
               {editingModel && (
-                <div className="bg-[#0F172A] border border-gray-700/50 rounded-md p-4">
-                  <label className="block text-sm font-medium text-gray-300 mb-2">Context Window</label>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg font-semibold text-gray-100">{editingModel?.contextWindow ?? 0}</span>
-                      <span className="text-sm text-gray-500">tokens</span>
-                    </div>
-                    {editingModel?.contextWindow > 0 && (
-                      <button 
-                        onClick={() => handleResetContextWindow(editingModel.id)} 
-                        disabled={resettingContextWindow === editingModel.id}
-                        className="px-3 py-1.5 text-sm text-orange-400 bg-orange-600/10 border border-orange-500/20 rounded-md hover:bg-orange-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {resettingContextWindow === editingModel.id ? '复位中...' : '复位'}
-                      </button>
-                    )}
+                <div className="bg-dark-bg border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <span className="text-sm font-medium text-gray-300">Context Window</span>
+                    <span className="text-sm text-gray-100">{editingModel?.contextWindow ?? 0} tokens</span>
+                    <span className="text-xs text-gray-500">
+                      {editingModel?.contextWindow > 0 ? '已学习' : '未设置，调用超限时自动学习'}
+                    </span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {editingModel?.contextWindow > 0 ? '已学习到的值，点击复位重新学习' : '未设置，下次调用超限时自动学习'}
-                  </p>
+                  {editingModel?.contextWindow > 0 && (
+                    <button 
+                      onClick={() => handleResetContextWindow(editingModel.id)} 
+                      disabled={resettingContextWindow === editingModel.id}
+                      className="h-7 px-2 text-xs text-orange-400 bg-orange-600/10 border border-orange-500/20 rounded-md hover:bg-orange-600/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {resettingContextWindow === editingModel.id ? '复位中...' : '复位'}
+                    </button>
+                  )}
                 </div>
               )}
 

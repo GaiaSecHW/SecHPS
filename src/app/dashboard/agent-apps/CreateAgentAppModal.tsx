@@ -302,21 +302,21 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark-surface rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700/50">
-          <h2 className="text-lg font-semibold text-gray-100">创建新应用</h2>
-          { !isSubmitting && (
-            <button onClick={handleClose} className="p-1 text-gray-400 hover:text-gray-400 rounded-full">
-              <X className="h-5 w-5" />
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-dark-surface rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700/50">
+          <h2 className="text-base font-semibold text-gray-100">创建新应用</h2>
+          {!isSubmitting && (
+            <button onClick={handleClose} className="h-7 px-2 rounded-md text-gray-400 hover:text-gray-300 hover:bg-gray-700/30">
+              <X size={16} />
             </button>
           )}
         </div>
 
-        <div className="px-6 py-4 space-y-5 overflow-y-auto">
+        <div className="px-4 py-3 space-y-3 overflow-y-auto">
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              应用名称 <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              应用名称 <span className="text-red-400">*</span>
             </label>
             <input
               type="text"
@@ -328,8 +328,8 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              使用引擎 <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              使用引擎 <span className="text-red-400">*</span>
             </label>
             <select
               value={formData.engine}
@@ -368,39 +368,38 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
 
           {isIcsOrAdmin && (
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                租户 <span className="text-red-500">*</span>
+              <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                租户 <span className="text-red-400">*</span>
               </label>
               <select
                 value={formData.tenantId}
                 onChange={(e) => setFormData({ ...formData, tenantId: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                disabled={isSubmitting}
-              >
-                <option value="">请选择租户</option>
+className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+              disabled={isSubmitting}
+            >
+              <option value="">请选择租户</option>
                 <option value="__public__">所有租户共享（公开）</option>
                 {tenants.map(t => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              <p className="mt-1 text-xs text-gray-500">选择"所有租户共享"则不绑定任何租户，所有用户可见</p>
+              <p className="mt-1 text-xs text-gray-500">选择"所有租户共享"则不绑定任何租户</p>
             </div>
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              AgentHarness 文件上传 <span className="text-red-500">*</span>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              AgentHarness 文件上传 <span className="text-red-400">*</span>
             </label>
             {!agentHarnessFile ? (
               <div>
                 <div
-                  className="border-2 border-dashed border-gray-600 rounded-md p-6 hover:border-primary-500 cursor-pointer"
+                  className="border border-gray-700/50 rounded-md p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <div className="flex flex-col items-center justify-center text-gray-500">
-                    <Upload size={24} className="mb-2" />
-                    <p className="text-sm">点击上传压缩包或文件夹</p>
-                    <p className="text-xs mt-1">支持 zip/rar/7z/tar.gz 格式</p>
+                  <div className="flex items-center justify-center gap-2 text-gray-500">
+                    <Upload size={16} />
+                    <span className="text-sm">点击上传压缩包或文件夹</span>
                   </div>
                   <input
                     ref={fileInputRef}
@@ -411,7 +410,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                     disabled={isSubmitting}
                   />
                 </div>
-                <div className="mt-2 flex justify-center">
+                <div className="mt-1.5 text-center">
                   <button
                     type="button"
                     onClick={() => {
@@ -420,7 +419,7 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                         fileInputRef.current.click();
                       }
                     }}
-                    className="text-sm text-primary-600 hover:text-primary-700"
+                    className="text-xs text-primary-500 hover:text-primary-400"
                     disabled={isSubmitting}
                   >
                     或选择文件夹
@@ -428,61 +427,56 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
                 </div>
               </div>
             ) : (
-              <div className="border border-gray-600 rounded-md p-4 flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <File size={20} className="text-primary-600" />
+              <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
+                <div className="flex items-center gap-2">
+                  <File size={16} className="text-primary-400" />
                   <div>
-                    <p className="text-sm font-medium text-gray-100">
+                    <span className="text-sm text-gray-200">
                       {agentHarnessFile.type === 'folder' ? `📁 ${agentHarnessFile.name}` : agentHarnessFile.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
+                    </span>
+                    <span className="text-xs text-gray-500 ml-1.5">
                       {agentHarnessFile.type === 'folder'
                         ? `${agentHarnessFile.files?.length || 0} 个文件`
-                        : `${((agentHarnessFile.size || 0) / 1024).toFixed(2)} KB`
+                        : `${((agentHarnessFile.size || 0) / 1024).toFixed(1)} KB`
                       }
-                    </p>
+                    </span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setAgentHarnessFile(null)}
-                  className="text-gray-400 hover:text-red-500 transition-colors"
+                  className="h-7 px-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/15"
                   disabled={isSubmitting}
                 >
-                  <X size={20} />
+                  <X size={14} />
                 </button>
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              默认智能体名称
-              <span className="text-green-500">
-                {formData.engine === 'claudecode'
-                  ? '(自动识别 .claude/agents/)'
-                  : '(自动识别 default_agent)'}
-              </span>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">
+              默认智能体名称 <span className="text-xs text-green-500">(自动识别)</span>
             </label>
             <input
               type="text"
               value={formData.defaultAgentName}
               onChange={(e) => setFormData({ ...formData, defaultAgentName: e.target.value })}
-              placeholder={formData.engine === 'claudecode' ? '例如: security-scanner' : '例如: code-assistant'}
+              placeholder="例如: code-assistant"
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
             {formData.engine === 'claudecode' && claudeCodeInfo && claudeCodeInfo.agents.length > 1 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <div className="mt-1.5 flex flex-wrap gap-1">
                 {claudeCodeInfo.agents.map(a => (
                   <button
                     key={a}
                     type="button"
                     onClick={() => setFormData(prev => ({ ...prev, defaultAgentName: a }))}
-                    className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                    className={`h-6 px-2 rounded-full text-xs transition-colors ${
                       formData.defaultAgentName === a
-                        ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                        : 'border-gray-600 text-gray-400 hover:border-gray-500'
+                        ? 'bg-primary-500/15 text-primary-400 border border-primary-500/50'
+                        : 'text-gray-400 hover:text-gray-300'
                     }`}
                   >
                     {a}
@@ -493,66 +487,54 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              启动命令
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">启动命令</label>
             <input
               type="text"
               value={formData.startCommand}
               onChange={(e) => setFormData({ ...formData, startCommand: e.target.value })}
-              placeholder={
-                formData.engine === 'claudecode'
-                  ? '例如: /project:security-scan'
-                  : '例如: /nazhua-audit'
-              }
+              placeholder="例如: /nazhua-audit"
               className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
               disabled={isSubmitting}
             />
             {formData.engine === 'claudecode' && claudeCodeInfo && claudeCodeInfo.commands.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                <p className="text-xs text-gray-500">检测到命令（点击选择）：</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {claudeCodeInfo.commands.map(cmd => (
-                    <button
-                      key={cmd}
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, startCommand: `/project:${cmd}` }))}
-                      className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                        formData.startCommand === `/project:${cmd}`
-                          ? 'border-primary-500 bg-primary-500/20 text-primary-400'
-                          : 'border-gray-600 text-gray-400 hover:border-primary-500 hover:text-primary-400'
-                      }`}
-                    >
-                      /project:{cmd}
-                    </button>
-                  ))}
-                </div>
+              <div className="mt-1.5 flex flex-wrap gap-1">
+                {claudeCodeInfo.commands.map(cmd => (
+                  <button
+                    key={cmd}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, startCommand: `/project:${cmd}` }))}
+                    className={`h-6 px-2 rounded-full text-xs transition-colors ${
+                      formData.startCommand === `/project:${cmd}`
+                        ? 'bg-primary-500/15 text-primary-400 border border-primary-500/50'
+                        : 'text-gray-400 hover:text-gray-300'
+                    }`}
+                  >
+                    /project:{cmd}
+                  </button>
+                ))}
               </div>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              文件结构要求
-            </label>
+            <label className="block text-sm font-medium text-gray-300 mb-1.5">文件结构要求</label>
             <textarea
               value={formData.inputRequirements}
               onChange={(e) => setFormData({ ...formData, inputRequirements: e.target.value })}
-              placeholder="描述上传文件的内容结构要求，如：必须包含 pom.xml 和 src 目录，属于 Java/Maven 项目结构"
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+              placeholder="描述上传文件的内容结构要求"
+              rows={2}
+              className="w-full px-3 py-2 bg-dark-bg border border-gray-700/50 rounded-md text-sm text-gray-200 placeholder:text-gray-500 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               disabled={isSubmitting}
             />
-            <p className="mt-1 text-xs text-gray-500">留空则不校验上传文件的目录结构</p>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-700/50 bg-[#0F172A]">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-700/50 bg-dark-bg">
           <button
             type="button"
             onClick={handleClose}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-gray-300 bg-dark-surface border border-gray-600 rounded-md hover:bg-[#0F172A] disabled:opacity-50"
+            className="h-[38px] px-3 rounded-md text-sm font-medium text-gray-400 bg-dark-surface hover:bg-gray-700/50 disabled:opacity-50"
           >
             取消
           </button>
@@ -560,9 +542,9 @@ export default function CreateAgentAppModal({ isOpen, onClose, onSubmit }: Props
             type="button"
             onClick={handleSubmit}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 flex items-center gap-2"
+            className="h-[38px] px-3 rounded-md text-sm font-medium bg-primary-500 text-white hover:bg-primary-400 disabled:opacity-50 flex items-center gap-1.5"
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+            {isSubmitting && <Loader2 size={14} className="animate-spin" />}
             {isSubmitting ? '创建中...' : '创建应用'}
           </button>
         </div>

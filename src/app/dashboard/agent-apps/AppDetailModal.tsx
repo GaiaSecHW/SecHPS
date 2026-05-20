@@ -232,13 +232,12 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
             {!agentHarnessFile ? (
               <div>
                 <div
-                  className="border-2 border-dashed border-gray-600 rounded-md p-4 hover:border-primary-500 cursor-pointer"
+                  className="border border-gray-700/50 rounded-md p-3 hover:border-primary-500 cursor-pointer bg-dark-bg"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <div className="flex flex-col items-center justify-center text-gray-500">
-                    <Upload size={20} className="mb-2" />
-                    <p className="text-sm">点击上传新的压缩包或文件夹</p>
-                    <p className="text-xs mt-1">支持 zip/rar/7z/tar.gz 格式</p>
+                  <div className="flex items-center justify-center gap-2 text-gray-500">
+                    <Upload size={16} />
+                    <span className="text-sm">点击上传新的压缩包或文件夹</span>
                   </div>
                   <input
                     ref={fileInputRef}
@@ -249,7 +248,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                     disabled={isSubmitting}
                   />
                 </div>
-                <div className="mt-2 flex justify-center">
+                <div className="mt-1.5 text-center">
                   <button
                     type="button"
                     onClick={() => {
@@ -258,7 +257,7 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                         fileInputRef.current.click();
                       }
                     }}
-                    className="text-sm text-primary-600 hover:text-primary-700"
+                    className="text-xs text-primary-500 hover:text-primary-400"
                     disabled={isSubmitting}
                   >
                     或选择文件夹
@@ -266,28 +265,28 @@ export default function AppDetailModal({ isOpen, onClose, app, onUpdate }: Props
                 </div>
               </div>
             ) : (
-              <div className="border border-gray-600 rounded-md p-3 flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <File size={18} className="text-primary-600" />
+              <div className="border border-gray-700/50 rounded-md px-3 py-2 flex items-center justify-between bg-dark-bg">
+                <div className="flex items-center gap-2">
+                  <File size={16} className="text-primary-400" />
                   <div>
-                    <p className="text-sm font-medium text-gray-100">
+                    <span className="text-sm text-gray-200">
                       {agentHarnessFile.type === 'folder' ? `📁 ${agentHarnessFile.name}` : agentHarnessFile.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
+                    </span>
+                    <span className="text-xs text-gray-500 ml-1.5">
                       {agentHarnessFile.type === 'folder'
                         ? `${agentHarnessFile.files?.length || 0} 个文件`
-                        : `${((agentHarnessFile.size || 0) / 1024).toFixed(2)} KB`
+                        : `${((agentHarnessFile.size || 0) / 1024).toFixed(1)} KB`
                       }
-                    </p>
+                    </span>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setAgentHarnessFile(null)}
-                  className="text-gray-400 hover:text-red-500 transition-colors"
+                  className="h-7 px-2 rounded-md text-gray-400 hover:text-red-400 hover:bg-red-500/15"
                   disabled={isSubmitting}
                 >
-                  <X size={18} />
+                  <X size={14} />
                 </button>
               </div>
             )}
