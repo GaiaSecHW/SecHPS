@@ -194,10 +194,19 @@ export async function DELETE(
     }
 
     const repoName = existing.agentHarnessPath;
-    if (repoName && isGiteaOrgConfigured()) {
+    
+    if (!repoName) {
+      logger.info(LOG_MODULES.SKILL, `AgentApp 无仓库路径，跳过仓库删除: ${appId}`);
+    } else if (!isGiteaOrgConfigured()) {
+      logger.warn(LOG_MODULES.SKILL, `Gitea 配置不完整，无法删除仓库: ${repoName}`);
+    } else {
       try {
-        await deleteOrgRepo(repoName);
-        logger.info(LOG_MODULES.SKILL, `Gitea 仓库删除成功: ${repoName}`);
+        const deleted = await deleteOrgRepo(repoName);
+        if (deleted) {
+          logger.info(LOG_MODULES.SKILL, `Gitea 仓库删除成功: ${repoName}`);
+        } else {
+          logger.warn(LOG_MODULES.SKILL, `Gitea 仓库删除返回失败: ${repoName}`);
+        }
       } catch (giteaError) {
         logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Gitea 删除仓库失败', appId, {
           details: { appId, repoName, error: giteaError instanceof Error ? giteaError.message : String(giteaError) }
