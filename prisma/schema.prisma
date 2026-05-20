@@ -14,7 +14,7 @@ model AgentApp {
   tenantId          String?
   name              String
   engine            String
-  agentHarnessPath  String
+  agentHarnessPath  String?
   defaultAgentName  String?  @default("default-agent")
   startCommand      String?
   notes             String?

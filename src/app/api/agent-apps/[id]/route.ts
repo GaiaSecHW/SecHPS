@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { prisma } from '@/lib/prisma';
-import { uploadAgentHarness, deleteAgentHarness } from '@/lib/minio-client';
 import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
+import {
+  pushOrUpdateOrgRepo,
+  deleteOrgRepo,
+  isConfigured as isGiteaOrgConfigured,
+} from '@/lib/gitea-org-repo';
 
 interface RouteContext {
   params: Promise<{ id: string }>;
@@ -85,10 +89,9 @@ export async function PUT(
     }
 
     let agentHarnessPath = existing.agentHarnessPath;
-    let minioUploaded = false;
+    let giteaUploaded = false;
     let syncedFilesMap: Map<string, Buffer> | null = null;
 
-    // MinIO 方式更新文件
     if (updateFiles) {
       const filesMap = new Map<string, Buffer>();
 
@@ -115,19 +118,17 @@ export async function PUT(
         }
       }
 
-      if (filesMap.size > 0) {
+      if (filesMap.size > 0 && agentHarnessPath && isGiteaOrgConfigured()) {
         try {
-          await deleteAgentHarness(appId);
-          await uploadAgentHarness(appId, filesMap);
-          minioUploaded = true;
+          const result = await pushOrUpdateOrgRepo(agentHarnessPath, filesMap);
+          giteaUploaded = result.success;
           syncedFilesMap = filesMap;
+          logger.info(LOG_MODULES.SKILL, `AgentHarness 更新: ${agentHarnessPath} (method: ${result.method}, success: ${result.success})`);
         } catch (uploadError) {
-          logger.errorWithUser(LOG_MODULES.SKILL, payload, 'MinIO 更新 AgentApp 失败', appId, {
-            details: { appId, error: uploadError instanceof Error ? uploadError.message : String(uploadError) }
+          logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Gitea 更新 AgentApp 文件失败', appId, {
+            details: { appId, repoName: agentHarnessPath, error: uploadError instanceof Error ? uploadError.message : String(uploadError) }
           });
         }
-
-        agentHarnessPath = `${appId}/`;
       }
     }
 
@@ -145,16 +146,15 @@ export async function PUT(
       },
     });
 
-    logger.info(LOG_MODULES.SKILL, 'AgentApp 更新成功', { appId, name, minioUploaded });
+    logger.info(LOG_MODULES.SKILL, 'AgentApp 更新成功', { appId, name, giteaUploaded });
 
-    // 异步同步 SKILL，不阻塞响应
     if (syncedFilesMap) {
       syncSkillsFromHarness(syncedFilesMap, payload.userId, existing.tenantId).catch(err =>
         console.error('[SkillHarnessSync] 自动同步失败:', err)
       );
     }
 
-    return NextResponse.json({ app, minioUploaded });
+    return NextResponse.json({ app, giteaUploaded });
   } catch (error) {
     logger.errorNoUser(LOG_MODULES.SKILL, '更新应用失败', { details: { error: error instanceof Error ? error.message : String(error) } });
     return NextResponse.json({ error: '更新应用失败' }, { status: 500 });
@@ -193,14 +193,17 @@ export async function DELETE(
       return NextResponse.json({ error: '应用不存在或无权限删除公共资源' }, { status: 404 });
     }
 
-    // MinIO 方式删除文件（异步，不阻塞响应）
-    deleteAgentHarness(appId).then(() => {
-      logger.info(LOG_MODULES.SKILL, `MinIO 删除 AgentApp 成功: ${appId}`);
-    }).catch(err => {
-      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'MinIO 删除 AgentApp 文件失败', appId, {
-        details: { appId, error: err instanceof Error ? err.message : String(err) }
-      });
-    });
+    const repoName = existing.agentHarnessPath;
+    if (repoName && isGiteaOrgConfigured()) {
+      try {
+        await deleteOrgRepo(repoName);
+        logger.info(LOG_MODULES.SKILL, `Gitea 仓库删除成功: ${repoName}`);
+      } catch (giteaError) {
+        logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Gitea 删除仓库失败', appId, {
+          details: { appId, repoName, error: giteaError instanceof Error ? giteaError.message : String(giteaError) }
+        });
+      }
+    }
 
     await prisma.agentApp.delete({
       where: { id: appId },

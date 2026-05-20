@@ -3,10 +3,18 @@ import { authenticateRequestEnhanced, authErrorResponse } from '@/lib/api-auth';
 import type { AuthSuccessResult } from '@/lib/api-auth';
 import { buildTenantFilter } from '@/lib/tenant-filter';
 import { prisma } from '@/lib/prisma';
-import { uploadAgentHarness } from '@/lib/minio-client';
 import AdmZip from 'adm-zip';
 import { logger, LOG_MODULES } from '@/lib/logger';
 import { syncSkillsFromHarness } from '@/lib/skill-harness-sync';
+import {
+  sanitizeRepoName,
+  checkOrgRepoExists,
+  createOrgRepo,
+  pushOrUpdateOrgRepo,
+  deleteOrgRepo,
+  isConfigured as isGiteaOrgConfigured,
+  getRepoUrl,
+} from '@/lib/gitea-org-repo';
 
 export async function GET(request: NextRequest) {
   const auth = authenticateRequestEnhanced(request);
@@ -99,9 +107,10 @@ export async function POST(request: NextRequest) {
 
     const appId = crypto.randomUUID();
     const filesMap = new Map<string, Buffer>();
+    let repoName: string;
 
-    // 处理上传的文件
     if (fileType === 'archive' && agentHarnessFile && agentHarnessFile.size > 0) {
+      repoName = sanitizeRepoName(agentHarnessFile.name);
       const fileBuffer = Buffer.from(await agentHarnessFile.arrayBuffer());
       const zip = new AdmZip(fileBuffer);
       const zipEntries = zip.getEntries();
@@ -113,6 +122,8 @@ export async function POST(request: NextRequest) {
       }
     } else if (fileType === 'folder' && filesJson) {
       const filesInfo: { key: string; relativePath: string }[] = JSON.parse(filesJson);
+      const folderName = filesInfo[0]?.relativePath.split('/')[0] || 'unknown';
+      repoName = sanitizeRepoName(folderName);
       
       for (const info of filesInfo) {
         const file = formData.get(info.key) as File;
@@ -122,22 +133,49 @@ export async function POST(request: NextRequest) {
           filesMap.set(relativePath, fileBuffer);
         }
       }
+    } else {
+      return NextResponse.json({ error: '无效的文件类型' }, { status: 400 });
     }
 
-    // Upload to MinIO
+    if (!isGiteaOrgConfigured()) {
+      return NextResponse.json({ error: 'Gitea 组织仓库服务未配置' }, { status: 500 });
+    }
+
+    const existingApp = await prisma.agentApp.findFirst({
+      where: { agentHarnessPath: repoName },
+    });
+    if (existingApp) {
+      return NextResponse.json({ error: `仓库名 ${repoName} 已被其他应用使用，请更换文件名` }, { status: 400 });
+    }
+
+    const repoExists = await checkOrgRepoExists(repoName);
+    if (repoExists) {
+      return NextResponse.json({ error: `仓库 ${repoName} 已存在，请使用其他文件名` }, { status: 400 });
+    }
+
     try {
-      await uploadAgentHarness(appId, filesMap);
-    } catch (uploadError) {
-      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'MinIO 上传 AgentApp 失败', appId, {
-        details: { appId, error: uploadError instanceof Error ? uploadError.message : String(uploadError) }
+      const repo = await createOrgRepo(repoName);
+      if (!repo) {
+        throw new Error('创建仓库失败');
+      }
+
+      if (filesMap.size > 0) {
+        const result = await pushOrUpdateOrgRepo(repoName, filesMap);
+        if (!result.success) {
+          throw new Error('上传文件失败');
+        }
+        logger.info(LOG_MODULES.SKILL, `AgentHarness 上传成功: ${repoName} (method: ${result.method})`);
+      }
+    } catch (giteaError) {
+      logger.errorWithUser(LOG_MODULES.SKILL, payload, 'Gitea 创建仓库失败', repoName, {
+        details: { repoName, error: giteaError instanceof Error ? giteaError.message : String(giteaError) }
       });
       return NextResponse.json({
-        error: 'MinIO 上传失败',
-        details: uploadError instanceof Error ? uploadError.message : String(uploadError)
+        error: giteaError instanceof Error ? giteaError.message : 'Gitea 创建仓库失败',
       }, { status: 500 });
     }
 
-    const agentHarnessPath = `${appId}/`;
+    const agentHarnessPath = repoName;
 
     const app = await prisma.agentApp.create({
       data: {

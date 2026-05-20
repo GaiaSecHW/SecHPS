@@ -24,6 +24,7 @@ lerna-debug.log*
 # Misc
 .DS_Store
 *.pem
+AgentHarness/
 
 # Debug
 debug/
