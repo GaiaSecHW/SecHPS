@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Settings, FileText, Clock, Play, CheckCircle, XCircle, AlertCircle, Loader2, ChevronDown, ChevronRight, Wrench, Activity, Cpu, Timer, ShieldAlert, ExternalLink, Download } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
 
@@ -80,6 +80,8 @@ export default function TaskDetailPage() {
   const [codeswarmStatus, setCodeswarmStatus] = useState<CodeswarmStatus | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [vulnStats, setVulnStats] = useState<{ total: number; bySeverity: Record<string, number>; byStatus: Record<string, number> } | null>(null);
+  const [reportFiles, setReportFiles] = useState<{ hasReport: boolean; files: { url: string; name: string }[] } | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -247,6 +249,54 @@ export default function TaskDetailPage() {
     }
   };
 
+  const fetchReportFiles = useCallback(async () => {
+    if (task?.status !== 'completed') return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/task-builder/tasks/${taskId}/report-files`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReportFiles(data);
+      }
+    } catch {}
+  }, [task?.status, taskId]);
+
+  const downloadFile = async (url: string, fileName: string) => {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(blobUrl);
+  };
+
+  const handleDownloadAllReports = async () => {
+    if (!reportFiles?.files?.length || downloading) return;
+    setDownloading(true);
+    
+    try {
+      for (const file of reportFiles.files) {
+        await downloadFile(file.url, file.name);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      toast.success('报告下载完成');
+    } catch (error) {
+      toast.error('下载失败');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReportFiles();
+  }, [fetchReportFiles]);
+
   useEffect(() => {
     return () => {
       if (eventSourceRef) eventSourceRef.close();
@@ -363,13 +413,23 @@ export default function TaskDetailPage() {
                  {executing ? '启动中...' : '执行任务'}
                </button>
              )}
-            {task.status === 'running' && (
-              <span className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md">
-                <Loader2 size={16} className="animate-spin" />
-                执行中...
-              </span>
+{task.status === 'running' && (
+               <span className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md">
+                 <Loader2 size={16} className="animate-spin" />
+                 执行中...
+               </span>
+             )}
+            {task.status === 'completed' && reportFiles?.hasReport && (
+              <button
+                onClick={handleDownloadAllReports}
+                disabled={downloading}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {downloading ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                {downloading ? '下载中...' : `下载报告 (${reportFiles.files.length})`}
+              </button>
             )}
-          </div>
+           </div>
         </div>
 
         <div className="grid grid-cols-4 gap-4 mt-6 bg-[#0F172A] rounded-lg p-4">
