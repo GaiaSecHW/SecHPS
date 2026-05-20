@@ -231,11 +231,13 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
     setCode(null);
     setCodeLoading(true);
     const token = localStorage.getItem('token');
-    fetch(`/api/knowledge-graph/${encodeURIComponent(product)}?view=node&nodeId=${node.id}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    fetch(`/api/knowledge-graph/${encodeURIComponent(product)}/decompile`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nodeId: node.id }),
     })
       .then(r => r.json())
-      .then(data => setCode(data.code || null))
+      .then(data => setCode(data.source || null))
       .catch(() => setCode(null))
       .finally(() => setCodeLoading(false));
   }
@@ -316,13 +318,14 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
           </div>
           <div className="border-t border-gray-700/40 overflow-auto custom-scrollbar" style={{ maxHeight: 220 }}>
             {codeLoading ? (
-              <div className="flex items-center justify-center py-4">
+              <div className="flex items-center justify-center py-4 gap-2">
                 <Loader2 size={16} className="animate-spin text-primary-400" />
+                <span className="text-[11px] text-gray-500">反编译中...</span>
               </div>
             ) : code ? (
               <pre className="font-mono text-[11px] text-gray-300 leading-relaxed px-3 py-2 whitespace-pre">{code}</pre>
             ) : (
-              <p className="text-[11px] text-gray-600 px-3 py-2">无方法体</p>
+              <p className="text-[11px] text-gray-600 px-3 py-2">无可用方法体</p>
             )}
           </div>
         </div>
