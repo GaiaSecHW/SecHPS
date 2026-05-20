@@ -25,6 +25,31 @@ npm run migrate:workflow-to-agent-team  # 工作流迁移到 AgentTeam
 npm run rollback:agent-team             # 回滚 AgentTeam 迁移
 ```
 
+## 运维命令
+
+```bash
+# 启动服务
+screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'   # 启动 Web 应用
+nohup pnpm --filter @codeswarm/worker dev > codeswarm/worker.log 2>&1 &  # 启动 Worker
+
+# 停止服务
+screen -S sechps -X quit                                             # 停止 Web 应用
+pkill -f "tsx.*index.ts"                                             # 停止 Worker 进程
+
+# 查看日志
+tail -f app.log                      # Web 应用日志
+tail -f codeswarm/worker.log         # Worker 日志
+screen -r sechps                     # 进入 Web 应用 screen 会话
+
+# 健康检查
+curl -s http://localhost:3000/api/global/health   # Web 应用状态
+curl -s http://127.0.0.1:8090/health              # Worker 状态（如有）
+
+# 重启流程
+screen -S sechps -X quit && screen -dmS sechps bash -c 'npm start > app.log 2>&1; exec bash'
+pkill -f "tsx.*index.ts" && nohup pnpm --filter @codeswarm/worker dev > codeswarm/worker.log 2>&1 &
+```
+
 **语言规则**: 用中文回答
 
 ## 认证模块导入规则（关键）

@@ -74,23 +74,50 @@ export async function DELETE(
   try {
     const { taskId } = await params;
 
-    // 释放 Worker 负载
-    try {
-      const task = await prisma.codeswarmTask.findUnique({
-        where: { taskId },
-        select: { workerId: true },
+    // 获取任务和 Worker 信息
+    const task = await prisma.codeswarmTask.findUnique({
+      where: { taskId },
+      select: { workerId: true, state: true },
+    });
+
+    // 如果任务正在运行/已分发，先通知 Worker 取消进程
+    if (task && task.workerId && ['dispatched', 'running'].includes(task.state)) {
+      const worker = await prisma.codeswarmWorker.findUnique({
+        where: { id: task.workerId },
+        select: { nodeId: true, address: true },
       });
-      if (task?.workerId) {
-        const worker = await prisma.codeswarmWorker.findUnique({
-          where: { id: task.workerId },
-          select: { nodeId: true },
-        });
-        if (worker) {
-          await codeswarmDispatcher.onTaskCompleted(worker.nodeId);
+
+      if (worker) {
+        // 尝试调用 Worker 的 cancel endpoint
+        const addresses = worker.address.split(',').map(a => a.trim()).filter(Boolean);
+        for (const addr of addresses) {
+          try {
+            const resp = await fetch(`http://${addr}/task/cancel`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskId }),
+              signal: AbortSignal.timeout(5000),
+            });
+            if (resp.ok) {
+              console.log(`[CodeSwarm] Task ${taskId} cancelled on worker ${worker.nodeId}`);
+              break;
+            }
+          } catch (err) {
+            console.warn(`[CodeSwarm] Failed to cancel on ${addr}:`, err);
+          }
         }
       }
-    } catch (e) {
-      console.error('[CodeSwarm] 释放 Worker 负载失败:', e);
+    }
+
+    // 释放 Worker 负载
+    if (task?.workerId) {
+      const worker = await prisma.codeswarmWorker.findUnique({
+        where: { id: task.workerId },
+        select: { nodeId: true },
+      });
+      if (worker) {
+        await codeswarmDispatcher.onTaskCompleted(worker.nodeId);
+      }
     }
 
     await prisma.$transaction(async (tx) => {
