@@ -6,7 +6,7 @@ import { generateWorkerToken, verifyWorkerToken, extractBearerToken } from '@/li
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { nodeId, maxConcurrent, currentTasks, address } = body;
+    const { nodeId, maxConcurrent, currentTasks, address, systemType, arch } = body;
 
     if (!nodeId) {
       return NextResponse.json({ error: 'nodeId is required' }, { status: 400 });
@@ -27,6 +27,8 @@ export async function POST(request: Request) {
       where: { nodeId },
       update: {
         address: address || '',
+        systemType: systemType || null,
+        arch: arch || null,
         status: 'online',
         maxConcurrent: maxConcurrent || 5,
         currentTasks: currentTasks || 0,
@@ -37,6 +39,8 @@ export async function POST(request: Request) {
         id: `worker-${Date.now()}`,
         nodeId,
         address: address || '',
+        systemType: systemType || null,
+        arch: arch || null,
         status: 'online',
         maxConcurrent: maxConcurrent || 5,
         currentTasks: currentTasks || 0,

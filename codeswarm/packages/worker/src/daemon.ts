@@ -159,6 +159,8 @@ export class WorkerDaemon {
   private async sendHeartbeat(): Promise<void> {
     try {
       const addresses = this.getLocalAddresses();
+      const systemType = os.platform() === 'win32' ? 'windows' : os.platform() === 'darwin' ? 'darwin' : 'linux';
+      const arch = os.arch() === 'x64' ? 'x64' : os.arch() === 'arm64' ? 'arm64' : os.arch();
       const resp = await fetch(`${this.config.orchestratorUrl}/api/codeswarm/worker/heartbeat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -167,6 +169,8 @@ export class WorkerDaemon {
           maxConcurrent: this.config.maxConcurrent,
           currentTasks: this.config.maxConcurrent - this.semaphore.available,
           address: addresses.join(','),
+          systemType,
+          arch,
         }),
       });
       if (!resp.ok) {

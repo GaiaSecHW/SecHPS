@@ -5,7 +5,7 @@ export async function GET() {
   try {
     // 使用 $queryRaw 替代 findMany，避免远程 PostgreSQL 挂起问题
     const workers = await prisma.$queryRaw`
-      SELECT id, "nodeId", address, status, "maxConcurrent", "currentTasks",
+      SELECT id, "nodeId", address, "systemType", arch, status, "maxConcurrent", "currentTasks",
              token, "lastHeartbeat", "createdAt", "updatedAt"
       FROM "CodeswarmWorker"
       ORDER BY "lastHeartbeat" DESC

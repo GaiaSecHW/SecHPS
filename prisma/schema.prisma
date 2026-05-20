@@ -354,6 +354,8 @@ model CodeswarmWorker {
   id            String          @id
   nodeId        String          @unique
   address       String
+  systemType    String?         // 系统类型: linux, windows, darwin
+  arch          String?         // CPU架构: x64, x86, arm64, armv7
   status        String          @default("online")
   maxConcurrent Int             @default(5)
   currentTasks  Int             @default(0)

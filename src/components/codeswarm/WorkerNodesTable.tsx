@@ -12,6 +12,8 @@ interface Worker {
   nodeId: string;
   name: string | null;
   address: string;
+  systemType: string | null;
+  arch: string | null;
   status: string;
   maxConcurrent: number;
   currentTasks: number;
@@ -198,6 +200,20 @@ export function WorkerNodesTable() {
                             ))}
                           </div>
                         </div>
+                        {(worker.systemType || worker.arch) && (
+                          <div className="flex items-center gap-1 mt-1">
+                            {worker.systemType && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-blue-900/30 text-blue-400">
+                                {worker.systemType}
+                              </span>
+                            )}
+                            {worker.arch && (
+                              <span className="px-1.5 py-0.5 text-[10px] font-medium rounded bg-emerald-900/30 text-emerald-400">
+                                {worker.arch}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </td>
