@@ -11,6 +11,7 @@
 #   ORCHESTRATOR_URL    - Orchestrator backend URL (e.g. http://host:3000)
 #   WORKER_ADDRESS      - External reachable address
 #   CODEDMAP_HOME       - Codedmap install path (default /opt/codedmap)
+#   JOERN_HOME          - Joern install path (default /opt/joern)
 #   GITEA_CODEDMAP_REPO - Gitea repo URL for codedmap db cache
 #   GITEA_CODEDMAP_TOKEN- Gitea access token
 #   PATH_MAPPING        - NFS path mapping (e.g. /nfs/shared=Z:/)
@@ -23,7 +24,7 @@ FROM node:20-bookworm AS worker-builder
 
 WORKDIR /build/codeswarm
 
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
 # Copy workspace root config
 COPY codeswarm/package.json codeswarm/pnpm-workspace.yaml codeswarm/pnpm-lock.yaml codeswarm/tsconfig.json ./
@@ -31,13 +32,15 @@ COPY codeswarm/package.json codeswarm/pnpm-workspace.yaml codeswarm/pnpm-lock.ya
 # Copy package manifests (leverage Docker layer cache)
 COPY codeswarm/packages/types/package.json ./packages/types/package.json
 COPY codeswarm/packages/acp/package.json ./packages/acp/package.json
+COPY codeswarm/packages/sdk-adapter/package.json ./packages/sdk-adapter/package.json
 COPY codeswarm/packages/worker/package.json ./packages/worker/package.json
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # Copy source & build
 COPY codeswarm/packages/types/ ./packages/types/
 COPY codeswarm/packages/acp/ ./packages/acp/
+COPY codeswarm/packages/sdk-adapter/ ./packages/sdk-adapter/
 COPY codeswarm/packages/worker/ ./packages/worker/
 
 RUN pnpm run build
@@ -47,55 +50,45 @@ RUN pnpm run build
 RUN pnpm deploy --prod --filter @codeswarm/worker /deploy/worker
 
 # ---------------------------------------------------------------------------
-# Stage 2: Build codedmap (Python)
+# Stage 2: Runtime image
 # ---------------------------------------------------------------------------
-FROM python:3.12-slim-bookworm AS codedmap-builder
+FROM eclipse-temurin:21-jre-alpine AS runtime
 
-WORKDIR /build/codedmap
+ARG JOERN_VERSION=v4.0.542
 
-RUN pip install --no-cache-dir --upgrade pip uv
-
-# Copy pyproject.toml for metadata
-COPY codedmap/pyproject.toml ./
-
-# Install dependencies directly (without lock file for cross-platform compatibility)
-# uv manages platform-independent resolution
-RUN uv venv /opt/codedmap-venv && \
-    . /opt/codedmap-venv/bin/activate && \
-    uv pip install --no-cache ".[api,ai,parsers]"
-
-# Copy source and install package
-COPY codedmap/ .
-RUN . /opt/codedmap-venv/bin/activate && \
-    pip install --no-cache-dir -e ".[api,ai,parsers]"
-
-# ---------------------------------------------------------------------------
-# Stage 3: Runtime image
-# ---------------------------------------------------------------------------
-FROM node:20-bookworm-slim AS runtime
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    ca-certificates \
+# Install base tools (Alpine uses apk)
+RUN apk add --no-cache \
+    bash \
     curl \
-    openjdk-17-jre-headless \
-    && rm -rf /var/lib/apt/lists/*
+    git \
+    unzip \
+    python3 \
+    py3-pip \
+    nodejs \
+    npm
 
-# Install opencode CLI (Go binary via npm)
+# Install opencode CLI
 RUN npm install -g opencode-ai@1.15.1
 
-# Install Joern (code analysis tool)
-RUN curl -L https://github.com/joernio/joern/releases/latest/download/joern-parse -o /usr/local/bin/joern-parse && \
-    chmod +x /usr/local/bin/joern-parse && \
-    curl -L https://github.com/joernio/joern/releases/latest/download/joern -o /usr/local/bin/joern && \
-    chmod +x /usr/local/bin/joern
+# Install Joern CLI
+RUN curl -fsSL "https://github.com/joernio/joern/releases/download/${JOERN_VERSION}/joern-cli.zip" -o /tmp/joern-cli.zip && \
+    unzip -q /tmp/joern-cli.zip -d /opt/ && \
+    rm /tmp/joern-cli.zip && \
+    ln -sf /opt/joern-cli/joern-parse /usr/local/bin/joern-parse && \
+    ln -sf /opt/joern-cli/joern-export /usr/local/bin/joern-export && \
+    ln -sf /opt/joern-cli/joern /usr/local/bin/joern
 
-# Copy codedmap (Python venv + source)
-COPY --from=codedmap-builder /opt/codedmap-venv /opt/codedmap-venv
-COPY --from=codedmap-builder /build/codedmap /opt/codedmap
+ENV JOERN_HOME=/opt/joern-cli
 
+# Copy codedmap source and install with all dependencies
+COPY codedmap/ /opt/codedmap/
+RUN pip install --no-cache-dir --break-system-packages uv && \
+    uv venv /opt/codedmap-venv && \
+    . /opt/codedmap-venv/bin/activate && \
+    cd /opt/codedmap && uv pip install --no-cache -e ".[api,ai,parsers]"
+
+ENV CODEDMAP_HOME=/opt/codedmap
 ENV PATH="/opt/codedmap-venv/bin:${PATH}"
-ENV CODEDMAP_HOME="/opt/codedmap"
 
 # Copy pruned worker deployment (real files, no symlinks)
 COPY --from=worker-builder /deploy/worker /opt/worker
@@ -107,8 +100,7 @@ RUN mkdir -p /opt/worker/data/task_workspaces
 ENV NODE_ID="" \
     PORT=8080 \
     MAX_CONCURRENT=5 \
-    ORCHESTRATOR_URL="http://host.docker.internal:3000" \
-    CODEDMAP_HOME="/opt/codedmap"
+    ORCHESTRATOR_URL="http://host.docker.internal:3000"
 
 EXPOSE 8080
 
