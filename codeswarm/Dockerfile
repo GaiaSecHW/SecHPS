@@ -55,14 +55,16 @@ WORKDIR /build/codedmap
 
 RUN pip install --no-cache-dir --upgrade pip uv
 
-COPY codedmap/pyproject.toml codedmap/uv.lock* ./
+# Copy lock file first for better layer caching
+COPY codedmap/pyproject.toml codedmap/uv.lock ./
 
-# Create venv and install dependencies
+# Install dependencies using uv (platform-independent)
 RUN uv venv /opt/codedmap-venv && \
     . /opt/codedmap-venv/bin/activate && \
-    uv pip install --no-cache .
+    uv pip install --no-cache -r uv.lock || \
+    uv pip install --no-cache ".[api,ai,parsers]"
 
-# Copy source and install package
+# Copy source and install package in editable mode
 COPY codedmap/ .
 RUN . /opt/codedmap-venv/bin/activate && \
     pip install --no-cache-dir -e ".[api,ai,parsers]"
@@ -76,10 +78,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     ca-certificates \
     curl \
+    openjdk-17-jre-headless \
     && rm -rf /var/lib/apt/lists/*
 
 # Install opencode CLI (Go binary via npm)
 RUN npm install -g opencode-ai@1.15.1
+
+# Install Joern (code analysis tool)
+RUN curl -L https://github.com/joernio/joern/releases/latest/download/joern-parse -o /usr/local/bin/joern-parse && \
+    chmod +x /usr/local/bin/joern-parse && \
+    curl -L https://github.com/joernio/joern/releases/latest/download/joern -o /usr/local/bin/joern && \
+    chmod +x /usr/local/bin/joern
 
 # Copy codedmap (Python venv + source)
 COPY --from=codedmap-builder /opt/codedmap-venv /opt/codedmap-venv
