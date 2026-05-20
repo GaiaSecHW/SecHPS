@@ -173,11 +173,27 @@ function DashboardLayoutContent({
               <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={collapsed}>
                 工作流编排
               </NavLink>
+            </>
+          )}
+
+          {/* ICSL & Admin section: evolution & knowledge */}
+          {(user?.isIcsTenant || user?.roles?.includes('admin')) && (
+            <>
+              {!collapsed && (
+                <div className="pt-5 pb-1 px-4">
+                  <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">进化与回流</p>
+                </div>
+              )}
+              {collapsed && <div className="pt-3 mx-3 border-t border-gray-800/60" />}
+
               <NavLink href="/dashboard/evolution" icon={<TrendingUp size={18} />} collapsed={collapsed}>
                 智能体进化
               </NavLink>
               <NavLink href="/dashboard/knowledge-graph" icon={<Network size={18} />} collapsed={collapsed}>
                 知识图谱
+              </NavLink>
+              <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={collapsed}>
+                数据回流
               </NavLink>
             </>
           )}
