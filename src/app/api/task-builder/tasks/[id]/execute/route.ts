@@ -4,7 +4,7 @@ import { PERMISSIONS } from '@/types/permissions';
 import { prisma, withRetry } from '@/lib/prisma';
 import eventBus from '@/lib/event-bus';
 import { codeswarmDispatcher } from '@/services/codeswarm-dispatcher';
-import { downloadAgentHarness } from '@/lib/minio-client';
+import { copyAgentHarnessFromLocal } from '@/lib/task-creation';
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 
@@ -116,16 +116,22 @@ export async function POST(
 
     const workspacePath = task.projectPath || undefined;
 
-    // On-demand: check if workspace has agent harness files, download from MinIO if missing
+    // On-demand: check if workspace has agent harness files, copy from local if missing
     if (workspacePath && task.agentId) {
       const hasHarness = checkWorkspaceHasHarness(workspacePath);
       if (!hasHarness) {
-        console.log(`[Execute] Workspace missing agent harness, downloading from MinIO: ${task.agentId}`);
-        try {
-          await downloadAgentHarness(task.agentId, workspacePath);
-          console.log(`[Execute] Agent harness downloaded to workspace`);
-        } catch (dlError) {
-          console.error(`[Execute] Failed to download agent harness from MinIO:`, dlError);
+        const agentAppForHarness = await prisma.agentApp.findUnique({
+          where: { id: task.agentId },
+          select: { agentHarnessPath: true },
+        });
+        if (agentAppForHarness?.agentHarnessPath) {
+          console.log(`[Execute] Workspace missing agent harness, copying from local: ${agentAppForHarness.agentHarnessPath}`);
+          try {
+            await copyAgentHarnessFromLocal(agentAppForHarness.agentHarnessPath, workspacePath);
+            console.log(`[Execute] Agent harness copied to workspace`);
+          } catch (copyError) {
+            console.error(`[Execute] Failed to copy agent harness from local:`, copyError);
+          }
         }
       }
     }

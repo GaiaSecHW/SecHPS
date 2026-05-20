@@ -1,9 +1,8 @@
 import { prisma } from '@/lib/prisma';
-import { writeFile, mkdir, rm } from 'fs/promises';
+import { writeFile, mkdir, rm, readdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import AdmZip from 'adm-zip';
-import { downloadAgentHarness } from '@/lib/minio-client';
 
 /**
  * 验证上传文件的目录结构是否符合 Agent 要求
@@ -142,6 +141,51 @@ function parseValidationResponse(text: string): { valid: boolean; reason?: strin
   return { valid: false, reason: reason || '文件结构不符合要求' };
 }
 
+/**
+ * 递归拷贝目录
+ */
+async function copyDirectoryRecursive(src: string, dest: string): Promise<void> {
+  await mkdir(dest, { recursive: true });
+  const entries = await readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = join(src, entry.name);
+    const destPath = join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDirectoryRecursive(srcPath, destPath);
+    } else {
+      const content = await readFile(srcPath);
+      await writeFile(destPath, content);
+    }
+  }
+}
+
+/**
+ * 从本地 AgentHarness 目录拷贝 Agent 文件到任务目录
+ * @param repoName Agent 的 repoName（对应 agentApp.agentHarnessPath）
+ * @param destDir 目标目录（任务目录）
+ * @returns 是否成功拷贝
+ */
+export async function copyAgentHarnessFromLocal(repoName: string, destDir: string): Promise<boolean> {
+  const agentHarnessBase = process.env.AGENT_HARNESS_LOCAL_PATH || './AgentHarness';
+  const sourceDir = join(process.cwd(), agentHarnessBase, repoName);
+
+  if (!existsSync(sourceDir)) {
+    console.log(`[TaskCreation] 本地 AgentHarness 目录不存在: ${sourceDir}`);
+    return false;
+  }
+
+  try {
+    await copyDirectoryRecursive(sourceDir, destDir);
+    console.log(`[TaskCreation] 从本地拷贝 AgentHarness 完成: ${repoName} -> ${destDir}`);
+    return true;
+  } catch (error) {
+    console.error(`[TaskCreation] 拷贝 AgentHarness 失败:`, error);
+    return false;
+  }
+}
+
 const SHARED_WORKSPACE_BASE = process.env.NFS_MOUNT_PATH || process.env.SHARED_WORKSPACE_PATH || '/data/shared-workspace';
 
 interface CreateTaskParams {
@@ -195,36 +239,35 @@ export async function createTaskWithFiles(params: CreateTaskParams): Promise<Cre
   const taskDir = join(SHARED_WORKSPACE_BASE, taskId);
   await mkdir(taskDir, { recursive: true });
 
-  // 检查 Agent 是否有文件结构要求，有则校验
-  if (files && files.length > 0) {
-    const agent = await prisma.agentApp.findUnique({
-      where: { id: agentId },
-      select: { inputRequirements: true },
-    });
+  // 获取 Agent 信息
+  const agent = await prisma.agentApp.findUnique({
+    where: { id: agentId },
+    select: { agentHarnessPath: true, inputRequirements: true },
+  });
 
-    if (agent?.inputRequirements) {
-      const validation = await validateFileStructure(files, agent.inputRequirements);
-      if (!validation.valid) {
-        throw new Error(`文件结构校验失败: ${validation.reason || '不符合 Agent 要求'}`);
-      }
-      console.log(`[TaskCreation] 文件结构校验通过`);
+  // 检查 Agent 是否有文件结构要求，有则校验
+  if (files && files.length > 0 && agent?.inputRequirements) {
+    const validation = await validateFileStructure(files, agent.inputRequirements);
+    if (!validation.valid) {
+      throw new Error(`文件结构校验失败: ${validation.reason || '不符合 Agent 要求'}`);
     }
+    console.log(`[TaskCreation] 文件结构校验通过`);
   }
 
   let filePath: string | null = null;
   let projectPath: string | null = null;
 
-  try {
-    console.log(`[TaskCreation] 开始为任务 ${taskId} 从 MinIO 拉取 AgentHarness (${agentId})`);
-    const rootDir = await downloadAgentHarness(agentId, taskDir);
-
-    if (rootDir) {
-      console.log(`[TaskCreation] 从 MinIO 拉取完成，根目录: ${rootDir}`);
+  // 从本地 AgentHarness 目录拷贝 Agent 文件
+  if (agent?.agentHarnessPath) {
+    console.log(`[TaskCreation] 开始为任务 ${taskId} 从本地拷贝 AgentHarness (${agent.agentHarnessPath})`);
+    const copied = await copyAgentHarnessFromLocal(agent.agentHarnessPath, taskDir);
+    if (copied) {
+      console.log(`[TaskCreation] AgentHarness 拷贝完成`);
     } else {
-      console.log(`[TaskCreation] MinIO 未找到 AgentHarness 文件，继续处理上传文件`);
+      console.log(`[TaskCreation] AgentHarness 拷贝失败或目录不存在，继续处理上传文件`);
     }
-  } catch (downloadError) {
-    console.error(`[TaskCreation] 从 MinIO 拉取文件失败:`, downloadError);
+  } else {
+    console.log(`[TaskCreation] Agent 未配置 agentHarnessPath，跳过拷贝`);
   }
 
   if (files && files.length > 0) {
