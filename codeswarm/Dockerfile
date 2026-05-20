@@ -55,16 +55,16 @@ WORKDIR /build/codedmap
 
 RUN pip install --no-cache-dir --upgrade pip uv
 
-# Copy lock file first for better layer caching
-COPY codedmap/pyproject.toml codedmap/uv.lock ./
+# Copy pyproject.toml for metadata
+COPY codedmap/pyproject.toml ./
 
-# Install dependencies using uv (platform-independent)
+# Install dependencies directly (without lock file for cross-platform compatibility)
+# uv manages platform-independent resolution
 RUN uv venv /opt/codedmap-venv && \
     . /opt/codedmap-venv/bin/activate && \
-    uv pip install --no-cache -r uv.lock || \
     uv pip install --no-cache ".[api,ai,parsers]"
 
-# Copy source and install package in editable mode
+# Copy source and install package
 COPY codedmap/ .
 RUN . /opt/codedmap-venv/bin/activate && \
     pip install --no-cache-dir -e ".[api,ai,parsers]"
