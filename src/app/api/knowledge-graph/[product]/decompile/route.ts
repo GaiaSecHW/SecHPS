@@ -19,6 +19,7 @@ export async function POST(
 ) {
   const auth = authenticateRequestEnhanced(request);
   if (!auth.success) return authErrorResponse(auth);
+  const userId = 'userId' in auth ? auth.userId : auth.payload.userId;
 
   const { product } = await params;
   const { nodeId } = await request.json();
@@ -59,7 +60,7 @@ ${code}`,
       system: '你是一个 Java 字节码反编译专家，擅长将 Jimple 中间表示还原为可读的 Java 源代码。',
       max_tokens: 4096,
       context: {
-        userId: auth.userId,
+        userId: userId,
         scene: 'other',
         description: '知识图谱方法体反编译',
       },
@@ -67,8 +68,12 @@ ${code}`,
   );
 
   const blocks: any[] = response?.content ?? [];
-  const content = blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
+  let content = blocks.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
     || response?.choices?.[0]?.message?.content
     || '';
+
+  // Strip <think>...</think> blocks emitted by reasoning models
+  content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
   return NextResponse.json({ source: content });
 }

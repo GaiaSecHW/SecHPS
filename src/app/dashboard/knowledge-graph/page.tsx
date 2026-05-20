@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Network, ChevronRight, ChevronDown, Loader2, AlertCircle, Search, X } from 'lucide-react';
+import { Network, ChevronRight, ChevronDown, Loader2, AlertCircle, Search, X, Tag, Upload } from 'lucide-react';
 import { ReactFlowProvider, ReactFlow, Background, Controls, Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import toast from 'react-hot-toast';
 
 interface MethodInfo {
   id: string;
@@ -64,18 +65,85 @@ function shortName(fullName: string) {
 
 // ─── Package Tree ─────────────────────────────────────────────────────────────
 
-function MethodItem({ m, selected, onSelect }: { m: MethodInfo; selected: boolean; onSelect: () => void }) {
+function MethodItem({ m, selected, onSelect, product, onTagChange }: {
+  m: MethodInfo; selected: boolean; onSelect: () => void;
+  product: string; onTagChange: (updated: MethodInfo) => void;
+}) {
+  const [tagging, setTagging] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  async function handleTag(tagType: 'source' | 'sink' | 'entry') {
+    const hasTag = tagType === 'source' ? m.isSource : tagType === 'sink' ? m.isSink : m.isEntryPoint;
+    const action = hasTag ? 'remove' : 'add';
+    setTagging(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/knowledge-graph/${encodeURIComponent(product)}/tag`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeId: m.id, action, tagType }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      const data = await res.json();
+      onTagChange({ ...m, tags: data.tags, isSource: data.isSource, isSink: data.isSink, isEntryPoint: data.isEntryPoint });
+    } catch (e: any) {
+      toast.error(e.message || '标记失败');
+    } finally {
+      setTagging(false);
+    }
+  }
+
   return (
-    <button
-      onClick={onSelect}
-      className={`w-full text-left flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-        selected ? 'bg-primary-600/20 text-primary-300' : `${methodColor(m)} hover:bg-gray-700/40`
-      }`}
-      title={m.fullName}
-    >
-      <span className="truncate">{m.name}</span>
-      {tagBadge(m)}
-    </button>
+    <div className="group relative flex items-center">
+      <button
+        onClick={onSelect}
+        className={`flex-1 text-left flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+          selected ? 'bg-primary-600/20 text-primary-300' : `${methodColor(m)} hover:bg-gray-700/40`
+        }`}
+        title={m.fullName}
+      >
+        <span className="truncate">{m.name}</span>
+        {tagBadge(m)}
+      </button>
+      <div className="flex-shrink-0 flex items-center">
+        {open ? (
+          <div className="flex items-center gap-0.5 pr-1">
+            {tagging ? (
+              <Loader2 size={10} className="animate-spin text-gray-500 mx-1" />
+            ) : (
+              <>
+                <button
+                  onClick={() => handleTag('entry')}
+                  title="Entry Point"
+                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isEntryPoint ? 'bg-yellow-500/30 text-yellow-400' : 'text-gray-600 hover:text-yellow-400 hover:bg-yellow-500/10'}`}
+                >E</button>
+                <button
+                  onClick={() => handleTag('source')}
+                  title="Source"
+                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isSource ? 'bg-green-500/30 text-green-400' : 'text-gray-600 hover:text-green-400 hover:bg-green-500/10'}`}
+                >S</button>
+                <button
+                  onClick={() => handleTag('sink')}
+                  title="Sink"
+                  className={`text-[9px] px-1 py-0.5 rounded transition-colors ${m.isSink ? 'bg-red-500/30 text-red-400' : 'text-gray-600 hover:text-red-400 hover:bg-red-500/10'}`}
+                >K</button>
+              </>
+            )}
+            <button onClick={() => setOpen(false)} className="text-gray-600 hover:text-gray-400 ml-0.5">
+              <X size={9} />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={e => { e.stopPropagation(); setOpen(true); }}
+            className="opacity-0 group-hover:opacity-100 transition-opacity px-1 py-1 text-gray-600 hover:text-gray-300"
+            title="标记"
+          >
+            <Tag size={10} />
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -89,9 +157,9 @@ function matchesFilter(m: MethodInfo, search: string, tagFilter: TagFilter) {
   return true;
 }
 
-function ClassItem({ cls, selectedId, onSelect, search, tagFilter }: {
+function ClassItem({ cls, selectedId, onSelect, search, tagFilter, product, onTagChange }: {
   cls: TreeClass; selectedId: string | null; onSelect: (m: MethodInfo) => void;
-  search: string; tagFilter: TagFilter;
+  search: string; tagFilter: TagFilter; product: string; onTagChange: (updated: MethodInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
   const hasTagged = cls.methods.some(m => m.isSource || m.isSink || m.isEntryPoint);
@@ -121,7 +189,7 @@ function ClassItem({ cls, selectedId, onSelect, search, tagFilter }: {
       {open && (
         <div className="ml-3 border-l border-gray-700/40 pl-1">
           {filteredMethods.map(m => (
-            <MethodItem key={m.id} m={m} selected={selectedId === m.id} onSelect={() => onSelect(m)} />
+            <MethodItem key={m.id} m={m} selected={selectedId === m.id} onSelect={() => onSelect(m)} product={product} onTagChange={onTagChange} />
           ))}
         </div>
       )}
@@ -129,9 +197,9 @@ function ClassItem({ cls, selectedId, onSelect, search, tagFilter }: {
   );
 }
 
-function PackageItem({ pkg, selectedId, onSelect, search, tagFilter }: {
+function PackageItem({ pkg, selectedId, onSelect, search, tagFilter, product, onTagChange }: {
   pkg: TreePackage; selectedId: string | null; onSelect: (m: MethodInfo) => void;
-  search: string; tagFilter: TagFilter;
+  search: string; tagFilter: TagFilter; product: string; onTagChange: (updated: MethodInfo) => void;
 }) {
   const [open, setOpen] = useState(false);
   const hasTagged = pkg.classes.some(c => c.methods.some(m => m.isSource || m.isSink || m.isEntryPoint));
@@ -161,7 +229,7 @@ function PackageItem({ pkg, selectedId, onSelect, search, tagFilter }: {
       {open && (
         <div className="ml-2">
           {pkg.classes.map(cls => (
-            <ClassItem key={cls.id} cls={cls} selectedId={selectedId} onSelect={onSelect} search={search} tagFilter={tagFilter} />
+            <ClassItem key={cls.id} cls={cls} selectedId={selectedId} onSelect={onSelect} search={search} tagFilter={tagFilter} product={product} onTagChange={onTagChange} />
           ))}
         </div>
       )}
@@ -429,6 +497,48 @@ export default function KnowledgeGraphPage() {
   const [tab, setTab] = useState<'graph' | 'paths'>('graph');
   const [search, setSearch] = useState('');
   const [tagFilter, setTagFilter] = useState<TagFilter>('all');
+  const [syncing, setSyncing] = useState(false);
+
+  function handleTagChange(updated: MethodInfo) {
+    setTreeData(prev => {
+      if (!prev) return prev;
+      const packages = prev.packages.map(pkg => ({
+        ...pkg,
+        classes: pkg.classes.map(cls => ({
+          ...cls,
+          methods: cls.methods.map(m => m.id === updated.id ? updated : m),
+        })),
+      }));
+      const allMethods = packages.flatMap(p => p.classes.flatMap(c => c.methods));
+      return {
+        packages,
+        stats: {
+          totalMethods: allMethods.length,
+          sources: allMethods.filter(m => m.isSource).length,
+          sinks: allMethods.filter(m => m.isSink).length,
+          entryPoints: allMethods.filter(m => m.isEntryPoint).length,
+        },
+      };
+    });
+    if (selectedMethod?.id === updated.id) setSelectedMethod(updated);
+  }
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/knowledge-graph/${encodeURIComponent(product)}/sync`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error((await res.json()).error);
+      toast.success('已同步到 MinIO');
+    } catch (e: any) {
+      toast.error(e.message || '同步失败');
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -479,6 +589,17 @@ export default function KnowledgeGraphPage() {
               <span className="text-red-400">{stats.sinks} Sink</span>
               <span className="text-yellow-400">{stats.entryPoints} Entry</span>
             </div>
+          )}
+          {product && (
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors disabled:opacity-50"
+              title="将标记同步到 MinIO"
+            >
+              {syncing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+              同步
+            </button>
           )}
           <select
             value={product}
@@ -537,7 +658,7 @@ export default function KnowledgeGraphPage() {
               <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin text-primary-400" /></div>
             ) : treeData?.packages ? (
               treeData.packages.map(pkg => (
-                <PackageItem key={pkg.name} pkg={pkg} selectedId={selectedMethod?.id || null} onSelect={setSelectedMethod} search={search} tagFilter={tagFilter} />
+                <PackageItem key={pkg.name} pkg={pkg} selectedId={selectedMethod?.id || null} onSelect={setSelectedMethod} search={search} tagFilter={tagFilter} product={product} onTagChange={handleTagChange} />
               ))
             ) : null}
           </div>
