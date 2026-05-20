@@ -31,7 +31,7 @@ export async function validateFileStructure(
   // 2. 获取模型配置和 apiKey
   const modelConfig = await prisma.modelConfig.findUnique({
     where: { id: configId },
-    select: { apiKey: true, baseURL: true, providerType: true },
+    select: { apiKey: true, apiBaseUrl: true, providerType: true },
   });
 
   if (!modelConfig?.apiKey) {
@@ -40,8 +40,11 @@ export async function validateFileStructure(
 
   // 3. 从 zip 中提取文件结构
   const fileTree = extractFileTree(files);
-  if (!fileTree) {
+  if (fileTree === null) {
     return { valid: true }; // 非 zip 文件，跳过校验
+  }
+  if (fileTree === '') {
+    return { valid: false, reason: '压缩包为空，没有任何文件' };
   }
 
   // 4. 调用模型判断
@@ -54,7 +57,7 @@ ${fileTree}
 请判断该文件结构是否符合要求。只回答 YES 或 NO，然后简述原因（一句话即可）。`;
 
   try {
-    const baseURL = modelConfig.baseURL || 'https://api.anthropic.com/v1';
+    const baseURL = modelConfig.apiBaseUrl || 'https://api.anthropic.com/v1';
     const isAnthropic = (baseURL as string).includes('anthropic') || modelConfig.providerType === 'anthropic';
 
     if (isAnthropic) {
@@ -67,14 +70,18 @@ ${fileTree}
         },
         body: JSON.stringify({
           model: modelName,
-          max_tokens: 200,
+          max_tokens: 1024,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
 
+      if (!resp.ok) {
+        console.error(`[FileValidation] 模型 API 返回错误 ${resp.status}，跳过校验`);
+        return { valid: true };
+      }
       const data = await resp.json();
       const text = data.content?.[0]?.text || '';
-      return parseValidationResponse(text);
+      return parseValidationResponse(stripThinkTags(text));
     }
 
     // OpenAI 兼容格式
@@ -86,14 +93,18 @@ ${fileTree}
       },
       body: JSON.stringify({
         model: modelName,
-        max_tokens: 200,
+        max_tokens: 1024,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
 
+    if (!resp.ok) {
+      console.error(`[FileValidation] 模型 API 返回错误 ${resp.status}，跳过校验`);
+      return { valid: true };
+    }
     const data = await resp.json();
     const text = data.choices?.[0]?.message?.content || '';
-    return parseValidationResponse(text);
+    return parseValidationResponse(stripThinkTags(text));
   } catch (error) {
     console.error('[FileValidation] 模型调用失败，跳过校验:', error);
     return { valid: true }; // 模型调用失败，跳过校验
@@ -116,6 +127,10 @@ function extractFileTree(files: { name: string; buffer: Buffer }[]): string | nu
   } catch {
     return null;
   }
+}
+
+function stripThinkTags(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
 }
 
 function parseValidationResponse(text: string): { valid: boolean; reason?: string } {

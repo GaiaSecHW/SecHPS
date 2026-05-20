@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const name = formData.get('name') as string;
     const agentId = formData.get('agentId') as string;
     const agentName = formData.get('agentName') as string;
     const modelId = formData.get('modelId') as string | null;
@@ -27,9 +26,20 @@ export async function POST(request: NextRequest) {
     const targetProduct = formData.get('targetProduct') as string | null;
     const file = formData.get('file') as File | null;
 
-    if (!name || !agentId) {
-      return NextResponse.json({ error: '缺少必填参数：name 和 agentId' }, { status: 400 });
+    if (!agentId) {
+      return NextResponse.json({ error: '缺少必填参数：agentId' }, { status: 400 });
     }
+
+    // 自动生成任务名称：用户名_租户名_时间戳
+    let tenantName = 'public';
+    if (tenant.tenantId) {
+      const tenantRecord = await prisma.tenant.findUnique({
+        where: { id: tenant.tenantId },
+        select: { name: true },
+      });
+      if (tenantRecord) tenantName = tenantRecord.name;
+    }
+    const name = `${payload.username}_${tenantName}_${Date.now()}`;
 
     // notes 为可选字段，无需校验
 
