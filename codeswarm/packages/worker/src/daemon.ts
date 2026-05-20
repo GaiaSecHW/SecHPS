@@ -255,7 +255,9 @@ export class WorkerDaemon {
 
       const onEvent = (event: AgentEvent) => {
         console.log(`[Daemon] Event received: ${event.type} - ${event.content?.substring(0, 50) || event.tool || event.message?.substring(0, 50)}`);
-        this.postEvent(payload, [event]).catch(() => {});
+        this.postEvent(payload, [event]).catch(err => {
+          this.server.log.warn({ taskId, event: event.type, error: err }, 'Failed to post event');
+        });
       };
 
       // ========== PHASE 1: 构建环境 ==========
@@ -440,13 +442,19 @@ export class WorkerDaemon {
   private async postEvent(payload: TaskPayload, events: unknown[]): Promise<void> {
     const callbackUrl = this.getCallbackUrl(payload);
     try {
-      await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
+      const response = await fetch(`${callbackUrl}/api/codeswarm/worker/event`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ taskId: payload.taskId, nodeId: this.config.nodeId, events }),
       });
-    } catch {
-      // Callback target not available, log and continue
+      
+      if (!response.ok) {
+        this.server.log.warn({ taskId: payload.taskId, status: response.status }, 'Event post failed');
+      } else {
+        this.server.log.debug({ taskId: payload.taskId, eventCount: events.length }, 'Events posted');
+      }
+    } catch (err) {
+      this.server.log.warn({ taskId: payload.taskId, error: err, callbackUrl }, 'Failed to post events to platform');
     }
   }
 
