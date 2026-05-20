@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { Plus, ClipboardList, Play, Trash2, Eye, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, FileText, Clock, AlertCircle } from 'lucide-react';
+import { Plus, ClipboardList, Play, Trash2, Calendar, Loader2, ChevronLeft, ChevronRight, RefreshCw, Square, Bot, Clock, AlertCircle, Search, CheckCircle } from 'lucide-react';
 import TaskCreateModal from './TaskCreateModal';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ConfirmDialog } from '@/components/ui/Modal';
@@ -39,11 +39,11 @@ interface TaskFormData {
   targetProduct: string;
 }
 
-const statusConfig: Record<string, { border: string; text: string; label: string }> = {
-  pending:   { border: 'border-gray-500',  text: 'text-gray-300',  label: '待执行' },
-  running:   { border: 'border-blue-500',  text: 'text-blue-400',  label: '执行中' },
-  completed: { border: 'border-green-500', text: 'text-green-400', label: '已完成' },
-  failed:    { border: 'border-red-500',   text: 'text-red-400',   label: '执行失败' },
+const statusConfig: Record<string, { bg: string; text: string; label: string }> = {
+  pending:   { bg: 'bg-gray-500/20',  text: 'text-gray-400',  label: '待执行' },
+  running:   { bg: 'bg-blue-500/20',  text: 'text-blue-400',  label: '执行中' },
+  completed: { bg: 'bg-green-500/20', text: 'text-green-400', label: '已完成' },
+  failed:    { bg: 'bg-red-500/20',   text: 'text-red-400',   label: '执行失败' },
 };
 
 const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
@@ -70,6 +70,8 @@ export default function TaskBuilderPage() {
     taskId: string | null;
     taskName: string;
   }>({ isOpen: false, taskId: null, taskName: '' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'running' | 'completed' | 'failed'>('all');
 
   useEffect(() => {
     fetchTasks(currentPage, pageSize);
@@ -101,6 +103,13 @@ export default function TaskBuilderPage() {
       setLoading(false);
     }
   };
+
+  const filteredTasks = tasks.filter(task =>
+    (statusFilter === 'all' || task.status === statusFilter) &&
+    (task.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    task.agentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (task.notes?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false))
+  );
 
   const handleCreateTask = async (formData: TaskFormData, file: File | null) => {
     const token = localStorage.getItem('token');
@@ -277,8 +286,8 @@ export default function TaskBuilderPage() {
   }
 
   return (
-    <div className="space-y-4">
-{/* Header */}
+    <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between bg-dark-surface border border-gray-700/50 rounded-xl px-5 py-4">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
@@ -294,7 +303,7 @@ export default function TaskBuilderPage() {
           <button
             onClick={() => fetchTasks(currentPage, pageSize)}
             disabled={loading}
-            className="flex items-center space-x-2 px-4 py-2 text-gray-300 bg-dark-surface-hover border border-gray-700/50 rounded-lg hover:bg-dark-surface-hover disabled:opacity-50"
+            className="flex items-center space-x-2 px-4 py-2 text-gray-300 bg-dark-bg border border-gray-700/50 rounded-lg hover:bg-gray-700 disabled:opacity-50"
           >
             <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
             <span>刷新</span>
@@ -309,97 +318,148 @@ export default function TaskBuilderPage() {
         </div>
       </div>
 
-      {tasks.length === 0 ? (
-        <div className="text-center py-12 bg-dark-surface rounded-lg border border-gray-700/50">
-          <ClipboardList className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-100">暂无任务实例</h3>
-          <p className="mt-2 text-sm text-gray-400">
-            点击右上角"创建任务"开始构建安全审计任务
-          </p>
+      {/* Search + Cards container */}
+      <div className="bg-dark-surface border border-gray-700/50 rounded-xl">
+        {/* Filters section */}
+        <div className="px-5 py-4 border-b border-gray-700/50">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            {/* 搜索框 */}
+            <div className="relative flex-1 max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                placeholder="搜索任务名称、Agent..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-3 py-2.5 bg-dark-bg border border-gray-700/50 rounded-lg focus:ring-2 focus:ring-primary-500 text-gray-100 placeholder-gray-500 text-sm"
+              />
+            </div>
+            
+            {/* 状态筛选按钮组 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'all' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                全部
+              </button>
+              <button
+                onClick={() => setStatusFilter('pending')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'pending' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <Clock size={16} />
+                待执行
+              </button>
+              <button
+                onClick={() => setStatusFilter('running')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'running' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <Loader2 size={16} />
+                执行中
+              </button>
+              <button
+                onClick={() => setStatusFilter('completed')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'completed' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <CheckCircle size={16} />
+                已完成
+              </button>
+              <button
+                onClick={() => setStatusFilter('failed')}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  statusFilter === 'failed' ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/25' : 'bg-dark-bg text-gray-400 hover:bg-gray-700'
+                }`}
+              >
+                <AlertCircle size={16} />
+                失败
+              </button>
+            </div>
+          </div>
         </div>
-      ) : (
-        <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))' }}>
-          {tasks.map((task) => {
+
+        {/* Cards section */}
+        {filteredTasks.length === 0 ? (
+          <div className="p-12">
+            <div className="text-center">
+              <ClipboardList className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 mb-4">
+                {searchQuery || statusFilter !== 'all' ? '未找到匹配的任务' : '暂无任务实例'}
+              </p>
+              {!searchQuery && statusFilter === 'all' && (
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="text-primary-500 hover:text-primary-400"
+                >
+                  创建第一个任务
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+        <div className="p-5">
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {filteredTasks.map((task) => {
             const config = statusConfig[task.status] || statusConfig.pending;
             const isExecuting = executingIds.has(task.id);
 
             return (
               <div
                 key={task.id}
-                className="bg-dark-surface rounded-lg shadow border border-gray-700/50 overflow-hidden hover:shadow-lg transition-shadow flex flex-col"
+                className="group relative flex flex-col rounded border border-gray-600/50 bg-gray-700/30 hover:bg-gray-700/50 transition-colors cursor-pointer min-h-[180px]"
+                onClick={() => handleViewDetail(task.id)}
               >
-                <div className="p-5 flex-1">
-                  {/* 标题行 */}
-                  <div className="flex items-start justify-between gap-2">
-                    <h3
-                      className="text-base font-semibold text-gray-100 truncate"
-                      title={task.name}
-                    >
-                      {task.name}
-                    </h3>
-                    <span
-                      className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.border} ${config.text}`}
-                    >
-                      {task.status === 'running' && <Loader2 size={11} className="animate-spin" />}
+                <div className="flex-1 p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-sm font-medium text-gray-100 truncate leading-tight">{task.name}</h3>
+                    <span className={`shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${config.bg} ${config.text}`}>
+                      {task.status === 'running' && <Loader2 size={10} className="animate-spin" />}
                       {config.label}
                     </span>
                   </div>
 
-                  {/* Agent */}
-                  <div className="mt-3 flex items-center gap-1.5 text-sm text-gray-400">
-                    <Bot size={14} className="shrink-0 text-gray-500" />
-                    <span className="truncate">{task.agentName}</span>
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <span className="truncate font-medium text-gray-300">{task.agentName}</span>
                     {task.modelName && (
                       <>
-                        <span className="text-gray-600">·</span>
+                        <span className="text-gray-600">/</span>
                         <span className="truncate text-gray-500">{task.modelName}</span>
                       </>
                     )}
                   </div>
 
-                  {/* 任务描述 */}
                   {task.notes && (
-                    <div className="mt-2 flex items-start gap-1.5">
-                      <FileText size={13} className="shrink-0 mt-0.5 text-gray-500" />
-                      <p className="text-xs text-gray-400 line-clamp-2">{task.notes}</p>
-                    </div>
+                    <p className="text-xs text-gray-500 line-clamp-2">{task.notes}</p>
                   )}
 
-                  {/* 错误信息 */}
                   {task.status === 'failed' && task.errorMessage && (
-                    <div className="mt-2 flex items-start gap-1.5">
-                      <AlertCircle size={13} className="shrink-0 mt-0.5 text-red-400" />
-                      <p className="text-xs text-red-400 line-clamp-2">{task.errorMessage}</p>
+                    <div className="flex items-start gap-1.5 text-xs">
+                      <AlertCircle size={12} className="text-red-400 shrink-0 mt-0.5" />
+                      <span className="text-red-400 line-clamp-1">{task.errorMessage}</span>
                     </div>
                   )}
 
-                  {/* 时间信息 */}
-                  <div className="mt-3 space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                      <Calendar size={12} className="shrink-0" />
-                      <span>创建于 {formatDate(task.createdAt)}</span>
-                    </div>
-                    {task.startedAt && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                        <Clock size={12} className="shrink-0" />
-                        <span>
-                          {task.completedAt
-                            ? `完成于 ${formatDate(task.completedAt)}`
-                            : `启动于 ${formatDate(task.startedAt)}`}
-                        </span>
-                      </div>
-                    )}
+                  <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <Clock size={12} className="shrink-0" />
+                    <span>创建于 {formatDate(task.createdAt)}</span>
                   </div>
                 </div>
 
                 {/* 操作栏 */}
-                <div className="px-5 py-3 bg-dark-bg border-t border-gray-700/50 flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                <div className="mt-auto border-t border-gray-600/30 px-4 py-2.5 flex items-center justify-between bg-gray-700/20">
+                  <div className="flex items-center gap-1.5">
                     {task.status === 'pending' && (
                       <button
-                        onClick={() => handleRunTask(task.id)}
+                        onClick={(e) => { e.stopPropagation(); handleRunTask(task.id); }}
                         disabled={isExecuting}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-400/15 rounded transition-colors disabled:opacity-50"
                       >
                         {isExecuting ? <Loader2 size={12} className="animate-spin" /> : <Play size={12} />}
                         执行
@@ -407,8 +467,8 @@ export default function TaskBuilderPage() {
                     )}
                     {task.status === 'running' && (
                       <button
-                        onClick={() => handleStopTask(task.id, task.name)}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+                        onClick={(e) => { e.stopPropagation(); handleStopTask(task.id, task.name); }}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-400/15 rounded transition-colors"
                       >
                         <Square size={12} />
                         停止
@@ -416,28 +476,22 @@ export default function TaskBuilderPage() {
                     )}
                     {(task.status === 'completed' || task.status === 'failed') && (
                       <button
-                        onClick={() => handleRunTask(task.id)}
+                        onClick={(e) => { e.stopPropagation(); handleRunTask(task.id); }}
                         disabled={isExecuting}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-400 hover:bg-blue-400/15 rounded transition-colors disabled:opacity-50"
                       >
                         {isExecuting ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                        重新执行
+                        重试
                       </button>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
-                      onClick={() => handleViewDetail(task.id)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-300 bg-dark-surface hover:bg-dark-surface-hover border border-gray-600 rounded-md transition-colors"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id, task.name); }}
+                      disabled={deleting}
+                      className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-red-400 hover:bg-red-400/15 rounded transition-colors disabled:opacity-50"
                     >
-                      <Eye size={12} />
-                      详情
-                    </button>
-                    <button
-                      onClick={() => handleDeleteTask(task.id, task.name)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:bg-red-900/20 border border-red-800/50 rounded-md transition-colors"
-                    >
-                      <Trash2 size={12} />
+                      {deleting ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
                       删除
                     </button>
                   </div>
@@ -445,8 +499,10 @@ export default function TaskBuilderPage() {
               </div>
             );
           })}
+          </div>
         </div>
-      )}
+        )}
+      </div>
 
       {/* 分页 */}
       <div className="bg-dark-surface px-6 py-3 border border-gray-700/50 rounded-lg flex items-center justify-between">

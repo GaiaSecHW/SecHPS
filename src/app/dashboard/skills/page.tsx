@@ -32,6 +32,7 @@ import {
   TrendingUp,
   User,
   FileUp,
+  Loader2,
 } from 'lucide-react';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { DeveloperGuard } from '@/components/PermissionGuard';
@@ -143,6 +144,8 @@ function SkillsPageContent() {
   const [batchOperating, setBatchOperating] = useState(false);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
 
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -289,6 +292,7 @@ function SkillsPageContent() {
 
   const handleDelete = async (skillId: string, skillName: string) => {
     if (!confirm(`确定要删除 Skill "${skillName}" 吗？`)) return;
+    setDeletingIds(prev => new Set(prev).add(skillId));
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/skills/${skillId}`, {
@@ -302,10 +306,13 @@ function SkillsPageContent() {
       fetchSkills();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '删除失败');
+    } finally {
+      setDeletingIds(prev => { const next = new Set(prev); next.delete(skillId); return next; });
     }
   };
 
   const handleToggleActive = async (skillId: string, currentActive: boolean) => {
+    setTogglingIds(prev => new Set(prev).add(skillId));
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(`/api/skills/${skillId}`, {
@@ -320,6 +327,8 @@ function SkillsPageContent() {
       fetchSkills();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '操作失败');
+    } finally {
+      setTogglingIds(prev => { const next = new Set(prev); next.delete(skillId); return next; });
     }
   };
 
@@ -679,171 +688,155 @@ function SkillsPageContent() {
             const canEdit = isAdmin || (skill.userId !== null && skill.userId === user?.id);
             const canDelete = isAdmin || (skill.userId !== null && skill.userId === user?.id && !skill.isBuiltin);
             const canShare = skill.userId !== null && skill.userId === user?.id;
+            const isToggling = togglingIds.has(skill.id);
+            const isDeleting = deletingIds.has(skill.id);
 
             return (
               <div
                 key={skill.id}
-                className={`bg-dark-surface rounded-xl border shadow-sm hover:shadow-lg hover:shadow-primary-500/10 hover:border-primary-500/30 transition-all duration-300 cursor-pointer group relative hover:-translate-y-1 ${
-                  selectedSkills.has(skill.id) ? 'ring-2 ring-primary-500 border-primary-400 shadow-primary-500/20' : 
-                  !skill.isActive ? 'border-gray-500/30 bg-gray-900/30' : 'border-gray-700/50'
+                className={`group relative flex flex-col rounded border border-gray-600/50 bg-gray-700/30 hover:bg-gray-700/50 transition-colors cursor-pointer min-h-[180px] ${
+                  selectedSkills.has(skill.id) ? 'ring-2 ring-primary-500 border-primary-500/50' : ''
                 }`}
                 onClick={() => router.push(`/dashboard/skills/${skill.id}`)}
               >
-                {!skill.isActive && (
-                  <div className="absolute inset-0 bg-gray-500/5 rounded-xl pointer-events-none" />
-                )}
-                {/* Admin checkbox */}
-                {isAdmin && (
+                {/* Top right: more menu + checkbox */}
+                <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5">
+                  {/* More menu */}
                   <div
-                    className="absolute top-3 right-3 z-10"
                     onClick={(e) => { e.stopPropagation(); }}
+                    ref={menuOpenId === skill.id ? menuRef : null}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedSkills.has(skill.id)}
-                      onChange={() => handleSelectSkill(skill.id)}
-                      className="w-4 h-4 text-blue-400 border-gray-600 rounded focus:ring-primary-500"
-                    />
-                  </div>
-                )}
-
-                {/* More menu */}
-                <div
-                  className="absolute top-3 right-10 z-10"
-                  onClick={(e) => { e.stopPropagation(); }}
-                  ref={menuOpenId === skill.id ? menuRef : null}
-                >
-                  <button
-                    onClick={() => setMenuOpenId(menuOpenId === skill.id ? null : skill.id)}
-                    className="p-1 rounded-md text-gray-400 hover:text-gray-400 hover:bg-dark-surface-hover opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <MoreVertical size={16} />
-                  </button>
-                  {menuOpenId === skill.id && (
-                    <div className="absolute right-0 top-8 bg-dark-surface rounded-lg shadow-xl border border-gray-700 py-1 min-w-[140px] z-20">
-                      <button
-                        onClick={() => { router.push(`/dashboard/skills/${skill.id}`); setMenuOpenId(null); }}
-                        className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
-                      >
-                        <Edit size={14} /> {canEdit ? '编辑' : '查看详情'}
-                      </button>
-                      <button
-                        onClick={() => { window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank'); setMenuOpenId(null); }}
-                        className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
-                      >
-                        <ExternalLink size={14} /> 新窗口打开
-                      </button>
-                      {canEdit && (
+                    <button
+                      onClick={() => setMenuOpenId(menuOpenId === skill.id ? null : skill.id)}
+                      className="p-1 rounded text-gray-400 hover:text-gray-300 hover:bg-gray-600/30"
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                    {menuOpenId === skill.id && (
+                      <div className="absolute right-0 top-6 bg-dark-surface rounded-lg shadow-xl border border-gray-700 py-1 min-w-[120px] z-20">
                         <button
-                          onClick={() => { handleToggleActive(skill.id, skill.isActive); setMenuOpenId(null); }}
-                          className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
+                          onClick={() => { router.push(`/dashboard/skills/${skill.id}`); setMenuOpenId(null); }}
+                          className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700/30 flex items-center gap-2"
                         >
-                          {skill.isActive ? <><XCircle size={14} /> 禁用</> : <><CheckCircle size={14} /> 启用</>}
+                          <Edit size={12} /> {canEdit ? '编辑' : '查看'}
                         </button>
-                      )}
-                      {canShare && (
                         <button
-                          onClick={() => { handleToggleShare(skill.id, skill.isPublic); setMenuOpenId(null); }}
-                          className="w-full px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-dark-surface-hover flex items-center gap-2"
+                          onClick={() => { window.open(`/dashboard/skills/${skill.id}?sidebar=collapsed`, '_blank'); setMenuOpenId(null); }}
+                          className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700/30 flex items-center gap-2"
                         >
-                          {skill.isPublic ? <><Globe size={14} /> 取消分享</> : <><Lock size={14} /> 分享</>}
+                          <ExternalLink size={12} /> 新窗口
                         </button>
-                      )}
-                      {canDelete && (
-                        <>
-                          <div className="border-t border-gray-700 my-1" />
+                        {canEdit && (
                           <button
-                            onClick={() => { handleDelete(skill.id, skill.displayName); setMenuOpenId(null); }}
-                            className="w-full px-3 py-1.5 text-left text-sm hover:bg-red-500/15 text-red-400 flex items-center gap-2"
+                            onClick={() => { handleToggleActive(skill.id, skill.isActive); setMenuOpenId(null); }}
+                            disabled={isToggling}
+                            className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700/30 flex items-center gap-2 disabled:opacity-50"
                           >
-                            <Trash2 size={14} /> 删除
+                            {isToggling ? <><Loader2 size={12} className="animate-spin" /> 处理中</> : skill.isActive ? <><XCircle size={12} /> 禁用</> : <><CheckCircle size={12} /> 启用</>}
                           </button>
-                        </>
-                      )}
+                        )}
+                        {canShare && (
+                          <button
+                            onClick={() => { handleToggleShare(skill.id, skill.isPublic); setMenuOpenId(null); }}
+                            className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-gray-700/30 flex items-center gap-2"
+                          >
+                            {skill.isPublic ? <><Globe size={12} /> 取消分享</> : <><Lock size={12} /> 分享</>}
+                          </button>
+                        )}
+                        {canDelete && (
+                          <>
+                            <div className="border-t border-gray-700 my-1" />
+                            <button
+                              onClick={() => { handleDelete(skill.id, skill.displayName); setMenuOpenId(null); }}
+                              disabled={isDeleting}
+                              className="w-full px-3 py-1.5 text-left text-xs hover:bg-red-500/15 text-red-400 flex items-center gap-2 disabled:opacity-50"
+                            >
+                              {isDeleting ? <><Loader2 size={12} className="animate-spin" /> 删除中</> : <><Trash2 size={12} /> 删除</>}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Checkbox */}
+                  {isAdmin && (
+                    <div onClick={(e) => { e.stopPropagation(); }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedSkills.has(skill.id)}
+                        onChange={() => handleSelectSkill(skill.id)}
+                        className="w-3.5 h-3.5 text-primary-500 border-gray-600 rounded focus:ring-primary-500 bg-dark-bg"
+                      />
                     </div>
                   )}
                 </div>
 
                 {/* Card content */}
-                <div className="p-4 flex flex-col h-full">
-                  {/* Icon + Title */}
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm group-hover:scale-110 group-hover:rotate-3 transition-all duration-200 ${
-                      iconColor === 'bg-red-600' ? 'bg-gradient-to-br from-red-500 to-red-700' :
-                      iconColor === 'bg-blue-600' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
-                      iconColor === 'bg-indigo-600' ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' :
-                      iconColor === 'bg-green-600' ? 'bg-gradient-to-br from-green-500 to-green-700' :
-                      iconColor === 'bg-orange-600' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
-                      iconColor === 'bg-teal-500' ? 'bg-gradient-to-br from-teal-400 to-teal-600' :
-                      'bg-gradient-to-br from-gray-500 to-gray-700'
-                    }`}>
-                      <IconComp className="text-white drop-shadow-sm" size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className={`font-semibold truncate text-base leading-tight ${!skill.isActive ? 'text-gray-400' : 'text-gray-100'}`}>{skill.displayName}</h3>
-                      <p className="text-xs text-gray-500 truncate">{skill.name}</p>
+                <div className="flex-1 p-4 flex flex-col">
+                  {/* Title row - add right padding to avoid overlap */}
+                  <div className="flex items-start justify-between gap-3 pr-14">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className={`w-7 h-7 rounded flex items-center justify-center flex-shrink-0 ${
+                        iconColor === 'bg-red-600' ? 'bg-gradient-to-br from-red-500 to-red-700' :
+                        iconColor === 'bg-blue-600' ? 'bg-gradient-to-br from-blue-500 to-blue-700' :
+                        iconColor === 'bg-indigo-600' ? 'bg-gradient-to-br from-indigo-500 to-indigo-700' :
+                        iconColor === 'bg-green-600' ? 'bg-gradient-to-br from-green-500 to-green-700' :
+                        iconColor === 'bg-orange-600' ? 'bg-gradient-to-br from-orange-500 to-orange-700' :
+                        iconColor === 'bg-teal-500' ? 'bg-gradient-to-br from-teal-400 to-teal-600' :
+                        'bg-gradient-to-br from-gray-500 to-gray-700'
+                      }`}>
+                        <IconComp className="text-white" size={14} />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className={`text-sm font-medium truncate leading-tight ${!skill.isActive ? 'text-gray-400' : 'text-gray-100'}`}>{skill.displayName}</h3>
+                        <p className="text-xs text-gray-500 truncate">{skill.name}</p>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Badges - limit to 3 visible, rest on hover */}
-                  <div className="flex flex-wrap gap-1.5 mb-2 min-h-[1.5rem]">
-                    {(() => {
-                      const badges: Array<{ key: string; node: React.ReactNode }> = [];
-                      if (skill.categoryName) badges.push({ key: 'category', node: <span className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 rounded font-medium">{skill.categoryName}</span> });
-                      if (skill.hasSubDimension && skill.languageName) badges.push({ key: 'language', node: <span className="px-2 py-0.5 text-xs bg-blue-500/15 text-blue-400 rounded">{skill.languageName}</span> });
-                      if (skill.hasSubDimension && skill.patternName) badges.push({ key: 'pattern', node: <span className="px-2 py-0.5 text-xs bg-orange-500/15 text-orange-400 rounded">{skill.patternName}</span> });
-                      if (!skill.isActive) badges.push({ key: 'disabled', node: <span className="px-2 py-0.5 text-xs bg-gray-500/15 text-gray-400 rounded">已禁用</span> });
-                      if (skill.isBuiltin) badges.push({ key: 'builtin', node: <span className="px-2 py-0.5 text-xs bg-indigo-500/15 text-indigo-400 rounded">内置</span> });
-                      const visible = badges.slice(0, 3);
-                      const hidden = badges.slice(3);
-                      return (
-                        <>
-                          {visible.map(b => <Fragment key={b.key}>{b.node}</Fragment>)}
-                          {hidden.length > 0 && (
-                            <span className="px-2 py-0.5 text-xs bg-gray-600/15 text-gray-500 rounded group-hover:hidden">
-                              +{hidden.length}
-                            </span>
-                          )}
-                          {hidden.map(b => (
-                            <span key={b.key} className="hidden group-hover:inline-flex">{b.node}</span>
-                          ))}
-                        </>
-                      );
-                    })()}
+                  {/* Badges */}
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {skill.categoryName && (
+                      <span className="px-2 py-0.5 text-xs bg-purple-500/15 text-purple-400 rounded">{skill.categoryName}</span>
+                    )}
+                    {skill.hasSubDimension && skill.languageName && (
+                      <span className="px-2 py-0.5 text-xs bg-blue-500/15 text-blue-400 rounded">{skill.languageName}</span>
+                    )}
+                    {skill.isBuiltin && (
+                      <span className="px-2 py-0.5 text-xs bg-indigo-500/15 text-indigo-400 rounded">内置</span>
+                    )}
+                    {!skill.isActive && (
+                      <span className="px-2 py-0.5 text-xs bg-gray-500/15 text-gray-400 rounded">已禁用</span>
+                    )}
                   </div>
 
                   {/* Description */}
-                  <p className={`text-sm line-clamp-2 min-h-[2.5rem] mb-2 leading-snug ${!skill.description ? 'italic text-gray-400/60' : 'text-gray-500'}`}>
+                  <p className="text-xs text-gray-500 line-clamp-2 mt-3 flex-1 min-h-[2rem]">
                     {skill.description || '暂无描述'}
                   </p>
 
-                  {/* Author */}
-                  {skill.userName && (
-                    <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
-                      <User size={11} />
-                      <span>{skill.userName}</span>
-                    </div>
-                  )}
+                  {/* Author + Metrics - align to bottom */}
+                  <div className="mt-auto pt-2">
+                    {skill.userName && (
+                      <div className="flex items-center gap-1 text-xs text-gray-500 mb-1.5">
+                        <User size={10} />
+                        <span>{skill.userName}</span>
+                      </div>
+                    )}
 
-                  {/* Metrics + Date */}
-                  <div className={`flex items-center justify-between text-xs pt-2 border-t mt-auto ${!skill.isActive ? 'border-gray-600/30 text-gray-500' : 'border-gray-700/50 text-gray-400'}`}>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1">
-                        <Play size={12} /> {formatNumber(skill.execCount)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <AlertTriangle size={12} /> {formatNumber(skill.vulnerabilityCount)}
-                      </span>
-                      {skill.successRate !== null && (
-                        <span className={`flex items-center gap-1 ${
-                          skill.successRate >= 0.8 ? 'text-green-500' :
-                          skill.successRate >= 0.5 ? 'text-yellow-500' : 'text-red-500'
-                        }`}>
-                          <CheckCircle size={12} /> {(skill.successRate * 100).toFixed(0)}%
+                    {/* Metrics + Date */}
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1">
+                          <Play size={10} /> {formatNumber(skill.execCount)}
                         </span>
-                      )}
+                        <span className="flex items-center gap-1">
+                          <AlertTriangle size={10} /> {formatNumber(skill.vulnerabilityCount)}
+                        </span>
+                      </div>
+                      <span>{new Date(skill.updatedAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</span>
                     </div>
-                    <span>{new Date(skill.updatedAt).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}</span>
                   </div>
                 </div>
               </div>
