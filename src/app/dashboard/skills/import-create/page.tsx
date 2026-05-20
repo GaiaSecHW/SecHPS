@@ -15,6 +15,7 @@ import {
   ChevronUp,
   Trash2,
   Plus,
+  Upload,
 } from 'lucide-react';
 import JSZip from 'jszip';
 import { PERMISSIONS } from '@/types/permissions';
@@ -470,294 +471,299 @@ export default function ImportCreateSkillPage() {
   const validItemsCount = skillItems.filter(item => item.parsed).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-100">导入创建 Skill</h1>
-            <p className="text-sm text-gray-400">
-              {batchMode ? '批量导入多个 Skill 文件' : '上传 ZIP 或 Markdown 文件创建 Skill'}
-            </p>
+    <div className="bg-[#0F172A]">
+      {/* Header */}
+      <div className="bg-dark-surface border-b border-gray-700/50">
+        <div className="flex items-center justify-between px-5 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="p-1.5 text-gray-400 hover:text-gray-100 hover:bg-gray-700/30 rounded transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-400 to-teal-500 flex items-center justify-center">
+              <Upload size={16} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-white">导入创建 Skill</h1>
+            </div>
           </div>
+          {skillItems.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setSkillItems([]);
+                setBatchMode(false);
+                setError('');
+              }}
+              className="text-xs text-gray-400 hover:text-gray-300"
+            >
+              清空重选
+            </button>
+          )}
         </div>
-        {skillItems.length > 0 && (
-          <button
-            type="button"
-            onClick={() => {
-              setSkillItems([]);
-              setBatchMode(false);
-              setError('');
-            }}
-            className="text-sm text-gray-400 hover:text-gray-200"
-          >
-            清空重新选择
-          </button>
-        )}
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
-
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6 space-y-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              上传 Skill 文件 <span className="text-red-500">*</span>
-            </label>
-            <div className="flex items-center gap-4">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".zip,.md"
-                multiple
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-lg hover:from-green-500 hover:to-teal-400 text-sm transition-all"
-              >
-                <Plus size={16} className="mr-1.5" />
-                选择文件
-              </button>
-              <span className="text-xs text-gray-500">
-                支持多选，可同时上传多个 ZIP 或 .md 文件
-              </span>
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
-              ZIP 压缩包需直接包含 SKILL.md 文件（不要有额外的文件夹包裹）
-            </p>
-          </div>
-
-          {skillItems.length > 0 && (
-            <div className="border-t border-gray-700/50 pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-300">
-                  文件列表 ({validItemsCount}/{skillItems.length} 个有效)
-                </h3>
-                {skillItems.length > 1 && (
-                  <span className="text-xs text-blue-400">批量导入模式</span>
-                )}
+      {/* Main Content */}
+      <div className="p-5">
+        <div className="max-w-4xl mx-auto">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
+                {error}
               </div>
-              
-              <div className="space-y-3 max-h-[400px] overflow-auto">
-                {skillItems.map(item => (
-                  <div
-                    key={item.id}
-                    className={`p-3 rounded-lg border ${
-                      item.status === 'success' 
-                        ? 'border-green-500/50 bg-green-900/20' 
-                        : item.status === 'failed'
-                        ? 'border-red-500/50 bg-red-900/20'
-                        : item.error
-                        ? 'border-yellow-500/50 bg-yellow-900/20'
-                        : 'border-gray-600 bg-dark-bg'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          {item.status === 'uploading' && (
-                            <Loader2 size={14} className="animate-spin text-blue-400" />
-                          )}
-                          {item.status === 'success' && (
-                            <CheckCircle size={14} className="text-green-400" />
-                          )}
-                          {item.status === 'failed' && (
-                            <AlertTriangle size={14} className="text-red-400" />
-                          )}
-                          <span className="text-sm text-gray-300 truncate">{item.file.name}</span>
-                        </div>
-                        
-                        {item.error && (
-                          <p className="text-xs text-yellow-400">{item.error}</p>
-                        )}
-                        
-                        {item.governanceWarning && item.governanceWarning.isPotentialDuplicate && (
-                          <div className="mt-2 p-2 bg-yellow-900/30 rounded border border-yellow-600/30">
-                            <p className="text-xs text-yellow-300 font-medium mb-1">
-                              ⚠️ 发现相似 Skill：
-                            </p>
-                            {item.governanceWarning.duplicates.map((dup, idx) => (
-                              <div key={idx} className="text-xs text-yellow-400 ml-2">
-                                • {dup.displayName} ({dup.confidence >= 0.85 ? '高置信度' : '低置信度'})
-                                {dup.recommendation && (
-                                  <span className="text-yellow-300 ml-1">
-                                    - 建议: {dup.recommendation === 'merge' ? '合并' : dup.recommendation === 'keep_separate' ? '保留独立' : '人工审核'}
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {item.parsed && (
-                          <div className="space-y-2 mt-2">
-                            <div className="grid grid-cols-3 gap-2">
-                              <input
-                                type="text"
-                                value={item.skillName}
-                                onChange={(e) => updateItem(item.id, { skillName: e.target.value })}
-                                placeholder="名称"
-                                className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                                disabled={item.status !== 'pending'}
-                              />
-                              <input
-                                type="text"
-                                value={item.skillDisplayName}
-                                onChange={(e) => updateItem(item.id, { skillDisplayName: e.target.value })}
-                                placeholder="显示名称"
-                                className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                                disabled={item.status !== 'pending'}
-                              />
-                              <input
-                                type="text"
-                                value={item.skillDescription}
-                                onChange={(e) => updateItem(item.id, { skillDescription: e.target.value })}
-                                placeholder="描述"
-                                className="px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                                disabled={item.status !== 'pending'}
-                              />
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-xs text-gray-500 mb-0.5">分类</label>
-                                <select
-                                  value={item.categoryId}
-                                  onChange={(e) => updateItem(item.id, { categoryId: e.target.value, vulnerabilityTreeId: null })}
-                                  className="w-full px-2 py-1 text-xs border border-gray-600 rounded focus:ring-1 focus:ring-primary-500"
-                                  disabled={item.status !== 'pending' || loadingData}
-                                >
-                                  <option value="">请选择分类</option>
-                                  {categories.map(c => (
-                                    <option key={c.id} value={c.id}>{c.displayName}</option>
-                                  ))}
-                                </select>
-                              </div>
-                              {(() => {
-                                const selectedCat = categories.find(c => c.id === item.categoryId);
-                                return selectedCat?.hasSubDimension ? (
-                                  <div>
-                                    <label className="block text-xs text-gray-500 mb-0.5">漏洞模式</label>
-                                    <VulnerabilityTreeSelector
-                                      value={item.vulnerabilityTreeId}
-                                      onChange={(patternId) => updateItem(item.id, { vulnerabilityTreeId: patternId })}
-                                      placeholder="选择漏洞模式"
-                                      loading={loadingData}
-                                    />
-                                  </div>
-                                ) : null;
-                              })()}
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-500 mb-0.5">适用产品</label>
-                              <ProductTagSelect 
-                                selectedIds={item.productTagIds} 
-                                onChange={(ids) => updateItem(item.id, { productTagIds: ids })} 
-                              />
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {item.status === 'pending' && (
-                        <button
-                          type="button"
-                          onClick={() => removeItem(item.id)}
-                          className="p-1 hover:bg-red-900/30 rounded text-gray-400 hover:text-red-400"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+            )}
 
-          {skillItems.length > 0 && validItemsCount > 0 && isAdmin && (
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={isPublic}
-                  onChange={(e) => setIsPublic(e.target.checked)}
-                  className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
-                />
-                <span className="ml-2 text-sm text-gray-300">
-                  公开 Skill（所有用户可见）
-                </span>
-              </label>
-            </div>
-          )}
-
-          {skillItems.length === 1 && skillItems[0].parsed && (
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-300">
-                  Skill 内容预览
+            <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-4">
+              {/* 上传区域 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  上传 Skill 文件 <span className="text-red-500">*</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPreview(!showPreview)}
-                  className="text-sm text-gray-400 hover:text-gray-200 flex items-center"
-                >
-                  {showPreview ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  {showPreview ? '收起' : '展开'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".zip,.md"
+                    multiple
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-md hover:from-green-500 hover:to-teal-400 transition-all"
+                  >
+                    <Plus size={14} className="mr-1" />
+                    选择文件
+                  </button>
+                  <span className="text-xs text-gray-500">
+                    支持多选 ZIP 或 .md 文件
+                  </span>
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  ZIP 需直接包含 SKILL.md 文件
+                </p>
               </div>
-              {showPreview && (
-                <div className="bg-[#0F172A] border border-gray-700/50 rounded-lg p-4 max-h-96 overflow-auto">
-                  <pre className="text-sm text-gray-300 whitespace-pre-wrap font-mono">
-                    {skillItems[0].parsed.content.substring(0, 2000)}
-                    {skillItems[0].parsed.content.length > 2000 && '\n\n... (内容已截断)'}
-                  </pre>
+
+              {skillItems.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-700/50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-300">
+                      文件列表 ({validItemsCount}/{skillItems.length} 个有效)
+                    </h3>
+                    {skillItems.length > 1 && (
+                      <span className="text-xs text-blue-400">批量模式</span>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2 overflow-y-auto overflow-x-hidden max-h-[280px]">
+                    {skillItems.map(item => (
+                      <div
+                        key={item.id}
+                        className={`p-2.5 rounded-md border ${
+                          item.status === 'success' 
+                            ? 'border-green-500/50 bg-green-900/20' 
+                            : item.status === 'failed'
+                            ? 'border-red-500/50 bg-red-900/20'
+                            : item.error
+                            ? 'border-yellow-500/50 bg-yellow-900/20'
+                            : 'border-gray-600 bg-dark-bg'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0 overflow-hidden">
+                            <div className="flex items-center gap-2 mb-1">
+                              {item.status === 'uploading' && (
+                                <Loader2 size={12} className="animate-spin text-blue-400" />
+                              )}
+                              {item.status === 'success' && (
+                                <CheckCircle size={12} className="text-green-400" />
+                              )}
+                              {item.status === 'failed' && (
+                                <AlertTriangle size={12} className="text-red-400" />
+                              )}
+                              <span className="text-xs text-gray-300 truncate">{item.file.name}</span>
+                            </div>
+                            
+                            {item.error && (
+                              <p className="text-xs text-yellow-400">{item.error}</p>
+                            )}
+                            
+                            {item.governanceWarning && item.governanceWarning.isPotentialDuplicate && (
+                              <div className="mt-1.5 p-1.5 bg-yellow-900/30 rounded border border-yellow-600/30">
+                                <p className="text-xs text-yellow-300 font-medium mb-0.5">
+                                  ⚠️ 发现相似 Skill：
+                                </p>
+                                {item.governanceWarning.duplicates.map((dup, idx) => (
+                                  <div key={idx} className="text-xs text-yellow-400 ml-1.5">
+                                    • {dup.displayName} ({dup.confidence >= 0.85 ? '高置信度' : '低'})
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {item.parsed && (
+                              <div className="space-y-1.5 mt-1.5">
+                                <div className="flex flex-wrap gap-2">
+                                  <input
+                                    type="text"
+                                    value={item.skillName}
+                                    onChange={(e) => updateItem(item.id, { skillName: e.target.value })}
+                                    placeholder="名称"
+                                    className="w-[120px] px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                    disabled={item.status !== 'pending'}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.skillDisplayName}
+                                    onChange={(e) => updateItem(item.id, { skillDisplayName: e.target.value })}
+                                    placeholder="显示名称"
+                                    className="w-[120px] px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                    disabled={item.status !== 'pending'}
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.skillDescription}
+                                    onChange={(e) => updateItem(item.id, { skillDescription: e.target.value })}
+                                    placeholder="描述"
+                                    className="flex-1 min-w-[150px] px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                    disabled={item.status !== 'pending'}
+                                  />
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <div className="min-w-[120px]">
+                                    <label className="block text-xs text-gray-500 mb-0.5">分类</label>
+                                    <select
+                                      value={item.categoryId}
+                                      onChange={(e) => updateItem(item.id, { categoryId: e.target.value, vulnerabilityTreeId: null })}
+                                      className="w-full px-2 py-1 text-xs bg-dark-surface border border-gray-600 rounded focus:ring-1 focus:ring-primary-500 text-gray-200"
+                                      disabled={item.status !== 'pending' || loadingData}
+                                    >
+                                      <option value="">请选择</option>
+                                      {categories.map(c => (
+                                        <option key={c.id} value={c.id}>{c.displayName}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  {(() => {
+                                    const selectedCat = categories.find(c => c.id === item.categoryId);
+                                    return selectedCat?.hasSubDimension ? (
+                                      <div className="min-w-[200px] max-w-[300px]">
+                                        <label className="block text-xs text-gray-500 mb-0.5">漏洞模式</label>
+                                        <VulnerabilityTreeSelector
+                                          value={item.vulnerabilityTreeId}
+                                          onChange={(patternId) => updateItem(item.id, { vulnerabilityTreeId: patternId })}
+                                          placeholder="选择"
+                                          loading={loadingData}
+                                        />
+                                      </div>
+                                    ) : null;
+                                  })()}
+                                </div>
+                                <div>
+                                  <label className="block text-xs text-gray-500 mb-0.5">适用产品</label>
+                                  <ProductTagSelect 
+                                    selectedIds={item.productTagIds} 
+                                    onChange={(ids) => updateItem(item.id, { productTagIds: ids })} 
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          
+                          {item.status === 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => removeItem(item.id)}
+                              className="p-1 hover:bg-red-900/30 rounded text-gray-400 hover:text-red-400 shrink-0"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {skillItems.length > 0 && validItemsCount > 0 && isAdmin && (
+                <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={isPublic}
+                      onChange={(e) => setIsPublic(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 text-blue-400 focus:ring-primary-500 bg-dark-bg"
+                    />
+                    <span className="ml-2 text-sm text-gray-300">
+                      公开 Skill（所有用户可见）
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {skillItems.length === 1 && skillItems[0].parsed && (
+                <div className="mt-3 pt-3 border-t border-gray-700/50">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-medium text-gray-300">
+                      内容预览
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowPreview(!showPreview)}
+                      className="text-xs text-gray-400 hover:text-gray-300 flex items-center"
+                    >
+                      {showPreview ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      {showPreview ? '收起' : '展开'}
+                    </button>
+                  </div>
+                  {showPreview && (
+                    <div className="bg-dark-bg border border-gray-700/50 rounded-md p-2 max-h-[150px] overflow-auto">
+                      <pre className="text-xs text-gray-300 whitespace-pre-wrap font-mono">
+                        {skillItems[0].parsed.content.substring(0, 1500)}
+                        {skillItems[0].parsed.content.length > 1500 && '\n... (截断)'}
+                      </pre>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          )}
-        </div>
 
-        {validItemsCount > 0 && (
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={loading || validItemsCount === 0}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                <>
-                  <Loader2 size={16} className="animate-spin mr-2" />
-                  {batchMode ? '批量导入中...' : '创建中...'}
-                </>
-              ) : (
-                <>
-                  <Save size={16} className="mr-2" />
-                  {batchMode ? `批量创建 (${validItemsCount} 个)` : '创建 Skill'}
-                </>
-              )}
-            </button>
-          </div>
-        )}
-      </form>
+            {/* 底部按钮 */}
+            {validItemsCount > 0 && (
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-md hover:bg-dark-bg transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || validItemsCount === 0}
+                  className="inline-flex items-center px-4 py-2 text-sm bg-gradient-to-r from-green-600 to-teal-500 text-white rounded-md hover:from-green-500 hover:to-teal-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin mr-1.5" />
+                      {batchMode ? '导入中...' : '创建中...'}
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} className="mr-1.5" />
+                      {batchMode ? `批量创建 (${validItemsCount})` : '创建 Skill'}
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

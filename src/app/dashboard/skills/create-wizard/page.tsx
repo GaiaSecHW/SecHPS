@@ -428,10 +428,10 @@ export default function SkillCreateWizardPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4">
         <div className="max-w-4xl mx-auto">
           <div className="bg-dark-surface border border-gray-700/50 rounded-xl">
-            <div className="p-6">
+            <div className="p-4">
               {currentStep === 'intent' && (
                 <IntentStep data={wizardData.intent} onChange={(intent) => saveData({ intent })} onNext={handleNext} />
               )}
@@ -459,7 +459,7 @@ export default function SkillCreateWizardPage() {
       </div>
 
       {/* Footer Navigation */}
-      <div className="bg-dark-surface border-t border-gray-700/50 px-6 py-4">
+      <div className="bg-dark-surface border-t border-gray-700/50 px-4 py-3">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <button
             onClick={handlePrevious}

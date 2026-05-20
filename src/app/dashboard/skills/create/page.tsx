@@ -13,6 +13,7 @@ import {
   ChevronDown,
   ChevronUp,
   Eye,
+  Wand2,
 } from 'lucide-react';
 import { PERMISSIONS } from '@/types/permissions';
 import { ProductTagSelect } from '@/components/skills/ProductTagSelect';
@@ -230,7 +231,7 @@ export default function CreateSkillPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="bg-[#0F172A]">
       {aiGenerating && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-dark-surface rounded-2xl shadow-2xl px-10 py-8 flex flex-col items-center gap-4 max-w-sm w-full mx-4">
@@ -256,294 +257,254 @@ export default function CreateSkillPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-dark-surface-hover rounded-lg transition-colors"
-          >
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-100">创建新 Skill</h1>
-            <p className="text-sm text-gray-400">定义一个新的 AI 漏洞检测技能</p>
+      {/* Header */}
+      <div className="bg-dark-surface border-b border-gray-700/50">
+        <div className="flex items-center justify-between px-5 py-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => router.back()}
+              className="p-1.5 text-gray-400 hover:text-gray-100 hover:bg-gray-700/30 rounded transition-colors"
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
+              <Wand2 size={16} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-semibold text-white">快速创建 Skill</h1>
+            </div>
           </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {error && (
-          <div className="bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded">
-            {error}
-          </div>
-        )}
-
-        <div className="bg-dark-surface rounded-lg shadow border border-gray-700/50 p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Skill 名称 <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="例如：SQL注入检测"
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                required
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                分类 <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                disabled={loadingCategories}
-              >
-                <option value="">{loadingCategories ? '加载中...' : '请选择分类'}</option>
-                {categories.map(c => (
-                  <option key={c.id} value={c.id}>{c.displayName}</option>
-                ))}
-              </select>
-            </div>
-
-            {selectedCategory?.hasSubDimension && (
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  漏洞模式 <span className="text-red-500">*</span>
-                </label>
-                <VulnerabilityTreeSelector
-                  value={vulnerabilityTreeId}
-                  onChange={(patternId) => setVulnerabilityTreeId(patternId)}
-                  placeholder="请选择漏洞模式"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  选择漏洞分类和具体模式
-                </p>
+      {/* Main Content */}
+      <div className="p-5">
+        <div className="max-w-4xl mx-auto">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="bg-red-900/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-lg text-sm">
+                {error}
               </div>
             )}
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">
-              适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
-            </label>
-            <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
-          </div>
+            <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-4">
+              {/* 基本信息 */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    Skill 名称 <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="例如：SQL注入检测"
+                    className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
+                    required
+                  />
+                </div>
 
-          {isAdmin && (
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={isPublic}
-                  onChange={(e) => setIsPublic(e.target.checked)}
-                  className="rounded border-gray-600 text-blue-400 focus:ring-primary-500"
-                />
-                <span className="ml-2 text-sm text-gray-300">
-                  公开 Skill（所有用户可见）
-                </span>
-              </label>
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-gray-300">
-                Skill 内容（Markdown 格式）<span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleAiGenerate}
-                  disabled={aiGenerating}
-                  className="inline-flex items-center px-3 py-1.5 text-sm bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-lg hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                  title="根据填写的名称和分类，使用大模型 AI 自动生成完整的 Skill 内容"
-                >
-                  {aiGenerating ? (
-                    <>
-                      <Loader2 size={14} className="mr-1.5 animate-spin" />
-                      AI 生成中...
-                    </>
-                  ) : aiGenerateSuccess ? (
-                    <>
-                      <CheckCircle size={14} className="mr-1.5" />
-                      生成成功！
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles size={14} className="mr-1.5" />
-                      AI 生成内容
-                    </>
-                  )}
-                </button>
-                {aiDiffContent && !aiGenerating && (
-                  <button
-                    type="button"
-                    onClick={() => setShowDiffModal(true)}
-                    className="inline-flex items-center px-3 py-1.5 text-sm bg-indigo-900/20 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition-all"
-                    title="重新打开上次 AI 生成结果的对比弹窗"
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    分类 <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="w-full px-3 py-1.5 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent text-gray-200"
+                    disabled={loadingCategories}
                   >
-                    <Eye size={14} className="mr-1.5" />
-                    查看上次对比
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setContent(DEFAULT_TEMPLATE)}
-                  className="text-sm text-blue-400 hover:text-blue-800"
-                >
-                  重置模板
-                </button>
+                    <option value="">{loadingCategories ? '加载中...' : '请选择分类'}</option>
+                    {categories.map(c => (
+                      <option key={c.id} value={c.id}>{c.displayName}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            </div>
 
-            {aiGenerateError && (
-              <div className="mb-3 flex items-start gap-2 bg-red-900/20 border border-red-200 text-red-400 px-4 py-3 rounded-lg text-sm">
-                <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />
-                <span>{aiGenerateError}</span>
-              </div>
-            )}
-
-            {aiGenerateSuccess && (
-              <div className="mb-3 flex items-center gap-2 bg-green-900/20 border border-green-200 text-green-400 px-4 py-3 rounded-lg text-sm">
-                <CheckCircle size={16} className="flex-shrink-0" />
-                <span>AI 已根据 Skill 名称和分类生成内容，你可以在下方编辑器中继续修改完善。</span>
-              </div>
-            )}
-
-            <div className="mb-3 border border-gray-700/50 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setShowFormatHint(!showFormatHint)}
-                className="w-full flex items-center justify-between px-4 py-2.5 bg-dark-bg hover:bg-dark-surface-hover transition-colors text-sm text-gray-400"
-              >
-                <span>格式建议</span>
-                {showFormatHint ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-              </button>
-              {showFormatHint && (
-                <div className="px-4 py-3 bg-dark-bg border-t border-gray-700/50 text-sm text-gray-400 space-y-4">
-                  <div>
-                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-blue-100 text-blue-400 flex items-center justify-center text-xs font-bold">1</span>
-                      核心结构（YAML Frontmatter + Markdown 正文）
-                    </h4>
-                    <div className="bg-dark-surface rounded border border-gray-700/50 p-3 font-mono text-xs leading-relaxed overflow-auto max-h-64">
-                      <pre className="text-gray-300">{FORMAT_GUIDE.example.yaml}
-
-{FORMAT_GUIDE.example.content}</pre>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-green-100 text-green-400 flex items-center justify-center text-xs font-bold">2</span>
-                      优秀 Skill 的关键原则
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {FORMAT_GUIDE.principles.map((p, i) => (
-                        <div key={i} className="bg-dark-surface rounded border p-3">
-                          <p className="font-medium text-gray-200 mb-1">{p.title}</p>
-                          <p className="text-xs text-gray-500">{p.description}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-red-100 text-red-400 flex items-center justify-center text-xs font-bold">3</span>
-                      常见错误 vs 正确做法
-                    </h4>
-                    <div className="space-y-2">
-                      {FORMAT_GUIDE.mistakes.map((m, i) => (
-                        <div key={i}>
-                          <div className="flex items-start gap-3 bg-red-900/20 rounded border border-red-100 p-2">
-                            <span className="text-red-500 font-bold text-xs">❌</span>
-                            <div className="text-xs">
-                              <p className="font-medium text-red-400">{m.wrong}</p>
-                              <code className="text-red-400 bg-red-100 px-1 rounded">{m.wrongCode}</code>
-                            </div>
-                          </div>
-                          <div className="flex items-start gap-3 bg-green-900/20 rounded border border-green-100 p-2">
-                            <span className="text-green-500 font-bold text-xs">✅</span>
-                            <div className="text-xs">
-                              <p className="font-medium text-green-400">{m.right}</p>
-                              <code className="text-green-400 bg-green-100 px-1 rounded">{m.rightCode}</code>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold text-gray-200 mb-2 flex items-center gap-2">
-                      <span className="w-5 h-5 rounded bg-purple-100 text-purple-700 flex items-center justify-center text-xs font-bold">4</span>
-                      推荐章节结构
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {FORMAT_GUIDE.sections.map((s, i) => (
-                        <span
-                          key={i}
-                          className={`px-2 py-1 rounded text-xs font-mono ${
-                            s.highlight
-                              ? 'bg-orange-900/20 text-orange-700 border border-orange-200'
-                              : 'bg-purple-900/20 text-purple-700'
-                          }`}
-                        >
-                          {s.name}{s.highlight ? ' ⭐重要' : ''}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      ⭐ <strong>示例章节</strong>是提升 Skill 效果的关键 - 展示具体的漏洞代码和检测输出格式。输出格式由系统自动添加。
-                    </p>
-                  </div>
+              {selectedCategory?.hasSubDimension && (
+                <div className="mt-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                    漏洞模式 <span className="text-red-500">*</span>
+                  </label>
+                  <VulnerabilityTreeSelector
+                    value={vulnerabilityTreeId}
+                    onChange={(patternId) => setVulnerabilityTreeId(patternId)}
+                    placeholder="请选择漏洞模式"
+                  />
                 </div>
               )}
-            </div>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="w-full h-[500px] px-4 py-3 border border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-sm"
-              placeholder="输入 Markdown 格式的 Skill 定义，或点击上方「AI 生成内容」按钮自动生成..."
-              required
-            />
-          </div>
-        </div>
 
-        <div className="flex justify-end space-x-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-4 py-2 border border-gray-600 rounded-lg hover:bg-dark-bg transition-colors"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                创建中...
-              </>
-            ) : (
-              <>
-                <Save size={16} className="mr-2" />
-                创建 Skill
-              </>
-            )}
-          </button>
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                  适用产品 <span className="text-xs text-gray-400">（不选则适用于所有产品）</span>
+                </label>
+                <ProductTagSelect selectedIds={productTagIds} onChange={setProductTagIds} />
+              </div>
+
+              {isAdmin && (
+                <div className="mt-3">
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={isPublic}
+                      onChange={(e) => setIsPublic(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 text-blue-400 focus:ring-primary-500 bg-dark-bg"
+                    />
+                    <span className="ml-2 text-sm text-gray-300">
+                      公开 Skill（所有用户可见）
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              {/* Skill 内容 */}
+              <div className="mt-4 pt-4 border-t border-gray-700/50">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-300">
+                    Skill 内容（Markdown 格式）<span className="text-red-500">*</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleAiGenerate}
+                      disabled={aiGenerating}
+                      className="inline-flex items-center px-3 py-1 text-xs bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-md hover:from-purple-700 hover:to-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="根据填写的名称和分类，使用大模型 AI 自动生成完整的 Skill 内容"
+                    >
+                      {aiGenerating ? (
+                        <>
+                          <Loader2 size={12} className="mr-1 animate-spin" />
+                          生成中...
+                        </>
+                      ) : aiGenerateSuccess ? (
+                        <>
+                          <CheckCircle size={12} className="mr-1" />
+                          成功！
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={12} className="mr-1" />
+                          AI 生成
+                        </>
+                      )}
+                    </button>
+                    {aiDiffContent && !aiGenerating && (
+                      <button
+                        type="button"
+                        onClick={() => setShowDiffModal(true)}
+                        className="inline-flex items-center px-2 py-1 text-xs text-indigo-400 hover:text-indigo-300 transition-all"
+                      >
+                        <Eye size={12} className="mr-1" />
+                        查看对比
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setContent(DEFAULT_TEMPLATE)}
+                      className="text-xs text-gray-400 hover:text-gray-300"
+                    >
+                      重置
+                    </button>
+                  </div>
+                </div>
+
+                {aiGenerateError && (
+                  <div className="mb-2 flex items-start gap-2 bg-red-900/20 border border-red-500/30 text-red-400 px-3 py-2 rounded-md text-xs">
+                    <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
+                    <span>{aiGenerateError}</span>
+                  </div>
+                )}
+
+                {aiGenerateSuccess && (
+                  <div className="mb-2 flex items-center gap-2 bg-green-900/20 border border-green-500/30 text-green-400 px-3 py-2 rounded-md text-xs">
+                    <CheckCircle size={14} className="flex-shrink-0" />
+                    <span>AI 已生成内容，可在下方编辑器中继续修改。</span>
+                  </div>
+                )}
+
+                {/* 格式建议 - 折叠 */}
+                <div className="mb-2 border border-gray-700/50 rounded-md overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setShowFormatHint(!showFormatHint)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-dark-bg hover:bg-gray-800 transition-colors text-xs text-gray-400"
+                  >
+                    <span>格式建议</span>
+                    {showFormatHint ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  </button>
+                  {showFormatHint && (
+                    <div className="px-3 py-2 bg-dark-bg border-t border-gray-700/50 text-xs text-gray-400 space-y-3 max-h-[200px] overflow-auto">
+                      <div>
+                        <h4 className="font-medium text-gray-200 mb-1">核心结构（YAML Frontmatter + Markdown 正文）</h4>
+                        <div className="bg-gray-800/50 rounded p-2 font-mono text-xs leading-relaxed overflow-auto">
+                          <pre className="text-gray-300">{FORMAT_GUIDE.example.yaml}
+
+{FORMAT_GUIDE.example.content}</pre>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium text-gray-200 mb-1">推荐章节结构</h4>
+                        <div className="flex flex-wrap gap-1">
+                          {FORMAT_GUIDE.sections.map((s, i) => (
+                            <span
+                              key={i}
+                              className={`px-1.5 py-0.5 rounded text-xs font-mono ${
+                                s.highlight
+                                  ? 'bg-orange-500/15 text-orange-400 border border-orange-500/30'
+                                  : 'bg-purple-500/15 text-purple-400'
+                              }`}
+                            >
+                              {s.name}{s.highlight ? ' ⭐' : ''}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full h-[350px] px-3 py-2 text-sm bg-dark-bg border border-gray-600 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-transparent font-mono text-gray-200"
+                  placeholder="输入 Markdown 格式的 Skill 定义，或点击上方「AI 生成」按钮自动生成..."
+                  required
+                />
+              </div>
+            </div>
+
+            {/* 底部按钮 */}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => router.back()}
+                className="px-4 py-2 text-sm border border-gray-600 text-gray-300 rounded-md hover:bg-dark-bg transition-colors"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex items-center px-4 py-2 text-sm bg-purple-500 text-white rounded-md hover:bg-purple-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={14} className="mr-1.5 animate-spin" />
+                    创建中...
+                  </>
+                ) : (
+                  <>
+                    <Save size={14} className="mr-1.5" />
+                    创建 Skill
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
 
       {showDiffModal && (() => {
         const leftLines = content.split('\n');

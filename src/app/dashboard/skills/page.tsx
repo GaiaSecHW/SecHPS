@@ -151,7 +151,7 @@ function SkillsPageContent() {
   const [importing, setImporting] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get('page') || '1'));
-  const [pageSize, setPageSize] = useState(Number(searchParams.get('limit') || '20'));
+  const [pageSize, setPageSize] = useState(Number(searchParams.get('limit') || '12'));
   const [totalPages, setTotalPages] = useState(1);
 
   const [searchInput, setSearchInput] = useState(searchParams.get('search') || '');
@@ -863,9 +863,9 @@ function SkillsPageContent() {
               }}
               className="w-[100px] px-3 py-1.5 border border-gray-600 rounded-lg text-sm bg-[#0F172A] text-gray-100"
             >
-              <option value="10">10/页</option>
-              <option value="20">20/页</option>
-              <option value="50">50/页</option>
+              <option value="12">12/页</option>
+              <option value="24">24/页</option>
+              <option value="36">36/页</option>
               <option value="100">100/页</option>
             </select>
           </div>

@@ -46,8 +46,8 @@ const statusConfig: Record<string, { bg: string; text: string; label: string }> 
   failed:    { bg: 'bg-red-500/20',   text: 'text-red-400',   label: '执行失败' },
 };
 
-const PAGE_SIZE_OPTIONS = [10, 20, 30, 50];
-const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [12, 24, 36, 100];
+const DEFAULT_PAGE_SIZE = 12;
 
 export default function TaskBuilderPage() {
   const router = useRouter();
