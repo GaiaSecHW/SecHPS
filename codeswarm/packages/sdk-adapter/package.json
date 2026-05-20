@@ -8,7 +8,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "file:C:/Users/Will/AppData/Roaming/npm/node_modules/@agentclientprotocol/claude-agent-acp/node_modules/@anthropic-ai/claude-agent-sdk"
+    "@anthropic-ai/claude-agent-sdk": "0.2.101"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

@@ -236,6 +236,18 @@ function main() {
   walkAndClean(STANDALONE_DIR);
   
   console.log(`\n✅ 已清理 ${cleanedFiles + cleanedDirs} 个非 Linux 文件/目录`);
+  
+  // 确保 standalone/.next/static 目录存在（Next.js standalone 需要此目录）
+  const standaloneStaticDir = path.join(STANDALONE_DIR, '.next', 'static');
+  const nestedStaticDir = path.join(STANDALONE_DIR, 'claude-web-platform', '.next', 'static');
+  
+  if (!fs.existsSync(standaloneStaticDir) && fs.existsSync(nestedStaticDir)) {
+    console.log('\n📦 复制 static 目录到正确位置...');
+    fs.mkdirSync(path.dirname(standaloneStaticDir), { recursive: true });
+    fs.cpSync(nestedStaticDir, standaloneStaticDir, { recursive: true });
+    console.log('✅ static 目录已复制到 standalone/.next/static');
+  }
+  
   console.log(`📁 输出目录: ${STANDALONE_DIR}`);
 }
 
