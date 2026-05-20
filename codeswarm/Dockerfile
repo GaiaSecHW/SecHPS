@@ -23,7 +23,7 @@ FROM node:20-bookworm AS worker-builder
 
 WORKDIR /build/codeswarm
 
-RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN corepack enable && corepack prepare pnpm@9 --activate
 
 # Copy workspace root config
 COPY codeswarm/package.json codeswarm/pnpm-workspace.yaml codeswarm/pnpm-lock.yaml codeswarm/tsconfig.json ./
