@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown';
 import {
   User,
   Bot,
@@ -122,7 +122,7 @@ export function ChatMessage({
             !isContentExpanded && isLongContent ? 'max-h-20 overflow-hidden relative' : ''
           }`}
         >
-          <ReactMarkdown>{text}</ReactMarkdown>
+          <MarkdownRenderer content={text} />
           {isStreaming && (
             <span className="inline-block w-2 h-4 bg-blue-500 animate-pulse ml-1" />
           )}

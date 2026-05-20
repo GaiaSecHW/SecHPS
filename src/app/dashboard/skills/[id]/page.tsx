@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown';
 import JSZip from 'jszip';
 import {
   ArrowLeft,
@@ -1545,116 +1545,11 @@ export default function SkillDetailPage() {
                 </button>
               </div>
               <div className="bg-dark-bg p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
-                <ReactMarkdown
-                  components={{
-                    code: ({ node, inline, className, children, ...props }: any) => {
-                      if (inline) {
-                        return (
-                          <code className="px-1.5 py-0.5 rounded bg-dark-surface-hover text-blue-400 font-mono text-sm" {...props}>
-                            {children}
-                          </code>
-                        );
-                      }
-                      return (
-                        <code className="block px-4 py-3 rounded-lg bg-gray-900 text-gray-100 font-mono text-sm overflow-x-auto" {...props}>
-                          {children}
-                        </code>
-                      );
-                    },
-                    pre: ({ node, children, ...props }: any) => (
-                      <pre className="px-4 py-3 rounded-lg bg-gray-900 text-gray-100 font-mono text-sm overflow-x-auto" {...props}>
-                        {children}
-                      </pre>
-                    ),
-                    h1: ({ children, ...props }: any) => (
-                      <h1 className="text-2xl font-bold text-gray-100 mt-6 mb-4 pb-2 border-b border-gray-700/50" {...props}>
-                        {children}
-                      </h1>
-                    ),
-                    h2: ({ children, ...props }: any) => (
-                      <h2 className="text-xl font-semibold text-gray-100 mt-5 mb-3 pb-2 border-b border-gray-700/50" {...props}>
-                        {children}
-                      </h2>
-                    ),
-                    h3: ({ children, ...props }: any) => (
-                      <h3 className="text-lg font-semibold text-gray-100 mt-4 mb-2" {...props}>
-                        {children}
-                      </h3>
-                    ),
-                    h4: ({ children, ...props }: any) => (
-                      <h4 className="text-base font-semibold text-gray-100 mt-3 mb-2" {...props}>
-                        {children}
-                      </h4>
-                    ),
-                    ul: ({ children, ...props }: any) => (
-                      <ul className="mt-4 space-y-2 list-disc list-inside marker:text-blue-400" {...props}>
-                        {children}
-                      </ul>
-                    ),
-                    ol: ({ children, ...props }: any) => (
-                      <ol className="mt-4 space-y-2 list-decimal list-inside" {...props}>
-                        {children}
-                      </ol>
-                    ),
-                    li: ({ children, ...props }: any) => (
-                      <li className="text-gray-300 ml-6" {...props}>
-                        {children}
-                      </li>
-                    ),
-                    blockquote: ({ children, ...props }: any) => (
-                      <blockquote className="border-l-4 border-blue-500 pl-4 italic my-4 text-gray-400" {...props}>
-                        {children}
-                      </blockquote>
-                    ),
-                    table: ({ children, ...props }: any) => (
-                      <div className="my-6 overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700/50 border border-gray-600" {...props}>
-                          {children}
-                        </table>
-                      </div>
-                    ),
-                    thead: ({ children, ...props }: any) => (
-                      <thead className="bg-[#0F172A]" {...props}>{children}</thead>
-                    ),
-                    tbody: ({ children, ...props }: any) => (
-                      <tbody className="divide-y divide-gray-700/50" {...props}>{children}</tbody>
-                    ),
-                    tr: ({ children, ...props }: any) => (
-                      <tr className="hover:bg-dark-surface-hover" {...props}>{children}</tr>
-                    ),
-                    th: ({ children, ...props }: any) => (
-                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" {...props}>
-                        {children}
-                      </th>
-                    ),
-                    td: ({ children, ...props }: any) => (
-                      <td className="px-4 py-2 text-sm text-gray-300" {...props}>
-                        {children}
-                      </td>
-                    ),
-                    a: ({ children, href, ...props }: any) => (
-                      <a href={href} className="text-blue-400 hover:text-blue-800 underline" target="_blank" rel="noopener noreferrer" {...props}>
-                        {children}
-                      </a>
-                    ),
-                    strong: ({ children, ...props }: any) => (
-                      <strong className="font-semibold text-gray-100" {...props}>{children}</strong>
-                    ),
-                    del: ({ children, ...props }: any) => (
-                      <del className="text-red-400 line-through" {...props}>{children}</del>
-                    ),
-                    p: ({ children, ...props }: any) => (
-                      <p className="text-gray-300 leading-relaxed mb-3" {...props}>{children}</p>
-                    ),
-                    hr: ({ ...props }: any) => (
-                      <hr className="my-4 border-gray-700/50" {...props} />
-                    ),
-                  }}
-                >
-                  {skillOutputTemplate && skillOutputTemplate.trim()
+                <MarkdownRenderer 
+                  content={skillOutputTemplate && skillOutputTemplate.trim()
                     ? (skill.content || '') + '\n\n' + skillOutputTemplate
                     : (skill.content || '暂无内容')}
-                </ReactMarkdown>
+                />
               </div>
             </div>
           </div>
@@ -1720,7 +1615,7 @@ export default function SkillDetailPage() {
             </button>
           </div>
           <div className="bg-dark-bg p-4 rounded-lg overflow-x-auto text-sm prose prose-sm max-w-none">
-            <ReactMarkdown>{viewingVersionContent || '暂无内容'}</ReactMarkdown>
+            <MarkdownRenderer content={viewingVersionContent || '暂无内容'} />
           </div>
         </div>
       )}

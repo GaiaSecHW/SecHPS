@@ -160,7 +160,7 @@ export default function UserTokenStatsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
       </div>
     );
@@ -168,7 +168,7 @@ export default function UserTokenStatsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-gray-400">此页面仅管理员可访问</p>
@@ -185,7 +185,7 @@ export default function UserTokenStatsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
           <p className="text-gray-400">{error}</p>
@@ -201,7 +201,7 @@ export default function UserTokenStatsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0F172A] p-6">
+    <div className="space-y-6">
       {/* Header */}
       <div className="mb-6">
         <button

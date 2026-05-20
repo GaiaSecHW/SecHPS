@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown';
 import { 
   Play, CheckCircle, XCircle, Clock, AlertCircle, RefreshCw, 
   TrendingUp, TrendingDown, Minus, ChevronDown, ChevronUp, Eye, EyeOff
@@ -455,26 +455,7 @@ function TestRunItem({
       {isExpanded && run.output && (
         <div className="px-4 py-3 border-t border-gray-100 bg-[#0F172A]">
           <div className="prose prose-sm max-w-none">
-            <ReactMarkdown
-              components={{
-                h1: ({ children }) => <h1 className="text-base font-bold text-gray-100 mb-2">{children}</h1>,
-                h2: ({ children }) => <h2 className="text-sm font-semibold text-gray-100 mb-2">{children}</h2>,
-                h3: ({ children }) => <h3 className="text-xs font-semibold text-gray-200 mb-1">{children}</h3>,
-                p: ({ children }) => <p className="text-xs text-gray-300 mb-2">{children}</p>,
-                ul: ({ children }) => <ul className="list-disc list-inside text-xs text-gray-300 space-y-1 mb-2">{children}</ul>,
-                ol: ({ children }) => <ol className="list-decimal list-inside text-xs text-gray-300 space-y-1 mb-2">{children}</ol>,
-                code: ({ children, className }) => {
-                  const isInline = !className;
-                  return isInline ? (
-                    <code className="px-1 py-0.5 bg-gray-100 text-gray-200 rounded text-xs font-mono">{children}</code>
-                  ) : (
-                    <code className="block bg-gray-900 text-gray-100 p-2 rounded text-xs font-mono overflow-x-auto">{children}</code>
-                  );
-                },
-              }}
-            >
-              {run.output}
-            </ReactMarkdown>
+            <MarkdownRenderer content={run.output || ''} />
           </div>
         </div>
       )}

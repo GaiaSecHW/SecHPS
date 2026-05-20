@@ -124,6 +124,11 @@ export function WorkerLogsPage() {
   const tasks = tasksData?.tasks || [];
   const logs = logsData?.logs || [];
 
+  const statusCounts = tasks.reduce((acc, task) => {
+    acc[task.state] = (acc[task.state] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
   useEffect(() => {
     if (!selectedTaskId && tasks.length > 0) setSelectedTaskId(tasks[0].taskId);
   }, [tasks, selectedTaskId]);
@@ -249,15 +254,15 @@ export function WorkerLogsPage() {
             <div className="flex items-center gap-2">
               <Layers size={16} className="text-gray-400" />
               <span className="text-sm font-medium text-gray-100">任务列表</span>
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-6 min-w-[90px] px-2 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-300">
-                <option value="all">全部状态</option>
-                <option value="completed">completed</option>
-                <option value="running">running</option>
-                <option value="failed">failed</option>
-                <option value="queued">queued</option>
-                <option value="dispatched">dispatched</option>
-                <option value="building">building</option>
-              </select>
+<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-6 min-w-[120px] px-2 text-xs bg-dark-bg border border-gray-700/50 rounded text-gray-300">
+                  <option value="all">全部状态 ({tasks.length})</option>
+                  <option value="completed">completed ({statusCounts.completed || 0})</option>
+                  <option value="running">running ({statusCounts.running || 0})</option>
+                  <option value="failed">failed ({statusCounts.failed || 0})</option>
+                  <option value="queued">queued ({statusCounts.queued || 0})</option>
+                  <option value="dispatched">dispatched ({statusCounts.dispatched || 0})</option>
+                  <option value="building">building ({statusCounts.building || 0})</option>
+                </select>
             </div>
             <button onClick={() => { refetchTasks(); refetchLogs(); }} className="p-1.5 text-gray-400 hover:text-gray-300 hover:bg-gray-700/30 rounded"><RefreshCw size={14} /></button>
           </div>

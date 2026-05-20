@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown';
 
 interface StreamingMessageProps {
   content: string;
@@ -29,7 +29,7 @@ export function StreamingMessage({
       className={`prose prose-sm prose-invert max-w-none bg-dark-surface rounded-lg p-4 max-h-[600px] overflow-y-auto border border-gray-700/50 ${className}`}
     >
       {content ? (
-        <ReactMarkdown>{content}</ReactMarkdown>
+        <MarkdownRenderer content={content} />
       ) : (
         <span className="text-gray-500">等待响应...</span>
       )}

@@ -527,29 +527,29 @@ export default function ModelsPage() {
                   名称
                 </th>
                 {isIcsOrAdmin && (
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] w-[120px]">
                     创建者
                   </th>
                 )}
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px] w-[120px]">
                   代理类型
                 </th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   API 地址
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">
                   模型列表
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
                   状态
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
                   公开
                 </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[100px] w-[100px]">
                   连接状态
                 </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   操作
                 </th>
               </tr>
@@ -568,34 +568,34 @@ export default function ModelsPage() {
                   return (
                     <tr key={model.id} className="hover:bg-[#0F172A]">
                       <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <Cpu size={16} className="text-gray-400" />
-                          <span className="font-medium text-gray-100">{model.name}</span>
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <Cpu size={16} className="text-gray-400 shrink-0" />
+                          <span className="font-medium text-gray-100 truncate" title={model.name}>{model.name}</span>
                           {model.isDefault && (
-                            <span className="px-1.5 py-0.5 text-xs font-medium bg-orange-500/15 text-orange-400 rounded">
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-orange-500/15 text-orange-400 rounded shrink-0">
                               默认
                             </span>
                           )}
                           {model.userId === null && (
-                            <span className="text-xs text-gray-500">(系统)</span>
+                            <span className="text-xs text-gray-500 shrink-0">(系统)</span>
                           )}
                         </div>
                       </td>
                       {isIcsOrAdmin && (
-                        <td className="px-4 py-4">
+                        <td className="px-4 py-4 min-w-[120px] w-[120px]">
                           <div className="flex items-center gap-2">
                             <User size={16} className="text-gray-400" />
                             {model.userId === null ? (
                               <span className="text-sm text-gray-400">系统模型</span>
                             ) : (
-                              <span className="text-sm text-gray-400">
+                              <span className="text-sm text-gray-400 truncate">
                                 {model.userName || model.userUsername || '未知用户'}
                               </span>
                             )}
                           </div>
                         </td>
                       )}
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 min-w-[120px] w-[120px]">
                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${
                           model.providerType === 'claude'
                             ? 'bg-purple-500/15 text-purple-400'
@@ -612,8 +612,8 @@ export default function ModelsPage() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <div className="flex flex-wrap gap-1">
+                      <td className="px-4 py-4 min-w-[200px]">
+                        <div className="flex flex-wrap gap-1 overflow-hidden" title={modelList.join(', ')}>
                           {modelList.slice(0, 3).map((m, i) => (
                             <span
                               key={i}
@@ -629,7 +629,7 @@ export default function ModelsPage() {
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 min-w-[100px] w-[100px]">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isActive
@@ -645,7 +645,7 @@ export default function ModelsPage() {
                           {model.isActive ? '启用' : '禁用'}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 min-w-[100px] w-[100px]">
                         <span
                           className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${
                             model.isPublic
@@ -657,7 +657,7 @@ export default function ModelsPage() {
                           {model.isPublic ? '公开' : '私有'}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="px-4 py-4 min-w-[100px] w-[100px]">
                         {testResults[model.id] ? (
                           <div className="space-y-1">
                             <span
@@ -693,8 +693,8 @@ export default function ModelsPage() {
                           <span className="text-xs text-gray-400">未测试</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleTestModel(model)}
                             disabled={testingModelId === model.id}

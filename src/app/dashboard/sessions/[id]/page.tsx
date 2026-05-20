@@ -28,7 +28,7 @@ import {
   User,
   RefreshCw,
 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownRenderer } from '@/components/markdown';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { EvaluationHeader } from '@/components/evaluation';
 import {
@@ -2392,7 +2392,7 @@ function MessageBubble({
                   const displayText = text.length > maxChars ? text.substring(0, maxChars) + '...' : text;
                   return (
                     <div key={idx} className="line-clamp-3">
-                      <ReactMarkdown>{displayText}</ReactMarkdown>
+                      <MarkdownRenderer content={displayText} />
                     </div>
                   );
                 })}
@@ -2762,7 +2762,7 @@ function MessageDetailPanel({ messageDetail }: { messageDetail: any }) {
                   <div className="px-3 py-2 bg-dark-bg border-t border-gray-700/50">
                     {part.type === 'text' && (
                       <div className="prose prose-sm max-w-none text-sm">
-                        <ReactMarkdown>{part.text || ''}</ReactMarkdown>
+                        <MarkdownRenderer content={part.text || ''} />
                       </div>
                     )}
                     {part.type === 'tool' && (

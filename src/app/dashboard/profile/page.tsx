@@ -172,39 +172,38 @@ export default function ProfilePage() {
       )}
 
       {/* 用户信息卡片 */}
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50 p-6">
-        <div className="flex items-center space-x-4 mb-6">
-          {user?.avatar ? (
-            <img
-              src={user.avatar}
-              alt={user.name || user.username}
-              className="h-16 w-16 rounded-full"
-            />
-          ) : (
-            <div className="h-16 w-16 rounded-full bg-primary-600 flex items-center justify-center">
-              <span className="text-white text-2xl font-medium">
-                {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
-              </span>
-            </div>
-          )}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-100">
+      <div className="bg-dark-surface rounded-lg border border-gray-700/50 px-4 py-3 flex items-center gap-4">
+        {user?.avatar ? (
+          <img
+            src={user.avatar}
+            alt={user.name || user.username}
+            className="h-12 w-12 rounded-full shrink-0"
+          />
+        ) : (
+          <div className="h-12 w-12 rounded-full bg-primary-600 flex items-center justify-center shrink-0">
+            <span className="text-white text-xl font-medium">
+              {(user?.name || user?.username || 'U').charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-gray-100 truncate">
               {user?.name || user?.username}
             </h2>
-            <p className="text-sm text-gray-500">@{user?.username}</p>
-            <p className="text-sm text-gray-500">{user?.email}</p>
+            <span className="text-xs text-gray-500">@{user?.username}</span>
           </div>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {user?.roles?.map((role: string) => (
-            <span
-              key={role}
-              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-500/15 text-blue-400"
-            >
-              {role}
-            </span>
-          ))}
+          <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {user?.roles?.map((role: string) => (
+              <span
+                key={role}
+                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400"
+              >
+                {role}
+              </span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -216,72 +215,66 @@ export default function ProfilePage() {
         </div>
 
         <form onSubmit={handleUpdateProfile} className="space-y-4">
-          <div>
-            <label
-              htmlFor="username"
-              className="block text-sm font-medium text-gray-300"
-            >
-              用户名
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={user?.username || ''}
-              disabled
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-500 cursor-not-allowed"
-            />
-            <p className="mt-1 text-xs text-gray-500">用户名不可修改</p>
+          {/* 用户名和邮箱占一行 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="username" className="block text-sm font-medium text-gray-300">
+                用户名
+              </label>
+              <input
+                id="username"
+                type="text"
+                value={user?.username || ''}
+                disabled
+                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-500 cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500">用户名不可修改</p>
+            </div>
+
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-300">
+                邮箱
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={user?.email || ''}
+                disabled
+                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-500 cursor-not-allowed"
+              />
+              <p className="mt-1 text-xs text-gray-500">邮箱不可修改</p>
+            </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-300"
-            >
-              邮箱
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={user?.email || ''}
-              disabled
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md bg-[#0F172A] text-gray-500 cursor-not-allowed"
-            />
-            <p className="mt-1 text-xs text-gray-500">邮箱不可修改</p>
-          </div>
+          {/* 姓名和头像链接占一行 */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-300">
+                姓名
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                placeholder="请输入您的姓名"
+              />
+            </div>
 
-          <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-300"
-            >
-              姓名
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="请输入您的姓名"
-            />
-          </div>
-
-          <div>
-            <label
-              htmlFor="avatar"
-              className="block text-sm font-medium text-gray-300"
-            >
-              头像链接
-            </label>
-            <input
-              id="avatar"
-              type="url"
-              value={avatar}
-              onChange={(e) => setAvatar(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-              placeholder="https://example.com/avatar.png"
-            />
+            <div>
+              <label htmlFor="avatar" className="block text-sm font-medium text-gray-300">
+                头像链接
+              </label>
+              <input
+                id="avatar"
+                type="url"
+                value={avatar}
+                onChange={(e) => setAvatar(e.target.value)}
+                className="mt-1 block w-full px-3 py-2 border border-gray-600 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                placeholder="https://example.com/avatar.png"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end">
