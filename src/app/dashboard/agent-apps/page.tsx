@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen } from 'lucide-react';
+import { RefreshCw, Plus, Box, Edit2, Trash2, Loader2, Eye, BookOpen, Bot, Terminal, User, Calendar, Play, ShieldAlert, Bell, Percent, Globe, Lock, CheckCircle, Clock } from 'lucide-react';
 import CreateAgentAppModal from './CreateAgentAppModal';
 import AppDetailModal from './AppDetailModal';
 import { PipelineViewModal } from '@/components/agent-apps/PipelineViewModal';
@@ -18,6 +18,18 @@ interface AgentApp {
   Tenant?: {
     name: string;
   } | null;
+  User?: {
+    name: string | null;
+    username: string;
+  };
+  _metrics?: {
+    runCount: number;
+    successRate: number | null;
+    lastRunAt: string | null;
+    vulnCount: number;
+    alertCount: number;
+    falsePositiveRate: number | null;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +51,14 @@ export default function AgentAppsPage() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewingApp, setViewingApp] = useState<AgentApp | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try { setIsAdmin(JSON.parse(userData)?.roles?.includes('admin') ?? false); } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     fetchApps();
@@ -269,7 +289,7 @@ export default function AgentAppsPage() {
             <Box size={18} className="text-white" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold text-white">Agent应用开发</h1>
+            <h1 className="text-xl font-semibold text-white">Agent市场</h1>
             <p className="text-sm text-gray-400 mt-0.5">管理和创建您的 Agent 应用</p>
           </div>
         </div>
@@ -299,107 +319,140 @@ export default function AgentAppsPage() {
          </div>
       </div>
 
-      <div className="bg-dark-surface rounded-lg border border-gray-700/50">
-        <div className="p-6">
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
-            </div>
-          ) : apps.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-gray-500">
-              <Box size={48} className="text-gray-300 mb-4" />
-              <p className="text-base font-medium">暂无应用</p>
-              <p className="text-sm mt-1">点击"创建新应用"开始创建您的第一个Agent应用</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px]">
-                <thead>
-                  <tr className="border-b border-gray-700/50">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 min-w-[200px]">名称</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400  w-[120px] min-w-[120px]">引擎</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400  w-[150px] min-w-[150px]">默认智能体</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">启动命令</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 w-[100px] min-w-[100px]">共享</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 w-[180px] min-w-[180px]">创建时间</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-gray-400 w-[180px] min-w-[180px]">更新时间</th>
-                    <th className="text-center py-3 px-4 text-sm font-medium text-gray-400 w-[180px] min-w-[180px]">操作</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {apps.map((app) => (
-                    <tr key={app.id} className="border-b border-gray-700/30 hover:bg-gray-800/30">
-                      <td className="py-3 px-4 text-sm text-gray-100 font-medium">
-                        <span className="block truncate max-w-[200px]" title={app.name}>
-                          {app.name}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-xs bg-blue-500/15 text-blue-400 px-2 py-1 rounded">{app.engine}</span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-300 min-w-[140px]">{app.defaultAgentName || '-'}</td>
-                      <td className="py-3 px-4 text-sm text-gray-300">
-                        <span 
-                          className="block truncate max-w-[200px]" 
-                          title={app.startCommand || ''}
-                        >
-                          {app.startCommand || '-'}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {app.isPublic ? (
-                          <span className="text-xs bg-green-500/15 text-green-400 px-2 py-1 rounded">已共享</span>
-                        ) : (
-                          <span className="text-xs bg-gray-500/15 text-gray-400 px-2 py-1 rounded">私有</span>
-                        )}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-500">
-                        {new Date(app.createdAt).toLocaleString('zh-CN')}
-                      </td>
-                      <td className="py-3 px-4 text-sm text-gray-500">
-                        {new Date(app.updatedAt).toLocaleString('zh-CN')}
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center justify-center gap-1">
-                          {app.engine === 'agentflow' && (
-                            <button
-                              onClick={() => setViewingApp(app)}
-                              className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition-colors"
-                            >
-                              <Eye size={14} className="mr-1" />
-                              查看
-                            </button>
-                          )}
-                          <button
-                            onClick={() => handleEdit(app)}
-                            disabled={deletingId === app.id}
-                            className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-primary-400 hover:bg-primary-500/10 rounded transition-colors disabled:opacity-50"
-                          >
-                            <Edit2 size={14} className="mr-1" />
-                            编辑
-                          </button>
-                          <button
-                            onClick={() => handleDelete(app)}
-                            disabled={deletingId === app.id}
-                            className="inline-flex items-center px-2 py-1 text-sm text-gray-300 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors disabled:opacity-50"
-                          >
-                            {deletingId === app.id ? (
-                              <Loader2 size={14} className="mr-1 animate-spin" />
-                            ) : (
-                              <Trash2 size={14} className="mr-1" />
-                            )}
-                            删除
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+      {/* Card Grid */}
+      {loading ? (
+        <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-12 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
         </div>
-      </div>
+      ) : apps.length === 0 ? (
+        <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-12">
+          <div className="text-center">
+            <Box className="mx-auto h-16 w-16 text-gray-500 opacity-60" />
+            <h3 className="mt-4 text-lg font-medium text-gray-100">暂无 Agent</h3>
+            <p className="mt-2 text-sm text-gray-500">
+              点击右上角"创建新 Agent"开始
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-dark-surface border border-gray-700/50 rounded-xl p-5">
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+            {apps.map((app) => {
+              const engineColors: Record<string, string> = {
+                opencode: 'from-teal-400 to-teal-600',
+                claudecode: 'from-purple-400 to-purple-600',
+                agentflow: 'from-cyan-400 to-cyan-600',
+              };
+              const gradient = engineColors[app.engine] || 'from-gray-400 to-gray-600';
+
+              return (
+                <div
+                  key={app.id}
+                  className="group relative flex flex-col rounded-xl border border-gray-700/50 bg-gray-800/40 hover:bg-gray-800/70 hover:border-gray-600/70 transition-all cursor-pointer"
+                  onClick={() => handleEdit(app)}
+                >
+                  {/* Header */}
+                  <div className="px-4 pt-4 pb-3 flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shrink-0 shadow-lg`}>
+                      <Bot size={18} className="text-white" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-semibold text-gray-100 truncate pr-6">{app.name}</h4>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[11px] bg-gray-900/80 text-gray-400 px-1.5 py-0.5 rounded font-mono border border-gray-700/50">
+                          {app.engine === 'opencode' ? 'OpenCode' : app.engine === 'claudecode' ? 'Claude Code' : app.engine}
+                        </span>
+                        {app.isPublic
+                          ? <span title="已共享"><Globe size={11} className="text-green-400" /></span>
+                          : <span title="私有"><Lock size={11} className="text-gray-500" /></span>}
+                      </div>
+                    </div>
+                    {/* Edit + Delete + View icons */}
+                    <div className="shrink-0 flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
+                      {app.engine === 'agentflow' && (
+                        <button
+                          onClick={() => setViewingApp(app)}
+                          className="p-1.5 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 transition-colors"
+                          title="查看流程"
+                        >
+                          <Eye size={13} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleEdit(app)}
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-primary-400 hover:bg-primary-500/10 transition-colors"
+                        title="编辑"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(app)}
+                        disabled={deletingId === app.id}
+                        className="p-1.5 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50"
+                        title="删除"
+                      >
+                        {deletingId === app.id ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className="mx-4 border-t border-gray-700/40" />
+
+                  {/* Metrics — 3 cols top row, 3 cols bottom row */}
+                  <div className="px-4 py-3 grid grid-cols-3 gap-1.5">
+                    {[
+                      { icon: <Play size={12} />, value: app._metrics?.runCount ?? 0, label: '运行次数', color: 'text-blue-400', show: true },
+                      { icon: <ShieldAlert size={12} />, value: app._metrics?.vulnCount ?? 0, label: '发现漏洞', color: 'text-red-400', show: true },
+                      { icon: <Bell size={12} />, value: app._metrics?.alertCount ?? 0, label: '告警数量', color: 'text-yellow-400', show: true },
+                      {
+                        icon: <CheckCircle size={12} />,
+                        value: app._metrics?.successRate != null ? `${(app._metrics.successRate * 100).toFixed(0)}%` : '-',
+                        label: '成功率',
+                        color: 'text-green-400',
+                        show: isAdmin,
+                      },
+                      {
+                        icon: <Percent size={12} />,
+                        value: app._metrics?.falsePositiveRate != null
+                          ? `${((1 - app._metrics.falsePositiveRate) * 100).toFixed(0)}%`
+                          : '-',
+                        label: '误报率',
+                        color: 'text-purple-400',
+                        show: isAdmin,
+                      },
+                      {
+                        icon: <Clock size={12} />,
+                        value: app._metrics?.lastRunAt
+                          ? new Date(app._metrics.lastRunAt).toLocaleDateString('zh-CN')
+                          : '-',
+                        label: '最近运行',
+                        color: 'text-gray-400',
+                        show: true,
+                      },
+                    ].filter(m => m.show).map(({ icon, value, label, color }) => (
+                      <div key={label} className="flex flex-col items-center gap-0.5 py-2 rounded-lg bg-gray-900/40">
+                        <span className={color}>{icon}</span>
+                        <span className="text-sm font-bold text-gray-100 leading-tight">{value}</span>
+                        <span className="text-[10px] text-gray-500">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="mx-4 border-t border-gray-700/40" />
+
+                  {/* Meta info */}
+                  <div className="px-4 py-3 flex items-center justify-between text-xs text-gray-400">
+                    <span><span className="text-gray-600">开发者：</span>{app.User?.name || app.User?.username || '-'}</span>
+                    <span><span className="text-gray-600">更新：</span>{new Date(app.updatedAt).toLocaleDateString('zh-CN')}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <CreateAgentAppModal
         isOpen={isCreateModalOpen}

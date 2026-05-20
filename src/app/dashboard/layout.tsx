@@ -13,6 +13,7 @@ import {
   MessageSquare,
   LogOut,
   Cog,
+  ClipboardCheck,
   User,
   Clock,
   Award,
@@ -162,13 +163,13 @@ function DashboardLayoutContent({
               {collapsed && <div className="pt-3 mx-3 border-t border-gray-800/60" />}
 
               <NavLink href="/dashboard/skills" icon={<Award size={18} />} collapsed={collapsed}>
-                Skills 管理
+                Skill市场
               </NavLink>
               <NavLink href="/dashboard/mcp-servers" icon={<Server size={18} />} collapsed={collapsed}>
-                MCP 服务器
+                MCP市场
               </NavLink>
               <NavLink href="/dashboard/agent-apps" icon={<Box size={18} />} collapsed={collapsed}>
-                Agent应用开发
+                Agent市场
               </NavLink>
               <NavLink href="/dashboard/agentflow-pipelines" icon={<Layers size={18} />} collapsed={collapsed}>
                 工作流编排
@@ -181,7 +182,7 @@ function DashboardLayoutContent({
             <>
               {!collapsed && (
                 <div className="pt-5 pb-1 px-4">
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">进化与回流</p>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-widest font-medium">数据与进化</p>
                 </div>
               )}
               {collapsed && <div className="pt-3 mx-3 border-t border-gray-800/60" />}
@@ -194,6 +195,9 @@ function DashboardLayoutContent({
               </NavLink>
               <NavLink href="/dashboard/data-feedback" icon={<GitBranch size={18} />} collapsed={collapsed}>
                 数据回流
+              </NavLink>
+              <NavLink href="/dashboard/evaluation" icon={<ClipboardCheck size={18} />} collapsed={collapsed}>
+                测评基准
               </NavLink>
             </>
           )}

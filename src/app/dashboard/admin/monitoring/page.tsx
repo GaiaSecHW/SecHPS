@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { apiGet } from '@/lib/api-client';
 import {
   Activity,
   Database,
@@ -115,20 +116,24 @@ export default function MonitoringPage() {
   const fetchData = useCallback(async (showRefresh = false) => {
     try {
       if (showRefresh) setRefreshing(true);
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
 
-      const [healthRes, metricsRes] = await Promise.all([
+      // health API returns 503 when system is unhealthy — that's valid data, not an error
+      const [healthRes, metricsResult] = await Promise.all([
         fetch('/api/admin/health', { headers }),
-        fetch('/api/admin/metrics', { headers }),
+        apiGet<MetricsResponse>('/api/admin/metrics'),
       ]);
 
-      if (!healthRes.ok || !metricsRes.ok) {
-        throw new Error('获取监控数据失败');
+      if (!healthRes.ok && healthRes.status !== 503) {
+        throw new Error('获取健康数据失败');
+      }
+      if (metricsResult.error) {
+        throw new Error(metricsResult.error);
       }
 
       setHealth(await healthRes.json());
-      setMetrics(await metricsRes.json());
+      setMetrics(metricsResult.data);
       setLastRefresh(new Date());
       setError(null);
     } catch (err) {

@@ -388,7 +388,7 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
             {codeLoading ? (
               <div className="flex items-center justify-center py-4 gap-2">
                 <Loader2 size={16} className="animate-spin text-primary-400" />
-                <span className="text-[11px] text-gray-500">反编译中...</span>
+                <span className="text-[11px] text-gray-500">代码加载中...</span>
               </div>
             ) : code ? (
               <pre className="font-mono text-[11px] text-gray-300 leading-relaxed px-3 py-2 whitespace-pre">{code}</pre>
@@ -532,7 +532,7 @@ export default function KnowledgeGraphPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error((await res.json()).error);
-      toast.success('已同步到 MinIO');
+      toast.success('已同步到云端');
     } catch (e: any) {
       toast.error(e.message || '同步失败');
     } finally {
@@ -595,7 +595,7 @@ export default function KnowledgeGraphPage() {
               onClick={handleSync}
               disabled={syncing}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-700/50 text-gray-400 hover:text-gray-200 hover:border-gray-600 transition-colors disabled:opacity-50"
-              title="将标记同步到 MinIO"
+              title="同步到云端"
             >
               {syncing ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
               同步
