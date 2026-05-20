@@ -288,6 +288,12 @@ export async function GET(
     if (view === 'tree') {
       return NextResponse.json(buildTree(db));
     }
+    if (view === 'node' && nodeId) {
+      const row = db.prepare("SELECT properties FROM nodes WHERE CAST(id AS TEXT) = ?").get(nodeId) as { properties: string } | undefined;
+      if (!row) return NextResponse.json({ error: 'Node not found' }, { status: 404 });
+      const p = JSON.parse(row.properties);
+      return NextResponse.json({ ...nodeToInfo(nodeId, p), code: p.code || null });
+    }
     if (view === 'graph' && nodeId) {
       const result = buildCallGraph(db, nodeId, depth);
       if (!result) return NextResponse.json({ error: 'Node not found' }, { status: 404 });

@@ -186,11 +186,14 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
   const [loading, setLoading] = useState(false);
   const [depth, setDepth] = useState(2);
   const [selected, setSelected] = useState<any>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [codeLoading, setCodeLoading] = useState(false);
 
   useEffect(() => {
     if (!method || !product) { setNodes([]); setEdges([]); return; }
     setLoading(true);
     setSelected(null);
+    setCode(null);
     setNodes([]);
     setEdges([]);
     const controller = new AbortController();
@@ -221,6 +224,21 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
       .finally(() => setLoading(false));
     return () => controller.abort();
   }, [method?.id, product, depth]);
+
+  function handleNodeClick(_evt: any, node: Node) {
+    const d = node.data as any;
+    setSelected(d);
+    setCode(null);
+    setCodeLoading(true);
+    const token = localStorage.getItem('token');
+    fetch(`/api/knowledge-graph/${encodeURIComponent(product)}?view=node&nodeId=${node.id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(data => setCode(data.code || null))
+      .catch(() => setCode(null))
+      .finally(() => setCodeLoading(false));
+  }
 
   if (!method) {
     return (
@@ -253,16 +271,16 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
         nodes={nodes}
         edges={edges}
         fitView
-        onNodeClick={(_evt, node) => setSelected(node.data)}
-        onPaneClick={() => setSelected(null)}
+        onNodeClick={handleNodeClick}
+        onPaneClick={() => { setSelected(null); setCode(null); }}
       >
         <Background color="#374151" gap={20} />
         <Controls />
       </ReactFlow>
       {selected && (
-        <div className="absolute bottom-3 left-3 right-3 z-10 bg-dark-bg/95 border border-gray-700/60 rounded-xl p-3 shadow-xl backdrop-blur-sm">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="absolute bottom-3 left-3 right-3 z-10 bg-dark-bg/95 border border-gray-700/60 rounded-xl shadow-xl backdrop-blur-sm overflow-hidden" style={{ maxHeight: '55%' }}>
+          <div className="flex items-start justify-between gap-2 px-3 pt-3 pb-2 flex-shrink-0">
+            <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-semibold text-white truncate">{selected.name}</span>
                 {selected.isSource && <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 border border-green-500/30 flex-shrink-0">SOURCE</span>}
@@ -271,9 +289,8 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
                 {selected.isExternal && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-500/20 text-gray-400 border border-gray-600/30 flex-shrink-0">EXTERNAL</span>}
               </div>
               {selected.signature && (
-                <div className="font-mono text-xs text-cyan-300 bg-dark-surface/80 rounded px-2 py-1 break-all">
+                <div className="font-mono text-xs bg-dark-surface/80 rounded px-2 py-1 break-all">
                   {(() => {
-                    // signature format: "returnType(paramType1,paramType2,...)"
                     const sig = selected.signature as string;
                     const parenIdx = sig.indexOf('(');
                     const returnType = parenIdx > 0 ? sig.slice(0, parenIdx) : '';
@@ -288,14 +305,25 @@ function CallGraphView({ product, method }: { product: string; method: MethodInf
                   })()}
                 </div>
               )}
-              <div className="text-[10px] text-gray-500 break-all" title={selected.fullName}>{selected.fullName}</div>
-              {selected.lineNumber && (
-                <div className="text-[10px] text-gray-600">Line {selected.lineNumber}</div>
-              )}
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] text-gray-500 truncate">{selected.fullName}</span>
+                {selected.lineNumber && <span className="text-[10px] text-gray-600 flex-shrink-0">Line {selected.lineNumber}</span>}
+              </div>
             </div>
-            <button onClick={() => setSelected(null)} className="text-gray-600 hover:text-gray-300 flex-shrink-0 mt-0.5">
+            <button onClick={() => { setSelected(null); setCode(null); }} className="text-gray-600 hover:text-gray-300 flex-shrink-0 mt-0.5">
               <X size={14} />
             </button>
+          </div>
+          <div className="border-t border-gray-700/40 overflow-auto custom-scrollbar" style={{ maxHeight: 220 }}>
+            {codeLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 size={16} className="animate-spin text-primary-400" />
+              </div>
+            ) : code ? (
+              <pre className="font-mono text-[11px] text-gray-300 leading-relaxed px-3 py-2 whitespace-pre">{code}</pre>
+            ) : (
+              <p className="text-[11px] text-gray-600 px-3 py-2">无方法体</p>
+            )}
           </div>
         </div>
       )}
